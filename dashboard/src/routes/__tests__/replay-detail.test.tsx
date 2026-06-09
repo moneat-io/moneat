@@ -102,6 +102,28 @@ describe('replay detail (player-hero layout)', () => {
     expect(screen.getByText('event-rail')).toBeInTheDocument()
   })
 
+  it('renders the browser replay player when rrweb events are available', async () => {
+    mockApi.getReplayRecording.mockResolvedValue({
+      events: [
+        {type: 2, timestamp: 1_000},
+        {type: 3, timestamp: 6_000},
+      ],
+    })
+
+    renderRoute(ReplayDetailRoute)
+
+    expect(await screen.findByText('player')).toBeInTheDocument()
+  })
+
+  it('renders the mobile replay viewer for native mobile sessions', async () => {
+    mockApi.getReplay.mockResolvedValue({...replayDetail, platform: 'android'})
+    mockApi.getReplayRecording.mockResolvedValue({events: []})
+
+    renderRoute(ReplayDetailRoute)
+
+    expect(await screen.findByText('mobile-player')).toBeInTheDocument()
+  })
+
   it('reveals session detail cards (incl. backend-pending fields) on expand', async () => {
     renderRoute(ReplayDetailRoute)
 

@@ -81,8 +81,8 @@ export function replayAvatarClass(user?: ReplayUser): string {
   if (isAnonymous(user)) return 'bg-muted text-muted-foreground'
   const str = user?.username || user?.email || user?.id || ''
   let hash = 0
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  for (const char of str) {
+    hash = (char.codePointAt(0) ?? 0) + ((hash << 5) - hash)
   }
   return AVATAR_TINTS[Math.abs(hash) % AVATAR_TINTS.length]
 }

@@ -81,6 +81,13 @@ private data class ReplayRetentionOptions(
     val demoEpochMs: Long? = null
 )
 
+private data class ReplayListRow(
+    val obj: JsonObject,
+    val projectId: Long,
+    val window: ReplayWindowQuery?,
+    val errorCount: Int
+)
+
 class ReplayService(
     private val queryHelper: DashboardQueryHelper,
     private val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
@@ -439,7 +446,7 @@ class ReplayService(
                 val breadcrumbs = parseStoredJsonArray(stringValue(row, "breadcrumbs"))
                 viewport = viewport ?: viewportFromContexts(contexts)
                 connection = connection ?: connectionFromBreadcrumbs(breadcrumbs)
-                if (!hasRage && breadcrumbs?.any { (it as? JsonObject)?.let(::isRageBreadcrumb) == true } == true) {
+                if (!hasRage && hasRageBreadcrumb(breadcrumbs)) {
                     hasRage = true
                 }
                 if (viewport != null && connection != null && hasRage) break
@@ -451,6 +458,84 @@ class ReplayService(
             ReplayContextEnrichment()
         }
     }
+
+    private suspend fun getReplayContextEnrichments(
+        windows: List<ReplayWindowQuery>
+    ): Map<ReplayWindowQuery, ReplayContextEnrichment> {
+        val validWindows = windows.filter { it.isValid }.distinct()
+        if (validWindows.isEmpty()) return emptyMap()
+
+        val windowConditions =
+            validWindows.joinToString("\n                OR ") { window ->
+                """
+                (project_id = ${window.projectId}
+                    AND timestamp >= fromUnixTimestamp64Milli(${window.startMs})
+                    AND timestamp <= fromUnixTimestamp64Milli(${window.endMs})
+                    AND ${queryHelper.timestampRetentionClause("timestamp", window.retentionDays, window.demoEpochMs)}
+                    ${window.userClause()})
+                """.trimIndent()
+            }
+        val query =
+            """
+            SELECT
+                toInt64(project_id) as project_id,
+                toUnixTimestamp64Milli(timestamp) as ts_ms,
+                user_id,
+                contexts,
+                breadcrumbs
+            FROM `$clickhouseDb`.events
+            WHERE $windowConditions
+            ORDER BY timestamp ASC
+            LIMIT ${validWindows.size * REPLAY_CONTEXT_EVENT_LIMIT}
+            FORMAT JSONEachRow
+            """.trimIndent()
+
+        return suspendRunCatching {
+            val rows = queryHelper.executeJsonEachRowQuery(query, "Replay list context enrichment")
+                ?: return emptyMap()
+            val enrichments = validWindows.associateWith { ReplayContextEnrichment() }.toMutableMap()
+
+            rows.forEach { row ->
+                val projectId = row["project_id"]?.jsonPrimitive?.long ?: return@forEach
+                val timestampMs = row["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
+                val rowUserId = row["user_id"]?.jsonPrimitive?.contentOrNull
+                val contexts = parseStoredJsonObject(stringValue(row, "contexts"))
+                val breadcrumbs = parseStoredJsonArray(stringValue(row, "breadcrumbs"))
+                matchingReplayWindows(validWindows, projectId, timestampMs, rowUserId).forEach { window ->
+                    val current = enrichments[window] ?: ReplayContextEnrichment()
+                    enrichments[window] = ReplayContextEnrichment(
+                        viewport = current.viewport ?: viewportFromContexts(contexts),
+                        connection = current.connection ?: connectionFromBreadcrumbs(breadcrumbs),
+                        hasRage = current.hasRage || hasRageBreadcrumb(breadcrumbs)
+                    )
+                }
+            }
+
+            enrichments
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to fetch replay list context enrichment" }
+            emptyMap()
+        }
+    }
+
+    private fun matchingReplayWindows(
+        windows: List<ReplayWindowQuery>,
+        projectId: Long,
+        timestampMs: Long,
+        userId: String?
+    ): List<ReplayWindowQuery> =
+        windows.filter { window ->
+            window.projectId == projectId &&
+                timestampMs >= window.startMs &&
+                timestampMs <= window.endMs &&
+                window.userIdMatches(userId)
+        }
+
+    private fun ReplayWindowQuery.userIdMatches(candidate: String?): Boolean =
+        userId.isNullOrBlank() || userId == candidate
+
+    private fun hasRageBreadcrumb(breadcrumbs: JsonArray?): Boolean =
+        breadcrumbs?.any { (it as? JsonObject)?.let(::isRageBreadcrumb) == true } == true
 
     private suspend fun getReplayUserSessionCount(
         projectId: Long,
@@ -814,7 +899,7 @@ class ReplayService(
 
         return suspendRunCatching {
             val rows = queryHelper.executeJsonEachRowQuery(query, "Replays") ?: return emptyList()
-            rows.mapNotNull { obj ->
+            val parsedRows = rows.mapNotNull { obj ->
                 suspendRunCatching {
                     val startedMs = obj["started_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                     val finishedMs = obj["finished_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull()
@@ -837,17 +922,25 @@ class ReplayService(
                     val rawErrorCount = obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                     val fallbackErrorCount =
                         if (rawErrorCount == 0) fallbackReplayErrorCount(emptyList(), replayWindow) else 0
-                    val hasRage = contextEnrichmentForWindow(replayWindow).hasRage
-                    buildReplayListItemFromJson(
-                        obj,
-                        rowProjectId ?: 0L,
-                        maxOf(rawErrorCount, fallbackErrorCount),
-                        hasRage
+                    ReplayListRow(
+                        obj = obj,
+                        projectId = rowProjectId ?: 0L,
+                        window = replayWindow,
+                        errorCount = maxOf(rawErrorCount, fallbackErrorCount)
                     )
                 }.getOrElse { e ->
                     logger.error(e) { "Failed to parse replay list row" }
                     null
                 }
+            }
+            val enrichments = getReplayContextEnrichments(parsedRows.mapNotNull { it.window })
+            parsedRows.mapNotNull { row ->
+                buildReplayListItemFromJson(
+                    row.obj,
+                    row.projectId,
+                    row.errorCount,
+                    row.window?.let { enrichments[it]?.hasRage } ?: false
+                )
             }
         }.getOrElse { e ->
             logger.error(e) { "Failed to fetch replays for services ${queryOptions.scope.cacheKeyPart()}" }

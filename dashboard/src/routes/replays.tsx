@@ -21,7 +21,7 @@ import type {Replay} from '@/lib/api'
 import {cn, formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil, parseDate} from '@/lib/date-format'
-import {useMemo, useState} from 'react'
+import {type KeyboardEvent, useCallback, useMemo, useState} from 'react'
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
@@ -126,6 +126,239 @@ const REPLAY_FACET_SCHEMA = [
 ] satisfies FacetSchema
 
 const REPLAY_ENVIRONMENTS = ['production', 'staging', 'development'] as const
+const LOADING_ROW_KEYS = [
+  'replay-loading-1',
+  'replay-loading-2',
+  'replay-loading-3',
+  'replay-loading-4',
+  'replay-loading-5',
+  'replay-loading-6',
+  'replay-loading-7',
+  'replay-loading-8',
+]
+
+function handleReplayRowKeyDown(
+  event: KeyboardEvent<HTMLTableRowElement>,
+  replay: Replay,
+  onOpen: (replay: Replay) => void
+) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  onOpen(replay)
+}
+
+function replayRowLabel(replay: Replay): string {
+  return `Open replay ${replay.replayId.slice(0, 8)} for ${replayDisplayName(replay.user)}`
+}
+
+interface ReplayRowProps {
+  readonly replay: Replay
+  readonly timezone: string
+  readonly onOpen: (replay: Replay) => void
+}
+
+function ReplayRow({ replay, timezone, onOpen }: ReplayRowProps) {
+  const level = getActivityLevel(replay.activity)
+  const signals = deriveReplaySignals(replay)
+  const browserOs = browserOsLabel(replay)
+  const mobile = isMobileOs(replay.osName)
+  const extraPages = replayExtraPageCount(replay)
+
+  return (
+    <TableRow
+      onClick={() => onOpen(replay)}
+      onKeyDown={(event) => handleReplayRowKeyDown(event, replay, onOpen)}
+      tabIndex={0}
+      role="button"
+      aria-label={replayRowLabel(replay)}
+      className="cursor-pointer"
+    >
+      <TableCell className="pl-3 pr-0">
+        <StatusDot tone={replayStatusTone(replay)} />
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Avatar className="h-6 w-6 shrink-0">
+            <AvatarFallback className={cn('text-2xs font-semibold', replayAvatarClass(replay.user))}>
+              {replayInitials(replay.user)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 leading-tight">
+            <div className="truncate text-xs font-medium">{replayDisplayName(replay.user)}</div>
+            <div className="font-mono text-2xs text-muted-foreground/70">
+              {replay.replayId.slice(0, 8)}
+            </div>
+          </div>
+        </div>
+      </TableCell>
+      <TableCell className="text-right font-mono text-xs tabular-nums">
+        {formatReplayClock(replay.durationMs)}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-2">
+          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn('h-full rounded-full', level.barClass)}
+              style={{ width: `${Math.min(100, Math.max(0, replay.activity))}%` }}
+            />
+          </div>
+          <span className="w-6 text-right font-mono text-2xs tabular-nums text-muted-foreground">
+            {replay.activity}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell>
+        {signals.length === 0 ? (
+          <span className="text-muted-foreground/60">-</span>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1">
+            {signals.map((signal) => (
+              <Badge key={signal.key} variant={signal.variant} className="gap-1 text-2xs">
+                {signal.key === 'error' && <AlertCircle className="h-3 w-3" />}
+                {signal.label}
+              </Badge>
+            ))}
+          </div>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-baseline gap-1 min-w-0">
+          <span className="truncate font-mono text-xs">{replayEntryPath(replay)}</span>
+          {extraPages > 0 && (
+            <span className="shrink-0 text-2xs text-muted-foreground">+{extraPages}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        {browserOs ? (
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+            {mobile ? <Smartphone className="h-3.5 w-3.5" /> : <Monitor className="h-3.5 w-3.5" />}
+            {browserOs}
+          </span>
+        ) : (
+          <span className="text-muted-foreground/60">-</span>
+        )}
+      </TableCell>
+      <TableCell className="text-right">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="whitespace-nowrap font-mono text-2xs text-muted-foreground">
+              {formatRelativeTime(replay.startedAt)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{formatDate(replay.startedAt, timezone)}</TooltipContent>
+        </Tooltip>
+      </TableCell>
+    </TableRow>
+  )
+}
+
+function ReplayTableSkeleton() {
+  return (
+    <div className="rounded-lg border border-border/60">
+      {LOADING_ROW_KEYS.map((key) => (
+        <div key={key} className="flex items-center gap-3 border-b border-border/40 p-2.5 last:border-0">
+          <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
+          <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+          <div className="ml-auto h-3 w-24 animate-pulse rounded bg-muted" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+interface ReplayContentProps {
+  readonly hasReplayScope: boolean
+  readonly isLoading: boolean
+  readonly replays: Replay[]
+  readonly filteredReplays: Replay[]
+  readonly visibleReplays: Replay[]
+  readonly timezone: string
+  readonly onOpenReplay: (replay: Replay) => void
+}
+
+function ReplayContent({
+  hasReplayScope,
+  isLoading,
+  replays,
+  filteredReplays,
+  visibleReplays,
+  timezone,
+  onOpenReplay,
+}: ReplayContentProps) {
+  if (!hasReplayScope) {
+    return (
+      <EmptyState
+        icon={Play}
+        title="No services match filters"
+        description="Adjust the selected services to view session replays."
+      />
+    )
+  }
+
+  if (isLoading) return <ReplayTableSkeleton />
+
+  if (!replays.length) {
+    return (
+      <EmptyState
+        icon={Play}
+        title="No replays yet"
+        description="Session replays are recorded when you enable replay capture in a compatible SDK. Configure replays in your service setup to start capturing user sessions."
+      />
+    )
+  }
+
+  if (filteredReplays.length === 0) {
+    return (
+      <EmptyState
+        icon={Search}
+        title="No replays match your search"
+        description="Try adjusting your search query or changing the filters."
+      />
+    )
+  }
+
+  if (visibleReplays.length === 0) {
+    return (
+      <EmptyState
+        icon={Search}
+        title="No replays in this view"
+        description="No sessions on this page match the selected view. Try another view or page."
+      />
+    )
+  }
+
+  return (
+    <TooltipProvider>
+      <div className="rounded-lg border border-border/60 overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="w-7" />
+              <TableHead className="text-2xs uppercase tracking-wide">User</TableHead>
+              <TableHead className="text-2xs uppercase tracking-wide text-right">Duration</TableHead>
+              <TableHead className="text-2xs uppercase tracking-wide w-[140px]">Activity</TableHead>
+              <TableHead className="text-2xs uppercase tracking-wide">Signals</TableHead>
+              <TableHead className="text-2xs uppercase tracking-wide">Entry page</TableHead>
+              <TableHead className="text-2xs uppercase tracking-wide">Browser · OS</TableHead>
+              <TableHead className="text-2xs uppercase tracking-wide text-right">Started</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {visibleReplays.map((replay) => (
+              <ReplayRow
+                key={replay.replayId}
+                replay={replay}
+                timezone={timezone}
+                onOpen={onOpenReplay}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </TooltipProvider>
+  )
+}
 
 function ReplaysPage() {
   const navigate = useNavigate()
@@ -236,6 +469,9 @@ function ReplaysPage() {
     () => filteredReplays.filter((r) => matchesView(r, view)),
     [filteredReplays, view]
   )
+  const openReplay = useCallback((replay: Replay) => {
+    navigate({ to: '/replays/$replayId', params: { replayId: replay.replayId } })
+  }, [navigate])
 
   if (projectsLoading) {
     return <div className="p-8 text-sm text-muted-foreground">Loading services...</div>
@@ -259,10 +495,6 @@ function ReplaysPage() {
         />
       </div>
     )
-  }
-
-  const openReplay = (replay: Replay) => {
-    navigate({ to: '/replays/$replayId', params: { replayId: replay.replayId } })
   }
 
   return (
@@ -330,154 +562,15 @@ function ReplaysPage() {
           </div>
         </div>
 
-        {/* Content */}
-        {!hasReplayScope ? (
-          <EmptyState
-            icon={Play}
-            title="No services match filters"
-            description="Adjust the selected services to view session replays."
-          />
-        ) : isLoading ? (
-          <div className="rounded-lg border border-border/60">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 border-b border-border/40 p-2.5 last:border-0">
-                <div className="h-6 w-6 animate-pulse rounded-full bg-muted" />
-                <div className="h-3 w-40 animate-pulse rounded bg-muted" />
-                <div className="ml-auto h-3 w-24 animate-pulse rounded bg-muted" />
-              </div>
-            ))}
-          </div>
-        ) : !replays.length ? (
-          <EmptyState
-            icon={Play}
-            title="No replays yet"
-            description="Session replays are recorded when you enable replay capture in a compatible SDK. Configure replays in your service setup to start capturing user sessions."
-          />
-        ) : filteredReplays.length === 0 ? (
-          <EmptyState
-            icon={Search}
-            title="No replays match your search"
-            description="Try adjusting your search query or changing the filters."
-          />
-        ) : visibleReplays.length === 0 ? (
-          <EmptyState
-            icon={Search}
-            title="No replays in this view"
-            description="No sessions on this page match the selected view. Try another view or page."
-          />
-        ) : (
-          <TooltipProvider>
-            <div className="rounded-lg border border-border/60 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-7" />
-                    <TableHead className="text-2xs uppercase tracking-wide">User</TableHead>
-                    <TableHead className="text-2xs uppercase tracking-wide text-right">Duration</TableHead>
-                    <TableHead className="text-2xs uppercase tracking-wide w-[140px]">Activity</TableHead>
-                    <TableHead className="text-2xs uppercase tracking-wide">Signals</TableHead>
-                    <TableHead className="text-2xs uppercase tracking-wide">Entry page</TableHead>
-                    <TableHead className="text-2xs uppercase tracking-wide">Browser · OS</TableHead>
-                    <TableHead className="text-2xs uppercase tracking-wide text-right">Started</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleReplays.map((replay) => {
-                    const level = getActivityLevel(replay.activity)
-                    const signals = deriveReplaySignals(replay)
-                    const browserOs = browserOsLabel(replay)
-                    const mobile = isMobileOs(replay.osName)
-                    const extraPages = replayExtraPageCount(replay)
-                    return (
-                      <TableRow
-                        key={replay.replayId}
-                        onClick={() => openReplay(replay)}
-                        className="cursor-pointer"
-                      >
-                        <TableCell className="pl-3 pr-0">
-                          <StatusDot tone={replayStatusTone(replay)} />
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Avatar className="h-6 w-6 shrink-0">
-                              <AvatarFallback className={cn('text-2xs font-semibold', replayAvatarClass(replay.user))}>
-                                {replayInitials(replay.user)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0 leading-tight">
-                              <div className="truncate text-xs font-medium">{replayDisplayName(replay.user)}</div>
-                              <div className="font-mono text-2xs text-muted-foreground/70">
-                                {replay.replayId.slice(0, 8)}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-xs tabular-nums">
-                          {formatReplayClock(replay.durationMs)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={cn('h-full rounded-full', level.barClass)}
-                                style={{ width: `${Math.min(100, Math.max(0, replay.activity))}%` }}
-                              />
-                            </div>
-                            <span className="w-6 text-right font-mono text-2xs tabular-nums text-muted-foreground">
-                              {replay.activity}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {signals.length === 0 ? (
-                            <span className="text-muted-foreground/60">—</span>
-                          ) : (
-                            <div className="flex flex-wrap items-center gap-1">
-                              {signals.map((s) => (
-                                <Badge key={s.key} variant={s.variant} className="gap-1 text-2xs">
-                                  {s.key === 'error' && <AlertCircle className="h-3 w-3" />}
-                                  {s.label}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-baseline gap-1 min-w-0">
-                            <span className="truncate font-mono text-xs">{replayEntryPath(replay)}</span>
-                            {extraPages > 0 && (
-                              <span className="shrink-0 text-2xs text-muted-foreground">+{extraPages}</span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {browserOs ? (
-                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                              {mobile ? <Smartphone className="h-3.5 w-3.5" /> : <Monitor className="h-3.5 w-3.5" />}
-                              {browserOs}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground/60">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="whitespace-nowrap font-mono text-2xs text-muted-foreground">
-                                {formatRelativeTime(replay.startedAt)}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{formatDate(replay.startedAt, timezone)}</TooltipContent>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          </TooltipProvider>
-        )}
+        <ReplayContent
+          hasReplayScope={hasReplayScope}
+          isLoading={isLoading}
+          replays={replays}
+          filteredReplays={filteredReplays}
+          visibleReplays={visibleReplays}
+          timezone={timezone}
+          onOpenReplay={openReplay}
+        />
 
         {/* Pagination */}
         {visibleReplays.length > 0 && (

@@ -148,8 +148,16 @@ class ReplayServiceTest {
         val replayRow = """
 {"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_count":2,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}
         """.trimIndent()
+        val contextRow = """
+{"project_id":1,"ts_ms":"1767225660000","user_id":"u-1","contexts":"{}","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:01:00.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
+        """.trimIndent()
         withClickHouseMockServer({ exchange ->
-            exchange.respond(200, replayRow, TEXT_PLAIN)
+            val query = exchange.requestBodyText()
+            if (query.contains("toUnixTimestamp64Milli(timestamp) as ts_ms")) {
+                exchange.respond(200, contextRow, TEXT_PLAIN)
+            } else {
+                exchange.respond(200, replayRow, TEXT_PLAIN)
+            }
         }) {
             val result = service.getReplays(projectId = 1, page = 1, limit = 25, period = "7d")
             assertEquals(1, result.size)
@@ -162,6 +170,7 @@ class ReplayServiceTest {
             assertEquals(8, result[0].activity)
             assertEquals("https://app.example.com", result[0].entryUrl)
             assertTrue("error" in result[0].signals)
+            assertTrue("rage_click" in result[0].signals)
         }
     }
 

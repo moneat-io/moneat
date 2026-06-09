@@ -79,7 +79,7 @@ const CATEGORY_META: Record<EventCategory, { readonly label: string; readonly co
 /** HTTP status from the explicit field, else parsed from a "→ 500" style title. */
 function statusOf(item: TimelineItem): number | null {
   if (typeof item.statusCode === 'number' && Number.isFinite(item.statusCode)) return item.statusCode
-  const m = item.title?.match(/→\s*(\d{3})\b/)
+  const m = /→\s*(\d{3})\b/.exec(item.title ?? '')
   return m ? Number(m[1]) : null
 }
 
@@ -111,7 +111,7 @@ function formatClock(offsetMs: number): string {
 
 /** Lowercase + strip non-alphanumerics, for comparing a title against its category label. */
 function normalizeLabel(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  return s.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
 }
 
 function issueSearch(projectId?: string | number): { projectId: string | undefined } {
