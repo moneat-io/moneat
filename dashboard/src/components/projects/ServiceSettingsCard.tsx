@@ -90,8 +90,8 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
     enabled: !!serviceId,
   })
 
-  const [localName, setName] = useState<string | undefined>(undefined)
-  const [localFramework, setFramework] = useState<string | undefined>(undefined)
+  const [localName, setLocalName] = useState<string | undefined>(undefined)
+  const [localFramework, setLocalFramework] = useState<string | undefined>(undefined)
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [copiedSlug, setCopiedSlug] = useState(false)
@@ -280,7 +280,7 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
           <Input
             id="service-name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => setLocalName(e.target.value)}
             placeholder="Checkout API"
             className="h-8"
           />
@@ -360,7 +360,7 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
                   <button
                     key={platform.id}
                     type="button"
-                    onClick={() => setFramework(platform.id)}
+                    onClick={() => setLocalFramework(platform.id)}
                     className={cn(
                       'rounded-md border p-2 text-left transition-colors',
                       framework === platform.id

@@ -148,76 +148,92 @@ function formatCentsRate(cents: number, unit: string): string {
   return `$${(cents / 100).toFixed(2)}/${unit}`
 }
 
-function buildIncludedLimits(tier: PricingCardTierInput): string[] {
-  const limits: string[] = []
+function customMetricLimitText(tier: PricingCardTierInput): string | null {
+  const limit = tier.monthlyCustomMetricLimit
+  if (limit == null || limit <= 0) return null
+  return `${formatEventLimit(limit)} custom metrics`
+}
 
-  // Unified ingestion GB is the primary limit
-  limits.push(`${formatDataLimit(tier.monthlyGbLimit)} ingestion`)
+function infraMetricLimitText(tier: PricingCardTierInput): string | null {
+  const limit = tier.monthlyInfraMetricSeriesHourLimit
+  if (limit == null || (limit <= 0 && !isUnlimited(limit))) return null
+  return `${formatEventLimit(limit)} infra metric series-hours`
+}
 
-  const metricLimit = tier.monthlyCustomMetricLimit
-  if (metricLimit != null && metricLimit > 0) {
-    limits.push(`${isUnlimited(metricLimit) ? 'Unlimited' : formatEventLimit(metricLimit)} custom metrics`)
-  }
+function spanLimitText(tier: PricingCardTierInput): string | null {
+  const limit = tier.monthlyApmSpanLimit
+  if (limit == null || limit <= 0) return null
+  return `${formatEventLimit(limit)} APM spans`
+}
 
-  const infraMetricLimit = tier.monthlyInfraMetricSeriesHourLimit
-  if (infraMetricLimit != null && (infraMetricLimit > 0 || isUnlimited(infraMetricLimit))) {
-    const limitText = isUnlimited(infraMetricLimit) ? 'Unlimited' : formatEventLimit(infraMetricLimit)
-    limits.push(`${limitText} infra metric series-hours`)
-  }
-
-  const spanLimit = tier.monthlyApmSpanLimit
-  if (spanLimit != null && spanLimit > 0) {
-    limits.push(`${isUnlimited(spanLimit) ? 'Unlimited' : formatEventLimit(spanLimit)} APM spans`)
-  }
-
+function hostLimitText(tier: PricingCardTierInput): string | null {
   const maxHosts = tier.maxHosts
-  if (maxHosts !== undefined) {
-    if (maxHosts == null || maxHosts >= UNLIMITED_SYSTEMS_SENTINEL) {
-      limits.push('Unlimited hosts')
-    } else {
-      limits.push(`Up to ${maxHosts} hosts`)
-    }
-  }
+  if (maxHosts === undefined) return null
+  if (maxHosts == null || maxHosts >= UNLIMITED_SYSTEMS_SENTINEL) return 'Unlimited hosts'
+  return `Up to ${maxHosts} hosts`
+}
 
-  const errRet = tier.retentionDays
-  const logRet = tier.logRetentionDays ?? errRet
-  const replayRet = tier.replayRetentionDays ?? errRet
-  const llmRet = tier.llmRetentionDays ?? errRet
-  const apmRet = tier.apmTraceRetentionDays ?? errRet
-  const coreSame = logRet === errRet && replayRet === errRet && llmRet === errRet
-  if (coreSame && apmRet === errRet) {
-    limits.push(`${errRet}-day retention`)
-  } else if (coreSame) {
-    limits.push(`${errRet}-day core retention, ${apmRet}-day APM traces`)
-  } else {
-    limits.push(
-      `${errRet}d errors, ${logRet}d logs, ${replayRet}d replays, ${llmRet}d AI, ${apmRet}d APM traces`
-    )
-  }
+function retentionLimitText(tier: PricingCardTierInput): string {
+  const errorRetention = tier.retentionDays
+  const logRetention = tier.logRetentionDays ?? errorRetention
+  const replayRetention = tier.replayRetentionDays ?? errorRetention
+  const llmRetention = tier.llmRetentionDays ?? errorRetention
+  const apmRetention = tier.apmTraceRetentionDays ?? errorRetention
+  const coreRetentionMatches =
+    logRetention === errorRetention && replayRetention === errorRetention && llmRetention === errorRetention
 
-  limits.push(tier.maxProjects == null ? 'Unlimited services' : `${tier.maxProjects} service${tier.maxProjects === 1 ? '' : 's'}`)
-  limits.push(`${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`)
+  if (coreRetentionMatches && apmRetention === errorRetention) return `${errorRetention}-day retention`
+  if (coreRetentionMatches) return `${errorRetention}-day core retention, ${apmRetention}-day APM traces`
+  return (
+    `${errorRetention}d errors, ${logRetention}d logs, ${replayRetention}d replays, ` +
+    `${llmRetention}d AI, ${apmRetention}d APM traces`
+  )
+}
 
-  // Analytics limits
+function pluralSuffix(count: number): string {
+  if (count === 1) return ''
+  return 's'
+}
+
+function serviceLimitText(tier: PricingCardTierInput): string {
+  if (tier.maxProjects == null) return 'Unlimited services'
+  return `${tier.maxProjects} service${pluralSuffix(tier.maxProjects)}`
+}
+
+function analyticsSiteLimitText(tier: PricingCardTierInput): string | null {
   const analyticsSites = tier.maxAnalyticsSites
-  if (analyticsSites != null) {
-    limits.push(`${analyticsSites} analytics site${analyticsSites === 1 ? '' : 's'}`)
-  } else if (tier.maxAnalyticsSites === null) {
-    limits.push('Unlimited analytics sites')
-  }
+  if (analyticsSites === undefined) return null
+  if (analyticsSites === null) return 'Unlimited analytics sites'
+  return `${analyticsSites} analytics site${pluralSuffix(analyticsSites)}`
+}
 
+function analyticsPageviewLimitText(tier: PricingCardTierInput): string | null {
   const analyticsPageviews = tier.monthlyAnalyticsPageviewLimit
-  if (analyticsPageviews != null && analyticsPageviews > 0) {
-    limits.push(`${formatEventLimit(analyticsPageviews)} page views/mo`)
-  }
+  if (analyticsPageviews == null || analyticsPageviews <= 0) return null
+  return `${formatEventLimit(analyticsPageviews)} page views/mo`
+}
 
+function analyticsRetentionText(tier: PricingCardTierInput): string | null {
   const analyticsRet = tier.analyticsRetentionDays
-  if (analyticsRet != null && analyticsRet > 0) {
-    const years = analyticsRet / 365
-    limits.push(`${years >= 1 ? `${Math.round(years)}-year` : `${analyticsRet}-day`} analytics retention`)
-  }
+  if (analyticsRet == null || analyticsRet <= 0) return null
+  if (analyticsRet >= 365) return `${Math.round(analyticsRet / 365)}-year analytics retention`
+  return `${analyticsRet}-day analytics retention`
+}
 
-  return limits
+function buildIncludedLimits(tier: PricingCardTierInput): string[] {
+  return [
+    `${formatDataLimit(tier.monthlyGbLimit)} ingestion`,
+    customMetricLimitText(tier),
+    infraMetricLimitText(tier),
+    spanLimitText(tier),
+    hostLimitText(tier),
+    retentionLimitText(tier),
+    serviceLimitText(tier),
+    `${formatMonitorLimit(tier.maxSystems)} (${tier.monitorIntervalSeconds}s interval)`,
+    analyticsSiteLimitText(tier),
+    analyticsPageviewLimitText(tier),
+    analyticsRetentionText(tier),
+  ].filter((limit): limit is string => limit != null)
 }
 
 function buildPlatformFeatures(tier: PricingCardTierInput): string[] {

@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {ReactNode} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {Loader2, ScrollText, Trash2} from 'lucide-react'
 import {api, type OtlpApiKey, type OtlpObservedService, type Project} from '@/lib/api'
@@ -129,6 +130,51 @@ function OtlpServiceRoutingPanel() {
   })
 
   const services = servicesData?.services ?? []
+  let serviceRoutingContent: ReactNode
+  if (servicesPending) {
+    serviceRoutingContent = (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading services...
+      </div>
+    )
+  } else if (services.length === 0) {
+    serviceRoutingContent = (
+      <div className="border rounded-lg p-8 text-center text-sm text-muted-foreground">
+        Services appear here after OTLP telemetry is received.
+      </div>
+    )
+  } else {
+    serviceRoutingContent = (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Service</TableHead>
+            <TableHead>Signals</TableHead>
+            <TableHead>Environment</TableHead>
+            <TableHead>Moneat service</TableHead>
+            <TableHead className="w-[80px]">
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {services.map((service) => (
+            <OtlpServiceRoutingRow
+              key={service.id}
+              service={service}
+              moneatServices={moneatServices}
+              upsertMapping={(serviceId) => upsertMapping.mutate({service, serviceId})}
+              deleteMapping={() => {
+                if (service.mappingId != null) deleteMapping.mutate(service.mappingId)
+              }}
+              isPending={upsertMapping.isPending || deleteMapping.isPending}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
 
   return (
     <Card id="otlp-service-routing">
@@ -140,44 +186,7 @@ function OtlpServiceRoutingPanel() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {servicesPending ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading services...
-          </div>
-        ) : services.length === 0 ? (
-          <div className="border rounded-lg p-8 text-center text-sm text-muted-foreground">
-            Services appear here after OTLP telemetry is received.
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Service</TableHead>
-                <TableHead>Signals</TableHead>
-                <TableHead>Environment</TableHead>
-                <TableHead>Moneat service</TableHead>
-                <TableHead className="w-[80px]">
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {services.map((service) => (
-                <OtlpServiceRoutingRow
-                  key={service.id}
-                  service={service}
-                  moneatServices={moneatServices}
-                  upsertMapping={(serviceId) => upsertMapping.mutate({service, serviceId})}
-                  deleteMapping={() => {
-                    if (service.mappingId != null) deleteMapping.mutate(service.mappingId)
-                  }}
-                  isPending={upsertMapping.isPending || deleteMapping.isPending}
-                />
-              ))}
-            </TableBody>
-          </Table>
-        )}
+        {serviceRoutingContent}
       </CardContent>
     </Card>
   )

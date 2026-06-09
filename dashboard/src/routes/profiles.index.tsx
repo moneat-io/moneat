@@ -127,9 +127,9 @@ function ViewToggle({
   onClick,
   children,
 }: {
-  active: boolean
-  onClick: () => void
-  children: ReactNode
+  readonly active: boolean
+  readonly onClick: () => void
+  readonly children: ReactNode
 }) {
   return (
     <button

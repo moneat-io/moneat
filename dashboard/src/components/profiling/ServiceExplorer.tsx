@@ -76,9 +76,13 @@ interface ZoomSelection {
   to: number
 }
 
-interface Props {
+type Props = Readonly<{
   service?: string
   filters?: ServiceExplorerFilters
+}>
+
+function normalizedInternalEnv(internalEnv: string): string | undefined {
+  return internalEnv === ALL_ENVS ? undefined : internalEnv
 }
 
 export function ServiceExplorer({service, filters}: Props) {
@@ -110,11 +114,7 @@ export function ServiceExplorer({service, filters}: Props) {
     return {from: to - RANGES[activeRangeKey].ms, to}
   }, [activeRangeKey])
 
-  const envParam = filtersControlled
-    ? filters.env
-    : internalEnv === ALL_ENVS
-      ? undefined
-      : internalEnv
+  const envParam = filtersControlled ? filters.env : normalizedInternalEnv(internalEnv)
   const effectiveType =
     filters?.type ?? internalSelectedType ?? summary?.types[0]?.profileType ?? undefined
   const filterSignature = [activeService ?? '', envParam ?? '', effectiveType ?? ''].join('\u001f')
@@ -189,7 +189,7 @@ export function ServiceExplorer({service, filters}: Props) {
 
   const toggleBucket = (ts: number) => {
     if (!bucketMs) return
-    if (activeZoom && activeZoom.from === ts) {
+    if (activeZoom?.from === ts) {
       setZoom(null)
     } else {
       setZoom({signature: zoomSignature, from: ts, to: ts + bucketMs})

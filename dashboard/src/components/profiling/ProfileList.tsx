@@ -60,7 +60,7 @@ interface ProfileScope {
   to?: number
 }
 
-interface Props {
+type Props = Readonly<{
   /** Embedded mode: scoped, compact list with no stats/filter chrome. */
   embedded?: boolean
   scope?: ProfileScope
@@ -70,7 +70,7 @@ interface Props {
   typeFilter?: string
   onTypeFilterChange?: (val: string) => void
   query?: string
-}
+}>
 
 export function ProfileList({
   embedded = false,

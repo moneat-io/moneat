@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {ReactNode} from 'react'
 import {useCallback, useEffect, useState} from 'react'
 import {ChevronRight, Minus, Search, SlidersHorizontal} from 'lucide-react'
 
@@ -32,14 +33,14 @@ function formatFacetCount(n: number): string {
 const SEARCH_THRESHOLD = 8
 const INITIAL_VISIBLE = 8
 
-export interface FacetRailProps {
+export type FacetRailProps = Readonly<{
   sections: readonly FacetRailSection[]
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
   title?: string
   icon?: React.ComponentType<{className?: string}>
   className?: string
-}
+}>
 
 /**
  * Facet-filter rail (generalized from the log viewer's TagFacets): a bordered
@@ -92,11 +93,11 @@ export function FacetRail({
   )
 }
 
-interface RailSectionProps {
+type RailSectionProps = Readonly<{
   section: FacetRailSection
   facetFilters: FacetFilter[]
   onFacetFiltersChange: (filters: FacetFilter[]) => void
-}
+}>
 
 type FacetValueLoader = NonNullable<FacetRailSection['loadOptions']>
 
@@ -189,6 +190,81 @@ function RailSection({section, facetFilters, onFacetFiltersChange}: RailSectionP
     : values
   const searchable = values.length > SEARCH_THRESHOLD
   const shown = showAll ? filtered : filtered.slice(0, INITIAL_VISIBLE)
+  let valuesContent: ReactNode
+  if (loadError) {
+    valuesContent = (
+      <div className="space-y-1 px-2 py-1">
+        <p className="text-xs text-muted-foreground">Could not load values.</p>
+        <button
+          type="button"
+          onClick={() => {
+            setLazyLoad({loader: loadOptions ?? null, values: null, error: false})
+          }}
+          className="rounded px-0 text-xs font-medium text-primary hover:underline focus:outline-none"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  } else if (!options && loadOptions && loaded === null) {
+    valuesContent = <p className="px-2 py-1 text-xs text-muted-foreground">Loading values...</p>
+  } else if (shown.length === 0) {
+    valuesContent = <p className="px-2 py-1 text-xs text-muted-foreground">No matches</p>
+  } else {
+    valuesContent = shown.map((item) => {
+      const state = getState(item.value)
+      const display = item.label ?? item.value
+      return (
+        <div
+          key={item.value}
+          className={cn(
+            'group flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/50',
+            state === 'include' && 'bg-primary/5',
+            state === 'exclude' && 'bg-danger-bg/50'
+          )}
+        >
+          <Checkbox
+            checked={state === 'include'}
+            onCheckedChange={() => toggleInclude(item.value)}
+            aria-label={display}
+            className={cn(
+              'h-3.5 w-3.5',
+              state === 'exclude' && 'border-danger-solid data-[state=checked]:bg-danger-solid'
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => toggleInclude(item.value)}
+            title={display}
+            className={cn(
+              'min-w-0 flex-1 truncate text-left font-mono text-xs focus:outline-none',
+              state === 'exclude' && 'text-muted-foreground line-through'
+            )}
+          >
+            {display}
+          </button>
+          {item.count != null && item.count > 0 && (
+            <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/60">
+              {formatFacetCount(item.count)}
+            </span>
+          )}
+          {allowExclude && (
+            <button
+              type="button"
+              onClick={(e) => toggleExclude(item.value, e)}
+              title={state === 'exclude' ? 'Remove exclusion' : 'Exclude this value'}
+              className={cn(
+                'shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100',
+                state === 'exclude' ? 'text-danger-fg opacity-100' : 'text-muted-foreground hover:text-danger-fg'
+              )}
+            >
+              <Minus className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )
+    })
+  }
 
   return (
     <div className="border-b border-border/50 last:border-b-0">
@@ -225,78 +301,7 @@ function RailSection({section, facetFilters, onFacetFiltersChange}: RailSectionP
             </div>
           )}
 
-          {loadError ? (
-            <div className="space-y-1 px-2 py-1">
-              <p className="text-xs text-muted-foreground">Could not load values.</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setLazyLoad({loader: loadOptions ?? null, values: null, error: false})
-                }}
-                className="rounded px-0 text-xs font-medium text-primary hover:underline focus:outline-none"
-              >
-                Retry
-              </button>
-            </div>
-          ) : !options && loadOptions && loaded === null ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">Loading values...</p>
-          ) : shown.length === 0 ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">No matches</p>
-          ) : (
-            shown.map((item) => {
-              const state = getState(item.value)
-              const display = item.label ?? item.value
-              return (
-                <div
-                  key={item.value}
-                  className={cn(
-                    'group flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-accent/50',
-                    state === 'include' && 'bg-primary/5',
-                    state === 'exclude' && 'bg-danger-bg/50'
-                  )}
-                >
-                  <Checkbox
-                    checked={state === 'include'}
-                    onCheckedChange={() => toggleInclude(item.value)}
-                    aria-label={display}
-                    className={cn(
-                      'h-3.5 w-3.5',
-                      state === 'exclude' && 'border-danger-solid data-[state=checked]:bg-danger-solid'
-                    )}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => toggleInclude(item.value)}
-                    title={display}
-                    className={cn(
-                      'min-w-0 flex-1 truncate text-left font-mono text-xs focus:outline-none',
-                      state === 'exclude' && 'text-muted-foreground line-through'
-                    )}
-                  >
-                    {display}
-                  </button>
-                  {item.count != null && item.count > 0 && (
-                    <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/60">
-                      {formatFacetCount(item.count)}
-                    </span>
-                  )}
-                  {allowExclude && (
-                    <button
-                      type="button"
-                      onClick={(e) => toggleExclude(item.value, e)}
-                      title={state === 'exclude' ? 'Remove exclusion' : 'Exclude this value'}
-                      className={cn(
-                        'shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100',
-                        state === 'exclude' ? 'text-danger-fg opacity-100' : 'text-muted-foreground hover:text-danger-fg'
-                      )}
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
-              )
-            })
-          )}
+          {valuesContent}
 
           {filtered.length > INITIAL_VISIBLE && (
             <button

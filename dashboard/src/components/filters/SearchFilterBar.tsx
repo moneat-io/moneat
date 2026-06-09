@@ -35,7 +35,7 @@ interface Suggestion {
   value: string
 }
 
-export interface SearchFilterBarProps {
+export type SearchFilterBarProps = Readonly<{
   query: string
   onQueryChange: (value: string) => void
   facetFilters: FacetFilter[]
@@ -57,7 +57,7 @@ export interface SearchFilterBarProps {
   /** Reset the surface-managed filter when the bar's clear-all is pressed. */
   onClearExtra?: () => void
   className?: string
-}
+}>
 
 /**
  * Unified search/filter bar in the house style (generalized from the log
@@ -94,7 +94,7 @@ export function SearchFilterBar({
       def.aliases?.forEach((a) => keys.add(a))
     }
     suggestKeys.forEach((k) => keys.add(k))
-    return Array.from(keys).sort()
+    return Array.from(keys).sort((a, b) => a.localeCompare(b))
   }, [schema, suggestKeys])
 
   const suggestions = useMemo<Suggestion[]>(() => {
@@ -165,8 +165,8 @@ export function SearchFilterBar({
     [query, onQueryChange]
   )
 
-  const applyToken = useCallback(
-    (token: string) => {
+	  const applyToken = useCallback(
+	    (token: string) => {
       // Boolean operators → treat the whole thing as a free-text query.
       if (/\b(AND|OR)\b/.test(token)) {
         appendToQuery(token)
@@ -220,35 +220,67 @@ export function SearchFilterBar({
     [appendToQuery, schema, onInterceptToken, facetFilters, onFacetFiltersChange]
   )
 
+  const applySuggestion = useCallback(
+    (suggestion: Suggestion) => {
+      if (suggestion.type === 'key') {
+        setInputValue(suggestion.value)
+        return
+      }
+      applyToken(suggestion.value)
+    },
+    [applyToken]
+  )
+
+  const handleEnterKey = useCallback(
+    (event: React.KeyboardEvent) => {
+      event.preventDefault()
+      const selected = suggestions[selectedIndex]
+      if (selected) {
+        applySuggestion(selected)
+        return
+      }
+      const trimmedInput = inputValue.trim()
+      if (trimmedInput) {
+        applyToken(trimmedInput)
+      }
+    },
+    [applySuggestion, applyToken, inputValue, selectedIndex, suggestions]
+  )
+
+  const handleBackspaceKey = useCallback(() => {
+    if (inputValue) return
+    // Empty input → peel off the last query word, then the last facet chip.
+    if (query) {
+      const words = query.trim().split(/\s+/)
+      onQueryChange(words.slice(0, -1).join(' '))
+      return
+    }
+    if (facetFilters.length > 0) {
+      onFacetFiltersChange(facetFilters.slice(0, -1))
+    }
+  }, [facetFilters, inputValue, onFacetFiltersChange, onQueryChange, query])
+
   const handleKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
-        const selected = suggestions[selectedIndex]
-        if (selected.type === 'key') {
-          setInputValue(selected.value)
-        } else {
-          applyToken(selected.value)
-        }
-      } else if (inputValue.trim()) {
-        applyToken(inputValue.trim())
-      }
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault()
-      setSelectedIndex((prev) => Math.min(prev + 1, suggestions.length - 1))
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      setSelectedIndex((prev) => Math.max(prev - 1, -1))
-    } else if (event.key === 'Escape') {
-      setShowSuggestions(false)
-    } else if (event.key === 'Backspace' && !inputValue) {
-      // Empty input → peel off the last query word, then the last facet chip.
-      if (query) {
-        const words = query.trim().split(/\s+/)
-        onQueryChange(words.slice(0, -1).join(' '))
-      } else if (facetFilters.length > 0) {
-        onFacetFiltersChange(facetFilters.slice(0, -1))
-      }
+    switch (event.key) {
+      case 'Enter':
+        handleEnterKey(event)
+        break
+      case 'ArrowDown':
+        event.preventDefault()
+        setSelectedIndex((prev) => Math.min(prev + 1, suggestions.length - 1))
+        break
+      case 'ArrowUp':
+        event.preventDefault()
+        setSelectedIndex((prev) => Math.max(prev - 1, -1))
+        break
+      case 'Escape':
+        setShowSuggestions(false)
+        break
+      case 'Backspace':
+        handleBackspaceKey()
+        break
+      default:
+        break
     }
   }
 

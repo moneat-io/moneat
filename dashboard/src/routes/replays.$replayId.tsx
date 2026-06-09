@@ -17,7 +17,7 @@
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {type RefObject, useCallback, useMemo, useRef, useState} from 'react'
-import {api, type ReplayDetail} from '@/lib/api'
+import {api, type ReplayDetail, type ReplayTimelineItem} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime as formatDateTimeUtil, parseDate} from '@/lib/date-format'
@@ -63,82 +63,22 @@ function formatDuration(ms: number) {
 function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
   const date = parseDate(isoString)
-  if (isNaN(date.getTime())) return 'Invalid Date'
+  if (Number.isNaN(date.getTime())) return 'Invalid Date'
   return formatDateTimeUtil(date, timezone)
 }
 
-/** Compute actual recording duration from events. Backend replay.durationMs uses session span and can be wrong. */
-function getRecordingDurationMs(events: unknown[], isMobileReplay: boolean): number {
-  if (!Array.isArray(events) || events.length === 0) return 0
+function positiveDurationMs(duration: unknown): number | undefined {
+  if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) return duration
+  if (typeof duration !== 'string') return undefined
 
-  if (isMobileReplay) {
-    // Mobile: sum video segment durations (same logic as MobileReplayViewer)
-    const replayEvents = events.filter(
-      (e): e is { type: number; timestamp: number; segment_id?: number; data?: { tag?: string; payload?: { duration?: number } } } =>
-        typeof e === 'object' &&
-        e !== null &&
-        'type' in e &&
-        'timestamp' in e &&
-        typeof (e as { type: unknown }).type === 'number' &&
-        typeof (e as { timestamp: unknown }).timestamp === 'number'
-    )
-    const segmentDurations = new Map<number, number>()
-    for (const e of replayEvents) {
-      if (e.type !== 5 || e.data?.tag !== 'video') continue
-      const segmentId = typeof e.segment_id === 'number' ? e.segment_id : undefined
-      const duration = e.data?.payload?.duration
-      const durMs =
-        typeof duration === 'number' && Number.isFinite(duration) && duration > 0
-          ? duration
-          : typeof duration === 'string'
-            ? Number(duration)
-            : NaN
-      if (segmentId !== undefined && Number.isFinite(durMs) && durMs > 0) {
-        segmentDurations.set(segmentId, durMs)
-      }
-    }
-    const videoSegments = events
-      .filter((e): e is { type: string; segment_id?: number } => typeof e === 'object' && e !== null && (e as { type?: string }).type === 'mobile_replay_video')
-      .sort((a, b) => (a.segment_id ?? 0) - (b.segment_id ?? 0))
-    if (videoSegments.length === 0) return 0
-    let total = 0
-    for (let i = 0; i < videoSegments.length; i++) {
-      const segment = videoSegments[i]
-      if (!segment) continue
-      const segId = typeof segment.segment_id === 'number' ? segment.segment_id : i
-      total += segmentDurations.get(segId) ?? 5000
-    }
-    return total
-  }
-
-  // rrweb: duration = max(timestamp) - min(timestamp)
-  let minTs = Infinity
-  let maxTs = -Infinity
-  for (const e of events) {
-    if (e && typeof e === 'object' && 'timestamp' in e && typeof (e as { timestamp: unknown }).timestamp === 'number') {
-      const ts = (e as { timestamp: number }).timestamp
-      minTs = Math.min(minTs, ts)
-      maxTs = Math.max(maxTs, ts)
-    }
-  }
-  return minTs < maxTs ? maxTs - minTs : 0
+  const parsed = Number(duration)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
-function getRecordingStartMs(events: unknown[]): number | null {
-  let minTs = Infinity
-  for (const e of events) {
-    if (e && typeof e === 'object' && 'timestamp' in e && typeof (e as { timestamp: unknown }).timestamp === 'number') {
-      const ts = (e as { timestamp: number }).timestamp
-      minTs = Math.min(minTs, ts)
-    }
-  }
-  return Number.isFinite(minTs) ? minTs : null
-}
+const DEFAULT_MOBILE_SEGMENT_DURATION_MS = 5000
 
-function isLikelyEpochMs(timestampMs: number | null): boolean {
-  if (timestampMs == null) return false
-  // 2000-01-01 UTC to 2100-01-01 UTC
-  return timestampMs >= 946684800000 && timestampMs <= 4102444800000
+interface TimestampedReplayEvent {
+  timestamp: number
 }
 
 interface MobileReplayEventForTiming {
@@ -151,7 +91,107 @@ interface MobileReplayEventForTiming {
   }
 }
 
+interface MobileVideoSegment {
+  type: string
+  segment_id?: number
+}
+
+function hasNumericTimestamp(event: unknown): event is TimestampedReplayEvent {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'timestamp' in event &&
+    typeof (event as { timestamp: unknown }).timestamp === 'number'
+  )
+}
+
+function isMobileReplayTimingEvent(event: unknown): event is MobileReplayEventForTiming {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'type' in event &&
+    'timestamp' in event &&
+    typeof (event as { type: unknown }).type === 'number' &&
+    typeof (event as { timestamp: unknown }).timestamp === 'number'
+  )
+}
+
+function isMobileVideoSegment(event: unknown): event is MobileVideoSegment {
+  return typeof event === 'object' && event !== null && (event as { type?: unknown }).type === 'mobile_replay_video'
+}
+
+function getRrwebRecordingDurationMs(events: unknown[]): number {
+  let minTs = Infinity
+  let maxTs = -Infinity
+  for (const event of events.filter(hasNumericTimestamp)) {
+    minTs = Math.min(minTs, event.timestamp)
+    maxTs = Math.max(maxTs, event.timestamp)
+  }
+  return minTs < maxTs ? maxTs - minTs : 0
+}
+
+function mobileSegmentDurations(events: unknown[]): Map<number, number> {
+  const durations = new Map<number, number>()
+
+  for (const event of events.filter(isMobileReplayTimingEvent)) {
+    if (event.type !== 5 || event.data?.tag !== 'video') continue
+
+    const segmentId = typeof event.segment_id === 'number' ? event.segment_id : undefined
+    const durationMs = positiveDurationMs(event.data?.payload?.duration)
+    if (segmentId !== undefined && durationMs !== undefined) {
+      durations.set(segmentId, durationMs)
+    }
+  }
+
+  return durations
+}
+
+function getMobileRecordingDurationMs(events: unknown[]): number {
+  const segmentDurations = mobileSegmentDurations(events)
+  const videoSegments = events
+    .filter(isMobileVideoSegment)
+    .sort((a, b) => (a.segment_id ?? 0) - (b.segment_id ?? 0))
+
+  return videoSegments.reduce((total, segment, index) => {
+    const segmentId = typeof segment.segment_id === 'number' ? segment.segment_id : index
+    return total + (segmentDurations.get(segmentId) ?? DEFAULT_MOBILE_SEGMENT_DURATION_MS)
+  }, 0)
+}
+
+/** Compute actual recording duration from events. Backend replay.durationMs uses session span and can be wrong. */
+function getRecordingDurationMs(events: unknown[], isMobileReplay: boolean): number {
+  if (!Array.isArray(events) || events.length === 0) return 0
+  return isMobileReplay ? getMobileRecordingDurationMs(events) : getRrwebRecordingDurationMs(events)
+}
+
+function getRecordingStartMs(events: unknown[]): number | null {
+  let minTs = Infinity
+  for (const event of events.filter(hasNumericTimestamp)) {
+    minTs = Math.min(minTs, event.timestamp)
+  }
+  return Number.isFinite(minTs) ? minTs : null
+}
+
+function isLikelyEpochMs(timestampMs: number | null): boolean {
+  if (timestampMs == null) return false
+  // 2000-01-01 UTC to 2100-01-01 UTC
+  return timestampMs >= 946684800000 && timestampMs <= 4102444800000
+}
+
 type MobileReplayOrientation = 'portrait' | 'landscape'
+type MobileCompressedTimeMapper = (absoluteTimestampMs: number) => number
+type ReplayTimelineItemWithData = ReplayTimelineItem & {
+  data?: Record<string, unknown>
+}
+
+interface MobileBreadcrumbReplayEvent {
+  type: number
+  timestamp: number
+  data?: {
+    tag?: string
+    payload?: Record<string, unknown>
+  }
+}
 
 function isNativeMobilePlatform(platform?: string): platform is 'android' | 'ios' {
   return platform === 'android' || platform === 'ios'
@@ -195,15 +235,7 @@ function replayPlatformLabel(platform?: string): string | null {
 
 function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestampMs: number) => number) | null {
   const replayEvents = events
-    .filter(
-      (e): e is MobileReplayEventForTiming =>
-        typeof e === 'object' &&
-        e !== null &&
-        'type' in e &&
-        'timestamp' in e &&
-        typeof (e as { type: unknown }).type === 'number' &&
-        typeof (e as { timestamp: unknown }).timestamp === 'number'
-    )
+    .filter(isMobileReplayTimingEvent)
     .sort((a, b) => a.timestamp - b.timestamp)
 
   const getEventSegmentId = (event: MobileReplayEventForTiming): number | undefined => {
@@ -219,13 +251,7 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
 
   const getVideoDurationMs = (event: MobileReplayEventForTiming): number | undefined => {
     if (event.type !== 5 || event.data?.tag !== 'video') return undefined
-    const duration = event.data?.payload?.duration
-    if (typeof duration === 'number' && Number.isFinite(duration) && duration > 0) return duration
-    if (typeof duration === 'string') {
-      const parsed = Number(duration)
-      if (Number.isFinite(parsed) && parsed > 0) return parsed
-    }
-    return undefined
+    return positiveDurationMs(event.data?.payload?.duration)
   }
 
   const isMeaningfulEvent = (event: MobileReplayEventForTiming): boolean => {
@@ -250,7 +276,7 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
   }
 
   const videoSegments = events
-    .filter((e): e is { type: string; segment_id?: number } => typeof e === 'object' && e !== null && (e as { type?: string }).type === 'mobile_replay_video')
+    .filter(isMobileVideoSegment)
     .sort((a, b) => (a.segment_id ?? 0) - (b.segment_id ?? 0))
 
   if (videoSegments.length === 0) return null
@@ -296,7 +322,7 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
     return {
       segmentId,
       startTimestamp: segmentStarts.get(segmentId),
-      durationMs: segmentDurations.get(segmentId) ?? 5000,
+      durationMs: segmentDurations.get(segmentId) ?? DEFAULT_MOBILE_SEGMENT_DURATION_MS,
     }
   })
 
@@ -333,6 +359,209 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
     const localMs = Math.max(0, Math.min(absoluteTimestampMs - target.startTimestamp, target.durationMs))
     return target.globalOffsetMs + localMs
   }
+}
+
+function isMobileBreadcrumbEvent(event: unknown): event is MobileBreadcrumbReplayEvent {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'type' in event &&
+    'timestamp' in event &&
+    (event as { type: unknown }).type === 5 &&
+    typeof (event as { timestamp: unknown }).timestamp === 'number' &&
+    (event as { data?: { tag?: string } }).data?.tag === 'breadcrumb'
+  )
+}
+
+function isMeaningfulBreadcrumbPayload(payload: Record<string, unknown>): boolean {
+  const category = payload.category
+  const action = payload.action
+  if (typeof category === 'string' && category.startsWith('device.')) return false
+  if (
+    typeof action === 'string' &&
+    ['SCREEN_OFF', 'SCREEN_ON', 'DREAMING_STARTED', 'DREAMING_STOPPED'].includes(action)
+  ) {
+    return false
+  }
+  return true
+}
+
+function formatBreadcrumbTitle(payload: Record<string, unknown>): string {
+  const category = payload.category ?? payload.type ?? ''
+  if (typeof category === 'string' && category.length > 0) {
+    return category
+      .split(/[._-]/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ')
+  }
+
+  const message = payload.message
+  if (typeof message === 'string' && message.length > 0) return message
+  return 'Breadcrumb'
+}
+
+function payloadText(value: unknown): string | undefined {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return undefined
+}
+
+function formatLifecycleBreadcrumbDetail(payload: Record<string, unknown>): string {
+  const screen = payloadText(payload.screen) ?? 'Screen'
+  const state = payloadText(payload.state) ?? ''
+  return `${screen}: ${state}`
+}
+
+function formatClickBreadcrumbDetail(payload: Record<string, unknown>): string {
+  const viewClass = payloadText(payload['view.class'])?.split('.').pop() ?? ''
+  const viewId = payloadText(payload['view.id']) ?? ''
+  return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
+}
+
+function formatNavigationBreadcrumbDetail(payload: Record<string, unknown>): string {
+  const from = payloadText(payload.from) ?? ''
+  const to = payloadText(payload.to) ?? ''
+  return `${from} → ${to}`
+}
+
+function formatHttpBreadcrumbDetail(payload: Record<string, unknown>): string | undefined {
+  const parts = [
+    payloadText(payload.method),
+    payloadText(payload.url),
+    payloadText(payload.status_code),
+  ].filter((part): part is string => part !== undefined)
+
+  return parts.length > 0 ? parts.join(' ') : undefined
+}
+
+function formatBreadcrumbDetail(payload: Record<string, unknown>, category: string): string | undefined {
+  const normalizedCategory = category.toLowerCase()
+  const message = payloadText(payload.message)
+  if (message) return message
+  if (normalizedCategory.includes('ui.lifecycle')) {
+    return formatLifecycleBreadcrumbDetail(payload)
+  }
+  if (normalizedCategory.includes('ui.click')) {
+    return formatClickBreadcrumbDetail(payload)
+  }
+  if (normalizedCategory.includes('navigation')) return formatNavigationBreadcrumbDetail(payload)
+  if (normalizedCategory.includes('http') || normalizedCategory.includes('network')) return formatHttpBreadcrumbDetail(payload)
+
+  return payloadText(payload.action) ?? payloadText(payload.type)
+}
+
+function clampTimelineOffsetMs(offsetMs: number, durationMs: number): number {
+  return Math.max(0, durationMs > 0 ? Math.min(offsetMs, durationMs) : offsetMs)
+}
+
+interface BreadcrumbTimelineOptions {
+  readonly events: unknown[]
+  readonly isMobileReplay: boolean
+  readonly recordingStartMs: number | null
+  readonly durationMs: number
+  readonly mobileCompressedTimeMapper: MobileCompressedTimeMapper | null
+}
+
+function buildBreadcrumbTimelineItems({
+  events,
+  isMobileReplay,
+  recordingStartMs,
+  durationMs,
+  mobileCompressedTimeMapper,
+}: BreadcrumbTimelineOptions): ReplayTimelineItemWithData[] {
+  if (!isMobileReplay || !Array.isArray(events) || events.length === 0) return []
+  const startMs = recordingStartMs ?? 0
+
+  return events
+    .filter(isMobileBreadcrumbEvent)
+    .filter((event) => isMeaningfulBreadcrumbPayload(event.data?.payload ?? {}))
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .map((event, index) => {
+      const payload = event.data?.payload ?? {}
+      const category = payload.category ?? payload.type ?? ''
+      const categoryText = typeof category === 'string' ? category : ''
+      const timestamp = event.timestamp
+      let offsetMs = timestamp - startMs
+      if (mobileCompressedTimeMapper && Number.isFinite(timestamp)) {
+        offsetMs = mobileCompressedTimeMapper(timestamp)
+      }
+
+      return {
+        id: `breadcrumb-${index}-${timestamp}`,
+        type: 'span',
+        timestamp: new Date(timestamp).toISOString(),
+        offsetMs: clampTimelineOffsetMs(offsetMs, durationMs),
+        title: formatBreadcrumbTitle(payload),
+        description: formatBreadcrumbDetail(payload, categoryText),
+        category: categoryText || undefined,
+        data: Object.keys(payload).length > 0 ? payload : undefined,
+      }
+    })
+}
+
+interface NormalizedTimelineOptions {
+  readonly items: ReplayTimelineItem[]
+  readonly fallbackItems: ReplayTimelineItemWithData[]
+  readonly replayStartMs: number
+  readonly recordingStartMs: number | null
+  readonly durationMs: number
+  readonly mobileCompressedTimeMapper: MobileCompressedTimeMapper | null
+}
+
+function normalizeTimelineItems({
+  items,
+  fallbackItems,
+  replayStartMs,
+  recordingStartMs,
+  durationMs,
+  mobileCompressedTimeMapper,
+}: NormalizedTimelineOptions): ReplayTimelineItemWithData[] {
+  if (items.length === 0) return fallbackItems
+
+  const shouldAdjust =
+    replayStartMs > 0 &&
+    isLikelyEpochMs(replayStartMs) &&
+    isLikelyEpochMs(recordingStartMs)
+  const shiftMs = shouldAdjust ? (recordingStartMs as number) - replayStartMs : 0
+  const out: ReplayTimelineItemWithData[] = []
+
+  for (const item of items) {
+    const rawOffset = item.offsetMs - shiftMs
+    if (!Number.isFinite(rawOffset)) continue
+
+    let normalizedOffset = Math.max(0, rawOffset)
+    if (mobileCompressedTimeMapper) {
+      const absoluteMs = parseDate(item.timestamp).getTime()
+      if (Number.isFinite(absoluteMs)) {
+        normalizedOffset = mobileCompressedTimeMapper(absoluteMs)
+      }
+    }
+
+    out.push({...item, offsetMs: clampTimelineOffsetMs(normalizedOffset, durationMs)})
+  }
+
+  return out
+}
+
+export const replayDetailHelperTestHooks = {
+  ReplayRecordingStage,
+  buildBreadcrumbTimelineItems,
+  createMobileCompressedTimeMapper,
+  formatDate,
+  formatDuration,
+  formatPlatformLabel: replayPlatformLabel,
+  getRecordingDurationMs,
+  getRecordingStartMs,
+  hasMobileVideoSegments,
+  isLikelyEpochMs,
+  isMobileReplayPlaceholder: isMobileUnsupportedRecording,
+  isMobileReplayPlatform: isNativeMobilePlatform,
+  isReplayMobile: isMobileReplaySession,
+  mobileContainerPlatform: mobilePlatform,
+  replayEventType: eventType,
+  replayProjectId: replayProjectResourceId,
+  normalizeTimelineItems,
+  resolveReplayDurationMs: replayDurationMs,
 }
 
 interface ReplayRecordingStageProps {
@@ -836,142 +1065,39 @@ function ReplayDetailPage() {
   }, [])
 
   // Derive breadcrumb timeline items from recording events for mobile replays when backend timeline is empty.
-  const breadcrumbsFromEvents = useMemo(() => {
-    if (!isMobileReplay || !Array.isArray(events) || events.length === 0) return []
-    const startMs = recordingStartMs ?? 0
-
-    const breadcrumbEvents = events
-      .filter(
-        (e): e is { type: number; timestamp: number; data?: { tag?: string; payload?: Record<string, unknown> } } =>
-          typeof e === 'object' &&
-          e !== null &&
-          'type' in e &&
-          'timestamp' in e &&
-          (e as { type: unknown }).type === 5 &&
-          (e as { data?: { tag?: string } }).data?.tag === 'breadcrumb'
-      )
-      .filter((e) => {
-        const p = e.data?.payload ?? {}
-        const cat = p.category
-        const action = p.action
-        if (typeof cat === 'string' && cat.startsWith('device.')) return false
-        if (
-          typeof action === 'string' &&
-          ['SCREEN_OFF', 'SCREEN_ON', 'DREAMING_STARTED', 'DREAMING_STOPPED'].includes(action)
-        )
-          return false
-        return true
-      })
-      .sort((a, b) => a.timestamp - b.timestamp)
-
-    const formatBreadcrumbTitle = (p: Record<string, unknown>): string => {
-      const cat = (p.category ?? p.type ?? '') as string
-      if (typeof cat === 'string' && cat.length > 0) {
-        return cat
-          .split(/[._-]/)
-          .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-          .join(' ')
-      }
-      const msg = p.message
-      if (typeof msg === 'string' && msg.length > 0) return msg
-      return 'Breadcrumb'
-    }
-
-    const formatBreadcrumbDetail = (p: Record<string, unknown>, category: string): string | undefined => {
-      const cat = category.toLowerCase()
-      if (p.message && typeof p.message === 'string') return p.message
-      if (cat.includes('ui.lifecycle'))
-        return `${p.screen ?? 'Screen'}: ${p.state ?? ''}`
-      if (cat.includes('ui.click')) {
-        const viewClass = (p['view.class'] as string)?.split('.').pop() ?? ''
-        const viewId = p['view.id'] ?? ''
-        return viewId ? `Clicked ${viewClass} (${viewId})` : `Clicked ${viewClass}`
-      }
-      if (cat.includes('navigation')) return `${p.from ?? ''} → ${p.to ?? ''}`
-      if (cat.includes('http') || cat.includes('network')) {
-        const parts: string[] = []
-        if (p.method) parts.push(String(p.method))
-        if (p.url) parts.push(String(p.url))
-        if (p.status_code != null) parts.push(String(p.status_code))
-        return parts.length > 0 ? parts.join(' ') : undefined
-      }
-      if (p.action && typeof p.action === 'string') return p.action
-      if (p.type && typeof p.type === 'string') return p.type
-      return undefined
-    }
-
-    return breadcrumbEvents.map((e, idx) => {
-      const p = e.data?.payload ?? {}
-      const cat = (p.category ?? p.type ?? '') as string
-      const title = formatBreadcrumbTitle(p)
-      const description = formatBreadcrumbDetail(p, cat)
-      let offsetMs = e.timestamp - startMs
-      if (mobileCompressedTimeMapper && Number.isFinite(e.timestamp)) {
-        offsetMs = mobileCompressedTimeMapper(e.timestamp)
-      }
-      offsetMs = Math.max(0, durationMs > 0 ? Math.min(offsetMs, durationMs) : offsetMs)
-      return {
-        id: `breadcrumb-${idx}-${e.timestamp}`,
-        type: 'span' as const,
-        timestamp: new Date(e.timestamp).toISOString(),
-        offsetMs,
-        title,
-        description,
-        category: cat || undefined,
-        data: Object.keys(p).length > 0 ? p : undefined,
-      }
-    })
-  }, [
-    isMobileReplay,
-    events,
-    recordingStartMs,
-    durationMs,
-    mobileCompressedTimeMapper,
-  ])
+  const breadcrumbsFromEvents = useMemo(
+    () =>
+      buildBreadcrumbTimelineItems({
+        events,
+        isMobileReplay,
+        recordingStartMs,
+        durationMs,
+        mobileCompressedTimeMapper,
+      }),
+    [durationMs, events, isMobileReplay, mobileCompressedTimeMapper, recordingStartMs]
+  )
 
   // Align backend offsets (based on replay_start_timestamp) with player offsets (based on recording event start).
   // For mobile replays with no backend timeline, use breadcrumbs derived from recording events.
-  const timelineItems = useMemo(() => {
-    const items = timeline?.items ?? []
-    if (items.length === 0) {
-      return breadcrumbsFromEvents
-    }
-
-    const replayStartMs = timeline?.replayStartMs ?? 0
-    const shouldAdjust =
-      replayStartMs > 0 &&
-      isLikelyEpochMs(replayStartMs) &&
-      isLikelyEpochMs(recordingStartMs)
-    const shiftMs = shouldAdjust ? (recordingStartMs as number) - replayStartMs : 0
-    const out: typeof items = []
-
-    for (const item of items) {
-      const rawOffset = item.offsetMs - shiftMs
-      if (!Number.isFinite(rawOffset)) continue
-
-      let normalizedOffset = Math.max(0, rawOffset)
-      if (mobileCompressedTimeMapper) {
-        const absoluteMs = parseDate(item.timestamp).getTime()
-        if (Number.isFinite(absoluteMs)) {
-          normalizedOffset = mobileCompressedTimeMapper(absoluteMs)
-        }
-      }
-      if (durationMs > 0) {
-        normalizedOffset = Math.max(0, Math.min(normalizedOffset, durationMs))
-      }
-
-      out.push({ ...item, offsetMs: normalizedOffset })
-    }
-
-    return out
-  }, [
-    timeline?.items,
-    timeline?.replayStartMs,
-    recordingStartMs,
-    durationMs,
-    mobileCompressedTimeMapper,
-    breadcrumbsFromEvents,
-  ])
+  const timelineItems = useMemo(
+    () =>
+      normalizeTimelineItems({
+        items: timeline?.items ?? [],
+        fallbackItems: breadcrumbsFromEvents,
+        replayStartMs: timeline?.replayStartMs ?? 0,
+        recordingStartMs,
+        durationMs,
+        mobileCompressedTimeMapper,
+      }),
+    [
+      breadcrumbsFromEvents,
+      durationMs,
+      mobileCompressedTimeMapper,
+      recordingStartMs,
+      timeline?.items,
+      timeline?.replayStartMs,
+    ]
+  )
 
   if (isLoading || !replay) {
     return (

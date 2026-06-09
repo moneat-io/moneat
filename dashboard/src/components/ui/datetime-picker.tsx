@@ -26,14 +26,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 
-interface DateTimePickerProps {
+type DateTimePickerProps = Readonly<{
+  id?: string
   value: string // ISO datetime-local format (YYYY-MM-DDTHH:mm)
   onChange: (value: string) => void
   placeholder?: string
   className?: string
-}
+}>
 
 export function DateTimePicker({
+  id,
   value,
   onChange,
   placeholder = "Pick a date and time",
@@ -77,6 +79,7 @@ export function DateTimePicker({
     <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           className={cn(
             "w-full justify-start text-left font-normal",
