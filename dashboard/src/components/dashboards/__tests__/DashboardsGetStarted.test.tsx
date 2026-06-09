@@ -58,19 +58,23 @@ const SAMPLE_TEMPLATES: readonly DashboardTemplateSummary[] = [
   },
 ]
 
-function setup(templates: readonly DashboardTemplateSummary[] = SAMPLE_TEMPLATES) {
+function setup(
+  templates: readonly DashboardTemplateSummary[] = SAMPLE_TEMPLATES,
+  isLoadingTemplates = false,
+) {
   const onCreateBlank = vi.fn()
   const onUseTemplate = vi.fn()
   const onImport = vi.fn()
-  render(
+  const result = render(
     <DashboardsGetStarted
       templates={templates}
+      isLoadingTemplates={isLoadingTemplates}
       onCreateBlank={onCreateBlank}
       onUseTemplate={onUseTemplate}
       onImport={onImport}
     />,
   )
-  return {onCreateBlank, onUseTemplate, onImport}
+  return {onCreateBlank, onUseTemplate, onImport, ...result}
 }
 
 describe('DashboardsGetStarted', () => {
@@ -131,5 +135,66 @@ describe('DashboardsGetStarted', () => {
       'aria-pressed',
       'false',
     )
+  })
+
+  it('shows a loading gallery while template metadata is pending', () => {
+    const {container} = setup([], true)
+
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0)
+    expect(screen.queryByText('No templates match this category.')).not.toBeInTheDocument()
+  })
+
+  it('shows an empty filtered state when no templates match the selected category', () => {
+    setup([])
+
+    expect(screen.getByText('No templates match this category.')).toBeInTheDocument()
+  })
+
+  it('renders every thumbnail family used by template categories and tags', () => {
+    const templates: readonly DashboardTemplateSummary[] = [
+      ...SAMPLE_TEMPLATES,
+      {
+        id: 'kubernetes-cluster',
+        title: 'Kubernetes Cluster',
+        description: 'Cluster telemetry.',
+        category: 'kubernetes',
+        tags: ['Kubernetes'],
+        required_sources: ['Prometheus'],
+        widget_count: 24,
+        variable_count: 3,
+        quality: 'ready',
+        resource_path: 'dashboard-templates/community/kubernetes-cluster.json',
+      },
+      {
+        id: 'browser-vitals',
+        title: 'Browser Vitals',
+        description: 'Browser performance telemetry.',
+        category: 'frontend',
+        tags: ['RUM', 'Browser'],
+        required_sources: ['OTLP'],
+        widget_count: 7,
+        variable_count: 1,
+        quality: 'partial',
+        resource_path: 'dashboard-templates/community/browser-vitals.json',
+      },
+      {
+        id: 'service-dashboard',
+        title: 'Service Dashboard',
+        description: 'Service-level telemetry.',
+        category: 'applications',
+        tags: ['Applications'],
+        required_sources: ['OTLP'],
+        widget_count: 11,
+        variable_count: 1,
+        quality: 'ready',
+        resource_path: 'dashboard-templates/community/service-dashboard.json',
+      },
+    ]
+
+    setup(templates)
+
+    expect(screen.getByText('Kubernetes Cluster')).toBeInTheDocument()
+    expect(screen.getByText('Browser Vitals')).toBeInTheDocument()
+    expect(screen.getByText('Service Dashboard')).toBeInTheDocument()
   })
 })
