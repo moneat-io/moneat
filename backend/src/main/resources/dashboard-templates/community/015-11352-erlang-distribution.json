@@ -78,8 +78,8 @@
                 "widget_type": "stat",
                 "grid_x": 0,
                 "grid_y": 0,
-                "grid_w": 6,
-                "grid_h": 4,
+                "grid_w": 3,
+                "grid_h": 3,
                 "query_configs": [
                     {
                         "dataSource": "__prometheus",
@@ -652,7 +652,7 @@
                     }
                 ],
                 "display_config": {
-                    "unit": "Bps",
+                    "unit": "decbytes",
                     "decimals": "0",
                     "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
                     "drawStyle": "line",

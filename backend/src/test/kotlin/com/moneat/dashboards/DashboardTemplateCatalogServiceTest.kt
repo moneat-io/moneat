@@ -79,4 +79,25 @@ class DashboardTemplateCatalogServiceTest {
         assertTrue(requests.size >= 100)
         assertTrue(requests.any { it.title == summary.title })
     }
+
+    @Test
+    fun `catalog entries point to parseable templates with matching counts`() {
+        val service = DashboardTemplateCatalogService()
+
+        val failures = service.listTemplates().mapNotNull { summary ->
+            val detail = service.getTemplate(summary.id)
+                ?: return@mapNotNull "${summary.id}: missing or undecodable ${summary.resourcePath}"
+            val widgetCount = detail.dashboard.widgets.size
+            val variableCount = detail.dashboard.variables.size
+            when {
+                widgetCount != summary.widgetCount ->
+                    "${summary.id}: widget_count expected ${summary.widgetCount}, got $widgetCount"
+                variableCount != summary.variableCount ->
+                    "${summary.id}: variable_count expected ${summary.variableCount}, got $variableCount"
+                else -> null
+            }
+        }
+
+        assertTrue(failures.isEmpty(), failures.joinToString("\n"))
+    }
 }

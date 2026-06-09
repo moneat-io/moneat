@@ -138,6 +138,12 @@ export interface UpdateDashboardAlertRequest {
 
 export interface BatchQueryResult {
   results: Record<string, Record<string, unknown>[]>
+  metadata?: Record<string, BatchQueryResultMetadata>
+}
+
+export interface BatchQueryResultMetadata {
+  original_ref_id?: string | null
+  query_index: number
 }
 
 export interface CustomDashboard {

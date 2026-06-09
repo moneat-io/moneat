@@ -316,7 +316,7 @@
             {
                 "title": "Tensor Core Utilization",
                 "widget_type": "timeseries",
-                "grid_x": 0,
+                "grid_x": 6,
                 "grid_y": 24,
                 "grid_w": 6,
                 "grid_h": 8,

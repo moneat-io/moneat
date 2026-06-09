@@ -16,6 +16,7 @@
 
 package com.moneat.routes
 
+import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.DashboardAlertResponse
@@ -23,7 +24,9 @@ import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.DashboardVariable
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.FolderResponse
+import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.NotificationChannels
+import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.SearchResponse
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.routes.DashboardCoreRouteDependencies
@@ -65,6 +68,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -157,10 +161,18 @@ class DashboardRoutesTest {
         }
     }
 
+    private fun seedProject(orgId: Int): Long = transaction {
+        Projects.insert {
+            it[organization_id] = orgId
+            it[name] = "Test Project"
+            it[slug] = "test-project-${System.nanoTime()}"
+        } get Projects.id
+    }
+
     private fun seedDashboardScope(orgId: Long): Long = transaction {
         exec(
             """
-            CREATE TABLE dashboards (
+            CREATE TABLE IF NOT EXISTS dashboards (
                 id BIGSERIAL PRIMARY KEY,
                 org_id BIGINT NOT NULL,
                 project_id BIGINT,
@@ -668,6 +680,60 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `POST batch query normalizes response refs and includes original ref metadata`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val query = QueryDsl(
+                dataSource = "events",
+                metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+                refId = "RabbitMQ 4.2+"
+            )
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource("events") } returns false
+            coEvery {
+                mockQueryEngine.executeQuery(any(), projectId, any(), any(), orgId.toLong())
+            } returns listOf(
+                mapOf(
+                    "timestamp" to JsonPrimitive("2026-06-09T00:00:00Z"),
+                    "count" to JsonPrimitive(1),
+                )
+            )
+            application { installRoutes(this) }
+
+            val r =
+                client.post("/v1/dashboards/$dashboardId/query/batch?projectId=$projectId") {
+                    withAuth(token(userId, orgId))
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {
+                          "queries": [
+                            {
+                              "dataSource": "events",
+                              "metrics": [{"function": "count", "alias": "count"}],
+                              "ref_id": "RabbitMQ 4.2+"
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            val body = r.bodyAsText()
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(body.contains(""""A""""))
+            assertTrue(body.contains(""""original_ref_id":"RabbitMQ 4.2+""""))
+            assertTrue(body.contains(""""query_index":0"""))
+            assertTrue(!body.contains(""""RabbitMQ 4.2+":"""))
+        }
+
+    @Test
     fun `POST variables resolve returns 400 for invalid id`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
@@ -700,6 +766,11 @@ class DashboardRoutesTest {
                         query = "label_values({namespace=\"\$namespace\"}, pod)",
                         datasource = "__loki",
                     ),
+                    DashboardVariable(
+                        name = "cache",
+                        query = "label_values(redis_up, instance)",
+                        datasource = "__redis",
+                    ),
                     DashboardVariable(name = "static"),
                     DashboardVariable(name = "ignored", query = "up"),
                 )
@@ -714,14 +785,22 @@ class DashboardRoutesTest {
                 sourceType = "loki",
                 port = 3100,
             )
+            val redis = makeDataSource(id = 12L, orgId = orgId.toLong()).copy(
+                name = "Redis",
+                sourceType = "redis",
+                port = 6379,
+            )
             every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
-            every { mockDataSourceService.listDataSources(orgId.toLong()) } returns listOf(prometheus, loki)
+            every { mockDataSourceService.listDataSources(orgId.toLong()) } returns listOf(prometheus, loki, redis)
             every {
                 mockDataSourceService.getDecryptedCredentials(prometheus.id, orgId.toLong())
             } returns DataSourceCredentials(apiKey = "prom-token")
             every {
                 mockDataSourceService.getDecryptedCredentials(loki.id, orgId.toLong())
             } returns DataSourceCredentials(apiKey = "loki-token")
+            every {
+                mockDataSourceService.getDecryptedCredentials(redis.id, orgId.toLong())
+            } returns DataSourceCredentials(password = "redis-token")
             coEvery {
                 mockDataSourceExecutor.executeLabelValuesQuery(
                     any(),
@@ -740,6 +819,15 @@ class DashboardRoutesTest {
                     "label_values({namespace=\"default\"}, pod)",
                 )
             } returns listOf("api-0")
+            coEvery {
+                mockDataSourceExecutor.executeLabelValuesQuery(
+                    any(),
+                    redis.host,
+                    redis.port,
+                    any(),
+                    "label_values(redis_up, instance)",
+                )
+            } returns listOf("cache-0")
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/$dashboardId/variables/resolve") {
@@ -752,6 +840,7 @@ class DashboardRoutesTest {
             assertTrue(r.bodyAsText().contains("namespace"))
             assertTrue(r.bodyAsText().contains("default"))
             assertTrue(r.bodyAsText().contains("api-0"))
+            assertTrue(r.bodyAsText().contains("cache-0"))
         }
 
     // ──── Import / Export ────

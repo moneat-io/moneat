@@ -26,8 +26,8 @@
                 "label": null,
                 "type": "custom",
                 "query": "prometheus",
-                "default_value": "Prometheus-DevTest",
-                "current": "Prometheus-DevTest",
+                "default_value": null,
+                "current": null,
                 "options": [],
                 "datasource": null
             },
@@ -583,7 +583,7 @@
                             {
                                 "field": "realm",
                                 "op": "eq",
-                                "value": "dialog-test",
+                                "value": "$realm",
                                 "values": null
                             }
                         ],
@@ -593,7 +593,7 @@
                             "from": "now-24h",
                             "to": "now"
                         },
-                        "rawQuery": "sum by (realm) (increase(keycloak_failed_login_attempts{provider=\"keycloak\",realm=\"dialog-test\"} [30m]))",
+                        "rawQuery": "sum by (realm) (increase(keycloak_failed_login_attempts{provider=\"keycloak\",realm=\"$realm\"}[30m]))",
                         "ref_id": "B"
                     }
                 ],

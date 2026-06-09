@@ -46,7 +46,7 @@ tasks.shadowJar {
 val dashboardTemplateSourceDir =
     providers.gradleProperty("dashboardTemplateSource")
         .orElse(providers.environmentVariable("DASHBOARD_TEMPLATE_SOURCE_DIR"))
-        .orElse("/Users/aelder/Projects/moneat-internal/grafana-dashboards")
+        .orElse(layout.projectDirectory.dir("../grafana-dashboards").asFile.absolutePath)
 
 tasks.register<JavaExec>("convertDashboardTemplates") {
     group = "dashboard"

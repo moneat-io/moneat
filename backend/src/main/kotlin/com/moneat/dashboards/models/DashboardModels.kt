@@ -261,7 +261,14 @@ data class ExecuteBatchQueryRequest(
 
 @Serializable
 data class BatchQueryResult(
-    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>
+    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>,
+    val metadata: Map<String, BatchQueryResultMetadata> = emptyMap()
+)
+
+@Serializable
+data class BatchQueryResultMetadata(
+    @SerialName("original_ref_id") val originalRefId: String? = null,
+    @SerialName("query_index") val queryIndex: Int
 )
 
 @Serializable

@@ -1780,7 +1780,7 @@
                     "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
                     "legendPlacement": "right",
                     "legendMode": "table",
-                    "visibleFields": "Time,1.0.0.1:853,1.1.1.1:853,8.8.4.4:853,8.8.8.8:853"
+                    "visibleFields": "Time"
                 },
                 "sort_order": 25
             },

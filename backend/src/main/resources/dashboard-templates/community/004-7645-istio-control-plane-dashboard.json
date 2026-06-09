@@ -817,7 +817,7 @@
                 "title": "Webhooks",
                 "widget_type": "section",
                 "grid_x": 0,
-                "grid_y": 100,
+                "grid_y": 24,
                 "grid_w": 12,
                 "grid_h": 1,
                 "query_configs": [],
@@ -830,7 +830,7 @@
                 "title": "Validation",
                 "widget_type": "timeseries",
                 "grid_x": 0,
-                "grid_y": 101,
+                "grid_y": 25,
                 "grid_w": 6,
                 "grid_h": 8,
                 "query_configs": [
@@ -897,7 +897,7 @@
                 "title": "Injection",
                 "widget_type": "timeseries",
                 "grid_x": 6,
-                "grid_y": 101,
+                "grid_y": 25,
                 "grid_w": 6,
                 "grid_h": 8,
                 "query_configs": [

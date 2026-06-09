@@ -650,7 +650,7 @@
                 "title": "Sync Stats",
                 "widget_type": "section",
                 "grid_x": 0,
-                "grid_y": 6,
+                "grid_y": 12,
                 "grid_w": 12,
                 "grid_h": 1,
                 "query_configs": [],
@@ -663,7 +663,7 @@
                 "title": "Sync Activity",
                 "widget_type": "timeseries",
                 "grid_x": 0,
-                "grid_y": 3,
+                "grid_y": 13,
                 "grid_w": 12,
                 "grid_h": 6,
                 "query_configs": [
@@ -714,7 +714,7 @@
                 "title": "Sync Failures",
                 "widget_type": "timeseries",
                 "grid_x": 0,
-                "grid_y": 9,
+                "grid_y": 19,
                 "grid_w": 12,
                 "grid_h": 5,
                 "query_configs": [

@@ -1242,21 +1242,21 @@ class GrafanaTranslatorTest {
     fun `resolveDatasource resolves template variable via inputsMap`() {
         val ds = JsonPrimitive("\${DS_REDIS}")
         val inputsMap = mapOf("DS_REDIS" to "redis-datasource")
-        val result = translator.resolveDatasource(ds, 0, inputsMap)
+        val result = translator.resolveDatasource(ds, inputsMap)
         assertEquals("__redis", result)
     }
 
     @Test
     fun `resolveDatasource drops unresolved Grafana datasource placeholders`() {
         val ds = JsonPrimitive("\${DS_UNKNOWN}")
-        val result = translator.resolveDatasource(ds, 0, emptyMap())
+        val result = translator.resolveDatasource(ds, emptyMap())
         assertEquals(null, result)
     }
 
     @Test
     fun `resolveDatasource maps known datasource names to Moneat markers`() {
         val ds = JsonPrimitive("prometheus")
-        val result = translator.resolveDatasource(ds, 0, emptyMap())
+        val result = translator.resolveDatasource(ds, emptyMap())
         assertEquals("__prometheus", result)
     }
 
@@ -1278,7 +1278,7 @@ class GrafanaTranslatorTest {
         )
 
         cases.forEach { (grafanaName, expected) ->
-            assertEquals(expected, translator.resolveDatasource(JsonPrimitive(grafanaName), 0, emptyMap()))
+            assertEquals(expected, translator.resolveDatasource(JsonPrimitive(grafanaName), emptyMap()))
         }
     }
 
@@ -1288,7 +1288,7 @@ class GrafanaTranslatorTest {
             put("type", "custom:42")
         }
 
-        val result = translator.resolveDatasource(ds, 0, emptyMap())
+        val result = translator.resolveDatasource(ds, emptyMap())
 
         assertEquals("custom:42", result)
     }

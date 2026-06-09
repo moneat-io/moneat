@@ -18,6 +18,7 @@ package com.moneat.dashboards.routes
 
 import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.dashboards.models.BatchQueryResult
+import com.moneat.dashboards.models.BatchQueryResultMetadata
 import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.models.CreateDashboardRequest
@@ -439,9 +440,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
     }
     val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
+    val metadata = mutableMapOf<String, BatchQueryResultMetadata>()
 
     for ((index, query) in request.queries.withIndex()) {
-        val refId = query.refId ?: ('A' + index).toString()
+        val refId = ('A' + index).toString()
+        val originalRefId = query.refId
+        metadata[refId] = BatchQueryResultMetadata(originalRefId = originalRefId, queryIndex = index)
         val withTimeRange = if (request.timeRange != null) {
             query.copy(timeRange = request.timeRange)
         } else {
@@ -464,12 +468,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
                 dataSourceExecutor,
             )?.let { results[refId] = it }
         }.getOrElse { e ->
-            logger.warn(e) { "Batch query $refId failed" }
+            logger.warn(e) { "Batch query ${originalRefId ?: refId} failed" }
             results[refId] = emptyList()
         }
     }
 
-    call.respond(BatchQueryResult(results))
+    call.respond(BatchQueryResult(results, metadata))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve(
@@ -498,10 +502,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
     for (v in variables) {
         val query = v.query ?: continue
         if (!query.startsWith("label_values(")) continue
-        val requiredSourceType = when (v.datasource) {
-            "__loki" -> "loki"
-            else -> "prometheus"
-        }
+        val requiredSourceType = DashboardQueryEngine.templateDataSourceType(v.datasource)
         val source = sources.firstOrNull {
             it.enabled && it.sourceType.equals(requiredSourceType, ignoreCase = true)
         } ?: continue

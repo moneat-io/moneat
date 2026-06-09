@@ -441,7 +441,7 @@ class GrafanaTranslator : DashboardTranslator {
 
         // Resolve datasource: check panel-level, then fall back per-target
         val panelDs = panelJson["datasource"]
-        val preMappedDataSource = resolveDatasource(panelDs, panelIndex, inputsMap)
+        val preMappedDataSource = resolveDatasource(panelDs, inputsMap)
 
         return targets.mapIndexed { idx, targetEl ->
             val target = targetEl.jsonObject
@@ -450,7 +450,7 @@ class GrafanaTranslator : DashboardTranslator {
 
             // Per-target datasource overrides panel-level
             val targetDs = target["datasource"]
-            val effectiveDs = resolveDatasource(targetDs, panelIndex, inputsMap)
+            val effectiveDs = resolveDatasource(targetDs, inputsMap)
                 ?: preMappedDataSource
 
             val parsed = parseTarget(target, warnings, panelIndex, legendFormat)
@@ -461,7 +461,6 @@ class GrafanaTranslator : DashboardTranslator {
 
     internal fun resolveDatasource(
         ds: JsonElement?,
-        @Suppress("UNUSED_PARAMETER") panelIndex: Int = -1,
         inputsMap: Map<String, String> = emptyMap()
     ): String? = when (ds) {
         is JsonPrimitive if ds.isString -> {

@@ -36,11 +36,29 @@ class DashboardTemplateCatalogService(
         encodeDefaults = true
     }
 
-    fun listTemplates(): List<DashboardTemplateSummary> =
-        loadCatalog().templates
+    private val cachedCatalog: DashboardTemplateCatalog by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        loadCatalog()
+    }
 
-    fun getTemplate(id: String): DashboardTemplateDetail? {
-        val summary = loadCatalog().templates.firstOrNull { it.id == id } ?: return null
+    private val cachedTemplateDetails: Map<String, DashboardTemplateDetail> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        cachedCatalog.templates.mapNotNull { summary ->
+            decodeTemplate(summary)?.let { detail -> summary.id to detail }
+        }.toMap()
+    }
+
+    fun listTemplates(): List<DashboardTemplateSummary> =
+        cachedCatalog.templates
+
+    fun getTemplate(id: String): DashboardTemplateDetail? =
+        cachedTemplateDetails[id]
+
+    fun getDashboardRequest(id: String): CreateDashboardRequest? =
+        getTemplate(id)?.dashboard
+
+    fun listDashboardRequests(): List<CreateDashboardRequest> =
+        cachedTemplateDetails.values.map { it.dashboard }
+
+    private fun decodeTemplate(summary: DashboardTemplateSummary): DashboardTemplateDetail? {
         val resource = readResource(summary.resourcePath) ?: return null
         return try {
             json.decodeFromString<DashboardTemplateDetail>(resource)
@@ -49,12 +67,6 @@ class DashboardTemplateCatalogService(
             null
         }
     }
-
-    fun getDashboardRequest(id: String): CreateDashboardRequest? =
-        getTemplate(id)?.dashboard
-
-    fun listDashboardRequests(): List<CreateDashboardRequest> =
-        listTemplates().mapNotNull { summary -> getDashboardRequest(summary.id) }
 
     private fun loadCatalog(): DashboardTemplateCatalog {
         val resource = readResource(catalogResourcePath) ?: return DashboardTemplateCatalog()

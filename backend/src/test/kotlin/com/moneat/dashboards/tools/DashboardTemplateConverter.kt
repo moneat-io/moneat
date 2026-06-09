@@ -28,7 +28,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import java.io.File
 
-private const val DEFAULT_SOURCE_ROOT = "/Users/aelder/Projects/moneat-internal/grafana-dashboards"
+private const val DEFAULT_SOURCE_ROOT = "../grafana-dashboards"
 private const val DEFAULT_OUTPUT_ROOT = "src/main/resources/dashboard-templates"
 private const val DEFAULT_REPORT_PATH = "build/reports/dashboard-template-conversion.json"
 private const val COMMUNITY_TEMPLATE_DIR = "community"

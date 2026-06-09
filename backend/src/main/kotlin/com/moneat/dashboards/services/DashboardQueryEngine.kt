@@ -106,6 +106,9 @@ class DashboardQueryEngine {
             "__redis" to "redis"
         )
 
+        fun templateDataSourceType(marker: String?): String =
+            marker?.let(TEMPLATE_DATA_SOURCE_MARKERS::get) ?: "prometheus"
+
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
             val rangeMinutes = rangeMs / MILLIS_PER_MINUTE
