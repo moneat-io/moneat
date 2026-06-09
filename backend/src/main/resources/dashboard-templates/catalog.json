@@ -1,0 +1,1655 @@
+{
+    "templates": [
+        {
+            "id": "001-1860-node-exporter-full",
+            "title": "Node Exporter Full",
+            "description": "Prebuilt Moneat dashboard for Node Exporter Full telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Infrastructure",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 140,
+            "variable_count": 4,
+            "quality": "needs-review",
+            "resource_path": "dashboard-templates/community/001-1860-node-exporter-full.json"
+        },
+        {
+            "id": "002-9614-nginx-ingress-controller",
+            "title": "NGINX Ingress controller",
+            "description": "Prebuilt Moneat dashboard for NGINX Ingress controller telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 12,
+            "variable_count": 4,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/002-9614-nginx-ingress-controller.json"
+        },
+        {
+            "id": "003-14584-argocd",
+            "title": "ArgoCD",
+            "description": "Prebuilt Moneat dashboard for ArgoCD telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 50,
+            "variable_count": 7,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/003-14584-argocd.json"
+        },
+        {
+            "id": "004-7645-istio-control-plane-dashboard",
+            "title": "Istio Control Plane Dashboard",
+            "description": "Prebuilt Moneat dashboard for Istio Control Plane Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 17,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/004-7645-istio-control-plane-dashboard.json"
+        },
+        {
+            "id": "005-7636-istio-service-dashboard",
+            "title": "Istio Service Dashboard",
+            "description": "Prebuilt Moneat dashboard for Istio Service Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 28,
+            "variable_count": 9,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/005-7636-istio-service-dashboard.json"
+        },
+        {
+            "id": "006-7639-istio-mesh-dashboard",
+            "title": "Istio Mesh Dashboard",
+            "description": "Prebuilt Moneat dashboard for Istio Mesh Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 9,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/006-7639-istio-mesh-dashboard.json"
+        },
+        {
+            "id": "007-7630-istio-workload-dashboard",
+            "title": "Istio Workload Dashboard",
+            "description": "Prebuilt Moneat dashboard for Istio Workload Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 25,
+            "variable_count": 7,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/007-7630-istio-workload-dashboard.json"
+        },
+        {
+            "id": "008-14981-coredns",
+            "title": "CoreDNS",
+            "description": "Prebuilt Moneat dashboard for CoreDNS telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 27,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/008-14981-coredns.json"
+        },
+        {
+            "id": "009-10991-rabbitmq-overview",
+            "title": "RabbitMQ-Overview",
+            "description": "Prebuilt Moneat dashboard for RabbitMQ-Overview telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Messaging",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 47,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/009-10991-rabbitmq-overview.json"
+        },
+        {
+            "id": "010-13659-blackbox-exporter-http-prober",
+            "title": "Blackbox Exporter (HTTP prober)",
+            "description": "Prebuilt Moneat dashboard for Blackbox Exporter (HTTP prober) telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 4,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/010-13659-blackbox-exporter-http-prober.json"
+        },
+        {
+            "id": "011-14055-loki-stack-monitoring-promtail-loki",
+            "title": "Loki stack monitoring (Promtail, Loki)",
+            "description": "Prebuilt Moneat dashboard for Loki stack monitoring (Promtail, Loki) telemetry.",
+            "category": "logs",
+            "tags": [
+                "Logs",
+                "Loki",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Loki",
+                "Prometheus"
+            ],
+            "widget_count": 22,
+            "variable_count": 0,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/011-14055-loki-stack-monitoring-promtail-loki.json"
+        },
+        {
+            "id": "012-11350-erlang-memory-allocators",
+            "title": "Erlang-Memory-Allocators",
+            "description": "Prebuilt Moneat dashboard for Erlang-Memory-Allocators telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 25,
+            "variable_count": 6,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/012-11350-erlang-memory-allocators.json"
+        },
+        {
+            "id": "013-11829-istio-performance-dashboard",
+            "title": "Istio Performance Dashboard",
+            "description": "Prebuilt Moneat dashboard for Istio Performance Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 19,
+            "variable_count": 1,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/013-11829-istio-performance-dashboard.json"
+        },
+        {
+            "id": "014-12239-nvidia-dcgm-exporter-dashboard",
+            "title": "NVIDIA DCGM Exporter Dashboard",
+            "description": "Prebuilt Moneat dashboard for NVIDIA DCGM Exporter Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 8,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/014-12239-nvidia-dcgm-exporter-dashboard.json"
+        },
+        {
+            "id": "015-11352-erlang-distribution",
+            "title": "Erlang-Distribution",
+            "description": "Prebuilt Moneat dashboard for Erlang-Distribution telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 22,
+            "variable_count": 5,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/015-11352-erlang-distribution.json"
+        },
+        {
+            "id": "016-11340-rabbitmq-quorum-queues-raft",
+            "title": "RabbitMQ-Quorum-Queues-Raft",
+            "description": "Prebuilt Moneat dashboard for RabbitMQ-Quorum-Queues-Raft telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Messaging",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 5,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/016-11340-rabbitmq-quorum-queues-raft.json"
+        },
+        {
+            "id": "017-15661-k8s-dashboard-en-20250125",
+            "title": "K8S Dashboard",
+            "description": "Prebuilt Moneat dashboard for K8S Dashboard telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 36,
+            "variable_count": 5,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/017-15661-k8s-dashboard-en-20250125.json"
+        },
+        {
+            "id": "018-14798-rabbitmq-stream",
+            "title": "RabbitMQ-Stream",
+            "description": "Prebuilt Moneat dashboard for RabbitMQ-Stream telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Messaging",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 18,
+            "variable_count": 4,
+            "quality": "needs-review",
+            "resource_path": "dashboard-templates/community/018-14798-rabbitmq-stream.json"
+        },
+        {
+            "id": "019-10441-keycloak-metrics-dashboard",
+            "title": "Keycloak Metrics Dashboard",
+            "description": "Prebuilt Moneat dashboard for Keycloak Metrics Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 24,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/019-10441-keycloak-metrics-dashboard.json"
+        },
+        {
+            "id": "020-13332-kube-state-metrics-v2",
+            "title": "kube-state-metrics-v2",
+            "description": "Prebuilt Moneat dashboard for kube-state-metrics-v2 telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 51,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/020-13332-kube-state-metrics-v2.json"
+        },
+        {
+            "id": "021-13502-minio-dashboard",
+            "title": "MinIO Dashboard",
+            "description": "Prebuilt Moneat dashboard for MinIO Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 37,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/021-13502-minio-dashboard.json"
+        },
+        {
+            "id": "022-4701-jvm-micrometer",
+            "title": "JVM (Micrometer)",
+            "description": "Prebuilt Moneat dashboard for JVM (Micrometer) telemetry.",
+            "category": "applications",
+            "tags": [
+                "Applications"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 5,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/022-4701-jvm-micrometer.json"
+        },
+        {
+            "id": "023-2583-mongodb",
+            "title": "MongoDB",
+            "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+            "category": "databases",
+            "tags": [
+                "Databases"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/023-2583-mongodb.json"
+        },
+        {
+            "id": "024-969-aws-elasticache-redis",
+            "title": "AWS ElastiCache Redis",
+            "description": "Prebuilt Moneat dashboard for AWS ElastiCache Redis telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch",
+                "Messaging"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 12,
+            "variable_count": 4,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/024-969-aws-elasticache-redis.json"
+        },
+        {
+            "id": "025-11835-redis-dashboard-for-prometheus-redis-exporter-helm-stable-redis-ha",
+            "title": "Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha)",
+            "description": "Prebuilt Moneat dashboard for Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha) telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Messaging",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 12,
+            "variable_count": 4,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/025-11835-redis-dashboard-for-prometheus-redis-exporter-helm-stable-redis-ha.json"
+        },
+        {
+            "id": "026-14361-aws-alb-cloudwatch-metrics",
+            "title": "AWS ALB Cloudwatch Metrics",
+            "description": "Prebuilt Moneat dashboard for AWS ALB Cloudwatch Metrics telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 12,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/026-14361-aws-alb-cloudwatch-metrics.json"
+        },
+        {
+            "id": "027-11159-nodejs-application-dashboard",
+            "title": "NodeJS Application Dashboard",
+            "description": "Prebuilt Moneat dashboard for NodeJS Application Dashboard telemetry.",
+            "category": "applications",
+            "tags": [
+                "Applications",
+                "Infrastructure",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 9,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/027-11159-nodejs-application-dashboard.json"
+        },
+        {
+            "id": "028-11265-amazon-ec2",
+            "title": "Amazon EC2",
+            "description": "Prebuilt Moneat dashboard for Amazon EC2 telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 20,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/028-11265-amazon-ec2.json"
+        },
+        {
+            "id": "029-11266-amazon-cloudwatch-logs",
+            "title": "Amazon CloudWatch Logs",
+            "description": "Prebuilt Moneat dashboard for Amazon CloudWatch Logs telemetry.",
+            "category": "logs",
+            "tags": [
+                "Cloud",
+                "CloudWatch",
+                "Logs"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 7,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/029-11266-amazon-cloudwatch-logs.json"
+        },
+        {
+            "id": "030-13996-clusterpolicyreport-details",
+            "title": "ClusterPolicyReport Details",
+            "description": "Prebuilt Moneat dashboard for ClusterPolicyReport Details telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 9,
+            "variable_count": 6,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/030-13996-clusterpolicyreport-details.json"
+        },
+        {
+            "id": "031-13995-policyreport-details",
+            "title": "PolicyReport Details",
+            "description": "Prebuilt Moneat dashboard for PolicyReport Details telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 9,
+            "variable_count": 7,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/031-13995-policyreport-details.json"
+        },
+        {
+            "id": "032-13968-policyreports",
+            "title": "PolicyReports",
+            "description": "Prebuilt Moneat dashboard for PolicyReports telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 5,
+            "variable_count": 7,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/032-13968-policyreports.json"
+        },
+        {
+            "id": "033-584-aws-sqs",
+            "title": "AWS SQS",
+            "description": "Prebuilt Moneat dashboard for AWS SQS telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 6,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/033-584-aws-sqs.json"
+        },
+        {
+            "id": "034-11001-cert-manager",
+            "title": "cert-manager",
+            "description": "Prebuilt Moneat dashboard for cert-manager telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 15,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/034-11001-cert-manager.json"
+        },
+        {
+            "id": "035-11454-k8s-storage-volumes-cluster",
+            "title": "K8s / Storage / Volumes / Cluster",
+            "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Cluster telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 25,
+            "variable_count": 2,
+            "quality": "needs-review",
+            "resource_path": "dashboard-templates/community/035-11454-k8s-storage-volumes-cluster.json"
+        },
+        {
+            "id": "036-11264-amazon-rds",
+            "title": "Amazon RDS",
+            "description": "Prebuilt Moneat dashboard for Amazon RDS telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 17,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/036-11264-amazon-rds.json"
+        },
+        {
+            "id": "037-315-kubernetes-cluster-monitoring-via-prometheus",
+            "title": "Kubernetes cluster monitoring (via Prometheus)",
+            "description": "Prebuilt Moneat dashboard for Kubernetes cluster monitoring (via Prometheus) telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/037-315-kubernetes-cluster-monitoring-via-prometheus.json"
+        },
+        {
+            "id": "038-6417-kubernetes-cluster-prometheus",
+            "title": "Kubernetes Cluster (Prometheus)",
+            "description": "Prebuilt Moneat dashboard for Kubernetes Cluster (Prometheus) telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 35,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/038-6417-kubernetes-cluster-prometheus.json"
+        },
+        {
+            "id": "039-593-aws-lambda",
+            "title": "AWS Lambda",
+            "description": "Prebuilt Moneat dashboard for AWS Lambda telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 6,
+            "variable_count": 4,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/039-593-aws-lambda.json"
+        },
+        {
+            "id": "040-4475-traefik",
+            "title": "Traefik",
+            "description": "Prebuilt Moneat dashboard for Traefik telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 9,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/040-4475-traefik.json"
+        },
+        {
+            "id": "041-7362-mysql-overview",
+            "title": "MySQL Overview",
+            "description": "Prebuilt Moneat dashboard for MySQL Overview telemetry.",
+            "category": "databases",
+            "tags": [
+                "Databases",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 50,
+            "variable_count": 2,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/041-7362-mysql-overview.json"
+        },
+        {
+            "id": "042-8171-kubernetes-nodes",
+            "title": "Kubernetes Nodes",
+            "description": "Prebuilt Moneat dashboard for Kubernetes Nodes telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Infrastructure",
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 8,
+            "variable_count": 1,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/042-8171-kubernetes-nodes.json"
+        },
+        {
+            "id": "043-9621-docker-registry",
+            "title": "Docker Registry",
+            "description": "Prebuilt Moneat dashboard for Docker Registry telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 19,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/043-9621-docker-registry.json"
+        },
+        {
+            "id": "044-14900-nginx",
+            "title": "Nginx",
+            "description": "Prebuilt Moneat dashboard for Nginx telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 23,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/044-14900-nginx.json"
+        },
+        {
+            "id": "045-12079-mongodb",
+            "title": "MongoDB",
+            "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+            "category": "databases",
+            "tags": [
+                "Databases",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 22,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/045-12079-mongodb.json"
+        },
+        {
+            "id": "046-9578-alertmanager",
+            "title": "Alertmanager",
+            "description": "Prebuilt Moneat dashboard for Alertmanager telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 110,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/046-9578-alertmanager.json"
+        },
+        {
+            "id": "047-13041-website-monitoring",
+            "title": "Website monitoring",
+            "description": "Prebuilt Moneat dashboard for Website monitoring telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 15,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/047-13041-website-monitoring.json"
+        },
+        {
+            "id": "048-12009-aws-kafka-cluster",
+            "title": "AWS Kafka Cluster",
+            "description": "Prebuilt Moneat dashboard for AWS Kafka Cluster telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch",
+                "Messaging"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 4,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/048-12009-aws-kafka-cluster.json"
+        },
+        {
+            "id": "049-7587-prometheus-blackbox-exporter",
+            "title": "Prometheus Blackbox Exporter",
+            "description": "Prebuilt Moneat dashboard for Prometheus Blackbox Exporter telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 11,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/049-7587-prometheus-blackbox-exporter.json"
+        },
+        {
+            "id": "050-11022-envoy-global",
+            "title": "Envoy Global",
+            "description": "Prebuilt Moneat dashboard for Envoy Global telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 22,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/050-11022-envoy-global.json"
+        },
+        {
+            "id": "051-6693-envoy",
+            "title": "Envoy Proxy",
+            "description": "Prebuilt Moneat dashboard for Envoy Proxy telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 13,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/051-6693-envoy.json"
+        },
+        {
+            "id": "052-13639-logs-app",
+            "title": "Logs / App",
+            "description": "Prebuilt Moneat dashboard for Logs / App telemetry.",
+            "category": "logs",
+            "tags": [
+                "Logs",
+                "Loki"
+            ],
+            "required_sources": [
+                "Loki"
+            ],
+            "widget_count": 2,
+            "variable_count": 2,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/052-13639-logs-app.json"
+        },
+        {
+            "id": "053-11023-contour",
+            "title": "Contour",
+            "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 8,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/053-11023-contour.json"
+        },
+        {
+            "id": "054-11021-envoy-clusters",
+            "title": "Envoy Clusters",
+            "description": "Prebuilt Moneat dashboard for Envoy Clusters telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 13,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/054-11021-envoy-clusters.json"
+        },
+        {
+            "id": "055-741-deployment-metrics",
+            "title": "Kubernetes Deployment metrics",
+            "description": "Prebuilt Moneat dashboard for Kubernetes Deployment metrics telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/055-741-deployment-metrics.json"
+        },
+        {
+            "id": "056-747-pod-metrics",
+            "title": "Kubernetes Pod Metrics",
+            "description": "Prebuilt Moneat dashboard for Kubernetes Pod Metrics telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 5,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/056-747-pod-metrics.json"
+        },
+        {
+            "id": "057-1621-kubernetes-cluster-monitoring-via-prometheus",
+            "title": "Kubernetes cluster monitoring (via Prometheus)",
+            "description": "Prebuilt Moneat dashboard for Kubernetes cluster monitoring (via Prometheus) telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/057-1621-kubernetes-cluster-monitoring-via-prometheus.json"
+        },
+        {
+            "id": "058-1471-kubernetes-apps",
+            "title": "Kubernetes App Metrics",
+            "description": "Prebuilt Moneat dashboard for Kubernetes App Metrics telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/058-1471-kubernetes-apps.json"
+        },
+        {
+            "id": "059-3063-memcached-pods-monitoring-via-prometheus",
+            "title": "Memcached Pods monitoring (via Prometheus)",
+            "description": "Prebuilt Moneat dashboard for Memcached Pods monitoring (via Prometheus) telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Infrastructure"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 2,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/059-3063-memcached-pods-monitoring-via-prometheus.json"
+        },
+        {
+            "id": "060-12010-aws-kafka-topic",
+            "title": "AWS Kafka Topic",
+            "description": "Prebuilt Moneat dashboard for AWS Kafka Topic telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch",
+                "Messaging"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 5,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/060-12010-aws-kafka-topic.json"
+        },
+        {
+            "id": "061-3831-autoscaler",
+            "title": "Kubernetes Cluster Autoscaler (via Prometheus)",
+            "description": "Prebuilt Moneat dashboard for Kubernetes Cluster Autoscaler (via Prometheus) telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 0,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/061-3831-autoscaler.json"
+        },
+        {
+            "id": "062-16032-aws-cni-metrics",
+            "title": "AWS CNI Metrics",
+            "description": "Prebuilt Moneat dashboard for AWS CNI Metrics telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 23,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/062-16032-aws-cni-metrics.json"
+        },
+        {
+            "id": "063-17175-spring-boot-observability",
+            "title": "Spring Boot Observability",
+            "description": "Prebuilt Moneat dashboard for Spring Boot Observability telemetry.",
+            "category": "applications",
+            "tags": [
+                "Applications",
+                "Loki",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Loki",
+                "Prometheus"
+            ],
+            "widget_count": 11,
+            "variable_count": 2,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/063-17175-spring-boot-observability.json"
+        },
+        {
+            "id": "064-17554-restic-exporter",
+            "title": "Restic Exporter",
+            "description": "Prebuilt Moneat dashboard for Restic Exporter telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 30,
+            "variable_count": 0,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/064-17554-restic-exporter.json"
+        },
+        {
+            "id": "065-7187-kubernetes-resource-requests",
+            "title": "Kubernetes Resource Requests",
+            "description": "Prebuilt Moneat dashboard for Kubernetes Resource Requests telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 4,
+            "variable_count": 0,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/065-7187-kubernetes-resource-requests.json"
+        },
+        {
+            "id": "066-12660-kubernetes-persistent-volumes",
+            "title": "Kubernetes / Persistent Volumes",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / Persistent Volumes telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/066-12660-kubernetes-persistent-volumes.json"
+        },
+        {
+            "id": "067-15038-external-dns",
+            "title": "External DNS",
+            "description": "Prebuilt Moneat dashboard for External DNS telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 22,
+            "variable_count": 2,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/067-15038-external-dns.json"
+        },
+        {
+            "id": "068-15760-kubernetes-views-pods",
+            "title": "Kubernetes / Views / Pods",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Pods telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 29,
+            "variable_count": 6,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/068-15760-kubernetes-views-pods.json"
+        },
+        {
+            "id": "069-9628-postgresql-database",
+            "title": "PostgreSQL Database",
+            "description": "Prebuilt Moneat dashboard for PostgreSQL Database telemetry.",
+            "category": "databases",
+            "tags": [
+                "Databases",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 35,
+            "variable_count": 7,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/069-9628-postgresql-database.json"
+        },
+        {
+            "id": "070-14114-postgres-overview",
+            "title": "PostgreSQL Exporter Quickstart and Dashboard",
+            "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter Quickstart and Dashboard telemetry.",
+            "category": "databases",
+            "tags": [
+                "Databases",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 6,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/070-14114-postgres-overview.json"
+        },
+        {
+            "id": "071-12485-postgresql-exporter",
+            "title": "PostgreSQL Exporter",
+            "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter telemetry.",
+            "category": "databases",
+            "tags": [
+                "Databases",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 37,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/071-12485-postgresql-exporter.json"
+        },
+        {
+            "id": "072-707-aws-rds",
+            "title": "AWS RDS",
+            "description": "Prebuilt Moneat dashboard for AWS RDS telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 13,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/072-707-aws-rds.json"
+        },
+        {
+            "id": "073-15758-kubernetes-views-namespaces",
+            "title": "Kubernetes / Views / Namespaces",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Namespaces telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 30,
+            "variable_count": 5,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/073-15758-kubernetes-views-namespaces.json"
+        },
+        {
+            "id": "074-19993-argocd-operational-overview",
+            "title": "ArgoCD / Operational / Overview",
+            "description": "Prebuilt Moneat dashboard for ArgoCD / Operational / Overview telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 52,
+            "variable_count": 6,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/074-19993-argocd-operational-overview.json"
+        },
+        {
+            "id": "075-19974-argocd-application-overview",
+            "title": "ArgoCD / Application / Overview",
+            "description": "Prebuilt Moneat dashboard for ArgoCD / Application / Overview telemetry.",
+            "category": "applications",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 14,
+            "variable_count": 8,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/075-19974-argocd-application-overview.json"
+        },
+        {
+            "id": "076-19975-argocd-notifications-overview",
+            "title": "ArgoCD / Notifications / Overview",
+            "description": "Prebuilt Moneat dashboard for ArgoCD / Notifications / Overview telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 3,
+            "variable_count": 5,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/076-19975-argocd-notifications-overview.json"
+        },
+        {
+            "id": "077-15759-kubernetes-views-nodes",
+            "title": "Kubernetes / Views / Nodes",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Nodes telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Infrastructure",
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 41,
+            "variable_count": 5,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/077-15759-kubernetes-views-nodes.json"
+        },
+        {
+            "id": "078-14191-elasticsearch-overview",
+            "title": "Elasticsearch Exporter Quickstart and Dashboard",
+            "description": "Prebuilt Moneat dashboard for Elasticsearch Exporter Quickstart and Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 71,
+            "variable_count": 5,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/078-14191-elasticsearch-overview.json"
+        },
+        {
+            "id": "079-15757-kubernetes-views-global",
+            "title": "Kubernetes / Views / Global",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Global telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 30,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/079-15757-kubernetes-views-global.json"
+        },
+        {
+            "id": "080-13646-kubernetes-persistent-volumes",
+            "title": "kubernetes-persistent-volumes",
+            "description": "Prebuilt Moneat dashboard for kubernetes-persistent-volumes telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 16,
+            "variable_count": 3,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/080-13646-kubernetes-persistent-volumes.json"
+        },
+        {
+            "id": "081-21640-external-secrets",
+            "title": "External Secrets",
+            "description": "Prebuilt Moneat dashboard for External Secrets telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 19,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/081-21640-external-secrets.json"
+        },
+        {
+            "id": "082-12006-kubernetes-apiserver",
+            "title": "Kubernetes apiserver",
+            "description": "Prebuilt Moneat dashboard for Kubernetes apiserver telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 6,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/082-12006-kubernetes-apiserver.json"
+        },
+        {
+            "id": "083-15761-kubernetes-system-api-server",
+            "title": "Kubernetes / System / API Server",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / System / API Server telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 12,
+            "variable_count": 4,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/083-15761-kubernetes-system-api-server.json"
+        },
+        {
+            "id": "084-17347-traefik-official-kubernetes-dashboard",
+            "title": "Traefik Official Kubernetes Dashboard",
+            "description": "Prebuilt Moneat dashboard for Traefik Official Kubernetes Dashboard telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Network",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 17,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/084-17347-traefik-official-kubernetes-dashboard.json"
+        },
+        {
+            "id": "085-16277-ethereum-metrics-exporter-single",
+            "title": "Ethereum Metrics Exporter (Single)",
+            "description": "Prebuilt Moneat dashboard for Ethereum Metrics Exporter (Single) telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 42,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/085-16277-ethereum-metrics-exporter-single.json"
+        },
+        {
+            "id": "086-17846-home-staking-dashboard",
+            "title": "Home Staking Dashboard",
+            "description": "Prebuilt Moneat dashboard for Home Staking Dashboard telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 42,
+            "variable_count": 0,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/086-17846-home-staking-dashboard.json"
+        },
+        {
+            "id": "087-15762-kubernetes-system-coredns",
+            "title": "Kubernetes / System / CoreDNS",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / System / CoreDNS telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 14,
+            "variable_count": 6,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/087-15762-kubernetes-system-coredns.json"
+        },
+        {
+            "id": "088-3662-prometheus-2-0-overview",
+            "title": "Prometheus 2.0 Overview",
+            "description": "Prebuilt Moneat dashboard for Prometheus 2.0 Overview telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Infrastructure"
+            ],
+            "required_sources": [],
+            "widget_count": 0,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/088-3662-prometheus-2-0-overview.json"
+        },
+        {
+            "id": "089-16367-kubernetes-compute-resources-node-pods",
+            "title": "Kubernetes / Compute Resources / Node (Pods)",
+            "description": "Prebuilt Moneat dashboard for Kubernetes / Compute Resources / Node (Pods) telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Infrastructure",
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 8,
+            "variable_count": 3,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/089-16367-kubernetes-compute-resources-node-pods.json"
+        },
+        {
+            "id": "090-10619-docker-host-container-overview",
+            "title": "Docker Container & Host Metrics",
+            "description": "Prebuilt Moneat dashboard for Docker Container & Host Metrics telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Infrastructure",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 13,
+            "variable_count": 6,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/090-10619-docker-host-container-overview.json"
+        },
+        {
+            "id": "091-11176-victoriametrics-cluster",
+            "title": "VictoriaMetrics - cluster",
+            "description": "Prebuilt Moneat dashboard for VictoriaMetrics - cluster telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 107,
+            "variable_count": 7,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/091-11176-victoriametrics-cluster.json"
+        },
+        {
+            "id": "092-11378-justai-system-monitor",
+            "title": "Spring Boot 2.1 System Monitor",
+            "description": "Prebuilt Moneat dashboard for Spring Boot 2.1 System Monitor telemetry.",
+            "category": "applications",
+            "tags": [
+                "Applications",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 42,
+            "variable_count": 5,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/092-11378-justai-system-monitor.json"
+        },
+        {
+            "id": "093-11956-nodejs-metrics",
+            "title": "Nodejs Metrics",
+            "description": "Prebuilt Moneat dashboard for Nodejs Metrics telemetry.",
+            "category": "applications",
+            "tags": [
+                "Applications",
+                "Infrastructure",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 18,
+            "variable_count": 5,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/093-11956-nodejs-metrics.json"
+        },
+        {
+            "id": "094-14448-airflow-monitoring",
+            "title": "Airflow monitoring",
+            "description": "Prebuilt Moneat dashboard for Airflow monitoring telemetry.",
+            "category": "databases",
+            "tags": [
+                "PostgreSQL"
+            ],
+            "required_sources": [
+                "PostgreSQL"
+            ],
+            "widget_count": 6,
+            "variable_count": 1,
+            "quality": "needs-review",
+            "resource_path": "dashboard-templates/community/094-14448-airflow-monitoring.json"
+        },
+        {
+            "id": "095-16071-aws-elb-application-load-balancer-by-target-group",
+            "title": "AWS ELB Application Load Balancer by Target Group",
+            "description": "Prebuilt Moneat dashboard for AWS ELB Application Load Balancer by Target Group telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 18,
+            "variable_count": 4,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/095-16071-aws-elb-application-load-balancer-by-target-group.json"
+        },
+        {
+            "id": "096-20577-aws-eks",
+            "title": "AWS - EKS",
+            "description": "Prebuilt Moneat dashboard for AWS - EKS telemetry.",
+            "category": "cloud",
+            "tags": [
+                "Cloud",
+                "CloudWatch"
+            ],
+            "required_sources": [
+                "CloudWatch"
+            ],
+            "widget_count": 39,
+            "variable_count": 1,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/096-20577-aws-eks.json"
+        },
+        {
+            "id": "097-20223-eth-docker-logs",
+            "title": "ETH Docker Logs",
+            "description": "Prebuilt Moneat dashboard for ETH Docker Logs telemetry.",
+            "category": "logs",
+            "tags": [
+                "Logs",
+                "Loki"
+            ],
+            "required_sources": [
+                "Loki"
+            ],
+            "widget_count": 4,
+            "variable_count": 0,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/097-20223-eth-docker-logs.json"
+        },
+        {
+            "id": "098-20398-karpenter",
+            "title": "Karpenter",
+            "description": "Prebuilt Moneat dashboard for Karpenter telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 30,
+            "variable_count": 9,
+            "quality": "partial",
+            "resource_path": "dashboard-templates/community/098-20398-karpenter.json"
+        },
+        {
+            "id": "099-9852-stians-disk-graphs",
+            "title": "node-exporter disk graphs",
+            "description": "Prebuilt Moneat dashboard for node-exporter disk graphs telemetry.",
+            "category": "infrastructure",
+            "tags": [
+                "Infrastructure",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 15,
+            "variable_count": 5,
+            "quality": "ready",
+            "resource_path": "dashboard-templates/community/099-9852-stians-disk-graphs.json"
+        },
+        {
+            "id": "100-11455-k8s-storage-volumes-namespace",
+            "title": "K8s / Storage / Volumes / Namespace",
+            "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Namespace telemetry.",
+            "category": "kubernetes",
+            "tags": [
+                "Kubernetes",
+                "Prometheus"
+            ],
+            "required_sources": [
+                "Prometheus"
+            ],
+            "widget_count": 27,
+            "variable_count": 4,
+            "quality": "needs-review",
+            "resource_path": "dashboard-templates/community/100-11455-k8s-storage-volumes-namespace.json"
+        }
+    ]
+}

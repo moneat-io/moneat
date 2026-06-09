@@ -1,0 +1,45 @@
+{
+    "id": "058-1471-kubernetes-apps",
+    "title": "Kubernetes App Metrics",
+    "description": "Prebuilt Moneat dashboard for Kubernetes App Metrics telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 2,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes App Metrics",
+        "description": "Prebuilt Moneat dashboard for Kubernetes App Metrics telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "namespace",
+                "label": null,
+                "type": "query",
+                "query": "label_values(container_memory_usage_bytes{namespace=~\".+\",container_name!=\"POD\"},namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "container",
+                "label": null,
+                "type": "query",
+                "query": "label_values(container_memory_usage_bytes{namespace=~\"$namespace\",container_name!=\"POD\"},container_name)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": []
+    }
+}

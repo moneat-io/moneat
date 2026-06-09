@@ -1,0 +1,565 @@
+{
+    "id": "053-11023-contour",
+    "title": "Contour",
+    "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 8,
+    "variable_count": 3,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Contour",
+        "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "Namespace",
+                "label": null,
+                "type": "query",
+                "query": "label_values(namespace)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "VHost",
+                "label": null,
+                "type": "query",
+                "query": "label_values(vhost)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Total IngressRoutes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Namespace: {{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(contour_ingressroute_total{namespace=~\"$Namespace\"}) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Orphaned IngressRoutes",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Namespace: {{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(contour_ingressroute_orphaned_total{namespace=~\"$Namespace\"}) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Valid IngressRoutes",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Namespace: {{ namespace }} ({{ vhost }})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "vhost",
+                                "op": "like",
+                                "value": "$VHost",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(contour_ingressroute_valid_total{namespace=~\"$Namespace\",vhost=~\"$VHost\"}) by (namespace,vhost)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Invalid IngressRoutes",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Namespace: {{ namespace }} ({{ vhost }})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "vhost",
+                                "op": "like",
+                                "value": "$VHost",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(contour_ingressroute_invalid_total{namespace=~\"$Namespace\",vhost=~\"$VHost\"}) by (namespace,vhost)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Root IngressRoutes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Namespace: {{ namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(contour_ingressroute_root_total{namespace=~\"$Namespace\"}) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Contour LDS Updates",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 8,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (failure)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_listener_manager_lds_update_failure",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (success)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_listener_manager_lds_update_success",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (rejected)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_listener_manager_lds_update_rejected",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Contour CDS Updates",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 8,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (Success)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_cluster_manager_cds_update_success",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (Failure)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_cluster_manager_cds_update_failure",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (Rejected)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_cluster_manager_cds_update_rejected",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Contour RDS Updates",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 8,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (Success)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_http_rds_ingress_http_update_success",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (Failure)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_http_rds_ingress_http_update_failure",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{kubernetes_pod_name}} (Rejected)"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "envoy_http_rds_ingress_http_update_rejected",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            }
+        ]
+    }
+}

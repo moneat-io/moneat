@@ -1,0 +1,75 @@
+{
+    "id": "022-4701-jvm-micrometer",
+    "title": "JVM (Micrometer)",
+    "description": "Prebuilt Moneat dashboard for JVM (Micrometer) telemetry.",
+    "category": "applications",
+    "tags": [
+        "Applications"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 5,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "JVM (Micrometer)",
+        "description": "Prebuilt Moneat dashboard for JVM (Micrometer) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "application",
+                "label": "Application",
+                "type": "query",
+                "query": "label_values(application)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": "Instance",
+                "type": "query",
+                "query": "label_values(jvm_memory_used_bytes{application=\"$application\"}, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "jvm_memory_pool_heap",
+                "label": "JVM Memory Pools Heap",
+                "type": "query",
+                "query": "label_values(jvm_memory_used_bytes{application=\"$application\", instance=\"$instance\", area=\"heap\"},id)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "jvm_memory_pool_nonheap",
+                "label": "JVM Memory Pools Non-Heap",
+                "type": "query",
+                "query": "label_values(jvm_memory_used_bytes{application=\"$application\", instance=\"$instance\", area=\"nonheap\"},id)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "jvm_buffer_pool",
+                "label": "JVM Buffer Pools",
+                "type": "query",
+                "query": "label_values(jvm_buffer_memory_used_bytes{application=\"$application\", instance=\"$instance\"},id)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": []
+    }
+}

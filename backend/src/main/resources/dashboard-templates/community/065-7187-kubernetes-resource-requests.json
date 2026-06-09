@@ -1,0 +1,284 @@
+{
+    "id": "065-7187-kubernetes-resource-requests",
+    "title": "Kubernetes Resource Requests",
+    "description": "Prebuilt Moneat dashboard for Kubernetes Resource Requests telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 4,
+    "variable_count": 0,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes Resource Requests",
+        "description": "Prebuilt Moneat dashboard for Kubernetes Resource Requests telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [],
+        "widgets": [
+            {
+                "title": "CPU Cores",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 9,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": "Allocatable CPU Cores"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(sum(kube_node_status_allocatable_cpu_cores) by (instance))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": "Requested CPU Cores"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(kube_pod_container_resource_requests_cpu_cores) by (instance))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": "Limits CPU Cores"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(kube_pod_container_resource_limits_cpu_cores) by (instance))",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "CPU Cores",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(kube_pod_container_resource_requests_cpu_cores) by (instance)) / min(sum(kube_node_status_allocatable_cpu_cores) by (instance)) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Memory",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 9,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Allocatable Memory"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(sum(kube_node_status_allocatable_memory_bytes) by (instance))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Requested Memory"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(kube_pod_container_resource_requests_memory_bytes) by (instance))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Limits Memory"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(kube_pod_container_resource_limits_memory_bytes) by (instance))",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Memory",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 8,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(sum(kube_pod_container_resource_requests_memory_bytes) by (instance)) / min(sum(kube_node_status_allocatable_memory_bytes) by (instance)) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            }
+        ]
+    }
+}

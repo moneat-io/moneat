@@ -1,0 +1,2102 @@
+{
+    "id": "074-19993-argocd-operational-overview",
+    "title": "ArgoCD / Operational / Overview",
+    "description": "Prebuilt Moneat dashboard for ArgoCD / Operational / Overview telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 52,
+    "variable_count": 6,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "ArgoCD / Operational / Overview",
+        "description": "Prebuilt Moneat dashboard for ArgoCD / Operational / Overview telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data source",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": "Cluster",
+                "type": "query",
+                "query": "label_values(argocd_app_info{}, cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "namespace",
+                "label": "Namespace",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\"}, namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "job",
+                "label": "Job",
+                "type": "query",
+                "query": "label_values(job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "kubernetes_cluster",
+                "label": "Kubernetes Cluster",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\"}, dest_server)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "project",
+                "label": "Project",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\", dest_server=~\"$kubernetes_cluster\"}, project)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Summary",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Clusters",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_cluster_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n  }\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Repositories",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count(\n  count(\n    argocd_app_info{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }\n  )\n  by (repo)\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Applications",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Health Status",
+                "widget_type": "donut",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ health_status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n) by (health_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Sync Status",
+                "widget_type": "donut",
+                "grid_x": 3,
+                "grid_y": 5,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ sync_status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n) by (sync_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Applications",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n) by (job, dest_server, project, name, health_status, sync_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "fieldRenames": "{\"dest_server\":\"Kubernetes Cluster\",\"health_status\":\"Health Status\",\"job\":\"Job\",\"name\":\"Application\",\"project\":\"Project\",\"sync_status\":\"Sync Status\"}"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Sync Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Sync Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ project }}/{{ name }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_sync_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n      }[$__rate_interval]\n    )\n  )\n) by (job, dest_server, project, name)\n> 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Sync Failures",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ project }}/{{ name }} - {{ phase }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_sync_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\n        phase=~\"Error|Failed\"\n      }[$__rate_interval]\n    )\n  )\n) by (job, dest_server, project, name, phase)\n> 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Controller Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 24,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Reconciliation Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }}/{{ job }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_reconcile_count{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  )\n) by (namespace, job)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Reconciliation Performance",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 31,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_app_reconcile_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "K8s API Activity",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 37,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ verb }} {{ resource_kind }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_k8s_request_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  )\n) by (job, verb, resource_kind)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Resource Event Processing Duration",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 43,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_resource_events_processing_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Resource Events Batch Size",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }}/{{ job }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_resource_events_processed_in_batch{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n  }\n) by (namespace, job)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "Kubectl Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "Pending Kubectl Runs",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 26,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ command }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_kubectl_exec_pending{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n  }\n) by (job, command)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Kubectl Exec Total",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 26,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ command }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_kubectl_exec_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  )\n) by (namespace, job, command)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Kubectl Requests Total",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 32,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ container }} {{ method }} {{ code }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_kubectl_requests_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (container, method, code)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Kubectl Requests Total by Host (6h)",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 32,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ host }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "topk(20,\n  sum(\n    increase(\n      argocd_kubectl_requests_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[6h]\n    )\n  ) by (host)\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Kubectl Request Duration by Verb (P95)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 38,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ container }} {{ verb }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(\n  0.95,\n  sum(\n    rate(\n      argocd_kubectl_request_duration_seconds_bucket{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  ) by (le, container, verb)\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "fillOpacity": "0.1",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Kubectl Request Duration by Host (6h)",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 38,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ host }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "topk(20,\n  histogram_quantile(\n    0.95,\n    sum(\n      increase(\n        argocd_kubectl_request_duration_seconds_bucket{\n          cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n        }[6h]\n      )\n    ) by (le, host)\n  )\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Kubectl Request Retries",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 44,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ container }} {{ method }} {{ code }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_kubectl_request_retries_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (container, method, code)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Kubectl Request Retries by Host (6h)",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 44,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ host }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "topk(20,\n  sum(\n    increase(\n      argocd_kubectl_request_retries_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[6h]\n    )\n  ) by (host)\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Kubectl Rate Limiter Duration (P95)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 50,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ verb }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(\n  0.95,\n  sum(\n    rate(\n      argocd_kubectl_rate_limiter_duration_seconds_bucket{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  ) by (le, verb)\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "fillOpacity": "0.0",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Kubectl Rate Limiter Duration P95 by Host (6h)",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 50,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ host }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "topk(20,\n  histogram_quantile(\n    0.95,\n    sum(\n      increase(\n        argocd_kubectl_rate_limiter_duration_seconds_bucket{\n          cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n        }[6h]\n      )\n    ) by (le, host)\n  )\n)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "Kubectl Request Size",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_kubectl_request_size_bytes_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 27
+            },
+            {
+                "title": "Kubectl Response Size",
+                "widget_type": "heatmap",
+                "grid_x": 6,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_kubectl_response_size_bytes_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 28
+            },
+            {
+                "title": "Kubectl Exec Plugin Calls",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 62,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ call_status }} {{ code }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_kubectl_exec_plugin_call_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  )\n) by (call_status, code)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 29
+            },
+            {
+                "title": "Kubectl Transport Create Calls",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 62,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }}/{{ job }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_kubectl_transport_create_calls_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  )\n) by (namespace, job)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 30
+            },
+            {
+                "title": "gRPC Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 26,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 31
+            },
+            {
+                "title": "gRPC Requests Handled",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ grpc_service }}/{{ grpc_method }} - {{ grpc_code }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    grpc_server_handled_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (namespace, job, grpc_service, grpc_method, grpc_code)\n> 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 32
+            },
+            {
+                "title": "gRPC Messages Sent",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 27,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ grpc_service }}/{{ grpc_method }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    grpc_server_msg_sent_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (namespace, job, grpc_service, grpc_method)\n> 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 33
+            },
+            {
+                "title": "gRPC Server Handling Duration (P50)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 33,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ grpc_service }}/{{ grpc_method }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(\n  0.5,\n  sum(\n    rate(\n      grpc_server_handling_seconds_bucket{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  ) by (le, grpc_service, grpc_method)\n)\nand\nsum(\n  rate(\n    grpc_server_handling_seconds_count{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (grpc_service, grpc_method) > 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "fillOpacity": "0.0",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 34
+            },
+            {
+                "title": "gRPC Server Handling Duration (P95)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 33,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ grpc_service }}/{{ grpc_method }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(\n  0.95,\n  sum(\n    rate(\n      grpc_server_handling_seconds_bucket{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n      }[$__rate_interval]\n    )\n  ) by (le, grpc_service, grpc_method)\n)\nand\nsum(\n  rate(\n    grpc_server_handling_seconds_count{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (grpc_service, grpc_method) > 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "fillOpacity": "0.0",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 35
+            },
+            {
+                "title": "Cluster Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 36
+            },
+            {
+                "title": "Cluster Connection Status",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ server }} - {{ k8s_version }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_cluster_connection_status{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n    server=~\"$kubernetes_cluster\"\n  }\n) by (namespace, job, server, k8s_version)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "fillOpacity": "0.0",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 37
+            },
+            {
+                "title": "Cluster Cache Age",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ server }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "server",
+                                "op": "like",
+                                "value": "$kubernetes_cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "argocd_cluster_cache_age_seconds{\n  cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n  server=~\"$kubernetes_cluster\"\n}\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "fillOpacity": "0.0",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 38
+            },
+            {
+                "title": "Resource Objects",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 40,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ server }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_cluster_api_resource_objects{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n    server=~\"$kubernetes_cluster\"\n  }\n) by (namespace, job, server)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 39
+            },
+            {
+                "title": "API Resources",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 46,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ server }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_cluster_api_resources{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n    server=~\"$kubernetes_cluster\"\n  }\n) by (namespace, job, server)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 40
+            },
+            {
+                "title": "Cluster Events",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 52,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ server }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  increase(\n    argocd_cluster_events_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n      server=~\"$kubernetes_cluster\"\n    }[$__rate_interval]\n  )\n) by (namespace, job, server)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 41
+            },
+            {
+                "title": "Repo Server Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 42
+            },
+            {
+                "title": "Pending Repo Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 29,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }}/{{ job }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_repo_pending_request_total{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n  }\n) by (namespace, job)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 43
+            },
+            {
+                "title": "Git Fetch Failures",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 29,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }} - {{ repo }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  increase(\n    argocd_git_fetch_fail_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (namespace, job, repo)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 44
+            },
+            {
+                "title": "Git Requests (ls-remote)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 35,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }} - {{ repo }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  increase(\n    argocd_git_request_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n      request_type=\"ls-remote\"\n    }[$__rate_interval]\n  )\n) by (namespace, job, repo)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 45
+            },
+            {
+                "title": "Git Requests (checkout)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 35,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ namespace }} - {{ repo }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  increase(\n    argocd_git_request_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n      request_type=\"fetch\"\n    }[$__rate_interval]\n  )\n) by (namespace, job, repo)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 46
+            },
+            {
+                "title": "Git Fetch Performance",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 41,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_git_request_duration_seconds_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n      request_type=\"fetch\"\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 47
+            },
+            {
+                "title": "Git Ls-remote Performance",
+                "widget_type": "heatmap",
+                "grid_x": 6,
+                "grid_y": 41,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_git_request_duration_seconds_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\n      request_type=\"ls-remote\"\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 48
+            },
+            {
+                "title": "Redis Performance",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 29,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 49
+            },
+            {
+                "title": "Redis Request Rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ initiator }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_redis_request_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (namespace, job, initiator)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 50
+            },
+            {
+                "title": "Redis Request Duration",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 36,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ le }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  rate(\n    argocd_redis_request_duration_seconds_bucket{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (le)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 51
+            }
+        ]
+    }
+}

@@ -1,0 +1,1181 @@
+{
+    "id": "011-14055-loki-stack-monitoring-promtail-loki",
+    "title": "Loki stack monitoring (Promtail, Loki)",
+    "description": "Prebuilt Moneat dashboard for Loki stack monitoring (Promtail, Loki) telemetry.",
+    "category": "logs",
+    "tags": [
+        "Logs",
+        "Loki",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Loki",
+        "Prometheus"
+    ],
+    "widget_count": 22,
+    "variable_count": 0,
+    "quality": "partial",
+    "warnings": [
+        "Panel 3: couldn't parse PromQL '{app=\"loki\"} | logfmt | level=\"warn\" or level=\"error\"', stored as rawQuery",
+        "Panel 5: couldn't parse PromQL '{app=\"promtail\"} | logfmt | level=\"warn\" or level=\"error\"', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Loki stack monitoring (Promtail, Loki)",
+        "description": "Prebuilt Moneat dashboard for Loki stack monitoring (Promtail, Loki) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [],
+        "widgets": [
+            {
+                "title": "Summary of alerts status",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Problems in the Loki Stack",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Number of error/warning messages logged by Loki itself",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{level}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "app",
+                                "op": "eq",
+                                "value": "loki",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "like",
+                                "value": "error|warn",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(log_messages_total{app=\"loki\",level=~\"error|warn\"}[1m])) by (level)\n",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "log_messages_total",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Error/warning messages logged by Loki itself",
+                "widget_type": "table",
+                "grid_x": 4,
+                "grid_y": 7,
+                "grid_w": 8,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{app=\"loki\"} | logfmt | level=\"warn\" or level=\"error\"",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Error/warning messages logged by Promtail",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{level}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "app_kubernetes_io_name",
+                                "op": "eq",
+                                "value": "promtail",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "like",
+                                "value": "error|warn",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(log_messages_total{app_kubernetes_io_name=\"promtail\",level=~\"error|warn\"}[1m])) by (level)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Error/warning messages logged by Promtail",
+                "widget_type": "table",
+                "grid_x": 4,
+                "grid_y": 12,
+                "grid_w": 8,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{app=\"promtail\"} | logfmt | level=\"warn\" or level=\"error\"",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Loki (distributor) - failed batch appends sent to ingesters",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 17,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(loki_distributor_ingester_append_failures_total[1m])*60",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Promtail - dropped log entries",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "pod={{kubernetes_pod_name}}, instance={{instance}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(promtail_dropped_entries_total[1m])*60",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Logging activity",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Number of Streams in Loki",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Streams"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "loki_ingester_memory_streams",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Loki (distributor) - log entries received per second",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(loki_distributor_lines_received_total[1m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Bytes received in ingester per second",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 40,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(loki_distributor_bytes_received_total[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Memory usage",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 46,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Loki memory usage (% of Kubernetes memory limit)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Usage (pod={{pod}}, container={{container}}, name={{name}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "100 * max by(pod,container) (container_memory_working_set_bytes{container!=\"\",container!=\"POD\",pod=~\"loki.*\"})\n/\non (pod,container) group_left  kube_pod_container_resource_limits_memory_bytes{pod=~\"loki.*\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Loki memory usage vs Kubernetes limit and request",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 53,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Usage (pod={{pod}}, container={{container}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "POD",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "container_memory_working_set_bytes{container!=\"\",container!=\"POD\",pod=~\"loki.*\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "mem_used",
+                                "alias": "Limit"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_limits_memory_bytes{pod=~\"loki.*\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "mem_used",
+                                "alias": "Request"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_requests_memory_bytes{pod=~\"loki.*\"})",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Promtail memory usage (% of Kubernetes memory limit)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 59,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "100* max by(pod,container) (container_memory_working_set_bytes{container!=\"\",container!=\"POD\",pod=~\"promtail.*\"})\n/\non (pod,container) (kube_pod_container_resource_limits_memory_bytes{pod=~\"promtail.*\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Promtail memory usage vs Kubernetes limit and request",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 65,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Usage (pod={{pod}}, container={{container}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "POD",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "container_memory_working_set_bytes{container!=\"\",container!=\"POD\",pod=~\"promtail.*\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "mem_used",
+                                "alias": "Limit"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_limits_memory_bytes{pod=~\"promtail.*\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "mem_used",
+                                "alias": "Request"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_requests_memory_bytes{pod=~\"promtail.*\"})",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "CPU Usage",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 71,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Loki CPU usage (% of Kubernetes CPU limit)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 72,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "POD",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "100* rate(container_cpu_usage_seconds_total{container!=\"POD\",container!=\"\",pod=~\"loki.*\"}[1m])\n/\non (pod,container) kube_pod_container_resource_limits_cpu_cores{container=\"loki\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            },
+            {
+                "title": "Loki CPU usage vs Kubernetes limit and request",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 78,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "CPU Usage (pod={{pod}}, container={{container}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "POD",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(container_cpu_usage_seconds_total{container!=\"\",container!=\"POD\",pod=~\"loki.*\"}[1m])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "cpu_percent",
+                                "alias": "CPU Limit"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_limits_cpu_cores{pod=~\"loki.*\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "cpu_percent",
+                                "alias": "CPU Request"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "loki.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_requests_cpu_cores{pod=~\"loki.*\"})",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 19
+            },
+            {
+                "title": "Promtail CPU usage (% of Kubernetes limit)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 84,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "POD",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "100 * rate(container_cpu_usage_seconds_total{container!=\"\",container!=\"POD\",pod=~\"promtail.*\"}[1m])\n/\non (pod,container) kube_pod_container_resource_limits_cpu_cores{pod=~\"promtail.*\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 20
+            },
+            {
+                "title": "Promtail CPU usage vs Kubernetes limit and request",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 90,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "CPU Usage (pod={{pod}}, container={{container}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "POD",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(container_cpu_usage_seconds_total{container!=\"\",container!=\"POD\",pod=~\"promtail.*\"}[1m])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "cpu_percent",
+                                "alias": "CPU Limit"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_limits_cpu_cores{pod=~\"promtail.*\"})",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "min",
+                                "field": "cpu_percent",
+                                "alias": "CPU Request"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "promtail.*",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "min(kube_pod_container_resource_requests_cpu_cores{pod=~\"promtail.*\"})",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 21
+            }
+        ]
+    }
+}

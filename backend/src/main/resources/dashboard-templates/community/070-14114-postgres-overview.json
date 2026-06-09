@@ -1,0 +1,663 @@
+{
+    "id": "070-14114-postgres-overview",
+    "title": "PostgreSQL Exporter Quickstart and Dashboard",
+    "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter Quickstart and Dashboard telemetry.",
+    "category": "databases",
+    "tags": [
+        "Databases",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 6,
+    "variable_count": 4,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "PostgreSQL Exporter Quickstart and Dashboard",
+        "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter Quickstart and Dashboard telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "instance",
+                "label": null,
+                "type": "query",
+                "query": "label_values(up{job=~\"postgres.*\"},instance)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "db",
+                "label": "db",
+                "type": "query",
+                "query": "label_values(pg_stat_database_tup_fetched{instance=~\"$instance\",datname!~\"template.*|postgres\"},datname)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "datasource",
+                "label": "datasource",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "Postgres Overview",
+                "current": "Postgres Overview",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "job",
+                "label": "job",
+                "type": "query",
+                "query": "label_values(pg_up, job)",
+                "default_value": "postgres",
+                "current": "postgres",
+                "options": [
+                    "postgres"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Rows",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 10,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "fetched"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(irate(pg_stat_database_tup_fetched{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "returned"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(irate(pg_stat_database_tup_returned{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "inserted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(irate(pg_stat_database_tup_inserted{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "updated"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(irate(pg_stat_database_tup_updated{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "deleted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(irate(pg_stat_database_tup_deleted{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "E"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "QPS",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 0,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(irate(pg_stat_database_xact_commit{datname=~\"$db\",instance=~\"$instance\"}[5m])) + sum(irate(pg_stat_database_xact_rollback{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Buffers",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "buffers_alloc"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(pg_stat_bgwriter_buffers_alloc{instance=~'$instance'}[5m])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "buffers_backend_fsync"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(pg_stat_bgwriter_buffers_backend_fsync{instance=~'$instance'}[5m])",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "buffers_backend"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(pg_stat_bgwriter_buffers_backend{instance=~'$instance'}[5m])",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "buffers_clean"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(pg_stat_bgwriter_buffers_clean{instance=~'$instance'}[5m])",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "buffers_checkpoint"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(pg_stat_bgwriter_buffers_checkpoint{instance=~'$instance'}[5m])",
+                        "ref_id": "E"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Conflicts/Deadlocks",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "deadlocks"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(pg_stat_database_deadlocks{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "conflicts"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(pg_stat_database_conflicts{datname=~\"$db\",instance=~\"$instance\"}[5m]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Cache hit ratio",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "cache hit rate"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(pg_stat_database_blks_hit{datname=~\"$db\",instance=~\"$instance\"}) / (sum(pg_stat_database_blks_hit{datname=~\"$db\",instance=~\"$instance\"}) + sum(pg_stat_database_blks_read{datname=~\"$db\",instance=~\"$instance\"}))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Number of active connections",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{__name__}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "datname",
+                                "op": "like",
+                                "value": "$db",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "pg_stat_database_numbackends{datname=~\"$db\",instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            }
+        ]
+    }
+}

@@ -1,0 +1,439 @@
+{
+    "id": "010-13659-blackbox-exporter-http-prober",
+    "title": "Blackbox Exporter (HTTP prober)",
+    "description": "Prebuilt Moneat dashboard for Blackbox Exporter (HTTP prober) telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 4,
+    "variable_count": 2,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Blackbox Exporter (HTTP prober)",
+        "description": "Prebuilt Moneat dashboard for Blackbox Exporter (HTTP prober) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "job",
+                "label": "Job",
+                "type": "query",
+                "query": "label_values(probe_success, job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": "Instance",
+                "type": "query",
+                "query": "label_values(probe_success{job=~\"$job\"}, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "HTTP Probe Overview",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "probe_success{job=~\"$job\", instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "probe_http_ssl{job=~\"$job\", instance=~\"$instance\"} > 0",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(probe_ssl_earliest_cert_expiry{job=~\"$job\", instance=~\"$instance\"} - time()) / 3600 / 24",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "probe_http_status_code{job=~\"$job\", instance=~\"$instance\"} > 0",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg_over_time(probe_duration_seconds{job=~\"$job\", instance=~\"$instance\"}[1m])",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "probe_tls_version_info{job=~\"$job\", instance=~\"$instance\"}",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg_over_time(probe_dns_lookup_time_seconds{job=~\"$job\", instance=~\"$instance\"}[1m])",
+                        "ref_id": "G"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "gaugeMin": "0",
+                    "fieldRenames": "{\"Value\":\"Up\",\"Value #A\":\"Status\",\"Value #B\":\"SSL\",\"Value #C\":\"SSL Cert Expiry (days)\",\"Value #D\":\"Code\",\"Value #E\":\"Probe Duration (s)\",\"Value #G\":\"DNS Lookup Duration (s)\",\"Value #H\":\"Probe IP\",\"instance\":\"Instance\",\"version\":\"TLS Version\"}"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "HTTP Probe Duration",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "duration_ms",
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(probe_http_duration_seconds{job=~\"$job\", instance=~\"$instance\"}) by (instance)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "$instance",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "HTTP Probe Phases Duration",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ phase }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "probe_http_duration_seconds{job=~\"$job\", instance=~\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            }
+        ]
+    }
+}

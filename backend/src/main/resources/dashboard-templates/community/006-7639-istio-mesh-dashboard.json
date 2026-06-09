@@ -1,0 +1,581 @@
+{
+    "id": "006-7639-istio-mesh-dashboard",
+    "title": "Istio Mesh Dashboard",
+    "description": "Prebuilt Moneat dashboard for Istio Mesh Dashboard telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Network",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 9,
+    "variable_count": 1,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Istio Mesh Dashboard",
+        "description": "Prebuilt Moneat dashboard for Istio Mesh Dashboard telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Global Traffic",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Traffic Volume",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "round(sum (rate(istio_requests_total{reporter=~\"source|waypoint\"}[$__rate_interval])), 0.01)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "fillOpacity": "0.1",
+                    "legendMode": "table"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Success Rate",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            },
+                            {
+                                "field": "response_code",
+                                "op": "not_like",
+                                "value": "5..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum (rate(istio_requests_total{reporter=~\"source|waypoint\",response_code!~\"5..\"}[$__rate_interval])) / sum (rate(istio_requests_total{reporter=~\"source|waypoint\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "fillOpacity": "0.1",
+                    "legendMode": "table"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "4xxs",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            },
+                            {
+                                "field": "response_code",
+                                "op": "like",
+                                "value": "4..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "round(sum (rate(istio_requests_total{reporter=~\"source|waypoint\",response_code=~\"4..\"}[$__rate_interval])), 0.01)or vector(0)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "fillOpacity": "0.1",
+                    "legendMode": "table"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "5xxs",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            },
+                            {
+                                "field": "response_code",
+                                "op": "like",
+                                "value": "5..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "round(sum (rate(istio_requests_total{reporter=~\"source|waypoint\",response_code=~\"5..\"}[$__rate_interval])), 0.01)or vector(0)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "reqps",
+                    "fillOpacity": "0.1",
+                    "legendMode": "table"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "HTTP/gRPC Workloads",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(sum by (destination_workload,destination_workload_namespace,destination_service) (rate(istio_requests_total{reporter=~\"source|waypoint\"}[$__rate_interval])), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "requests"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(histogram_quantile(0.5, sum by (le,destination_workload,destination_workload_namespace) (rate(istio_request_duration_milliseconds_bucket{reporter=~\"source|waypoint\"}[$__rate_interval]))), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "p50"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(histogram_quantile(0.9, sum by (le,destination_workload,destination_workload_namespace) (rate(istio_request_duration_milliseconds_bucket{reporter=~\"source|waypoint\"}[$__rate_interval]))), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "p90"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(histogram_quantile(0.99, sum by (le,destination_workload,destination_workload_namespace) (rate(istio_request_duration_milliseconds_bucket{reporter=~\"source|waypoint\"}[$__rate_interval]))), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "p99"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            },
+                            {
+                                "field": "response_code",
+                                "op": "not_like",
+                                "value": "5..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(sum by (destination_workload,destination_workload_namespace) (rate(istio_requests_total{reporter=~\"source|waypoint\",response_code!~\"5..\"}[$__rate_interval]))/sum by (destination_workload,destination_workload_namespace) (rate(istio_requests_total{reporter=~\"source|waypoint\"}[$__rate_interval])), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "success"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "TCP Workloads",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 26,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(sum by (destination_workload,destination_workload_namespace,destination_service) (rate(istio_tcp_received_bytes_total{reporter=~\"source|waypoint\"}[$__rate_interval])), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "recv"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ destination_workload}}.{{ destination_workload_namespace }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reporter",
+                                "op": "like",
+                                "value": "source|waypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "label_join(sum by (destination_workload,destination_workload_namespace,destination_service) (rate(istio_tcp_sent_bytes_total{reporter=~\"source|waypoint\"}[$__rate_interval])), \"destination_workload_var\", \".\", \"destination_workload\", \"destination_workload_namespace\")",
+                        "ref_id": "sent"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Istio Component Versions",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 42,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Istio Component Versions",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 43,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{component}} ({{tag}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by (component,tag) (istio_build)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "fillOpacity": "0.1",
+                    "legendMode": "list"
+                },
+                "sort_order": 8
+            }
+        ]
+    }
+}

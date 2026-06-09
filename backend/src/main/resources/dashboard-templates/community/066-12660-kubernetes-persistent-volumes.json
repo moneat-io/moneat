@@ -1,0 +1,65 @@
+{
+    "id": "066-12660-kubernetes-persistent-volumes",
+    "title": "Kubernetes / Persistent Volumes",
+    "description": "Prebuilt Moneat dashboard for Kubernetes / Persistent Volumes telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 4,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes / Persistent Volumes",
+        "description": "Prebuilt Moneat dashboard for Kubernetes / Persistent Volumes telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": "cluster",
+                "type": "query",
+                "query": "label_values(kubelet_volume_stats_capacity_bytes, cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "namespace",
+                "label": "Namespace",
+                "type": "query",
+                "query": "label_values(kubelet_volume_stats_capacity_bytes{cluster=\"$cluster\", job=\"kubelet\", metrics_path=\"/metrics\"}, namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "volume",
+                "label": "PersistentVolumeClaim",
+                "type": "query",
+                "query": "label_values(kubelet_volume_stats_capacity_bytes{cluster=\"$cluster\", job=\"kubelet\", metrics_path=\"/metrics\", namespace=\"$namespace\"}, persistentvolumeclaim)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": []
+    }
+}

@@ -1,0 +1,758 @@
+{
+    "id": "030-13996-clusterpolicyreport-details",
+    "title": "ClusterPolicyReport Details",
+    "description": "Prebuilt Moneat dashboard for ClusterPolicyReport Details telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 9,
+    "variable_count": 6,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "ClusterPolicyReport Details",
+        "description": "Prebuilt Moneat dashboard for ClusterPolicyReport Details telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "DS_PROMETHEUS",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "prometheus",
+                "current": "prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "policy",
+                "label": "Policy",
+                "type": "query",
+                "query": "label_values(cluster_policy_report_result, policy)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "category",
+                "label": "Category",
+                "type": "query",
+                "query": "label_values(cluster_policy_report_result, category)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "severity",
+                "label": "Severity",
+                "type": "query",
+                "query": "label_values(cluster_policy_report_result, severity)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "kind",
+                "label": "Kind",
+                "type": "query",
+                "query": "label_values(cluster_policy_report_result, kind)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "source",
+                "label": "Source",
+                "type": "query",
+                "query": "label_values(cluster_policy_report_result, source)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Policy Pass Status",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "pass",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"pass\" })",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "gaugeMin": "0",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Policy Warning Status",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "warn",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"warn\" })",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"orange\"}]",
+                    "gaugeMin": "0",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Policy Fail Status",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "fail",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"fail\" })",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Policy Error Status",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 0,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "error",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"error\" })",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"dark-red\"}]",
+                    "gaugeMin": "0",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Status Timeline",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\" } > 0) by (status)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Passed Resources",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "pass",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", kind=~\"$kind\", source=~\"$source\", status=\"pass\" }) by (policy,rule,kind,name,status,severity,category,source)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "fieldRenames": "{\"namespace\":\"namespace\"}"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Failed Resources",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "fail",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"fail\" }) by (policy,rule,kind,name,status,severity,category,source)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "fieldRenames": "{\"namespace\":\"namespace\"}"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Warning Resources",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 12,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "warn",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"warn\" }) by (policy,rule,kind,name,status,severity,category,source )",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "fieldRenames": "{\"namespace\":\"namespace\"}"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Errored Resources",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 12,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "eq",
+                                "value": "warn",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=\"warn\" }) by (policy,rule,kind,name,status,severity,category,source)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "fieldRenames": "{\"namespace\":\"namespace\"}"
+                },
+                "sort_order": 8
+            }
+        ]
+    }
+}

@@ -1,0 +1,413 @@
+{
+    "id": "040-4475-traefik",
+    "title": "Traefik",
+    "description": "Prebuilt Moneat dashboard for Traefik telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Network",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 9,
+    "variable_count": 2,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Traefik",
+        "description": "Prebuilt Moneat dashboard for Traefik telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "service",
+                "label": null,
+                "type": "query",
+                "query": "label_values(service)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "entrypoint",
+                "label": null,
+                "type": "query",
+                "query": "label_values(entrypoint)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "$backend stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "$service return code",
+                "widget_type": "donut",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{method}} : {{code}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "eq",
+                                "value": "$service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "traefik_service_requests_total{service=\"$service\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "$service response time",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "eq",
+                                "value": "$service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(traefik_service_request_duration_seconds_sum{service=\"$service\"}) / sum(traefik_service_requests_total{service=\"$service\"}) * 1000",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Total requests over 5min $service",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Total requests $service"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "eq",
+                                "value": "$service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(traefik_service_requests_total{service=\"$service\"}[5m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Global stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Status code 200 over 5min",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 16,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{method}} : {{code}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "entrypoint",
+                                "op": "like",
+                                "value": "$entrypoint",
+                                "values": null
+                            },
+                            {
+                                "field": "code",
+                                "op": "eq",
+                                "value": "200",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(traefik_entrypoint_requests_total{entrypoint=~\"$entrypoint\",code=\"200\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Others status code over 5min",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 16,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ method }} : {{code}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "entrypoint",
+                                "op": "like",
+                                "value": "$entrypoint",
+                                "values": null
+                            },
+                            {
+                                "field": "code",
+                                "op": "neq",
+                                "value": "200",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(traefik_entrypoint_requests_total{entrypoint=~\"$entrypoint\",code!=\"200\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Requests by service",
+                "widget_type": "donut",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ service }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(traefik_service_requests_total[5m])) by (service) ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Requests by protocol",
+                "widget_type": "donut",
+                "grid_x": 6,
+                "grid_y": 23,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ entrypoint }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "entrypoint",
+                                "op": "like",
+                                "value": "$entrypoint",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(traefik_entrypoint_requests_total{entrypoint =~ \"$entrypoint\"}[5m])) by (entrypoint) ",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 8
+            }
+        ]
+    }
+}

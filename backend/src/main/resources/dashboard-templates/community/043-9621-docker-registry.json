@@ -1,0 +1,906 @@
+{
+    "id": "043-9621-docker-registry",
+    "title": "Docker Registry",
+    "description": "Prebuilt Moneat dashboard for Docker Registry telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 19,
+    "variable_count": 3,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Docker Registry",
+        "description": "Prebuilt Moneat dashboard for Docker Registry telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "namespace",
+                "label": null,
+                "type": "query",
+                "query": "query_result(registry_http_in_flight_requests)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "app",
+                "label": null,
+                "type": "query",
+                "query": "query_result(registry_http_in_flight_requests{kubernetes_namespace=\"$namespace\"})",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": null,
+                "type": "query",
+                "query": "query_result(up{app=\"$app\"})",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "General Counters, CPU, Memory and File Descriptor Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Start Time",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "app",
+                                "op": "eq",
+                                "value": "$app",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_start_time_seconds{app=\"$app\", instance=\"$instance\"} * 1000",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Total Cache Requests",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "Request",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "registry_storage_cache_total{instance=\"$instance\",type=\"Request\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Total Hit Cache Requests",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "Hit",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "registry_storage_cache_total{instance=\"$instance\",type=\"Hit\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Total Missed Cache Requests",
+                "widget_type": "stat",
+                "grid_x": 7,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "type",
+                                "op": "eq",
+                                "value": "Miss",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "registry_storage_cache_total{instance=\"$instance\",type=\"Miss\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Resident Memory Usage",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(process_resident_memory_bytes{instance=\"$instance\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Average CPU Usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "CPU Time"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(rate(process_cpu_seconds_total{instance=\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Average Memory Usage",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 4,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Resident Mem"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(rate(process_resident_memory_bytes{instance=\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Virtual Mem"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(rate(process_virtual_memory_bytes{instance=\"$instance\"}[5m]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Open File Descriptors",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 4,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Open FD"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_open_fds{instance=\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Registry Metrics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "HTTP Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ handler }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "ceil(rate(registry_http_requests_total{instance=\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "In-Flight HTTP Requests",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 12,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ handler }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "registry_http_in_flight_requests{instance=\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Registry Cache Requests Rate",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 12,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "ceil(rate(registry_storage_cache_total{instance=\"$instance\"}[5m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Registry Action Latency",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 20,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ action }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "increase(registry_storage_action_seconds_sum{instance=\"$instance\"}[2m]) * 1000",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "HTTP Request Latencies in seconds (blob)",
+                "widget_type": "heatmap",
+                "grid_x": 4,
+                "grid_y": 20,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "handler",
+                                "op": "eq",
+                                "value": "blob",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(registry_http_request_duration_seconds_bucket{handler=\"blob\"}[10m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Upload HTTP Request Latencies in seconds (base)",
+                "widget_type": "heatmap",
+                "grid_x": 8,
+                "grid_y": 20,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "handler",
+                                "op": "eq",
+                                "value": "base",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(registry_http_request_duration_seconds_bucket{handler=\"base\"}[10m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Upload HTTP Request Latencies in seconds (blob_upload)",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "handler",
+                                "op": "eq",
+                                "value": "blob_upload",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(registry_http_request_duration_seconds_bucket{handler=\"blob_upload\"}[10m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "Manifest HTTP Request Latencies in seconds (manifest)",
+                "widget_type": "heatmap",
+                "grid_x": 4,
+                "grid_y": 27,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "handler",
+                                "op": "eq",
+                                "value": "manifest",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(registry_http_request_duration_seconds_bucket{handler=\"manifest\"}[10m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 17
+            },
+            {
+                "title": "Catalog HTTP Request Latencies in seconds (catalog)",
+                "widget_type": "heatmap",
+                "grid_x": 8,
+                "grid_y": 27,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "handler",
+                                "op": "eq",
+                                "value": "catalog",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(registry_http_request_duration_seconds_bucket{handler=\"catalog\"}[10m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            }
+        ]
+    }
+}

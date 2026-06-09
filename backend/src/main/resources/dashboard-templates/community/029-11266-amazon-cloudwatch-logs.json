@@ -1,0 +1,288 @@
+{
+    "id": "029-11266-amazon-cloudwatch-logs",
+    "title": "Amazon CloudWatch Logs",
+    "description": "Prebuilt Moneat dashboard for Amazon CloudWatch Logs telemetry.",
+    "category": "logs",
+    "tags": [
+        "Cloud",
+        "CloudWatch",
+        "Logs"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 7,
+    "variable_count": 3,
+    "quality": "partial",
+    "warnings": [],
+    "dashboard": {
+        "title": "Amazon CloudWatch Logs",
+        "description": "Prebuilt Moneat dashboard for Amazon CloudWatch Logs telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data source",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "period",
+                "label": "Period [sec]",
+                "type": "custom",
+                "query": "60,300,3600",
+                "default_value": "300",
+                "current": "300",
+                "options": [
+                    "60",
+                    "300",
+                    "3600"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Incoming log events [count/sec]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Logs\",\"MetricName\":\"IncomingLogEvents\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LogGroupName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Incoming bytes [bytes/sec]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Logs\",\"MetricName\":\"IncomingLogEvents\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LogGroupName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Delivery errors [count]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 16,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Logs\",\"MetricName\":\"DeliveryErrors\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LogGroupName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Delivery throttling [count]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 16,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Logs\",\"MetricName\":\"DeliveryThrottling\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LogGroupName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Forwarded log events [count/sec]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Logs\",\"MetricName\":\"ForwardedLogEvents\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LogGroupName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Forwarded bytes [bytes/sec]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 25,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Logs\",\"MetricName\":\"ForwardedBytes\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LogGroupName\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": " ",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"\",\"MetricName\":\"\",\"Statistics\":[\"Average\"],\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            }
+        ]
+    }
+}

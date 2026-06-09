@@ -1,0 +1,633 @@
+{
+    "id": "075-19974-argocd-application-overview",
+    "title": "ArgoCD / Application / Overview",
+    "description": "Prebuilt Moneat dashboard for ArgoCD / Application / Overview telemetry.",
+    "category": "applications",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 14,
+    "variable_count": 8,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "ArgoCD / Application / Overview",
+        "description": "Prebuilt Moneat dashboard for ArgoCD / Application / Overview telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data source",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": "Cluster",
+                "type": "query",
+                "query": "label_values(argocd_app_info{}, cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "namespace",
+                "label": "Namespace",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\"}, namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "job",
+                "label": "Job",
+                "type": "query",
+                "query": "label_values(job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "kubernetes_cluster",
+                "label": "Kubernetes Cluster",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\"}, dest_server)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "project",
+                "label": "Project",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\", dest_server=~\"$kubernetes_cluster\"}, project)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "application_namespace",
+                "label": "Application Namespace",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\", dest_server=~\"$kubernetes_cluster\", project=~\"$project\"}, exported_namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "application",
+                "label": "Application",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\", dest_server=~\"$kubernetes_cluster\", project=~\"$project\", exported_namespace=~\"$application_namespace\"}, name)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Summary By Project",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Application Health Status",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ project }} - {{ health_status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n) by (job, project, health_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Application Sync Status",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ project }} - {{ sync_status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n) by (job, project, sync_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Application Syncs",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ project }} - {{ phase }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_sync_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n      }[$__rate_interval]\n    )\n  )\n) by (job, project, phase)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Application Auto Sync Enabled",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ project }} - {{ autosync_enabled }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n\n  }\n) by (job, project, autosync_enabled)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Applications (Unhealthy/OutOfSync/AutoSyncDisabled) Summary",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Unhealthy Applications",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\n    health_status!~\"Healthy|Progressing\"\n  }\n) by (job, dest_server, project, name, exported_namespace, health_status) > 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "fieldRenames": "{\"dest_server\":\"Cluster\",\"exported_namespace\":\"Application Namespace\",\"health_status\":\"Health Status\",\"job\":\"Job\",\"name\":\"Application\",\"project\":\"Project\"}"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Out Of Sync Applications",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 12,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\n    sync_status!=\"Synced\"\n  }\n) by (job, dest_server, project, name, exported_namespace, sync_status) > 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "fieldRenames": "{\"dest_server\":\"Cluster\",\"exported_namespace\":\"Application Namespace\",\"job\":\"Job\",\"name\":\"Application\",\"project\":\"Project\",\"sync_status\":\"Sync Status\"}"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Applications That Failed to Sync (7d)",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 20,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_sync_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\n        phase!=\"Succeeded\"\n      }[7d]\n    )\n  )\n) by (job, dest_server, project, name, exported_namespace, phase) > 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "fieldRenames": "{\"Value\":\"Count\",\"dest_server\":\"Cluster\",\"exported_namespace\":\"Application Namespace\",\"job\":\"Job\",\"name\":\"Application\",\"phase\":\"Phase\",\"project\":\"Project\"}"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Applications With Auto Sync Disabled",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 20,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\n    autosync_enabled!=\"true\"\n  }\n) by (job, dest_server, project, name, exported_namespace, autosync_enabled) > 0\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "fieldRenames": "{\"autosync_enabled\":\"Auto Sync Enabled\",\"dest_server\":\"Kubernetes Cluster\",\"exported_namespace\":\"Application Namespace\",\"job\":\"Job\",\"name\":\"Application\",\"project\":\"Project\"}"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Application ($application)",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Application Health Status by Application",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ exported_namespace }}/{{ name }} - {{ health_status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\nexported_namespace=~\"$application_namespace\",\nname=~\"$application\"\n\n  }\n) by (namespace, job, dest_server, project, name, exported_namespace, health_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Application Sync Status by Application",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 33,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ exported_namespace }}/{{ name }} - {{ sync_status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  argocd_app_info{\n    cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\nexported_namespace=~\"$application_namespace\",\nname=~\"$application\"\n\n  }\n) by (namespace, job, dest_server, project, name, exported_namespace, sync_status)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Application Sync Result by Application",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 39,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ exported_namespace }}/{{ name }} - {{ phase }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  round(\n    increase(\n      argocd_app_sync_total{\n        cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\ndest_server=~\"$kubernetes_cluster\",\nproject=~\"$project\"\n,\nexported_namespace=~\"$application_namespace\",\nname=~\"$application\"\n\n      }[$__rate_interval]\n    )\n  )\n) by (namespace, job, dest_server, project, name, exported_namespace, phase)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "decimals": "0",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 13
+            }
+        ]
+    }
+}

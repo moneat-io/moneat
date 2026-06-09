@@ -1,0 +1,1405 @@
+{
+    "id": "064-17554-restic-exporter",
+    "title": "Restic Exporter",
+    "description": "Prebuilt Moneat dashboard for Restic Exporter telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 30,
+    "variable_count": 0,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Restic Exporter",
+        "description": "Prebuilt Moneat dashboard for Restic Exporter telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [],
+        "widgets": [
+            {
+                "title": "General",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Repository Check",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_check_success",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Repository Locks",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_locks_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":2,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Repository total size",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_size_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Repository total snapshots",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_snapshots_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Last backup",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 9,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_backup_timestamp * 1000",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "time() - restic_backup_timestamp",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "fieldRenames": "{\"Value #A\":\"last_backup\",\"Value #B\":\"last_backup_since\"}"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Total snapshot count",
+                "widget_type": "table",
+                "grid_x": 9,
+                "grid_y": 4,
+                "grid_w": 3,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_backup_snapshots_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "fieldRenames": "{\"Value\":\"total_snapshot_count\"}"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Total backup size & files",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 9,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_backup_size_total",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_backup_files_total",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "fieldRenames": "{\"Value\":\"total_backup_size\",\"Value #A\":\"total_backup_size\",\"Value #B\":\"total_backup_files\"}"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Total backup size",
+                "widget_type": "donut",
+                "grid_x": 9,
+                "grid_y": 15,
+                "grid_w": 3,
+                "grid_h": 11,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_backup_size_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Total backup size",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 26,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_size_total)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.3",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Total backup files",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 35,
+                "grid_w": 7,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_files_total)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.3",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Total snapshot count",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 35,
+                "grid_w": 5,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_snapshots_total)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.3",
+                    "stackMode": "normal",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Advanced",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 44,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Repository total size",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 45,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_size_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Repository total uncompressed",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 45,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_uncompressed_size_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Repository compression ratio",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 45,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_compression_ratio",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "Repository total snapshots",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 45,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_snapshots_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "Repository total blobs",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 45,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_blob_count_total",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Exporter scrape duration",
+                "widget_type": "stat",
+                "grid_x": 10,
+                "grid_y": 45,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_scrape_duration_seconds",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Repository total size",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 48,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Compressed size"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_size_total",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Uncompressed size"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "restic_uncompressed_size_total",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "Backup total size",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_size_total)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Backup data added (last backup)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 64,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_data_added_bytes)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "decbytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Backup total files",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 72,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_files_total)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Backup files new",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 80,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_files_new)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Backup files changed",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 88,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_files_changed)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Backup files unmodified",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 96,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_files_unmodified)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Backup directories new",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 104,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_dirs_new)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "Backup directories changed",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 112,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_dirs_changed)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "Backup directories unmodified",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 120,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_dirs_unmodified)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Backup duration (time measured by restic)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 128,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{client_hostname}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum by(client_hostname,client_username) (restic_backup_duration_seconds)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.0",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 29
+            }
+        ]
+    }
+}

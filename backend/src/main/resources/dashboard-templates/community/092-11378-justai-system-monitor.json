@@ -1,0 +1,2947 @@
+{
+    "id": "092-11378-justai-system-monitor",
+    "title": "Spring Boot 2.1 System Monitor",
+    "description": "Prebuilt Moneat dashboard for Spring Boot 2.1 System Monitor telemetry.",
+    "category": "applications",
+    "tags": [
+        "Applications",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 42,
+    "variable_count": 5,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "Spring Boot 2.1 System Monitor",
+        "description": "Prebuilt Moneat dashboard for Spring Boot 2.1 System Monitor telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "application",
+                "label": "Application",
+                "type": "query",
+                "query": "label_values(application)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": "Instance",
+                "type": "query",
+                "query": "label_values(jvm_classes_loaded_classes{application=\"$application\"}, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "hikaricp",
+                "label": "HikariCP-Pool",
+                "type": "query",
+                "query": "label_values(hikaricp_connections{instance=\"$instance\", application=\"$application\"}, pool)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "memory_pool_heap",
+                "label": "Memory Pool (heap)",
+                "type": "query",
+                "query": "label_values(jvm_memory_used_bytes{application=\"$application\", instance=\"$instance\", area=\"heap\"},id)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "memory_pool_nonheap",
+                "label": "Memory Pool (nonheap)",
+                "type": "query",
+                "query": "label_values(jvm_memory_used_bytes{application=\"$application\", instance=\"$instance\", area=\"nonheap\"},id)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Basic Statistics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Uptime",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_uptime_seconds{application=\"$application\", instance=\"$instance\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Heap Used",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "area",
+                                "op": "eq",
+                                "value": "heap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_used_bytes{application=\"$application\", instance=\"$instance\", area=\"heap\"})*100/sum(jvm_memory_max_bytes{application=\"$application\",instance=\"$instance\", area=\"heap\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Non-Heap Used",
+                "widget_type": "stat",
+                "grid_x": 5,
+                "grid_y": 1,
+                "grid_w": 2,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "area",
+                                "op": "eq",
+                                "value": "nonheap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(jvm_memory_used_bytes{application=\"$application\", instance=\"$instance\", area=\"nonheap\"})*100/sum(jvm_memory_max_bytes{application=\"$application\",instance=\"$instance\", area=\"nonheap\"})",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Process Open Files",
+                "widget_type": "timeseries",
+                "grid_x": 7,
+                "grid_y": 1,
+                "grid_w": 5,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Open Files"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_files_open_files{application=\"$application\", instance=\"$instance\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Max Files"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_files_max_files{application=\"$application\", instance=\"$instance\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Start time",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 2,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_start_time_seconds{application=\"$application\", instance=\"$instance\"}*1000",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "CPU Usage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "System CPU Usage"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "system_cpu_usage{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Process CPU Usage"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_cpu_usage{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Load Average",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 7,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Load Average [1m]"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "system_load_average_1m{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "CPU Core Size"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "system_cpu_count{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "JVM Statistics - Heaps",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "$memory_pool_heap (heap)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "$memory_pool_heap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_memory_used_bytes{instance=\"$instance\", application=\"$application\", id=\"$memory_pool_heap\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Commited"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "$memory_pool_heap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_memory_committed_bytes{instance=\"$instance\", application=\"$application\", id=\"$memory_pool_heap\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Max"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "$memory_pool_heap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_memory_max_bytes{instance=\"$instance\", application=\"$application\", id=\"$memory_pool_heap\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "$memory_pool_nonheap (non-heap)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "$memory_pool_nonheap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_memory_used_bytes{instance=\"$instance\", application=\"$application\", id=\"$memory_pool_nonheap\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Commited"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "$memory_pool_nonheap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_memory_committed_bytes{instance=\"$instance\", application=\"$application\", id=\"$memory_pool_nonheap\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Max"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "$memory_pool_nonheap",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_memory_max_bytes{instance=\"$instance\", application=\"$application\", id=\"$memory_pool_nonheap\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "JVM Statistics Threads/Buffers",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 31,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Threads",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 32,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Daemon"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_threads_daemon_threads{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Live"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_threads_live_threads{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Peak"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_threads_peak_threads{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Memory Allocate/Promote",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 32,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "allocated"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(jvm_gc_memory_allocated_bytes_total{instance=\"$instance\", application=\"$application\"}[5m])",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "promoted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(jvm_gc_memory_promoted_bytes_total{instance=\"$instance\", application=\"$application\"}[5m])",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Classes Loaded",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 39,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Classes Loaded"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_classes_loaded_classes{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Classes Unloaded",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 39,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Classes Unloaded"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(jvm_classes_unloaded_classes_total{instance=\"$instance\", application=\"$application\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Direct Buffers",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 46,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Used Bytes"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "direct",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_buffer_memory_used_bytes{instance=\"$instance\", application=\"$application\", id=\"direct\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity Bytes"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "direct",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_buffer_total_capacity_bytes{instance=\"$instance\", application=\"$application\", id=\"direct\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "Mapped Buffers",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 46,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "Used Bytes"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "mapped",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_buffer_memory_used_bytes{instance=\"$instance\", application=\"$application\", id=\"mapped\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity Bytes"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "id",
+                                "op": "eq",
+                                "value": "mapped",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jvm_buffer_total_capacity_bytes{instance=\"$instance\", application=\"$application\", id=\"mapped\"}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 17
+            },
+            {
+                "title": "JVM Statistics - GC",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 53,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "GC Count",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 54,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{action}} [{{cause}}]"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(jvm_gc_pause_seconds_count{instance=\"$instance\", application=\"$application\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 19
+            },
+            {
+                "title": "GC Stop the World Duration",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 54,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{action}} [{{cause}}]"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(jvm_gc_pause_seconds_sum{instance=\"$instance\", application=\"$application\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 20
+            },
+            {
+                "title": "HikariCP Statistics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 62,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Connections Size",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 63,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 22
+            },
+            {
+                "title": "Connections",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 63,
+                "grid_w": 10,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Active"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_active{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Idle"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_idle{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Pending"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_pending{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 23
+            },
+            {
+                "title": "Connection Timeout Count",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 67,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_timeout_total{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 24
+            },
+            {
+                "title": "Connection Creation Time",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 71,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Creation Time"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_creation_seconds_sum{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"} / hikaricp_connections_creation_seconds_count{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 25
+            },
+            {
+                "title": "Connection Usage Time",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 71,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Usage Time"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_usage_seconds_sum{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"} / hikaricp_connections_usage_seconds_count{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 26
+            },
+            {
+                "title": "Connection Acquire Time",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 71,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Acquire Time"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "pool",
+                                "op": "eq",
+                                "value": "$hikaricp",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "hikaricp_connections_acquire_seconds_sum{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"} / hikaricp_connections_acquire_seconds_count{instance=\"$instance\", application=\"$application\", pool=\"$hikaricp\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 27
+            },
+            {
+                "title": "Jetty Statistics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 77,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 28
+            },
+            {
+                "title": "Thread Config Min",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 78,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Min threads"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jetty_threads_config_min{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 29
+            },
+            {
+                "title": "HTTP Codes",
+                "widget_type": "timeseries",
+                "grid_x": 2,
+                "grid_y": 78,
+                "grid_w": 10,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "5xx - Server Errors"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "5..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\", status=~\"5..\"}[1m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "4xx - Client Errors"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "4..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\", status=~\"4..\"}[1m]))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "2xx - Success"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "2..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\", status=~\"2..\"}[1m]))",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "3xx - Redirections"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "3..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\", status=~\"3..\"}[1m]))",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 30
+            },
+            {
+                "title": "Thread Config Max",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 82,
+                "grid_w": 2,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Max threads"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jetty_threads_config_max{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 31
+            },
+            {
+                "title": "Requests/second",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 86,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Requests per second"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\"}[1m]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 32
+            },
+            {
+                "title": "Requests duration",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 86,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Average"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "not_like",
+                                "value": "5..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(http_server_requests_seconds_sum{application=\"$application\", instance=\"$instance\", status!~\"5..\"}[1m]))/sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\", status!~\"5..\"}[1m]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "Maximum"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "not_like",
+                                "value": "5..",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max(http_server_requests_seconds_max{application=\"$application\", instance=\"$instance\", status!~\"5..\"})",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 33
+            },
+            {
+                "title": "TOP 10",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 93,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{uri}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "topk(10, sum by(uri, method) (rate(http_server_requests_seconds_count{application=\"$application\", instance=\"$instance\"}[1m])))",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 34
+            },
+            {
+                "title": "Threads",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 93,
+                "grid_w": 6,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Current thread"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jetty_threads_current{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Busy thread"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jetty_threads_busy{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Idle threads"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jetty_threads_idle{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Jobs  threads"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "jetty_threads_jobs{instance=\"$instance\", application=\"$application\"}",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 35
+            },
+            {
+                "title": "Logback Statistics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 102,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 36
+            },
+            {
+                "title": "INFO logs",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 103,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "info"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "eq",
+                                "value": "info",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(logback_events_total{instance=\"$instance\", application=\"$application\", level=\"info\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 37
+            },
+            {
+                "title": "ERROR logs",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 103,
+                "grid_w": 6,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "error"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "eq",
+                                "value": "error",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(logback_events_total{instance=\"$instance\", application=\"$application\", level=\"error\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 38
+            },
+            {
+                "title": "WARN logs",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 110,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "warn"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "eq",
+                                "value": "warn",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(logback_events_total{instance=\"$instance\", application=\"$application\", level=\"warn\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 39
+            },
+            {
+                "title": "DEBUG logs",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 110,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "debug"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "eq",
+                                "value": "debug",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(logback_events_total{instance=\"$instance\", application=\"$application\", level=\"debug\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 40
+            },
+            {
+                "title": "TRACE logs",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 110,
+                "grid_w": 4,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "trace"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "eq",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "application",
+                                "op": "eq",
+                                "value": "$application",
+                                "values": null
+                            },
+                            {
+                                "field": "level",
+                                "op": "eq",
+                                "value": "trace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "irate(logback_events_total{instance=\"$instance\", application=\"$application\", level=\"trace\"}[5m])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 41
+            }
+        ]
+    }
+}

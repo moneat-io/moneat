@@ -1,0 +1,278 @@
+{
+    "id": "094-14448-airflow-monitoring",
+    "title": "Airflow monitoring",
+    "description": "Prebuilt Moneat dashboard for Airflow monitoring telemetry.",
+    "category": "databases",
+    "tags": [
+        "PostgreSQL"
+    ],
+    "required_sources": [
+        "PostgreSQL"
+    ],
+    "widget_count": 6,
+    "variable_count": 1,
+    "quality": "needs-review",
+    "warnings": [
+        "Panel 0: SQL query imported as rawQuery for manual review",
+        "Panel 1: SQL query imported as rawQuery for manual review",
+        "Panel 2: SQL query imported as rawQuery for manual review",
+        "Panel 3: SQL query imported as rawQuery for manual review",
+        "Panel 4: SQL query imported as rawQuery for manual review",
+        "Panel 5: SQL query imported as rawQuery for manual review"
+    ],
+    "dashboard": {
+        "title": "Airflow monitoring",
+        "description": "Prebuilt Moneat dashboard for Airflow monitoring telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "Dags",
+                "label": "Pesquisar por Dags",
+                "type": "query",
+                "query": "select dag_id from public.dag ",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__postgresql"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Dags Status (Se há jobs falhados)",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__postgresql",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "with \ndags_processar as (\n\tselect * from public.dag where dag_id in ($Dags)),\ntask_avg as (\n\t-- media de duracao por task\n\tselect ti.dag_id, ti.task_id, round(avg(ti.duration)) avg_duration_seconds, count(1) total_execution_times \n\tfrom dags_processar dp \n\tinner join task_instance  ti on ti.dag_id  = dp.dag_id\n\twhere ti.execution_date  >= execution_date -  interval '60 day'\n\tand   ti.state  = 'success'\n\tgroup by ti.dag_id, ti.task_id\n\torder by 1, 2),\ntmp as(\n\tselect dr.*, rank() over (partition by dr.dag_id  order by id desc) as rk from dag_run dr \n\tinner join dags_processar dp on dp.dag_id = dr.dag_id ),\ndags_last_execution as (\n\tselect * from tmp where rk = 1),\nlast_execution_tasks as (\t\n--- tasks da ultima execucao\n\tselect ti.dag_id \n\t\t  ,ti.task_id \n\t\t  ,ti.state \n\t\t  ,ti.start_date \n\t\t  ,round(EXTRACT(EPOCH FROM (coalesce(ti.end_date, current_timestamp) - ti.start_date ))) as last_duration \n\tfrom dags_last_execution dle \n\tinner join task_instance ti on dle.dag_id = ti.dag_id  and ti.execution_date  = dle.execution_date),\ntemp_last_execution_rules as (\n\tselect let.dag_id, let.task_id, let.state,\n\t\tcase when  let.last_duration> 900 and let.last_duration >= ta.avg_duration_seconds*1.3 and total_execution_times > 10 then 'CRITICAL'\n                     when  let.last_duration> 180 and let.last_duration >= ta.avg_duration_seconds*1.3 and total_execution_times > 10 then 'WARNING'\n\t\t     \t\telse 'OK'\n\t\tend message,\n\t\tlet.last_duration,\n\t\tta.avg_duration_seconds,\n\t\ttotal_execution_times,\n\t\tcase when  let.state = 'success' then ta.avg_duration_seconds- let.last_duration  else 0 end dif_between_avg_and_last\n\tfrom last_execution_tasks let \n\tleft join task_avg ta on let.dag_id = ta.dag_id and let.task_id = ta.task_id)\n--- ultima execuçao status das tasks\nselect ti.dag_id, \n\t   dle.execution_date +  interval '1 day' start_date , \n\t   dle.state,\n\t    sum(avg_duration_seconds)   FILTER (WHERE ti.state = 'success') / sum(avg_duration_seconds) as percentual_conclusao,\n\t   sum(avg_duration_seconds)   FILTER (WHERE ti.state = 'success') / sum(avg_duration_seconds) as percentual_conclusao_num,\n\t   count(1)    as total_tasks,\n\t   count(1)   FILTER (WHERE ti.state = 'running') as running,\n\t   count(1)   FILTER (WHERE ti.state = 'success') as success,\n\t   count(1)   FILTER (WHERE ti.state = 'failed') as failed,\n\t   count(1)   FILTER (WHERE ti.state = 'failed') as failed2,\n\t   count(1)   FILTER (WHERE ti.state not in ('failed', 'success' ,'failed' )    ) as other_status,\n\t   count(1)   filter (where ti.message = 'WARNING') as waring,\n\t   count(1)   filter (where ti.message = 'CRITICAL') as critical,\n\t   cast(avg(dif_between_avg_and_last) FILTER (WHERE ti.state = 'success')  as Integer) as speed\n\t \nfrom dags_last_execution dle \ninner join temp_last_execution_rules ti on dle.dag_id = ti.dag_id \ngroup by ti.dag_id, dle.execution_date,  dle.state",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Percentual de conclusão",
+                "widget_type": "bargauge",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__postgresql",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "with \r\ndags_processar as (\r\n\tselect * from public.dag where dag_id in ($Dags)),\r\ntask_avg as (\r\n\t-- media de duracao por task\r\n\tselect ti.dag_id, ti.task_id, round(avg(ti.duration)) avg_duration_seconds, count(1) total_execution_times \r\n\tfrom dags_processar dp \r\n\tinner join task_instance  ti on ti.dag_id  = dp.dag_id\r\n\twhere ti.execution_date  >= execution_date -  interval '60 day'\r\n\tand   ti.state  = 'success'\r\n\tgroup by ti.dag_id, ti.task_id\r\n\torder by 1, 2),\r\ntmp as(\r\n\tselect dr.*, rank() over (partition by dr.dag_id  order by id desc) as rk from dag_run dr \r\n\tinner join dags_processar dp on dp.dag_id = dr.dag_id ),\r\ndags_last_execution as (\r\n\tselect * from tmp where rk = 1),\r\nlast_execution_tasks as (\t\r\n--- tasks da ultima execucao\r\n\tselect ti.dag_id \r\n\t\t  ,ti.task_id \r\n\t\t  ,ti.state \r\n\t\t  ,ti.start_date \r\n\t\t  ,round(EXTRACT(EPOCH FROM (coalesce(ti.end_date, current_timestamp) - ti.start_date ))) as last_duration \r\n\tfrom dags_last_execution dle \r\n\tinner join task_instance ti on dle.dag_id = ti.dag_id  and ti.execution_date  = dle.execution_date),\r\ntemp_last_execution_rules as (\r\n\tselect let.dag_id, let.task_id, let.state,\r\n\t\tcase when  let.last_duration> 900 and let.last_duration >= ta.avg_duration_seconds*1.3 and total_execution_times > 10 then 'CRITICAL'\r\n                     when  let.last_duration> 180 and let.last_duration >= ta.avg_duration_seconds*1.3 and total_execution_times > 10 then 'WARNING'\r\n\t\t     \t\telse 'OK'\r\n\t\tend message,\r\n\t\tlet.last_duration,\r\n\t\tta.avg_duration_seconds,\r\n\t\ttotal_execution_times,\r\n\t\tcase when  let.state = 'success' then ta.avg_duration_seconds- let.last_duration  else 0 end dif_between_avg_and_last\r\n\tfrom last_execution_tasks let \r\n\tleft join task_avg ta on let.dag_id = ta.dag_id and let.task_id = ta.task_id)\r\n--- ultima execuçao status das tasks\r\nselect ti.dag_id, \r\n\t    sum(avg_duration_seconds)   FILTER (WHERE ti.state = 'success') / sum(avg_duration_seconds) as Percentual\r\n\t    --  sum(avg_duration_seconds)   FILTER (WHERE ti.state = 'success') / sum(avg_duration_seconds) as percentual_conclusao_num\r\nfrom dags_last_execution dle \r\ninner join temp_last_execution_rules ti on dle.dag_id = ti.dag_id \r\ngroup by ti.dag_id, dle.execution_date,  dle.state",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"semi-dark-green\"},{\"value\":35,\"color\":\"semi-dark-yellow\"},{\"value\":70,\"color\":\"semi-dark-red\"}]",
+                    "orientation": "horizontal",
+                    "displayMode": "lcd"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Duração das Execuções por dia",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__postgresql",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": " SELECT   dag_id\r\n       ,  MIN(start_date) AS START\r\n       ,  MAX(end_date) AS end\r\n       ,  MAX(end_date) -  MIN(start_date) AS duration\r\n       ,  AVG(duration)\r\n       ,  AVG(duration) as avg2\r\n    FROM  task_instance\r\nWHERE  \r\n  dag_id in ($Dags)\r\n     AND  state = 'success'\r\n     GROUP BY  execution_date, dag_id\r\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Tasks",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__postgresql",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "\r\nwith \r\ndags_processar as (\r\n\tselect * from public.dag\r\n\twhere dag_id  in ($Dags)),\r\ntask_avg as (\r\n\t-- media de duracao por task\r\n\tselect ti.dag_id, ti.task_id, round(avg(ti.duration)) avg_duration_seconds, count(1) total_execution_times \r\n\tfrom dags_processar dp \r\n\tinner join task_instance  ti on ti.dag_id  = dp.dag_id\r\n\twhere ti.execution_date  >= execution_date -  interval '7 day'\r\n\tand   ti.state  = 'success'\r\n\tgroup by ti.dag_id, ti.task_id\r\n\torder by 1, 2),\r\ntmp as(\r\n\tselect dr.*, rank() over (partition by dr.dag_id  order by id desc) as rk from dag_run dr \r\n\tinner join dags_processar dp on dp.dag_id = dr.dag_id ),\r\ndags_last_execution as (\r\n\tselect * from tmp where rk = 1),\r\nlast_execution_tasks as (\t\r\n--- tasks da ultima execucao\r\n\tselect ti.dag_id \r\n\t\t  ,ti.task_id \r\n\t\t  ,ti.state \r\n\t\t  ,ti.start_date \r\n\t\t  ,round(EXTRACT(EPOCH FROM (coalesce(ti.end_date, current_timestamp) - ti.start_date ))) as last_duration \r\n\tfrom dags_last_execution dle \r\n\tinner join task_instance ti on dle.dag_id = ti.dag_id  and ti.execution_date  = dle.execution_date),\r\ntemp_last_execution_rules as (\r\n\tselect let.dag_id, let.task_id, let.state,\r\n\t\t--case when  let.last_duration> 900 and let.last_duration >= ta.avg_duration_seconds*1.3 and total_execution_times > 10 then 'CRITICAL' \r\n\t--\t\t when  let.last_duration> 180 and let.last_duration >= ta.avg_duration_seconds*1.3 and total_execution_times > 10 then 'WARNING'\r\n\t--\telse 'OK'\r\n\t--\tend message,\r\n\t\tlet.last_duration,\r\n\t\tta.avg_duration_seconds,\r\n\t\ttotal_execution_times,\r\n\t\tcase when  let.state = 'success' then ta.avg_duration_seconds- let.last_duration  else 0 end dif_between_avg_and_last\r\n\tfrom last_execution_tasks let \r\n\tleft join task_avg ta on let.dag_id = ta.dag_id and let.task_id = ta.task_id)\r\n--- ultima execuçao status das tasks\r\nselect * from temp_last_execution_rules\r\nwhere dag_id in ($Dags) and state = 'running'",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Jobs falhados",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__postgresql",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "SELECT \r\n dr.dag_id as NOME_DAG\r\n,LEFT(RIGHT(dr.run_id,25),10)  AS DATA\r\n,LEFT(RIGHT(dr.run_id,14),8)  AS HORARIO\r\n,ti.task_id as NOME_TASK_AIRFLOW\r\n--,ti.state as STATUS_JOB\r\n,case when ti.state = 'failed' then 1 else 0 end STATUS_JOB\r\n,concat('http://airflow.service.consul:8080/admin/taskinstance/?flt0_task_id_contains=' ) as log\r\nFROM dag_run as dr\r\nINNER JOIN\r\n(\r\n    SELECT dag_id, task_id, state, execution_date\r\n    FROM task_instance\r\n    WHERE state = 'failed'  and execution_date > now() - interval '7 day' and dag_id in ($Dags)\r\n  ) as ti\r\nON dr.dag_id = ti.dag_id AND dr.execution_date = ti.execution_date\r\norder by dr.dag_id, dr.execution_date\r\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Duração de cada job",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 23,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__postgresql",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": " SELECT  execution_date\r\n      , task_id\r\n       ,  MIN(start_date) AS start\r\n       ,  MAX(end_date) AS end\r\n       ,  MAX(end_date) - MIN(start_date) AS duration\r\n    FROM  task_instance\r\n   WHERE  dag_id in ($Dags)\r\n     AND  state = 'success'\r\nGROUP BY  execution_date, TASK_ID\r\nORDER BY  execution_date DESC",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            }
+        ]
+    }
+}

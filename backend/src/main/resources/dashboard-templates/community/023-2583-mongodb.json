@@ -1,0 +1,57 @@
+{
+    "id": "023-2583-mongodb",
+    "title": "MongoDB",
+    "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+    "category": "databases",
+    "tags": [
+        "Databases"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 2,
+    "quality": "ready",
+    "warnings": [],
+    "dashboard": {
+        "title": "MongoDB",
+        "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "env",
+                "label": "env",
+                "type": "query",
+                "query": "label_values(mongodb_connections, instance)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "interval",
+                "label": null,
+                "type": "custom",
+                "query": "1m,10m,30m,1h,6h,12h,1d,7d,14d,30d",
+                "default_value": "$__auto_interval",
+                "current": "$__auto_interval",
+                "options": [
+                    "$__auto_interval",
+                    "1m",
+                    "10m",
+                    "30m",
+                    "1h",
+                    "6h",
+                    "12h",
+                    "1d",
+                    "7d",
+                    "14d",
+                    "30d"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": []
+    }
+}

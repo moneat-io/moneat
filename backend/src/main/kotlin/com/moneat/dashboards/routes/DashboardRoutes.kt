@@ -18,6 +18,7 @@ package com.moneat.dashboards.routes
 
 import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.dashboards.models.BatchQueryResult
+import com.moneat.dashboards.models.BatchQueryResultMetadata
 import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
 import com.moneat.dashboards.models.CreateDashboardRequest
@@ -30,6 +31,7 @@ import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.ExecuteBatchQueryRequest
 import com.moneat.dashboards.models.ExecuteQueryRequest
 import com.moneat.dashboards.models.ImportDashboardRequest
+import com.moneat.dashboards.models.InstantiateDashboardTemplateRequest
 import com.moneat.dashboards.models.MoveToFolderRequest
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TestConnectionRequest
@@ -43,6 +45,7 @@ import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.dashboards.services.DashboardTemplateCatalogService
 import com.moneat.dashboards.translation.DashboardTranslator
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
@@ -437,9 +440,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
     }
     val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
+    val metadata = mutableMapOf<String, BatchQueryResultMetadata>()
 
     for ((index, query) in request.queries.withIndex()) {
-        val refId = query.refId ?: ('A' + index).toString()
+        val refId = ('A' + index).toString()
+        val originalRefId = query.refId
+        metadata[refId] = BatchQueryResultMetadata(originalRefId = originalRefId, queryIndex = index)
         val withTimeRange = if (request.timeRange != null) {
             query.copy(timeRange = request.timeRange)
         } else {
@@ -462,12 +468,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
                 dataSourceExecutor,
             )?.let { results[refId] = it }
         }.getOrElse { e ->
-            logger.warn(e) { "Batch query $refId failed" }
+            logger.warn(e) { "Batch query ${originalRefId ?: refId} failed" }
             results[refId] = emptyList()
         }
     }
 
-    call.respond(BatchQueryResult(results))
+    call.respond(BatchQueryResult(results, metadata))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve(
@@ -490,15 +496,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
     val variables = dashboard.variables
     val currentValues = call.receive<Map<String, String>>()
 
-    // Find the org's Prometheus datasource
-    val promSource = dataSourceService.listDataSources(orgId)
-        .firstOrNull { it.sourceType.equals("prometheus", ignoreCase = true) }
+    val sources = dataSourceService.listDataSources(orgId)
 
     val resolved = mutableMapOf<String, List<String>>()
     for (v in variables) {
         val query = v.query ?: continue
         if (!query.startsWith("label_values(")) continue
-        if (promSource == null) continue
+        val requiredSourceType = DashboardQueryEngine.templateDataSourceType(v.datasource)
+        val source = sources.firstOrNull {
+            it.enabled && it.sourceType.equals(requiredSourceType, ignoreCase = true)
+        } ?: continue
 
         // Substitute variable references in the query
         var substituted = query
@@ -508,13 +515,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
                 .replace("\$$name", value)
         }
 
-        val creds = dataSourceService.getDecryptedCredentials(promSource.id, orgId) ?: continue
-        val sourceType = CustomDataSourceType.fromString(promSource.sourceType)
-            ?: CustomDataSourceType.PROMETHEUS
+        val creds = dataSourceService.getDecryptedCredentials(source.id, orgId) ?: continue
+        val sourceType = CustomDataSourceType.fromString(source.sourceType)
+            ?: continue
         val options = dataSourceExecutor.executeLabelValuesQuery(
             sourceType,
-            promSource.host,
-            promSource.port,
+            source.host,
+            source.port,
             creds,
             substituted
         )
@@ -709,6 +716,54 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetAvailableData
     }
 }
 
+private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboardTemplates(
+    templateCatalogService: DashboardTemplateCatalogService,
+) {
+    call.respond(templateCatalogService.listTemplates())
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleGetDashboardTemplate(
+    templateCatalogService: DashboardTemplateCatalogService,
+) {
+    val templateId = call.parameters["templateId"]
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Template ID required"))
+    val template = templateCatalogService.getTemplate(templateId)
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Template not found"))
+    call.respond(template)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleInstantiateDashboardTemplate(
+    dashboardService: CustomDashboardService,
+    templateCatalogService: DashboardTemplateCatalogService,
+) {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
+        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
+    val templateId = call.parameters["templateId"]
+        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Template ID required"))
+    val template = templateCatalogService.getTemplate(templateId)
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Template not found"))
+    val request = receiveInstantiateDashboardTemplateRequest()
+    val createRequest = template.dashboard.copy(
+        projectId = request.projectId ?: template.dashboard.projectId,
+        folderId = request.folderId ?: template.dashboard.folderId,
+    )
+    val dashboard = dashboardService.createDashboard(orgId, userId.toLong(), createRequest)
+    call.respond(HttpStatusCode.Created, dashboard)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.receiveInstantiateDashboardTemplateRequest():
+    InstantiateDashboardTemplateRequest {
+    val body = call.receiveText()
+    if (body.isBlank()) return InstantiateDashboardTemplateRequest()
+    return suspendRunCatching {
+        json.decodeFromString<InstantiateDashboardTemplateRequest>(body)
+    }.getOrElse { e ->
+        throw BadRequestException("Invalid dashboard template payload", e)
+    }
+}
+
 private suspend fun io.ktor.server.routing.RoutingContext.handleSearch(
     dashboardService: CustomDashboardService,
 ) {
@@ -876,16 +931,39 @@ data class DashboardTranslators(
     val grafana: GrafanaTranslator = GrafanaTranslator(),
 )
 
+data class DashboardCoreRouteDependencies(
+    val dashboardService: CustomDashboardService = GlobalContext.get().get(),
+    val queryEngine: DashboardQueryEngine = GlobalContext.get().get(),
+    val retentionPolicyService: RetentionPolicyService = GlobalContext.get().get(),
+    val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
+)
+
+data class DashboardDataSourceRouteDependencies(
+    val dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
+    val dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
+)
+
+data class DashboardRouteDependencies(
+    val core: DashboardCoreRouteDependencies = DashboardCoreRouteDependencies(),
+    val translators: DashboardTranslators = DashboardTranslators(),
+    val dataSources: DashboardDataSourceRouteDependencies = DashboardDataSourceRouteDependencies(),
+    val dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
+    val templateCatalogService: DashboardTemplateCatalogService = GlobalContext.get().get(),
+)
+
 fun Route.customDashboardRoutes(
-    dashboardService: CustomDashboardService = GlobalContext.get().get(),
-    queryEngine: DashboardQueryEngine = GlobalContext.get().get(),
-    retentionPolicyService: RetentionPolicyService = GlobalContext.get().get(),
-    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
-    translators: DashboardTranslators = DashboardTranslators(),
-    dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
-    dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
-    dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
+    dependencies: DashboardRouteDependencies = DashboardRouteDependencies(),
 ) {
+    val dashboardService = dependencies.core.dashboardService
+    val queryEngine = dependencies.core.queryEngine
+    val retentionPolicyService = dependencies.core.retentionPolicyService
+    val projectIdResolver = dependencies.core.projectIdResolver
+    val translators = dependencies.translators
+    val dataSourceService = dependencies.dataSources.dataSourceService
+    val dataSourceExecutor = dependencies.dataSources.dataSourceExecutor
+    val dashboardAlertService = dependencies.dashboardAlertService
+    val templateCatalogService = dependencies.templateCatalogService
+
     route("/v1/dashboards") {
         authenticate(AUTH_JWT) {
             get { handleListDashboards(dashboardService, projectIdResolver) }
@@ -895,6 +973,11 @@ fun Route.customDashboardRoutes(
                 post { handleCreateFolder(dashboardService) }
                 put("/{folderId}") { handleUpdateFolder(dashboardService) }
                 delete("/{folderId}") { handleDeleteFolder(dashboardService) }
+            }
+            get("/templates") { handleListDashboardTemplates(templateCatalogService) }
+            get("/templates/{templateId}") { handleGetDashboardTemplate(templateCatalogService) }
+            post("/templates/{templateId}") {
+                handleInstantiateDashboardTemplate(dashboardService, templateCatalogService)
             }
             get("/{id}") { handleGetDashboard(dashboardService) }
             post("/{id}/favorite") { handleToggleFavorite(dashboardService) }
@@ -931,7 +1014,6 @@ fun Route.customDashboardRoutes(
             put("/{id}/alerts/{alertId}") { handleUpdateAlert(dashboardAlertService) }
             delete("/{id}/alerts/{alertId}") { handleDeleteAlert(dashboardAlertService) }
             get("/datasources") { handleGetAvailableDataSources(dataSourceService, queryEngine) }
-            get("/templates") { call.respond(dashboardService.getDefaultDashboardTemplates()) }
         }
     }
 
