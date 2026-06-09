@@ -7,12 +7,12 @@ Moneat is an OpenTelemetry-native observability platform for error monitoring, p
 
 ## Features
 
-- [Error Monitoring](/docs/error-monitoring) - Capture and track errors using Sentry-compatible SDKs
+- [Error Monitoring](/docs/error-monitoring) - Capture, group, and triage errors from connected sources
 - [Issue Tracking](/docs/issue-tracking) - Group, triage, and resolve issues with automatic fingerprinting
-- [Session Replay](/docs/session-replay) - Record and replay user sessions linked to errors
+- [Session Replay](/docs/session-replay) - Record and replay user sessions linked to errors and traces
 - [Performance Monitoring](/docs/performance-monitoring) - Distributed tracing, transactions, spans, and service maps
-- [Structured Logging](/docs/logging) - Ingest, search, and tail logs via OTLP
-- [OpenTelemetry Ingestion](/docs/logging) - Send logs, traces, and metrics from any OTLP exporter or Collector
+- [Structured Logging](/docs/logging) - Ingest, search, and tail structured logs
+- [OpenTelemetry](/docs/opentelemetry) - Send logs, traces, and metrics from any OTLP exporter or Collector
 - [Releases & Source Maps](/docs/releases) - Track deployments and upload source maps
 - [AI Observability](/docs/ai-observability) - Monitor LLM applications and trace agent executions
 - [Custom Dashboards](/docs/custom-dashboards) - Build dashboards with drag-and-drop widgets and custom data sources
@@ -26,9 +26,14 @@ Moneat is an OpenTelemetry-native observability platform for error monitoring, p
 
 ## Configuration & Account
 
-- [SDK Setup](/docs/sdk-setup) - Install and configure Sentry-compatible SDKs
 - [Integrations](/docs/integrations) - Slack, Discord, and webhook notifications
 - [SSO & Auth](/docs/sso-authentication) - OAuth and SSO providers
 - [API Tokens](/docs/api-tokens) - Create and manage API tokens
 - [MCP Server](/docs/mcp-server/overview) - Model Context Protocol server for AI coding assistants
 - [Billing](/docs/billing) - Plans, usage, and billing
+
+## Source Setup
+
+- [OpenTelemetry](/docs/opentelemetry) - Create OTLP API keys and configure exporters
+- [Sentry-Compatible SDKs](/docs/sdk-setup) - Connect existing Sentry SDK instrumentation
+- [Datadog Agent Compatibility](/docs/datadog-agent) - Connect existing Datadog Agent fleets

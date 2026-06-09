@@ -7,7 +7,9 @@ description: Group, triage, and resolve errors with automatic issue management.
 
 ## How Issues Work
 
-When Moneat receives an error event, it generates a fingerprint and groups the event with other events that share the same fingerprint. This group is called an **issue**. Each issue tracks the number of occurrences, affected users, first and last seen timestamps, and the full event history.
+When Moneat receives an error event, it generates a fingerprint and groups the event with other
+events that share the same fingerprint. This group is called an **issue**. Each issue tracks
+occurrences, affected users, first and last seen timestamps, source metadata, and event history.
 
 ## Issue Lifecycle
 
@@ -15,27 +17,27 @@ Issues move through the following states as your team triages and resolves them:
 
 | Status | Description |
 |--------|-------------|
-| **New** | The issue has just been created. It hasn't been seen or addressed by any team member yet. |
-| **Acknowledged** | A team member has seen the issue and is aware of it. This indicates the issue is being looked at. |
-| **Resolved** | The underlying problem has been fixed. If the same error occurs again, the issue will be reopened automatically. |
-| **Ignored** | The issue has been intentionally ignored. It won't trigger alerts or appear in the default view. Useful for known, non-critical issues. |
+| **Unresolved** | The issue is active and appears in the default issue view. |
+| **Resolved** | The underlying problem has been fixed. If the same error occurs again, the issue can reopen. |
+| **Ignored** | The issue has been intentionally ignored and is excluded from the default active view. |
+| **Next release** | The issue is marked resolved in the next release, so Moneat can close it when a newer release is observed. |
 
 ## Issue Details
 
-Clicking on an issue in the dashboard opens the detail view, which includes:
+Clicking an issue in the dashboard opens the detail view, which includes:
 
-- **Stack trace** - Full exception stack trace with source context
+- **Stack trace** - Full exception stack trace with source context when available
 - **Breadcrumbs** - Timeline of events leading up to the error
-- **Tags** - Filterable metadata (environment, browser, OS, etc.)
+- **Tags** - Filterable metadata such as environment, browser, OS, and source
 - **User impact** - Number of unique users affected
-- **Event history** - Timeline of all occurrences with frequency chart
-- **Device & browser** - Client environment information
+- **Event history** - Timeline of occurrences with frequency chart
+- **Device & browser** - Client environment information when provided
 
 ## Filtering & Search
 
-The issues list supports several filtering options to help you focus on what matters:
+The issues list supports filtering options to help you focus on what matters:
 
-- **Status** - Filter by new, acknowledged, resolved, or ignored
+- **Status** - Filter by unresolved, resolved, ignored, or next release
 - **Service** - Show issues from specific services
 - **Time range** - Filter by when issues were first or last seen
 - **Sort** - Sort by last seen, first seen, event count, or user count
@@ -43,5 +45,6 @@ The issues list supports several filtering options to help you focus on what mat
 ## Auto-Reopening
 
 :::info[Resolved issues can reopen]
-When you resolve an issue, Moneat continues to monitor for new events matching that fingerprint. If the same error occurs again, the issue is automatically reopened and you'll be notified, ensuring regressions don't go unnoticed.
+When you resolve an issue, Moneat continues to monitor for new events matching that fingerprint. If
+the same error occurs again, the issue is automatically reopened so regressions do not go unnoticed.
 :::

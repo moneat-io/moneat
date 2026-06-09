@@ -5,17 +5,21 @@ description: Complete reference for all Product Analytics API endpoints.
 
 # API Reference
 
-All analytics API endpoints are under `/v1/analytics/{projectId}/` and require JWT authentication via the `Authorization: Bearer {token}` header.
+Analytics read API endpoints are available under `/v1/analytics/` for organization-scoped queries
+and `/v1/analytics/{projectId}/` for service-scoped queries, where `{projectId}` is the Moneat
+service identifier. They require an authenticated dashboard session JWT via the
+`Authorization: Bearer {token}` header.
 
 ## Authentication
 
-Include your JWT token in every request:
+Include the dashboard session JWT in every request:
 
 ```http
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-See [API Tokens](/docs/api-tokens) for how to generate tokens.
+Analytics read endpoints do not currently use the scoped API tokens documented on the
+[API Tokens](/docs/api-tokens) page.
 
 ## Common Parameters
 
@@ -317,8 +321,8 @@ See [Funnel Analysis](./funnels) for detailed usage.
 | Status Code | Description |
 |-------------|-------------|
 | `401 Unauthorized` | Missing or invalid JWT token |
-| `403 Forbidden` | User does not have access to this project |
-| `404 Not Found` | Project not found |
+| `403 Forbidden` | User does not have access to this service or organization |
+| `404 Not Found` | Service or organization not found |
 | `422 Unprocessable Entity` | Invalid parameters (e.g., bad date format, unknown filter property) |
 | `429 Too Many Requests` | Rate limit exceeded |
 
@@ -334,13 +338,8 @@ Error responses include a JSON body:
 
 ## Rate Limits
 
-Analytics API endpoints are rate-limited per organization. Current limits:
-
-| Tier | Requests per minute |
-|------|---------------------|
-| Free | 60 |
-| Pro | 300 |
-| Enterprise | 1000 |
+Analytics API endpoints are rate-limited per organization. Current limits depend on your plan and
+deployment configuration; see [Billing & Plans](/docs/billing) for the current source of truth.
 
 Rate limit headers are included in every response:
 

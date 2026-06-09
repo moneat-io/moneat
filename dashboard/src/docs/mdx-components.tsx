@@ -43,7 +43,10 @@ function interpolateTokens(text: string): string {
   return result
 }
 
-export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
+type MdxPreProps = Readonly<ComponentPropsWithoutRef<'pre'>>
+type DocsLinkProps = Readonly<ComponentPropsWithoutRef<'a'>>
+
+export function MdxPre(props: MdxPreProps) {
   const child = props.children
   if (isValidElement(child)) {
     const {className, children} = (child as ReactElement<{className?: string; children?: string}>).props
@@ -59,8 +62,17 @@ export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
   return <pre {...props} />
 }
 
-export function DocsLink(props: ComponentPropsWithoutRef<'a'>) {
-  return <a {...props} className={props.className ?? 'text-sky-700 underline hover:text-sky-900'} />
+export function DocsLink({children, className, href, ...props}: DocsLinkProps) {
+  const content = children ?? <span className="sr-only">{href ?? 'Documentation link'}</span>
+  return (
+    <a
+      {...props}
+      {...(href === undefined ? {} : {href})}
+      className={className ?? 'text-indigo-300 underline underline-offset-2 hover:text-indigo-200'}
+    >
+      {content}
+    </a>
+  )
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- intentional shared utility module

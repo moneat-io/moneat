@@ -127,7 +127,9 @@ No visitor-identifying data is ever stored in Redis for real-time counting.
 
 ## Data Retention
 
-Analytics events are stored in ClickHouse with a **730-day TTL** (2 years). After this period, events are automatically deleted by ClickHouse's TTL mechanism. Retention periods may vary by plan tier.
+Analytics events are stored in ClickHouse and retained according to the analytics retention period
+configured for your plan. See [Billing & Plans](/docs/billing) for current retention and pageview
+limits.
 
 ## GDPR & CCPA Compliance
 
@@ -144,4 +146,3 @@ Moneat Analytics is **compliant by design** with GDPR, CCPA, PECR, and similar p
 :::info[Legal disclaimer]
 While Moneat Analytics is designed to be privacy-compliant, consult your legal team for advice specific to your jurisdiction and use case.
 :::
-

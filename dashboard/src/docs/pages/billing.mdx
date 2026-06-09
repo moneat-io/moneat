@@ -7,16 +7,18 @@ description: Understand plan tiers, usage-based billing, and account management.
 
 ## Pricing Model
 
-Moneat uses a GB-based pricing model. Your usage is measured by the volume of event data ingested and stored. Each plan includes a monthly data allowance, and you can add additional capacity as needed.
+Moneat uses a unified ingestion model. Your usage is measured by the volume of telemetry data ingested
+and stored, with separate plan limits for high-cardinality signals such as APM spans, custom metrics,
+infrastructure metric series-hours, analytics pageviews, hosts, and monitors.
 
 ## Plan Tiers
 
 | Plan | Price | Description |
 |------|-------|-------------|
-| **Free** | $0/month | Basic error monitoring, limited event volume, core features. |
-| **Pro** | Starting price/month | Higher event limits, longer retention, integrations. |
-| **Team** | Custom pricing | On-call management, SAML SSO, SSO enforcement, higher data volumes. |
-| **Business** | Custom pricing | Extended retention, priority support. |
+| **Free** | $0/month | 1 GB ingestion, 1 service, 3 monitors, 1 analytics site, and core telemetry features. |
+| **Pro** | $29/month | 50 GB ingestion, unlimited services, 10 monitors, 5 analytics sites, and pay-as-you-go overages. |
+| **Team** | $79/month | 200 GB ingestion, 25 monitors, SAML/OIDC SSO, on-call seats, and higher analytics limits. |
+| **Business** | $199/month | 1 TB ingestion, unlimited hosts and analytics sites, priority support, SLA, and custom retention. |
 
 :::info[Visit the [pricing page](https://moneat.io) for current pricing and plan comparison.]
 :::
@@ -34,7 +36,8 @@ Monitor your data usage in real-time from **Settings & Billing**. The usage dash
 - **Quota remaining** - Capacity left
 - **Historical trends** - Usage patterns over previous months
 
-Retention is configured per plan and can differ by signal type, including APM traces.
+Retention is configured per plan and can differ by signal type, including logs, replays, AI events,
+analytics, and APM traces.
 
 ## On-Call Seats
 

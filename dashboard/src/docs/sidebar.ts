@@ -51,12 +51,14 @@ export const docsSidebar: SidebarCategory[] = [
   {
     label: 'Configuration',
     collapsed: false,
-    items: ['sdk-setup', 'integrations', 'sso-authentication', 'api-tokens'],
+    items: ['integrations', 'sso-authentication', 'api-tokens'],
   },
   {
     label: 'Source Setup',
     collapsed: false,
     items: [
+      'opentelemetry',
+      'sdk-setup',
       {
         label: 'Datadog Agent Compatibility',
         link: 'datadog-agent',

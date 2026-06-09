@@ -129,9 +129,9 @@ export default defineNuxtPlugin(() => {
 
 1. Open the Moneat dashboard
 2. Navigate to your service's **Settings** page
-3. Copy the **Public Key** (also called the Sentry key)
+3. Copy the **Public Key**
 
-This is the same key used for error monitoring - one key for both features.
+This is the same service public key used by client-side service ingestion.
 
 ## Verifying Installation
 
@@ -142,7 +142,9 @@ After adding the script or initializing the NPM package:
 3. You should see your visit appear in the **Realtime** badge within seconds
 
 :::tip[Debugging]
-Open your browser's Network tab and look for requests to `/api/{projectId}/analytics/event`. A `202 Accepted` response confirms events are being received.
+Open your browser's Network tab and look for requests to
+`/api/{domain}/analytics/event?sentry_key=...`. A `202 Accepted` response confirms events are being
+received.
 :::
 
 ## Self-Hosted Considerations
@@ -150,7 +152,7 @@ Open your browser's Network tab and look for requests to `/api/{projectId}/analy
 If you self-host Moneat, ensure the following:
 
 - The tracking script is served from your Moneat instance at `/js/m.js`
-- The analytics ingestion endpoint (`/api/{projectId}/analytics/event`) is accessible from client browsers
+- The browser analytics ingestion endpoint (`/api/{domain}/analytics/event?sentry_key=...`) is accessible from client browsers
 - If using a CDN or reverse proxy, ensure the client's real IP is forwarded via `X-Forwarded-For` or `X-Real-IP` headers (required for GeoIP and session hashing)
 
 ### GeoIP Database

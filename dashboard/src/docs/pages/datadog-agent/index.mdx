@@ -9,8 +9,10 @@ description: Use a Datadog-compatible agent to send infrastructure metrics, APM 
 
 Moneat can ingest telemetry from the Datadog Agent, giving you infrastructure monitoring, APM traces, continuous profiling, log collection, and more - without sending data to Datadog. Deploy the standard Datadog Agent on your hosts and point it at your Moneat instance.
 
-:::info[Enterprise feature]
-Datadog Agent ingestion is available on Enterprise plans. Some features (processes, network monitoring) require the Datadog enterprise module.
+:::info[Availability]
+Datadog-compatible ingestion is included on all standard plans. Usage and retention follow your plan's
+ingestion, host, APM span, custom metric, and infrastructure metric limits. Self-hosted builds that use
+module licensing may also need the `datadog` module enabled for specialized monitoring dashboards.
 :::
 
 ## How It Works
@@ -24,14 +26,14 @@ The Datadog Agent collects system metrics, APM traces, logs, and profiles from y
 - **APM traces** - Distributed traces with service maps, latency, and error tracking
 - **Continuous profiling** - CPU, heap, wall-time, and other profile types
 - **Log collection** - Structured logs with Datadog-compatible query syntax
-- **Process monitoring** - Running processes and resource consumption (Enterprise)
-- **Network monitoring** - Network flow data between services (Enterprise)
-- **Kubernetes monitoring** - Pods, nodes, services, deployments, and more (Enterprise)
-- **Database monitoring** - Slow query tracking and database performance (Enterprise)
-- **Dynamic instrumentation** - Debug live applications with probes (Enterprise)
-- **Synthetic tests** - Create and schedule API tests from the dashboard (Enterprise)
-- **Network device monitoring** - SNMP devices, traps, and flow data (Enterprise)
-- **SBOM** - Software package inventory with CVE tracking (Enterprise)
+- **Process monitoring** - Running processes and resource consumption
+- **Network monitoring** - Network flow data between services
+- **Kubernetes monitoring** - Pods, nodes, services, deployments, and more
+- **Database monitoring** - Slow query tracking and database performance
+- **Dynamic instrumentation** - Debug live applications with probes
+- **Synthetic tests** - Create and schedule API tests from the dashboard
+- **Network device monitoring** - SNMP devices, traps, and flow data
+- **SBOM** - Software package inventory with CVE tracking
 
 ## Quick Start
 
@@ -48,6 +50,6 @@ The Datadog Agent collects system metrics, APM traces, logs, and profiles from y
 - [Kubernetes Monitoring](/docs/datadog-agent/kubernetes) - Monitor cluster resources and workloads
 - [Database Monitoring](/docs/datadog-agent/database-monitoring) - Track slow queries and database performance
 - [Dynamic Instrumentation](/docs/datadog-agent/debugger) - Debug live applications with dynamic probes
-- [Synthetic Tests](/docs/datadog-agent/synthetics) - View API and browser test results from Datadog
+- [Synthetic Tests](/docs/datadog-agent/synthetics) - Create Moneat API tests and view compatible imported results
 - [Network Device Monitoring](/docs/datadog-agent/network-devices) - Monitor SNMP devices, traps, and flows
 - [SBOM](/docs/datadog-agent/sbom) - Inventory software packages and track CVEs

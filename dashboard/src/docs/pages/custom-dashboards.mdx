@@ -5,13 +5,15 @@ description: Build dashboards with drag-and-drop widgets and custom data sources
 
 # Custom Dashboards
 
-Custom dashboards let you combine data from multiple sources into a single view. Create widgets that query events, transactions, replays, infrastructure metrics, or external data sources.
+Custom dashboards let you combine data from multiple sources into a single view. Create widgets that
+query errors, traces, logs, replays, infrastructure metrics, uptime checks, billing data, or external
+data sources.
 
 ## Creating a Dashboard
 
 Navigate to **Dashboards** in the sidebar and click **New Dashboard**. Give it a title, then add widgets. Dashboards can be organized into folders.
 
-## Widget Types
+## Common Widget Types
 
 | Type | Description |
 |------|-------------|
@@ -25,12 +27,15 @@ Navigate to **Dashboards** in the sidebar and click **New Dashboard**. Give it a
 | Heatmap | Heatmap grid |
 | Top List | Ranked list of values |
 | Text | Markdown text block |
+| Map and topology widgets | Geo maps, host maps, topology maps, sankey diagrams, and treemaps |
+| Analysis widgets | Scatter plots, timelines, streams, flame graphs, cost summaries, and iframes |
 
 Widgets are positioned on a 12-column grid and can be resized by dragging.
 
 ## Data Sources
 
-Built-in data sources include events, transactions, and replays. You can also add custom data sources under **Dashboards > Data Sources**:
+Built-in data sources include errors, traces, logs, replays, uptime, infrastructure, and billing data.
+You can also add custom data sources under **Dashboards > Data Sources**:
 
 - Prometheus
 - ClickHouse
@@ -39,13 +44,19 @@ Built-in data sources include events, transactions, and replays. You can also ad
 - InfluxDB
 - Redis
 - Elasticsearch
+- MongoDB
 
 Each data source stores its connection credentials encrypted.
 
-## Grafana Import
+## Dashboard Import
 
-You can import existing Grafana dashboards via **Dashboards > Import**. Paste the Grafana dashboard JSON and Moneat will convert panels, grid layout, queries, and variables. Supported Grafana panel types include timeseries, bar chart, pie chart, stat, table, heatmap, gauge, text, and graph.
+You can import existing Grafana and Datadog dashboards via **Dashboards > Import**. Paste the
+dashboard JSON and Moneat will convert supported panels, grid layout, queries, and variables.
+Supported Grafana panel types include timeseries, bar chart, pie chart, stat, table, heatmap, gauge,
+text, and graph.
 
 ## Alerts
 
-Dashboard widgets can have alert conditions attached. When a threshold is crossed, alerts are routed through your configured notification channels (Slack, Discord, webhooks) or escalation policies.
+Dashboard widgets can have alert conditions attached. When a threshold is crossed, alerts are routed
+through configured notification channels such as Slack, Discord, and email, or through escalation
+policies.

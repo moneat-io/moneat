@@ -11,15 +11,16 @@ Moneat's Kubernetes monitoring shows cluster resources and workloads in one plac
 deployments, DaemonSets, and ReplicaSets as infrastructure telemetry, with source details kept in setup and
 troubleshooting flows.
 
-<Admonition type="info" title="Enterprise feature">
-Kubernetes monitoring requires the Datadog Agent integration, available on Enterprise plans.
+<Admonition type="info" title="Availability">
+Kubernetes monitoring is included on standard plans. For self-hosted builds that use module licensing,
+enable the `datadog` module to expose the Kubernetes monitoring dashboard.
 </Admonition>
 
 ## Prerequisites
 
 - A running Kubernetes cluster
 - The Datadog Agent deployed as a DaemonSet (see [Agent Setup](/docs/datadog-agent/agent-setup))
-- The Enterprise `datadog` module enabled
+- For self-hosted module-licensed builds, the `datadog` module enabled
 
 ## Enable Kubernetes Monitoring
 
