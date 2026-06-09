@@ -59,6 +59,7 @@ const {mockApi, mockNavigate} = vi.hoisted(() => ({
     getDashboard: vi.fn(),
     updateDashboard: vi.fn(),
     deleteDashboard: vi.fn(),
+    getApmTraceDetail: vi.fn(),
     createLogTailStream: vi.fn(),
     getCurrentUser: vi.fn(),
     getSystemLogs: vi.fn(),
@@ -77,6 +78,7 @@ vi.mock('@/lib/api', () => ({
 }))
 
 vi.mock('@/lib/demo', () => ({
+  getNow: () => Date.parse('2026-06-03T12:00:00.000Z'),
   getNowDate: () => new Date('2026-06-03T12:00:00.000Z'),
 }))
 
@@ -99,26 +101,6 @@ vi.mock('@/components/dashboards/WidgetConfigPanel', () => ({
       <button onClick={() => onSave(widget)}>Save Widget</button>
       <button onClick={onClose}>Editor Cancel</button>
     </div>
-  ),
-}))
-
-vi.mock('@/components/logs/LogDetail', () => ({
-  LogDetail: ({
-    log,
-    open,
-    onViewInContext,
-  }: {
-    log: {message: string; timestamp: string} | null
-    open: boolean
-    onViewInContext?: (log: {message: string; timestamp: string}) => void
-  }) => (
-    open && log
-      ? (
-        <button type="button" onClick={() => onViewInContext?.(log)}>
-          View context for {log.message}
-        </button>
-      )
-      : null
   ),
 }))
 
@@ -229,6 +211,7 @@ describe('LogExplorer facets', () => {
       hasMore: false,
       totalCount: 0,
     })
+    mockApi.getApmTraceDetail.mockResolvedValue({spans: []})
     mockApi.getLogMetricRules.mockResolvedValue({rules: []})
     mockApi.getLogIndexes.mockResolvedValue({indexes: []})
     mockApi.getLogIndexUsage.mockResolvedValue({usage: []})
@@ -560,7 +543,7 @@ describe('LogExplorer facets', () => {
     })
   })
 
-  it('renders log rows and can view a selected log in context', async () => {
+  it('renders log rows and loads context for a selected log', async () => {
     mockApi.getLogs.mockResolvedValue({
       logs: [sampleLog()],
       nextCursor: null,
@@ -578,14 +561,19 @@ describe('LogExplorer facets', () => {
     renderLogExplorer({enableUrlSync: true})
 
     fireEvent.click(await screen.findByText('payment failed'))
-    fireEvent.click(await screen.findByRole('button', {name: /View context for payment failed/i}))
+
+    const viewer = await screen.findByLabelText('Log context viewer')
+    expect(within(viewer).getByText('Event 1')).toBeInTheDocument()
+    fireEvent.click(within(viewer).getByRole('button', {name: /Context/i}))
 
     await waitFor(() => {
       expect(mockApi.getLogs).toHaveBeenLastCalledWith(expect.objectContaining({
-        query: undefined,
-        levels: undefined,
-        from: '2026-06-03T11:53:00.000Z',
-        to: '2026-06-03T12:03:00.000Z',
+        from: '2026-06-03T11:57:45.000Z',
+        to: '2026-06-03T11:58:15.000Z',
+        limit: 200,
+        host: 'host-1',
+        service: undefined,
+        traceId: undefined,
       }))
     })
   })
