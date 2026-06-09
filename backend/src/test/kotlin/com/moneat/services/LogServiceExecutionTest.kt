@@ -112,6 +112,7 @@ class LogServiceExecutionTest {
                             """
                             {"bucket_index":0,"cnt":1}
                             {"bucket_index":2,"cnt":2}
+                            {"bucket_index":3,"cnt":4}
                             """.trimIndent()
                         }
 
@@ -151,7 +152,7 @@ class LogServiceExecutionTest {
             assertEquals("2026-06-01T00:00:00Z", result.firstSeen)
             assertEquals("2026-06-02T00:00:00Z", result.lastSeen)
             assertEquals(50, result.trendPct)
-            assertEquals(listOf(1L, 0L, 2L), result.sparkline)
+            assertEquals(listOf(1L, 0L, 6L), result.sparkline)
             assertEquals("checkout", result.topServices.first().value)
             assertEquals(2L, result.topServices.first().count)
             assertEquals("checkout-1", result.topHosts.first().value)
@@ -160,6 +161,8 @@ class LogServiceExecutionTest {
             assertTrue(statsQuery.contains("organization_id = 42"))
             assertTrue(statsQuery.contains("service = 'checkout'"))
             assertTrue(statsQuery.contains("replaceRegexpAll"))
+            assertTrue(statsQuery.contains("[0-9a-fA-F]{8}"))
+            assertTrue(statsQuery.contains("[0-9a-fA-F]{12,}"))
         }
 
     @Test

@@ -88,7 +88,7 @@ export function PatternsPanel({log, from, to, onViewMatching}: PatternsPanelProp
   const message = stripAnsi(log.message || log.body || '')
 
   const {data, isLoading, isError} = useQuery({
-    queryKey: ['log-pattern', log.logId],
+    queryKey: ['log-pattern', log.logId, message, log.service || null, from ?? null, to ?? null],
     queryFn: () => api.getLogPattern({logId: log.logId, message, service: log.service || undefined, from, to}),
     enabled: !!message,
     retry: false,

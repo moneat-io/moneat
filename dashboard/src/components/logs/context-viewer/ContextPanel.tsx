@@ -43,15 +43,25 @@ const scopeLabel: Record<Scope, string> = {
 export function ContextPanel({log}: ContextPanelProps) {
   const {timezone} = useTimezone()
   const anchorMs = useMemo(() => new Date(log.timestamp).getTime(), [log.timestamp])
+  const hasValidAnchor = Number.isFinite(anchorMs)
 
   const [scope, setScope] = useState<Scope>(log.host ? 'host' : 'all')
+  const effectiveScope: Scope =
+    scope === 'host' && !log.host
+      ? 'all'
+      : scope === 'service' && !log.service
+        ? 'all'
+        : scope === 'trace' && !log.traceId
+          ? 'all'
+          : scope
+
   const [beforeSec, setBeforeSec] = useState(WINDOW_STEP)
   const [afterSec, setAfterSec] = useState(WINDOW_STEP)
 
   // Reset the window when the anchor log or scope changes. Done in render via
   // the "storing information from previous renders" pattern rather than an
   // effect, so the new window is used on the very next render.
-  const windowKey = `${log.logId}:${scope}`
+  const windowKey = `${log.logId}:${effectiveScope}`
   const [prevWindowKey, setPrevWindowKey] = useState(windowKey)
   if (windowKey !== prevWindowKey) {
     setPrevWindowKey(windowKey)
@@ -59,40 +69,55 @@ export function ContextPanel({log}: ContextPanelProps) {
     setAfterSec(WINDOW_STEP)
   }
 
-  const from = new Date(anchorMs - beforeSec * 1000).toISOString()
-  const to = new Date(anchorMs + afterSec * 1000).toISOString()
+  const from = hasValidAnchor ? new Date(anchorMs - beforeSec * 1000).toISOString() : undefined
+  const to = hasValidAnchor ? new Date(anchorMs + afterSec * 1000).toISOString() : undefined
 
   const {data, isLoading, isError} = useQuery({
-    queryKey: ['log-context', log.logId, scope, from, to],
-    queryFn: () =>
-      api.getLogs({
+    queryKey: ['log-context', log.logId, effectiveScope, from, to],
+    queryFn: () => {
+      if (!from || !to) throw new Error('Cannot load log context without a valid timestamp')
+      return api.getLogs({
         from,
         to,
         limit: 200,
-        service: scope === 'service' ? log.service || undefined : undefined,
-        host: scope === 'host' ? log.host || undefined : undefined,
-        traceId: scope === 'trace' ? log.traceId || undefined : undefined,
-      }),
-    enabled: Number.isFinite(anchorMs),
+        service: effectiveScope === 'service' ? log.service || undefined : undefined,
+        host: effectiveScope === 'host' ? log.host || undefined : undefined,
+        traceId: effectiveScope === 'trace' ? log.traceId || undefined : undefined,
+      })
+    },
+    enabled: hasValidAnchor,
   })
 
   // Surrounding logs ascending by time, with the anchor guaranteed present.
   const rows = useMemo(() => {
+    if (!hasValidAnchor) return [log]
     const seen = new Map<string, LogEntry>()
     for (const l of data?.logs ?? []) seen.set(l.logId, l)
     seen.set(log.logId, log)
     return [...seen.values()].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-  }, [data, log])
+  }, [data, hasValidAnchor, log])
 
   const volume = useMemo(
-    () => buildContextVolume(rows.map((r) => new Date(r.timestamp).getTime()), anchorMs),
-    [rows, anchorMs]
+    () =>
+      hasValidAnchor
+        ? buildContextVolume(rows.map((r) => new Date(r.timestamp).getTime()), anchorMs)
+        : {buckets: [], markerPct: 50},
+    [rows, anchorMs, hasValidAnchor]
   )
 
   const anchorRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
-    anchorRef.current?.scrollIntoView({block: 'center', behavior: 'auto'})
-  }, [log.logId, isLoading])
+    if (!hasValidAnchor) return
+    anchorRef.current?.scrollIntoView?.({block: 'center', behavior: 'auto'})
+  }, [log.logId, isLoading, hasValidAnchor])
+
+  if (!hasValidAnchor) {
+    return (
+      <div className="p-3.5 text-xs text-muted-foreground">
+        This log has an invalid timestamp, so surrounding context cannot be loaded.
+      </div>
+    )
+  }
 
   const maxVol = Math.max(1, ...volume.buckets.map((b) => b.count))
 
@@ -101,7 +126,7 @@ export function ContextPanel({log}: ContextPanelProps) {
       <div className="mb-2.5 flex flex-wrap items-center gap-2.5">
         <div className="flex overflow-hidden rounded-md border border-border">
           {(['host', 'service', 'trace', 'all'] as const).map((s) => {
-            const disabled = (s === 'host' && !log.host) || (s === 'trace' && !log.traceId)
+            const disabled = (s === 'host' && !log.host) || (s === 'service' && !log.service) || (s === 'trace' && !log.traceId)
             return (
               <button
                 key={s}
@@ -112,7 +137,7 @@ export function ContextPanel({log}: ContextPanelProps) {
                   'h-[26px] px-2.5 text-xs font-medium capitalize transition-colors',
                   s !== 'host' && 'border-l border-border',
                   disabled && 'cursor-not-allowed opacity-40',
-                  scope === s
+                  effectiveScope === s
                     ? 'bg-primary/10 font-semibold text-primary'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
@@ -123,7 +148,7 @@ export function ContextPanel({log}: ContextPanelProps) {
           })}
         </div>
         <span className="ml-auto text-xs text-muted-foreground">
-          {rows.length} logs · {beforeSec}s before / {afterSec}s after · {scopeLabel[scope]}
+          {rows.length} logs · {beforeSec}s before / {afterSec}s after · {scopeLabel[effectiveScope]}
         </span>
       </div>
 

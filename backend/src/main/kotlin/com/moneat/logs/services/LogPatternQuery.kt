@@ -52,9 +52,9 @@ private const val TREND_PERCENT_MULTIPLIER = 100.0
 private const val CLICKHOUSE_ERROR_PREVIEW_CHARS = 600
 
 private const val SQL_UUID_RE =
-    "\\\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\\\b"
+    "\\\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\\\b"
 private const val SQL_PREFIXED_ID_RE = "\\\\b[a-z][a-z0-9]*_[A-Za-z0-9]{3,}\\\\b"
-private const val SQL_HEX_RE = "\\\\b(?:0x)?[0-9a-f]{12,}\\\\b"
+private const val SQL_HEX_RE = "\\\\b(?:0x)?[0-9a-fA-F]{12,}\\\\b"
 private const val SQL_QUOTED_RE = "\"[^\"]*\"|'[^']*'"
 private const val SQL_FLOAT_RE = "\\\\b\\\\d+\\\\.\\\\d+\\\\b"
 private const val SQL_INT_RE = "\\\\b\\\\d+\\\\b"
@@ -250,10 +250,8 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
 
         val values = MutableList(PATTERN_SPARKLINE_BUCKETS) { 0L }
         jsonObjects(body).forEach { obj ->
-            val idx = obj.intField("bucket_index")
-            if (idx in values.indices) {
-                values[idx] = obj.longField("cnt")
-            }
+            val idx = obj.intField("bucket_index").coerceIn(values.indices)
+            values[idx] += obj.longField("cnt")
         }
         return values
     }

@@ -158,6 +158,28 @@ class LogServicesExtendedTest {
     }
 
     @Test
+    fun `topValues maps API aliases to top-level columns`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        val handler = queryBasedClickHouseHandler(
+            AS_FIELD_VALUE to """{"field_value":"api","cnt":10}""",
+            "$SELECT_COUNT" to """{"cnt":10}""",
+            captureQueries = capturedQueries
+        )
+        withClickHouseMockServer(handler) { server ->
+            val service = newService(ClickHouseLogRepository(server.baseUrl))
+
+            service.topValuesWithEmptyFilters(1L, "service_name", 5)
+            service.topValuesWithEmptyFilters(1L, "message", 5)
+
+            val allQueries = capturedQueries.joinToString("\n")
+            assertTrue(allQueries.contains("SELECT service AS field_value"))
+            assertTrue(allQueries.contains("SELECT message AS field_value"))
+            assertFalse(allQueries.contains("tags['service_name']"))
+            assertFalse(allQueries.contains("tags['message']"))
+        }
+    }
+
+    @Test
     fun `topValues with filters applies conditions`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         val handler = queryBasedClickHouseHandler(

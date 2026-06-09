@@ -232,13 +232,16 @@ export function LogContextViewer({
         }
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
+    globalThis.window?.addEventListener('keydown', handler)
+    return () => globalThis.window?.removeEventListener('keydown', handler)
   }, [canPrev, canNext, onNavigate, onClose])
 
   const handleCopyLink = useCallback(async () => {
+    const url = globalThis.window?.location?.href
+    const clipboard = globalThis.navigator?.clipboard
+    if (!url || !clipboard) return
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await clipboard.writeText(url)
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 1100)
     } catch {
@@ -247,10 +250,11 @@ export function LogContextViewer({
   }, [])
 
   const handleShare = useCallback(async () => {
-    const url = window.location.href
-    if (typeof navigator.share === 'function') {
+    const url = globalThis.window?.location?.href
+    const nav = globalThis.navigator
+    if (url && typeof nav?.share === 'function') {
       try {
-        await navigator.share({title: 'Moneat log', text: message, url})
+        await nav.share({title: 'Moneat log', text: message, url})
         return
       } catch {
         // user cancelled or unsupported — fall through to copy

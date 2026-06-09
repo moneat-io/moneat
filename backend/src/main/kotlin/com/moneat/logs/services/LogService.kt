@@ -779,7 +779,9 @@ class LogService(private val logRepository: LogRepository) {
 
     private fun topValueColumnExpression(field: String): String =
         when (field) {
-            "service", "level", "environment", "host", "container_name" -> field
+            "service", "service_name" -> "service"
+            "message" -> "message"
+            "level", "environment", "host", "container_name" -> field
             else -> {
                 val escapedKey = escapeSql(field)
                 "tags['$escapedKey']"
