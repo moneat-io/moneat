@@ -8,10 +8,10 @@ import {
   BookOpen,
   Bug,
   Check,
+  Code2,
   Copy,
   Filter,
   Flag,
-  GithubIcon,
   GitBranch,
   Globe,
   HardDrive,
@@ -557,7 +557,7 @@ function DocsIndex() {
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-slate-300 transition-colors hover:bg-white/[0.04]"
               >
-                <GithubIcon className="size-4 text-slate-500" /> GitHub
+                <Code2 className="size-4 text-slate-500" /> GitHub
                 <ArrowUpRight className="ml-auto size-3 text-slate-600" />
               </a>
             </li>

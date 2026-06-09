@@ -29,7 +29,7 @@ function titleFor(slug: string): string {
   const doc = getDoc(slug)
   if (doc?.title) return doc.title
   const last = slug.split('/').pop() ?? slug
-  return last.replaceAll('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  return last.replaceAll('-', ' ').replaceAll(/\b\w/g, (c) => c.toUpperCase())
 }
 
 // Flatten the real sidebar tree into search groups so results mirror the nav.

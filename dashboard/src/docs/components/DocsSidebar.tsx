@@ -34,7 +34,7 @@ function getTitle(slug: string): string {
   const last = slug.split('/').pop() ?? slug
   return last
     .replaceAll('-', ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replaceAll(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function isActiveOrAncestor(currentSlug: string, item: SidebarItem): boolean {
@@ -86,7 +86,7 @@ function NestedCategory({category, currentSlug, depth}: NestedCategoryProps) {
   const hasActive = isActiveOrAncestor(currentSlug, category)
   const [userOpen, setUserOpen] = useState(!category.collapsed)
   const open = hasActive || userOpen
-  const panelId = `docs-panel-${category.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  const panelId = `docs-panel-${category.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`
   const paddingLeft = `${12 + depth * 12}px`
   const linkActive = currentSlug === category.link || currentSlug.startsWith(`${category.link}/`)
 
@@ -146,7 +146,7 @@ function TopCategory({category, currentSlug}: TopCategoryProps) {
   const hasActive = isActiveOrAncestor(currentSlug, category)
   const [userOpen, setUserOpen] = useState(!category.collapsed)
   const open = hasActive || userOpen
-  const panelId = `docs-group-${category.label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+  const panelId = `docs-group-${category.label.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}`
 
   return (
     <div className="mt-3 first:mt-0">
