@@ -468,7 +468,7 @@ function ReplayHeader({ replay, replayId, durationMs, platformLabel }: ReplayHea
       {replay.errorCount > 0 && (
         <Badge variant="destructive" className="flex items-center gap-1 text-[11px]">
           <AlertCircle className="h-3 w-3" />
-          {replay.errorCount} error{replay.errorCount !== 1 ? 's' : ''}
+          {replay.errorCount} error{replay.errorCount === 1 ? '' : 's'}
         </Badge>
       )}
       {platformLabel && (

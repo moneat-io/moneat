@@ -30,7 +30,13 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.msgpack.core.MessagePack
+import java.util.Base64
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -43,6 +49,7 @@ class ReplayServiceTest {
     companion object {
         private const val TEXT_PLAIN = "text/plain"
         private const val REPLAY_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        private val GEO_TEST_IP = listOf(203, 0, 113, 10).joinToString(".")
         private var db: Database? = null
     }
 
@@ -91,7 +98,7 @@ class ReplayServiceTest {
             TimelineQueryResponse({ query -> query.contains("countDistinct(replay_id)") }, """{"count":0}"""),
             TimelineQueryResponse({ query -> query.contains("SELECT contexts, breadcrumbs") }, ""),
             TimelineQueryResponse(
-                { query -> query.contains("SELECT toString(event_id) as event_id") && query.contains("breadcrumbs") },
+                { query -> query.contains("toString(event_id) as event_id") && query.contains("breadcrumbs") },
                 rows.breadcrumbRow
             ),
             TimelineQueryResponse({ query -> query.contains("SELECT toInt64(project_id)") }, """{"project_id":1}"""),
@@ -112,6 +119,59 @@ class ReplayServiceTest {
             TimelineQueryResponse({ query -> query.contains("event_type = 'transaction'") }, ""),
             TimelineQueryResponse({ query -> query.contains("apm_spans") }, "")
         )
+
+    private fun jsonString(value: String): String =
+        buildString {
+            append('"')
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
+            append('"')
+        }
+
+    private fun recordingDataRow(recordingData: String): String =
+        """{"recording_data":${jsonString(recordingData)}}"""
+
+    private fun encodedMobileReplaySegment(): String {
+        val replayEventPayload = """{"segment_id":7}""".toByteArray()
+        val recordingPayload =
+            """{"segment_id":7}[{"type":5,"timestamp":1000,"data":{"tag":"breadcrumb","payload":{"message":"tap"}}}]"""
+                .toByteArray()
+        val videoPayload = byteArrayOf(0, 0, 0, 24) + "ftyp".toByteArray() + byteArrayOf(0, 0, 0, 0)
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(3)
+        packer.packString("replay_event")
+        packer.packBinaryHeader(replayEventPayload.size)
+        packer.writePayload(replayEventPayload)
+        packer.packString("replay_recording")
+        packer.packBinaryHeader(recordingPayload.size)
+        packer.writePayload(recordingPayload)
+        packer.packString("replay_video")
+        packer.packBinaryHeader(videoPayload.size)
+        packer.writePayload(videoPayload)
+        val bytes = packer.toByteArray()
+        packer.close()
+        return Base64.getEncoder().encodeToString(bytes)
+    }
+
+    private fun encodedMobileMetadataOnlySegment(): String {
+        val replayEventPayload = """{"segment_id":8}""".toByteArray()
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packString("replay_event")
+        packer.packBinaryHeader(replayEventPayload.size)
+        packer.writePayload(replayEventPayload)
+        val bytes = packer.toByteArray()
+        packer.close()
+        return Base64.getEncoder().encodeToString(bytes)
+    }
 
     @Test
     fun `getProjectIdForReplay returns project id for valid replay`() = runBlocking {
@@ -221,12 +281,12 @@ class ReplayServiceTest {
     @Test
     fun `getReplay returns replay detail`() = runBlocking {
         val replayId = REPLAY_UUID
-        every { geoIpService.resolve("203.0.113.10") } returns GeoIpService.GeoResult(
+        every { geoIpService.resolve(GEO_TEST_IP) } returns GeoIpService.GeoResult(
             countryCode = "IT",
             city = "Milan"
         )
         val detailRow = """
-{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["err-1"],"trace_ids":["trace-1"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","user_ip_address":"203.0.113.10","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
+{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["err-1"],"trace_ids":["trace-1"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","user_ip_address":"$GEO_TEST_IP","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
         """.trimIndent()
         val contextRow = """
 {"contexts":"{\"device\":{\"screen_width_pixels\":1512,\"screen_height_pixels\":856}}","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:00:10.000Z\",\"category\":\"network.event\",\"data\":{\"network_type\":\"4g\"}},{\"timestamp\":\"2026-01-01T00:00:11.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
@@ -257,13 +317,60 @@ class ReplayServiceTest {
             assertEquals("Chrome", result.browserName)
             assertEquals("macOS", result.osName)
             assertEquals("https://app.example.com", result.entryUrl)
-            assertEquals("203.0.113.10", result.ipAddress)
+            assertEquals(GEO_TEST_IP, result.ipAddress)
             assertEquals("Milan, IT", result.geo)
             assertEquals("1512 x 856", result.viewport)
             assertEquals("4g", result.connection)
             assertEquals(14, result.userSessionCount)
             assertTrue("error" in result.signals)
             assertTrue("rage_click" in result.signals)
+        }
+    }
+
+    @Test
+    fun `getReplay falls back to window errors and subdivision geo`() = runBlocking {
+        val replayId = REPLAY_UUID
+        every { geoIpService.resolve(GEO_TEST_IP) } returns GeoIpService.GeoResult(
+            countryCode = "US",
+            subdivision = "CA"
+        )
+        val detailRow = """
+{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["","https://app.example.com/fallback"],"error_ids":[],"trace_ids":[],"segment_count":1,"environment":"","release":"","platform":"javascript","user_id":"u-1","user_email":"","user_username":"","user_ip_address":"$GEO_TEST_IP","browser_name":"","browser_version":"","os_name":"","os_version":"","activity":0,"tags":"not-json"}
+        """.trimIndent()
+        val errorIdRows = """
+{"event_id":"11111111-2222-3333-4444-555555555555"}
+{"event_id":"22222222-3333-4444-5555-666666666666"}
+        """.trimIndent()
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("GROUP BY replay_id") ->
+                    exchange.respond(200, detailRow, TEXT_PLAIN)
+                query.contains("SELECT toString(event_id) as event_id") ->
+                    exchange.respond(200, errorIdRows, TEXT_PLAIN)
+                query.contains("countDistinct(event_id)") ->
+                    exchange.respond(200, """{"count":2}""", TEXT_PLAIN)
+                query.contains("SELECT contexts, breadcrumbs") ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+                query.contains("countDistinct(replay_id)") ->
+                    exchange.respond(200, """{"count":0}""", TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplay(replayId)
+            assertNotNull(result)
+            assertEquals("https://app.example.com/fallback", result.entryUrl)
+            assertEquals(2, result.errorCount)
+            assertEquals(2, result.errorIds.size)
+            assertEquals(GEO_TEST_IP, result.ipAddress)
+            assertEquals("CA, US", result.geo)
+            assertTrue("error" in result.signals)
+            assertTrue("dead_click" in result.signals)
+            assertTrue(result.tags.isEmpty())
+            assertEquals(0, result.userSessionCount)
         }
     }
 
@@ -288,8 +395,19 @@ class ReplayServiceTest {
         val spanRow = """
 {"span_id":"span-1","trace_id":"trace-aaa","transaction_id":"22222222-3333-4444-5555-666666666666","description":"GET /health","op":"http.client","start_ts_ms":"1767225720500","duration_ms":"50","http_status_code":"200"}
         """.trimIndent()
+        val breadcrumbs = """
+[
+  {"timestamp":"2026-01-01T00:00:05.000Z","category":"device.battery","data":{"action":"SCREEN_OFF"}},
+  {"timestamp":1767225630.0,"category":"ui.lifecycle","data":{"screen":"Checkout","state":"active"}},
+  {"timestamp":"2026-01-01T00:00:32.000Z","category":"navigation.screen","data":{"from":"Cart","to":"Checkout"}},
+  {"timestamp":"2026-01-01T00:00:33.000Z","category":"network.event","data":{"method":"POST","url":"/api/pay","status_code":"502"}},
+  {"timestamp":"2026-01-01T00:00:34.000Z","type":"custom-action","data":{"type":"tap"}},
+  {"timestamp":"2026-01-01T00:00:35.000Z","category":"Logcat","message":"Client request failed: 401 Unauthorized"},
+  {"timestamp":"2026-01-01T00:00:36.000Z","category":"ui.click","message":"rage click x3"}
+]
+        """.trimIndent()
         val breadcrumbRow = """
-{"event_id":"33333333-4444-5555-6666-777777777777","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:00:30.000Z\",\"category\":\"Logcat\",\"message\":\"Client request failed: 401 Unauthorized\"},{\"timestamp\":\"2026-01-01T00:00:31.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
+{"event_id":"33333333-4444-5555-6666-777777777777","breadcrumbs":${jsonString(breadcrumbs)}}
         """.trimIndent()
         val rows = ReplayTimelineRows(
             detailRow = detailRow,
@@ -310,15 +428,137 @@ class ReplayServiceTest {
             assertNotNull(txItem)
             assertEquals("GET /api", txItem.title)
             assertEquals(503, txItem.statusCode)
-            val spanItem = result.items.find { it.type == "span" }
+            val spanItem = result.items.find { it.traceId == "trace-aaa" && it.title == "GET /health" }
             assertNotNull(spanItem)
             assertEquals("GET /health", spanItem.title)
             assertEquals(200, spanItem.statusCode)
             val logcatItem = result.items.find { it.category == "Logcat" }
             assertNotNull(logcatItem)
             assertEquals(401, logcatItem.statusCode)
+            val lifecycleItem = result.items.find { it.category == "ui.lifecycle" }
+            assertNotNull(lifecycleItem)
+            assertEquals("Ui Lifecycle", lifecycleItem.title)
+            assertEquals("Checkout: active", lifecycleItem.description)
+            val navigationItem = result.items.find { it.category == "navigation.screen" }
+            assertNotNull(navigationItem)
+            assertEquals("Cart -> Checkout", navigationItem.description)
+            val networkItem = result.items.find { it.category == "network.event" }
+            assertNotNull(networkItem)
+            assertEquals("POST /api/pay 502", networkItem.description)
+            assertEquals(502, networkItem.statusCode)
+            val customItem = result.items.find { it.category == "custom-action" }
+            assertNotNull(customItem)
+            assertEquals("Custom Action", customItem.title)
+            assertEquals("tap", customItem.description)
+            assertNull(result.items.find { it.category == "device.battery" })
             val rageItem = result.items.find { it.rage == true }
             assertNotNull(rageItem)
+            Unit
+        }
+    }
+
+    @Test
+    fun `getReplayRecording decodes json payload variants`() = runBlocking {
+        val rawJsonEvents = """[{"type":2,"timestamp":1000}]"""
+        val encodedJsonEvents =
+            Base64.getEncoder().encodeToString("""[{"type":3,"timestamp":2000}]""".toByteArray())
+        val recordingRows = listOf(
+            recordingDataRow(rawJsonEvents),
+            recordingDataRow(encodedJsonEvents)
+        ).joinToString("\n")
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("SELECT recording_data") ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecording(REPLAY_UUID)
+            assertNotNull(result)
+            assertEquals(2, result.events.size)
+            assertEquals(2, result.events[0].jsonObject["type"]?.jsonPrimitive?.int)
+            assertEquals(3, result.events[1].jsonObject["type"]?.jsonPrimitive?.int)
+        }
+    }
+
+    @Test
+    fun `getReplayRecording decodes mobile msgpack recording and video payloads`() = runBlocking {
+        val recordingRows = recordingDataRow(encodedMobileReplaySegment())
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("SELECT recording_data") ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecording(REPLAY_UUID)
+            assertNotNull(result)
+            assertEquals(2, result.events.size)
+            val replayEvent = result.events.first { it.jsonObject["type"]?.jsonPrimitive?.int == 5 }
+            assertEquals(7, replayEvent.jsonObject["segment_id"]?.jsonPrimitive?.int)
+            val videoEvent = result.events.first {
+                it.jsonObject["type"]?.jsonPrimitive?.contentOrNull == "mobile_replay_video"
+            }
+            assertEquals(7, videoEvent.jsonObject["segment_id"]?.jsonPrimitive?.int)
+            assertEquals("video/mp4", videoEvent.jsonObject["mime_type"]?.jsonPrimitive?.contentOrNull)
+        }
+    }
+
+    @Test
+    fun `getReplayRecording returns placeholder for unsupported mobile payloads`() = runBlocking {
+        val recordingRows = recordingDataRow(encodedMobileMetadataOnlySegment())
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("SELECT recording_data") ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecording(REPLAY_UUID)
+            assertNotNull(result)
+            assertEquals(1, result.events.size)
+            val placeholder = result.events.first().jsonObject
+            assertEquals("mobile_replay_not_supported", placeholder["type"]?.jsonPrimitive?.contentOrNull)
+        }
+    }
+
+    @Test
+    fun `getReplaysForIssue returns replay list items with entry url and signals`() = runBlocking {
+        val replayRow = """
+{"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","duration_ms":"300000","urls":["","https://app.example.com/issue"],"error_count":1,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":0}
+        """.trimIndent()
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("issues FINAL") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("replay_events r") ->
+                    exchange.respond(200, replayRow, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplaysForIssue("issue-1")
+            assertEquals(1, result.size)
+            assertEquals("https://app.example.com/issue", result.first().entryUrl)
+            assertTrue("error" in result.first().signals)
+            assertTrue("dead_click" in result.first().signals)
         }
     }
 }

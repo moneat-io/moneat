@@ -100,7 +100,14 @@ function statusBadgeVariant(status: number): 'success' | 'warning' | 'danger' {
 /** Strip a trailing "→ 500" / bare status from the title so we can render the code as a badge instead. */
 function titleWithoutStatus(title: string, status: number | null): string {
   if (status == null) return title
-  return title.replace(/\s*→?\s*\b\d{3}\b\s*$/, '').trimEnd()
+  const trimmedTitle = title.trimEnd()
+  const statusText = String(status)
+  if (!trimmedTitle.endsWith(statusText)) return title
+
+  const beforeStatus = trimmedTitle.slice(0, -statusText.length).trimEnd()
+  return beforeStatus.endsWith('→')
+    ? beforeStatus.slice(0, -1).trimEnd()
+    : beforeStatus
 }
 
 /** m:ss clock for the right-aligned time column (matches the player scrubber). */

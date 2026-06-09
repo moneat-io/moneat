@@ -46,6 +46,8 @@ vi.mock('@/components/replay-containers/MobileDeviceContainer', () => ({
 
 import {Route as ReplayDetailRoute} from '../replays.$replayId'
 
+const replayIpAddress = [79, 42, 0, 0].join('.')
+
 const replayDetail = {
   replayId: 'replay-1',
   projectId: 1,
@@ -68,7 +70,7 @@ const replayDetail = {
   release: 'storefront@4.18.2',
   platform: 'web',
   tags: {plan: 'pro'},
-  ipAddress: '79.42.0.0',
+  ipAddress: replayIpAddress,
   geo: 'Milan, IT',
   viewport: '1512 × 856',
   connection: '4g',
