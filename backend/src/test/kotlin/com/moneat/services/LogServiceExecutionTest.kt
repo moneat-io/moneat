@@ -17,7 +17,10 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.logs.models.LogAnalyticsFilters
+import com.moneat.logs.models.LogPatternRequest
 import com.moneat.logs.models.LogQueryRequest
+import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
 import com.moneat.testsupport.MockHttpServer
@@ -43,6 +46,121 @@ class LogServiceExecutionTest {
     fun teardown() {
         ClickHouseClient.close()
     }
+
+    @Test
+    fun `queryLogs filters by host and trace id`() =
+        runBlocking {
+            val repository =
+                RecordingLogRepository { sql ->
+                    when {
+                        sql.contains("SELECT") && sql.contains("toString(log_id) AS log_id_str") -> ""
+                        else -> error("Unexpected query: $sql")
+                    }
+                }
+
+            val result =
+                LogService(repository).queryLogs(
+                    organizationId = 42L,
+                    request = LogQueryRequest(host = "checkout-1", traceId = "trace-abc")
+                )
+
+            assertTrue(result.logs.isEmpty())
+            assertFalse(result.hasMore)
+            assertEquals(null, result.totalCount)
+
+            val selectQuery = repository.queries.first { it.contains("toString(log_id) AS log_id_str") }
+            assertTrue(selectQuery.contains("host = 'checkout-1'"))
+            assertTrue(selectQuery.contains("trace_id = 'trace-abc'"))
+        }
+
+    @Test
+    fun `queryLogs filters by structural message pattern`() =
+        runBlocking {
+            val repository =
+                RecordingLogRepository { sql ->
+                    when {
+                        sql.contains("SELECT") && sql.contains("toString(log_id) AS log_id_str") -> ""
+                        sql.contains("SELECT count() as count") -> """{"count":0}"""
+                        else -> error("Unexpected query: $sql")
+                    }
+                }
+
+            LogService(repository).queryLogs(
+                organizationId = 42L,
+                request = LogQueryRequest(messagePattern = "Order <int> failed for user <id>")
+            )
+
+            val selectQuery = repository.queries.first { it.contains("toString(log_id) AS log_id_str") }
+            assertTrue(selectQuery.contains("replaceRegexpAll"))
+            assertTrue(selectQuery.contains("Order <int> failed for user <id>"))
+        }
+
+    @Test
+    fun `getLogPattern returns pattern rollups from ClickHouse aggregates`() =
+        runBlocking {
+            val repository =
+                RecordingLogRepository { sql ->
+                    when {
+                        sql.contains("AS first_seen_ms") -> {
+                            """
+                            {"cnt":3,"level_value":"error","first_seen_ms":1780272000000,"last_seen_ms":1780358400000}
+                            """.trimIndent()
+                        }
+
+                        sql.contains("AS previous_count") -> """{"previous_count":2}"""
+                        sql.contains("AS bucket_index") -> {
+                            """
+                            {"bucket_index":0,"cnt":1}
+                            {"bucket_index":2,"cnt":2}
+                            """.trimIndent()
+                        }
+
+                        sql.contains("service AS value") -> {
+                            """
+                            {"value":"checkout","cnt":2}
+                            {"value":"worker","cnt":1}
+                            """.trimIndent()
+                        }
+
+                        sql.contains("host AS value") -> {
+                            """
+                            {"value":"checkout-1","cnt":2}
+                            {"value":"checkout-2","cnt":1}
+                            """.trimIndent()
+                        }
+
+                        else -> error("Unexpected query: $sql")
+                    }
+                }
+
+            val result =
+                LogService(repository).getLogPattern(
+                    organizationId = 42L,
+                    request = LogPatternRequest(
+                        message = "Order 123 failed for user usr_abcdef",
+                        service = "checkout",
+                        from = "2026-06-01T00:00:00Z",
+                        to = "2026-06-02T00:00:00Z"
+                    )
+                )
+
+            assertEquals("Order <int> failed for user <id>", result.pattern)
+            assertEquals("error", result.level)
+            assertEquals(3L, result.count)
+            assertEquals("24h", result.windowLabel)
+            assertEquals("2026-06-01T00:00:00Z", result.firstSeen)
+            assertEquals("2026-06-02T00:00:00Z", result.lastSeen)
+            assertEquals(50, result.trendPct)
+            assertEquals(listOf(1L, 0L, 2L), result.sparkline)
+            assertEquals("checkout", result.topServices.first().value)
+            assertEquals(2L, result.topServices.first().count)
+            assertEquals("checkout-1", result.topHosts.first().value)
+
+            val statsQuery = repository.queries.first { it.contains("AS first_seen_ms") }
+            assertTrue(statsQuery.contains("organization_id = 42"))
+            assertTrue(statsQuery.contains("service = 'checkout'"))
+            assertTrue(statsQuery.contains("replaceRegexpAll"))
+        }
 
     @Test
     fun `queryLogs deserializes clickhouse rows and computes pagination`() =
@@ -130,18 +248,11 @@ class LogServiceExecutionTest {
                 val result =
                     LogService(LogRepositoryImpl()).aggregateLogs(
                         organizationId = 7L,
-                        from = "2026-02-01T10:00:00Z",
-                        to = "2026-02-01T12:00:00Z",
+                        filters = LogAnalyticsFilters(
+                            from = "2026-02-01T10:00:00Z",
+                            to = "2026-02-01T12:00:00Z"
+                        ),
                         interval = "auto",
-                        query = null,
-                        levels = emptyList(),
-                        service = null,
-                        environment = null,
-                        tags = emptyMap(),
-                        excludeService = null,
-                        excludeEnvironment = null,
-                        excludeContainerName = null,
-                        excludeTags = emptyMap(),
                         groupBy = "level"
                     )
 
@@ -153,4 +264,17 @@ class LogServiceExecutionTest {
                 assertEquals(1L, result.buckets[0].groups["warn"])
             }
         }
+
+    private class RecordingLogRepository(
+        private val responder: (String) -> String
+    ) : LogRepository {
+        val queries = mutableListOf<String>()
+
+        override suspend fun executeClickHouseInsert(sql: String): Boolean = true
+
+        override suspend fun executeClickHouseQuery(sql: String): String {
+            queries += sql
+            return responder(sql)
+        }
+    }
 }

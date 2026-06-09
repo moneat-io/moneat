@@ -57,9 +57,11 @@ const facetChipColors: Record<string, string> = {
   environment: 'bg-success-bg text-success-fg border-success-border',
   host: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]',
   source: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]',
+  trace_id: 'bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3)/0.3)]',
+  message_pattern: 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]',
 }
 
-const BUILT_IN_FACETS = ['service', 'environment', 'env', 'level', 'host', 'source']
+const BUILT_IN_FACETS = ['service', 'environment', 'env', 'level', 'host', 'source', 'trace_id', 'message_pattern']
 
 interface LogSearchBarProps {
   query: string
@@ -224,7 +226,7 @@ export function LogSearchBar({
           if (!levels.includes(value.toLowerCase())) {
             onToggleLevel(value.toLowerCase())
           }
-        } else if (!isExclude && ['service', 'environment', 'host', 'source'].includes(key)) {
+        } else if (!isExclude && ['service', 'environment', 'host', 'source', 'trace_id', 'message_pattern'].includes(key)) {
           // Only simple includes on known facet fields become facet filters
           const existing = facetFilters.filter((f) => f.key !== key || f.value !== value)
           onFacetFiltersChange([...existing, {key, value, exclude: false}])

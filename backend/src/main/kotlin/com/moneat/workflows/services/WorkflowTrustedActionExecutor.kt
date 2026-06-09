@@ -19,6 +19,7 @@ package com.moneat.workflows.services
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.DashboardService
+import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogService
@@ -127,18 +128,15 @@ class WorkflowTrustedActionExecutor(
             "aggregate",
             logService.aggregateLogs(
                 organizationId = organizationId.toLong(),
-                from = params.optional("from"),
-                to = params.optional("to"),
+                filters = LogAnalyticsFilters(
+                    from = params.optional("from"),
+                    to = params.optional("to"),
+                    query = params.optional("query"),
+                    levels = csvParam(params, "levels"),
+                    service = params.optional("service"),
+                    environment = params.optional("environment")
+                ),
                 interval = params.optional("interval"),
-                query = params.optional("query"),
-                levels = csvParam(params, "levels"),
-                service = params.optional("service"),
-                environment = params.optional("environment"),
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
                 groupBy = params.optional("group_by")
             )
         )

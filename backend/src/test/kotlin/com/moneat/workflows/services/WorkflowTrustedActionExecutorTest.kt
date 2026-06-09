@@ -157,8 +157,7 @@ class WorkflowTrustedActionExecutorTest {
     fun `log aggregate returns aggregate key`() {
         coEvery {
             logService.aggregateLogs(
-                any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any()
             )
         } returns LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = "1h")
         val result = run(WorkflowTrustedActionExecutor.LOGS_AGGREGATE_STEP, mapOf("query" to "level:error"))

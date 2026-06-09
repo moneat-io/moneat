@@ -158,13 +158,32 @@ data class LogQueryRequest(
     val levels: List<String> = emptyList(),
     val service: String? = null,
     val environment: String? = null,
+    val host: String? = null,
+    val traceId: String? = null,
+    val messagePattern: String? = null,
     val from: String? = null,
     val to: String? = null,
     val tags: Map<String, String> = emptyMap(),
     val systemId: String? = null,
     val hostId: Int? = null,
     val containerName: String? = null,
+    val excludeService: String? = null,
+    val excludeEnvironment: String? = null,
+    val excludeContainerName: String? = null,
+    val excludeTags: Map<String, String> = emptyMap()
+)
+
+data class LogAnalyticsFilters(
+    val from: String? = null,
+    val to: String? = null,
+    val query: String? = null,
+    val levels: List<String> = emptyList(),
+    val service: String? = null,
+    val environment: String? = null,
+    val host: String? = null,
     val traceId: String? = null,
+    val messagePattern: String? = null,
+    val tags: Map<String, String> = emptyMap(),
     val excludeService: String? = null,
     val excludeEnvironment: String? = null,
     val excludeContainerName: String? = null,
@@ -182,6 +201,34 @@ data class LogTailFilters(
     @SerialName("exclude_environment") val excludeEnvironment: String? = null,
     @SerialName("exclude_container_name") val excludeContainerName: String? = null,
     @SerialName("exclude_tags") val excludeTags: Map<String, String> = emptyMap()
+)
+
+data class LogPatternRequest(
+    val logId: String? = null,
+    val message: String? = null,
+    val service: String? = null,
+    val from: String? = null,
+    val to: String? = null
+)
+
+@Serializable
+data class LogPatternBreakdown(
+    val value: String,
+    val count: Long
+)
+
+@Serializable
+data class LogPatternResponse(
+    val pattern: String,
+    val level: String,
+    val count: Long,
+    @SerialName("window_label") val windowLabel: String,
+    @SerialName("first_seen") val firstSeen: String,
+    @SerialName("last_seen") val lastSeen: String,
+    @SerialName("trend_pct") val trendPct: Int? = null,
+    val sparkline: List<Long> = emptyList(),
+    @SerialName("top_services") val topServices: List<LogPatternBreakdown> = emptyList(),
+    @SerialName("top_hosts") val topHosts: List<LogPatternBreakdown> = emptyList()
 )
 
 @Serializable

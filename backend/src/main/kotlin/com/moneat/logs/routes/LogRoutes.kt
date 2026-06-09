@@ -31,6 +31,8 @@ import com.moneat.events.services.EventService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.logs.LogPermissions
 import com.moneat.logs.models.CreateLogIndexRequest
+import com.moneat.logs.models.LogAnalyticsFilters
+import com.moneat.logs.models.LogPatternRequest
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.UpdateLogIndexRequest
@@ -58,6 +60,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.request.ApplicationRequest
 import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -288,6 +291,7 @@ private suspend fun ApplicationCall.testLogIndex(logIndexService: LogIndexServic
 
 private fun Route.registerLogQueryRoutes(logService: LogService) {
     get("/logs") { call.queryLogs(logService) }
+    get("/logs/pattern") { call.getLogPattern(logService) }
     get("/logs/tag-values") { call.getLogTagValues(logService) }
     get("/logs/filters") { call.getLogFilters(logService) }
     get("/logs/aggregate") { call.aggregateLogs(logService) }
@@ -306,10 +310,12 @@ private suspend fun ApplicationCall.queryLogs(logService: LogService) {
             levels = parseLevelQueryParams(this),
             service = request.queryParameters["service"],
             environment = request.queryParameters["environment"],
+            host = request.queryParameters["host"],
             from = range.from,
             to = range.to,
             tags = parseTagQueryParams(this),
-            traceId = request.queryParameters["traceId"],
+            traceId = request.traceIdParameter(),
+            messagePattern = request.messagePatternParameter(),
             excludeService = request.queryParameters["excludeService"],
             excludeEnvironment = request.queryParameters["excludeEnvironment"],
             excludeContainerName = request.queryParameters["excludeContainerName"],
@@ -317,6 +323,29 @@ private suspend fun ApplicationCall.queryLogs(logService: LogService) {
         )
 
     val result = logService.queryLogs(orgId, logRequest)
+    respond(HttpStatusCode.OK, result)
+}
+
+private suspend fun ApplicationCall.getLogPattern(logService: LogService) {
+    val logId = request.queryParameters["logId"] ?: request.queryParameters["log_id"]
+    val message = request.queryParameters["message"]
+    if (logId.isNullOrBlank() && message.isNullOrBlank()) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Missing logId or message parameter"))
+        return
+    }
+
+    val range = demoAwareLogTimeRange()
+    val result =
+        logService.getLogPattern(
+            organizationId = requiredOrganizationIdOrRespond()?.toLong() ?: return,
+            request = LogPatternRequest(
+                logId = logId,
+                message = message,
+                service = request.queryParameters["service"],
+                from = range.from,
+                to = range.to
+            )
+        )
     respond(HttpStatusCode.OK, result)
 }
 
@@ -356,18 +385,8 @@ private suspend fun ApplicationCall.aggregateLogs(logService: LogService) {
     val result =
         logService.aggregateLogs(
             organizationId = orgId,
-            from = range.from,
-            to = range.to,
+            filters = logAnalyticsFilters(range),
             interval = request.queryParameters["interval"],
-            query = request.queryParameters["q"] ?: request.queryParameters["query"],
-            levels = parseLevelQueryParams(this),
-            service = request.queryParameters["service"],
-            environment = request.queryParameters["environment"],
-            tags = parseTagQueryParams(this),
-            excludeService = request.queryParameters["excludeService"],
-            excludeEnvironment = request.queryParameters["excludeEnvironment"],
-            excludeContainerName = request.queryParameters["excludeContainerName"],
-            excludeTags = parseExcludeTagQueryParams(this),
             groupBy = request.queryParameters["groupBy"]
         )
     logger.debug {
@@ -391,17 +410,7 @@ private suspend fun ApplicationCall.getTopLogValues(logService: LogService) {
             organizationId = requiredOrganizationIdOrRespond()?.toLong() ?: return,
             field = field,
             limit = request.queryParameters["limit"]?.toIntOrNull() ?: 10,
-            from = range.from,
-            to = range.to,
-            query = request.queryParameters["q"] ?: request.queryParameters["query"],
-            levels = parseLevelQueryParams(this),
-            service = request.queryParameters["service"],
-            environment = request.queryParameters["environment"],
-            tags = parseTagQueryParams(this),
-            excludeService = request.queryParameters["excludeService"],
-            excludeEnvironment = request.queryParameters["excludeEnvironment"],
-            excludeContainerName = request.queryParameters["excludeContainerName"],
-            excludeTags = parseExcludeTagQueryParams(this)
+            filters = logAnalyticsFilters(range)
         )
     respond(HttpStatusCode.OK, result)
 }
@@ -411,23 +420,31 @@ private suspend fun ApplicationCall.exportLogs(logService: LogService) {
     val csv =
         logService.exportCsv(
             organizationId = organizationId,
-            from = request.queryParameters["from"],
-            to = request.queryParameters["to"],
-            query = request.queryParameters["q"] ?: request.queryParameters["query"],
-            levels = parseLevelQueryParams(this),
-            service = request.queryParameters["service"],
-            environment = request.queryParameters["environment"],
-            tags = parseTagQueryParams(this),
-            excludeService = request.queryParameters["excludeService"],
-            excludeEnvironment = request.queryParameters["excludeEnvironment"],
-            excludeContainerName = request.queryParameters["excludeContainerName"],
-            excludeTags = parseExcludeTagQueryParams(this),
+            filters = logAnalyticsFilters(LogTimeRange(request.queryParameters["from"], request.queryParameters["to"])),
             limit = request.queryParameters["limit"]?.toIntOrNull() ?: 5000
         )
 
     response.headers.append(HttpHeaders.ContentDisposition, "attachment; filename=\"logs-export.csv\"")
     respondText(csv, ContentType.Text.CSV)
 }
+
+private fun ApplicationCall.logAnalyticsFilters(range: LogTimeRange): LogAnalyticsFilters =
+    LogAnalyticsFilters(
+        from = range.from,
+        to = range.to,
+        query = request.queryParameters["q"] ?: request.queryParameters["query"],
+        levels = parseLevelQueryParams(this),
+        service = request.queryParameters["service"],
+        environment = request.queryParameters["environment"],
+        host = request.queryParameters["host"],
+        traceId = request.traceIdParameter(),
+        messagePattern = request.messagePatternParameter(),
+        tags = parseTagQueryParams(this),
+        excludeService = request.queryParameters["excludeService"],
+        excludeEnvironment = request.queryParameters["excludeEnvironment"],
+        excludeContainerName = request.queryParameters["excludeContainerName"],
+        excludeTags = parseExcludeTagQueryParams(this)
+    )
 
 private fun Route.registerLogTailRoute(
     logService: LogService,
@@ -658,6 +675,14 @@ private fun parseExcludeTagQueryParams(call: ApplicationCall): Map<String, Strin
             if (key.isBlank()) return@mapNotNull null
             key to value
         }.toMap()
+}
+
+private fun ApplicationRequest.traceIdParameter(): String? {
+    return queryParameters["traceId"] ?: queryParameters["trace_id"]
+}
+
+private fun ApplicationRequest.messagePatternParameter(): String? {
+    return queryParameters["pattern"] ?: queryParameters["messagePattern"] ?: queryParameters["message_pattern"]
 }
 
 private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {

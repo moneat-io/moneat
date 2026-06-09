@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.repositories.LogRepository
@@ -78,33 +79,13 @@ class LogServicesExtendedTest {
         organizationId = orgId,
         field = field,
         limit = limit,
-        from = null,
-        to = null,
-        query = null,
-        levels = emptyList(),
-        service = null,
-        environment = null,
-        tags = emptyMap(),
-        excludeService = null,
-        excludeEnvironment = null,
-        excludeContainerName = null,
-        excludeTags = emptyMap()
+        filters = LogAnalyticsFilters()
     )
 
     private suspend fun LogService.exportCsvWithEmptyFilters(orgId: Long, limit: Int = 100) =
         exportCsv(
             organizationId = orgId,
-            from = null,
-            to = null,
-            query = null,
-            levels = emptyList(),
-            service = null,
-            environment = null,
-            tags = emptyMap(),
-            excludeService = null,
-            excludeEnvironment = null,
-            excludeContainerName = null,
-            excludeTags = emptyMap(),
+            filters = LogAnalyticsFilters(),
             limit = limit
         )
 
@@ -116,18 +97,8 @@ class LogServicesExtendedTest {
         groupBy: String? = null
     ) = aggregateLogs(
         organizationId = orgId,
-        from = from,
-        to = to,
+        filters = LogAnalyticsFilters(from = from, to = to),
         interval = interval,
-        query = null,
-        levels = emptyList(),
-        service = null,
-        environment = null,
-        tags = emptyMap(),
-        excludeService = null,
-        excludeEnvironment = null,
-        excludeContainerName = null,
-        excludeTags = emptyMap(),
         groupBy = groupBy
     )
 
@@ -201,17 +172,19 @@ class LogServicesExtendedTest {
                 organizationId = 1L,
                 field = "level",
                 limit = 10,
-                from = FROM_2026_01_01,
-                to = TO_2026_01_02,
-                query = "database",
-                levels = listOf("error"),
-                service = "api",
-                environment = "prod",
-                tags = mapOf("region" to US_EAST),
-                excludeService = "worker",
-                excludeEnvironment = "staging",
-                excludeContainerName = "test-container",
-                excludeTags = mapOf("debug" to "true")
+                filters = LogAnalyticsFilters(
+                    from = FROM_2026_01_01,
+                    to = TO_2026_01_02,
+                    query = "database",
+                    levels = listOf("error"),
+                    service = "api",
+                    environment = "prod",
+                    tags = mapOf("region" to US_EAST),
+                    excludeService = "worker",
+                    excludeEnvironment = "staging",
+                    excludeContainerName = "test-container",
+                    excludeTags = mapOf("debug" to "true")
+                )
             )
 
             val allQueries = capturedQueries.joinToString("\n")
@@ -697,18 +670,13 @@ class LogServicesExtendedTest {
 
             service.aggregateLogs(
                 organizationId = 1L,
-                from = null,
-                to = null,
+                filters = LogAnalyticsFilters(
+                    excludeService = "worker",
+                    excludeEnvironment = "staging",
+                    excludeContainerName = "test-ctr",
+                    excludeTags = mapOf("debug" to "true")
+                ),
                 interval = "1h",
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = "worker",
-                excludeEnvironment = "staging",
-                excludeContainerName = "test-ctr",
-                excludeTags = mapOf("debug" to "true"),
                 groupBy = null
             )
 

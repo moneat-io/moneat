@@ -41,7 +41,7 @@ import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import {TimeRangePicker} from '@/components/filters/TimeRangePicker'
 import {LogTable} from '@/components/logs/LogTable'
-import {LogDetail} from '@/components/logs/LogDetail'
+import {LogContextViewer} from '@/components/logs/context-viewer'
 import {AutoRefreshToggle, type RefreshInterval} from '@/components/logs/AutoRefreshToggle'
 import {LogSetupGuide} from '@/components/logs/LogSetupGuide'
 import {type LogVizMode, LogVizTabs} from '@/components/logs/LogVizTabs'
@@ -63,7 +63,6 @@ import {type FacetFilter, type FacetRailSection, type FacetSchema} from '@/lib/f
 import {TIME_PRESETS} from '@/lib/filters/time'
 import {logLevelBadgeClass} from '@/lib/severity'
 import {cn} from '@/lib/utils'
-import {parseDate} from '@/lib/date-format'
 import {
   Activity,
   Bell,
@@ -121,6 +120,9 @@ type LogExplorerInitialState = {
 type DerivedLogFilters = {
   service?: string
   environment?: string
+  host?: string
+  traceId?: string
+  messagePattern?: string
   containerName?: string
   tags: Record<string, string>
   excludeService?: string
@@ -198,6 +200,8 @@ const LOG_FACET_CHIP_COLORS: Record<string, string> = {
   environment: 'bg-success-bg text-success-fg border-success-border',
   host: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]',
   source: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]',
+  trace_id: 'bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3)/0.3)]',
+  message_pattern: 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]',
 }
 
 function shouldOpenFacetRail(enableFacets: boolean): boolean {
@@ -363,6 +367,12 @@ function applyIncludedLogFilter(derived: DerivedLogFilters, filter: FacetFilter)
     derived.service = filter.value
   } else if (filter.key === 'environment') {
     derived.environment = filter.value
+  } else if (filter.key === 'host') {
+    derived.host = filter.value
+  } else if (filter.key === 'trace_id' || filter.key === 'traceId') {
+    derived.traceId = filter.value
+  } else if (filter.key === 'message_pattern' || filter.key === 'messagePattern') {
+    derived.messagePattern = filter.value
   } else if (filter.key === 'container_name') {
     derived.containerName = filter.value
   } else {
@@ -949,6 +959,7 @@ export function LogExplorer({
   // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [viewerExpanded, setViewerExpanded] = useState(false)
 
   // Log management sheet (controlled so contextual actions can open a specific tab)
   const [managementOpen, setManagementOpen] = useState(false)
@@ -1101,6 +1112,8 @@ export function LogExplorer({
       },
       {key: 'host', color: LOG_FACET_CHIP_COLORS.host},
       {key: 'level', allowExclude: false, suggestions: LEVEL_OPTIONS},
+      {key: 'trace_id', color: LOG_FACET_CHIP_COLORS.trace_id},
+      {key: 'message_pattern', color: LOG_FACET_CHIP_COLORS.message_pattern},
       {
         key: 'service',
         color: LOG_FACET_CHIP_COLORS.service,
@@ -1188,6 +1201,9 @@ export function LogExplorer({
       timeRange.to,
       derivedFilters.service,
       derivedFilters.environment,
+      derivedFilters.host,
+      derivedFilters.traceId,
+      derivedFilters.messagePattern,
       derivedFilters.containerName,
       JSON.stringify(derivedFilters.tags),
       derivedFilters.excludeService,
@@ -1203,6 +1219,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         containerName: derivedFilters.containerName,
         from: timeRange.from,
         to: timeRange.to,
@@ -1329,6 +1348,7 @@ export function LogExplorer({
     queryKey: [
       'log-aggregate', systemId, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      derivedFilters.host, derivedFilters.traceId, derivedFilters.messagePattern,
       JSON.stringify(derivedFilters.tags), groupBy,
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
       derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
@@ -1342,6 +1362,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         tags: hasRecordValues(derivedFilters.tags) ? derivedFilters.tags : undefined,
         excludeService: derivedFilters.excludeService,
         excludeEnvironment: derivedFilters.excludeEnvironment,
@@ -1358,6 +1381,7 @@ export function LogExplorer({
     queryKey: [
       'log-top', systemId, topField, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      derivedFilters.host, derivedFilters.traceId, derivedFilters.messagePattern,
       JSON.stringify(derivedFilters.tags),
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
       derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
@@ -1373,6 +1397,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         tags: hasRecordValues(derivedFilters.tags) ? derivedFilters.tags : undefined,
         excludeService: derivedFilters.excludeService,
         excludeEnvironment: derivedFilters.excludeEnvironment,
@@ -1393,6 +1420,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         tags: hasRecordValues(derivedFilters.tags) ? derivedFilters.tags : undefined,
         excludeService: derivedFilters.excludeService,
         excludeEnvironment: derivedFilters.excludeEnvironment,
@@ -1424,33 +1454,21 @@ export function LogExplorer({
     setDetailOpen(true)
   }, [])
   
-  // View in context: clear filters and show ±5 minute window around selected log
-  const handleViewInContext = useCallback((log: LogEntry) => {
-    const logTime = parseDate(log.timestamp)
-    if (Number.isNaN(logTime.getTime())) return
-    
-    // Calculate ±5 minutes
-    const fiveMinutesMs = 5 * 60 * 1000
-    const contextFrom = new Date(logTime.getTime() - fiveMinutesMs)
-    const contextTo = new Date(logTime.getTime() + fiveMinutesMs)
-    
-    // Clear filters and query
-    setQuery('')
-    setFacetFilters([])
-    setLevels([...LEVEL_OPTIONS])
-    
-    // Set custom time range
-    setTimePreset('custom')
-    setCustomFrom(toDateTimeLocalValue(contextFrom))
-    setCustomTo(toDateTimeLocalValue(contextTo))
-    
-    // Reset pagination
-    setCursor(null)
-    setCursorHistory([])
-    
-    // Keep the log selected for highlight
-    setSelectedLog(log)
-    setDetailOpen(false)
+  const handleViewerNavigate = useCallback((delta: number) => {
+    setSelectedLog((current) => {
+      if (!current) return current
+      const currentIndex = accumulatedLogs.findIndex((log) => log.logId === current.logId)
+      if (currentIndex === -1) return current
+      const nextIndex = Math.min(Math.max(currentIndex + delta, 0), accumulatedLogs.length - 1)
+      return accumulatedLogs[nextIndex] ?? current
+    })
+  }, [accumulatedLogs])
+
+  const handleAddFacetFilter = useCallback((key: string, value: string, exclude = false) => {
+    setFacetFilters((prev) => [
+      ...prev.filter((filter) => !(filter.key === key && filter.value === value)),
+      {key, value, exclude},
+    ])
   }, [])
 
   const handlePreviousPage = () => {
@@ -1609,30 +1627,49 @@ export function LogExplorer({
             onHistogramBucketClick={handleHistogramBucketClick}
             onTopValueClick={handleTopValueClick}
           />
-          <LogExplorerContent
-            showEmptyState={showEmptyState}
-            isInitialLoadingState={isInitialLoadingState}
-            logs={logs}
-            selectedLogId={selectedLog?.logId}
-            onSelectLog={handleSelectLog}
-            isLoadingMore={isLoadingMore}
-            isFetching={isFetching}
-            hasMore={logPage?.hasMore}
-            logPageLoaded={Boolean(logPage)}
-            scrollSentinelRef={scrollSentinelRef}
-            logContainerRef={logContainerRef}
-            sdkVersions={sdkVersions}
-          />
+          <div className="relative flex min-h-0 flex-1 overflow-hidden">
+            <LogExplorerContent
+              showEmptyState={showEmptyState}
+              isInitialLoadingState={isInitialLoadingState}
+              logs={logs}
+              selectedLogId={selectedLog?.logId}
+              onSelectLog={handleSelectLog}
+              isLoadingMore={isLoadingMore}
+              isFetching={isFetching}
+              hasMore={logPage?.hasMore}
+              logPageLoaded={Boolean(logPage)}
+              scrollSentinelRef={scrollSentinelRef}
+              logContainerRef={logContainerRef}
+              sdkVersions={sdkVersions}
+            />
+            {detailOpen && selectedLog && (
+              <>
+                <div
+                  className="absolute inset-0 z-30 bg-black/40 lg:hidden"
+                  onClick={() => setDetailOpen(false)}
+                  aria-hidden="true"
+                />
+                <LogContextViewer
+                  className={cn(
+                    'absolute inset-y-0 right-0 z-40 w-full max-w-[860px] sm:w-[88%] lg:relative lg:inset-auto lg:z-auto',
+                    viewerExpanded ? 'lg:w-full lg:max-w-none' : 'lg:w-[60%] lg:min-w-[460px]'
+                  )}
+                  log={selectedLog}
+                  logs={accumulatedLogs}
+                  index={Math.max(0, accumulatedLogs.findIndex((log) => log.logId === selectedLog.logId))}
+                  total={aggregateData?.totalCount ?? totalCount ?? accumulatedLogs.length}
+                  onNavigate={handleViewerNavigate}
+                  onClose={() => setDetailOpen(false)}
+                  onAddFacetFilter={handleAddFacetFilter}
+                  timeRange={timeRange}
+                  expanded={viewerExpanded}
+                  onToggleExpand={() => setViewerExpanded((value) => !value)}
+                />
+              </>
+            )}
+          </div>
         </div>
       </ExplorerShell>
-
-      {/* Log detail sheet */}
-      <LogDetail
-        log={selectedLog}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        onViewInContext={enableUrlSync ? handleViewInContext : undefined}
-      />
 
       {/* Log management sheet, controlled so Explorer actions can open a specific tab. */}
       {!systemId && (

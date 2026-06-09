@@ -3,7 +3,7 @@ import globals from 'globals'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
-import {reactRefresh} from 'eslint-plugin-react-refresh'
+import reactRefresh from 'eslint-plugin-react-refresh'
 import checkFile from 'eslint-plugin-check-file'
 
 export default [
@@ -26,7 +26,7 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin,
       'react-hooks': reactHooks,
-      'react-refresh': reactRefresh.plugin,
+      'react-refresh': reactRefresh,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,

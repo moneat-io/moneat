@@ -26,11 +26,14 @@ import com.moneat.config.isClickHouseError
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
+import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogEntryResponse
 import com.moneat.logs.models.LogFilterOptionWithCount
 import com.moneat.logs.models.LogFilterOptionsResponse
 import com.moneat.logs.models.LogFilterOptionsWithCountsResponse
 import com.moneat.logs.models.LogIngestEntry
+import com.moneat.logs.models.LogPatternRequest
+import com.moneat.logs.models.LogPatternResponse
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogQueryResponse
 import com.moneat.logs.models.LogTagValuesResponse
@@ -82,6 +85,17 @@ private data class LogWithCursor(
     val timestampMs: Long
 )
 
+private data class LogAnalyticsWhere(
+    val conditions: List<String>,
+    val fromMs: Long?,
+    val toMs: Long?
+)
+
+private data class AggregateParseResult(
+    val buckets: List<LogAggregateBucket>,
+    val totalCount: Long
+)
+
 private const val MAX_LOG_QUERY_LIMIT = 500
 private const val MAX_TOP_VALUES_LIMIT = 100
 private const val MAX_FILTER_VALUES_LIMIT = 200
@@ -122,6 +136,7 @@ class LogService(private val logRepository: LogRepository) {
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracking = UsageTrackingService.instance
     private val queryParser = LogQueryParser()
+    private val patternQuery = LogPatternQuery(logRepository)
 
     fun liveChannel(organizationId: Long): String = "log:live:$organizationId"
 
@@ -434,6 +449,7 @@ class LogService(private val logRepository: LogRepository) {
             addLogIncludeFilters(request)
             addLogQueryFilter(request.query)
             addTagFilters(request.tags)
+            addLogMessagePatternFilter(request.messagePattern)
             addLogTraceFilter(request.traceId)
             addLogExcludeFilters(request)
             addTagFilters(request.excludeTags, exclude = true)
@@ -453,8 +469,39 @@ class LogService(private val logRepository: LogRepository) {
     private fun MutableList<String>.addLogIncludeFilters(request: LogQueryRequest) {
         addIfPresent(request.service) { "service = '${escapeSql(it)}'" }
         addIfPresent(request.environment) { "environment = '${escapeSql(it)}'" }
+        addIfPresent(request.host) { "host = '${escapeSql(it)}'" }
         addIfPresent(request.containerName) { "container_name = '${escapeSql(it)}'" }
         addLevelFilter(request.levels)
+    }
+
+    private suspend fun buildLogAnalyticsWhere(
+        organizationId: Long,
+        filters: LogAnalyticsFilters,
+        defaultToNow: Boolean = false
+    ): LogAnalyticsWhere {
+        val fromMs = parseTimeToMillis(filters.from)
+        val toMs = parseTimeToMillis(filters.to) ?: if (defaultToNow) System.currentTimeMillis() else null
+        val conditions =
+            buildList {
+                add(ClickHouseQueryUtils.orgIdClause(organizationId))
+                fromMs?.let { add("timestamp >= fromUnixTimestamp64Milli($it)") }
+                toMs?.let { add("timestamp <= fromUnixTimestamp64Milli($it)") }
+                addLogIncludeFilters(filters)
+                addLogQueryFilter(filters.query)
+                addTagFilters(filters.tags)
+                addLogMessagePatternFilter(filters.messagePattern)
+                addLogTraceFilter(filters.traceId)
+                addLogExcludeFilters(filters)
+                addTagFilters(filters.excludeTags, exclude = true)
+            }
+        return LogAnalyticsWhere(conditions = conditions, fromMs = fromMs, toMs = toMs)
+    }
+
+    private fun MutableList<String>.addLogIncludeFilters(filters: LogAnalyticsFilters) {
+        addIfPresent(filters.service) { "service = '${escapeSql(it)}'" }
+        addIfPresent(filters.environment) { "environment = '${escapeSql(it)}'" }
+        addIfPresent(filters.host) { "host = '${escapeSql(it)}'" }
+        addLevelFilter(filters.levels)
     }
 
     private fun MutableList<String>.addLevelFilter(levels: List<String>) {
@@ -493,6 +540,10 @@ class LogService(private val logRepository: LogRepository) {
         }
     }
 
+    private fun MutableList<String>.addLogMessagePatternFilter(messagePattern: String?) {
+        logMessagePatternCondition(messagePattern).takeIf { it.isNotBlank() }?.let { add(it) }
+    }
+
     private fun MutableList<String>.addLogTraceFilter(traceId: String?) {
         addIfPresent(traceId) { "trace_id = '${escapeSql(it)}'" }
     }
@@ -501,6 +552,12 @@ class LogService(private val logRepository: LogRepository) {
         addIfPresent(request.excludeService) { "service != '${escapeSql(it)}'" }
         addIfPresent(request.excludeEnvironment) { "environment != '${escapeSql(it)}'" }
         addIfPresent(request.excludeContainerName) { "container_name != '${escapeSql(it)}'" }
+    }
+
+    private fun MutableList<String>.addLogExcludeFilters(filters: LogAnalyticsFilters) {
+        addIfPresent(filters.excludeService) { "service != '${escapeSql(it)}'" }
+        addIfPresent(filters.excludeEnvironment) { "environment != '${escapeSql(it)}'" }
+        addIfPresent(filters.excludeContainerName) { "container_name != '${escapeSql(it)}'" }
     }
 
     private fun MutableList<String>.addLogCursorFilter(cursor: String?) {
@@ -518,6 +575,11 @@ class LogService(private val logRepository: LogRepository) {
             add(condition(value))
         }
     }
+
+    suspend fun getLogPattern(
+        organizationId: Long,
+        request: LogPatternRequest
+    ): LogPatternResponse = patternQuery.getLogPattern(organizationId, request)
 
     fun autoInterval(
         fromMs: Long?,
@@ -553,22 +615,13 @@ class LogService(private val logRepository: LogRepository) {
 
     suspend fun aggregateLogs(
         organizationId: Long,
-        from: String?,
-        to: String?,
+        filters: LogAnalyticsFilters,
         interval: String?,
-        query: String?,
-        levels: List<String>,
-        service: String?,
-        environment: String?,
-        tags: Map<String, String>,
-        excludeService: String?,
-        excludeEnvironment: String?,
-        excludeContainerName: String?,
-        excludeTags: Map<String, String>,
         groupBy: String?
     ): LogAggregateResponse {
-        val fromMs = parseTimeToMillis(from)
-        val toMs = parseTimeToMillis(to) ?: System.currentTimeMillis()
+        val where = buildLogAnalyticsWhere(organizationId, filters, defaultToNow = true)
+        val fromMs = where.fromMs
+        val toMs = where.toMs ?: System.currentTimeMillis()
         val resolvedInterval =
             if (interval.isNullOrBlank() || interval == "auto") {
                 autoInterval(fromMs, toMs)
@@ -577,56 +630,7 @@ class LogService(private val logRepository: LogRepository) {
             }
         val chInterval = intervalToClickHouse(resolvedInterval)
 
-        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
-        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
-        conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
-
-        if (!service.isNullOrBlank()) conditions += "service = '${escapeSql(service)}'"
-        if (!environment.isNullOrBlank()) conditions += "environment = '${escapeSql(environment)}'"
-        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
-        if (normalizedLevels.isNotEmpty()) {
-            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
-            conditions += "level IN ($inClause)"
-        }
-        if (!query.isNullOrBlank()) {
-            // Use Datadog-compatible query parser
-            suspendRunCatching {
-                val parsed = queryParser.parse(query)
-                if (parsed.rootNode != null) {
-                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
-                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
-                        conditions += "($queryCondition)"
-                    }
-                }
-            }.getOrElse { e ->
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(query)
-            }
-        }
-        tags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        // Exclude filters
-        if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
-        if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
-        if (!excludeContainerName.isNullOrBlank()) {
-            conditions += "container_name != '${escapeSql(excludeContainerName)}'"
-        }
-        excludeTags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value, exclude = true)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        val whereClause = conditions.joinToString(" AND ")
+        val whereClause = where.conditions.joinToString(" AND ")
 
         val validGroupBy = groupBy?.takeIf { it in setOf("level", "service", "environment") }
 
@@ -673,32 +677,29 @@ class LogService(private val logRepository: LogRepository) {
             return LogAggregateResponse(buckets = emptyList(), totalCount = 0, interval = resolvedInterval)
         }
 
+        val parsed = parseAggregateRows(body, validGroupBy)
+
+        logger.debug {
+            "Aggregate logs result for org $organizationId: ${parsed.buckets.size} buckets, " +
+                "totalCount=${parsed.totalCount}, " +
+                "interval=$resolvedInterval"
+        }
+        return LogAggregateResponse(
+            buckets = parsed.buckets,
+            totalCount = parsed.totalCount,
+            interval = resolvedInterval
+        )
+    }
+
+    private fun parseAggregateRows(
+        body: String,
+        validGroupBy: String?
+    ): AggregateParseResult {
         val bucketMap = LinkedHashMap<String, MutableMap<String, Long>>()
         var totalCount = 0L
 
         body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
-            try {
-                val obj = json.parseToJsonElement(line).jsonObject
-                val bucketTs = obj["bucket"]?.jsonPrimitive?.content ?: return@forEach
-                val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
-                totalCount += cnt
-
-                val groups = bucketMap.getOrPut(bucketTs) { mutableMapOf() }
-                if (validGroupBy != null) {
-                    val groupValue = obj["group_value"]?.jsonPrimitive?.content ?: "unknown"
-                    groups[groupValue] = (groups[groupValue] ?: 0L) + cnt
-                } else {
-                    groups["_total"] = (groups["_total"] ?: 0L) + cnt
-                }
-            } catch (_: SerializationException) {
-                // Ignored: skip malformed JSON line
-            } catch (_: IOException) {
-                // Ignored: skip malformed JSON line
-            } catch (_: IllegalStateException) {
-                // Ignored: skip malformed JSON line
-            } catch (_: IllegalArgumentException) {
-                // Ignored: skip malformed JSON line
-            }
+            parseAggregateRow(line, validGroupBy, bucketMap)?.let { totalCount += it }
         }
 
         val buckets =
@@ -710,96 +711,41 @@ class LogService(private val logRepository: LogRepository) {
                     groups = if (validGroupBy != null) groups else emptyMap()
                 )
             }
-
-        logger.debug {
-            "Aggregate logs result for org $organizationId: ${buckets.size} buckets, totalCount=$totalCount, " +
-                "interval=$resolvedInterval"
-        }
-        return LogAggregateResponse(buckets = buckets, totalCount = totalCount, interval = resolvedInterval)
+        return AggregateParseResult(buckets = buckets, totalCount = totalCount)
     }
+
+    private fun parseAggregateRow(
+        line: String,
+        validGroupBy: String?,
+        bucketMap: LinkedHashMap<String, MutableMap<String, Long>>
+    ): Long? =
+        suspendRunCatching {
+            val obj = json.parseToJsonElement(line).jsonObject
+            val bucketTs = obj["bucket"]?.jsonPrimitive?.content ?: return@suspendRunCatching null
+            val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
+            val groups = bucketMap.getOrPut(bucketTs) { mutableMapOf() }
+            if (validGroupBy != null) {
+                val groupValue = obj["group_value"]?.jsonPrimitive?.content ?: "unknown"
+                groups[groupValue] = (groups[groupValue] ?: 0L) + cnt
+            } else {
+                groups["_total"] = (groups["_total"] ?: 0L) + cnt
+            }
+            cnt
+        }.getOrElse { null }
 
     suspend fun topValues(
         organizationId: Long,
         field: String,
         limit: Int,
-        from: String?,
-        to: String?,
-        query: String?,
-        levels: List<String>,
-        service: String?,
-        environment: String?,
-        tags: Map<String, String>,
-        excludeService: String?,
-        excludeEnvironment: String?,
-        excludeContainerName: String?,
-        excludeTags: Map<String, String>
+        filters: LogAnalyticsFilters
     ): LogTopResponse {
-        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
-        val fromMs = parseTimeToMillis(from)
-        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
-        val toMs = parseTimeToMillis(to)
-        if (toMs != null) conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
-        if (!service.isNullOrBlank()) conditions += "service = '${escapeSql(service)}'"
-        if (!environment.isNullOrBlank()) conditions += "environment = '${escapeSql(environment)}'"
-        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
-        if (normalizedLevels.isNotEmpty()) {
-            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
-            conditions += "level IN ($inClause)"
-        }
-        if (!query.isNullOrBlank()) {
-            // Use Datadog-compatible query parser
-            suspendRunCatching {
-                val parsed = queryParser.parse(query)
-                if (parsed.rootNode != null) {
-                    val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
-                    if (queryCondition.isNotBlank() && queryCondition != "1=1") {
-                        conditions += "($queryCondition)"
-                    }
-                }
-            }.getOrElse { e ->
-                logger.error(e) {
-                    "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-                }
-                // Fallback: treat as simple full-text search
-                conditions += buildSimpleSearchCondition(query)
-            }
-        }
-        tags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        // Exclude filters
-        if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
-        if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
-        if (!excludeContainerName.isNullOrBlank()) {
-            conditions += "container_name != '${escapeSql(excludeContainerName)}'"
-        }
-        excludeTags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value, exclude = true)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        val whereClause = conditions.joinToString(" AND ")
+        val whereClause =
+            buildLogAnalyticsWhere(organizationId, filters)
+                .conditions
+                .joinToString(" AND ")
         val safeLimit = limit.coerceIn(1, MAX_TOP_VALUES_LIMIT)
 
-        // Determine the SQL column expression for the field
-        val columnExpr =
-            when (field) {
-                "service", "level", "environment", "host", "container_name" -> {
-                    field
-                }
-
-                else -> {
-                    // Treat as tag key
-                    val escapedKey = escapeSql(field)
-                    "tags['$escapedKey']"
-                }
-            }
+        val columnExpr = topValueColumnExpression(field)
 
         val sql =
             """
@@ -818,23 +764,7 @@ class LogService(private val logRepository: LogRepository) {
             return LogTopResponse(field = field, values = emptyList(), totalCount = 0)
         }
 
-        val values = mutableListOf<LogTopValue>()
-        body.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.forEach { line ->
-            try {
-                val obj = json.parseToJsonElement(line).jsonObject
-                val value = obj["field_value"]?.jsonPrimitive?.content ?: return@forEach
-                val cnt = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L
-                values += LogTopValue(value = value, count = cnt)
-            } catch (_: SerializationException) {
-                // Ignored: skip malformed JSON line
-            } catch (_: IOException) {
-                // Ignored: skip malformed JSON line
-            } catch (_: IllegalStateException) {
-                // Ignored: skip malformed JSON line
-            } catch (_: IllegalArgumentException) {
-                // Ignored: skip malformed JSON line
-            }
-        }
+        val values = parseTopValueRows(body)
 
         // Get total count for percentage calculation
         val totalSql =
@@ -842,76 +772,51 @@ class LogService(private val logRepository: LogRepository) {
             SELECT count() AS cnt FROM `$clickhouseDb`.logs WHERE $whereClause
             FORMAT JSONEachRow
             """.trimIndent()
-        val totalResponse = logRepository.executeClickHouseQuery(totalSql)
-        val totalCount =
-            try {
-                json
-                    .parseToJsonElement(totalResponse.trim())
-                    .jsonObject["cnt"]
-                    ?.jsonPrimitive
-                    ?.longOrNull ?: 0L
-            } catch (_: SerializationException) {
-                0L
-            } catch (_: IOException) {
-                0L
-            } catch (_: IllegalStateException) {
-                0L
-            } catch (_: IllegalArgumentException) {
-                0L
-            }
+        val totalCount = parseCountResponse(logRepository.executeClickHouseQuery(totalSql))
 
         return LogTopResponse(field = field, values = values, totalCount = totalCount)
     }
 
+    private fun topValueColumnExpression(field: String): String =
+        when (field) {
+            "service", "level", "environment", "host", "container_name" -> field
+            else -> {
+                val escapedKey = escapeSql(field)
+                "tags['$escapedKey']"
+            }
+        }
+
+    private fun parseTopValueRows(body: String): List<LogTopValue> =
+        body
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .mapNotNull { line ->
+                suspendRunCatching {
+                    val obj = json.parseToJsonElement(line).jsonObject
+                    val value = obj["field_value"]?.jsonPrimitive?.content ?: return@suspendRunCatching null
+                    LogTopValue(value = value, count = obj["cnt"]?.jsonPrimitive?.longOrNull ?: 0L)
+                }.getOrElse { null }
+            }.toList()
+
+    private fun parseCountResponse(body: String): Long =
+        suspendRunCatching {
+            json
+                .parseToJsonElement(body.trim())
+                .jsonObject["cnt"]
+                ?.jsonPrimitive
+                ?.longOrNull ?: 0L
+        }.getOrElse { 0L }
+
     suspend fun exportCsv(
         organizationId: Long,
-        from: String?,
-        to: String?,
-        query: String?,
-        levels: List<String>,
-        service: String?,
-        environment: String?,
-        tags: Map<String, String>,
-        excludeService: String?,
-        excludeEnvironment: String?,
-        excludeContainerName: String?,
-        excludeTags: Map<String, String>,
+        filters: LogAnalyticsFilters,
         limit: Int
     ): String {
-        val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(organizationId))
-        val fromMs = parseTimeToMillis(from)
-        if (fromMs != null) conditions += "timestamp >= fromUnixTimestamp64Milli($fromMs)"
-        val toMs = parseTimeToMillis(to)
-        if (toMs != null) conditions += "timestamp <= fromUnixTimestamp64Milli($toMs)"
-        if (!service.isNullOrBlank()) conditions += "service = '${escapeSql(service)}'"
-        if (!environment.isNullOrBlank()) conditions += "environment = '${escapeSql(environment)}'"
-        val normalizedLevels = levels.map { normalizeLevel(it) }.filter { it.isNotBlank() }.distinct()
-        if (normalizedLevels.isNotEmpty()) {
-            val inClause = normalizedLevels.joinToString(",") { "'${escapeSql(it)}'" }
-            conditions += "level IN ($inClause)"
-        }
-        addExportCsvQueryConditions(query, conditions)
-        tags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        // Exclude filters
-        if (!excludeService.isNullOrBlank()) conditions += "service != '${escapeSql(excludeService)}'"
-        if (!excludeEnvironment.isNullOrBlank()) conditions += "environment != '${escapeSql(excludeEnvironment)}'"
-        if (!excludeContainerName.isNullOrBlank()) {
-            conditions += "container_name != '${escapeSql(excludeContainerName)}'"
-        }
-        excludeTags.forEach { (key, value) ->
-            val condition = buildTagCondition(key, value, exclude = true)
-            if (condition.isNotBlank()) {
-                conditions += condition
-            }
-        }
-
-        val whereClause = conditions.joinToString(" AND ")
+        val whereClause =
+            buildLogAnalyticsWhere(organizationId, filters)
+                .conditions
+                .joinToString(" AND ")
         val safeLimit = limit.coerceIn(1, MAX_EXPORT_LIMIT)
 
         val sql =
@@ -965,43 +870,6 @@ class LogService(private val logRepository: LogRepository) {
         }
 
         return sb.toString()
-    }
-
-    /** Applies Datadog-style query parsing to [conditions], or falls back to simple search on parse errors. */
-    private fun addExportCsvQueryConditions(
-        query: String?,
-        conditions: MutableList<String>,
-    ) {
-        if (query.isNullOrBlank()) return
-        try {
-            val parsed = queryParser.parse(query)
-            if (parsed.rootNode != null) {
-                val queryCondition = queryParser.toClickHouseSql(parsed.rootNode, ::escapeSql)
-                if (queryCondition.isNotBlank() && queryCondition != "1=1") {
-                    conditions += "($queryCondition)"
-                }
-            }
-        } catch (e: SerializationException) {
-            logger.error(e) {
-                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-            }
-            conditions += buildSimpleSearchCondition(query)
-        } catch (e: IOException) {
-            logger.error(e) {
-                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-            }
-            conditions += buildSimpleSearchCondition(query)
-        } catch (e: IllegalStateException) {
-            logger.error(e) {
-                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-            }
-            conditions += buildSimpleSearchCondition(query)
-        } catch (e: IllegalArgumentException) {
-            logger.error(e) {
-                "Failed to parse query (query_fp=${utf8Fingerprint(query)}), falling back to simple search"
-            }
-            conditions += buildSimpleSearchCondition(query)
-        }
     }
 
     private fun csvEscape(value: String): String {

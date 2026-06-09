@@ -660,17 +660,7 @@ class LogRoutesExtendedTest {
             coEvery {
                 mockLogService.exportCsv(
                     organizationId = 1,
-                    from = null,
-                    to = null,
-                    query = null,
-                    levels = emptyList(),
-                    service = null,
-                    environment = null,
-                    tags = emptyMap(),
-                    excludeService = null,
-                    excludeEnvironment = null,
-                    excludeContainerName = null,
-                    excludeTags = emptyMap(),
+                    filters = any(),
                     limit = 5000
                 )
             } returns "timestamp,message\n2026-01-01T00:00:00Z,hello\n"
