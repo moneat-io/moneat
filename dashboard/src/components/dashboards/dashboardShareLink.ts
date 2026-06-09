@@ -29,26 +29,37 @@ export interface ParsedDashboardLink {
   variableValues?: Record<string, string>
 }
 
+function timeRangeFromSearch(search: DashboardLinkSearch): TimeRangeDef | undefined {
+  return search.from && search.to ? {from: search.from, to: search.to} : undefined
+}
+
+function stringRecordFromUnknown(parsed: unknown): Record<string, string> | undefined {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+
+  const values: Record<string, string> = {}
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value === 'string') values[key] = value
+  }
+  return Object.keys(values).length > 0 ? values : undefined
+}
+
+function variablesFromSearch(vars?: string): Record<string, string> | undefined {
+  if (!vars) return undefined
+  try {
+    return stringRecordFromUnknown(JSON.parse(vars))
+  } catch {
+    // Malformed link — ignore the variable portion.
+    return undefined
+  }
+}
+
 /** Reads time range + variable selections out of a dashboard deep link. */
 export function parseDashboardLink(search: DashboardLinkSearch): ParsedDashboardLink {
   const result: ParsedDashboardLink = {}
-  if (search.from && search.to) {
-    result.timeRange = {from: search.from, to: search.to}
-  }
-  if (search.vars) {
-    try {
-      const parsed: unknown = JSON.parse(search.vars)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        const values: Record<string, string> = {}
-        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-          if (typeof value === 'string') values[key] = value
-        }
-        if (Object.keys(values).length > 0) result.variableValues = values
-      }
-    } catch {
-      // Malformed link — ignore the variable portion.
-    }
-  }
+  const timeRange = timeRangeFromSearch(search)
+  const variableValues = variablesFromSearch(search.vars)
+  if (timeRange) result.timeRange = timeRange
+  if (variableValues) result.variableValues = variableValues
   return result
 }
 

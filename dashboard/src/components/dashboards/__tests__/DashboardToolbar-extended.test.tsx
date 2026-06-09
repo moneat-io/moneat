@@ -107,11 +107,12 @@ describe('DashboardToolbar – title editing', () => {
     expect(onTitleChange).not.toHaveBeenCalled()
   })
 
-  it('shows the cursor-pointer affordance only when editing', () => {
+  it('uses a button affordance only when editing', () => {
     const {rerender} = renderToolbar({isEditing: false})
-    expect(screen.getByText('Test Dashboard').className).not.toContain('cursor-pointer')
+    expect(screen.getByRole('heading', {name: 'Test Dashboard'})).toBeInTheDocument()
+    expect(screen.queryByRole('button', {name: 'Test Dashboard'})).not.toBeInTheDocument()
     rerender(<DashboardToolbar {...defaultProps} isEditing />)
-    expect(screen.getByText('Test Dashboard').className).toContain('cursor-pointer')
+    expect(screen.getByRole('button', {name: 'Test Dashboard'})).toBeInTheDocument()
   })
 })
 

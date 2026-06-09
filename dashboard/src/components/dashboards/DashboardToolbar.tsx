@@ -42,7 +42,7 @@ import {
 } from './dashboardToolbarHelpers'
 import {buildDashboardShareUrl} from './dashboardShareLink'
 
-interface DashboardToolbarProps {
+type DashboardToolbarProps = Readonly<{
   title: string
   /** ISO timestamp of the last edit, shown as "edited 2h ago". */
   updatedAt?: string
@@ -67,7 +67,61 @@ interface DashboardToolbarProps {
   variableValues: Record<string, string>
   onVariableChange: (name: string, value: string) => void
   onVariableSettings?: () => void
-}
+}>
+
+type FavoriteButtonProps = Readonly<{
+  isFavorited: boolean
+  onToggle: () => void
+}>
+
+type TitleFieldProps = Readonly<{
+  title: string
+  isEditing: boolean
+  onTitleChange: (title: string) => void
+}>
+
+type VariablePillProps = Readonly<{
+  variable: DashboardVariable
+  value: string | undefined
+  onChange: (value: string) => void
+}>
+
+type VariableSingleSelectProps = Readonly<{
+  variable: DashboardVariable
+  value: string | undefined
+  onSelect: (value: string) => void
+}>
+
+type VariableMultiSelectProps = Readonly<{
+  variable: DashboardVariable
+  value: string | undefined
+  onApply: (value: string) => void
+}>
+
+type TimeRangeControlProps = Readonly<{
+  timeRange: TimeRangeDef
+  onChange: (range: TimeRangeDef) => void
+}>
+
+type RefreshControlProps = Readonly<{
+  refreshMs: number
+  onChange: (ms: number) => void
+  onRefreshNow: () => void
+}>
+
+type ShareButtonProps = Readonly<{
+  timeRange: TimeRangeDef
+  variableValues: Record<string, string>
+}>
+
+type DashboardActionsMenuProps = Readonly<{
+  isDefault: boolean
+  onDuplicate: () => void
+  onExport: () => void
+  onSetDefault: () => void
+  onVariableSettings?: () => void
+  onDelete: () => void
+}>
 
 export function DashboardToolbar(props: DashboardToolbarProps) {
   const {
@@ -201,7 +255,7 @@ export function DashboardToolbar(props: DashboardToolbarProps) {
   )
 }
 
-function FavoriteButton({isFavorited, onToggle}: {isFavorited: boolean; onToggle: () => void}) {
+function FavoriteButton({isFavorited, onToggle}: FavoriteButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -225,7 +279,7 @@ function FavoriteButton({isFavorited, onToggle}: {isFavorited: boolean; onToggle
 
 function TitleField({
   title, isEditing, onTitleChange,
-}: {title: string; isEditing: boolean; onTitleChange: (t: string) => void}) {
+}: TitleFieldProps) {
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(title)
 
@@ -252,22 +306,24 @@ function TitleField({
     )
   }
 
-  return (
-    <h2
-      className={cn(
-        'truncate text-sm font-semibold leading-tight',
-        isEditing && 'cursor-pointer hover:text-primary',
-      )}
-      onClick={() => isEditing && startEditing()}
-    >
-      {title}
-    </h2>
-  )
+  if (isEditing) {
+    return (
+      <button
+        type="button"
+        className="max-w-full truncate text-left text-sm font-semibold leading-tight hover:text-primary"
+        onClick={startEditing}
+      >
+        {title}
+      </button>
+    )
+  }
+
+  return <h2 className="truncate text-sm font-semibold leading-tight">{title}</h2>
 }
 
 function VariablePill({
   variable, value, onChange,
-}: {variable: DashboardVariable; value: string | undefined; onChange: (value: string) => void}) {
+}: VariablePillProps) {
   const [open, setOpen] = useState(false)
   const label = variable.label || variable.name
 
@@ -355,7 +411,7 @@ function VariablePill({
 
 function VariableSingleSelect({
   variable, value, onSelect,
-}: {variable: DashboardVariable; value: string | undefined; onSelect: (value: string) => void}) {
+}: VariableSingleSelectProps) {
   const [filter, setFilter] = useState('')
   const options = realOptions(variable)
   const visible = useMemo(
@@ -405,7 +461,7 @@ function VariableSingleSelect({
 
 function VariableMultiSelect({
   variable, value, onApply,
-}: {variable: DashboardVariable; value: string | undefined; onApply: (value: string) => void}) {
+}: VariableMultiSelectProps) {
   const startAll = value === ALL_VALUE
   const [all, setAll] = useState(startAll)
   const [selected, setSelected] = useState<Set<string>>(() => new Set(startAll ? [] : selectedValues(value)))
@@ -487,7 +543,7 @@ function VariableMultiSelect({
 
 function TimeRangeControl({
   timeRange, onChange,
-}: {timeRange: TimeRangeDef; onChange: (range: TimeRangeDef) => void}) {
+}: TimeRangeControlProps) {
   const [open, setOpen] = useState(false)
   const [from, setFrom] = useState(timeRange.from)
   const [to, setTo] = useState(timeRange.to)
@@ -574,7 +630,7 @@ function TimeRangeControl({
 
 function RefreshControl({
   refreshMs, onChange, onRefreshNow,
-}: {refreshMs: number; onChange: (ms: number) => void; onRefreshNow: () => void}) {
+}: RefreshControlProps) {
   return (
     <div className="inline-flex h-7 items-stretch overflow-hidden rounded-md border bg-background">
       <Tooltip>
@@ -623,15 +679,16 @@ function RefreshControl({
 
 function ShareButton({
   timeRange, variableValues,
-}: {timeRange: TimeRangeDef; variableValues: Record<string, string>}) {
+}: ShareButtonProps) {
   const [copied, setCopied] = useState(false)
 
   const share = () => {
-    const base = typeof window === 'undefined' ? '' : window.location.origin + window.location.pathname
+    const browserWindow = globalThis.window
+    const base = browserWindow ? browserWindow.location.origin + browserWindow.location.pathname : ''
     const url = buildDashboardShareUrl(base, timeRange, variableValues)
-    void navigator.clipboard?.writeText(url)
+    void globalThis.navigator.clipboard?.writeText(url)
     setCopied(true)
-    window.setTimeout(() => setCopied(false), 1600)
+    globalThis.setTimeout(() => setCopied(false), 1600)
   }
 
   return (
@@ -648,14 +705,7 @@ function ShareButton({
 
 function DashboardActionsMenu({
   isDefault, onDuplicate, onExport, onSetDefault, onVariableSettings, onDelete,
-}: {
-  isDefault: boolean
-  onDuplicate: () => void
-  onExport: () => void
-  onSetDefault: () => void
-  onVariableSettings?: () => void
-  onDelete: () => void
-}) {
+}: DashboardActionsMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

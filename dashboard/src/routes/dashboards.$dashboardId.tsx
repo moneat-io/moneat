@@ -198,10 +198,10 @@ function DashboardViewPage() {
 
   useEffect(() => {
     if (refreshMs <= 0) return
-    const timer = window.setInterval(() => {
+    const timer = globalThis.setInterval(() => {
       queryClient.invalidateQueries({queryKey: ['widget-data']})
     }, refreshMs)
-    return () => window.clearInterval(timer)
+    return () => globalThis.clearInterval(timer)
   }, [refreshMs, queryClient])
 
   const {data: availableDataSources} = useQuery({
