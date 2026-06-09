@@ -21,7 +21,7 @@ koin = "4.1.1"
 mcp-kotlin-sdk = "0.12.0"
 micrometer = "1.16.5"
 temporal = "1.27.1"
-jackson = "2.21.3"
+jackson = "2.21.4"
 graalvm = "25.0.3"
 
 [libraries]
