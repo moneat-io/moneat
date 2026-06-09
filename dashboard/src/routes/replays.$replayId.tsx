@@ -28,6 +28,7 @@ import {ReplayTimelineScrubber} from '@/components/ReplayTimelineScrubber'
 import {BrowserWindowContainer} from '@/components/replay-containers/BrowserWindowContainer'
 import {MobileDeviceContainer} from '@/components/replay-containers/MobileDeviceContainer'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import {
     AlertCircle,
     ArrowUpRight,
@@ -40,7 +41,6 @@ import {
     Layers,
     Loader2,
     Monitor,
-    Play,
     Smartphone,
     Tag,
     User,
@@ -534,67 +534,67 @@ function ReplayDetailPage() {
     : null
 
   return (
-    <div className="flex flex-col">
-      {/* ───── Header ───── */}
-      <div className="px-3 py-3 lg:px-5 lg:py-3">
-        {/* Breadcrumb nav */}
-        <nav className="mb-2 flex items-center gap-2 text-sm">
-          <Link
-            to="/replays"
-            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Replays
-          </Link>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="text-foreground font-medium truncate max-w-[200px] sm:max-w-none font-mono text-xs" title={replayId}>
-            {replayId.slice(0, 8)}...
-          </span>
-        </nav>
-
-        {/* Compact header bar */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
-          <div className="flex items-center gap-2">
-            <Play className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-base">
-              {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
-            </span>
-          </div>
-          {replay.errorCount > 0 && (
-            <Badge variant="destructive" className="flex items-center gap-1 text-[11px]">
-              <AlertCircle className="h-3 w-3" />
-              {replay.errorCount} error{replay.errorCount !== 1 ? 's' : ''}
-            </Badge>
-          )}
-          {platformLabel && (
-            <Badge variant="outline" className="flex items-center gap-1 text-[11px]">
-              {(replay.platform === 'android' || replay.platform === 'ios') ? (
-                <Smartphone className="h-3 w-3" />
-              ) : (
-                <Monitor className="h-3 w-3" />
-              )}
-              {platformLabel}
-            </Badge>
-          )}
-          {replay.environment && (
-            <Badge variant="outline" className="text-[11px]">{replay.environment}</Badge>
-          )}
-          <span className="hidden sm:inline text-muted-foreground/40">|</span>
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Clock3 className="h-3 w-3" />
-            {formatRelativeTime(replay.startedAt)}
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-xs">
-            <span className="font-semibold text-primary tabular-nums">{formatDuration(durationMs)}</span>
-            <span className="text-muted-foreground">duration</span>
-          </span>
-        </div>
+    <div
+      className="fixed flex flex-col overflow-hidden"
+      style={{
+        top: 'var(--header-height, 0px)',
+        left: 'var(--sidebar-width, 0px)',
+        right: 0,
+        bottom: 0,
+      }}
+    >
+      {/* ───── Header (single compact row) ───── */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b px-3 py-2.5 text-sm lg:px-5">
+        <Link
+          to="/replays"
+          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Replays
+        </Link>
+        <span className="text-muted-foreground/40">/</span>
+        <span className="font-mono text-xs text-muted-foreground" title={replayId}>
+          {replayId.slice(0, 8)}...
+        </span>
+        <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+        <StatusDot tone={replay.errorCount > 0 ? 'danger' : 'success'} />
+        <span className="font-semibold">
+          {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
+        </span>
+        {replay.errorCount > 0 && (
+          <Badge variant="destructive" className="flex items-center gap-1 text-[11px]">
+            <AlertCircle className="h-3 w-3" />
+            {replay.errorCount} error{replay.errorCount !== 1 ? 's' : ''}
+          </Badge>
+        )}
+        {platformLabel && (
+          <Badge variant="outline" className="flex items-center gap-1 text-[11px]">
+            {(replay.platform === 'android' || replay.platform === 'ios') ? (
+              <Smartphone className="h-3 w-3" />
+            ) : (
+              <Monitor className="h-3 w-3" />
+            )}
+            {platformLabel}
+          </Badge>
+        )}
+        {replay.environment && (
+          <Badge variant="outline" className="text-[11px]">{replay.environment}</Badge>
+        )}
+        <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock3 className="h-3 w-3" />
+          {formatRelativeTime(replay.startedAt)}
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          <span className="font-semibold text-primary tabular-nums">{formatDuration(durationMs)}</span>
+          <span className="text-muted-foreground">duration</span>
+        </span>
       </div>
 
-      {/* ───── Two-column main content ───── */}
-      <div className="flex-1 px-3 lg:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
-        {/* Left column: Device container + replay */}
-        <div className="lg:col-span-5 flex flex-col min-h-0">
+      {/* ───── Player-hero: recording + scrubber  |  event rail ───── */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 pt-3 lg:grid-cols-[1.2fr_1fr] lg:px-5">
+        {/* Left: recording (hero) on a stage + docked scrubber */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-2.5">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-lg border bg-muted/30 p-3">
           {recordingLoading ? (
             replay.platform === 'android' || replay.platform === 'ios' ? (
               <MobileDeviceContainer
@@ -654,47 +654,43 @@ function ReplayDetailPage() {
               />
             </BrowserWindowContainer>
           ) : (
-            <div className="flex items-center justify-center h-[400px] rounded-lg border bg-muted">
-              <p className="text-muted-foreground">No recording data available for this replay</p>
+            <p className="text-sm text-muted-foreground">No recording data available for this replay</p>
+          )}
+          </div>
+
+          {/* Scrubber docked directly under the recording */}
+          <ReplayTimelineScrubber
+            currentOffsetMs={currentOffsetMs}
+            durationMs={durationMs}
+            isPlaying={isPlaying}
+            items={timelineItems}
+            onSeek={handleSeek}
+            onPlayPause={handlePlayPause}
+            onSpeedChange={handleSpeedChange}
+            speed={playbackSpeed}
+            className="shrink-0 rounded-lg border"
+          />
+        </div>
+
+        {/* Right: event rail */}
+        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border bg-card">
+          {timelineItems.length > 0 ? (
+            <ReplayTimelinePanel
+              items={timelineItems}
+              currentOffsetMs={currentOffsetMs}
+              projectId={replayProjectId}
+              onSeek={handleSeek}
+            />
+          ) : (
+            <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
+              No breadcrumb events for this replay.
             </div>
           )}
         </div>
-
-        {/* Right column: replay timeline */}
-        <div className="lg:col-span-7 flex flex-col min-h-0">
-          <div className="flex flex-col min-h-[400px] max-h-[400px] lg:min-h-[calc(100vh-220px)] lg:max-h-[calc(100vh-220px)]">
-            {timelineItems.length > 0 ? (
-              <ReplayTimelinePanel
-                items={timelineItems}
-                currentOffsetMs={currentOffsetMs}
-                projectId={replayProjectId}
-                onSeek={handleSeek}
-              />
-            ) : (
-              <div className="flex-1 rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-                No breadcrumb events for this replay.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ───── Full-width timeline scrubber ───── */}
-      <div className="mt-3">
-        <ReplayTimelineScrubber
-          currentOffsetMs={currentOffsetMs}
-          durationMs={durationMs}
-          isPlaying={isPlaying}
-          items={timelineItems}
-          onSeek={handleSeek}
-          onPlayPause={handlePlayPause}
-          onSpeedChange={handleSpeedChange}
-          speed={playbackSpeed}
-        />
       </div>
 
       {/* ───── Collapsible session details ───── */}
-      <div className="px-3 lg:px-5 py-3">
+      <div className="shrink-0 border-t px-3 py-2 lg:px-5">
         <button
           type="button"
           onClick={() => setDetailsExpanded(!detailsExpanded)}
@@ -706,7 +702,7 @@ function ReplayDetailPage() {
         </button>
 
         {detailsExpanded && (
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div className="mt-3 grid max-h-[42vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {/* Session info */}
             <div className="rounded-lg border bg-card p-3">
               <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -770,6 +766,13 @@ function ReplayDetailPage() {
               ) : (
                 <p className="text-sm text-muted-foreground">Anonymous</p>
               )}
+              {(replay.geo || replay.ipAddress || replay.userSessionCount != null) && (
+                <div className="mt-2 space-y-1 border-t pt-2 text-xs text-muted-foreground">
+                  {replay.geo && <div>{replay.geo}</div>}
+                  {replay.ipAddress && <div className="font-mono">{replay.ipAddress}</div>}
+                  {replay.userSessionCount != null && <div>{replay.userSessionCount} prior sessions</div>}
+                </div>
+              )}
             </div>
 
             {/* Browser / OS */}
@@ -794,6 +797,8 @@ function ReplayDetailPage() {
                 {!replay.browserName && !replay.osName && (
                   <p className="text-muted-foreground">Not recorded</p>
                 )}
+                {replay.viewport && <div className="font-mono text-xs text-muted-foreground">{replay.viewport}</div>}
+                {replay.connection && <div className="text-xs text-muted-foreground">{replay.connection}</div>}
               </div>
             </div>
 

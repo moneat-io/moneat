@@ -66,11 +66,12 @@ class GeoIpService {
      * Returns empty GeoResult if GeoIP is unavailable or IP can't be resolved.
      */
     fun resolve(ip: String): GeoResult {
-        if (!readerAvailable || reader == null) return GeoResult()
+        val currentReader = reader ?: return GeoResult()
+        if (!readerAvailable) return GeoResult()
         return runCatching {
             val address = InetAddress.getByName(ip)
-            val cityMethod = reader!!.javaClass.getMethod("city", InetAddress::class.java)
-            val response = cityMethod.invoke(reader, address)
+            val cityMethod = currentReader.javaClass.getMethod("city", InetAddress::class.java)
+            val response = cityMethod.invoke(currentReader, address)
 
             val countryObj = response.javaClass.getMethod("getCountry").invoke(response)
             val countryCode = countryObj?.javaClass?.getMethod("getIsoCode")?.invoke(countryObj)?.toString() ?: ""

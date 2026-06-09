@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.analytics.services.GeoIpService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.ReplayService
@@ -24,7 +25,9 @@ import com.moneat.testsupport.OrgProjectTestFixtures
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import com.moneat.testsupport.withClickHouseMockServer
+import com.sun.net.httpserver.HttpExchange
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -45,8 +48,22 @@ class ReplayServiceTest {
 
     private val retentionPolicyService = mockk<RetentionPolicyService>()
     private val pricingTierService = mockk<PricingTierService>()
+    private val geoIpService = mockk<GeoIpService>()
     private lateinit var queryHelper: DashboardQueryHelper
     private lateinit var service: ReplayService
+
+    private data class ReplayTimelineRows(
+        val detailRow: String,
+        val errorRow: String,
+        val txRow: String,
+        val spanRow: String,
+        val breadcrumbRow: String
+    )
+
+    private data class TimelineQueryResponse(
+        val matches: (String) -> Boolean,
+        val body: String
+    )
 
     @BeforeTest
     fun setup() {
@@ -54,9 +71,47 @@ class ReplayServiceTest {
 
         coEvery { retentionPolicyService.getRetentionDaysForProject(any()) } returns 30
         coEvery { retentionPolicyService.getRetentionDaysForOrganization(any()) } returns 30
+        every { geoIpService.resolve(any()) } returns GeoIpService.GeoResult()
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
-        service = ReplayService(queryHelper)
+        service = ReplayService(queryHelper, geoIpService = geoIpService)
     }
+
+    private fun respondReplayTimelineQuery(exchange: HttpExchange, rows: ReplayTimelineRows) {
+        val query = exchange.requestBodyText()
+        val body =
+            replayTimelineResponses(rows)
+                .firstOrNull { it.matches(query) }
+                ?.body
+                .orEmpty()
+        exchange.respond(200, body, TEXT_PLAIN)
+    }
+
+    private fun replayTimelineResponses(rows: ReplayTimelineRows): List<TimelineQueryResponse> =
+        listOf(
+            TimelineQueryResponse({ query -> query.contains("countDistinct(replay_id)") }, """{"count":0}"""),
+            TimelineQueryResponse({ query -> query.contains("SELECT contexts, breadcrumbs") }, ""),
+            TimelineQueryResponse(
+                { query -> query.contains("SELECT toString(event_id) as event_id") && query.contains("breadcrumbs") },
+                rows.breadcrumbRow
+            ),
+            TimelineQueryResponse({ query -> query.contains("SELECT toInt64(project_id)") }, """{"project_id":1}"""),
+            TimelineQueryResponse({ query -> query.contains("GROUP BY replay_id") }, rows.detailRow),
+            TimelineQueryResponse(
+                { query -> query.contains("event_type = 'error'") && query.contains("IN (") },
+                rows.errorRow
+            ),
+            TimelineQueryResponse(
+                { query -> query.contains("event_type = 'transaction'") && query.contains("trace_id") },
+                rows.txRow
+            ),
+            TimelineQueryResponse(
+                { query -> query.contains("apm_spans") && query.contains("trace_id_hex IN") },
+                rows.spanRow
+            ),
+            TimelineQueryResponse({ query -> query.contains("event_type = 'error'") }, ""),
+            TimelineQueryResponse({ query -> query.contains("event_type = 'transaction'") }, ""),
+            TimelineQueryResponse({ query -> query.contains("apm_spans") }, "")
+        )
 
     @Test
     fun `getProjectIdForReplay returns project id for valid replay`() = runBlocking {
@@ -105,6 +160,8 @@ class ReplayServiceTest {
             assertEquals("Chrome", result[0].browserName)
             assertEquals("macOS", result[0].osName)
             assertEquals(8, result[0].activity)
+            assertEquals("https://app.example.com", result[0].entryUrl)
+            assertTrue("error" in result[0].signals)
         }
     }
 
@@ -135,6 +192,7 @@ class ReplayServiceTest {
             assertEquals(1, result.size)
             assertEquals(2L, result.first().projectId)
             assertEquals(3, result.first().errorCount)
+            assertTrue("error" in result.first().signals)
             assertTrue(queries.any { it.contains("project_id IN (1, 2)") })
             assertTrue(queries.any { it.contains("project_id = 2") })
             assertTrue(queries.any { it.contains("environment = 'production'") })
@@ -154,16 +212,29 @@ class ReplayServiceTest {
     @Test
     fun `getReplay returns replay detail`() = runBlocking {
         val replayId = REPLAY_UUID
+        every { geoIpService.resolve("203.0.113.10") } returns GeoIpService.GeoResult(
+            countryCode = "IT",
+            city = "Milan"
+        )
         val detailRow = """
-{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["err-1"],"trace_ids":["trace-1"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
+{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":["err-1"],"trace_ids":["trace-1"],"segment_count":5,"environment":"prod","release":"1.0.0","platform":"javascript","user_id":"u-1","user_email":"test@test.com","user_username":"tester","user_ip_address":"203.0.113.10","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}
+        """.trimIndent()
+        val contextRow = """
+{"contexts":"{\"device\":{\"screen_width_pixels\":1512,\"screen_height_pixels\":856}}","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:00:10.000Z\",\"category\":\"network.event\",\"data\":{\"network_type\":\"4g\"}},{\"timestamp\":\"2026-01-01T00:00:11.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
         """.trimIndent()
         withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
             when {
-                query.contains("replay_events") && query.contains("project_id") && !query.contains("GROUP BY") ->
+                query.contains("countDistinct(replay_id)") ->
+                    exchange.respond(200, """{"count":14}""", TEXT_PLAIN)
+                query.contains("SELECT contexts, breadcrumbs") ->
+                    exchange.respond(200, contextRow, TEXT_PLAIN)
+                query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                else ->
+                query.contains("GROUP BY replay_id") ->
                     exchange.respond(200, detailRow, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
             }
         }) {
             val result = service.getReplay(replayId)
@@ -176,6 +247,14 @@ class ReplayServiceTest {
             assertEquals("javascript", result.platform)
             assertEquals("Chrome", result.browserName)
             assertEquals("macOS", result.osName)
+            assertEquals("https://app.example.com", result.entryUrl)
+            assertEquals("203.0.113.10", result.ipAddress)
+            assertEquals("Milan, IT", result.geo)
+            assertEquals("1512 x 856", result.viewport)
+            assertEquals("4g", result.connection)
+            assertEquals(14, result.userSessionCount)
+            assertTrue("error" in result.signals)
+            assertTrue("rage_click" in result.signals)
         }
     }
 
@@ -195,35 +274,23 @@ class ReplayServiceTest {
 {"event_id":"11111111-2222-3333-4444-555555555555","timestamp":"2026-01-01T00:01:00.000Z","ts_ms":"1767225660000","message":"NullPointerException","level":"error","issue_id":"issue-1","exception_type":"NullPointerException","exception_value":"null ref"}
         """.trimIndent()
         val txRow = """
-{"event_id":"22222222-3333-4444-5555-666666666666","timestamp":"2026-01-01T00:02:00.000Z","ts_ms":"1767225720000","transaction_name":"GET /api","duration_ms":"150.0","transaction_op":"http.server","contexts":"{}"}
+{"event_id":"22222222-3333-4444-5555-666666666666","timestamp":"2026-01-01T00:02:00.000Z","ts_ms":"1767225720000","transaction_name":"GET /api","duration_ms":"150.0","transaction_op":"http.server","contexts":"{}","http_status_code":"503"}
         """.trimIndent()
         val spanRow = """
-{"span_id":"span-1","trace_id":"trace-aaa","transaction_id":"22222222-3333-4444-5555-666666666666","description":"SELECT *","op":"db","start_ts_ms":"1767225720500","duration_ms":"50"}
+{"span_id":"span-1","trace_id":"trace-aaa","transaction_id":"22222222-3333-4444-5555-666666666666","description":"GET /health","op":"http.client","start_ts_ms":"1767225720500","duration_ms":"50","http_status_code":"200"}
         """.trimIndent()
+        val breadcrumbRow = """
+{"event_id":"33333333-4444-5555-6666-777777777777","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:00:30.000Z\",\"category\":\"Logcat\",\"message\":\"Client request failed: 401 Unauthorized\"},{\"timestamp\":\"2026-01-01T00:00:31.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
+        """.trimIndent()
+        val rows = ReplayTimelineRows(
+            detailRow = detailRow,
+            errorRow = errorRow,
+            txRow = txRow,
+            spanRow = spanRow,
+            breadcrumbRow = breadcrumbRow
+        )
 
-        withClickHouseMockServer({ exchange ->
-            val query = exchange.requestBodyText()
-            when {
-                query.contains("replay_events") && !query.contains("GROUP BY") ->
-                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("GROUP BY replay_id") ->
-                    exchange.respond(200, detailRow, TEXT_PLAIN)
-                query.contains("event_type = 'error'") && query.contains("IN (") ->
-                    exchange.respond(200, errorRow, TEXT_PLAIN)
-                query.contains("event_type = 'transaction'") && query.contains("trace_id") ->
-                    exchange.respond(200, txRow, TEXT_PLAIN)
-                query.contains("apm_spans") && query.contains("trace_id_hex IN") ->
-                    exchange.respond(200, spanRow, TEXT_PLAIN)
-                query.contains("event_type = 'error'") ->
-                    exchange.respond(200, "", TEXT_PLAIN)
-                query.contains("event_type = 'transaction'") ->
-                    exchange.respond(200, "", TEXT_PLAIN)
-                query.contains("apm_spans") ->
-                    exchange.respond(200, "", TEXT_PLAIN)
-                else ->
-                    exchange.respond(200, "", TEXT_PLAIN)
-            }
-        }) {
+        withClickHouseMockServer({ exchange -> respondReplayTimelineQuery(exchange, rows) }) {
             val result = service.getReplayTimeline(replayId)
             assertTrue(result.replayStartMs > 0)
             assertTrue(result.items.isNotEmpty())
@@ -233,9 +300,16 @@ class ReplayServiceTest {
             val txItem = result.items.find { it.type == "transaction" }
             assertNotNull(txItem)
             assertEquals("GET /api", txItem.title)
+            assertEquals(503, txItem.statusCode)
             val spanItem = result.items.find { it.type == "span" }
             assertNotNull(spanItem)
-            assertEquals("SELECT *", spanItem.title)
+            assertEquals("GET /health", spanItem.title)
+            assertEquals(200, spanItem.statusCode)
+            val logcatItem = result.items.find { it.category == "Logcat" }
+            assertNotNull(logcatItem)
+            assertEquals(401, logcatItem.statusCode)
+            val rageItem = result.items.find { it.rage == true }
+            assertNotNull(rageItem)
         }
     }
 }

@@ -348,9 +348,10 @@ describe('release, replay, and feedback service facets', () => {
     renderRoute(ReplaysRoute)
 
     await screen.findByText('user@example.com')
-    fireEvent.change(screen.getByPlaceholderText('Search by user, URL, or browser...'), {
-      target: {value: 'does-not-exist'},
-    })
+    // The shared search bar commits free text on Enter (not on change).
+    const searchInput = screen.getByRole('textbox')
+    fireEvent.change(searchInput, {target: {value: 'does-not-exist'}})
+    fireEvent.keyDown(searchInput, {key: 'Enter'})
 
     expect(await screen.findByText('No replays match your search')).toBeInTheDocument()
   })
