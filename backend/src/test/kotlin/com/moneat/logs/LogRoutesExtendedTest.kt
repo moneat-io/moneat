@@ -689,7 +689,6 @@ class LogRoutesExtendedTest {
             val response = client.get("/v1/logs/tail")
 
             assertEquals(HttpStatusCode.Unauthorized, response.status)
-            assertTrue(response.bodyAsText().contains("Unauthorized"))
         }
 
     // ──── OTLP service routing ────

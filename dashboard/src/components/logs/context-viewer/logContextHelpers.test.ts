@@ -29,6 +29,7 @@ import {
   guessAttrType,
   splitPatternSegments,
   tokenizeJson,
+  traceSpanTypes,
 } from './logContextHelpers'
 
 function makeLog(overrides: Partial<LogEntry> = {}): LogEntry {
@@ -166,6 +167,38 @@ describe('groupLogAttributes', () => {
     const status = groups[0].rows.find((r) => r.key === 'status')!
     expect(status.pill).toBe('err')
   })
+
+  it('marks warning and neutral status levels', () => {
+    const warnGroups = groupLogAttributes(makeLog({level: 'warning'}))
+    const warnStatus = warnGroups[0].rows.find((r) => r.key === 'status')!
+    expect(warnStatus.pill).toBe('warn')
+
+    const infoGroups = groupLogAttributes(makeLog({level: 'info'}))
+    const infoStatus = infoGroups[0].rows.find((r) => r.key === 'status')!
+    expect(infoStatus.pill).toBeNull()
+  })
+
+  it('classifies status-code pills and custom tag groups', () => {
+    const groups = groupLogAttributes(
+      makeLog({
+        tags: {
+          'http.status_code': '404',
+          'rpc.status_code': '201',
+          'db.status_code': '102',
+          custom: 'value',
+        },
+      })
+    )
+
+    const http = groups.find((g) => g.name === 'HTTP')!
+    const rpc = groups.find((g) => g.name === 'RPC')!
+    const db = groups.find((g) => g.name === 'DB')!
+    const custom = groups.find((g) => g.name === 'Custom')!
+    expect(http.rows[0].pill).toBe('warn')
+    expect(rpc.rows[0].pill).toBe('ok')
+    expect(db.rows[0].pill).toBeNull()
+    expect(custom.rows[0].value).toBe('value')
+  })
 })
 
 describe('filterAttrGroups', () => {
@@ -201,6 +234,16 @@ describe('buildContextVolume', () => {
   it('is stable when all timestamps coincide', () => {
     const {buckets, markerPct} = buildContextVolume([5, 5], 5, 5)
     expect(buckets).toHaveLength(5)
+    expect(markerPct).toBe(50)
+  })
+
+  it('returns empty buckets for invalid inputs', () => {
+    const {buckets, markerPct} = buildContextVolume([], Number.NaN, 3)
+    expect(buckets).toEqual([
+      {id: 'bucket-0', count: 0, hot: false},
+      {id: 'bucket-1', count: 0, hot: false},
+      {id: 'bucket-2', count: 0, hot: false},
+    ])
     expect(markerPct).toBe(50)
   })
 })
@@ -294,5 +337,22 @@ describe('computeLogPinPct', () => {
 
   it('returns null when far outside the window', () => {
     expect(computeLogPinPct(layout, 5000)).toBeNull()
+  })
+
+  it('returns null for invalid log timestamps', () => {
+    expect(computeLogPinPct(layout, Number.NaN)).toBeNull()
+  })
+})
+
+describe('traceSpanTypes', () => {
+  it('returns distinct lowercase span types and drops blanks', () => {
+    expect(
+      traceSpanTypes([
+        makeSpan({type: 'SERVER'}),
+        makeSpan({type: 'db'}),
+        makeSpan({type: 'server'}),
+        makeSpan({type: ''}),
+      ])
+    ).toEqual(['server', 'db'])
   })
 })

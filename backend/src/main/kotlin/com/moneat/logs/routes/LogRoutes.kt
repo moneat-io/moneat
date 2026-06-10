@@ -21,8 +21,6 @@ import kotlinx.serialization.SerializationException
 import java.io.IOException
 import java.io.Writer
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
@@ -111,8 +109,8 @@ fun Route.logRoutes(
                 membershipService = membershipService,
                 dashboardAlertService = dashboardAlertService
             )
+            registerLogTailRoute(logService, membershipService)
         }
-        registerLogTailRoute(logService, membershipService)
     }
 }
 
@@ -635,7 +633,7 @@ private fun ApplicationCall.resolveTailIdentity(): Pair<Int, Long>? {
     return if (principalUserId != null && principalOrgId != null) {
         principalUserId to principalOrgId
     } else {
-        authenticateTailRequest(this)
+        null
     }
 }
 
@@ -683,41 +681,6 @@ private fun ApplicationRequest.traceIdParameter(): String? {
 
 private fun ApplicationRequest.messagePatternParameter(): String? {
     return queryParameters["pattern"] ?: queryParameters["messagePattern"] ?: queryParameters["message_pattern"]
-}
-
-private fun authenticateTailRequest(call: ApplicationCall): Pair<Int, Long>? {
-    val authHeader = call.request.header(HttpHeaders.Authorization)
-    val bearerPrefix = "Bearer "
-    val bearerToken =
-        authHeader
-            ?.takeIf { it.startsWith(bearerPrefix, ignoreCase = true) }
-            ?.substring(bearerPrefix.length)
-            ?.trim()
-    // Authorization header or cookie only (no query param to avoid leaking secrets)
-    val token = bearerToken ?: call.request.cookies["auth_token"]
-
-    if (token.isNullOrBlank()) return null
-
-    return suspendRunCatching {
-        val config = call.application.environment.config
-        val secret = config.property("jwt.secret").getString()
-        val issuer = config.property("jwt.issuer").getString()
-        val audience = config.property("jwt.audience").getString()
-
-        val verifier =
-            JWT
-                .require(Algorithm.HMAC256(secret))
-                .withIssuer(issuer)
-                .withAudience(audience)
-                .build()
-
-        val decoded = verifier.verify(token)
-        val userId = decoded.getClaim("userId").asInt()
-        val orgId = decoded.currentOrgIdOrNull()?.toLong() ?: return@suspendRunCatching null
-        Pair(userId, orgId)
-    }.getOrElse { _ ->
-        null
-    }
 }
 
 fun Route.logIngestRoutes(
