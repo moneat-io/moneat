@@ -50,6 +50,9 @@ private const val PATTERN_SPARKLINE_BUCKETS = 3
 private const val TOP_PATTERN_BREAKDOWN_LIMIT = 5
 private const val TREND_PERCENT_MULTIPLIER = 100.0
 private const val CLICKHOUSE_ERROR_PREVIEW_CHARS = 600
+private const val LOG_ID_PARAMETER = "logId"
+private const val PATTERN_PARAMETER = "pattern"
+private const val SERVICE_PARAMETER = "service"
 
 private const val SQL_UUID_RE =
     "\\\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\\\b"
@@ -112,8 +115,8 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
             lastSeen = stats.lastSeenMs?.let { Instant.ofEpochMilli(it).toString() }.orEmpty(),
             trendPct = trendPercent(stats.count, previousCount),
             sparkline = queryPatternSparkline(conditions, window),
-            topServices = queryPatternBreakdown("service", conditions),
-            topHosts = queryPatternBreakdown("host", conditions)
+            topServices = queryPatternBreakdown(PatternBreakdownColumn.SERVICE, conditions),
+            topHosts = queryPatternBreakdown(PatternBreakdownColumn.HOST, conditions)
         )
     }
 
@@ -134,12 +137,16 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
             """
             SELECT message
             FROM `$clickhouseDb`.logs
-            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId)} AND log_id = toUUID('$parsedId')
+            WHERE ${ClickHouseQueryUtils.orgIdClause(organizationId)} AND log_id = toUUID({$LOG_ID_PARAMETER:String})
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(query)
+        val body =
+            logRepository.executeClickHouseQuery(
+                query,
+                mapOf(LOG_ID_PARAMETER to parsedId.toString())
+            )
         if (body.isClickHouseError()) {
             patternLogger.warn {
                 "Failed to resolve log pattern anchor message: ${body.take(CLICKHOUSE_ERROR_PREVIEW_CHARS)}"
@@ -167,7 +174,7 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
         )
     }
 
-    private suspend fun queryPatternStats(conditions: String): PatternStats {
+    private suspend fun queryPatternStats(conditions: PatternConditions): PatternStats {
         val query =
             """
             SELECT
@@ -176,11 +183,11 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
                 toUnixTimestamp64Milli(min(timestamp)) AS first_seen_ms,
                 toUnixTimestamp64Milli(max(timestamp)) AS last_seen_ms
             FROM `$clickhouseDb`.logs
-            WHERE $conditions
+            WHERE ${conditions.sql}
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(query)
+        val body = logRepository.executeClickHouseQuery(query, conditions.parameters)
         if (body.isClickHouseError()) {
             patternLogger.warn { "Failed to query log pattern stats: ${body.take(CLICKHOUSE_ERROR_PREVIEW_CHARS)}" }
             return PatternStats()
@@ -220,17 +227,17 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
             """
             SELECT count() AS previous_count
             FROM `$clickhouseDb`.logs
-            WHERE $conditions
+            WHERE ${conditions.sql}
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(query)
+        val body = logRepository.executeClickHouseQuery(query, conditions.parameters)
         if (body.isClickHouseError()) return 0
         return firstObject(body)?.longField("previous_count") ?: 0
     }
 
     private suspend fun queryPatternSparkline(
-        conditions: String,
+        conditions: PatternConditions,
         window: PatternWindow
     ): List<Long> {
         val bucketMs = roundUp(window.durationMs, PATTERN_SPARKLINE_BUCKETS.toLong()).coerceAtLeast(1)
@@ -239,13 +246,13 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
             SELECT intDiv(toUnixTimestamp64Milli(timestamp) - ${window.fromMs}, $bucketMs) AS bucket_index,
                    count() AS cnt
             FROM `$clickhouseDb`.logs
-            WHERE $conditions
+            WHERE ${conditions.sql}
             GROUP BY bucket_index
             ORDER BY bucket_index
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(query)
+        val body = logRepository.executeClickHouseQuery(query, conditions.parameters)
         if (body.isClickHouseError()) return List(PATTERN_SPARKLINE_BUCKETS) { 0L }
 
         val values = MutableList(PATTERN_SPARKLINE_BUCKETS) { 0L }
@@ -257,21 +264,22 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
     }
 
     private suspend fun queryPatternBreakdown(
-        column: String,
-        conditions: String
+        column: PatternBreakdownColumn,
+        conditions: PatternConditions
     ): List<LogPatternBreakdown> {
+        val columnName = column.sqlName
         val query =
             """
-            SELECT $column AS value, count() AS cnt
+            SELECT $columnName AS value, count() AS cnt
             FROM `$clickhouseDb`.logs
-            WHERE $conditions AND $column != ''
+            WHERE ${conditions.sql} AND $columnName != ''
             GROUP BY value
             ORDER BY cnt DESC
             LIMIT $TOP_PATTERN_BREAKDOWN_LIMIT
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(query)
+        val body = logRepository.executeClickHouseQuery(query, conditions.parameters)
         if (body.isClickHouseError()) return emptyList()
         return jsonObjects(body).mapNotNull { obj ->
             val value = obj.stringField("value").takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -303,18 +311,30 @@ private data class PatternConditionScope(
     val patternExpression: String
 )
 
-private fun patternConditions(scope: PatternConditionScope): String {
+private data class PatternConditions(
+    val sql: String,
+    val parameters: Map<String, String>
+)
+
+private enum class PatternBreakdownColumn(val sqlName: String) {
+    SERVICE("service"),
+    HOST("host")
+}
+
+private fun patternConditions(scope: PatternConditionScope): PatternConditions {
+    val parameters = mutableMapOf(PATTERN_PARAMETER to scope.pattern)
     val conditions =
         mutableListOf(
             ClickHouseQueryUtils.orgIdClause(scope.organizationId),
             "timestamp >= fromUnixTimestamp64Milli(${scope.fromMs})",
             "timestamp <= fromUnixTimestamp64Milli(${scope.toMs})",
-            "${scope.patternExpression} = '${escapeSql(scope.pattern)}'"
+            "${scope.patternExpression} = {$PATTERN_PARAMETER:String}"
         )
     if (!scope.service.isNullOrBlank()) {
-        conditions += "service = '${escapeSql(scope.service)}'"
+        conditions += "service = {$SERVICE_PARAMETER:String}"
+        parameters[SERVICE_PARAMETER] = scope.service
     }
-    return conditions.joinToString(" AND ")
+    return PatternConditions(sql = conditions.joinToString(" AND "), parameters = parameters)
 }
 
 private fun patternSqlExpression(column: String): String {

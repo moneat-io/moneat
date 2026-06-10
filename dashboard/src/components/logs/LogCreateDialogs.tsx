@@ -189,6 +189,7 @@ function MonitorForm({
       onClose()
     },
   })
+  const groupBySummary = groupBy === GROUP_BY_NONE ? '' : `, per ${groupBy}`
 
   return (
     <>
@@ -278,8 +279,7 @@ function MonitorForm({
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
             {condition} {threshold}
           </code>{' '}
-          over {windowMinutes}m
-          {groupBy !== GROUP_BY_NONE ? `, per ${groupBy}` : ''}.
+          over {windowMinutes}m{groupBySummary}.
         </p>
       </div>
       <DialogFooter className="mt-2">

@@ -48,7 +48,7 @@ export function toGroupByValue(groupBy: string): string | null {
 
 /** Map a stored group-by field ('' | null | field) onto a select value. */
 export function toGroupBySelectValue(groupBy: string | null | undefined): string {
-  return groupBy ? groupBy : GROUP_BY_NONE
+  return groupBy || GROUP_BY_NONE
 }
 
 /** Returns the single active level when the filter narrows to exactly one,

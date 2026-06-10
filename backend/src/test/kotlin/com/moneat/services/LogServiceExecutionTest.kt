@@ -158,11 +158,15 @@ class LogServiceExecutionTest {
             assertEquals("checkout-1", result.topHosts.first().value)
 
             val statsQuery = repository.queries.first { it.contains("AS first_seen_ms") }
+            val statsParameters = repository.parameters[repository.queries.indexOf(statsQuery)]
             assertTrue(statsQuery.contains("organization_id = 42"))
-            assertTrue(statsQuery.contains("service = 'checkout'"))
+            assertTrue(statsQuery.contains("service = {service:String}"))
+            assertTrue(statsQuery.contains("= {pattern:String}"))
             assertTrue(statsQuery.contains("replaceRegexpAll"))
             assertTrue(statsQuery.contains("[0-9a-fA-F]{8}"))
             assertTrue(statsQuery.contains("[0-9a-fA-F]{12,}"))
+            assertEquals("checkout", statsParameters["service"])
+            assertEquals("Order <int> failed for user <id>", statsParameters["pattern"])
         }
 
     @Test
@@ -272,11 +276,22 @@ class LogServiceExecutionTest {
         private val responder: (String) -> String
     ) : LogRepository {
         val queries = mutableListOf<String>()
+        val parameters = mutableListOf<Map<String, String>>()
 
         override suspend fun executeClickHouseInsert(sql: String): Boolean = true
 
         override suspend fun executeClickHouseQuery(sql: String): String {
             queries += sql
+            parameters += emptyMap()
+            return responder(sql)
+        }
+
+        override suspend fun executeClickHouseQuery(
+            sql: String,
+            queryParameters: Map<String, String>
+        ): String {
+            queries += sql
+            parameters += queryParameters
             return responder(sql)
         }
     }

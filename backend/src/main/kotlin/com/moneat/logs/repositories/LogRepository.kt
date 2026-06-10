@@ -23,4 +23,8 @@ package com.moneat.logs.repositories
 interface LogRepository {
     suspend fun executeClickHouseInsert(sql: String): Boolean
     suspend fun executeClickHouseQuery(sql: String): String
+    suspend fun executeClickHouseQuery(
+        sql: String,
+        queryParameters: Map<String, String>
+    ): String = executeClickHouseQuery(sql)
 }
