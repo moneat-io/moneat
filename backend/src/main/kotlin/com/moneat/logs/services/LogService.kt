@@ -85,8 +85,14 @@ private data class LogWithCursor(
     val timestampMs: Long
 )
 
+private data class LogQueryWhere(
+    val conditions: List<String>,
+    val parameters: Map<String, String>
+)
+
 private data class LogAnalyticsWhere(
     val conditions: List<String>,
+    val parameters: Map<String, String>,
     val fromMs: Long?,
     val toMs: Long?
 )
@@ -372,14 +378,14 @@ class LogService(private val logRepository: LogRepository) {
         request: LogQueryRequest
     ): LogQueryResponse {
         val limit = request.limit.coerceIn(1, MAX_LOG_QUERY_LIMIT)
-        val conditions = buildLogQueryConditions(organizationId, request) ?: return LogQueryResponse(
+        val where = buildLogQueryConditions(organizationId, request) ?: return LogQueryResponse(
             logs = emptyList(),
             nextCursor = null,
             hasMore = false,
             totalCount = 0L
         )
 
-        val whereClause = conditions.joinToString(" AND ")
+        val whereClause = where.conditions.joinToString(" AND ")
 
         logger.debug {
             "Executing log query: where_fp=${utf8Fingerprint(whereClause)} " +
@@ -413,7 +419,7 @@ class LogService(private val logRepository: LogRepository) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(query)
+        val body = logRepository.executeClickHouseQuery(query, where.parameters)
         if (body.isClickHouseError()) {
             logger.error(
                 "ClickHouse query failed. where_fp=${utf8Fingerprint(whereClause)} " +
@@ -441,20 +447,23 @@ class LogService(private val logRepository: LogRepository) {
     private suspend fun buildLogQueryConditions(
         organizationId: Long,
         request: LogQueryRequest
-    ): List<String>? {
+    ): LogQueryWhere? {
         val scopeFilter = buildScopeFilter(organizationId, request.systemId, request.hostId) ?: return null
-        return buildList {
-            add(scopeFilter)
-            addLogTimeFilters(request)
-            addLogIncludeFilters(request)
-            addLogQueryFilter(request.query)
-            addTagFilters(request.tags)
-            addLogMessagePatternFilter(request.messagePattern)
-            addLogTraceFilter(request.traceId)
-            addLogExcludeFilters(request)
-            addTagFilters(request.excludeTags, exclude = true)
-            addLogCursorFilter(request.cursor)
-        }
+        val parameters = mutableMapOf<String, String>()
+        val conditions =
+            buildList {
+                add(scopeFilter)
+                addLogTimeFilters(request)
+                addLogIncludeFilters(request)
+                addLogQueryFilter(request.query)
+                addTagFilters(request.tags)
+                addLogMessagePatternFilter(request.messagePattern, parameters)
+                addLogTraceFilter(request.traceId)
+                addLogExcludeFilters(request)
+                addTagFilters(request.excludeTags, exclude = true)
+                addLogCursorFilter(request.cursor)
+            }
+        return LogQueryWhere(conditions = conditions, parameters = parameters)
     }
 
     private fun MutableList<String>.addLogTimeFilters(request: LogQueryRequest) {
@@ -481,6 +490,7 @@ class LogService(private val logRepository: LogRepository) {
     ): LogAnalyticsWhere {
         val fromMs = parseTimeToMillis(filters.from)
         val toMs = parseTimeToMillis(filters.to) ?: if (defaultToNow) System.currentTimeMillis() else null
+        val parameters = mutableMapOf<String, String>()
         val conditions =
             buildList {
                 add(ClickHouseQueryUtils.orgIdClause(organizationId))
@@ -489,12 +499,12 @@ class LogService(private val logRepository: LogRepository) {
                 addLogIncludeFilters(filters)
                 addLogQueryFilter(filters.query)
                 addTagFilters(filters.tags)
-                addLogMessagePatternFilter(filters.messagePattern)
+                addLogMessagePatternFilter(filters.messagePattern, parameters)
                 addLogTraceFilter(filters.traceId)
                 addLogExcludeFilters(filters)
                 addTagFilters(filters.excludeTags, exclude = true)
             }
-        return LogAnalyticsWhere(conditions = conditions, fromMs = fromMs, toMs = toMs)
+        return LogAnalyticsWhere(conditions = conditions, parameters = parameters, fromMs = fromMs, toMs = toMs)
     }
 
     private fun MutableList<String>.addLogIncludeFilters(filters: LogAnalyticsFilters) {
@@ -540,8 +550,15 @@ class LogService(private val logRepository: LogRepository) {
         }
     }
 
-    private fun MutableList<String>.addLogMessagePatternFilter(messagePattern: String?) {
-        logMessagePatternCondition(messagePattern).takeIf { it.isNotBlank() }?.let { add(it) }
+    private fun MutableList<String>.addLogMessagePatternFilter(
+        messagePattern: String?,
+        parameters: MutableMap<String, String>
+    ) {
+        val normalizedPattern = normalizeLogMessagePattern(messagePattern)
+        if (normalizedPattern.isBlank()) return
+
+        add(logMessagePatternCondition(normalizedPattern))
+        parameters[LOG_MESSAGE_PATTERN_PARAMETER] = normalizedPattern
     }
 
     private fun MutableList<String>.addLogTraceFilter(traceId: String?) {
@@ -670,7 +687,7 @@ class LogService(private val logRepository: LogRepository) {
             "Aggregate logs SQL for org $organizationId (fromMs=$fromMs, toMs=$toMs, interval=$chInterval, " +
                 "groupBy=$validGroupBy): query_fp=${utf8Fingerprint(sql)}"
         }
-        val body = logRepository.executeClickHouseQuery(sql)
+        val body = logRepository.executeClickHouseQuery(sql, where.parameters)
         logger.debug { "Aggregate logs response body (first 500 chars): ${body.take(WARN_BODY_PREVIEW_CHARS)}" }
         if (body.isClickHouseError()) {
             logger.warn { "Failed to aggregate logs: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
@@ -739,10 +756,8 @@ class LogService(private val logRepository: LogRepository) {
         limit: Int,
         filters: LogAnalyticsFilters
     ): LogTopResponse {
-        val whereClause =
-            buildLogAnalyticsWhere(organizationId, filters)
-                .conditions
-                .joinToString(" AND ")
+        val where = buildLogAnalyticsWhere(organizationId, filters)
+        val whereClause = where.conditions.joinToString(" AND ")
         val safeLimit = limit.coerceIn(1, MAX_TOP_VALUES_LIMIT)
 
         val columnExpr = topValueColumnExpression(field)
@@ -758,7 +773,7 @@ class LogService(private val logRepository: LogRepository) {
             FORMAT JSONEachRow
             """.trimIndent()
 
-        val body = logRepository.executeClickHouseQuery(sql)
+        val body = logRepository.executeClickHouseQuery(sql, where.parameters)
         if (body.isClickHouseError()) {
             logger.warn { "Failed to query top values: ${body.take(ERROR_BODY_PREVIEW_CHARS)}" }
             return LogTopResponse(field = field, values = emptyList(), totalCount = 0)
@@ -772,7 +787,7 @@ class LogService(private val logRepository: LogRepository) {
             SELECT count() AS cnt FROM `$clickhouseDb`.logs WHERE $whereClause
             FORMAT JSONEachRow
             """.trimIndent()
-        val totalCount = parseCountResponse(logRepository.executeClickHouseQuery(totalSql))
+        val totalCount = parseCountResponse(logRepository.executeClickHouseQuery(totalSql, where.parameters))
 
         return LogTopResponse(field = field, values = values, totalCount = totalCount)
     }
@@ -815,10 +830,8 @@ class LogService(private val logRepository: LogRepository) {
         filters: LogAnalyticsFilters,
         limit: Int
     ): String {
-        val whereClause =
-            buildLogAnalyticsWhere(organizationId, filters)
-                .conditions
-                .joinToString(" AND ")
+        val where = buildLogAnalyticsWhere(organizationId, filters)
+        val whereClause = where.conditions.joinToString(" AND ")
         val safeLimit = limit.coerceIn(1, MAX_EXPORT_LIMIT)
 
         val sql =
@@ -836,7 +849,7 @@ class LogService(private val logRepository: LogRepository) {
             """.trimIndent()
 
         logger.debug { "Export CSV SQL: query_fp=${utf8Fingerprint(sql)}" }
-        val body = logRepository.executeClickHouseQuery(sql)
+        val body = logRepository.executeClickHouseQuery(sql, where.parameters)
         if (body.isClickHouseError()) {
             logger.error {
                 "ClickHouse export error. query_fp=${utf8Fingerprint(sql)}\n" +

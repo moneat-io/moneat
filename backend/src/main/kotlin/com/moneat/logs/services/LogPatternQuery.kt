@@ -23,7 +23,6 @@ import com.moneat.logs.models.LogPatternRequest
 import com.moneat.logs.models.LogPatternResponse
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.utils.ClickHouseQueryUtils
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -53,6 +52,7 @@ private const val CLICKHOUSE_ERROR_PREVIEW_CHARS = 600
 private const val LOG_ID_PARAMETER = "logId"
 private const val PATTERN_PARAMETER = "pattern"
 private const val SERVICE_PARAMETER = "service"
+internal const val LOG_MESSAGE_PATTERN_PARAMETER = "messagePattern"
 
 private const val SQL_UUID_RE =
     "\\\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\\\b"
@@ -355,10 +355,12 @@ private fun patternSqlExpression(column: String): String {
 }
 
 internal fun logMessagePatternCondition(pattern: String?): String {
-    val trimmed = pattern?.trim().orEmpty()
+    val trimmed = normalizeLogMessagePattern(pattern)
     if (trimmed.isBlank()) return ""
-    return "${patternSqlExpression("message")} = '${escapeSql(trimmed)}'"
+    return "${patternSqlExpression("message")} = {$LOG_MESSAGE_PATTERN_PARAMETER:String}"
 }
+
+internal fun normalizeLogMessagePattern(pattern: String?): String = pattern?.trim().orEmpty()
 
 internal fun derivePatternString(message: String): String {
     return message

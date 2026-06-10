@@ -92,7 +92,12 @@ class LogServiceExecutionTest {
 
             val selectQuery = repository.queries.first { it.contains("toString(log_id) AS log_id_str") }
             assertTrue(selectQuery.contains("replaceRegexpAll"))
-            assertTrue(selectQuery.contains("Order <int> failed for user <id>"))
+            assertTrue(selectQuery.contains("{messagePattern:String}"))
+            assertFalse(selectQuery.contains("Order <int> failed for user <id>"))
+            assertEquals(
+                mapOf("messagePattern" to "Order <int> failed for user <id>"),
+                repository.parameters.first()
+            )
         }
 
     @Test
