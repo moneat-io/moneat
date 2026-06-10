@@ -19,7 +19,7 @@ describe('release replay feedback service scope API', () => {
       http.get(`${API_BASE}/v1/releases`, ({request}) => {
         const url = new URL(request.url)
         expect(url.searchParams.getAll('services')).toEqual(['API', 'Worker'])
-        expect(url.searchParams.getAll('serviceIds')).toEqual(['1', 'svc-worker'])
+        expect(url.searchParams.getAll('serviceIds')).toEqual(['svc-api', 'svc-worker'])
         expect(url.searchParams.get('projectId')).toBeNull()
         return HttpResponse.json(releases)
       })

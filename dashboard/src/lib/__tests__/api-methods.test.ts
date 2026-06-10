@@ -173,7 +173,7 @@ describe('ApiClient - Projects and Issues', () => {
           expect(url.searchParams.get('limit')).toBe('50')
           expect(url.searchParams.get('status')).toBe('unresolved')
           expect(url.searchParams.get('services')).toBe('api,worker')
-          expect(url.searchParams.get('serviceIds')).toBe('proj-1,2')
+          expect(url.searchParams.get('serviceIds')).toBe('proj-1,proj-2')
           return HttpResponse.json(mockIssues)
         })
       )

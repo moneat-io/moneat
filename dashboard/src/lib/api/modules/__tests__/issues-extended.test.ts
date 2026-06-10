@@ -45,7 +45,7 @@ describe('Issues API - extended coverage', () => {
   })
 
   it('getIssue with projectId appends projectId to query', async () => {
-    const mockIssue = { id: 'iss-2', projectId: 5, title: 'Test', status: 'unresolved' }
+    const mockIssue = { id: 'iss-2', projectId: 'proj-5', title: 'Test', status: 'unresolved' }
 
     server.use(
       http.get(`${API_BASE}/v1/issues/iss-2`, ({ request }) => {

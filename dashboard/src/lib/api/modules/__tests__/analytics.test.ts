@@ -105,7 +105,7 @@ describe('Analytics API', () => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           expect(url.searchParams.getAll('services')).toEqual(['api', 'worker'])
-          expect(url.searchParams.getAll('serviceIds')).toEqual(['service-1', '2'])
+          expect(url.searchParams.getAll('serviceIds')).toEqual(['service-1', 'service-2'])
           return HttpResponse.json({
             uniqueVisitors: 25,
             totalPageviews: 80,

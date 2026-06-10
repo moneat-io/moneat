@@ -49,7 +49,7 @@ vi.mock('@/components/dashboards/WidgetConfigPanel', () => ({
     onClose,
   }: {
     widget: DashboardWidget
-    dashboardId: number
+    dashboardId: string
     projectId?: string
     onSave: (widget: DashboardWidget) => void
     onClose: () => void
@@ -82,9 +82,9 @@ describe('CreateLogMetricDialog', () => {
     vi.clearAllMocks()
     mockApi.getLogAggregate.mockResolvedValue(EMPTY_AGGREGATE)
     mockApi.getProjects.mockResolvedValue([])
-    mockApi.getDashboards.mockResolvedValue([{id: 7, title: 'Payments', widgets: []}])
-    mockApi.getDashboard.mockResolvedValue({id: 7, title: 'Payments', widgets: []})
-    mockApi.createDashboard.mockResolvedValue({id: 99, title: 'My logs', widgets: []})
+    mockApi.getDashboards.mockResolvedValue([{id: 'dashboard-7', title: 'Payments', widgets: []}])
+    mockApi.getDashboard.mockResolvedValue({id: 'dashboard-7', title: 'Payments', widgets: []})
+    mockApi.createDashboard.mockResolvedValue({id: 'dashboard-99', title: 'My logs', widgets: []})
     mockApi.updateDashboard.mockResolvedValue({})
     mockApi.deleteDashboard.mockResolvedValue(undefined)
     if (!HTMLElement.prototype.hasPointerCapture) {
@@ -105,7 +105,7 @@ describe('CreateLogMetricDialog', () => {
     fireEvent.click(continueButton)
 
     const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
-    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('7')
+    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('dashboard-7')
     expect(within(editor).getByTestId('editor-datasource')).toHaveTextContent('logs')
     expect(within(editor).getByTestId('editor-filters')).toHaveTextContent('"field":"service"')
 
@@ -113,7 +113,7 @@ describe('CreateLogMetricDialog', () => {
 
     await waitFor(() => {
       expect(mockApi.updateDashboard).toHaveBeenCalledWith(
-        7,
+        'dashboard-7',
         expect.objectContaining({
           widgets: expect.arrayContaining([expect.objectContaining({widget_type: 'timeseries'})]),
         })
@@ -125,7 +125,7 @@ describe('CreateLogMetricDialog', () => {
 
   it('creates a new dashboard then saves the widget into it', async () => {
     mockApi.getDashboards.mockResolvedValue([])
-    mockApi.getDashboard.mockResolvedValue({id: 99, title: 'My logs', widgets: []})
+    mockApi.getDashboard.mockResolvedValue({id: 'dashboard-99', title: 'My logs', widgets: []})
     const onOpenChange = vi.fn()
     renderWithClient(<CreateLogMetricDialog open onOpenChange={onOpenChange} {...metricSeed} />)
 
@@ -138,10 +138,10 @@ describe('CreateLogMetricDialog', () => {
     )
 
     const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
-    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('99')
+    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('dashboard-99')
     fireEvent.click(within(editor).getByRole('button', {name: 'Save Widget'}))
 
-    await waitFor(() => expect(mockApi.updateDashboard).toHaveBeenCalledWith(99, expect.anything()))
+    await waitFor(() => expect(mockApi.updateDashboard).toHaveBeenCalledWith('dashboard-99', expect.anything()))
     expect(mockApi.deleteDashboard).not.toHaveBeenCalled()
   })
 
@@ -156,7 +156,7 @@ describe('CreateLogMetricDialog', () => {
     const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
     fireEvent.click(within(editor).getByRole('button', {name: 'Editor Cancel'}))
 
-    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith(99))
+    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith('dashboard-99'))
     expect(mockApi.updateDashboard).not.toHaveBeenCalled()
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
