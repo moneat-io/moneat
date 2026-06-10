@@ -12,7 +12,6 @@
     ],
     "widget_count": 28,
     "variable_count": 9,
-    "quality": "partial",
     "warnings": [],
     "dashboard": {
         "title": "Istio Service Dashboard",

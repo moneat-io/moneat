@@ -12,7 +12,6 @@
     ],
     "widget_count": 50,
     "variable_count": 2,
-    "quality": "partial",
     "warnings": [
         "Panel 4: couldn't parse PromQL '(mysql_global_variables_innodb_buffer_pool_size{instance=\"$host\"} * 100) / on (instance) node_memory_MemTotal_bytes{instance=\"$host\"}', stored as rawQuery"
     ],

@@ -246,8 +246,6 @@ export interface DashboardImportResult {
   variables?: DashboardVariable[]
 }
 
-export type DashboardTemplateQuality = 'ready' | 'partial' | 'needs-review'
-
 export interface DashboardTemplateSummary {
   id: string
   title: string
@@ -257,7 +255,6 @@ export interface DashboardTemplateSummary {
   required_sources: string[]
   widget_count: number
   variable_count: number
-  quality: DashboardTemplateQuality
   resource_path: string
 }
 

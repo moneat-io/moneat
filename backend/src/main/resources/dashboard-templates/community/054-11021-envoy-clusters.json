@@ -12,7 +12,6 @@
     ],
     "widget_count": 13,
     "variable_count": 3,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Envoy Clusters",

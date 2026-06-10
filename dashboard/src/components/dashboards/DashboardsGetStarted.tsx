@@ -23,7 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import {Badge} from '@/components/ui/badge'
-import type {DashboardTemplateQuality, DashboardTemplateSummary} from '@/lib/api'
+import type {DashboardTemplateSummary} from '@/lib/api'
 import {cn} from '@/lib/utils'
 
 // First-run Dashboards experience: a template-gallery quickstart shown when no
@@ -175,18 +175,6 @@ const FILTERS: ReadonlyArray<{key: TemplateFilter; label: string}> = [
   {key: 'cloud', label: 'Cloud'},
   {key: 'logs', label: 'Logs'},
 ]
-
-const QUALITY_LABELS: Record<DashboardTemplateQuality, string> = {
-  ready: 'Ready',
-  partial: 'Partial',
-  'needs-review': 'Review',
-}
-
-const QUALITY_VARIANTS: Record<DashboardTemplateQuality, 'success' | 'warning' | 'neutral'> = {
-  ready: 'success',
-  partial: 'warning',
-  'needs-review': 'neutral',
-}
 
 const SOURCE_BADGE_LIMIT = 2
 
@@ -428,12 +416,6 @@ function TemplateCard({model, onUse}: TemplateCardProps) {
         </div>
         <p className="text-xs leading-snug text-muted-foreground">{template.description}</p>
         <div className="mt-0.5 flex flex-wrap gap-1.5">
-          <Badge
-            variant={QUALITY_VARIANTS[template.quality]}
-            className="rounded-full px-2 py-0 text-[10px] font-medium leading-4"
-          >
-            {QUALITY_LABELS[template.quality]}
-          </Badge>
           {sources.map((source) => (
             <Badge
               key={source}

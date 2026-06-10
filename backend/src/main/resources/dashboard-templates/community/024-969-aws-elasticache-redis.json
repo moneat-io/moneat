@@ -13,7 +13,6 @@
     ],
     "widget_count": 12,
     "variable_count": 4,
-    "quality": "partial",
     "warnings": [],
     "dashboard": {
         "title": "AWS ElastiCache Redis",

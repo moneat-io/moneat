@@ -12,7 +12,6 @@
     ],
     "widget_count": 23,
     "variable_count": 3,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "AWS CNI Metrics",

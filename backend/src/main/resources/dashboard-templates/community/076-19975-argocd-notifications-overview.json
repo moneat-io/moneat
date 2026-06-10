@@ -11,7 +11,6 @@
     ],
     "widget_count": 3,
     "variable_count": 5,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "ArgoCD / Notifications / Overview",

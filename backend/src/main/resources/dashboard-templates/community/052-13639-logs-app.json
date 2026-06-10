@@ -12,7 +12,6 @@
     ],
     "widget_count": 2,
     "variable_count": 2,
-    "quality": "partial",
     "warnings": [
         "Panel 1: couldn't parse PromQL '{job=\"$app\"} |= \"$search\" | logfmt', stored as rawQuery"
     ],

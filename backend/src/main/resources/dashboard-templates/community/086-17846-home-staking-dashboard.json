@@ -11,7 +11,6 @@
     ],
     "widget_count": 42,
     "variable_count": 0,
-    "quality": "partial",
     "warnings": [
         "Panel 5: couldn't parse PromQL '(validator_performance_expected_attestations-validator_performance_included_attestations)', stored as rawQuery",
         "Panel 24: couldn't parse PromQL '(validator_performance_expected_attestations-validator_performance_included_attestations)', stored as rawQuery"

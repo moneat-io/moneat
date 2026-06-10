@@ -164,7 +164,6 @@ const TEMPLATE: DashboardTemplateSummary = {
   required_sources: ['Prometheus'],
   widget_count: 140,
   variable_count: 4,
-  quality: 'needs-review',
   resource_path: 'dashboard-templates/community/node-exporter-full.json',
 }
 

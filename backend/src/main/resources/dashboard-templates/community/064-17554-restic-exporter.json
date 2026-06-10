@@ -11,7 +11,6 @@
     ],
     "widget_count": 30,
     "variable_count": 0,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Restic Exporter",

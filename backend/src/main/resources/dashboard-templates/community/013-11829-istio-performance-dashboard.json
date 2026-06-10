@@ -12,7 +12,6 @@
     ],
     "widget_count": 19,
     "variable_count": 1,
-    "quality": "partial",
     "warnings": [],
     "dashboard": {
         "title": "Istio Performance Dashboard",

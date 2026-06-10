@@ -13,7 +13,6 @@
     ],
     "widget_count": 8,
     "variable_count": 1,
-    "quality": "partial",
     "warnings": [
         "Panel 3: couldn't parse PromQL '((node_memory_MemTotal_bytes{instance=\"$server\"} - node_memory_MemFree_bytes{instance=\"$server\"}  - node_memory_Buffers_bytes{instance=\"$server\"} - node_memory_Cached_bytes{instance=\"$server\"}) / node_memory_MemTotal_bytes{instance=\"$server\"}) * 100', stored as rawQuery"
     ],

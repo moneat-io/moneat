@@ -12,7 +12,6 @@
     ],
     "widget_count": 14,
     "variable_count": 6,
-    "quality": "partial",
     "warnings": [
         "Panel 0: couldn't parse PromQL 'up{job=~\"$job\", instance=~\"$instance\", cluster=~\"$cluster\"}', stored as rawQuery"
     ],

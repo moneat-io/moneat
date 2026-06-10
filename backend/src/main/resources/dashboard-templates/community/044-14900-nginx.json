@@ -12,7 +12,6 @@
     ],
     "widget_count": 23,
     "variable_count": 3,
-    "quality": "partial",
     "warnings": [
         "Panel 1: couldn't parse PromQL '100 - (cpu_usage_idle{instance=~ \"$instance*\",cpu=\"cpu-total\"})', stored as rawQuery",
         "Panel 2: couldn't parse PromQL '100 - (cpu_usage_idle{instance=~ \"$instance*\",cpu=\"cpu-total\"})', stored as rawQuery"

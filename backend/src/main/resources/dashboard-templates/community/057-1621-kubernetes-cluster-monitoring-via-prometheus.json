@@ -9,7 +9,6 @@
     "required_sources": [],
     "widget_count": 0,
     "variable_count": 1,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Kubernetes cluster monitoring (via Prometheus)",

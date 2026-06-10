@@ -12,7 +12,6 @@
     ],
     "widget_count": 42,
     "variable_count": 5,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Spring Boot 2.1 System Monitor",

@@ -11,7 +11,6 @@
     ],
     "widget_count": 107,
     "variable_count": 7,
-    "quality": "partial",
     "warnings": [
         "Panel 100: couldn't parse PromQL '# go other\nmax(\n    go_memstats_gc_sys_bytes{job=~\"$job\", instance=~\"$instance\"} +\n    go_memstats_mspan_sys_bytes{job=~\"$job\", instance=~\"$instance\"} +\n    go_memstats_other_sys_bytes{job=~\"$job\", instance=~\"$instance\"} +\n    go_memstats_mcache_sys_bytes{job=~\"$job\", instance=~\"$instance\"}\n)', stored as rawQuery",
         "Panel 100: couldn't parse PromQL '#go heap inuse\nmax(\n    go_memstats_heap_inuse_bytes{job=~\"$job\", instance=~\"$instance\"}\n    +\n    (\n        go_memstats_heap_idle_bytes{job=~\"$job\", instance=~\"$instance\"}\n        -\n        go_memstats_heap_released_bytes{job=~\"$job\", instance=~\"$instance\"}\n    )\n)', stored as rawQuery"

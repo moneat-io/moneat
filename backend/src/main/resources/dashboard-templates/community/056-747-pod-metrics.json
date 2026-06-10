@@ -9,7 +9,6 @@
     "required_sources": [],
     "widget_count": 0,
     "variable_count": 5,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Kubernetes Pod Metrics",

@@ -12,7 +12,6 @@
     ],
     "widget_count": 20,
     "variable_count": 3,
-    "quality": "partial",
     "warnings": [],
     "dashboard": {
         "title": "Amazon EC2",

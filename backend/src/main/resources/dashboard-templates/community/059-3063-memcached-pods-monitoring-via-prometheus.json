@@ -9,7 +9,6 @@
     "required_sources": [],
     "widget_count": 0,
     "variable_count": 2,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Memcached Pods monitoring (via Prometheus)",

@@ -13,7 +13,6 @@
     ],
     "widget_count": 18,
     "variable_count": 5,
-    "quality": "partial",
     "warnings": [
         "Panel 4: couldn't parse PromQL '(process_start_time_seconds{service=~\"$service\", stack=~\"$stack\"})*1000', stored as rawQuery"
     ],

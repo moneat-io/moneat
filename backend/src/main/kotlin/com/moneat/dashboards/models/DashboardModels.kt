@@ -303,7 +303,6 @@ data class DashboardTemplateSummary(
     @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
     @SerialName("widget_count") val widgetCount: Int = 0,
     @SerialName("variable_count") val variableCount: Int = 0,
-    val quality: String = "ready",
     @SerialName("resource_path") val resourcePath: String
 )
 
@@ -317,7 +316,6 @@ data class DashboardTemplateDetail(
     @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
     @SerialName("widget_count") val widgetCount: Int = 0,
     @SerialName("variable_count") val variableCount: Int = 0,
-    val quality: String = "ready",
     val warnings: List<String> = emptyList(),
     val dashboard: CreateDashboardRequest
 )

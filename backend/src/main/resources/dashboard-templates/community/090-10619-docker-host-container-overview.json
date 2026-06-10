@@ -12,7 +12,6 @@
     ],
     "widget_count": 13,
     "variable_count": 6,
-    "quality": "partial",
     "warnings": [
         "Panel 4: non-standard query target stored as rawQuery",
         "Panel 5: couldn't parse PromQL '{__name__=~\"^node_load.*\"}', stored as rawQuery"

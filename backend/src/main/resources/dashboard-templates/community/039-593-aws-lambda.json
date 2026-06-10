@@ -12,7 +12,6 @@
     ],
     "widget_count": 6,
     "variable_count": 4,
-    "quality": "partial",
     "warnings": [],
     "dashboard": {
         "title": "AWS Lambda",

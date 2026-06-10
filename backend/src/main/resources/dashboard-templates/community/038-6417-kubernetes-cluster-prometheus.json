@@ -12,7 +12,6 @@
     ],
     "widget_count": 35,
     "variable_count": 3,
-    "quality": "partial",
     "warnings": [
         "Panel 4: couldn't parse PromQL '(sum (node_filesystem_size{nodename=~\"$node\"}) - sum (node_filesystem_free{nodename=~\"$node\"})) / sum (node_filesystem_size{nodename=~\"$node\"})', stored as rawQuery"
     ],
