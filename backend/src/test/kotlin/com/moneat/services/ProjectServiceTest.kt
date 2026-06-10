@@ -49,7 +49,8 @@ class ProjectServiceTest {
         val projects = service.getProjects(orgId = 7, demoEpochMs = 123L)
 
         assertEquals(1, projects.size)
-        assertEquals(99L, projects.single().serviceId)
+        assertEquals(PROJECT_RESOURCE_ID, projects.single().id)
+        assertEquals(PROJECT_RESOURCE_ID, projects.single().serviceId)
         assertEquals("checkout-api", projects.single().serviceName)
         assertEquals(4L, projects.single().issueCount)
     }
@@ -68,7 +69,8 @@ class ProjectServiceTest {
 
         val project = service.getProject(42L)
 
-        assertEquals(99L, project?.serviceId)
+        assertEquals(PROJECT_RESOURCE_ID, project?.id)
+        assertEquals(PROJECT_RESOURCE_ID, project?.serviceId)
         assertEquals("checkout-api", project?.serviceName)
         assertEquals(5L, project?.issueCount)
     }
@@ -108,7 +110,12 @@ class ProjectServiceTest {
             framework = "kotlin",
             keys = listOf(ProjectKeyResponse(platformTarget = null, dsn = "https://public@example.com/42")),
             dsn = "https://public@example.com/42",
+            resourceId = PROJECT_RESOURCE_ID,
             serviceId = serviceId,
             serviceName = serviceName
         )
+
+    private companion object {
+        private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+    }
 }

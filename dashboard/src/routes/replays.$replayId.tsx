@@ -224,9 +224,8 @@ function replayDurationMs(recordingDurationMs: number, computedDurationMs: numbe
   return replayDuration ?? 0
 }
 
-function replayProjectResourceId(replay: ReplayDetail | undefined): string | undefined {
-  if (replay?.projectResourceId) return replay.projectResourceId
-  return replay?.projectId === undefined ? undefined : String(replay.projectId)
+function replayProjectIdentifier(replay: ReplayDetail | undefined): string | undefined {
+  return replay?.projectId
 }
 
 function replayPlatformLabel(platform?: string): string | null {
@@ -559,7 +558,7 @@ export const replayDetailHelperTestHooks = {
   isReplayMobile: isMobileReplaySession,
   mobileContainerPlatform: mobilePlatform,
   replayEventType: eventType,
-  replayProjectId: replayProjectResourceId,
+  replayProjectId: replayProjectIdentifier,
   normalizeTimelineItems,
   resolveReplayDurationMs: replayDurationMs,
 }
@@ -1034,7 +1033,7 @@ function ReplayDetailPage() {
     [events]
   )
   const durationMs = replayDurationMs(recordingDurationMs, computedDurationMs, replay?.durationMs)
-  const replayProjectId = replayProjectResourceId(replay)
+  const replayProjectId = replayProjectIdentifier(replay)
   const mobileCompressedTimeMapper = useMemo(
     () => (isMobileReplay ? createMobileCompressedTimeMapper(events) : null),
     [events, isMobileReplay]

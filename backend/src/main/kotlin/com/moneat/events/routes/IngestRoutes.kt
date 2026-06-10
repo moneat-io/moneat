@@ -80,7 +80,7 @@ fun Route.ingestRoutes(
                 call.application.environment.config
                     .property("ingest.queueKey")
                     .getString()
-            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolveProtocolId)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -166,7 +166,7 @@ fun Route.ingestRoutes(
 
         // Structured logs endpoint
         post("/logs/") {
-            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolveProtocolId)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
@@ -244,7 +244,7 @@ fun Route.ingestRoutes(
 
         // Legacy store endpoint
         post("/store/") {
-            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolveProtocolId)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post

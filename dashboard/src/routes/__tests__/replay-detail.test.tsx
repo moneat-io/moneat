@@ -50,8 +50,7 @@ const replayIpAddress = [79, 42, 0, 0].join('.')
 
 const replayDetail = {
   replayId: 'replay-1',
-  projectId: 1,
-  projectResourceId: 'svc-api',
+  projectId: 'svc-api',
   startedAt: '2026-06-01T00:00:00.000Z',
   finishedAt: '2026-06-01T00:01:24.000Z',
   durationMs: 84_000,

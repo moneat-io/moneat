@@ -19,6 +19,7 @@ package com.moneat.mcp.services
 import com.moneat.shared.models.NotificationPreferences
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -97,7 +98,7 @@ class NotificationPreferencesServiceTest {
         val prefs = service.getPreferences(USER_ID)
 
         assertEquals(1, prefs.projects.size)
-        assertEquals(PROJECT_ID, prefs.projects.single().projectId)
+        assertEquals(ProjectIdResolver().resourceIdFor(PROJECT_ID), prefs.projects.single().projectId)
         assertEquals("Backend", prefs.projects.single().projectName)
         assertFalse(prefs.projects.single().issueAlerts)
         assertFalse(prefs.projects.single().weeklySummary)

@@ -35,8 +35,6 @@ class ProjectIdResolver(
 
     fun resolve(param: String): Long? {
         val normalized = param.trim().takeIf { it.isNotBlank() } ?: return null
-        normalized.toLongOrNull()?.let { return it }
-
         val resourceId = parseUuid(normalized) ?: return null
         val now = nowMs()
         projectIdByResourceId[resourceId]?.let { entry ->
@@ -48,6 +46,9 @@ class ProjectIdResolver(
         resourceIdByProjectId[projectId] = CachedEntry(resourceId, now + CACHE_TTL_MS)
         return projectId
     }
+
+    fun resolveProtocolId(param: String): Long? =
+        resolve(param) ?: param.trim().toLongOrNull()?.takeIf { it > 0 }
 
     fun resourceIdFor(projectId: Long): String? {
         val now = nowMs()

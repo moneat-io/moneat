@@ -17,6 +17,7 @@
 package com.moneat.logs
 
 import com.moneat.dashboards.models.DashboardAlertResponse
+import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -29,6 +30,8 @@ import com.moneat.logs.models.LogPipelineResponse
 import com.moneat.logs.models.LogPipelineStep
 import com.moneat.logs.models.LogSavedViewResponse
 import com.moneat.logs.models.LogSavedViewState
+import com.moneat.logs.routes.LogManagementRouteDependencies
+import com.moneat.logs.routes.LogRouteDependencies
 import com.moneat.logs.routes.logRoutes as installLogRoutes
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogManagementService
@@ -67,6 +70,9 @@ private const val TEST_ORG_ID = 7
 private const val TEST_USER_ID = 42
 private const val TEST_CREATED_AT = "2026-06-04T00:00:00Z"
 private const val TEST_UPDATED_AT = "2026-06-04T00:01:00Z"
+private const val DASHBOARD_RESOURCE_ID = "00000000-0000-0000-0000-000000000012"
+private const val WIDGET_RESOURCE_ID = "00000000-0000-0000-0000-000000000034"
+private const val ALERT_RESOURCE_ID = "00000000-0000-0000-0000-000000000055"
 
 class LogManagementRoutesTest {
     private val logService = mockk<LogService>(relaxed = true)
@@ -76,6 +82,7 @@ class LogManagementRoutesTest {
     private val logManagementService = mockk<LogManagementService>(relaxed = true)
     private val membershipService = mockk<OrgMembershipService>(relaxed = true)
     private val dashboardAlertService = mockk<DashboardAlertService>(relaxed = true)
+    private val customDashboardService = mockk<CustomDashboardService>(relaxed = true)
 
     @BeforeTest
     fun setup() {
@@ -86,9 +93,12 @@ class LogManagementRoutesTest {
             otlpServiceRoutingService,
             logManagementService,
             membershipService,
-            dashboardAlertService
+            dashboardAlertService,
+            customDashboardService
         )
         every { membershipService.requireRole(TEST_ORG_ID, TEST_USER_ID, OrgRole.ADMIN) } just Runs
+        every { customDashboardService.resolveDashboardId(DASHBOARD_RESOURCE_ID, TEST_ORG_ID.toLong()) } returns 12
+        every { customDashboardService.resolveWidgetId(WIDGET_RESOURCE_ID, 12) } returns 34
     }
 
     // ──── Index management ────
@@ -335,13 +345,13 @@ class LogManagementRoutesTest {
             )
             val dashboardDraft = client.postJson(
                 "/v1/logs/monitors/from-query",
-                """{"name":"Errors","threshold":10.0,"dashboard_id":12,"widget_id":34}"""
+                dashboardAlertDraftBody()
             )
 
             assertEquals(HttpStatusCode.OK, draftOnly.status)
             assertTrue(draftOnly.bodyAsText().contains(""""dashboard_alert_created":false"""))
             assertEquals(HttpStatusCode.OK, dashboardDraft.status)
-            assertTrue(dashboardDraft.bodyAsText().contains(""""dashboard_alert_id":55"""))
+            assertTrue(dashboardDraft.bodyAsText().contains(""""dashboard_alert_id":"$ALERT_RESOURCE_ID""""))
         }
 
     @Test
@@ -359,7 +369,7 @@ class LogManagementRoutesTest {
 
             val response = client.postJson(
                 "/v1/logs/monitors/from-query",
-                """{"name":"Errors","threshold":10.0,"dashboard_id":12,"widget_id":34}"""
+                dashboardAlertDraftBody()
             )
 
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -421,13 +431,21 @@ class LogManagementRoutesTest {
         installJwtAuth()
         routing {
             installLogRoutes(
-                logService = logService,
-                otlpApiKeyService = otlpApiKeyService,
-                logIndexService = logIndexService,
-                otlpServiceRoutingService = otlpServiceRoutingService,
-                logManagementService = logManagementService,
-                membershipService = membershipService,
-                dashboardAlertService = dashboardAlertService
+                LogRouteDependencies(
+                    logService = logService,
+                    otlpApiKeyService = otlpApiKeyService,
+                    logIndexService = logIndexService,
+                    otlpServiceRoutingService = otlpServiceRoutingService,
+                    logManagement = LogManagementRouteDependencies(
+                        logManagementService = logManagementService,
+                        logIndexService = logIndexService,
+                        logService = logService,
+                        membershipService = membershipService,
+                        dashboardAlertService = dashboardAlertService,
+                        customDashboardService = customDashboardService,
+                    ),
+                    membershipService = membershipService,
+                )
             )
         }
     }
@@ -452,6 +470,16 @@ class LogManagementRoutesTest {
 
     private fun token(): String =
         RouteTestSupport.createToken(userId = TEST_USER_ID, orgId = TEST_ORG_ID)
+
+    private fun dashboardAlertDraftBody(): String =
+        """
+        {
+          "name":"Errors",
+          "threshold":10.0,
+          "dashboard_id":"$DASHBOARD_RESOURCE_ID",
+          "widget_id":"$WIDGET_RESOURCE_ID"
+        }
+        """.trimIndent()
 
     private fun pipelineResponse(id: Int, name: String): LogPipelineResponse =
         LogPipelineResponse(
@@ -506,9 +534,9 @@ class LogManagementRoutesTest {
 
     private fun dashboardAlertResponse(): DashboardAlertResponse =
         DashboardAlertResponse(
-            id = 55,
-            widgetId = 34,
-            dashboardId = 12,
+            id = ALERT_RESOURCE_ID,
+            widgetId = WIDGET_RESOURCE_ID,
+            dashboardId = DASHBOARD_RESOURCE_ID,
             name = "Errors",
             condition = ">",
             threshold = 10.0,

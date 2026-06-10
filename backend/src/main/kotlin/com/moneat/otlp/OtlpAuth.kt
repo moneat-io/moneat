@@ -74,7 +74,7 @@ object OtlpAuth {
                 ?: call.request.header(HttpHeaders.Authorization)
         val projectId =
             extractProjectIdFromDsn(dsnLikeHeader, projectIdResolver)
-                ?: call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
+                ?: call.request.queryParameters["projectId"]?.let(projectIdResolver::resolveProtocolId)
                 ?: return null
         val publicKey =
             extractPublicKey(
@@ -95,6 +95,6 @@ object OtlpAuth {
             .find(cleaned)
             ?.groupValues
             ?.getOrNull(1)
-            ?.let(projectIdResolver::resolve)
+            ?.let(projectIdResolver::resolveProtocolId)
     }
 }

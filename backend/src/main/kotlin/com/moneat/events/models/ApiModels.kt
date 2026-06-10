@@ -17,6 +17,7 @@
 package com.moneat.events.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
@@ -70,23 +71,21 @@ data class ProjectKeyResponse(
 
 @Serializable
 data class ProjectResponse(
-    val id: Long,
-    val resourceId: String = id.toString(),
+    val id: String,
     val name: String,
     val slug: String,
     val framework: String?,
     val keys: List<ProjectKeyResponse>,
     val dsn: String, // First key's DSN for backward compatibility
     val issueCount: Long = 0,
-    val serviceId: Long = id,
+    val serviceId: String = id,
     val serviceName: String = slug
 )
 
 @Serializable
 data class IssueResponse(
     val id: String,
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
     val title: String,
     val culprit: String,
     val level: String,
@@ -103,8 +102,7 @@ data class IssueResponse(
 @Serializable
 data class IssueDetailResponse(
     val id: String,
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
     val projectName: String,
     val title: String,
     val culprit: String,
@@ -237,8 +235,7 @@ data class TransactionWithSpansResponse(
 @Serializable
 data class TraceDetailResponse(
     val traceId: String,
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
     val spans: List<SpanResponse>,
     val startTimestamp: Double,
     val endTimestamp: Double,
@@ -249,8 +246,7 @@ data class TraceDetailResponse(
 data class EventTraceResponse(
     val eventId: String?,
     val eventType: String?,
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
     val traceId: String,
     val transaction: TransactionDetailResponse? = null,
     val spans: List<SpanResponse> = emptyList()
@@ -462,8 +458,7 @@ data class ReleaseMarker(
 @Serializable
 data class ReplayListItem(
     val replayId: String,
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Double,
@@ -482,8 +477,8 @@ data class ReplayListItem(
 @Serializable
 data class ReplayDetailResponse(
     val replayId: String,
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
+    @Transient val numericProjectId: Long = 0,
     val startedAt: String,
     val finishedAt: String,
     val durationMs: Double,
@@ -596,7 +591,7 @@ data class FeedbackUpdateRequest(
 @Serializable
 data class EventIssueLinkResponse(
     val issueId: String,
-    val projectResourceId: String
+    val projectId: String
 )
 
 @Serializable
@@ -645,8 +640,7 @@ data class NotificationPreferencesData(
 
 @Serializable
 data class ProjectNotificationPreferences(
-    val projectId: Long,
-    val projectResourceId: String = projectId.toString(),
+    val projectId: String,
     val projectName: String,
     val issueAlerts: Boolean,
     val errorAlerts: Boolean,

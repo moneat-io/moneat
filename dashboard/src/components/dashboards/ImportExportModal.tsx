@@ -50,7 +50,7 @@ interface ImportExportModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode: 'import' | 'export'
-  dashboardId?: number
+  dashboardId?: string
 }
 
 export function ImportExportModal({open, onOpenChange, mode, dashboardId}: ImportExportModalProps) {
@@ -61,7 +61,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const [format, setFormat] = useState<DashboardImportFormat>('grafana')
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)
-  const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
+  const [importedDashboardId, setImportedDashboardId] = useState<string | null>(null)
   const [exportData, setExportData] = useState<string>('')
   const [showDataSourceMapper, setShowDataSourceMapper] = useState(false)
   const [unmappedDataSources, setUnmappedDataSources] = useState<string[]>([])

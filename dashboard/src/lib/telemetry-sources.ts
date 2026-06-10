@@ -141,22 +141,22 @@ export function toggleTelemetrySourceId(
   return [...selectedSourceIds, sourceId]
 }
 
-export function telemetrySourcesStorageKey(serviceId: string | number): string {
+export function telemetrySourcesStorageKey(serviceId: string): string {
   return `moneat:service:${serviceId}:telemetry-sources`
 }
 
-function legacyTelemetrySourcesStorageKey(serviceId: string | number): string {
+function legacyTelemetrySourcesStorageKey(serviceId: string): string {
   return `moneat:project:${serviceId}:telemetry-sources`
 }
 
-export function loadTelemetrySourceIdsForService(serviceId: string | number): TelemetrySourceId[] {
+export function loadTelemetrySourceIdsForService(serviceId: string): TelemetrySourceId[] {
   const rawValue = globalThis.localStorage?.getItem(telemetrySourcesStorageKey(serviceId)) ??
     globalThis.localStorage?.getItem(legacyTelemetrySourcesStorageKey(serviceId))
   return parseTelemetrySourceIds(rawValue)
 }
 
 export function storeTelemetrySourceIdsForService(
-  serviceId: string | number,
+  serviceId: string,
   sourceIds: TelemetrySourceId[]
 ): void {
   globalThis.localStorage?.setItem(telemetrySourcesStorageKey(serviceId), serializeTelemetrySourceIds(sourceIds))

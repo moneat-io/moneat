@@ -155,8 +155,7 @@ export interface OtlpObservedService {
   mappingId?: number | null
   serviceNamespace: string
   serviceName: string
-  projectId?: number | null
-  projectResourceId?: string | null
+  projectId?: string | null
   projectName?: string | null
   seenLogs: boolean
   seenTraces: boolean
@@ -171,8 +170,7 @@ export interface OtlpServiceMapping {
   id: number
   serviceNamespace: string
   serviceName: string
-  projectId: number
-  projectResourceId: string
+  projectId: string
   projectName: string
   updatedAt: string
 }

@@ -113,7 +113,7 @@ function statusVariant(state: TelemetrySourceStatusState): 'default' | 'secondar
   return 'outline'
 }
 
-function getInitialSourceIds(projectId: string | number, selectedSourcesParam?: string): TelemetrySourceId[] {
+function getInitialSourceIds(projectId: string, selectedSourcesParam?: string): TelemetrySourceId[] {
   const sourceIdsFromSearch = parseTelemetrySourceIds(selectedSourcesParam)
   if (sourceIdsFromSearch.length > 0) return sourceIdsFromSearch
 
@@ -324,7 +324,7 @@ function TargetPlatformSection({
   const [showAddPlatform, setShowAddPlatform] = useState(false)
 
   const addTargetMutation = useMutation({
-    mutationFn: (target: string) => api.addProjectTarget(service.resourceId, target),
+    mutationFn: (target: string) => api.addProjectTarget(service.id, target),
     onSuccess: (_key, target) => {
       queryClient.invalidateQueries({queryKey: ['projects']})
       router.invalidate()
@@ -800,7 +800,7 @@ export function ServiceTelemetrySetupHub({
     [selectedSourcesParam]
   )
   const [storedSourceIds, setStoredSourceIds] = useState<TelemetrySourceId[]>(
-    () => getInitialSourceIds(service.resourceId)
+    () => getInitialSourceIds(service.id)
   )
   const selectedSourceIds = sourceIdsFromSearch.length > 0 ? sourceIdsFromSearch : storedSourceIds
   const [requestedActiveSourceId, setRequestedActiveSourceId] = useState<TelemetrySourceId>(selectedSourceIds[0])
@@ -816,7 +816,7 @@ export function ServiceTelemetrySetupHub({
 
   const copyResourceId = async () => {
     try {
-      await navigator.clipboard.writeText(service.resourceId)
+      await navigator.clipboard.writeText(service.id)
       setCopiedResourceId(true)
       setTimeout(() => setCopiedResourceId(false), COPY_RESET_MS)
     } catch (error) {
@@ -830,8 +830,8 @@ export function ServiceTelemetrySetupHub({
   }
 
   useEffect(() => {
-    storeTelemetrySourceIdsForService(service.resourceId, selectedSourceIds)
-  }, [service.resourceId, selectedSourceIds])
+    storeTelemetrySourceIdsForService(service.id, selectedSourceIds)
+  }, [service.id, selectedSourceIds])
 
   const {data: sdkVersionsResponse} = useQuery({
     queryKey: ['sdk-versions'],
@@ -844,8 +844,8 @@ export function ServiceTelemetrySetupHub({
     staleTime: 30 * 60 * 1000,
   })
   const {data: projectStats} = useQuery({
-    queryKey: ['serviceStats', service.resourceId, '24h'],
-    queryFn: () => api.getProjectStats(service.resourceId, '24h'),
+    queryKey: ['serviceStats', service.id, '24h'],
+    queryFn: () => api.getProjectStats(service.id, '24h'),
   })
   const {data: otlpKeyResponse} = useQuery({
     queryKey: ['otlpApiKeys'],
@@ -905,7 +905,7 @@ export function ServiceTelemetrySetupHub({
 
   const updateSelectedSources = (sourceIds: TelemetrySourceId[]) => {
     setStoredSourceIds(sourceIds)
-    storeTelemetrySourceIdsForService(service.resourceId, sourceIds)
+    storeTelemetrySourceIdsForService(service.id, sourceIds)
     navigate({
       search: (previous) => ({
         ...previous,
@@ -946,7 +946,7 @@ export function ServiceTelemetrySetupHub({
             <div className="mt-1 flex max-w-full items-center gap-2 text-xs text-muted-foreground">
               <span>Service ID</span>
               <code className="max-w-[min(28rem,70vw)] truncate rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
-                {service.resourceId}
+                {service.id}
               </code>
               <Button
                 type="button"
@@ -961,7 +961,7 @@ export function ServiceTelemetrySetupHub({
             </div>
           </div>
           <Button asChild variant="outline" size="icon" aria-label="Service settings">
-            <Link to="/projects/$projectId/settings" params={{projectId: service.resourceId}}>
+            <Link to="/projects/$projectId/settings" params={{projectId: service.id}}>
               <Settings className="h-4 w-4" />
             </Link>
           </Button>

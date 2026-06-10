@@ -95,7 +95,7 @@ class McpAuthorizationTest {
         val projectId = seedProject(organizationId = 2)
         val result = registryWithNoopTool().callTool(
             name = "read_project",
-            args = JsonObject(mapOf("project_id" to JsonPrimitive(projectId))),
+            args = JsonObject(mapOf("project_id" to JsonPrimitive(projectResourceId(projectId)))),
             context = context,
         )
 
@@ -277,6 +277,14 @@ class McpAuthorizationTest {
             }[Projects.id]
         }
 
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
+    }
+
     private fun seedHost(organizationId: Int): Int =
         transaction {
             seedOrganization(organizationId)
@@ -454,6 +462,7 @@ class McpAuthorizationTest {
                 """
                 CREATE TABLE dashboards (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     org_id BIGINT NOT NULL,
                     title VARCHAR(255) NOT NULL,
                     description TEXT NULL,
@@ -467,6 +476,7 @@ class McpAuthorizationTest {
                 """
                 CREATE TABLE custom_data_sources (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     org_id BIGINT NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     source_type VARCHAR(50) NOT NULL,

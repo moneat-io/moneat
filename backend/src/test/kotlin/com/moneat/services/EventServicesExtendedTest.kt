@@ -127,7 +127,7 @@ class EventServicesExtendedTest {
         issueService = IssueService(
             issueRepository,
             queryHelper,
-            ProjectIdResolver(lookupResourceIdByProjectId = { null }),
+            ProjectIdResolver(),
             alertEpisodeService
         )
     }
@@ -290,7 +290,7 @@ class EventServicesExtendedTest {
         )
 
         assertEquals(1, result.size)
-        assertEquals(otherProjectId, result.single().projectId)
+        assertEquals(ProjectIdResolver().resourceIdFor(otherProjectId), result.single().projectId)
     }
 
     @Test
@@ -353,7 +353,7 @@ class EventServicesExtendedTest {
         )
 
         assertEquals(1, result.size)
-        assertEquals(testProjectId, result.single().projectId)
+        assertEquals(ProjectIdResolver().resourceIdFor(testProjectId), result.single().projectId)
     }
 
     @Test

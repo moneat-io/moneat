@@ -45,8 +45,8 @@ beforeAll(() => {
 
 function kpiWidget(overrides: Partial<DashboardWidget> = {}): DashboardWidget {
   return {
-    id: -1,
-    dashboard_id: 0,
+    id: "overview-widget",
+    dashboard_id: "overview-dashboard",
     title: 'KPI Title Should Be Hidden',
     widget_type: 'kpi',
     grid_x: 0,
@@ -61,7 +61,7 @@ function kpiWidget(overrides: Partial<DashboardWidget> = {}): DashboardWidget {
 }
 
 const baseProps = {
-  dashboardId: 0,
+  dashboardId: "overview-dashboard",
   timeRange: {from: 'now-24h', to: 'now'},
   autoRefresh: false,
   onLayoutChange: vi.fn(),

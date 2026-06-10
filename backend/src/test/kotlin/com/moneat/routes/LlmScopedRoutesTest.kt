@@ -49,6 +49,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,6 +59,8 @@ class LlmScopedRoutesTest {
     companion object {
         private const val PROJECT_ID = 1L
         private const val SECOND_PROJECT_ID = 2L
+        private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val SECOND_PROJECT_RESOURCE_ID = "118f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private var db: Database? = null
     }
 
@@ -81,6 +84,7 @@ class LlmScopedRoutesTest {
             Memberships,
             Projects
         )
+        seedRouteProjects()
     }
 
     private fun installRoutes(app: Application) {
@@ -126,6 +130,22 @@ class LlmScopedRoutesTest {
             }
         }
         return userId to orgId
+    }
+
+    private fun seedRouteProjects() {
+        seedProject(PROJECT_ID, PROJECT_RESOURCE_ID, "llm-primary")
+        seedProject(SECOND_PROJECT_ID, SECOND_PROJECT_RESOURCE_ID, "llm-secondary")
+    }
+
+    private fun seedProject(projectId: Long, resourceId: String, slug: String) = transaction {
+        Projects.insert {
+            it[id] = projectId
+            it[resource_id] = Uuid.parse(resourceId)
+            it[organization_id] = 1
+            it[name] = slug
+            it[Projects.slug] = slug
+            it[framework] = "otel"
+        }
     }
 
     private fun LlmGenerationsQuery.hasExpectedFilters(): Boolean =
@@ -189,7 +209,7 @@ class LlmScopedRoutesTest {
 
         application { installRoutes(this) }
         val response = client.get(
-            "/v1/llm/generations?range=7d&serviceIds=$PROJECT_ID&services=API" +
+            "/v1/llm/generations?range=7d&serviceIds=$PROJECT_RESOURCE_ID&services=API" +
                 "&model=gpt-4o&provider=openai&type=chat&status=error&page=2&pageSize=10"
         ) {
             withAuth(token(userId, orgId))

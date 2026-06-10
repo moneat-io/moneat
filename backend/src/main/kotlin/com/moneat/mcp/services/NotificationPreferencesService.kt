@@ -87,8 +87,7 @@ class NotificationPreferencesService {
             val projectId = pref[NotificationPreferences.project_id]!!
             val projectRow = projectRows[projectId]
             ProjectNotificationPreferences(
-                projectId = projectId,
-                projectResourceId = projectRow?.second ?: projectId.toString(),
+                projectId = projectRow?.second ?: "",
                 projectName = projectRow?.first ?: "Unknown",
                 issueAlerts = pref[NotificationPreferences.issue_alerts],
                 errorAlerts = pref[NotificationPreferences.error_alerts],

@@ -72,11 +72,40 @@ class DashboardCrudToolTest {
             exec("DROP TABLE IF EXISTS dashboard_favorites")
             exec("DROP TABLE IF EXISTS custom_data_sources")
             exec("DROP TABLE IF EXISTS dashboards")
+            exec("DROP TABLE IF EXISTS projects")
             patchJsonbForH2(DashboardWidgets, DashboardWidgetAlerts)
+            exec(
+                """
+                CREATE TABLE projects (
+                    id BIGINT PRIMARY KEY,
+                    resource_id UUID NOT NULL,
+                    organization_id INT NOT NULL,
+                    name VARCHAR(255) NOT NULL,
+                    slug VARCHAR(255) NOT NULL,
+                    framework VARCHAR(50)
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                INSERT INTO projects (id, resource_id, organization_id, name, slug, framework)
+                VALUES
+                    ($PROJECT_ID, '$PROJECT_RESOURCE_ID', $ORG_ID, 'Primary Project', 'primary-project', 'otel'),
+                    (
+                        $SECOND_PROJECT_ID,
+                        '$SECOND_PROJECT_RESOURCE_ID',
+                        $ORG_ID,
+                        'Other Project',
+                        'other-project',
+                        'otel'
+                    )
+                """.trimIndent()
+            )
             exec(
                 """
                 CREATE TABLE dashboards (
                     id BIGSERIAL PRIMARY KEY,
+                    resource_id UUID NOT NULL,
                     org_id BIGINT NOT NULL,
                     project_id BIGINT,
                     folder_id BIGINT,
@@ -105,6 +134,7 @@ class DashboardCrudToolTest {
                 """
                 CREATE TABLE custom_data_sources (
                     id BIGSERIAL PRIMARY KEY,
+                    resource_id UUID NOT NULL,
                     org_id BIGINT NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     description TEXT,
@@ -125,6 +155,7 @@ class DashboardCrudToolTest {
                 """
                 CREATE TABLE dashboard_widgets (
                     id BIGSERIAL PRIMARY KEY,
+                    resource_id UUID NOT NULL,
                     dashboard_id BIGINT NOT NULL,
                     title VARCHAR(255),
                     widget_type VARCHAR(50) NOT NULL,
@@ -145,6 +176,7 @@ class DashboardCrudToolTest {
                 """
                 CREATE TABLE dashboard_widget_alerts (
                     id BIGSERIAL PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     widget_id BIGINT NOT NULL,
                     dashboard_id BIGINT NOT NULL,
                     org_id BIGINT NOT NULL,
@@ -195,8 +227,8 @@ class DashboardCrudToolTest {
         val result = CreateDashboardAlertTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(widgetId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
                     "name" to JsonPrimitive("CPU high"),
                     "condition" to JsonPrimitive("gt"),
                     "threshold" to JsonPrimitive(0.85),
@@ -222,8 +254,8 @@ class DashboardCrudToolTest {
             CreateDashboardAlertTool().execute(
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
-                        "widget_id" to JsonPrimitive(widgetId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                        "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
                         "name" to JsonPrimitive("Heap high"),
                         "condition" to JsonPrimitive("gt"),
                         "threshold" to JsonPrimitive(0.85)
@@ -236,7 +268,7 @@ class DashboardCrudToolTest {
         val result = UpdateDashboardAlertTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "alert_id" to JsonPrimitive(created.id),
                     "condition" to JsonPrimitive("gte"),
                     "threshold" to JsonPrimitive(0.9),
@@ -277,8 +309,8 @@ class DashboardCrudToolTest {
         val result = CreateDashboardAlertTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(widgetId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
                     "name" to JsonPrimitive("CPU high"),
                     "condition" to JsonPrimitive("above"),
                     "threshold" to JsonPrimitive(0.85)
@@ -302,8 +334,8 @@ class DashboardCrudToolTest {
         val result = CreateDashboardAlertTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(widgetId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
                     "name" to JsonPrimitive("CPU high"),
                     "condition" to JsonPrimitive("gt"),
                     "threshold" to JsonPrimitive(0.85),
@@ -348,8 +380,8 @@ class DashboardCrudToolTest {
             val result = CreateDashboardAlertTool().execute(
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
-                        "widget_id" to JsonPrimitive(widgetId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                        "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
                         "name" to JsonPrimitive("Alias alert $index"),
                         "condition" to JsonPrimitive(conditionCase.first),
                         "threshold" to JsonPrimitive(index.toDouble()),
@@ -374,8 +406,8 @@ class DashboardCrudToolTest {
             CreateDashboardAlertTool().execute(
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
-                        "widget_id" to JsonPrimitive(widgetId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                        "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
                         "name" to JsonPrimitive("Heap high"),
                         "condition" to JsonPrimitive("gt"),
                         "threshold" to JsonPrimitive(0.85)
@@ -385,7 +417,7 @@ class DashboardCrudToolTest {
             ).content.first().text!!
         )
         val baseArgs: Map<String, JsonElement> = mapOf(
-            "dashboard_id" to JsonPrimitive(dashboardId),
+            "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
             "alert_id" to JsonPrimitive(created.id),
         )
         val cases: List<Pair<Map<String, JsonElement>, String>> = listOf(
@@ -418,7 +450,7 @@ class DashboardCrudToolTest {
         val result = CreateDashboardWidgetTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "title" to JsonPrimitive("Memory"),
                     "widget_type" to JsonPrimitive("stat"),
                     "query_configs" to JsonArray(listOf(queryDslJson("metrics"))),
@@ -447,8 +479,8 @@ class DashboardCrudToolTest {
         val result = UpdateDashboardWidgetTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(firstWidgetId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(firstWidgetId)),
                     "title" to JsonPrimitive("CPU load"),
                     "widget_type" to JsonPrimitive("gauge"),
                     "grid_w" to JsonPrimitive(3),
@@ -459,8 +491,8 @@ class DashboardCrudToolTest {
         )
 
         val dashboard = decodeDashboard(result.content.first().text!!)
-        val updated = dashboard.widgets.single { it.id == firstWidgetId }
-        val untouched = dashboard.widgets.single { it.id == secondWidgetId }
+        val updated = dashboard.widgets.single { it.id == widgetResourceId(firstWidgetId) }
+        val untouched = dashboard.widgets.single { it.id == widgetResourceId(secondWidgetId) }
         assertFalse(result.isError)
         assertEquals("CPU load", updated.title)
         assertEquals("gauge", updated.widgetType)
@@ -479,8 +511,8 @@ class DashboardCrudToolTest {
         val result = DeleteDashboardWidgetTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(firstWidgetId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(firstWidgetId)),
                 )
             ),
             context
@@ -488,7 +520,7 @@ class DashboardCrudToolTest {
 
         val dashboard = decodeDashboard(result.content.first().text!!)
         assertFalse(result.isError)
-        assertEquals(listOf(secondWidgetId), dashboard.widgets.map { it.id })
+        assertEquals(listOf(widgetResourceId(secondWidgetId)), dashboard.widgets.map { it.id })
         assertEquals("Latency", dashboard.widgets.single().title)
     }
 
@@ -500,7 +532,7 @@ class DashboardCrudToolTest {
         val result = ReplaceDashboardWidgetsTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "expected_widget_count" to JsonPrimitive(2),
                     "widgets" to JsonArray(emptyList()),
                 )
@@ -524,7 +556,7 @@ class DashboardCrudToolTest {
         val result = ReplaceDashboardWidgetsTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "expected_widget_count" to JsonPrimitive(1),
                     "widgets" to JsonArray(
                         listOf(
@@ -567,8 +599,8 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "project_id" to JsonPrimitive(PROJECT_ID + 1),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "project_id" to JsonPrimitive(SECOND_PROJECT_RESOURCE_ID),
                     "query_config" to queryDslJson("metrics"),
                 )
             ),
@@ -576,21 +608,17 @@ class DashboardCrudToolTest {
         )
 
         assertTrue(result.isError)
-        assertEquals("Dashboard is scoped to project $PROJECT_ID", result.content.first().text)
+        assertEquals("Dashboard is scoped to project $PROJECT_RESOURCE_ID", result.content.first().text)
     }
 
     @Test
-    fun `preview dashboard widget query schema accepts resource IDs and legacy numeric IDs`() {
+    fun `preview dashboard widget query schema accepts resource IDs only`() {
         val projectIdSchema = PreviewDashboardWidgetQueryTool()
             .inputSchema
             .properties["project_id"]!!
             .jsonObject
-        val typeValues = projectIdSchema["type"] as JsonArray
 
-        assertEquals(
-            listOf("string", "number"),
-            typeValues.jsonArray.map { it.jsonPrimitive.content }
-        )
+        assertEquals("string", projectIdSchema["type"]?.jsonPrimitive?.content)
     }
 
     @Test
@@ -600,7 +628,7 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "query_config" to queryDslJson("metrics"),
                 )
             ),
@@ -618,7 +646,7 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "query_config" to queryDslJson("custom:bad", rawQuery = "up{service=\"\$service\"}"),
                     "variables" to JsonObject(mapOf("service" to JsonPrimitive("api"))),
                     "time_range" to JsonObject(
@@ -643,8 +671,8 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "query_config" to queryDslJson("custom:123", rawQuery = "up"),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "query_config" to queryDslJson("custom:$MISSING_DATA_SOURCE_RESOURCE_ID", rawQuery = "up"),
                 )
             ),
             context
@@ -662,7 +690,7 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "query_config" to queryDslJson("__prometheus", rawQuery = "up"),
                 )
             ),
@@ -681,7 +709,7 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "query_config" to queryDslJson("__prometheus", rawQuery = "up"),
                 )
             ),
@@ -699,7 +727,7 @@ class DashboardCrudToolTest {
         val result = PreviewDashboardWidgetQueryTool().execute(
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                     "query_config" to queryDslJson("metrics", rawQuery = "SELECT 1"),
                 )
             ),
@@ -718,43 +746,43 @@ class DashboardCrudToolTest {
             UpdateDashboardWidgetTool(),
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(WIDGET_ID),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(WIDGET_ID)),
                     "title" to JsonPrimitive("CPU"),
                 )
             ),
-            "Widget not found on dashboard: $WIDGET_ID"
+            "Widget not found on dashboard: ${widgetResourceId(WIDGET_ID)}"
         )
         assertToolError(
             DeleteDashboardWidgetTool(),
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(dashboardId),
-                    "widget_id" to JsonPrimitive(WIDGET_ID),
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(WIDGET_ID)),
                 )
             ),
-            "Widget not found on dashboard: $WIDGET_ID"
+            "Widget not found on dashboard: ${widgetResourceId(WIDGET_ID)}"
         )
         assertToolError(
             ReplaceDashboardWidgetsTool(),
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(DASHBOARD_ID + 1),
+                    "dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID),
                     "expected_widget_count" to JsonPrimitive(0),
                     "widgets" to JsonArray(emptyList()),
                 )
             ),
-            "Dashboard not found: ${DASHBOARD_ID + 1}"
+            "Dashboard not found: $MISSING_DASHBOARD_RESOURCE_ID"
         )
         assertToolError(
             PreviewDashboardWidgetQueryTool(),
             JsonObject(
                 mapOf(
-                    "dashboard_id" to JsonPrimitive(DASHBOARD_ID + 1),
+                    "dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID),
                     "query_config" to queryDslJson("metrics"),
                 )
             ),
-            "Dashboard not found: ${DASHBOARD_ID + 1}"
+            "Dashboard not found: $MISSING_DASHBOARD_RESOURCE_ID"
         )
     }
 
@@ -764,7 +792,7 @@ class DashboardCrudToolTest {
         seedWidget(dashboardId)
 
         val baseCreateArgs = mapOf(
-            "dashboard_id" to JsonPrimitive(dashboardId),
+            "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
             "widget_type" to JsonPrimitive("stat"),
         )
 
@@ -798,7 +826,7 @@ class DashboardCrudToolTest {
                 PreviewDashboardWidgetQueryTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "query_config" to JsonObject(emptyMap()),
                     )
                 ),
@@ -808,7 +836,7 @@ class DashboardCrudToolTest {
                 PreviewDashboardWidgetQueryTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "query_config" to queryDslJson("metrics"),
                         "variables" to JsonArray(emptyList()),
                     )
@@ -819,7 +847,7 @@ class DashboardCrudToolTest {
                 PreviewDashboardWidgetQueryTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "query_config" to queryDslJson("metrics"),
                         "variables" to JsonObject(mapOf("service" to JsonObject(emptyMap()))),
                     )
@@ -830,7 +858,7 @@ class DashboardCrudToolTest {
                 PreviewDashboardWidgetQueryTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "query_config" to queryDslJson("metrics"),
                         "variables" to JsonObject(mapOf("service" to JsonPrimitive(123))),
                     )
@@ -841,7 +869,7 @@ class DashboardCrudToolTest {
                 PreviewDashboardWidgetQueryTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "query_config" to queryDslJson("metrics"),
                         "time_range" to JsonArray(emptyList()),
                     )
@@ -852,7 +880,7 @@ class DashboardCrudToolTest {
                 ReplaceDashboardWidgetsTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "expected_widget_count" to JsonPrimitive(1),
                         "widgets" to JsonObject(emptyMap()),
                     )
@@ -863,7 +891,7 @@ class DashboardCrudToolTest {
                 ReplaceDashboardWidgetsTool(),
                 JsonObject(
                     mapOf(
-                        "dashboard_id" to JsonPrimitive(dashboardId),
+                        "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
                         "expected_widget_count" to JsonPrimitive(1),
                         "widgets" to JsonArray(
                             listOf(JsonObject(mapOf("widget_type" to JsonPrimitive("bad"))))
@@ -902,9 +930,9 @@ class DashboardCrudToolTest {
         exec(
             """
             INSERT INTO dashboards (
-                id, org_id, project_id, title, created_by, created_at, updated_at
+                id, resource_id, org_id, project_id, title, created_by, created_at, updated_at
             ) VALUES (
-                $DASHBOARD_ID, $ORG_ID, $projectValue, 'MCP Test Dashboard',
+                $DASHBOARD_ID, '$DASHBOARD_RESOURCE_ID', $ORG_ID, $projectValue, 'MCP Test Dashboard',
                 $CREATED_BY, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """.trimIndent()
@@ -924,10 +952,10 @@ class DashboardCrudToolTest {
         exec(
             """
             INSERT INTO dashboard_widgets (
-                id, dashboard_id, title, widget_type, query_config, query_configs, display_config,
+                id, resource_id, dashboard_id, title, widget_type, query_config, query_configs, display_config,
                 grid_y, grid_h, sort_order, created_at, updated_at
             ) VALUES (
-                $widgetId, $dashboardId, '$title', '$widgetType', '{}', '[]', '{}',
+                $widgetId, '${widgetResourceId(widgetId)}', $dashboardId, '$title', '$widgetType', '{}', '[]', '{}',
                 $gridY, $gridH, $sortOrder,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
@@ -945,16 +973,26 @@ class DashboardCrudToolTest {
         exec(
             """
             INSERT INTO custom_data_sources (
-                id, org_id, name, source_type, host, encrypted_credentials, extra_config,
+                id, resource_id, org_id, name, source_type, host, encrypted_credentials, extra_config,
                 enabled, created_by, created_at, updated_at
             ) VALUES (
-                $sourceId, $ORG_ID, 'Prometheus', '$sourceType', 'prometheus.local',
+                $sourceId, '$DATA_SOURCE_RESOURCE_ID', $ORG_ID, 'Prometheus', '$sourceType', 'prometheus.local',
                 'not-encrypted', '{}', $enabledValue, $CREATED_BY, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """.trimIndent()
         )
         sourceId
     }
+
+    private fun dashboardResourceId(dashboardId: Long): String =
+        if (dashboardId == DASHBOARD_ID) DASHBOARD_RESOURCE_ID else MISSING_DASHBOARD_RESOURCE_ID
+
+    private fun widgetResourceId(widgetId: Long): String =
+        when (widgetId) {
+            WIDGET_ID -> WIDGET_RESOURCE_ID
+            WIDGET_ID + 1 -> SECOND_WIDGET_RESOURCE_ID
+            else -> MISSING_WIDGET_RESOURCE_ID
+        }
 
     private fun decodeAlert(text: String): DashboardAlertResponse =
         json.decodeFromString<DashboardAlertResponse>(text)
@@ -1003,9 +1041,19 @@ class DashboardCrudToolTest {
         private const val ORG_ID = 1L
         private const val CREATED_BY = 100L
         private const val PROJECT_ID = 200L
+        private const val SECOND_PROJECT_ID = PROJECT_ID + 1
+        private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val SECOND_PROJECT_RESOURCE_ID = "118f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val DASHBOARD_ID = 10L
+        private const val DASHBOARD_RESOURCE_ID = "218f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val MISSING_DASHBOARD_RESOURCE_ID = "318f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val WIDGET_ID = 20L
+        private const val WIDGET_RESOURCE_ID = "418f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val SECOND_WIDGET_RESOURCE_ID = "518f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val MISSING_WIDGET_RESOURCE_ID = "618f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val DATA_SOURCE_ID = 30L
+        private const val DATA_SOURCE_RESOURCE_ID = "718f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val MISSING_DATA_SOURCE_RESOURCE_ID = "818f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val DASHBOARD_JSONB_TYPE = "com.moneat.dashboards.models.JsonbColumnType"
     }
 }

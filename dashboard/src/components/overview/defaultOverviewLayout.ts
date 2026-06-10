@@ -18,7 +18,7 @@ import type {CustomDashboard, DashboardWidget} from '@/lib/api'
 import {OVERVIEW_WIDGETS} from './overviewWidgetTypes'
 
 /** Reserved id for the local default overview dashboard. */
-export const OVERVIEW_DASHBOARD_ID = 0
+export const OVERVIEW_DASHBOARD_ID = 'overview-default'
 
 interface WidgetSpec {
   type: string
@@ -51,8 +51,7 @@ const DEFAULT_SPECS: WidgetSpec[] = [
 
 export function buildDefaultOverviewWidgets(): DashboardWidget[] {
   return DEFAULT_SPECS.map((spec, index) => ({
-    // Negative ids are stable local keys for the default overview layout.
-    id: -(index + 1),
+    id: `overview-default-widget-${index + 1}`,
     dashboard_id: OVERVIEW_DASHBOARD_ID,
     title: OVERVIEW_WIDGETS[spec.type]?.label ?? spec.type,
     widget_type: spec.type,

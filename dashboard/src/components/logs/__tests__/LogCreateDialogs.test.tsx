@@ -50,7 +50,7 @@ vi.mock('@/components/dashboards/WidgetConfigPanel', () => ({
   }: {
     widget: DashboardWidget
     dashboardId: number
-    projectId?: string | number
+    projectId?: string
     onSave: (widget: DashboardWidget) => void
     onClose: () => void
   }) => (

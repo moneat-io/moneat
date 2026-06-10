@@ -1205,7 +1205,7 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                         call.respond(
                             EventIssueLinkResponse(
                                 issueId = issueId,
-                                projectResourceId = projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+                                projectId = projectIdResolver.resourceIdFor(projectId) ?: ""
                             )
                         )
                     }
@@ -1370,11 +1370,10 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                                                 .firstOrNull()
                                         val projectName = projectRow?.get(Projects.name) ?: "Unknown"
                                         val projectResourceId =
-                                            projectRow?.get(Projects.resource_id)?.toString() ?: projectId.toString()
+                                            projectRow?.get(Projects.resource_id)?.toString() ?: ""
 
                                         ProjectNotificationPreferences(
-                                            projectId = projectId,
-                                            projectResourceId = projectResourceId,
+                                            projectId = projectResourceId,
                                             projectName = projectName,
                                             issueAlerts = pref[NotificationPreferences.issue_alerts],
                                             errorAlerts = pref[NotificationPreferences.error_alerts],

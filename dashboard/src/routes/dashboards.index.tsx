@@ -61,7 +61,7 @@ export const Route = createFileRoute('/dashboards/')({
   component: DashboardListPage,
 })
 
-type FolderFilter = 'all' | 'favorites' | 'uncategorized' | number
+type FolderFilter = 'all' | 'favorites' | 'uncategorized' | string
 
 type DashboardPageTitleProps = Readonly<{
   isFirstRun: boolean
@@ -99,12 +99,12 @@ type DashboardWorkspaceProps = Readonly<{
   onCancelCreatingFolder: () => void
   onNewFolderNameChange: (name: string) => void
   onCreateFolder: (name: string) => void
-  onDeleteFolder: (folderId: number) => void
+  onDeleteFolder: (folderId: string) => void
   onCreateBlank: () => void
-  onDeleteDashboard: (dashboardId: number) => void
-  onDuplicateDashboard: (dashboardId: number) => void
-  onFavoriteToggle: (dashboardId: number) => void
-  onMoveToFolder: (dashboardId: number, folderId: number | null) => void
+  onDeleteDashboard: (dashboardId: string) => void
+  onDuplicateDashboard: (dashboardId: string) => void
+  onFavoriteToggle: (dashboardId: string) => void
+  onMoveToFolder: (dashboardId: string, folderId: string | null) => void
 }>
 
 type MobileFolderPillsProps = Readonly<{
@@ -125,7 +125,7 @@ type FolderSidebarProps = Readonly<{
   isCreatingFolder: boolean
   newFolderName: string
   onSelectFolder: (folder: FolderFilter) => void
-  onDeleteFolder: (folderId: number) => void
+  onDeleteFolder: (folderId: string) => void
   onStartCreatingFolder: () => void
   onCancelCreatingFolder: () => void
   onNewFolderNameChange: (name: string) => void
@@ -170,7 +170,7 @@ type DashboardCardProps = Readonly<{
   onDelete: () => void
   onDuplicate: () => void
   onFavoriteToggle: () => void
-  onMoveToFolder: (folderId: number | null) => void
+  onMoveToFolder: (folderId: string | null) => void
 }>
 
 function DashboardListPage() {
@@ -220,7 +220,7 @@ function DashboardListPage() {
   const createFromTemplateMutation = useMutation({
     mutationFn: (templateId: string) =>
       api.createDashboardFromTemplate(templateId, {
-        folder_id: typeof selectedFolder === 'number' ? selectedFolder : undefined,
+        folder_id: isConcreteFolder(selectedFolder) ? selectedFolder : undefined,
       }),
     onSuccess: (dashboard) => {
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
@@ -229,7 +229,7 @@ function DashboardListPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteDashboard(id),
+    mutationFn: (id: string) => api.deleteDashboard(id),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['custom-dashboards']}),
   })
 
@@ -243,11 +243,11 @@ function DashboardListPage() {
   })
 
   const deleteFolderMutation = useMutation({
-    mutationFn: (id: number) => api.deleteDashboardFolder(id),
+    mutationFn: (id: string) => api.deleteDashboardFolder(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['dashboard-folders']})
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
-      if (typeof selectedFolder === 'number') setSelectedFolder('all')
+      if (isConcreteFolder(selectedFolder)) setSelectedFolder('all')
     },
   })
 
@@ -255,7 +255,7 @@ function DashboardListPage() {
     createMutation.mutate({
       title: 'New Dashboard',
       widgets: [],
-      folder_id: typeof selectedFolder === 'number' ? selectedFolder : undefined,
+      folder_id: isConcreteFolder(selectedFolder) ? selectedFolder : undefined,
     })
   }
 
@@ -267,7 +267,7 @@ function DashboardListPage() {
     createFolderMutation.mutate({name})
   }
 
-  const handleDuplicateDashboard = (dashboardId: number) => {
+  const handleDuplicateDashboard = (dashboardId: string) => {
     api.getDashboard(dashboardId).then((full) => {
       createMutation.mutate({
         title: `${full.title} (Copy)`,
@@ -288,12 +288,12 @@ function DashboardListPage() {
     })
   }
 
-  const handleFavoriteToggle = async (dashboardId: number) => {
+  const handleFavoriteToggle = async (dashboardId: string) => {
     await api.toggleDashboardFavorite(dashboardId)
     queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
   }
 
-  const handleMoveToFolder = async (dashboardId: number, folderId: number | null) => {
+  const handleMoveToFolder = async (dashboardId: string, folderId: string | null) => {
     await api.moveDashboardToFolder(dashboardId, folderId)
     queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
   }
@@ -374,6 +374,10 @@ function filterDashboards(
   return dashboards.filter((dashboard) => dashboard.folder_id === selectedFolder)
 }
 
+function isConcreteFolder(selectedFolder: FolderFilter): selectedFolder is string {
+  return !['all', 'favorites', 'uncategorized'].includes(selectedFolder)
+}
+
 function countFavorites(dashboards: readonly CustomDashboard[]) {
   return dashboards.filter((dashboard) => dashboard.is_favorited).length
 }
@@ -382,7 +386,7 @@ function countUncategorized(dashboards: readonly CustomDashboard[]) {
   return dashboards.filter((dashboard) => !dashboard.folder_id).length
 }
 
-function countDashboardsInFolder(dashboards: readonly CustomDashboard[], folderId: number) {
+function countDashboardsInFolder(dashboards: readonly CustomDashboard[], folderId: string) {
   return dashboards.filter((dashboard) => dashboard.folder_id === folderId).length
 }
 
@@ -738,8 +742,18 @@ const CARD_ACCENT_COLORS = [
   'from-chart-6 to-chart-6/70',
 ]
 
-function getAccentColor(id: number) {
-  return CARD_ACCENT_COLORS[id % CARD_ACCENT_COLORS.length]
+function getAccentColor(id: string) {
+  const index = Math.abs(hashIdentifier(id)) % CARD_ACCENT_COLORS.length
+  return CARD_ACCENT_COLORS[index]
+}
+
+function hashIdentifier(value: string) {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(index)
+    hash |= 0
+  }
+  return hash
 }
 
 function DashboardsEmptyState({
@@ -773,7 +787,7 @@ function DashboardsEmptyState({
     )
   }
 
-  if (typeof selectedFolder === 'number') {
+  if (isConcreteFolder(selectedFolder)) {
     return (
       <EmptyState
         icon={Folder}

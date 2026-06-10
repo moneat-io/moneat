@@ -25,6 +25,11 @@ import type {QueryDsl, DashboardWidgetAlert} from '@/lib/api'
 import {renderWithQueryClient, clearAuthStorage} from '@/test/utils'
 
 const API_BASE = 'http://localhost:8080'
+const DASHBOARD_ID = 'dashboard-5'
+const WIDGET_ID = 'widget-10'
+const OTHER_WIDGET_ID = 'widget-99'
+const ALERT_ID = 'alert-1'
+const SECOND_ALERT_ID = 'alert-2'
 
 const baseQuery: QueryDsl = {
   dataSource: 'events',
@@ -36,9 +41,9 @@ const baseQuery: QueryDsl = {
 }
 
 const makeAlert = (overrides: Partial<DashboardWidgetAlert> = {}): DashboardWidgetAlert => ({
-  id: 1,
-  widget_id: 10,
-  dashboard_id: 5,
+  id: ALERT_ID,
+  widget_id: WIDGET_ID,
+  dashboard_id: DASHBOARD_ID,
   name: 'High error rate',
   condition: '>',
   threshold: 100,
@@ -61,15 +66,15 @@ beforeEach(() => {
 })
 
 function renderAlertForm(props: {
-  dashboardId?: number
-  widgetId?: number
+  dashboardId?: string
+  widgetId?: string
   queryConfigs?: QueryDsl[]
   onPreviewChange?: (preview: AlertThresholdPreview | null) => void
 } = {}) {
   return renderWithQueryClient(
     <AlertConfigForm
-      dashboardId={props.dashboardId ?? 5}
-      widgetId={props.widgetId ?? 10}
+      dashboardId={props.dashboardId ?? DASHBOARD_ID}
+      widgetId={props.widgetId ?? WIDGET_ID}
       queryConfigs={props.queryConfigs ?? [baseQuery]}
       onPreviewChange={props.onPreviewChange}
     />
@@ -294,7 +299,7 @@ describe('AlertConfigForm', () => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.threshold).toBe(100)
           expect(body.warning_threshold).toBe(75)
-          return HttpResponse.json(makeAlert({id: 2, name: 'New alert'}))
+          return HttpResponse.json(makeAlert({id: SECOND_ALERT_ID, name: 'New alert'}))
         })
       )
       const user = userEvent.setup()
@@ -319,8 +324,8 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'High errors', enabled: true}),
-            makeAlert({id: 2, widget_id: 10, name: 'Low throughput', enabled: false}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, name: 'High errors', enabled: true}),
+            makeAlert({id: SECOND_ALERT_ID, widget_id: WIDGET_ID, name: 'Low throughput', enabled: false}),
           ])
         )
       )
@@ -335,8 +340,8 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'Widget 10 alert'}),
-            makeAlert({id: 2, widget_id: 99, name: 'Other widget alert'}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, name: 'Widget 10 alert'}),
+            makeAlert({id: SECOND_ALERT_ID, widget_id: OTHER_WIDGET_ID, name: 'Other widget alert'}),
           ])
         )
       )
@@ -351,7 +356,12 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'Firing alert', last_triggered_at: '2024-06-01T00:00:00Z'}),
+            makeAlert({
+              id: ALERT_ID,
+              widget_id: WIDGET_ID,
+              name: 'Firing alert',
+              last_triggered_at: '2024-06-01T00:00:00Z',
+            }),
           ])
         )
       )
@@ -365,7 +375,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'Idle alert', last_triggered_at: null}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, name: 'Idle alert', last_triggered_at: null}),
           ])
         )
       )
@@ -380,7 +390,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'Disabled alert', enabled: false}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, name: 'Disabled alert', enabled: false}),
           ])
         )
       )
@@ -401,12 +411,12 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'Toggle me', enabled: true}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, name: 'Toggle me', enabled: true}),
           ])
         ),
         http.put(`${API_BASE}/v1/dashboards/:dashId/alerts/:alertId`, () => {
           putCalled = true
-          return HttpResponse.json(makeAlert({id: 1, enabled: false}))
+          return HttpResponse.json(makeAlert({id: ALERT_ID, enabled: false}))
         })
       )
       const user = userEvent.setup()
@@ -429,7 +439,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, name: 'Delete me'}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, name: 'Delete me'}),
           ])
         ),
         http.delete(`${API_BASE}/v1/dashboards/:dashId/alerts/:alertId`, () => {
@@ -457,7 +467,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, metric_index: 0, condition: '>', threshold: 50}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, metric_index: 0, condition: '>', threshold: 50}),
           ])
         )
       )
@@ -475,7 +485,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, metric_index: 0, condition: '>', threshold: 50}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, metric_index: 0, condition: '>', threshold: 50}),
           ])
         )
       )
@@ -493,7 +503,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, metric_index: 0, condition: '>', threshold: 50}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, metric_index: 0, condition: '>', threshold: 50}),
           ])
         )
       )
@@ -511,7 +521,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, metric_index: 0, condition: '>', threshold: 50}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, metric_index: 0, condition: '>', threshold: 50}),
           ])
         )
       )
@@ -525,7 +535,7 @@ describe('AlertConfigForm', () => {
       server.use(
         http.get(`${API_BASE}/v1/dashboards/:id/alerts`, () =>
           HttpResponse.json([
-            makeAlert({id: 1, widget_id: 10, metric_index: 999, condition: '>', threshold: 50}),
+            makeAlert({id: ALERT_ID, widget_id: WIDGET_ID, metric_index: 999, condition: '>', threshold: 50}),
           ])
         )
       )

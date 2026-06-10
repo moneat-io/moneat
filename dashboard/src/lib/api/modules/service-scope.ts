@@ -1,4 +1,4 @@
-export type ServiceScopeId = string | number
+export type ServiceScopeId = string
 
 export interface ServiceScopeParams {
   services?: readonly string[]

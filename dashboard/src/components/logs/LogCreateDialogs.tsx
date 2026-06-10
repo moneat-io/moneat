@@ -121,7 +121,7 @@ function DialogField({label, children}: {readonly label: string; readonly childr
 
 function toWidgetRequest(widget: DashboardWidget, sortOrder: number): CreateWidgetRequest {
   return {
-    ...(widget.id > 0 ? {id: widget.id} : {}),
+    ...(widget.id ? {id: widget.id} : {}),
     title: widget.title,
     widget_type: widget.widget_type,
     grid_x: widget.grid_x,
@@ -338,7 +338,7 @@ export function CreateLogMetricDialog({
   const queryClient = useQueryClient()
 
   const [stage, setStage] = useState<'choose' | 'edit'>('choose')
-  const [dashboardId, setDashboardId] = useState<number | null>(null)
+  const [dashboardId, setDashboardId] = useState<string | null>(null)
   const [createdNew, setCreatedNew] = useState(false)
   const [widget, setWidget] = useState<DashboardWidget | null>(null)
   const [selected, setSelected] = useState('')
@@ -407,7 +407,7 @@ export function CreateLogMetricDialog({
         const created = await api.createDashboard({title: newName.trim() || 'Logs', widgets: []})
         return {id: created.id, created: true}
       }
-      return {id: Number(effectiveSelected), created: false}
+      return {id: effectiveSelected, created: false}
     },
     onSuccess: ({id, created}) => {
       setDashboardId(id)

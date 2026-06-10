@@ -39,6 +39,7 @@ class DashboardFolderRepositoryImpl : DashboardFolderRepository {
                 .map { row ->
                     DashboardFolderRow(
                         id = row[DashboardFolders.id],
+                        resourceId = row[DashboardFolders.resourceId].toString(),
                         orgId = row[DashboardFolders.orgId],
                         name = row[DashboardFolders.name],
                         color = row[DashboardFolders.color],
@@ -58,6 +59,7 @@ class DashboardFolderRepositoryImpl : DashboardFolderRepository {
                 ?.let { row ->
                     DashboardFolderRow(
                         id = row[DashboardFolders.id],
+                        resourceId = row[DashboardFolders.resourceId].toString(),
                         orgId = row[DashboardFolders.orgId],
                         name = row[DashboardFolders.name],
                         color = row[DashboardFolders.color],

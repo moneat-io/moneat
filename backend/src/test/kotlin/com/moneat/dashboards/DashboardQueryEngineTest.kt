@@ -665,11 +665,12 @@ class DashboardQueryEngineTest {
         enabled: Boolean,
     ): CustomDataSourceResponse =
         CustomDataSourceResponse(
-            id = id,
+            id = id.toString(),
             orgId = 1,
             name = sourceType,
             sourceType = sourceType,
             host = "localhost",
+            numericId = id,
             port = 9090,
             enabled = enabled,
             createdBy = 1,

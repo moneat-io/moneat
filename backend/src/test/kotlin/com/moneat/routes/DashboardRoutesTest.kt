@@ -69,8 +69,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -85,11 +87,20 @@ class DashboardRoutesTest {
         private const val DEFAULT_TIMESTAMP = "2024-01-01T00:00:00"
         private const val TEST_DS = "Test DS"
         private const val DASHBOARDS_PATH = "/v1/dashboards"
-        private const val DASHBOARDS_1 = "/v1/dashboards/1"
-        private const val DASHBOARDS_99 = "/v1/dashboards/99"
+        private const val DASHBOARD_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_DASHBOARD_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val FOLDER_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_FOLDER_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val ALERT_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_ALERT_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val DATA_SOURCE_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_DATA_SOURCE_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val WIDGET_RESOURCE_ID = "00000000-0000-0000-0000-000000000010"
+        private const val DASHBOARDS_1 = "/v1/dashboards/$DASHBOARD_RESOURCE_ID"
+        private const val DASHBOARDS_99 = "/v1/dashboards/$MISSING_DASHBOARD_RESOURCE_ID"
         private const val BODY_NAME_X = """{"name":"X"}"""
-        private const val DATASOURCES_1 = "/v1/datasources/1"
-        private const val DATASOURCES_99 = "/v1/datasources/99"
+        private const val DATASOURCES_1 = "/v1/datasources/$DATA_SOURCE_RESOURCE_ID"
+        private const val DATASOURCES_99 = "/v1/datasources/$MISSING_DATA_SOURCE_RESOURCE_ID"
         private var db: Database? = null
     }
 
@@ -127,7 +138,36 @@ class DashboardRoutesTest {
             Memberships,
             Projects
         )
+        every { mockDashboardService.isValidResourceId(any()) } answers {
+            isUuid(firstArg())
+        }
+        every { mockDashboardService.resolveDashboardId(any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
+        every { mockDashboardService.resolveFolderId(any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
+        every { mockDataSourceService.isValidResourceId(any()) } answers {
+            isUuid(firstArg())
+        }
+        every { mockDataSourceService.resolveDataSourceId(any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
+        every { mockAlertService.isValidResourceId(any()) } answers {
+            isUuid(firstArg())
+        }
+        every { mockAlertService.resolveAlertId(any(), any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
     }
+
+    private fun isUuid(value: String?): Boolean =
+        value?.let {
+            runCatching { java.util.UUID.fromString(it) }.isSuccess
+        } ?: false
+
+    private fun resourceNumber(value: String): Long? =
+        value.takeIf(::isUuid)?.takeLast(12)?.toLongOrNull()
 
     private fun Application.installAuth() {
         installJwtAuth()
@@ -169,11 +209,20 @@ class DashboardRoutesTest {
         } get Projects.id
     }
 
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
+    }
+
     private fun seedDashboardScope(orgId: Long): Long = transaction {
         exec(
             """
             CREATE TABLE IF NOT EXISTS dashboards (
                 id BIGSERIAL PRIMARY KEY,
+                resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                 org_id BIGINT NOT NULL,
                 project_id BIGINT,
                 folder_id BIGINT,
@@ -209,7 +258,7 @@ class DashboardRoutesTest {
         id: Long = 1L,
         orgId: Long = 1L
     ) = DashboardResponse(
-        id = id, orgId = orgId, projectId = null,
+        id = resourceId(id), orgId = orgId, projectId = null,
         folderId = null, title = TEST_DASHBOARD,
         description = null, layoutType = "grid",
         isDefault = false, isFavorited = false,
@@ -223,7 +272,7 @@ class DashboardRoutesTest {
         id: Long = 1L,
         orgId: Long = 1L
     ) = FolderResponse(
-        id = id,
+        id = resourceId(id),
         orgId = orgId,
         name = "Test Folder",
         color = "#FF0000",
@@ -236,7 +285,7 @@ class DashboardRoutesTest {
         id: Long = 1L,
         dashboardId: Long = 1L
     ) = DashboardAlertResponse(
-        id = id, widgetId = 1L, dashboardId = dashboardId,
+        id = resourceId(id), widgetId = WIDGET_RESOURCE_ID, dashboardId = resourceId(dashboardId),
         name = "Test Alert", condition = "gt",
         threshold = 90.0, metricIndex = 0,
         durationSeconds = 60, alertPriority = null,
@@ -251,15 +300,19 @@ class DashboardRoutesTest {
         id: Long = 1L,
         orgId: Long = 1L
     ) = CustomDataSourceResponse(
-        id = id, orgId = orgId, name = TEST_DS,
+        id = resourceId(id), orgId = orgId, name = TEST_DS,
         description = null, sourceType = "postgresql",
         host = "localhost", port = 5432,
         databaseName = "testdb", extraConfig = emptyMap(),
         enabled = true, createdBy = 1L,
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
+        numericId = id,
         hasCredentials = true
     )
+
+    private fun resourceId(id: Long): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     private fun installRoutes(app: Application) {
         app.installAuth()
@@ -442,7 +495,7 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/dashboards/1") {
+            val r = client.delete(DASHBOARDS_1) {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
@@ -516,7 +569,7 @@ class DashboardRoutesTest {
             } returns folder
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/folders/1") {
+            val r = client.put("/v1/dashboards/folders/$FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Renamed"}""")
@@ -535,7 +588,7 @@ class DashboardRoutesTest {
             } returns null
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/folders/99") {
+            val r = client.put("/v1/dashboards/folders/$MISSING_FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
@@ -568,7 +621,7 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/dashboards/folders/1") {
+            val r = client.delete("/v1/dashboards/folders/$FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
@@ -585,7 +638,7 @@ class DashboardRoutesTest {
             } returns false
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/dashboards/folders/99") {
+            val r = client.delete("/v1/dashboards/folders/$MISSING_FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
@@ -603,7 +656,7 @@ class DashboardRoutesTest {
         } returns true
         application { installRoutes(this) }
 
-        val r = client.post("/v1/dashboards/1/favorite") {
+        val r = client.post("$DASHBOARDS_1/favorite") {
             withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
@@ -621,10 +674,10 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/1/folder") {
+            val r = client.put("$DASHBOARDS_1/folder") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
-                setBody("""{"folder_id":2}""")
+                setBody("""{"folder_id":"$FOLDER_RESOURCE_ID"}""")
             }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -640,10 +693,10 @@ class DashboardRoutesTest {
             } returns false
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/99/folder") {
+            val r = client.put("$DASHBOARDS_99/folder") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
-                setBody("""{"folder_id":2}""")
+                setBody("""{"folder_id":"$FOLDER_RESOURCE_ID"}""")
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -706,8 +759,9 @@ class DashboardRoutesTest {
             )
             application { installRoutes(this) }
 
+            val projectResourceIdValue = projectResourceId(projectId)
             val r =
-                client.post("/v1/dashboards/$dashboardId/query/batch?projectId=$projectId") {
+                client.post("/v1/dashboards/${resourceId(dashboardId)}/query/batch?projectId=$projectResourceIdValue") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -793,13 +847,13 @@ class DashboardRoutesTest {
             every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
             every { mockDataSourceService.listDataSources(orgId.toLong()) } returns listOf(prometheus, loki, redis)
             every {
-                mockDataSourceService.getDecryptedCredentials(prometheus.id, orgId.toLong())
+                mockDataSourceService.getDecryptedCredentials(prometheus.numericId, orgId.toLong())
             } returns DataSourceCredentials(apiKey = "prom-token")
             every {
-                mockDataSourceService.getDecryptedCredentials(loki.id, orgId.toLong())
+                mockDataSourceService.getDecryptedCredentials(loki.numericId, orgId.toLong())
             } returns DataSourceCredentials(apiKey = "loki-token")
             every {
-                mockDataSourceService.getDecryptedCredentials(redis.id, orgId.toLong())
+                mockDataSourceService.getDecryptedCredentials(redis.numericId, orgId.toLong())
             } returns DataSourceCredentials(password = "redis-token")
             coEvery {
                 mockDataSourceExecutor.executeLabelValuesQuery(
@@ -830,7 +884,7 @@ class DashboardRoutesTest {
             } returns listOf("cache-0")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/dashboards/$dashboardId/variables/resolve") {
+            val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/variables/resolve") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"job":"api","namespace":"default"}""")
@@ -890,7 +944,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(
-                "/v1/dashboards/1/export/moneat"
+                "$DASHBOARDS_1/export/moneat"
             ) {
                 withAuth(token(userId, orgId))
             }
@@ -909,7 +963,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(
-                "/v1/dashboards/99/export/moneat"
+                "$DASHBOARDS_99/export/moneat"
             ) {
                 withAuth(token(userId, orgId))
             }
@@ -929,7 +983,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(
-                "/v1/dashboards/1/export/xml"
+                "$DASHBOARDS_1/export/xml"
             ) {
                 withAuth(token(userId, orgId))
             }
@@ -962,7 +1016,7 @@ class DashboardRoutesTest {
             } returns listOf(alert)
             application { installRoutes(this) }
 
-            val r = client.get("/v1/dashboards/1/alerts") {
+            val r = client.get("$DASHBOARDS_1/alerts") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -982,11 +1036,11 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val body = """
-                {"widget_id":1,"name":"A","condition":"gt",
+                {"widget_id":"$WIDGET_RESOURCE_ID","name":"A","condition":"gt",
                  "threshold":90.0,"metric_index":0,
                  "duration_seconds":60}
             """.trimIndent()
-            val r = client.post("/v1/dashboards/1/alerts") {
+            val r = client.post("$DASHBOARDS_1/alerts") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
@@ -1007,7 +1061,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.put("/v1/dashboards/1/alerts/1") {
+                client.put("$DASHBOARDS_1/alerts/$ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
@@ -1022,7 +1076,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.put("/v1/dashboards/1/alerts/1") {
+                client.put("$DASHBOARDS_1/alerts/$ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":""")
@@ -1042,7 +1096,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.put("/v1/dashboards/1/alerts/99") {
+                client.put("$DASHBOARDS_1/alerts/$MISSING_ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
@@ -1062,7 +1116,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.delete("/v1/dashboards/1/alerts/1") {
+                client.delete("$DASHBOARDS_1/alerts/$ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.NoContent, r.status)
@@ -1080,7 +1134,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.delete("/v1/dashboards/1/alerts/99") {
+                client.delete("$DASHBOARDS_1/alerts/$MISSING_ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.NotFound, r.status)
@@ -1179,12 +1233,12 @@ class DashboardRoutesTest {
                 client.post("/v1/dashboards/templates/001-1860-node-exporter-full") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
-                    setBody("""{"project_id":77,"folder_id":88}""")
+                    setBody("""{"project_id":"project-77","folder_id":"folder-88"}""")
                 }
 
             assertEquals(HttpStatusCode.Created, r.status)
-            assertEquals(77L, requestSlot.captured.projectId)
-            assertEquals(88L, requestSlot.captured.folderId)
+            assertEquals("project-77", requestSlot.captured.projectId)
+            assertEquals("folder-88", requestSlot.captured.folderId)
             assertEquals("Node Exporter Full", requestSlot.captured.title)
             assertTrue(requestSlot.captured.widgets.isNotEmpty())
         }
@@ -1385,7 +1439,7 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/datasources/1") {
+            val r = client.delete(DATASOURCES_1) {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)

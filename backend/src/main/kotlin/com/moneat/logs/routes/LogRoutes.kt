@@ -24,7 +24,6 @@ import java.io.Writer
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.datadog.decompression.DecompressionService
-import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.events.services.EventService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.logs.LogPermissions
@@ -35,7 +34,6 @@ import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.models.LogTailFilters
 import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.logs.services.LogIndexService
-import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.models.CreateOtlpApiKeyRequest
@@ -87,29 +85,26 @@ private const val MILLIS_IN_24_HOURS = 24L * 60 * 60 * 1000
 private const val SSE_POLL_TIMEOUT_SECONDS = 15L
 private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 
+data class LogRouteDependencies(
+    val logService: LogService = GlobalContext.get().get(),
+    val otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
+    val logIndexService: LogIndexService = GlobalContext.get().get(),
+    val otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
+    val logManagement: LogManagementRouteDependencies = LogManagementRouteDependencies(),
+    val membershipService: OrgMembershipService = logManagement.membershipService,
+)
+
 fun Route.logRoutes(
-    logService: LogService = GlobalContext.get().get(),
-    otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
-    logIndexService: LogIndexService = GlobalContext.get().get(),
-    otlpServiceRoutingService: OtlpServiceRoutingService = GlobalContext.get().get(),
-    logManagementService: LogManagementService = GlobalContext.get().get(),
-    membershipService: OrgMembershipService = GlobalContext.get().get(),
-    dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
+    dependencies: LogRouteDependencies = LogRouteDependencies(),
 ) {
     route("/v1") {
         authenticate("auth-jwt") {
-            registerOtlpApiKeyRoutes(otlpApiKeyService)
-            registerOtlpServiceRoutingRoutes(otlpServiceRoutingService)
-            registerLogIndexRoutes(logIndexService, membershipService)
-            registerLogQueryRoutes(logService)
-            registerLogManagementRoutes(
-                logManagementService = logManagementService,
-                logIndexService = logIndexService,
-                logService = logService,
-                membershipService = membershipService,
-                dashboardAlertService = dashboardAlertService
-            )
-            registerLogTailRoute(logService, membershipService)
+            registerOtlpApiKeyRoutes(dependencies.otlpApiKeyService)
+            registerOtlpServiceRoutingRoutes(dependencies.otlpServiceRoutingService)
+            registerLogIndexRoutes(dependencies.logIndexService, dependencies.membershipService)
+            registerLogQueryRoutes(dependencies.logService)
+            registerLogManagementRoutes(dependencies.logManagement)
+            registerLogTailRoute(dependencies.logService, dependencies.membershipService)
         }
     }
 }

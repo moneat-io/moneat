@@ -51,7 +51,7 @@ function appendAnalyticsParams(qs: URLSearchParams, params?: AnalyticsParams) {
 function appendListParam(
   qs: URLSearchParams,
   name: string,
-  values?: ReadonlyArray<string | number>
+  values?: readonly string[]
 ) {
   values?.forEach((value) => {
     qs.append(name, String(value))

@@ -28,8 +28,8 @@ import {ChevronLeft, ChevronRight, Loader2, TerminalSquare} from 'lucide-react'
 
 interface EmbeddedLogsProps {
   systemId?: string
-  /** Optional project resource ID for trace/span links; legacy numeric IDs are accepted during migration. */
-  projectId?: string | number
+  /** Optional project resource ID for trace/span links. */
+  projectId?: string
   /**
    * Filter logs by time range around a specific timestamp
    * Shows logs from [centerTimestamp - contextMinutes] to [centerTimestamp + contextMinutes]

@@ -53,9 +53,9 @@ export function ServicesAndSdksSetup() {
   const [chosenId, setChosenId] = useState<string | null>(null)
   const selectedId = useMemo(() => {
     if (!services || services.length === 0) return null
-    const ids = services.map((service) => service.resourceId)
+    const ids = services.map((service) => service.id)
     if (chosenId && ids.includes(chosenId)) return chosenId
-    return services[0].resourceId
+    return services[0].id
   }, [services, chosenId])
 
   // Telemetry-source selection for the chosen service, persisted to localStorage.
@@ -106,7 +106,7 @@ export function ServicesAndSdksSetup() {
             className="h-8 rounded-md border border-input bg-background px-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {services.map((service) => (
-              <option key={service.resourceId} value={service.resourceId}>
+              <option key={service.id} value={service.id}>
                 {service.name}
               </option>
             ))}

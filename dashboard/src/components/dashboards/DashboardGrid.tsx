@@ -34,18 +34,18 @@ const LEGACY_SMALL_WIDGET_TYPES = new Set(['stat', 'gauge', 'bargauge'])
 interface DashboardGridProps {
   widgets: DashboardWidget[]
   isEditing: boolean
-  dashboardId: number
-  projectId?: string | number
+  dashboardId: string
+  projectId?: string
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variableValues?: Record<string, string>
   onLayoutChange: (widgets: CreateWidgetRequest[]) => void
   onWidgetClick: (widget: DashboardWidget) => void
-  onWidgetDelete: (widgetId: number) => void
+  onWidgetDelete: (widgetId: string) => void
 }
 
 type WidgetCardAlert = {
-  widget_id: number
+  widget_id: string
   enabled: boolean
   last_triggered_at: string | null
   last_triggered_level?: string | null
@@ -55,14 +55,14 @@ type WidgetCardAlert = {
 type WidgetCardProps = Readonly<{
   widget: DashboardWidget
   isEditing: boolean
-  dashboardId: number
-  projectId?: string | number
+  dashboardId: string
+  projectId?: string
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variableValues?: Record<string, string>
   alerts: WidgetCardAlert[]
   onWidgetClick: (widget: DashboardWidget) => void
-  onWidgetDelete: (widgetId: number) => void
+  onWidgetDelete: (widgetId: string) => void
 }>
 
 function widgetMinHeight(widgetType: DashboardWidget['widget_type']): number {
@@ -72,10 +72,10 @@ function widgetMinHeight(widgetType: DashboardWidget['widget_type']): number {
   return 6
 }
 
-function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
+function getSectionMembership(widgets: DashboardWidget[]): Map<string, string> {
   const sorted = [...widgets].sort((a, b) => a.grid_y - b.grid_y || a.sort_order - b.sort_order)
-  const membership = new Map<number, number>()
-  let currentSectionId: number | null = null
+  const membership = new Map<string, string>()
+  let currentSectionId: string | null = null
   for (const w of sorted) {
     if (w.widget_type === 'section') {
       currentSectionId = w.id
@@ -111,8 +111,8 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(1200)
-  const [collapsedSections, setCollapsedSections] = useState<Set<number>>(() => {
-    const initial = new Set<number>()
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
     for (const w of widgets) {
       if (w.widget_type === 'section' && w.display_config?.collapsed === 'true') {
         initial.add(w.id)
@@ -160,7 +160,7 @@ export function DashboardGrid({
     })
   }, [widgets, collapsedSections, sectionMembership])
 
-  const toggleSection = useCallback((sectionId: number) => {
+  const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((prev) => {
       const next = new Set(prev)
       if (next.has(sectionId)) {

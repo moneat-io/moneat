@@ -53,7 +53,7 @@ function tryFormatJson(value: string): {isJson: boolean; formatted: string} {
 
 interface LogOverviewTabProps {
   log: LogEntry
-  projectId?: string | number
+  projectId?: string
 }
 
 export function LogOverviewTab({log, projectId}: LogOverviewTabProps) {

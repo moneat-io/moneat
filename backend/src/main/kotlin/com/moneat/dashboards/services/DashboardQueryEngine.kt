@@ -516,8 +516,8 @@ class DashboardQueryEngine {
 
     fun isCustomDataSource(dataSource: String): Boolean = dataSource.startsWith("custom:")
 
-    fun parseCustomDataSourceId(dataSource: String): Long? =
-        if (dataSource.startsWith("custom:")) dataSource.removePrefix("custom:").toLongOrNull() else null
+    fun parseCustomDataSourceId(dataSource: String): String? =
+        dataSource.takeIf { it.startsWith("custom:") }?.removePrefix("custom:")
 
     private fun QueryDsl.isLogsDataSource(): Boolean =
         DataSource.fromString(dataSource)?.tableName == LOGS_TABLE_NAME

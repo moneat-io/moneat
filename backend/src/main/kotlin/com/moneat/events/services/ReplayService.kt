@@ -139,7 +139,7 @@ class ReplayService(
     }
 
     private fun projectResourceId(projectId: Long): String =
-        projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+        projectIdResolver.resourceIdFor(projectId) ?: ""
 
     private fun firstEntryUrl(urls: List<String>): String? =
         urls.firstOrNull { it.isNotBlank() }
@@ -253,8 +253,7 @@ class ReplayService(
         val activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
         return ReplayListItem(
             replayId = replayId,
-            projectId = objProjectId,
-            projectResourceId = projectResourceId(objProjectId),
+            projectId = projectResourceId(objProjectId),
             startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
             finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
@@ -979,8 +978,8 @@ class ReplayService(
         val userSessionCount = userSessionCountForWindow(replayWindow)
         return ReplayDetailResponse(
             replayId = replayId,
-            projectId = objProjectId,
-            projectResourceId = projectResourceId(objProjectId),
+            projectId = projectResourceId(objProjectId),
+            numericProjectId = objProjectId,
             startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
             finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
             durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
@@ -1338,7 +1337,8 @@ class ReplayService(
             }.getOrElse { _ ->
                 replayStartMs + MILLIS_PER_DAY
             }
-        val projectId = replay.projectId
+        val projectId = replay.numericProjectId
+        if (projectId <= 0L) return ReplayTimelineResponse(emptyList(), replayStartMs)
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val retentionOptions = ReplayRetentionOptions(retentionDays = retentionDays, demoEpochMs = demoEpochMs)
         val replayWindow = ReplayWindowQuery(

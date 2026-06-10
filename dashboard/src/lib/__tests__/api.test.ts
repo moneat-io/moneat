@@ -278,13 +278,13 @@ describe('ApiClient', () => {
 
     it('handles 204 No Content responses', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/projects/1`, () => {
+        http.delete(`${API_BASE}/v1/projects/proj-1`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
 
       sessionStorage.setItem('authenticated', 'true')
-      const result = await api.deleteProject(1)
+      const result = await api.deleteProject('proj-1')
 
       expect(result).toBeUndefined()
     })

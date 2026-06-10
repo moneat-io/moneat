@@ -22,7 +22,7 @@ export interface LlmTimelinePoint {
   errors: number
 }
 
-export type LlmServiceId = string | number
+export type LlmServiceId = string
 
 export interface LlmScopeParams {
   services?: string[]

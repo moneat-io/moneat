@@ -25,6 +25,8 @@ import type {FacetFilter} from '@/lib/filters/types'
  */
 
 const ALL_LOG_LEVELS = 6
+const LOG_METRIC_WIDGET_DASHBOARD_ID = 'log-metric-draft-dashboard'
+const LOG_METRIC_WIDGET_ID = 'log-metric-draft-widget'
 
 export interface LogMetricWidgetSeed {
   /** Raw free-text search (the non-facet portion of the query). */
@@ -88,8 +90,8 @@ export function defaultLogMetricTitle(query: string): string {
 
 export function buildLogMetricWidget(seed: LogMetricWidgetSeed): DashboardWidget {
   return {
-    id: 0,
-    dashboard_id: 0,
+    id: LOG_METRIC_WIDGET_ID,
+    dashboard_id: LOG_METRIC_WIDGET_DASHBOARD_ID,
     title: seed.title?.trim() || defaultLogMetricTitle(seed.query),
     widget_type: 'timeseries',
     grid_x: 0,

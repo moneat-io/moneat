@@ -20,6 +20,7 @@ import com.moneat.analytics.services.GeoIpService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.ReplayService
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.OrgProjectTestFixtures
 import com.moneat.testsupport.requestBodyText
@@ -139,6 +140,9 @@ class ReplayServiceTest {
     private fun recordingDataRow(recordingData: String): String =
         """{"recording_data":${jsonString(recordingData)}}"""
 
+    private fun defaultProjectResourceId(): String =
+        ProjectIdResolver().resourceIdFor(1) ?: ""
+
     private fun encodedMobileReplaySegment(): String {
         val replayEventPayload = """{"segment_id":7}""".toByteArray()
         val recordingPayload =
@@ -222,7 +226,7 @@ class ReplayServiceTest {
             val result = service.getReplays(projectId = 1, page = 1, limit = 25, period = "7d")
             assertEquals(1, result.size)
             assertEquals(REPLAY_UUID, result[0].replayId)
-            assertEquals(1L, result[0].projectId)
+            assertEquals(defaultProjectResourceId(), result[0].projectId)
             assertEquals(300000.0, result[0].durationMs)
             assertEquals(2, result[0].errorCount)
             assertEquals("Chrome", result[0].browserName)
@@ -259,7 +263,7 @@ class ReplayServiceTest {
                 )
 
             assertEquals(1, result.size)
-            assertEquals(2L, result.first().projectId)
+            assertEquals("", result.first().projectId)
             assertEquals(3, result.first().errorCount)
             assertTrue("error" in result.first().signals)
             assertTrue(queries.any { it.contains("project_id IN (1, 2)") })
@@ -309,7 +313,7 @@ class ReplayServiceTest {
             val result = service.getReplay(replayId)
             assertNotNull(result)
             assertEquals(replayId, result.replayId)
-            assertEquals(1L, result.projectId)
+            assertEquals(defaultProjectResourceId(), result.projectId)
             assertEquals(300000.0, result.durationMs)
             assertEquals(5, result.segmentCount)
             assertEquals("prod", result.environment)

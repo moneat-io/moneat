@@ -28,7 +28,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@/lib/api', () => ({
   api: {
-    importDashboard: vi.fn().mockResolvedValue({dashboard: {id: 42, widgets: []}, warnings: []}),
+    importDashboard: vi.fn().mockResolvedValue({dashboard: {id: 'dashboard-42', widgets: []}, warnings: []}),
     exportDashboard: vi.fn().mockResolvedValue({title: 'Test', widgets: []}),
     listCustomDataSources: vi.fn().mockResolvedValue([]),
   },
@@ -176,14 +176,14 @@ describe('ImportExportModal', () => {
   describe('export mode', () => {
     it('renders export header', () => {
       renderWithQuery(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
+        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId="dashboard-1" />
       )
       expect(screen.getByText('Export Dashboard')).toBeInTheDocument()
     })
 
     it('renders export format buttons', () => {
       renderWithQuery(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
+        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId="dashboard-1" />
       )
       expect(screen.getByText('Export as Moneat JSON')).toBeInTheDocument()
       expect(screen.getByText('Export as Grafana JSON')).toBeInTheDocument()
@@ -192,7 +192,7 @@ describe('ImportExportModal', () => {
 
     it('does not show Import button in export mode', () => {
       renderWithQuery(
-        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={1} />
+        <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId="dashboard-1" />
       )
       expect(screen.queryByText('Import')).not.toBeInTheDocument()
     })

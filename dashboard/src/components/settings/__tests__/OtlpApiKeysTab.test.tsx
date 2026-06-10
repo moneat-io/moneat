@@ -53,8 +53,7 @@ function mockBaseResponses() {
     http.get(`${API_BASE}/v1/projects`, () => {
       return HttpResponse.json([
         {
-          id: 30,
-          resourceId: WEB_APP_RESOURCE_ID,
+          id: WEB_APP_RESOURCE_ID,
           name: 'Web App',
           slug: 'web-app',
           framework: 'react',
@@ -62,8 +61,7 @@ function mockBaseResponses() {
           dsn: '',
         },
         {
-          id: 31,
-          resourceId: WORKER_RESOURCE_ID,
+          id: WORKER_RESOURCE_ID,
           name: 'Worker',
           slug: 'worker',
           framework: 'kotlin',

@@ -36,8 +36,7 @@ import {Route as ReplayRoute, replayDetailHelperTestHooks as helpers} from '../r
 function replay(overrides: Partial<ReplayDetail> = {}): ReplayDetail {
   return {
     replayId: 'replay-1',
-    projectId: 12,
-    projectResourceId: 'svc-api',
+    projectId: 'svc-api',
     startedAt: '2026-06-01T00:00:00.000Z',
     finishedAt: '2026-06-01T00:01:00.000Z',
     durationMs: 60_000,
@@ -111,7 +110,7 @@ describe('replay detail helper coverage', () => {
     expect(helpers.mobileContainerPlatform('android')).toBe('android')
     expect(helpers.replayProjectId(undefined)).toBeUndefined()
     expect(helpers.replayProjectId(replay())).toBe('svc-api')
-    expect(helpers.replayProjectId(replay({projectResourceId: '', projectId: 99}))).toBe('99')
+    expect(helpers.replayProjectId(replay({projectId: 'svc-worker'}))).toBe('svc-worker')
   })
 
   it('detects mobile replay inputs and chooses durations', () => {

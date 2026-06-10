@@ -22,12 +22,13 @@ export interface ProjectKey {
 export type ProjectIdentifier = string
 
 export interface Project {
-  id: number
-  resourceId: ProjectIdentifier
+  id: ProjectIdentifier
   name: string
   slug: string
   framework?: string
   keys: ProjectKey[]
   dsn: string
   issueCount?: number
+  serviceId?: ProjectIdentifier
+  serviceName?: string
 }

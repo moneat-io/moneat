@@ -38,7 +38,7 @@ export const Route = createFileRoute('/projects/$projectId/settings')({
 
 function ServiceSettingsPage() {
   const {service} = Route.useLoaderData()
-  const stored = loadTelemetrySourceIdsForService(service.resourceId)
+  const stored = loadTelemetrySourceIdsForService(service.id)
   const sourceIds = stored.length > 0 ? stored : DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
 
   return (
@@ -47,7 +47,7 @@ function ServiceSettingsPage() {
         <div className="space-y-2">
           <Link
             to="/projects/$projectId"
-            params={{projectId: service.resourceId}}
+            params={{projectId: service.id}}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -59,7 +59,7 @@ function ServiceSettingsPage() {
           </div>
         </div>
 
-        <ServiceSettingsCard serviceId={service.resourceId} sourceIds={sourceIds} />
+        <ServiceSettingsCard serviceId={service.id} sourceIds={sourceIds} />
       </div>
     </div>
   )

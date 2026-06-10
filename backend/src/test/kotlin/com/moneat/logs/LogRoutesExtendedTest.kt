@@ -18,6 +18,8 @@ package com.moneat.logs
 
 import com.moneat.logs.models.LogIndexResponse
 import com.moneat.logs.models.LogIndexTestResponse
+import com.moneat.logs.routes.LogManagementRouteDependencies
+import com.moneat.logs.routes.LogRouteDependencies
 import com.moneat.logs.routes.logRoutes as installLogRoutes
 import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogService
@@ -78,10 +80,17 @@ class LogRoutesExtendedTest {
         logIndexService: LogIndexService
     ) {
         installLogRoutes(
-            logService = logService,
-            otlpApiKeyService = otlpApiKeyService,
-            logIndexService = logIndexService,
-            membershipService = mockMembershipService
+            LogRouteDependencies(
+                logService = logService,
+                otlpApiKeyService = otlpApiKeyService,
+                logIndexService = logIndexService,
+                logManagement = LogManagementRouteDependencies(
+                    logIndexService = logIndexService,
+                    logService = logService,
+                    membershipService = mockMembershipService,
+                ),
+                membershipService = mockMembershipService,
+            )
         )
     }
 
@@ -92,11 +101,18 @@ class LogRoutesExtendedTest {
         otlpServiceRoutingService: OtlpServiceRoutingService
     ) {
         installLogRoutes(
-            logService = logService,
-            otlpApiKeyService = otlpApiKeyService,
-            logIndexService = logIndexService,
-            otlpServiceRoutingService = otlpServiceRoutingService,
-            membershipService = mockMembershipService
+            LogRouteDependencies(
+                logService = logService,
+                otlpApiKeyService = otlpApiKeyService,
+                logIndexService = logIndexService,
+                otlpServiceRoutingService = otlpServiceRoutingService,
+                logManagement = LogManagementRouteDependencies(
+                    logIndexService = logIndexService,
+                    logService = logService,
+                    membershipService = mockMembershipService,
+                ),
+                membershipService = mockMembershipService,
+            )
         )
     }
 

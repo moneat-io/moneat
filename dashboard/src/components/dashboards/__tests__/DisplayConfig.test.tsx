@@ -45,8 +45,8 @@ function renderWithQuery(ui: React.ReactElement) {
 
 function makeWidget(overrides: Partial<DashboardWidget> = {}): DashboardWidget {
   return {
-    id: 1,
-    dashboard_id: 1,
+    id: "widget-1",
+    dashboard_id: "widget-1",
     title: 'Test',
     widget_type: 'timeseries',
     grid_x: 0,
@@ -79,8 +79,8 @@ describe('DisplayConfigForm - Legend', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -95,8 +95,8 @@ describe('DisplayConfigForm - Legend', () => {
         widget={makeWidget({widget_type: 'bar'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -109,8 +109,8 @@ describe('DisplayConfigForm - Legend', () => {
         widget={makeWidget({widget_type: 'donut'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -123,8 +123,8 @@ describe('DisplayConfigForm - Legend', () => {
         widget={makeWidget({widget_type: 'stat'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -138,8 +138,8 @@ describe('DisplayConfigForm - Legend', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -160,8 +160,8 @@ describe('DisplayConfigForm - Axes', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -176,8 +176,8 @@ describe('DisplayConfigForm - Axes', () => {
         widget={makeWidget({widget_type: 'stat'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -192,8 +192,8 @@ describe('DisplayConfigForm - Unit', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -207,8 +207,8 @@ describe('DisplayConfigForm - Unit', () => {
         widget={makeWidget({widget_type: 'stat'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -223,8 +223,8 @@ describe('DisplayConfigForm - Style', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -241,8 +241,8 @@ describe('DisplayConfigForm - Style', () => {
         widget={makeWidget({widget_type: 'bar'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -259,8 +259,8 @@ describe('DisplayConfigForm - Thresholds', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -275,8 +275,8 @@ describe('DisplayConfigForm - Thresholds', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -298,8 +298,8 @@ describe('DisplayConfigForm - Thresholds', () => {
         })}
         onSave={onSave}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -327,8 +327,8 @@ describe('DisplayConfigForm - Value Mappings', () => {
         widget={makeWidget({widget_type: 'stat'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -342,8 +342,8 @@ describe('DisplayConfigForm - Value Mappings', () => {
         widget={makeWidget({widget_type: 'table'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -356,8 +356,8 @@ describe('DisplayConfigForm - Value Mappings', () => {
         widget={makeWidget({widget_type: 'timeseries'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()
@@ -371,8 +371,8 @@ describe('DisplayConfigForm - Value Mappings', () => {
         widget={makeWidget({widget_type: 'stat'})}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     await switchToDisplayTab()

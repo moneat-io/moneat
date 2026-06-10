@@ -57,6 +57,7 @@ private const val MIN_WIDGET_HEIGHT = 3
 private const val FILL_OPACITY_SCALE = 100.0
 private const val REGEX_THIRD_GROUP_IDX = 3
 private const val GRAFANA_SCHEMA_VERSION = 39
+private const val IMPORT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
 
 /** Imports and exports dashboards between Grafana JSON and Moneat dashboard models. */
 class GrafanaTranslator : DashboardTranslator {
@@ -131,7 +132,7 @@ class GrafanaTranslator : DashboardTranslator {
         }
 
         val dashboard = DashboardResponse(
-            id = 0,
+            id = IMPORT_PLACEHOLDER_ID,
             orgId = 0,
             title = title,
             description = description,
@@ -163,8 +164,8 @@ class GrafanaTranslator : DashboardTranslator {
             val gridY = scaleGridValue(grafanaY)
             val collapsed = panelJson["collapsed"]?.jsonPrimitive?.contentOrNull == "true"
             return WidgetResponse(
-                id = 0,
-                dashboardId = 0,
+                id = IMPORT_PLACEHOLDER_ID,
+                dashboardId = IMPORT_PLACEHOLDER_ID,
                 title = rowTitle,
                 widgetType = "section",
                 gridX = 0,
@@ -204,8 +205,8 @@ class GrafanaTranslator : DashboardTranslator {
 
         val minH = if (moneatType == "stat" || moneatType == "gauge") 1 else MIN_WIDGET_HEIGHT
         return WidgetResponse(
-            id = 0,
-            dashboardId = 0,
+            id = IMPORT_PLACEHOLDER_ID,
+            dashboardId = IMPORT_PLACEHOLDER_ID,
             title = panelTitle,
             widgetType = moneatType ?: "text",
             gridX = gridX,

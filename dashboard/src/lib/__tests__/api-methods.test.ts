@@ -63,12 +63,12 @@ describe('ApiClient - Projects and Issues', () => {
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1`, () => {
           return HttpResponse.json(mockProject)
         })
       )
 
-      const project = await api.getProject(1)
+      const project = await api.getProject('proj-1')
       expect(project).toEqual(mockProject)
     })
 
@@ -97,24 +97,24 @@ describe('ApiClient - Projects and Issues', () => {
 
     it('updates project', async () => {
       server.use(
-        http.put(`${API_BASE}/v1/projects/1`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/projects/proj-1`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.name).toBe('Updated Name')
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      await api.updateProject(1, { name: 'Updated Name' })
+      await api.updateProject('proj-1', { name: 'Updated Name' })
     })
 
     it('deletes project', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/projects/1`, () => {
+        http.delete(`${API_BASE}/v1/projects/proj-1`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      await api.deleteProject(1)
+      await api.deleteProject('proj-1')
     })
   })
 
@@ -123,7 +123,7 @@ describe('ApiClient - Projects and Issues', () => {
       const mockIssues = [
         {
           id: 'issue-1',
-          projectId: 1,
+          projectId: 'proj-1',
           title: 'TypeError: undefined is not a function',
           culprit: 'app.js',
           level: 'error',
@@ -137,7 +137,7 @@ describe('ApiClient - Projects and Issues', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/issues`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-1/issues`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('page')).toBe('1')
           expect(url.searchParams.get('limit')).toBe('25')
@@ -145,7 +145,7 @@ describe('ApiClient - Projects and Issues', () => {
         })
       )
 
-      const issues = await api.getIssues(1, 1, 25)
+      const issues = await api.getIssues('proj-1', 1, 25)
       expect(issues).toEqual(mockIssues)
     })
 
@@ -153,8 +153,7 @@ describe('ApiClient - Projects and Issues', () => {
       const mockIssues = [
         {
           id: 'issue-1',
-          projectId: 1,
-          projectResourceId: 'proj-1',
+          projectId: 'proj-1',
           title: 'TypeError: undefined is not a function',
           culprit: 'app.js',
           level: 'error',
@@ -184,7 +183,7 @@ describe('ApiClient - Projects and Issues', () => {
         limit: 50,
         status: 'unresolved',
         services: ['api', 'worker'],
-        serviceIds: ['proj-1', 2],
+        serviceIds: ['proj-1', 'proj-2'],
       })
       expect(issues).toEqual(mockIssues)
     })
@@ -192,7 +191,7 @@ describe('ApiClient - Projects and Issues', () => {
     it('fetches single issue detail', async () => {
       const mockIssue = {
         id: 'issue-1',
-        projectId: 1,
+        projectId: 'proj-1',
         title: 'TypeError',
         culprit: 'app.js',
         level: 'error',

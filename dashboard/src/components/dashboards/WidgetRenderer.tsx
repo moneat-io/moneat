@@ -18,7 +18,6 @@ import {memo, type ComponentProps, type CSSProperties, type ReactNode, useEffect
 import {useQuery} from '@tanstack/react-query'
 import type {BatchQueryResultMetadata, DashboardWidget, QueryDsl, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
-import {isDemo} from '@/lib/demo'
 import {
     Area,
     AreaChart,
@@ -144,8 +143,8 @@ function DebouncedChartContainer({children, debounceMs = 150}: {
 
 interface WidgetRendererProps {
   widget: DashboardWidget
-  dashboardId: number
-  projectId?: string | number
+  dashboardId: string
+  projectId?: string
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variables?: Record<string, string>
@@ -170,8 +169,8 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   const {data, isLoading, error} = useQuery({
     queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queryFingerprint, variables],
     queryFn: async () => {
-      if (!projectId && !isDemo()) return []
-      const effectiveProjectId = projectId ?? -1
+      if (!projectId) return []
+      const effectiveProjectId = projectId
       if (isBatch) {
         const result = await api.executeBatchQuery(dashboardId, queries, effectiveProjectId, timeRange, variables)
         // Merge batch results: use legendFormat alias as series name, group by timestamp
@@ -214,7 +213,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         ? api.executeWidgetQuery(dashboardId, queries[0], effectiveProjectId, timeRange, variables)
         : []
     },
-    enabled: (!!projectId || isDemo()) && isQueryDrivenWidget(widgetType) && queries.length > 0,
+    enabled: !!projectId && isQueryDrivenWidget(widgetType) && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })
 

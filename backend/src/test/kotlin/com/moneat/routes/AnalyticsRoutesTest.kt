@@ -54,6 +54,7 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,6 +64,8 @@ class AnalyticsRoutesTest {
     companion object {
         private const val PROJECT_ID = 1L
         private const val SECOND_PROJECT_ID = 2L
+        private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val SECOND_PROJECT_RESOURCE_ID = "118f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val OVERVIEW_PERIOD_30D = "/overview?period=30d"
         private var db: Database? = null
     }
@@ -87,6 +90,7 @@ class AnalyticsRoutesTest {
             Memberships,
             Projects
         )
+        seedRouteProjects()
     }
 
     private fun Application.installAuth() {
@@ -132,7 +136,23 @@ class AnalyticsRoutesTest {
         }
     }
 
-    private fun authedGet(path: String) = "/v1/analytics/$PROJECT_ID$path"
+    private fun seedRouteProjects() {
+        seedProject(PROJECT_ID, PROJECT_RESOURCE_ID, "analytics-primary")
+        seedProject(SECOND_PROJECT_ID, SECOND_PROJECT_RESOURCE_ID, "analytics-secondary")
+    }
+
+    private fun seedProject(projectId: Long, resourceId: String, slug: String) = transaction {
+        Projects.insert {
+            it[id] = projectId
+            it[resource_id] = Uuid.parse(resourceId)
+            it[organization_id] = 1
+            it[name] = slug
+            it[Projects.slug] = slug
+            it[framework] = "otel"
+        }
+    }
+
+    private fun authedGet(path: String) = "/v1/analytics/$PROJECT_RESOURCE_ID$path"
 
     private fun stubAccess(userId: Int) {
         every { mockDashboardService.hasProjectAccess(userId, PROJECT_ID) } returns true
@@ -239,7 +259,8 @@ class AnalyticsRoutesTest {
         } returns overviewResponse
 
         application { installRoutes(this) }
-        val r = client.get("/v1/analytics/overview?period=30d&serviceIds=$PROJECT_ID&services=API") {
+        val route = "/v1/analytics/overview?period=30d&serviceIds=$PROJECT_RESOURCE_ID&services=API"
+        val r = client.get(route) {
             withAuth(token(userId, orgId))
         }
 

@@ -98,7 +98,7 @@ const ISSUES_FETCH_LIMIT = 500
 
 type SafeIssue = {
   id: string
-  projectResourceId: string
+  projectId: string
   service: string
   title: string
   culprit: string
@@ -113,15 +113,15 @@ type SafeIssue = {
 
 type IssueUpdateTarget = {
   id: string
-  projectResourceId: string
+  projectId: string
 }
 
 type IssueActionStatus = 'resolved' | 'ignored' | 'resolvedInNextRelease'
 type ToastFn = ReturnType<typeof useToast>['toast']
 type QueryClient = ReturnType<typeof useQueryClient>
 
-function issueSelectionKey(issue: Pick<SafeIssue, 'id' | 'projectResourceId'>): string {
-  return `${issue.projectResourceId}:${issue.id}`
+function issueSelectionKey(issue: Pick<SafeIssue, 'id' | 'projectId'>): string {
+  return `${issue.projectId}:${issue.id}`
 }
 
 function toggledSelection(current: ReadonlySet<string>, key: string): Set<string> {
@@ -225,7 +225,7 @@ function useIssueBulkMutation({
   return useMutation({
     mutationFn: async (issues: IssueUpdateTarget[]) => {
       const results = await Promise.allSettled(
-        issues.map((issue) => api.updateIssue(issue.id, { status }, issue.projectResourceId))
+        issues.map((issue) => api.updateIssue(issue.id, { status }, issue.projectId))
       )
       const successCount = results.filter(r => r.status === 'fulfilled').length
       if (successCount === 0) throw new Error('All requests failed')
@@ -322,7 +322,7 @@ function serviceNameMaps(services: readonly Project[]): {
   byId: Map<string, string>
 } {
   return {
-    byResourceId: new Map(services.map((service) => [service.resourceId, service.name])),
+    byResourceId: new Map(services.map((service) => [service.id, service.name])),
     byId: new Map(services.map((service) => [String(service.id), service.name])),
   }
 }
@@ -335,17 +335,17 @@ function toSafeIssue(
   const id = toSafeId(issue.id)
   if (!id) return null
 
-  const projectResourceId = toSafeId(issue.projectResourceId) || toSafeId(issue.projectId)
-  if (!projectResourceId) return null
+  const projectId = toSafeId(issue.projectId)
+  if (!projectId) return null
 
   const service =
-    servicesByResourceId.get(projectResourceId) ??
+    servicesByResourceId.get(projectId) ??
     servicesById.get(toSafeId(issue.projectId)) ??
-    projectResourceId
+    projectId
 
   return {
     id,
-    projectResourceId,
+    projectId,
     service,
     title: toSafeString(issue.title, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
     culprit: toSafeString(issue.culprit, '', ISSUE_SEARCH_TEXT_MAX_CHARS),
@@ -560,7 +560,7 @@ function DashboardPage({tabs}: DashboardPageProps) {
     safeIssues.forEach((issue) => {
       byKey.set(issueSelectionKey(issue), {
         id: issue.id,
-        projectResourceId: issue.projectResourceId,
+        projectId: issue.projectId,
       })
     })
     return byKey
@@ -1016,7 +1016,7 @@ function IssueRow({issue, selected, onToggle}: IssueRowProps) {
         <Link
           to="/issues/$issueId"
           params={{ issueId: issue.id }}
-          search={{ projectId: issue.projectResourceId }}
+          search={{ projectId: issue.projectId }}
           className="flex-1 flex items-center gap-2 sm:gap-3 min-w-0"
         >
           <div className="w-12 sm:w-[4.5rem] shrink-0">

@@ -58,8 +58,7 @@ vi.mock('@tanstack/react-router', () => ({
 import { Route as IssuesIndexRoute } from '../issues.index'
 
 const mockProject = {
-  id: 1,
-  resourceId: 'proj-1',
+  id: 'proj-1',
   name: 'Test Service',
   slug: 'test-project',
   platform: 'javascript',
@@ -68,8 +67,7 @@ const mockProject = {
 const mockIssues = [
   {
     id: 'issue-1',
-    projectId: 1,
-    projectResourceId: 'proj-1',
+    projectId: 'proj-1',
     title: 'TypeError: null ref',
     culprit: 'app.main',
     level: 'error',
@@ -82,8 +80,7 @@ const mockIssues = [
   },
   {
     id: 'issue-2',
-    projectId: 1,
-    projectResourceId: 'proj-1',
+    projectId: 'proj-1',
     title: 'ValueError: invalid input',
     culprit: 'api.handler',
     level: 'warning',
@@ -96,8 +93,7 @@ const mockIssues = [
   },
   {
     id: 'issue-3',
-    projectId: 1,
-    projectResourceId: 'proj-1',
+    projectId: 'proj-1',
     title: 'Fatal crash',
     culprit: '',
     level: 'fatal',
@@ -110,8 +106,7 @@ const mockIssues = [
   },
   {
     id: 'issue-4',
-    projectId: 1,
-    projectResourceId: 'proj-1',
+    projectId: 'proj-1',
     title: 'Debug trace',
     culprit: 'debug.module',
     level: 'debug',
@@ -124,8 +119,7 @@ const mockIssues = [
   },
   {
     id: 'issue-5',
-    projectId: 1,
-    projectResourceId: 'proj-1',
+    projectId: 'proj-1',
     title: 'Info message',
     culprit: 'info: Info message',
     level: 'info',
@@ -234,16 +228,14 @@ describe('Issues Index - data coverage', () => {
   it('keeps row service context for org-wide issue links and bulk updates', async () => {
     const workerProject = {
       ...mockProject,
-      id: 2,
-      resourceId: 'proj-2',
+      id: 'proj-2',
       name: 'Worker Service',
       slug: 'worker-service',
     }
     const workerIssue = {
       ...mockIssues[0],
       id: 'issue-worker',
-      projectId: 2,
-      projectResourceId: 'proj-2',
+      projectId: 'proj-2',
       title: 'Worker panic',
       culprit: 'worker.handler',
     }
@@ -291,8 +283,7 @@ describe('Issues Index - data coverage', () => {
   it('passes selected services to the org-wide issues API', async () => {
     const workerProject = {
       ...mockProject,
-      id: 2,
-      resourceId: 'proj-2',
+      id: 'proj-2',
       name: 'Worker Service',
       slug: 'worker-service',
     }

@@ -118,7 +118,7 @@ fun Route.analyticsIngestRoutes(
     // Project-ID route for API clients
     route("/api/{projectId}/analytics") {
         post("/event") {
-            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolveProtocolId)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post

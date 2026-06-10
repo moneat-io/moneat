@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.ReplayService
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.OrgProjectTestFixtures
 import com.moneat.testsupport.requestBodyText
@@ -62,6 +63,9 @@ class ReplayServiceExtendedTest {
         queryHelper = DashboardQueryHelper(retentionPolicyService, pricingTierService)
         service = ReplayService(queryHelper)
     }
+
+    private fun defaultProjectResourceId(): String =
+        ProjectIdResolver().resourceIdFor(1) ?: ""
 
     @Test
     fun `getReplayRecording decodes JSON segment events from recording_data`() = runBlocking {
@@ -212,7 +216,7 @@ class ReplayServiceExtendedTest {
             val result = service.getReplaysForIssue(issueId, limit = 5)
             assertEquals(1, result.size)
             assertEquals(REPLAY_UUID, result[0].replayId)
-            assertEquals(1L, result[0].projectId)
+            assertEquals(defaultProjectResourceId(), result[0].projectId)
             assertEquals(3, result[0].errorCount)
             assertEquals("Chrome", result[0].browserName)
         }

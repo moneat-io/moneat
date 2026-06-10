@@ -27,7 +27,7 @@ describe('release replay feedback service scope API', () => {
 
     const result = await api.getOrganizationReleases({
       services: ['API', 'Worker'],
-      serviceIds: [1, 'svc-worker'],
+      serviceIds: ['svc-api', 'svc-worker'],
     })
 
     expect(result).toEqual(releases)

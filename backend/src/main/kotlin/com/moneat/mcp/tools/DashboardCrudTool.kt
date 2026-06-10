@@ -70,6 +70,19 @@ private fun dashboardAlertPriority(input: String?): String? {
     }
 }
 
+private fun JsonObject.requiredStringArg(name: String): String? =
+    this[name]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+
+private fun JsonObject.requiredDashboardId(context: McpContext): Long? =
+    requiredStringArg("dashboard_id")?.let { dashboardId ->
+        dashCrudService.resolveDashboardId(dashboardId, context.organizationId.toLong())
+    }
+
+private fun JsonObject.requiredAlertId(dashboardId: Long, context: McpContext): Long? =
+    requiredStringArg("alert_id")?.let { alertId ->
+        dashAlertService.resolveAlertId(alertId, dashboardId, context.organizationId.toLong())
+    }
+
 class UpdateDashboardTool : McpTool {
     override val name = "update_dashboard"
     override val description =
@@ -78,7 +91,7 @@ class UpdateDashboardTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "dashboard_id" to schemaNumber("Dashboard ID"),
+                "dashboard_id" to schemaString("Dashboard resource ID"),
                 "title" to schemaString("New title"),
                 "description" to schemaString("New description")
             )
@@ -90,8 +103,7 @@ class UpdateDashboardTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val dashId = args["dashboard_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val dashboardResourceId = args.requiredStringArg("dashboard_id")
             ?: return errorResult("dashboard_id is required")
 
         val title = args["title"]?.jsonPrimitive?.content
@@ -101,6 +113,8 @@ class UpdateDashboardTool : McpTool {
                 "At least one of title or description is required"
             )
         }
+        val dashId = dashCrudService.resolveDashboardId(dashboardResourceId, context.organizationId.toLong())
+            ?: return errorResult("Dashboard not found")
         val request = UpdateDashboardRequest(
             title = title,
             description = description
@@ -120,7 +134,7 @@ class DeleteDashboardTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("dashboard_id" to schemaNumber("Dashboard ID"))
+            mapOf("dashboard_id" to schemaString("Dashboard resource ID"))
         ),
         required = listOf("dashboard_id")
     )
@@ -129,9 +143,10 @@ class DeleteDashboardTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val dashId = args["dashboard_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val dashboardResourceId = args.requiredStringArg("dashboard_id")
             ?: return errorResult("dashboard_id is required")
+        val dashId = dashCrudService.resolveDashboardId(dashboardResourceId, context.organizationId.toLong())
+            ?: return errorResult("Dashboard not found")
 
         val deleted = dashCrudService.deleteDashboard(
             id = dashId,
@@ -153,8 +168,8 @@ class CreateDashboardAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "dashboard_id" to schemaNumber("Dashboard ID"),
-                "widget_id" to schemaNumber("Widget ID"),
+                "dashboard_id" to schemaString("Dashboard resource ID"),
+                "widget_id" to schemaString("Widget resource ID"),
                 "name" to schemaString("Alert name"),
                 "condition" to schemaEnum(
                     "Condition", dashboardAlertConditions
@@ -182,11 +197,9 @@ class CreateDashboardAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val dashId = args["dashboard_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val dashboardResourceId = args.requiredStringArg("dashboard_id")
             ?: return errorResult("dashboard_id is required")
-        val widgetId = args["widget_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val widgetId = args.requiredStringArg("widget_id")
             ?: return errorResult("widget_id is required")
         val name = args["name"]?.jsonPrimitive?.content
             ?: return errorResult("name is required")
@@ -217,6 +230,8 @@ class CreateDashboardAlertTool : McpTool {
         } catch (e: IllegalArgumentException) {
             return errorResult(e.message ?: "Invalid dashboard alert priority")
         }
+        val dashId = dashCrudService.resolveDashboardId(dashboardResourceId, context.organizationId.toLong())
+            ?: return errorResult("Dashboard not found")
         val request = CreateDashboardAlertRequest(
             widgetId = widgetId,
             name = name,
@@ -242,8 +257,8 @@ class UpdateDashboardAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "dashboard_id" to schemaNumber("Dashboard ID"),
-                "alert_id" to schemaNumber("Alert ID"),
+                "dashboard_id" to schemaString("Dashboard resource ID"),
+                "alert_id" to schemaString("Alert resource ID"),
                 "name" to schemaString("Alert name"),
                 "condition" to schemaEnum(
                     "Condition", dashboardAlertConditions
@@ -266,11 +281,9 @@ class UpdateDashboardAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val dashId = args["dashboard_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val dashboardResourceId = args.requiredStringArg("dashboard_id")
             ?: return errorResult("dashboard_id is required")
-        val alertId = args["alert_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val alertResourceId = args.requiredStringArg("alert_id")
             ?: return errorResult("alert_id is required")
 
         val name = args["name"]?.jsonPrimitive?.content
@@ -324,6 +337,10 @@ class UpdateDashboardAlertTool : McpTool {
                 "At least one field must be provided to update"
             )
         }
+        val dashId = dashCrudService.resolveDashboardId(dashboardResourceId, context.organizationId.toLong())
+            ?: return errorResult("Dashboard not found")
+        val alertId = dashAlertService.resolveAlertId(alertResourceId, dashId, context.organizationId.toLong())
+            ?: return errorResult("Alert not found")
         val request = UpdateDashboardAlertRequest(
             name = name,
             condition = normalizedCondition,
@@ -349,8 +366,8 @@ class DeleteDashboardAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "dashboard_id" to schemaNumber("Dashboard ID"),
-                "alert_id" to schemaNumber("Alert ID")
+                "dashboard_id" to schemaString("Dashboard resource ID"),
+                "alert_id" to schemaString("Alert resource ID")
             )
         ),
         required = listOf("dashboard_id", "alert_id")
@@ -360,12 +377,14 @@ class DeleteDashboardAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val dashId = args["dashboard_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val dashboardResourceId = args.requiredStringArg("dashboard_id")
             ?: return errorResult("dashboard_id is required")
-        val alertId = args["alert_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val alertResourceId = args.requiredStringArg("alert_id")
             ?: return errorResult("alert_id is required")
+        val dashId = dashCrudService.resolveDashboardId(dashboardResourceId, context.organizationId.toLong())
+            ?: return errorResult("Dashboard not found")
+        val alertId = dashAlertService.resolveAlertId(alertResourceId, dashId, context.organizationId.toLong())
+            ?: return errorResult("Alert not found")
 
         val deleted = dashAlertService.deleteAlert(
             alertId = alertId,

@@ -129,8 +129,7 @@ import {overviewTestData} from '../../components/overview/__tests__/overviewTest
 import type {OverviewResponse} from '@/lib/api/types'
 
 const project = {
-  id: 1,
-  resourceId: 'svc-api',
+  id: 'svc-api',
   name: 'API Service',
   slug: 'api-service',
   keys: [],
@@ -153,8 +152,7 @@ const projectStats = {
 
 const issue = {
   id: 'issue-1',
-  projectId: 1,
-  projectResourceId: 'svc-api',
+  projectId: 'svc-api',
   title: 'Checkout failed',
   culprit: 'CheckoutController',
   level: 'error',
@@ -314,8 +312,7 @@ const release = {
 
 const replay = {
   replayId: 'replay-1',
-  projectId: 1,
-  projectResourceId: 'svc-api',
+  projectId: 'svc-api',
   startedAt: '2026-06-05T12:00:00.000Z',
   finishedAt: '2026-06-05T12:01:00.000Z',
   durationMs: 60_000,

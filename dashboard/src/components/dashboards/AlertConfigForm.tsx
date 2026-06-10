@@ -45,8 +45,8 @@ const ALERT_PRIORITIES = [
 ] as const
 
 interface AlertConfigFormProps {
-  dashboardId: number
-  widgetId: number
+  dashboardId: string
+  widgetId: string
   queryConfigs: QueryDsl[]
   onPreviewChange?: (preview: AlertThresholdPreview | null) => void
 }
@@ -134,13 +134,13 @@ export function AlertConfigForm({
   })
 
   const toggleMutation = useMutation({
-    mutationFn: ({alertId, enabled}: {alertId: number; enabled: boolean}) =>
+    mutationFn: ({alertId, enabled}: {alertId: string; enabled: boolean}) =>
       api.updateDashboardAlert(dashboardId, alertId, {enabled}),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['dashboard-alerts', dashboardId]}),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (alertId: number) => api.deleteDashboardAlert(dashboardId, alertId),
+    mutationFn: (alertId: string) => api.deleteDashboardAlert(dashboardId, alertId),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['dashboard-alerts', dashboardId]}),
   })
 

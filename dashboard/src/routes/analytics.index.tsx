@@ -653,7 +653,7 @@ function ProductAnalyticsContent({
     <div className="space-y-2">
       <ProductAnalyticsEmptyState
         service={setupService}
-        serviceId={setupService?.resourceId ?? 'your-service-id'}
+        serviceId={setupService?.id ?? 'your-service-id'}
       />
     </div>
   )

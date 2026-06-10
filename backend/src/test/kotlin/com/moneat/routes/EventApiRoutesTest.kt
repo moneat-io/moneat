@@ -57,8 +57,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
@@ -85,6 +87,7 @@ class EventApiRoutesTest {
         private const val DB_QUERY = "db.query"
         private const val TIMESTAMP_2026_01_01 = "2026-01-01T00:00:00Z"
         private const val TIMESTAMP_2026_01_02 = "2026-01-02T00:00:00Z"
+        private const val TEST_PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
     }
 
     private lateinit var mockDashboardService: DashboardService
@@ -169,6 +172,17 @@ class EventApiRoutesTest {
         return SeededProjectScope(userId, orgId, projectId)
     }
 
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
+    }
+
+    private fun projectApiPath(projectId: Long, suffix: String = ""): String =
+        "/v1/projects/${projectResourceId(projectId)}$suffix"
+
     // ──── Authentication ────
 
     @Test
@@ -196,11 +210,11 @@ class EventApiRoutesTest {
 
     @Test
     fun `GET issues returns 403 when user lacks project access`() = testApplication {
-        val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_PROJECT_ID) } returns false
+        val (userId, projectId) = seedUserWithProject()
+        every { mockDashboardService.hasProjectAccess(userId, projectId) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$SENTINEL_PROJECT_ID/issues") {
+        val response = client.get(projectApiPath(projectId, "/issues")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -241,7 +255,7 @@ class EventApiRoutesTest {
         } returns listOf(sampleIssue(projectId))
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/issues") {
+        val response = client.get(projectApiPath(projectId, "/issues")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -265,9 +279,10 @@ class EventApiRoutesTest {
         } returns listOf(sampleIssue(scope.projectId))
 
         application { installTestApp() }
+        val serviceId = projectResourceId(scope.projectId)
         val url =
             "/v1/issues?page=2&limit=5&status=resolved" +
-                "&services=Test%20Project&serviceIds=${scope.projectId}"
+                "&services=Test%20Project&serviceIds=$serviceId"
         val response = client.get(url) {
             withAuth(token(scope.userId, scope.orgId))
         }
@@ -333,7 +348,7 @@ class EventApiRoutesTest {
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/issues?page=3&limit=10&status=resolved") {
+        val response = client.get(projectApiPath(projectId, "/issues?page=3&limit=10&status=resolved")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -461,7 +476,7 @@ class EventApiRoutesTest {
         } returns listOf(sampleTransactionSummary())
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/transactions") {
+        val response = client.get(projectApiPath(projectId, "/transactions")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -477,7 +492,7 @@ class EventApiRoutesTest {
         } returns emptyList()
 
         application { installTestApp() }
-        val url = "/v1/projects/$projectId/transactions?period=30d&environment=production&operation=$HTTP_SERVER"
+        val url = projectApiPath(projectId, "/transactions?period=30d&environment=production&operation=$HTTP_SERVER")
         val response = client.get(url) {
             withAuth(token(userId))
         }
@@ -498,7 +513,7 @@ class EventApiRoutesTest {
         } returns samplePerformanceStats()
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/transactions/stats") {
+        val response = client.get(projectApiPath(projectId, "/transactions/stats")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -514,7 +529,7 @@ class EventApiRoutesTest {
         } returns samplePerformanceStats()
 
         application { installTestApp() }
-        val url = "/v1/projects/$projectId/transactions/stats?period=24h&environment=staging&operation=$DB_QUERY"
+        val url = projectApiPath(projectId, "/transactions/stats?period=24h&environment=staging&operation=$DB_QUERY")
         val response = client.get(url) {
             withAuth(token(userId))
         }
@@ -635,7 +650,7 @@ class EventApiRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-found-1"))
-        assertTrue(response.bodyAsText().contains("projectResourceId"))
+        assertTrue(response.bodyAsText().contains("projectId"))
     }
 
     @Test
@@ -699,12 +714,14 @@ class EventApiRoutesTest {
 
     @Test
     fun `demo user can access issues without explicit project membership`() = testApplication {
+        val (_, projectId) = seedUserWithProject()
+        val resourceId = projectResourceId(projectId)
         coEvery {
             mockDashboardService.getIssues(any(), any(), any(), any(), any())
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/1/issues") {
+        val response = client.get("/v1/projects/$resourceId/issues") {
             withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -712,9 +729,9 @@ class EventApiRoutesTest {
 
     // ──── Helpers ────
 
-    private fun sampleIssue(projectId: Long = 1L) = IssueResponse(
+    private fun sampleIssue(projectId: Long? = null) = IssueResponse(
         id = "issue-1",
-        projectId = projectId,
+        projectId = projectId?.let(::projectResourceId) ?: TEST_PROJECT_RESOURCE_ID,
         title = "NullPointerException",
         culprit = "com.app.Main",
         level = "error",
@@ -728,7 +745,7 @@ class EventApiRoutesTest {
 
     private fun sampleIssueDetail() = IssueDetailResponse(
         id = ISSUE_DETAIL_1,
-        projectId = 1L,
+        projectId = TEST_PROJECT_RESOURCE_ID,
         projectName = "Test Project",
         title = "NullPointerException",
         culprit = "com.app.Main",

@@ -18,6 +18,7 @@ package com.moneat.logs.routes
 
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.dashboards.models.CreateDashboardAlertRequest
+import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.logs.LogPermissions
@@ -51,6 +52,7 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -66,18 +68,32 @@ private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val DEFAULT_METRIC_ROLLUP_MINUTES = 5L
 private const val MAX_METRIC_ROLLUP_DAYS = 1L
 
+data class LogManagementRouteDependencies(
+    val logManagementService: LogManagementService = GlobalContext.get().get(),
+    val logIndexService: LogIndexService = GlobalContext.get().get(),
+    val logService: LogService = GlobalContext.get().get(),
+    val membershipService: OrgMembershipService = GlobalContext.get().get(),
+    val dashboardAlertService: DashboardAlertService = GlobalContext.get().get(),
+    val customDashboardService: CustomDashboardService = GlobalContext.get().get(),
+)
+
 fun Route.registerLogManagementRoutes(
-    logManagementService: LogManagementService,
-    logIndexService: LogIndexService,
-    logService: LogService,
-    membershipService: OrgMembershipService,
-    dashboardAlertService: DashboardAlertService
+    dependencies: LogManagementRouteDependencies,
 ) {
-    registerLogIndexManagementRoutes(logIndexService, membershipService)
-    registerLogPipelineManagementRoutes(logManagementService, membershipService)
-    registerLogSavedViewManagementRoutes(logManagementService, membershipService)
-    registerLogMetricManagementRoutes(logManagementService, logService, membershipService)
-    registerLogMonitorManagementRoutes(logManagementService, membershipService, dashboardAlertService)
+    registerLogIndexManagementRoutes(dependencies.logIndexService, dependencies.membershipService)
+    registerLogPipelineManagementRoutes(dependencies.logManagementService, dependencies.membershipService)
+    registerLogSavedViewManagementRoutes(dependencies.logManagementService, dependencies.membershipService)
+    registerLogMetricManagementRoutes(
+        dependencies.logManagementService,
+        dependencies.logService,
+        dependencies.membershipService
+    )
+    registerLogMonitorManagementRoutes(
+        dependencies.logManagementService,
+        dependencies.membershipService,
+        dependencies.dashboardAlertService,
+        dependencies.customDashboardService
+    )
 }
 
 private fun Route.registerLogIndexManagementRoutes(
@@ -260,7 +276,8 @@ private suspend fun RoutingContext.handleRollupMetricRule(
 private fun Route.registerLogMonitorManagementRoutes(
     logManagementService: LogManagementService,
     membershipService: OrgMembershipService,
-    dashboardAlertService: DashboardAlertService
+    dashboardAlertService: DashboardAlertService,
+    customDashboardService: CustomDashboardService
 ) {
     get("/logs/monitors") {
         val orgId = call.logOrgIdOrRespond() ?: return@get
@@ -298,7 +315,11 @@ private fun Route.registerLogMonitorManagementRoutes(
     post("/logs/monitors/from-query") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@post
         val request = call.receive<LogMonitorDraftRequest>()
-        val response = call.createLogMonitorDraftOrBadRequest(request, dashboardAlertService) ?: return@post
+        val response = call.createLogMonitorDraftOrBadRequest(
+            request,
+            dashboardAlertService,
+            customDashboardService
+        ) ?: return@post
         call.respond(HttpStatusCode.OK, response)
     }
 }
@@ -319,14 +340,19 @@ private suspend fun ApplicationCall.respondLogPermissions(membershipService: Org
 
 private suspend fun ApplicationCall.createLogMonitorDraft(
     request: LogMonitorDraftRequest,
-    dashboardAlertService: DashboardAlertService
+    dashboardAlertService: DashboardAlertService,
+    customDashboardService: CustomDashboardService
 ): LogMonitorDraftResponse? {
     val dashboardId = request.dashboardId
     val widgetId = request.widgetId
     if (dashboardId != null && widgetId != null) {
         val orgId = logOrgIdOrRespond() ?: return null
+        val numericDashboardId = customDashboardService.resolveDashboardId(dashboardId, orgId.toLong())
+            ?: throw IllegalArgumentException("Dashboard not found")
+        customDashboardService.resolveWidgetId(widgetId, numericDashboardId)
+            ?: throw IllegalArgumentException("Widget not found on dashboard")
         val alert = dashboardAlertService.createAlert(
-            dashboardId = dashboardId,
+            dashboardId = numericDashboardId,
             orgId = orgId.toLong(),
             createdBy = logUserId().toLong(),
             request = CreateDashboardAlertRequest(
@@ -345,10 +371,11 @@ private suspend fun ApplicationCall.createLogMonitorDraft(
 
 private suspend fun ApplicationCall.createLogMonitorDraftOrBadRequest(
     request: LogMonitorDraftRequest,
-    dashboardAlertService: DashboardAlertService
+    dashboardAlertService: DashboardAlertService,
+    customDashboardService: CustomDashboardService
 ): LogMonitorDraftResponse? =
     suspendRunCatching {
-        createLogMonitorDraft(request, dashboardAlertService)
+        createLogMonitorDraft(request, dashboardAlertService, customDashboardService)
     }.getOrElse { error ->
         if (error is IllegalArgumentException) {
             respond(HttpStatusCode.BadRequest, ErrorResponse(error.message ?: "Invalid monitor draft"))
@@ -503,7 +530,7 @@ private fun com.moneat.logs.models.LogMetricRuleResponse.toCreateRequest(): Crea
 
 private fun LogMonitorDraftRequest.toDraftResponse(
     dashboardAlertCreated: Boolean,
-    dashboardAlertId: Long?
+    dashboardAlertId: String?
 ): LogMonitorDraftResponse =
     LogMonitorDraftResponse(
         name = name,

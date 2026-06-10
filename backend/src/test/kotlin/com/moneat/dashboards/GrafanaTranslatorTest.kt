@@ -439,7 +439,7 @@ class GrafanaTranslatorTest {
     @Test
     fun `export generates valid Grafana JSON structure`() {
         val dashboard = DashboardResponse(
-            id = 1,
+            id = "dashboard-1",
             orgId = 1,
             title = "Test",
             createdBy = 1,
@@ -447,7 +447,7 @@ class GrafanaTranslatorTest {
             updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = 1, dashboardId = 1, title = "CPU",
+                    id = "widget-1", dashboardId = "dashboard-1", title = "CPU",
                     widgetType = "timeseries",
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
                     queryConfigs = listOf(
@@ -470,7 +470,7 @@ class GrafanaTranslatorTest {
     @Test
     fun `export scales 12-col grid to 24-col`() {
         val dashboard = DashboardResponse(
-            id = 1,
+            id = "dashboard-1",
             orgId = 1,
             title = "Test",
             createdBy = 1,
@@ -478,8 +478,8 @@ class GrafanaTranslatorTest {
             updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = 1,
-                    dashboardId = 1,
+                    id = "widget-1",
+                    dashboardId = "dashboard-1",
                     widgetType = "stat",
                     gridX = 3,
                     gridY = 0,
@@ -498,7 +498,7 @@ class GrafanaTranslatorTest {
     @Test
     fun `export maps toplist to table in Grafana`() {
         val dashboard = DashboardResponse(
-            id = 1,
+            id = "dashboard-1",
             orgId = 1,
             title = "Test",
             createdBy = 1,
@@ -506,8 +506,8 @@ class GrafanaTranslatorTest {
             updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = 1,
-                    dashboardId = 1,
+                    id = "widget-1",
+                    dashboardId = "dashboard-1",
                     widgetType = "toplist",
                     queryConfigs = listOf(QueryDsl(dataSource = "events")),
                 )
@@ -1074,7 +1074,7 @@ class GrafanaTranslatorTest {
     @Test
     fun `export includes variables in templating`() {
         val dashboard = DashboardResponse(
-            id = 1,
+            id = "dashboard-1",
             orgId = 1,
             title = "Test",
             createdBy = 1,

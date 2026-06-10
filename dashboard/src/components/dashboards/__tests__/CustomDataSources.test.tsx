@@ -18,6 +18,10 @@ import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {api} from '@/lib/api'
 import React from 'react'
 
+const DATA_SOURCE_ID = 'datasource-1'
+const SECOND_DATA_SOURCE_ID = 'datasource-2'
+const DELETE_DATA_SOURCE_ID = 'datasource-42'
+
 // Mock the api module
 vi.mock('@/lib/api', () => ({
   api: {
@@ -44,7 +48,7 @@ describe('Custom Data Sources', () => {
     it('listCustomDataSources returns array', async () => {
       vi.mocked(api.listCustomDataSources).mockResolvedValue([
         {
-          id: 1,
+          id: DATA_SOURCE_ID,
           org_id: 1,
           name: 'My PostgreSQL',
           source_type: 'postgresql',
@@ -68,7 +72,7 @@ describe('Custom Data Sources', () => {
 
     it('createCustomDataSource sends correct payload', async () => {
       vi.mocked(api.createCustomDataSource).mockResolvedValue({
-        id: 2,
+        id: SECOND_DATA_SOURCE_ID,
         org_id: 1,
         name: 'Prometheus',
         source_type: 'prometheus',
@@ -89,7 +93,7 @@ describe('Custom Data Sources', () => {
         port: 9090,
       })
 
-      expect(result.id).toBe(2)
+      expect(result.id).toBe(SECOND_DATA_SOURCE_ID)
       expect(api.createCustomDataSource).toHaveBeenCalledWith({
         name: 'Prometheus',
         source_type: 'prometheus',
@@ -136,7 +140,7 @@ describe('Custom Data Sources', () => {
 
     it('updateCustomDataSource can update credentials', async () => {
       vi.mocked(api.updateCustomDataSource).mockResolvedValue({
-        id: 1,
+        id: DATA_SOURCE_ID,
         org_id: 1,
         name: 'My PostgreSQL',
         source_type: 'postgresql',
@@ -150,18 +154,18 @@ describe('Custom Data Sources', () => {
         has_credentials: true,
       })
 
-      await api.updateCustomDataSource(1, {
+      await api.updateCustomDataSource(DATA_SOURCE_ID, {
         password: 'new-password',
       })
 
-      expect(api.updateCustomDataSource).toHaveBeenCalledWith(1, {
+      expect(api.updateCustomDataSource).toHaveBeenCalledWith(DATA_SOURCE_ID, {
         password: 'new-password',
       })
     })
 
     it('updateCustomDataSource can toggle enabled', async () => {
       vi.mocked(api.updateCustomDataSource).mockResolvedValue({
-        id: 1,
+        id: DATA_SOURCE_ID,
         org_id: 1,
         name: 'My PostgreSQL',
         source_type: 'postgresql',
@@ -175,14 +179,14 @@ describe('Custom Data Sources', () => {
         has_credentials: true,
       })
 
-      const result = await api.updateCustomDataSource(1, {enabled: false})
+      const result = await api.updateCustomDataSource(DATA_SOURCE_ID, {enabled: false})
       expect(result.enabled).toBe(false)
     })
 
     it('deleteCustomDataSource calls with correct id', async () => {
       vi.mocked(api.deleteCustomDataSource).mockResolvedValue(undefined)
-      await api.deleteCustomDataSource(42)
-      expect(api.deleteCustomDataSource).toHaveBeenCalledWith(42)
+      await api.deleteCustomDataSource(DELETE_DATA_SOURCE_ID)
+      expect(api.deleteCustomDataSource).toHaveBeenCalledWith(DELETE_DATA_SOURCE_ID)
     })
   })
 
@@ -190,7 +194,7 @@ describe('Custom Data Sources', () => {
     it('credentials are never in list response', async () => {
       vi.mocked(api.listCustomDataSources).mockResolvedValue([
         {
-          id: 1,
+          id: DATA_SOURCE_ID,
           org_id: 1,
           name: 'Test DB',
           source_type: 'postgresql',

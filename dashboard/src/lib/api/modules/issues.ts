@@ -27,7 +27,7 @@ import { urlWithQuery } from '../utils'
 function setCsvParam(
   params: URLSearchParams,
   key: string,
-  values: readonly (string | number)[] | undefined
+  values: readonly string[] | undefined
 ) {
   const csv = values
     ?.map((value) => String(value).trim())
@@ -52,7 +52,7 @@ export function issuesMethods(core: ApiClientCore) {
     },
 
     getIssues: (
-      projectId: string | number,
+      projectId: string,
       page = 1,
       limit = 25,
       status?: string
@@ -68,14 +68,14 @@ export function issuesMethods(core: ApiClientCore) {
       )
     },
 
-    getIssue: (issueId: string, projectId?: string | number | null) => {
+    getIssue: (issueId: string, projectId?: string | null) => {
       const params = new URLSearchParams()
       if (projectId != null) params.set('projectId', String(projectId))
       const path = `${base}/issues/${encodeURIComponent(issueId)}`
       return core.request<IssueDetail>(urlWithQuery(path, params.toString()))
     },
 
-    getIssueEvents: (issueId: string, limit = 50, projectId?: string | number | null) => {
+    getIssueEvents: (issueId: string, limit = 50, projectId?: string | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<Event[]>(
@@ -83,7 +83,7 @@ export function issuesMethods(core: ApiClientCore) {
       )
     },
 
-    getIssueTransactions: (issueId: string, limit = 20, projectId?: string | number | null) => {
+    getIssueTransactions: (issueId: string, limit = 20, projectId?: string | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<IssueTransaction[]>(
@@ -98,7 +98,7 @@ export function issuesMethods(core: ApiClientCore) {
         substatus?: string
         statusDetail?: Record<string, string>
       },
-      projectId?: string | number | null
+      projectId?: string | null
     ) => {
       const params = new URLSearchParams()
       if (projectId != null) params.set('projectId', String(projectId))

@@ -42,8 +42,10 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import io.mockk.verify
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
@@ -104,7 +106,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody(
@@ -161,7 +163,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody(
@@ -217,7 +219,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             setBody("""{"events":[]}""")
         }
@@ -240,7 +242,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody("""{"events":[{"name":"recording.started","user_id":"user"}]}""")
@@ -264,7 +266,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody("""{"events":[{"name":"recording.started","user_id":"user"}]}""")
@@ -288,7 +290,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody("{not-json")
@@ -312,7 +314,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody("""{"events":[]}""")
@@ -339,7 +341,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody(events)
@@ -363,7 +365,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody("""{"events":[{"name":"","user_id":""}]}""")
@@ -387,7 +389,7 @@ class AnalyticsServerIngestRoutesTest {
             }
         }
 
-        val response = client.post("/v1/analytics/$projectId/events") {
+        val response = client.post(analyticsRoute(projectId)) {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.Authorization, "Bearer $API_KEY")
             setBody("""{"events":[{"name":"recording.started","user_id":"user"}]}""")
@@ -397,6 +399,17 @@ class AnalyticsServerIngestRoutesTest {
     }
 
     // ──── Helpers ────
+
+    private fun analyticsRoute(projectId: Long): String =
+        "/v1/analytics/${projectResourceId(projectId)}/events"
+
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
+    }
 
     private fun seedProject(): Pair<Int, Long> {
         return transaction {

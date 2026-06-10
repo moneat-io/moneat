@@ -512,8 +512,8 @@ data class LogMonitorDraftRequest(
     val threshold: Double,
     @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
-    @SerialName("dashboard_id") val dashboardId: Long? = null,
-    @SerialName("widget_id") val widgetId: Long? = null
+    @SerialName("dashboard_id") val dashboardId: String? = null,
+    @SerialName("widget_id") val widgetId: String? = null
 )
 
 @Serializable
@@ -526,5 +526,5 @@ data class LogMonitorDraftResponse(
     val threshold: Double,
     @SerialName("warning_threshold") val warningThreshold: Double? = null,
     @SerialName("dashboard_alert_created") val dashboardAlertCreated: Boolean = false,
-    @SerialName("dashboard_alert_id") val dashboardAlertId: Long? = null
+    @SerialName("dashboard_alert_id") val dashboardAlertId: String? = null
 )

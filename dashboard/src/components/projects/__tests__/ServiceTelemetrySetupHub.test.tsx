@@ -35,8 +35,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const baseService: Project = {
-  id: 1,
-  resourceId: 'svc-checkout',
+  id: 'svc-checkout',
   name: 'Checkout API',
   slug: 'checkout-api',
   framework: 'react',

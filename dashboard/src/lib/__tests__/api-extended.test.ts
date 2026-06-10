@@ -47,12 +47,12 @@ describe('ApiClient - Extended Methods', () => {
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/stats`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1/stats`, () => {
           return HttpResponse.json(mockStats)
         })
       )
 
-      const stats = await api.getProjectStats(1)
+      const stats = await api.getProjectStats('proj-1')
       expect(stats).toEqual(mockStats)
     })
 
@@ -70,12 +70,12 @@ describe('ApiClient - Extended Methods', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/releases`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1/releases`, () => {
           return HttpResponse.json(mockReleases)
         })
       )
 
-      const releases = await api.getReleases(1)
+      const releases = await api.getReleases('proj-1')
       expect(releases).toEqual(mockReleases)
     })
 
@@ -96,12 +96,12 @@ describe('ApiClient - Extended Methods', () => {
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/releases/1.0.0/stats`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1/releases/1.0.0/stats`, () => {
           return HttpResponse.json(mockReleaseStats)
         })
       )
 
-      const stats = await api.getReleaseStats(1, '1.0.0')
+      const stats = await api.getReleaseStats('proj-1', '1.0.0')
       expect(stats).toEqual(mockReleaseStats)
     })
   })
@@ -122,14 +122,14 @@ describe('ApiClient - Extended Methods', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/transactions`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-1/transactions`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           return HttpResponse.json(mockSummary)
         })
       )
 
-      const summary = await api.getTransactions(1)
+      const summary = await api.getTransactions('proj-1')
       expect(summary).toEqual(mockSummary)
     })
 
@@ -187,14 +187,14 @@ describe('ApiClient - Extended Methods', () => {
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/transactions/stats`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-1/transactions/stats`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           return HttpResponse.json(mockPerfStats)
         })
       )
 
-      const stats = await api.getPerformanceStats(1, { period: '7d' })
+      const stats = await api.getPerformanceStats('proj-1', { period: '7d' })
       expect(stats).toEqual(mockPerfStats)
     })
   })
@@ -204,7 +204,7 @@ describe('ApiClient - Extended Methods', () => {
       const mockReplays = [
         {
           replayId: 'replay-1',
-          projectId: 1,
+          projectId: 'proj-1',
           startedAt: '2024-02-11T10:00:00Z',
           finishedAt: '2024-02-11T10:05:00Z',
           durationMs: 300000,
@@ -218,19 +218,19 @@ describe('ApiClient - Extended Methods', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/replays`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1/replays`, () => {
           return HttpResponse.json(mockReplays)
         })
       )
 
-      const replays = await api.getReplays(1)
+      const replays = await api.getReplays('proj-1')
       expect(replays).toEqual(mockReplays)
     })
 
     it('fetches replay detail', async () => {
       const mockReplay = {
         replayId: 'replay-1',
-        projectId: 1,
+        projectId: 'proj-1',
         startedAt: '2024-02-11T10:00:00Z',
         finishedAt: '2024-02-11T10:05:00Z',
         durationMs: 300000,
@@ -272,12 +272,12 @@ describe('ApiClient - Extended Methods', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/feedback`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1/feedback`, () => {
           return HttpResponse.json(mockFeedback)
         })
       )
 
-      const feedback = await api.getFeedback(1)
+      const feedback = await api.getFeedback('proj-1')
       expect(feedback).toEqual(mockFeedback)
     })
 
@@ -409,7 +409,7 @@ describe('ApiClient - Extended Methods', () => {
         },
         projects: [
           {
-            projectId: 1,
+            projectId: 'proj-1',
             projectName: 'Test Project',
             issueAlerts: true,
             errorAlerts: true,
