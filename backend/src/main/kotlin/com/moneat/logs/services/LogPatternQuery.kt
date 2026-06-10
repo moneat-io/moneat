@@ -50,26 +50,31 @@ private const val TOP_PATTERN_BREAKDOWN_LIMIT = 5
 private const val TREND_PERCENT_MULTIPLIER = 100.0
 private const val CLICKHOUSE_ERROR_PREVIEW_CHARS = 600
 private const val LOG_ID_PARAMETER = "logId"
-private const val PATTERN_PARAMETER = "pattern"
 private const val SERVICE_PARAMETER = "service"
 internal const val LOG_MESSAGE_PATTERN_PARAMETER = "messagePattern"
+private const val UUID_LENGTH = 36
+private const val UUID_DASH_OFFSET_1 = 8
+private const val UUID_DASH_OFFSET_2 = 13
+private const val UUID_DASH_OFFSET_3 = 18
+private const val UUID_DASH_OFFSET_4 = 23
+private const val MIN_HEX_TOKEN_CHARS = 12
+private const val MIN_PREFIXED_ID_SUFFIX_CHARS = 3
+private const val HEX_PREFIX_LENGTH = 2
+private const val NO_MATCH = -1
+private const val UUID_REPLACEMENT = "<uuid>"
+private const val ID_REPLACEMENT = "<id>"
+private const val HEX_REPLACEMENT = "<hex>"
+private const val STRING_REPLACEMENT = "<str>"
+private const val FLOAT_REPLACEMENT = "<float>"
+private const val INT_REPLACEMENT = "<int>"
+private const val LIKE_WILDCARD = '%'
+private const val LIKE_ESCAPE = '\\'
 
-private const val SQL_UUID_RE =
-    "\\\\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\\\\b"
-private const val SQL_PREFIXED_ID_RE = "\\\\b[a-z][a-z0-9]*_[A-Za-z0-9]{3,}\\\\b"
-private const val SQL_HEX_RE = "\\\\b(?:0x)?[0-9a-fA-F]{12,}\\\\b"
-private const val SQL_QUOTED_RE = "\"[^\"]*\"|'[^']*'"
-private const val SQL_FLOAT_RE = "\\\\b\\\\d+\\\\.\\\\d+\\\\b"
-private const val SQL_INT_RE = "\\\\b\\\\d+\\\\b"
-private const val SQL_TRIM_RE = "^\\\\s+|\\\\s+$"
+private val uuidDashOffsets =
+    setOf(UUID_DASH_OFFSET_1, UUID_DASH_OFFSET_2, UUID_DASH_OFFSET_3, UUID_DASH_OFFSET_4)
 
-private val uuidRegex =
-    Regex("""\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b""", RegexOption.IGNORE_CASE)
-private val prefixedIdRegex = Regex("""\b[a-z][a-z0-9]*_[A-Za-z0-9]{3,}\b""")
-private val hexRegex = Regex("""\b(?:0x)?[0-9a-f]{12,}\b""", RegexOption.IGNORE_CASE)
-private val quotedRegex = Regex("\"[^\"]*\"|'[^']*'")
-private val floatRegex = Regex("""\b\d+\.\d+\b""")
-private val intRegex = Regex("""\b\d+\b""")
+private val patternPlaceholderTokens =
+    listOf(UUID_REPLACEMENT, ID_REPLACEMENT, HEX_REPLACEMENT, STRING_REPLACEMENT, FLOAT_REPLACEMENT, INT_REPLACEMENT)
 
 internal class LogPatternQuery(private val logRepository: LogRepository) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -84,7 +89,6 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
         if (pattern.isBlank()) return emptyResponse(pattern, resolvedWindow(request))
 
         val window = resolvedWindow(request)
-        val patternExpression = patternSqlExpression("message")
         val conditions =
             patternConditions(
                 PatternConditionScope(
@@ -92,8 +96,7 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
                     service = request.service,
                     fromMs = window.fromMs,
                     toMs = window.toMs,
-                    pattern = pattern,
-                    patternExpression = patternExpression
+                    pattern = pattern
                 )
             )
         val stats = queryPatternStats(conditions)
@@ -102,8 +105,7 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
                 organizationId = organizationId,
                 service = request.service,
                 window = window,
-                pattern = pattern,
-                patternExpression = patternExpression
+                pattern = pattern
             )
 
         return LogPatternResponse(
@@ -206,8 +208,7 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
         organizationId: Long,
         service: String?,
         window: PatternWindow,
-        pattern: String,
-        patternExpression: String
+        pattern: String
     ): Long {
         val durationMs = window.durationMs
         val previousToMs = window.fromMs
@@ -219,8 +220,7 @@ internal class LogPatternQuery(private val logRepository: LogRepository) {
                     service = service,
                     fromMs = previousFromMs,
                     toMs = previousToMs,
-                    pattern = pattern,
-                    patternExpression = patternExpression
+                    pattern = pattern
                 )
             )
         val query =
@@ -307,8 +307,7 @@ private data class PatternConditionScope(
     val service: String?,
     val fromMs: Long,
     val toMs: Long,
-    val pattern: String,
-    val patternExpression: String
+    val pattern: String
 )
 
 private data class PatternConditions(
@@ -322,13 +321,14 @@ private enum class PatternBreakdownColumn(val sqlName: String) {
 }
 
 private fun patternConditions(scope: PatternConditionScope): PatternConditions {
-    val parameters = mutableMapOf(PATTERN_PARAMETER to scope.pattern)
+    val parameters =
+        mutableMapOf(LOG_MESSAGE_PATTERN_PARAMETER to messagePatternLikeParameter(scope.pattern))
     val conditions =
         mutableListOf(
             ClickHouseQueryUtils.orgIdClause(scope.organizationId),
             "timestamp >= fromUnixTimestamp64Milli(${scope.fromMs})",
             "timestamp <= fromUnixTimestamp64Milli(${scope.toMs})",
-            "${scope.patternExpression} = {$PATTERN_PARAMETER:String}"
+            logMessagePatternCondition(scope.pattern)
         )
     if (!scope.service.isNullOrBlank()) {
         conditions += "service = {$SERVICE_PARAMETER:String}"
@@ -337,41 +337,211 @@ private fun patternConditions(scope: PatternConditionScope): PatternConditions {
     return PatternConditions(sql = conditions.joinToString(" AND "), parameters = parameters)
 }
 
-private fun patternSqlExpression(column: String): String {
-    val replacements =
-        listOf(
-            SQL_UUID_RE to "<uuid>",
-            SQL_PREFIXED_ID_RE to "<id>",
-            SQL_HEX_RE to "<hex>",
-            SQL_QUOTED_RE to "<str>",
-            SQL_FLOAT_RE to "<float>",
-            SQL_INT_RE to "<int>"
-        )
-    val collapsed =
-        replacements.fold(column) { expression, (regex, replacement) ->
-            "replaceRegexpAll($expression, '$regex', '$replacement')"
-        }
-    return "replaceRegexpAll($collapsed, '$SQL_TRIM_RE', '')"
-}
-
 internal fun logMessagePatternCondition(pattern: String?): String {
     val trimmed = normalizeLogMessagePattern(pattern)
     if (trimmed.isBlank()) return ""
-    return "${patternSqlExpression("message")} = {$LOG_MESSAGE_PATTERN_PARAMETER:String}"
+    return "message LIKE {$LOG_MESSAGE_PATTERN_PARAMETER:String}"
 }
 
 internal fun normalizeLogMessagePattern(pattern: String?): String = pattern?.trim().orEmpty()
 
-internal fun derivePatternString(message: String): String {
-    return message
-        .replace(uuidRegex, "<uuid>")
-        .replace(prefixedIdRegex, "<id>")
-        .replace(hexRegex, "<hex>")
-        .replace(quotedRegex, "<str>")
-        .replace(floatRegex, "<float>")
-        .replace(intRegex, "<int>")
-        .trim()
+internal fun messagePatternLikeParameter(pattern: String?): String {
+    val trimmed = normalizeLogMessagePattern(pattern)
+    if (trimmed.isBlank()) return ""
+
+    val output = StringBuilder(trimmed.length)
+    var index = 0
+    while (index < trimmed.length) {
+        val placeholder = patternPlaceholderTokens.firstOrNull { trimmed.startsWith(it, index) }
+        if (placeholder != null) {
+            appendWildcard(output)
+            index += placeholder.length
+        } else {
+            appendLikeLiteral(output, trimmed[index])
+            index += 1
+        }
+    }
+    return output.toString()
 }
+
+private fun appendWildcard(output: StringBuilder) {
+    if (output.lastOrNull() != LIKE_WILDCARD) {
+        output.append(LIKE_WILDCARD)
+    }
+}
+
+private fun appendLikeLiteral(
+    output: StringBuilder,
+    char: Char
+) {
+    if (char == LIKE_WILDCARD || char == '_' || char == LIKE_ESCAPE) {
+        output.append(LIKE_ESCAPE)
+    }
+    output.append(char)
+}
+
+internal fun derivePatternString(message: String): String {
+    val output = StringBuilder(message.length)
+    var index = 0
+    while (index < message.length) {
+        val replacement = patternReplacementAt(message, index)
+        if (replacement != null) {
+            output.append(replacement.value)
+            index = replacement.nextIndex
+        } else {
+            output.append(message[index])
+            index += 1
+        }
+    }
+    return output.toString().trim()
+}
+
+private data class PatternReplacement(
+    val value: String,
+    val nextIndex: Int
+)
+
+private fun patternReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? =
+    quotedReplacementAt(input, index)
+        ?: uuidReplacementAt(input, index)
+        ?: prefixedIdReplacementAt(input, index)
+        ?: hexReplacementAt(input, index)
+        ?: floatReplacementAt(input, index)
+        ?: intReplacementAt(input, index)
+
+private fun quotedReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? {
+    val quote = input[index]
+    if (quote != '"' && quote != '\'') return null
+    var end = index + 1
+    while (end < input.length && input[end] != quote) {
+        end += 1
+    }
+    return PatternReplacement(STRING_REPLACEMENT, if (end < input.length) end + 1 else input.length)
+}
+
+private fun uuidReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? {
+    val end = index + UUID_LENGTH
+    if (end > input.length || !hasWordBoundaries(input, index, end)) return null
+    val isUuid =
+        (0 until UUID_LENGTH).all { offset ->
+            val char = input[index + offset]
+            if (offset in uuidDashOffsets) char == '-' else char.isHexDigit()
+        }
+    return if (isUuid) PatternReplacement(UUID_REPLACEMENT, end) else null
+}
+
+private fun prefixedIdReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? {
+    if (!input[index].isLowercaseAsciiLetter()) return null
+
+    var cursor = index + 1
+    while (cursor < input.length && input[cursor].isLowercaseAsciiLetterOrDigit()) {
+        cursor += 1
+    }
+    if (cursor >= input.length || input[cursor] != '_') return null
+
+    val suffixStart = cursor + 1
+    cursor = suffixStart
+    while (cursor < input.length && input[cursor].isAsciiLetterOrDigit()) {
+        cursor += 1
+    }
+
+    val suffixLength = cursor - suffixStart
+    val isValid = suffixLength >= MIN_PREFIXED_ID_SUFFIX_CHARS && hasWordBoundaries(input, index, cursor)
+    return if (isValid) PatternReplacement(ID_REPLACEMENT, cursor) else null
+}
+
+private fun hexReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? {
+    val hexStart =
+        if (hasHexPrefix(input, index)) {
+            index + HEX_PREFIX_LENGTH
+        } else {
+            index
+        }
+    var cursor = hexStart
+    while (cursor < input.length && input[cursor].isHexDigit()) {
+        cursor += 1
+    }
+
+    val hexLength = cursor - hexStart
+    val isValid = hexLength >= MIN_HEX_TOKEN_CHARS && hasWordBoundaries(input, index, cursor)
+    return if (isValid) PatternReplacement(HEX_REPLACEMENT, cursor) else null
+}
+
+private fun floatReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? {
+    val firstDigitsEnd = consumeDigits(input, index)
+    if (firstDigitsEnd == index || firstDigitsEnd >= input.length || input[firstDigitsEnd] != '.') {
+        return null
+    }
+    val end = consumeDigits(input, firstDigitsEnd + 1)
+    val isValid = end > firstDigitsEnd + 1 && hasWordBoundaries(input, index, end)
+    return if (isValid) PatternReplacement(FLOAT_REPLACEMENT, end) else null
+}
+
+private fun intReplacementAt(
+    input: String,
+    index: Int
+): PatternReplacement? {
+    val end = consumeDigits(input, index)
+    val isValid = end > index && hasWordBoundaries(input, index, end)
+    return if (isValid) PatternReplacement(INT_REPLACEMENT, end) else null
+}
+
+private fun consumeDigits(
+    input: String,
+    index: Int
+): Int {
+    var cursor = index
+    while (cursor < input.length && input[cursor].isDigit()) {
+        cursor += 1
+    }
+    return cursor
+}
+
+private fun hasHexPrefix(
+    input: String,
+    index: Int
+): Boolean {
+    return index + HEX_PREFIX_LENGTH < input.length && input[index] == '0' &&
+        (input[index + 1] == 'x' || input[index + 1] == 'X')
+}
+
+private fun hasWordBoundaries(
+    input: String,
+    start: Int,
+    end: Int
+): Boolean {
+    val previousIsWord = start > 0 && input[start - 1].isRegexWordChar()
+    val nextIsWord = end < input.length && input[end].isRegexWordChar()
+    return !previousIsWord && !nextIsWord
+}
+
+private fun Char.isRegexWordChar(): Boolean = isAsciiLetterOrDigit() || this == '_'
+
+private fun Char.isAsciiLetterOrDigit(): Boolean = isLowercaseAsciiLetterOrDigit() || this in 'A'..'Z'
+
+private fun Char.isLowercaseAsciiLetterOrDigit(): Boolean = isLowercaseAsciiLetter() || this in '0'..'9'
+
+private fun Char.isLowercaseAsciiLetter(): Boolean = this in 'a'..'z'
+
+private fun Char.isHexDigit(): Boolean = this in '0'..'9' || this in 'a'..'f' || this in 'A'..'F'
 
 private fun resolvedWindow(request: LogPatternRequest): PatternWindow {
     val requestedToMs = parseTimeToMillis(request.to) ?: System.currentTimeMillis()

@@ -37,6 +37,16 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LogServiceExecutionTest {
+    private companion object {
+        private const val ANCHOR_LOG_ID = "00000000-0000-0000-0000-000000000123"
+        private const val FROM_MS = "1704067200000"
+        private const val TO_MS = "1704067800000"
+        private const val PATTERN_MESSAGE = "Payment 123 failed for user usr_abc123"
+        private const val NORMALIZED_PATTERN = "Payment <int> failed for user <id>"
+        private const val NORMALIZED_PATTERN_LIKE = "Payment % failed for user %"
+        private const val ORDER_PATTERN_LIKE = "Order % failed for user %"
+    }
+
     @BeforeTest
     fun setup() {
         ClickHouseClient.close()
@@ -91,11 +101,11 @@ class LogServiceExecutionTest {
             )
 
             val selectQuery = repository.queries.first { it.contains("toString(log_id) AS log_id_str") }
-            assertTrue(selectQuery.contains("replaceRegexpAll"))
+            assertTrue(selectQuery.contains("message LIKE {messagePattern:String}"))
             assertTrue(selectQuery.contains("{messagePattern:String}"))
             assertFalse(selectQuery.contains("Order <int> failed for user <id>"))
             assertEquals(
-                mapOf("messagePattern" to "Order <int> failed for user <id>"),
+                mapOf("messagePattern" to ORDER_PATTERN_LIKE),
                 repository.parameters.first()
             )
         }
@@ -166,12 +176,106 @@ class LogServiceExecutionTest {
             val statsParameters = repository.parameters[repository.queries.indexOf(statsQuery)]
             assertTrue(statsQuery.contains("organization_id = 42"))
             assertTrue(statsQuery.contains("service = {service:String}"))
-            assertTrue(statsQuery.contains("= {pattern:String}"))
-            assertTrue(statsQuery.contains("replaceRegexpAll"))
-            assertTrue(statsQuery.contains("[0-9a-fA-F]{8}"))
-            assertTrue(statsQuery.contains("[0-9a-fA-F]{12,}"))
+            assertTrue(statsQuery.contains("message LIKE {messagePattern:String}"))
             assertEquals("checkout", statsParameters["service"])
-            assertEquals("Order <int> failed for user <id>", statsParameters["pattern"])
+            assertEquals(ORDER_PATTERN_LIKE, statsParameters["messagePattern"])
+        }
+
+    @Test
+    fun `getLogPattern resolves anchor log and ignores malformed rollup rows`() =
+        runBlocking {
+            val repository =
+                RecordingLogRepository { sql ->
+                    when {
+                        sql.contains("SELECT message") -> """{"message":"$PATTERN_MESSAGE"}"""
+                        sql.contains("AS first_seen_ms") -> {
+                            """
+                            not-json
+                            {"cnt":1,"level_value":"warn","first_seen_ms":1704067200000,"last_seen_ms":1704067800000}
+                            """.trimIndent()
+                        }
+
+                        sql.contains("AS previous_count") -> "Code: 62. DB::Exception"
+                        sql.contains("AS bucket_index") -> {
+                            """
+                            {"bucket_index":-1,"cnt":2}
+                            {"bucket_index":9,"cnt":3}
+                            """.trimIndent()
+                        }
+
+                        sql.contains("service AS value") -> {
+                            """
+                            {"value":"","cnt":9}
+                            {"value":"checkout","cnt":1}
+                            """.trimIndent()
+                        }
+
+                        sql.contains("host AS value") -> "Code: 62. DB::Exception"
+                        else -> error("Unexpected query: $sql")
+                    }
+                }
+
+            val result =
+                LogService(repository).getLogPattern(
+                    organizationId = 42L,
+                    request = LogPatternRequest(
+                        logId = ANCHOR_LOG_ID,
+                        service = "checkout",
+                        from = FROM_MS,
+                        to = TO_MS
+                    )
+                )
+
+            assertEquals(NORMALIZED_PATTERN, result.pattern)
+            assertEquals("warn", result.level)
+            assertEquals(1L, result.count)
+            assertEquals("10m", result.windowLabel)
+            assertEquals("2024-01-01T00:00:00Z", result.firstSeen)
+            assertEquals("2024-01-01T00:10:00Z", result.lastSeen)
+            assertNull(result.trendPct)
+            assertEquals(listOf(2L, 0L, 3L), result.sparkline)
+            assertEquals(listOf("checkout"), result.topServices.map { it.value })
+            assertTrue(result.topHosts.isEmpty())
+
+            val anchorQuery = repository.queries.first { it.contains("SELECT message") }
+            val anchorParams = repository.parameters[repository.queries.indexOf(anchorQuery)]
+            assertEquals(mapOf("logId" to ANCHOR_LOG_ID), anchorParams)
+
+            val statsQuery = repository.queries.first { it.contains("AS first_seen_ms") }
+            val statsParams = repository.parameters[repository.queries.indexOf(statsQuery)]
+            assertTrue(statsQuery.contains("service = {service:String}"))
+            assertEquals("checkout", statsParams["service"])
+            assertEquals(NORMALIZED_PATTERN_LIKE, statsParams["messagePattern"])
+        }
+
+    @Test
+    fun `getLogPattern returns empty response for invalid anchor`() =
+        runBlocking {
+            val repository =
+                RecordingLogRepository { sql ->
+                    error("Unexpected query: $sql")
+                }
+
+            val result =
+                LogService(repository).getLogPattern(
+                    organizationId = 42L,
+                    request = LogPatternRequest(
+                        logId = "not-a-uuid",
+                        message = "   ",
+                        from = FROM_MS,
+                        to = TO_MS
+                    )
+                )
+
+            assertEquals("", result.pattern)
+            assertEquals("info", result.level)
+            assertEquals(0L, result.count)
+            assertEquals("10m", result.windowLabel)
+            assertNull(result.trendPct)
+            assertEquals(listOf(0L, 0L, 0L), result.sparkline)
+            assertTrue(result.topServices.isEmpty())
+            assertTrue(result.topHosts.isEmpty())
+            assertTrue(repository.queries.isEmpty())
         }
 
     @Test
@@ -275,6 +379,49 @@ class LogServiceExecutionTest {
                 assertEquals(2L, result.buckets[0].groups["error"])
                 assertEquals(1L, result.buckets[0].groups["warn"])
             }
+        }
+
+    @Test
+    fun `analytics queries pass structural message pattern as ClickHouse parameter`() =
+        runBlocking {
+            val repository =
+                RecordingLogRepository { sql ->
+                    when {
+                        sql.contains("AS field_value") -> """{"field_value":"checkout","cnt":4}"""
+                        sql.contains("SELECT count() AS cnt") -> """{"cnt":4}"""
+                        sql.contains("GROUP BY bucket") -> """{"bucket":"2024-01-01T00:00:00Z","cnt":4}"""
+                        else -> error("Unexpected query: $sql")
+                    }
+                }
+            val service = LogService(repository)
+            val filters =
+                LogAnalyticsFilters(
+                    from = FROM_MS,
+                    to = TO_MS,
+                    host = "checkout-1",
+                    traceId = "trace-abc",
+                    messagePattern = NORMALIZED_PATTERN
+                )
+
+            val topValues = service.topValues(organizationId = 42L, field = "service", limit = 10, filters = filters)
+            val aggregates =
+                service.aggregateLogs(
+                    organizationId = 42L,
+                    filters = filters,
+                    interval = "1h",
+                    groupBy = null
+                )
+
+            assertEquals("checkout", topValues.values.single().value)
+            assertEquals(4L, topValues.totalCount)
+            assertEquals(4L, aggregates.totalCount)
+
+            val allQueries = repository.queries.joinToString("\n")
+            assertTrue(allQueries.contains("host = 'checkout-1'"))
+            assertTrue(allQueries.contains("trace_id = 'trace-abc'"))
+            assertTrue(allQueries.contains("{messagePattern:String}"))
+            assertFalse(allQueries.contains(NORMALIZED_PATTERN))
+            assertTrue(repository.parameters.all { it["messagePattern"] == NORMALIZED_PATTERN_LIKE })
         }
 
     private class RecordingLogRepository(

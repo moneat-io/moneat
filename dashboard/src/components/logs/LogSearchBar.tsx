@@ -75,7 +75,19 @@ function appendQueryToken(query: string, token: string): string {
 }
 
 function hasBooleanOperators(token: string): boolean {
-  return /\b(AND|OR)\b/.test(token)
+  let index = 0
+  while (index < token.length) {
+    while (index < token.length && !isFacetWordChar(token[index])) index += 1
+    const wordStart = index
+    while (index < token.length && isFacetWordChar(token[index])) index += 1
+    const word = token.slice(wordStart, index)
+    if (word === 'AND' || word === 'OR') return true
+  }
+  return false
+}
+
+function isFacetWordChar(char: string): boolean {
+  return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char === '_'
 }
 
 function normalizeFacetKey(key: string): string {

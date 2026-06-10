@@ -558,7 +558,7 @@ class LogService(private val logRepository: LogRepository) {
         if (normalizedPattern.isBlank()) return
 
         add(logMessagePatternCondition(normalizedPattern))
-        parameters[LOG_MESSAGE_PATTERN_PARAMETER] = normalizedPattern
+        parameters[LOG_MESSAGE_PATTERN_PARAMETER] = messagePatternLikeParameter(normalizedPattern)
     }
 
     private fun MutableList<String>.addLogTraceFilter(traceId: String?) {

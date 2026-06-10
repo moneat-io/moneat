@@ -24,14 +24,24 @@ import type {ApmSpanResponse, LogEntry} from '@/lib/api'
 // placeholders so the "Matched pattern" string is still meaningful and honest.
 // ============================================================================
 
-const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi
-// Prefixed identifiers such as ord_8F2K19, ch_3PqfQ2K, ik_b1c9, req_7c2a.
-const PREFIXED_ID_RE = /\b[a-z][a-z0-9]*_[A-Za-z0-9]{3,}\b/g
-// Bare hex blobs (>= 12 chars) and 0x-prefixed values.
-const HEX_RE = /\b(?:0x)?[0-9a-f]{12,}\b/gi
-const QUOTED_RE = /"[^"]*"|'[^']*'/g
-const FLOAT_RE = /\b\d+\.\d+\b/g
-const INT_RE = /\b\d+\b/g
+const UUID_LENGTH = 36
+const MIN_HEX_TOKEN_CHARS = 12
+const MIN_PREFIXED_ID_SUFFIX_CHARS = 3
+const UUID_DASH_OFFSETS = new Set([8, 13, 18, 23])
+const UUID_REPLACEMENT = '<uuid>'
+const ID_REPLACEMENT = '<id>'
+const HEX_REPLACEMENT = '<hex>'
+const STRING_REPLACEMENT = '<str>'
+const FLOAT_REPLACEMENT = '<float>'
+const INT_REPLACEMENT = '<int>'
+const PATTERN_PLACEHOLDERS = [
+  UUID_REPLACEMENT,
+  ID_REPLACEMENT,
+  HEX_REPLACEMENT,
+  STRING_REPLACEMENT,
+  FLOAT_REPLACEMENT,
+  INT_REPLACEMENT,
+]
 
 /**
  * Collapse a log message into a structural pattern. Order matters: the most
@@ -40,14 +50,135 @@ const INT_RE = /\b\d+\b/g
  */
 export function derivePatternString(message: string): string {
   if (!message) return ''
-  return message
-    .replaceAll(UUID_RE, '<uuid>')
-    .replaceAll(PREFIXED_ID_RE, '<id>')
-    .replaceAll(HEX_RE, '<hex>')
-    .replaceAll(QUOTED_RE, '<str>')
-    .replaceAll(FLOAT_RE, '<float>')
-    .replaceAll(INT_RE, '<int>')
-    .trim()
+  let index = 0
+  let output = ''
+  while (index < message.length) {
+    const replacement = patternReplacementAt(message, index)
+    if (replacement) {
+      output += replacement.value
+      index = replacement.nextIndex
+    } else {
+      output += message[index]
+      index += 1
+    }
+  }
+  return output.trim()
+}
+
+interface PatternReplacement {
+  value: string
+  nextIndex: number
+}
+
+function patternReplacementAt(value: string, index: number): PatternReplacement | null {
+  return (
+    quotedReplacementAt(value, index) ??
+    uuidReplacementAt(value, index) ??
+    prefixedIdReplacementAt(value, index) ??
+    hexReplacementAt(value, index) ??
+    floatReplacementAt(value, index) ??
+    intReplacementAt(value, index)
+  )
+}
+
+function quotedReplacementAt(value: string, index: number): PatternReplacement | null {
+  const quote = value[index]
+  if (quote !== '"' && quote !== "'") return null
+  let end = index + 1
+  while (end < value.length && value[end] !== quote) end += 1
+  return {value: STRING_REPLACEMENT, nextIndex: end < value.length ? end + 1 : value.length}
+}
+
+function uuidReplacementAt(value: string, index: number): PatternReplacement | null {
+  const end = index + UUID_LENGTH
+  if (end > value.length || !hasWordBoundaries(value, index, end)) return null
+  for (let offset = 0; offset < UUID_LENGTH; offset += 1) {
+    const char = value[index + offset]
+    if (UUID_DASH_OFFSETS.has(offset)) {
+      if (char !== '-') return null
+    } else if (!isHexDigit(char)) {
+      return null
+    }
+  }
+  return {value: UUID_REPLACEMENT, nextIndex: end}
+}
+
+function prefixedIdReplacementAt(value: string, index: number): PatternReplacement | null {
+  if (!isLowercaseAsciiLetter(value[index])) return null
+  let cursor = index + 1
+  while (cursor < value.length && isLowercaseAsciiLetterOrDigit(value[cursor])) cursor += 1
+  if (cursor >= value.length || value[cursor] !== '_') return null
+
+  const suffixStart = cursor + 1
+  cursor = suffixStart
+  while (cursor < value.length && isAsciiLetterOrDigit(value[cursor])) cursor += 1
+
+  if (cursor - suffixStart < MIN_PREFIXED_ID_SUFFIX_CHARS || !hasWordBoundaries(value, index, cursor)) {
+    return null
+  }
+  return {value: ID_REPLACEMENT, nextIndex: cursor}
+}
+
+function hexReplacementAt(value: string, index: number): PatternReplacement | null {
+  const hexStart = hasHexPrefix(value, index) ? index + 2 : index
+  let cursor = hexStart
+  while (cursor < value.length && isHexDigit(value[cursor])) cursor += 1
+  if (cursor - hexStart < MIN_HEX_TOKEN_CHARS || !hasWordBoundaries(value, index, cursor)) return null
+  return {value: HEX_REPLACEMENT, nextIndex: cursor}
+}
+
+function floatReplacementAt(value: string, index: number): PatternReplacement | null {
+  const firstDigitsEnd = consumeDigits(value, index)
+  if (firstDigitsEnd === index || firstDigitsEnd >= value.length || value[firstDigitsEnd] !== '.') return null
+  const end = consumeDigits(value, firstDigitsEnd + 1)
+  if (end === firstDigitsEnd + 1 || !hasWordBoundaries(value, index, end)) return null
+  return {value: FLOAT_REPLACEMENT, nextIndex: end}
+}
+
+function intReplacementAt(value: string, index: number): PatternReplacement | null {
+  const end = consumeDigits(value, index)
+  if (end === index || !hasWordBoundaries(value, index, end)) return null
+  return {value: INT_REPLACEMENT, nextIndex: end}
+}
+
+function consumeDigits(value: string, index: number): number {
+  let cursor = index
+  while (cursor < value.length && isDigit(value[cursor])) cursor += 1
+  return cursor
+}
+
+function hasHexPrefix(value: string, index: number): boolean {
+  return index + 2 < value.length && value[index] === '0' && (value[index + 1] === 'x' || value[index + 1] === 'X')
+}
+
+function hasWordBoundaries(value: string, start: number, end: number): boolean {
+  const previousIsWord = start > 0 && isRegexWordChar(value[start - 1])
+  const nextIsWord = end < value.length && isRegexWordChar(value[end])
+  return !previousIsWord && !nextIsWord
+}
+
+function isRegexWordChar(char: string): boolean {
+  return isAsciiLetterOrDigit(char) || char === '_'
+}
+
+function isAsciiLetterOrDigit(char: string): boolean {
+  return isLowercaseAsciiLetterOrDigit(char) || (char >= 'A' && char <= 'Z')
+}
+
+function isLowercaseAsciiLetterOrDigit(char: string): boolean {
+  return isLowercaseAsciiLetter(char) || isDigit(char)
+}
+
+function isLowercaseAsciiLetter(char: string): boolean {
+  return char >= 'a' && char <= 'z'
+}
+
+function isHexDigit(char: string): boolean {
+  return isDigit(char) || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')
+}
+
+function isDigit(char: string): boolean {
+  return char >= '0' && char <= '9'
 }
 
 /** Split a pattern string into literal/placeholder segments for rendering. */
@@ -59,20 +190,31 @@ export interface PatternSegment {
 export function splitPatternSegments(pattern: string): PatternSegment[] {
   if (!pattern) return []
   const segments: PatternSegment[] = []
-  const re = /<[^>]+>/g
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-  while ((match = re.exec(pattern)) !== null) {
-    if (match.index > lastIndex) {
-      segments.push({text: pattern.slice(lastIndex, match.index), wildcard: false})
+  let index = 0
+  while (index < pattern.length) {
+    const placeholder = PATTERN_PLACEHOLDERS.find((token) => pattern.startsWith(token, index))
+    if (placeholder) {
+      segments.push({text: placeholder, wildcard: true})
+      index += placeholder.length
+      continue
     }
-    segments.push({text: match[0], wildcard: true})
-    lastIndex = match.index + match[0].length
-  }
-  if (lastIndex < pattern.length) {
-    segments.push({text: pattern.slice(lastIndex), wildcard: false})
+    const nextPlaceholder = nextPatternPlaceholderIndex(pattern, index)
+    const end = nextPlaceholder === -1 ? pattern.length : nextPlaceholder
+    segments.push({text: pattern.slice(index, end), wildcard: false})
+    index = end
   }
   return segments
+}
+
+function nextPatternPlaceholderIndex(pattern: string, from: number): number {
+  let next = -1
+  for (const token of PATTERN_PLACEHOLDERS) {
+    const index = pattern.indexOf(token, from)
+    if (index !== -1 && (next === -1 || index < next)) {
+      next = index
+    }
+  }
+  return next
 }
 
 // ============================================================================
@@ -97,14 +239,46 @@ export interface AttrGroup {
   rows: AttrRow[]
 }
 
-const ISO_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/
-
 export function guessAttrType(value: string): AttrType {
   if (value === 'true' || value === 'false') return 'bool'
-  if (/^-?\d+$/.test(value)) return 'int'
-  if (/^-?\d+\.\d+$/.test(value)) return 'float'
-  if (ISO_TIME_RE.test(value)) return 'time'
+  if (isSignedInteger(value)) return 'int'
+  if (isSignedFloat(value)) return 'float'
+  if (isIsoTimePrefix(value)) return 'time'
   return 'str'
+}
+
+function isSignedInteger(value: string): boolean {
+  const start = value.startsWith('-') ? 1 : 0
+  return start < value.length && consumeDigits(value, start) === value.length
+}
+
+function isSignedFloat(value: string): boolean {
+  const start = value.startsWith('-') ? 1 : 0
+  const wholeEnd = consumeDigits(value, start)
+  if (wholeEnd === start || wholeEnd >= value.length || value[wholeEnd] !== '.') return false
+  return consumeDigits(value, wholeEnd + 1) === value.length && wholeEnd + 1 < value.length
+}
+
+function isIsoTimePrefix(value: string): boolean {
+  return (
+    value.length >= 16 &&
+    isDigit(value[0]) &&
+    isDigit(value[1]) &&
+    isDigit(value[2]) &&
+    isDigit(value[3]) &&
+    value[4] === '-' &&
+    isDigit(value[5]) &&
+    isDigit(value[6]) &&
+    value[7] === '-' &&
+    isDigit(value[8]) &&
+    isDigit(value[9]) &&
+    value[10] === 'T' &&
+    isDigit(value[11]) &&
+    isDigit(value[12]) &&
+    value[13] === ':' &&
+    isDigit(value[14]) &&
+    isDigit(value[15])
+  )
 }
 
 function statusCodePill(value: string): AttrPill {
@@ -398,19 +572,14 @@ export interface JsonToken {
   kind: JsonKind
 }
 
-const JSON_STRING_RE = /"(?:\\.|[^"\\])*"/y
-const JSON_NUMBER_RE = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y
-const JSON_LITERAL_RE = /\b(?:true|false|null)\b/y
-
-function execSticky(re: RegExp, value: string, index: number): string | null {
-  re.lastIndex = index
-  return re.exec(value)?.[0] ?? null
-}
-
 function nextNonWhitespaceIndex(value: string, index: number): number {
   let cursor = index
-  while (cursor < value.length && /\s/.test(value[cursor])) cursor += 1
+  while (cursor < value.length && isJsonWhitespace(value[cursor])) cursor += 1
   return cursor
+}
+
+function isJsonWhitespace(char: string): boolean {
+  return char === ' ' || char === '\n' || char === '\r' || char === '\t'
 }
 
 function pushPlainToken(tokens: JsonToken[], json: string, from: number, to: number) {
@@ -424,9 +593,9 @@ export function tokenizeJson(json: string): JsonToken[] {
   let index = 0
 
   while (index < json.length) {
-    const stringToken = execSticky(JSON_STRING_RE, json, index)
-    if (stringToken) {
-      const tokenEnd = index + stringToken.length
+    const stringEnd = jsonStringEnd(json, index)
+    if (stringEnd !== -1) {
+      const tokenEnd = stringEnd
       const colonIndex = nextNonWhitespaceIndex(json, tokenEnd)
       const isKey = json[colonIndex] === ':'
       const end = isKey ? colonIndex + 1 : tokenEnd
@@ -437,20 +606,20 @@ export function tokenizeJson(json: string): JsonToken[] {
       continue
     }
 
-    const numberToken = execSticky(JSON_NUMBER_RE, json, index)
-    if (numberToken) {
+    const numberEnd = jsonNumberEnd(json, index)
+    if (numberEnd !== -1) {
       pushPlainToken(tokens, json, plainStart, index)
-      tokens.push({text: numberToken, kind: 'number'})
-      index += numberToken.length
+      tokens.push({text: json.slice(index, numberEnd), kind: 'number'})
+      index = numberEnd
       plainStart = index
       continue
     }
 
-    const literalToken = execSticky(JSON_LITERAL_RE, json, index)
-    if (literalToken) {
+    const literalEnd = jsonLiteralEnd(json, index)
+    if (literalEnd !== -1) {
       pushPlainToken(tokens, json, plainStart, index)
-      tokens.push({text: literalToken, kind: 'boolean'})
-      index += literalToken.length
+      tokens.push({text: json.slice(index, literalEnd), kind: 'boolean'})
+      index = literalEnd
       plainStart = index
       continue
     }
@@ -460,4 +629,46 @@ export function tokenizeJson(json: string): JsonToken[] {
 
   pushPlainToken(tokens, json, plainStart, json.length)
   return tokens
+}
+
+function jsonStringEnd(value: string, index: number): number {
+  if (value[index] !== '"') return -1
+  let cursor = index + 1
+  while (cursor < value.length) {
+    if (value[cursor] === '\\') {
+      cursor += 2
+    } else if (value[cursor] === '"') {
+      return cursor + 1
+    } else {
+      cursor += 1
+    }
+  }
+  return -1
+}
+
+function jsonNumberEnd(value: string, index: number): number {
+  let cursor = index
+  if (value[cursor] === '-') cursor += 1
+  const integerStart = cursor
+  cursor = consumeDigits(value, cursor)
+  if (cursor === integerStart) return -1
+  if (value[cursor] === '.') {
+    const fractionStart = cursor + 1
+    cursor = consumeDigits(value, fractionStart)
+    if (cursor === fractionStart) return -1
+  }
+  if (value[cursor] === 'e' || value[cursor] === 'E') {
+    const exponentStart = value[cursor + 1] === '+' || value[cursor + 1] === '-' ? cursor + 2 : cursor + 1
+    const exponentEnd = consumeDigits(value, exponentStart)
+    if (exponentEnd === exponentStart) return -1
+    cursor = exponentEnd
+  }
+  return cursor
+}
+
+function jsonLiteralEnd(value: string, index: number): number {
+  if (value.startsWith('true', index)) return index + 4
+  if (value.startsWith('false', index)) return index + 5
+  if (value.startsWith('null', index)) return index + 4
+  return -1
 }
