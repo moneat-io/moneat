@@ -12,7 +12,6 @@
     ],
     "widget_count": 30,
     "variable_count": 4,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Kubernetes / Views / Global",

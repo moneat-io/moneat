@@ -29,7 +29,6 @@ const SAMPLE_TEMPLATES: readonly DashboardTemplateSummary[] = [
     required_sources: ['Prometheus'],
     widget_count: 140,
     variable_count: 4,
-    quality: 'needs-review',
     resource_path: 'dashboard-templates/community/node-exporter-full.json',
   },
   {
@@ -41,7 +40,6 @@ const SAMPLE_TEMPLATES: readonly DashboardTemplateSummary[] = [
     required_sources: ['PostgreSQL'],
     widget_count: 16,
     variable_count: 2,
-    quality: 'ready',
     resource_path: 'dashboard-templates/community/postgresql-overview.json',
   },
   {
@@ -53,7 +51,6 @@ const SAMPLE_TEMPLATES: readonly DashboardTemplateSummary[] = [
     required_sources: ['Loki'],
     widget_count: 8,
     variable_count: 1,
-    quality: 'partial',
     resource_path: 'dashboard-templates/community/log-analytics.json',
   },
 ]
@@ -99,6 +96,14 @@ describe('DashboardsGetStarted', () => {
         screen.getByRole('button', {name: new RegExp(`Use the ${title} template`, 'i')}),
       ).toBeInTheDocument()
     }
+  })
+
+  it('does not render template quality labels', () => {
+    setup()
+
+    expect(screen.queryByText('Ready')).not.toBeInTheDocument()
+    expect(screen.queryByText('Partial')).not.toBeInTheDocument()
+    expect(screen.queryByText('Review')).not.toBeInTheDocument()
   })
 
   it('uses a template by id when its card is clicked', () => {
@@ -162,7 +167,6 @@ describe('DashboardsGetStarted', () => {
         required_sources: ['Prometheus'],
         widget_count: 24,
         variable_count: 3,
-        quality: 'ready',
         resource_path: 'dashboard-templates/community/kubernetes-cluster.json',
       },
       {
@@ -174,7 +178,6 @@ describe('DashboardsGetStarted', () => {
         required_sources: ['OTLP'],
         widget_count: 7,
         variable_count: 1,
-        quality: 'partial',
         resource_path: 'dashboard-templates/community/browser-vitals.json',
       },
       {
@@ -186,7 +189,6 @@ describe('DashboardsGetStarted', () => {
         required_sources: ['OTLP'],
         widget_count: 11,
         variable_count: 1,
-        quality: 'ready',
         resource_path: 'dashboard-templates/community/service-dashboard.json',
       },
     ]

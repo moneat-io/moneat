@@ -12,7 +12,6 @@
     ],
     "widget_count": 18,
     "variable_count": 4,
-    "quality": "needs-review",
     "warnings": [
         "Panel 11: no recognizable query target",
         "Panel 12: non-standard query target stored as rawQuery",

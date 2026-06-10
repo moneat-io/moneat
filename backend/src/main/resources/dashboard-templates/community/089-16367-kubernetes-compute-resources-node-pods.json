@@ -13,7 +13,6 @@
     ],
     "widget_count": 8,
     "variable_count": 3,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Kubernetes / Compute Resources / Node (Pods)",

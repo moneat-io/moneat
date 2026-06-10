@@ -12,7 +12,6 @@
     ],
     "widget_count": 15,
     "variable_count": 5,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "node-exporter disk graphs",

@@ -12,7 +12,6 @@
     ],
     "widget_count": 30,
     "variable_count": 5,
-    "quality": "partial",
     "warnings": [
         "Panel 26: couldn't parse PromQL '- sum(rate(container_network_transmit_bytes_total{namespace=~\"$namespace\", pod=~\"${created_by}.*\", cluster=\"$cluster\"}[$__rate_interval])) by (pod)', stored as rawQuery",
         "Panel 27: couldn't parse PromQL '- sum(rate(container_network_transmit_packets_total{namespace=~\"$namespace\", pod=~\"${created_by}.*\", cluster=\"$cluster\"}[$__rate_interval])) by (pod)', stored as rawQuery",

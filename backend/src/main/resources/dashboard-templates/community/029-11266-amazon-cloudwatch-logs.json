@@ -13,7 +13,6 @@
     ],
     "widget_count": 7,
     "variable_count": 3,
-    "quality": "partial",
     "warnings": [],
     "dashboard": {
         "title": "Amazon CloudWatch Logs",

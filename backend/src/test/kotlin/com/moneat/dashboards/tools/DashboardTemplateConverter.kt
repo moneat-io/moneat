@@ -32,9 +32,6 @@ private const val DEFAULT_SOURCE_ROOT = "../grafana-dashboards"
 private const val DEFAULT_OUTPUT_ROOT = "src/main/resources/dashboard-templates"
 private const val DEFAULT_REPORT_PATH = "build/reports/dashboard-template-conversion.json"
 private const val COMMUNITY_TEMPLATE_DIR = "community"
-private const val READY_QUALITY = "ready"
-private const val PARTIAL_QUALITY = "partial"
-private const val NEEDS_REVIEW_QUALITY = "needs-review"
 
 private val TAG_RULES = listOf(
     KeywordRule("Kubernetes", setOf("kubernetes", "k8s")),
@@ -120,7 +117,6 @@ private class DashboardTemplateConverter {
                 variables = importResult.variables,
                 widgets = widgets
             )
-            val quality = templateQuality(importResult.warnings, widgets)
             val tags = inferTags(id, importResult.dashboard.title, requiredSources)
             val resourcePath = "dashboard-templates/$COMMUNITY_TEMPLATE_DIR/$id.json"
             val summary = DashboardTemplateSummary(
@@ -132,7 +128,6 @@ private class DashboardTemplateConverter {
                 requiredSources = requiredSources,
                 widgetCount = widgets.size,
                 variableCount = importResult.variables.size,
-                quality = quality,
                 resourcePath = resourcePath
             )
             val detail = DashboardTemplateDetail(
@@ -144,7 +139,6 @@ private class DashboardTemplateConverter {
                 requiredSources = summary.requiredSources,
                 widgetCount = summary.widgetCount,
                 variableCount = summary.variableCount,
-                quality = summary.quality,
                 warnings = importResult.warnings,
                 dashboard = createRequest
             )
@@ -157,7 +151,6 @@ private class DashboardTemplateConverter {
                 widgetCount = widgets.size,
                 variableCount = importResult.variables.size,
                 requiredSources = requiredSources,
-                quality = quality,
                 warnings = importResult.warnings
             )
         }
@@ -192,17 +185,6 @@ private class DashboardTemplateConverter {
 
     private fun neutralDescription(title: String): String =
         "Prebuilt Moneat dashboard for $title telemetry."
-
-    private fun templateQuality(warnings: List<String>, widgets: List<CreateWidgetRequest>): String {
-        val hasTextFallback = widgets.any { widget ->
-            widget.widgetType == "text" && widget.queryConfigs.isNotEmpty()
-        }
-        return when {
-            warnings.isEmpty() && !hasTextFallback -> READY_QUALITY
-            warnings.size <= 5 -> PARTIAL_QUALITY
-            else -> NEEDS_REVIEW_QUALITY
-        }
-    }
 
     private fun inferTags(id: String, title: String, requiredSources: List<String>): List<String> {
         val haystack = "$id $title".lowercase()
@@ -244,6 +226,5 @@ private data class DashboardTemplateConversionRow(
     val widgetCount: Int,
     val variableCount: Int,
     val requiredSources: List<String>,
-    val quality: String,
     val warnings: List<String>,
 )

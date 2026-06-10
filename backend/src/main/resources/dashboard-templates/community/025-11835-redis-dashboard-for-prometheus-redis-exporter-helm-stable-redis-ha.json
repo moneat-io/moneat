@@ -12,7 +12,6 @@
     ],
     "widget_count": 12,
     "variable_count": 4,
-    "quality": "partial",
     "warnings": [
         "Panel 2: couldn't parse PromQL '100 * (redis_memory_used_bytes{instance=~\"$instance\"}  / redis_memory_max_bytes{instance=~\"$instance\"} )', stored as rawQuery"
     ],

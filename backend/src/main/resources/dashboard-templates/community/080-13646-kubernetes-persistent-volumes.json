@@ -12,7 +12,6 @@
     ],
     "widget_count": 16,
     "variable_count": 3,
-    "quality": "partial",
     "warnings": [
         "Panel 11: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes{namespace=~\"${k8s_namespace}\"}))', stored as rawQuery"
     ],

@@ -14,7 +14,6 @@
             ],
             "widget_count": 140,
             "variable_count": 4,
-            "quality": "needs-review",
             "resource_path": "dashboard-templates/community/001-1860-node-exporter-full.json"
         },
         {
@@ -31,7 +30,6 @@
             ],
             "widget_count": 12,
             "variable_count": 4,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/002-9614-nginx-ingress-controller.json"
         },
         {
@@ -47,7 +45,6 @@
             ],
             "widget_count": 50,
             "variable_count": 7,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/003-14584-argocd.json"
         },
         {
@@ -64,7 +61,6 @@
             ],
             "widget_count": 17,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/004-7645-istio-control-plane-dashboard.json"
         },
         {
@@ -81,7 +77,6 @@
             ],
             "widget_count": 28,
             "variable_count": 9,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/005-7636-istio-service-dashboard.json"
         },
         {
@@ -98,7 +93,6 @@
             ],
             "widget_count": 9,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/006-7639-istio-mesh-dashboard.json"
         },
         {
@@ -115,7 +109,6 @@
             ],
             "widget_count": 25,
             "variable_count": 7,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/007-7630-istio-workload-dashboard.json"
         },
         {
@@ -131,7 +124,6 @@
             ],
             "widget_count": 27,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/008-14981-coredns.json"
         },
         {
@@ -148,7 +140,6 @@
             ],
             "widget_count": 47,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/009-10991-rabbitmq-overview.json"
         },
         {
@@ -164,7 +155,6 @@
             ],
             "widget_count": 4,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/010-13659-blackbox-exporter-http-prober.json"
         },
         {
@@ -183,7 +173,6 @@
             ],
             "widget_count": 22,
             "variable_count": 0,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/011-14055-loki-stack-monitoring-promtail-loki.json"
         },
         {
@@ -199,7 +188,6 @@
             ],
             "widget_count": 25,
             "variable_count": 6,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/012-11350-erlang-memory-allocators.json"
         },
         {
@@ -216,7 +204,6 @@
             ],
             "widget_count": 19,
             "variable_count": 1,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/013-11829-istio-performance-dashboard.json"
         },
         {
@@ -232,7 +219,6 @@
             ],
             "widget_count": 8,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/014-12239-nvidia-dcgm-exporter-dashboard.json"
         },
         {
@@ -248,7 +234,6 @@
             ],
             "widget_count": 22,
             "variable_count": 5,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/015-11352-erlang-distribution.json"
         },
         {
@@ -265,7 +250,6 @@
             ],
             "widget_count": 5,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/016-11340-rabbitmq-quorum-queues-raft.json"
         },
         {
@@ -282,7 +266,6 @@
             ],
             "widget_count": 36,
             "variable_count": 5,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/017-15661-k8s-dashboard-en-20250125.json"
         },
         {
@@ -299,7 +282,6 @@
             ],
             "widget_count": 18,
             "variable_count": 4,
-            "quality": "needs-review",
             "resource_path": "dashboard-templates/community/018-14798-rabbitmq-stream.json"
         },
         {
@@ -315,7 +297,6 @@
             ],
             "widget_count": 24,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/019-10441-keycloak-metrics-dashboard.json"
         },
         {
@@ -331,7 +312,6 @@
             ],
             "widget_count": 51,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/020-13332-kube-state-metrics-v2.json"
         },
         {
@@ -347,7 +327,6 @@
             ],
             "widget_count": 37,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/021-13502-minio-dashboard.json"
         },
         {
@@ -361,7 +340,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 5,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/022-4701-jvm-micrometer.json"
         },
         {
@@ -375,7 +353,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/023-2583-mongodb.json"
         },
         {
@@ -393,7 +370,6 @@
             ],
             "widget_count": 12,
             "variable_count": 4,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/024-969-aws-elasticache-redis.json"
         },
         {
@@ -410,7 +386,6 @@
             ],
             "widget_count": 12,
             "variable_count": 4,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/025-11835-redis-dashboard-for-prometheus-redis-exporter-helm-stable-redis-ha.json"
         },
         {
@@ -427,7 +402,6 @@
             ],
             "widget_count": 12,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/026-14361-aws-alb-cloudwatch-metrics.json"
         },
         {
@@ -445,7 +419,6 @@
             ],
             "widget_count": 9,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/027-11159-nodejs-application-dashboard.json"
         },
         {
@@ -462,7 +435,6 @@
             ],
             "widget_count": 20,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/028-11265-amazon-ec2.json"
         },
         {
@@ -480,7 +452,6 @@
             ],
             "widget_count": 7,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/029-11266-amazon-cloudwatch-logs.json"
         },
         {
@@ -496,7 +467,6 @@
             ],
             "widget_count": 9,
             "variable_count": 6,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/030-13996-clusterpolicyreport-details.json"
         },
         {
@@ -512,7 +482,6 @@
             ],
             "widget_count": 9,
             "variable_count": 7,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/031-13995-policyreport-details.json"
         },
         {
@@ -528,7 +497,6 @@
             ],
             "widget_count": 5,
             "variable_count": 7,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/032-13968-policyreports.json"
         },
         {
@@ -545,7 +513,6 @@
             ],
             "widget_count": 6,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/033-584-aws-sqs.json"
         },
         {
@@ -561,7 +528,6 @@
             ],
             "widget_count": 15,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/034-11001-cert-manager.json"
         },
         {
@@ -578,7 +544,6 @@
             ],
             "widget_count": 25,
             "variable_count": 2,
-            "quality": "needs-review",
             "resource_path": "dashboard-templates/community/035-11454-k8s-storage-volumes-cluster.json"
         },
         {
@@ -595,7 +560,6 @@
             ],
             "widget_count": 17,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/036-11264-amazon-rds.json"
         },
         {
@@ -609,7 +573,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/037-315-kubernetes-cluster-monitoring-via-prometheus.json"
         },
         {
@@ -626,7 +589,6 @@
             ],
             "widget_count": 35,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/038-6417-kubernetes-cluster-prometheus.json"
         },
         {
@@ -643,7 +605,6 @@
             ],
             "widget_count": 6,
             "variable_count": 4,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/039-593-aws-lambda.json"
         },
         {
@@ -660,7 +621,6 @@
             ],
             "widget_count": 9,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/040-4475-traefik.json"
         },
         {
@@ -677,7 +637,6 @@
             ],
             "widget_count": 50,
             "variable_count": 2,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/041-7362-mysql-overview.json"
         },
         {
@@ -695,7 +654,6 @@
             ],
             "widget_count": 8,
             "variable_count": 1,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/042-8171-kubernetes-nodes.json"
         },
         {
@@ -711,7 +669,6 @@
             ],
             "widget_count": 19,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/043-9621-docker-registry.json"
         },
         {
@@ -728,7 +685,6 @@
             ],
             "widget_count": 23,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/044-14900-nginx.json"
         },
         {
@@ -745,7 +701,6 @@
             ],
             "widget_count": 22,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/045-12079-mongodb.json"
         },
         {
@@ -761,7 +716,6 @@
             ],
             "widget_count": 110,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/046-9578-alertmanager.json"
         },
         {
@@ -777,7 +731,6 @@
             ],
             "widget_count": 15,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/047-13041-website-monitoring.json"
         },
         {
@@ -795,7 +748,6 @@
             ],
             "widget_count": 4,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/048-12009-aws-kafka-cluster.json"
         },
         {
@@ -811,7 +763,6 @@
             ],
             "widget_count": 11,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/049-7587-prometheus-blackbox-exporter.json"
         },
         {
@@ -828,7 +779,6 @@
             ],
             "widget_count": 22,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/050-11022-envoy-global.json"
         },
         {
@@ -845,7 +795,6 @@
             ],
             "widget_count": 13,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/051-6693-envoy.json"
         },
         {
@@ -862,7 +811,6 @@
             ],
             "widget_count": 2,
             "variable_count": 2,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/052-13639-logs-app.json"
         },
         {
@@ -878,7 +826,6 @@
             ],
             "widget_count": 8,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/053-11023-contour.json"
         },
         {
@@ -895,7 +842,6 @@
             ],
             "widget_count": 13,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/054-11021-envoy-clusters.json"
         },
         {
@@ -909,7 +855,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/055-741-deployment-metrics.json"
         },
         {
@@ -923,7 +868,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 5,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/056-747-pod-metrics.json"
         },
         {
@@ -937,7 +881,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/057-1621-kubernetes-cluster-monitoring-via-prometheus.json"
         },
         {
@@ -951,7 +894,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/058-1471-kubernetes-apps.json"
         },
         {
@@ -965,7 +907,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 2,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/059-3063-memcached-pods-monitoring-via-prometheus.json"
         },
         {
@@ -983,7 +924,6 @@
             ],
             "widget_count": 5,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/060-12010-aws-kafka-topic.json"
         },
         {
@@ -997,7 +937,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 0,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/061-3831-autoscaler.json"
         },
         {
@@ -1014,7 +953,6 @@
             ],
             "widget_count": 23,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/062-16032-aws-cni-metrics.json"
         },
         {
@@ -1033,7 +971,6 @@
             ],
             "widget_count": 11,
             "variable_count": 2,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/063-17175-spring-boot-observability.json"
         },
         {
@@ -1049,7 +986,6 @@
             ],
             "widget_count": 30,
             "variable_count": 0,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/064-17554-restic-exporter.json"
         },
         {
@@ -1066,7 +1002,6 @@
             ],
             "widget_count": 4,
             "variable_count": 0,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/065-7187-kubernetes-resource-requests.json"
         },
         {
@@ -1080,7 +1015,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/066-12660-kubernetes-persistent-volumes.json"
         },
         {
@@ -1096,7 +1030,6 @@
             ],
             "widget_count": 22,
             "variable_count": 2,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/067-15038-external-dns.json"
         },
         {
@@ -1113,7 +1046,6 @@
             ],
             "widget_count": 29,
             "variable_count": 6,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/068-15760-kubernetes-views-pods.json"
         },
         {
@@ -1130,7 +1062,6 @@
             ],
             "widget_count": 35,
             "variable_count": 7,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/069-9628-postgresql-database.json"
         },
         {
@@ -1147,7 +1078,6 @@
             ],
             "widget_count": 6,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/070-14114-postgres-overview.json"
         },
         {
@@ -1164,7 +1094,6 @@
             ],
             "widget_count": 37,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/071-12485-postgresql-exporter.json"
         },
         {
@@ -1181,7 +1110,6 @@
             ],
             "widget_count": 13,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/072-707-aws-rds.json"
         },
         {
@@ -1198,7 +1126,6 @@
             ],
             "widget_count": 30,
             "variable_count": 5,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/073-15758-kubernetes-views-namespaces.json"
         },
         {
@@ -1214,7 +1141,6 @@
             ],
             "widget_count": 52,
             "variable_count": 6,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/074-19993-argocd-operational-overview.json"
         },
         {
@@ -1230,7 +1156,6 @@
             ],
             "widget_count": 14,
             "variable_count": 8,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/075-19974-argocd-application-overview.json"
         },
         {
@@ -1246,7 +1171,6 @@
             ],
             "widget_count": 3,
             "variable_count": 5,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/076-19975-argocd-notifications-overview.json"
         },
         {
@@ -1264,7 +1188,6 @@
             ],
             "widget_count": 41,
             "variable_count": 5,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/077-15759-kubernetes-views-nodes.json"
         },
         {
@@ -1280,7 +1203,6 @@
             ],
             "widget_count": 71,
             "variable_count": 5,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/078-14191-elasticsearch-overview.json"
         },
         {
@@ -1297,7 +1219,6 @@
             ],
             "widget_count": 30,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/079-15757-kubernetes-views-global.json"
         },
         {
@@ -1314,7 +1235,6 @@
             ],
             "widget_count": 16,
             "variable_count": 3,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/080-13646-kubernetes-persistent-volumes.json"
         },
         {
@@ -1330,7 +1250,6 @@
             ],
             "widget_count": 19,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/081-21640-external-secrets.json"
         },
         {
@@ -1347,7 +1266,6 @@
             ],
             "widget_count": 6,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/082-12006-kubernetes-apiserver.json"
         },
         {
@@ -1364,7 +1282,6 @@
             ],
             "widget_count": 12,
             "variable_count": 4,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/083-15761-kubernetes-system-api-server.json"
         },
         {
@@ -1382,7 +1299,6 @@
             ],
             "widget_count": 17,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/084-17347-traefik-official-kubernetes-dashboard.json"
         },
         {
@@ -1398,7 +1314,6 @@
             ],
             "widget_count": 42,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/085-16277-ethereum-metrics-exporter-single.json"
         },
         {
@@ -1414,7 +1329,6 @@
             ],
             "widget_count": 42,
             "variable_count": 0,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/086-17846-home-staking-dashboard.json"
         },
         {
@@ -1431,7 +1345,6 @@
             ],
             "widget_count": 14,
             "variable_count": 6,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/087-15762-kubernetes-system-coredns.json"
         },
         {
@@ -1445,7 +1358,6 @@
             "required_sources": [],
             "widget_count": 0,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/088-3662-prometheus-2-0-overview.json"
         },
         {
@@ -1463,7 +1375,6 @@
             ],
             "widget_count": 8,
             "variable_count": 3,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/089-16367-kubernetes-compute-resources-node-pods.json"
         },
         {
@@ -1480,7 +1391,6 @@
             ],
             "widget_count": 13,
             "variable_count": 6,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/090-10619-docker-host-container-overview.json"
         },
         {
@@ -1496,7 +1406,6 @@
             ],
             "widget_count": 107,
             "variable_count": 7,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/091-11176-victoriametrics-cluster.json"
         },
         {
@@ -1513,7 +1422,6 @@
             ],
             "widget_count": 42,
             "variable_count": 5,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/092-11378-justai-system-monitor.json"
         },
         {
@@ -1531,7 +1439,6 @@
             ],
             "widget_count": 18,
             "variable_count": 5,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/093-11956-nodejs-metrics.json"
         },
         {
@@ -1547,7 +1454,6 @@
             ],
             "widget_count": 6,
             "variable_count": 1,
-            "quality": "needs-review",
             "resource_path": "dashboard-templates/community/094-14448-airflow-monitoring.json"
         },
         {
@@ -1564,7 +1470,6 @@
             ],
             "widget_count": 18,
             "variable_count": 4,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/095-16071-aws-elb-application-load-balancer-by-target-group.json"
         },
         {
@@ -1581,7 +1486,6 @@
             ],
             "widget_count": 39,
             "variable_count": 1,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/096-20577-aws-eks.json"
         },
         {
@@ -1598,7 +1502,6 @@
             ],
             "widget_count": 4,
             "variable_count": 0,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/097-20223-eth-docker-logs.json"
         },
         {
@@ -1614,7 +1517,6 @@
             ],
             "widget_count": 30,
             "variable_count": 9,
-            "quality": "partial",
             "resource_path": "dashboard-templates/community/098-20398-karpenter.json"
         },
         {
@@ -1631,7 +1533,6 @@
             ],
             "widget_count": 15,
             "variable_count": 5,
-            "quality": "ready",
             "resource_path": "dashboard-templates/community/099-9852-stians-disk-graphs.json"
         },
         {
@@ -1648,7 +1549,6 @@
             ],
             "widget_count": 27,
             "variable_count": 4,
-            "quality": "needs-review",
             "resource_path": "dashboard-templates/community/100-11455-k8s-storage-volumes-namespace.json"
         }
     ]

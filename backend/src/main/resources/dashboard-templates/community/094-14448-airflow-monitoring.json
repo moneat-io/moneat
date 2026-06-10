@@ -11,7 +11,6 @@
     ],
     "widget_count": 6,
     "variable_count": 1,
-    "quality": "needs-review",
     "warnings": [
         "Panel 0: SQL query imported as rawQuery for manual review",
         "Panel 1: SQL query imported as rawQuery for manual review",

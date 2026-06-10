@@ -11,7 +11,6 @@
     ],
     "widget_count": 4,
     "variable_count": 2,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Blackbox Exporter (HTTP prober)",

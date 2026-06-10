@@ -12,7 +12,6 @@
     ],
     "widget_count": 12,
     "variable_count": 3,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "AWS ALB Cloudwatch Metrics",

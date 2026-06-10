@@ -12,7 +12,6 @@
     ],
     "widget_count": 36,
     "variable_count": 5,
-    "quality": "partial",
     "warnings": [
         "Panel 32: couldn't parse PromQL '- sum (rate (container_network_transmit_bytes_total{origin_prometheus=~\"$origin_prometheus\",pod=~\"$Pod\",image!=\"\",name=~\"^k8s_.*\",node=~\"^$Node$\",namespace=~\"$NameSpace\",pod=~\".*$Container.*\"}[2m])) by (pod)', stored as rawQuery"
     ],

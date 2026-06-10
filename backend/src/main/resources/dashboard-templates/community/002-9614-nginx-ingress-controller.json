@@ -12,7 +12,6 @@
     ],
     "widget_count": 12,
     "variable_count": 4,
-    "quality": "partial",
     "warnings": [
         "Panel 7: couldn't parse PromQL '- sum (irate (nginx_ingress_controller_response_size_sum{controller_pod=~\"$controller\",controller_class=~\"$controller_class\",controller_namespace=~\"$namespace\"}[2m]))', stored as rawQuery"
     ],

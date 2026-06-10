@@ -12,7 +12,6 @@
     ],
     "widget_count": 29,
     "variable_count": 6,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Kubernetes / Views / Pods",

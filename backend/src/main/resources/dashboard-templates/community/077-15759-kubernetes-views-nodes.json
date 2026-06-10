@@ -13,7 +13,6 @@
     ],
     "widget_count": 41,
     "variable_count": 5,
-    "quality": "partial",
     "warnings": [
         "Panel 33: couldn't parse PromQL '100 - ((node_filesystem_avail_bytes{instance=\"$instance\", cluster=\"$cluster\"} * 100) / node_filesystem_size_bytes{instance=\"$instance\", cluster=\"$cluster\"})', stored as rawQuery",
         "Panel 34: couldn't parse PromQL '100 - (node_filesystem_files_free{instance=\"$instance\", cluster=\"$cluster\"} / node_filesystem_files{instance=\"$instance\", cluster=\"$cluster\"} * 100)', stored as rawQuery"

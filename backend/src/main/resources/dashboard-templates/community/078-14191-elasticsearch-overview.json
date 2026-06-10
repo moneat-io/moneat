@@ -11,7 +11,6 @@
     ],
     "widget_count": 71,
     "variable_count": 5,
-    "quality": "partial",
     "warnings": [
         "Panel 31: couldn't parse PromQL '1-(elasticsearch_filesystem_data_available_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}/elasticsearch_filesystem_data_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"})', stored as rawQuery"
     ],

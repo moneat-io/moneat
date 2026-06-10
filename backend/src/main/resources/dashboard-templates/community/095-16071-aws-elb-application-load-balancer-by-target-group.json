@@ -12,7 +12,6 @@
     ],
     "widget_count": 18,
     "variable_count": 4,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "AWS ELB Application Load Balancer by Target Group",

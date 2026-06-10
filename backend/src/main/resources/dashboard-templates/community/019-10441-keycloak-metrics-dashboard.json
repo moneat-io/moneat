@@ -11,7 +11,6 @@
     ],
     "widget_count": 24,
     "variable_count": 4,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Keycloak Metrics Dashboard",

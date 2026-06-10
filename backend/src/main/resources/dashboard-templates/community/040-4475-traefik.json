@@ -12,7 +12,6 @@
     ],
     "widget_count": 9,
     "variable_count": 2,
-    "quality": "ready",
     "warnings": [],
     "dashboard": {
         "title": "Traefik",

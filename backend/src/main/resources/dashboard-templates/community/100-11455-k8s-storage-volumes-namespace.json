@@ -12,7 +12,6 @@
     ],
     "widget_count": 27,
     "variable_count": 4,
-    "quality": "needs-review",
     "warnings": [
         "Panel 5: couldn't parse PromQL '(\n  (\n    (kubelet_volume_stats_available_bytes {namespace=~\"(openshift-.*|kube-.*|default|logging)\"} ) \n    and\n    (predict_linear(kubelet_volume_stats_available_bytes {namespace=~\"(openshift-.*|kube-.*|default|logging)\"}[1w], 7 * 24 * 60 * 60) < 0)\n  )\n)', stored as rawQuery",
         "Panel 6: couldn't parse PromQL '(\n  (\n    ((kubelet_volume_stats_used_bytes {namespace=\"$namespace\"} ) * 0) + 1\n    and\n    (predict_linear(kubelet_volume_stats_available_bytes {namespace=\"$namespace\"}[1d], 7 * 24 * 60 * 60) < 0)\n  )\n)', stored as rawQuery",

@@ -14,7 +14,6 @@
     ],
     "widget_count": 22,
     "variable_count": 0,
-    "quality": "partial",
     "warnings": [
         "Panel 3: couldn't parse PromQL '{app=\"loki\"} | logfmt | level=\"warn\" or level=\"error\"', stored as rawQuery",
         "Panel 5: couldn't parse PromQL '{app=\"promtail\"} | logfmt | level=\"warn\" or level=\"error\"', stored as rawQuery"
