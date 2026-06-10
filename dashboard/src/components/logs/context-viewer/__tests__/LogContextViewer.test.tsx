@@ -17,13 +17,14 @@
 import {beforeEach, describe, it, expect, vi} from 'vitest'
 import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import type {LogEntry} from '@/lib/api'
+import type {ApmSpanResponse, LogEntry} from '@/lib/api'
 import {LogContextViewer} from '../LogContextViewer'
 
 const {mockApi} = vi.hoisted(() => ({
   mockApi: {
     getLogs: vi.fn(),
     getLogPattern: vi.fn(),
+    getApmTraceDetail: vi.fn(),
   },
 }))
 
@@ -58,6 +59,28 @@ function makeLog(overrides: Partial<LogEntry> = {}): LogEntry {
     spanId: '',
     tags: {'http.method': 'POST', 'http.status_code': '504'},
     resourceAttributes: {},
+    ...overrides,
+  }
+}
+
+function makeSpan(overrides: Partial<ApmSpanResponse> = {}): ApmSpanResponse {
+  return {
+    spanId: 'span-1',
+    traceId: 'trace-1',
+    parentId: '',
+    name: 'GET /checkout',
+    service: 'checkout',
+    resource: 'GET /checkout',
+    type: 'server',
+    startNs: 1_780_000_000_000_000_000,
+    durationNs: 40_000_000,
+    error: 0,
+    meta: {},
+    metrics: {},
+    host: 'host-1',
+    env: 'production',
+    version: '1.0.0',
+    source: 'otlp',
     ...overrides,
   }
 }
@@ -108,6 +131,21 @@ describe('LogContextViewer', () => {
       nextCursor: null,
       hasMore: false,
       totalCount: 0,
+    })
+    mockApi.getApmTraceDetail.mockResolvedValue({
+      spans: [
+        makeSpan(),
+        makeSpan({
+          spanId: 'span-2',
+          parentId: 'span-1',
+          service: 'payments-db',
+          resource: 'SELECT payments',
+          type: 'db',
+          startNs: 1_780_000_000_010_000_000,
+          durationNs: 20_000_000,
+          error: 1,
+        }),
+      ],
     })
     mockApi.getLogPattern.mockResolvedValue({
       pattern: 'Payment gateway timeout after <int> retries for order <id>',
@@ -229,5 +267,65 @@ describe('LogContextViewer', () => {
 
     fireEvent.click(screen.getByRole('button', {name: /Create monitor/}))
     expect(onCreateMonitor).toHaveBeenCalled()
+  })
+
+  it('wires share, expand, trace, and pattern actions from connected context', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const share = vi.fn().mockRejectedValue(new Error('cancelled'))
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: {writeText},
+    })
+    Object.defineProperty(globalThis.navigator, 'share', {
+      configurable: true,
+      value: share,
+    })
+    const onToggleExpand = vi.fn()
+    const onAddFacetFilter = vi.fn()
+    const log = makeLog({
+      traceId: 'trace-1',
+      spanId: 'span-2',
+      resourceAttributes: {
+        'cloud.region': 'us-east-1',
+        'k8s.pod.name': 'checkout-pod',
+      },
+    })
+    renderViewer({
+      log,
+      onToggleExpand,
+      onAddFacetFilter,
+      timeRange: {from: '2026-06-08T00:00:00.000Z', to: '2026-06-09T00:00:00.000Z'},
+    })
+
+    fireEvent.click(screen.getByText('Copy link'))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(globalThis.window.location.href))
+
+    fireEvent.click(screen.getByTitle('Share'))
+    await waitFor(() => expect(share).toHaveBeenCalledWith({
+      title: 'Moneat log',
+      text: 'Payment gateway timeout after 3 retries for order ord_8F2K19',
+      url: globalThis.window.location.href,
+    }))
+
+    fireEvent.click(screen.getByTitle('Expand'))
+    expect(onToggleExpand).toHaveBeenCalled()
+
+    fireEvent.click(screen.getAllByTitle('Exclude')[0])
+    expect(onAddFacetFilter).toHaveBeenCalledWith('service', 'payments-api', true)
+
+    await screen.findByText(/2 spans/)
+    fireEvent.click(screen.getAllByRole('button', {name: /Trace/})[0])
+    expect(await screen.findByText('SELECT payments')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', {name: /All logs in this trace/}))
+    expect(onAddFacetFilter).toHaveBeenCalledWith('trace_id', 'trace-1')
+
+    fireEvent.click(screen.getAllByRole('button', {name: /Pattern/})[0])
+    fireEvent.click(await screen.findByRole('button', {name: /View 1 matching logs/}))
+    expect(onAddFacetFilter).toHaveBeenCalledWith(
+      'message_pattern',
+      'Payment gateway timeout after <int> retries for order <id>'
+    )
+    fireEvent.click(screen.getByRole('button', {name: /Create log metric/}))
+    fireEvent.click(screen.getByRole('button', {name: /Create monitor/}))
   })
 })
