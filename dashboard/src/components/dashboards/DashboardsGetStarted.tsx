@@ -244,9 +244,9 @@ export function DashboardsGetStarted({
           hint="Curated, fully editable starting points."
           tools={
             <fieldset
-              aria-label="Filter templates by category"
               className="inline-flex items-center gap-0.5 rounded-md border bg-muted/40 p-0.5"
             >
+              <legend className="sr-only">Filter templates by category</legend>
               {FILTERS.map((f) => {
                 const active = filter === f.key
                 return (
