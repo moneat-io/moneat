@@ -31,7 +31,7 @@ function isJson(value: string): boolean {
   }
 }
 
-export function ContentPanel({log}: {log: LogEntry}) {
+export function ContentPanel({log}: Readonly<{log: LogEntry}>) {
   const message = stripAnsi(log.message || '')
   const body = stripAnsi(log.body || '')
   const showBody = body && body !== message

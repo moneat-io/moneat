@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {api, type LogEntry} from '@/lib/api'
+import {api, type ApmSpanResponse, type LogEntry} from '@/lib/api'
 import {stripAnsi} from '@/lib/ansi'
 import {cn} from '@/lib/utils'
 import {getNow} from '@/lib/demo'
@@ -72,6 +72,36 @@ export interface LogContextViewerProps {
   className?: string
 }
 
+interface FacetChipProps {
+  label: string
+  value: string
+  accent?: boolean
+  filterKey?: string
+  onAddFacetFilter?: (key: string, value: string, exclude?: boolean) => void
+  excludable?: boolean
+}
+
+interface ConnectedNodeProps {
+  icon: React.ReactNode
+  title: string
+  subtitle: string
+  status?: 'ok' | 'err' | 'warn'
+  onClick: () => void
+}
+
+interface LogContextKeyboardOptions {
+  canPrev: boolean
+  canNext: boolean
+  onNavigate: (delta: number) => void
+  onClose: () => void
+}
+
+interface TraceSummary {
+  spanCount: number
+  serviceCount: number
+  errorCount: number
+}
+
 function relativeFromNow(iso: string): string {
   const t = new Date(iso).getTime()
   if (Number.isNaN(t)) return ''
@@ -83,6 +113,56 @@ function relativeFromNow(iso: string): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  const tag = el?.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!el?.isContentEditable
+}
+
+function useLogContextKeyboard({canPrev, canNext, onNavigate, onClose}: Readonly<LogContextKeyboardOptions>) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (isEditableKeyboardTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if ((e.key === 'j' || e.key === 'J') && canNext) {
+        e.preventDefault()
+        onNavigate(1)
+        return
+      }
+      if ((e.key === 'k' || e.key === 'K') && canPrev) {
+        e.preventDefault()
+        onNavigate(-1)
+      }
+    }
+    globalThis.window?.addEventListener('keydown', handler)
+    return () => globalThis.window?.removeEventListener('keydown', handler)
+  }, [canPrev, canNext, onNavigate, onClose])
+}
+
+function summarizeTrace(spans: ApmSpanResponse[]): TraceSummary {
+  return {
+    spanCount: spans.length,
+    serviceCount: new Set(spans.map((s) => s.service).filter(Boolean)).size,
+    errorCount: spans.filter((s) => s.error > 0 || (s.statusCode != null && s.statusCode >= 500)).length,
+  }
+}
+
+function formatTraceSubtitle(isLoading: boolean, summary: TraceSummary): string {
+  if (isLoading) return 'loading...'
+  if (summary.spanCount === 0) return 'view trace'
+  const errors = summary.errorCount === 1 ? 'error' : 'errors'
+  return `${summary.spanCount} spans · ${summary.serviceCount} services · ${summary.errorCount} ${errors}`
+}
+
+function connectedStatusClass(status?: ConnectedNodeProps['status']): string {
+  if (status === 'ok') return 'bg-emerald-500'
+  if (status === 'err') return 'bg-red-500'
+  return 'bg-amber-500'
+}
+
 function FacetChip({
   label,
   value,
@@ -90,14 +170,7 @@ function FacetChip({
   filterKey,
   onAddFacetFilter,
   excludable,
-}: {
-  label: string
-  value: string
-  accent?: boolean
-  filterKey?: string
-  onAddFacetFilter?: (key: string, value: string, exclude?: boolean) => void
-  excludable?: boolean
-}) {
+}: Readonly<FacetChipProps>) {
   return (
     <span
       className={cn(
@@ -146,13 +219,7 @@ function ConnectedNode({
   subtitle,
   status,
   onClick,
-}: {
-  icon: React.ReactNode
-  title: string
-  subtitle: string
-  status?: 'ok' | 'err' | 'warn'
-  onClick: () => void
-}) {
+}: Readonly<ConnectedNodeProps>) {
   return (
     <button
       type="button"
@@ -167,7 +234,7 @@ function ConnectedNode({
             <span
               className={cn(
                 'h-[7px] w-[7px] rounded-full',
-                status === 'ok' ? 'bg-emerald-500' : status === 'err' ? 'bg-red-500' : 'bg-amber-500'
+                connectedStatusClass(status)
               )}
             />
           )}
@@ -192,7 +259,7 @@ export function LogContextViewer({
   expanded,
   onToggleExpand,
   className,
-}: LogContextViewerProps) {
+}: Readonly<LogContextViewerProps>) {
   const {timezone} = useTimezone()
   const [activeTab, setActiveTab] = useState<TabId>('content')
   const [linkCopied, setLinkCopied] = useState(false)
@@ -210,37 +277,14 @@ export function LogContextViewer({
     staleTime: 60_000,
   })
   const spans = traceQuery.data?.spans ?? []
-  const traceErrorCount = spans.filter((s) => s.error > 0 || (s.statusCode != null && s.statusCode >= 500)).length
-  const traceServiceCount = new Set(spans.map((s) => s.service).filter(Boolean)).size
+  const traceSummary = useMemo(() => summarizeTrace(spans), [spans])
   const traceHref = log.traceId ? `/performance/traces/${log.traceId}` : undefined
 
   const canPrev = index > 0
   const canNext = index < logs.length - 1
 
   // Keyboard: J/K to move between events, Esc to close. Ignore while typing.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null
-      const tag = el?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
-      if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape') {
-        onClose()
-      } else if (e.key === 'j' || e.key === 'J') {
-        if (canNext) {
-          e.preventDefault()
-          onNavigate(1)
-        }
-      } else if (e.key === 'k' || e.key === 'K') {
-        if (canPrev) {
-          e.preventDefault()
-          onNavigate(-1)
-        }
-      }
-    }
-    globalThis.window?.addEventListener('keydown', handler)
-    return () => globalThis.window?.removeEventListener('keydown', handler)
-  }, [canPrev, canNext, onNavigate, onClose])
+  useLogContextKeyboard({canPrev, canNext, onNavigate, onClose})
 
   const handleCopyLink = useCallback(async () => {
     const url = globalThis.window?.location?.href
@@ -390,14 +434,8 @@ export function LogContextViewer({
             <ConnectedNode
               icon={<GitBranch className="h-3.5 w-3.5" />}
               title="Trace"
-              status={traceErrorCount > 0 ? 'err' : 'ok'}
-              subtitle={
-                traceQuery.isLoading
-                  ? 'loading…'
-                  : spans.length > 0
-                    ? `${spans.length} spans · ${traceServiceCount} services · ${traceErrorCount} error${traceErrorCount === 1 ? '' : 's'}`
-                    : 'view trace'
-              }
+              status={traceSummary.errorCount > 0 ? 'err' : 'ok'}
+              subtitle={formatTraceSubtitle(traceQuery.isLoading, traceSummary)}
               onClick={() => setActiveTab('trace')}
             />
           )}

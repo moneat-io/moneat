@@ -53,7 +53,7 @@ function typeColor(type: string): string {
   return TYPE_COLOR[(type || '').toLowerCase()] || 'bg-muted-foreground/50'
 }
 
-function EmptyTrace({children}: {children: React.ReactNode}) {
+function EmptyTrace({children}: Readonly<{children: React.ReactNode}>) {
   return (
     <div className="p-3.5">
       <div className="rounded-md border border-border bg-card py-10 text-center text-xs text-muted-foreground">
@@ -63,7 +63,14 @@ function EmptyTrace({children}: {children: React.ReactNode}) {
   )
 }
 
-export function TracePanel({log, spans, isLoading, isError, traceHref, onViewAllTraceLogs}: TracePanelProps) {
+export function TracePanel({
+  log,
+  spans,
+  isLoading,
+  isError,
+  traceHref,
+  onViewAllTraceLogs,
+}: Readonly<TracePanelProps>) {
   const layout = useMemo(() => computeTraceLayout(spans), [spans])
   const pinPct = useMemo(
     () => (spans.length > 0 ? computeLogPinPct(layout, new Date(log.timestamp).getTime()) : null),

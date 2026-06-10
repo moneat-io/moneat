@@ -41,12 +41,12 @@ const INT_RE = /\b\d+\b/g
 export function derivePatternString(message: string): string {
   if (!message) return ''
   return message
-    .replace(UUID_RE, '<uuid>')
-    .replace(PREFIXED_ID_RE, '<id>')
-    .replace(HEX_RE, '<hex>')
-    .replace(QUOTED_RE, '<str>')
-    .replace(FLOAT_RE, '<float>')
-    .replace(INT_RE, '<int>')
+    .replaceAll(UUID_RE, '<uuid>')
+    .replaceAll(PREFIXED_ID_RE, '<id>')
+    .replaceAll(HEX_RE, '<hex>')
+    .replaceAll(QUOTED_RE, '<str>')
+    .replaceAll(FLOAT_RE, '<float>')
+    .replaceAll(INT_RE, '<int>')
     .trim()
 }
 
@@ -216,10 +216,20 @@ export function filterAttrGroups(groups: AttrGroup[], query: string): AttrGroup[
 // Context volume strip (Context tab)
 // ============================================================================
 
+export interface VolumeBucket {
+  id: string
+  count: number
+  hot: boolean
+}
+
 export interface VolumeStrip {
-  buckets: {count: number; hot: boolean}[]
+  buckets: VolumeBucket[]
   /** Horizontal position of the anchor marker, 0–100. */
   markerPct: number
+}
+
+function emptyVolumeBuckets(bins: number): VolumeBucket[] {
+  return Array.from({length: bins}, (_, index) => ({id: `bucket-${index}`, count: 0, hot: false}))
 }
 
 /**
@@ -231,7 +241,7 @@ export function buildContextVolume(timestampsMs: number[], anchorMs: number, bin
   let min = Math.min(...all)
   let max = Math.max(...all)
   if (!Number.isFinite(min) || !Number.isFinite(max)) {
-    return {buckets: Array.from({length: bins}, () => ({count: 0, hot: false})), markerPct: 50}
+    return {buckets: emptyVolumeBuckets(bins), markerPct: 50}
   }
   if (min === max) {
     min -= 1
@@ -243,7 +253,7 @@ export function buildContextVolume(timestampsMs: number[], anchorMs: number, bin
   for (const ts of timestampsMs) counts[binOf(ts)] += 1
   const anchorBin = binOf(anchorMs)
   return {
-    buckets: counts.map((count, i) => ({count, hot: i === anchorBin})),
+    buckets: counts.map((count, index) => ({id: `bucket-${index}`, count, hot: index === anchorBin})),
     markerPct: ((anchorMs - min) / range) * 100,
   }
 }
@@ -383,24 +393,71 @@ export function traceSpanTypes(spans: ApmSpanResponse[]): string[] {
 // ============================================================================
 
 export type JsonKind = 'key' | 'string' | 'number' | 'boolean' | 'plain'
+export interface JsonToken {
+  text: string
+  kind: JsonKind
+}
 
-const JSON_TOKEN_RE =
-  /("(?:\\.|[^"\\])*"\s*:)|("(?:\\.|[^"\\])*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(\btrue\b|\bfalse\b|\bnull\b)/g
+const JSON_STRING_RE = /"(?:\\.|[^"\\])*"/y
+const JSON_NUMBER_RE = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y
+const JSON_LITERAL_RE = /\b(?:true|false|null)\b/y
+
+function execSticky(re: RegExp, value: string, index: number): string | null {
+  re.lastIndex = index
+  return re.exec(value)?.[0] ?? null
+}
+
+function nextNonWhitespaceIndex(value: string, index: number): number {
+  let cursor = index
+  while (cursor < value.length && /\s/.test(value[cursor])) cursor += 1
+  return cursor
+}
+
+function pushPlainToken(tokens: JsonToken[], json: string, from: number, to: number) {
+  if (to > from) tokens.push({text: json.slice(from, to), kind: 'plain'})
+}
 
 /** Split a pretty-printed JSON string into classified segments for rendering. */
-export function tokenizeJson(json: string): {text: string; kind: JsonKind}[] {
-  const out: {text: string; kind: JsonKind}[] = []
-  let lastIndex = 0
-  let match: RegExpExecArray | null
-  JSON_TOKEN_RE.lastIndex = 0
-  while ((match = JSON_TOKEN_RE.exec(json)) !== null) {
-    if (match.index > lastIndex) out.push({text: json.slice(lastIndex, match.index), kind: 'plain'})
-    if (match[1]) out.push({text: match[1], kind: 'key'})
-    else if (match[2]) out.push({text: match[2], kind: 'string'})
-    else if (match[3]) out.push({text: match[3], kind: 'number'})
-    else if (match[4]) out.push({text: match[4], kind: 'boolean'})
-    lastIndex = match.index + match[0].length
+export function tokenizeJson(json: string): JsonToken[] {
+  const tokens: JsonToken[] = []
+  let plainStart = 0
+  let index = 0
+
+  while (index < json.length) {
+    const stringToken = execSticky(JSON_STRING_RE, json, index)
+    if (stringToken) {
+      const tokenEnd = index + stringToken.length
+      const colonIndex = nextNonWhitespaceIndex(json, tokenEnd)
+      const isKey = json[colonIndex] === ':'
+      const end = isKey ? colonIndex + 1 : tokenEnd
+      pushPlainToken(tokens, json, plainStart, index)
+      tokens.push({text: json.slice(index, end), kind: isKey ? 'key' : 'string'})
+      index = end
+      plainStart = index
+      continue
+    }
+
+    const numberToken = execSticky(JSON_NUMBER_RE, json, index)
+    if (numberToken) {
+      pushPlainToken(tokens, json, plainStart, index)
+      tokens.push({text: numberToken, kind: 'number'})
+      index += numberToken.length
+      plainStart = index
+      continue
+    }
+
+    const literalToken = execSticky(JSON_LITERAL_RE, json, index)
+    if (literalToken) {
+      pushPlainToken(tokens, json, plainStart, index)
+      tokens.push({text: literalToken, kind: 'boolean'})
+      index += literalToken.length
+      plainStart = index
+      continue
+    }
+
+    index += 1
   }
-  if (lastIndex < json.length) out.push({text: json.slice(lastIndex), kind: 'plain'})
-  return out
+
+  pushPlainToken(tokens, json, plainStart, json.length)
+  return tokens
 }

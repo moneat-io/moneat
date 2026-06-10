@@ -74,7 +74,7 @@ function buildJsonView(log: LogEntry): Record<string, unknown> {
   return out
 }
 
-function AttrValue({row, traceHref, spanHref}: {row: AttrRow; traceHref?: string; spanHref?: string}) {
+function AttrValue({row, traceHref, spanHref}: Readonly<{row: AttrRow; traceHref?: string; spanHref?: string}>) {
   if (row.linkable) {
     const href = row.key === 'trace_id' ? traceHref : spanHref
     if (href) {
@@ -106,7 +106,101 @@ function AttrValue({row, traceHref, spanHref}: {row: AttrRow; traceHref?: string
   )
 }
 
-export function AttributesPanel({log, traceHref, spanHref, onAddFacetFilter}: AttributesPanelProps) {
+interface AttributeContentProps {
+  view: 'table' | 'json'
+  log: LogEntry
+  query: string
+  filtered: ReturnType<typeof filterAttrGroups>
+  traceHref?: string
+  spanHref?: string
+  onAddFacetFilter?: (key: string, value: string, exclude?: boolean) => void
+}
+
+function AttributeContent({
+  view,
+  log,
+  query,
+  filtered,
+  traceHref,
+  spanHref,
+  onAddFacetFilter,
+}: Readonly<AttributeContentProps>) {
+  if (view === 'json') {
+    const jsonValue = buildJsonView(log)
+    return (
+      <CodeBox copyValue={JSON.stringify(jsonValue, null, 2)} copyLabel="attributes">
+        <JsonHighlight value={jsonValue} />
+      </CodeBox>
+    )
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <div className="rounded-md border border-border bg-card py-8 text-center text-xs text-muted-foreground">
+        No attributes match "{query}".
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-card">
+      {filtered.map((group, gi) => (
+        <div key={group.name}>
+          <div
+            className={cn(
+              'px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
+              gi > 0 && 'border-t border-border/60'
+            )}
+          >
+            {group.name} <span className="font-medium text-muted-foreground/60">{group.rows.length}</span>
+          </div>
+          {group.rows.map((row) => {
+            const facetKey = facetKeyFor(row.key)
+            return (
+              <div
+                key={`${group.name}:${row.key}`}
+                className="group/arow grid grid-cols-[minmax(120px,200px)_1fr_auto] items-center gap-2.5 border-b border-border/50 px-2.5 py-1 font-mono text-[11px] last:border-b-0 hover:bg-accent/40"
+              >
+                <span className="flex items-center gap-1.5 truncate text-muted-foreground">
+                  {row.linkable && <Link2 className="h-2.5 w-2.5 shrink-0 text-muted-foreground/60" />}
+                  {row.key}
+                </span>
+                <span className="min-w-0 text-foreground">
+                  <AttrValue row={row} traceHref={traceHref} spanHref={spanHref} />
+                </span>
+                <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/arow:opacity-100">
+                  {facetKey && onAddFacetFilter && (
+                    <>
+                      <button
+                        type="button"
+                        title="Filter to"
+                        onClick={() => onAddFacetFilter(facetKey, row.value, false)}
+                        className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        title="Exclude"
+                        onClick={() => onAddFacetFilter(facetKey, row.value, true)}
+                        className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 hover:bg-accent hover:text-foreground"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                    </>
+                  )}
+                  <CopyButton value={row.value} label={row.key} className="h-5 w-5" />
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function AttributesPanel({log, traceHref, spanHref, onAddFacetFilter}: Readonly<AttributesPanelProps>) {
   const [query, setQuery] = useState('')
   const [view, setView] = useState<'table' | 'json'>('table')
 
@@ -146,70 +240,15 @@ export function AttributesPanel({log, traceHref, spanHref, onAddFacetFilter}: At
         </div>
       </div>
 
-      {view === 'json' ? (
-        <CodeBox copyValue={JSON.stringify(buildJsonView(log), null, 2)} copyLabel="attributes">
-          <JsonHighlight value={buildJsonView(log)} />
-        </CodeBox>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-md border border-border bg-card py-8 text-center text-xs text-muted-foreground">
-          No attributes match “{query}”.
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-md border border-border bg-card">
-          {filtered.map((group, gi) => (
-            <div key={group.name}>
-              <div
-                className={cn(
-                  'px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground',
-                  gi > 0 && 'border-t border-border/60'
-                )}
-              >
-                {group.name} <span className="font-medium text-muted-foreground/60">{group.rows.length}</span>
-              </div>
-              {group.rows.map((row) => {
-                const facetKey = facetKeyFor(row.key)
-                return (
-                  <div
-                    key={`${group.name}:${row.key}`}
-                    className="group/arow grid grid-cols-[minmax(120px,200px)_1fr_auto] items-center gap-2.5 border-b border-border/50 px-2.5 py-1 font-mono text-[11px] last:border-b-0 hover:bg-accent/40"
-                  >
-                    <span className="flex items-center gap-1.5 truncate text-muted-foreground">
-                      {row.linkable && <Link2 className="h-2.5 w-2.5 shrink-0 text-muted-foreground/60" />}
-                      {row.key}
-                    </span>
-                    <span className="min-w-0 text-foreground">
-                      <AttrValue row={row} traceHref={traceHref} spanHref={spanHref} />
-                    </span>
-                    <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/arow:opacity-100">
-                      {facetKey && onAddFacetFilter && (
-                        <>
-                          <button
-                            type="button"
-                            title="Filter to"
-                            onClick={() => onAddFacetFilter(facetKey, row.value, false)}
-                            className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            title="Exclude"
-                            onClick={() => onAddFacetFilter(facetKey, row.value, true)}
-                            className="grid h-5 w-5 place-items-center rounded-sm text-muted-foreground/70 hover:bg-accent hover:text-foreground"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                        </>
-                      )}
-                      <CopyButton value={row.value} label={row.key} className="h-5 w-5" />
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-      )}
+      <AttributeContent
+        view={view}
+        log={log}
+        query={query}
+        filtered={filtered}
+        traceHref={traceHref}
+        spanHref={spanHref}
+        onAddFacetFilter={onAddFacetFilter}
+      />
     </div>
   )
 }

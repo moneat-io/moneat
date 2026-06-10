@@ -18,7 +18,7 @@ import {cn} from '@/lib/utils'
 import type {ReactNode} from 'react'
 
 /** Uppercase section divider label with a trailing rule. */
-export function SecLabel({children, className}: {children: ReactNode; className?: string}) {
+export function SecLabel({children, className}: Readonly<{children: ReactNode; className?: string}>) {
   return (
     <div className={cn('mb-2 flex items-center gap-2', className)}>
       <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -30,7 +30,7 @@ export function SecLabel({children, className}: {children: ReactNode; className?
 }
 
 /** Muted helper row shown at the bottom of a panel. */
-export function Hint({icon, children}: {icon?: ReactNode; children: ReactNode}) {
+export function Hint({icon, children}: Readonly<{icon?: ReactNode; children: ReactNode}>) {
   return (
     <div className="mt-2.5 flex items-start gap-2 text-[11px] text-muted-foreground/80">
       {icon && <span className="mt-px shrink-0">{icon}</span>}

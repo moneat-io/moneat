@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {api, type LogEntry, type LogPatternBreakdown} from '@/lib/api'
+import {api, type LogEntry, type LogPatternBreakdown, type LogPatternResponse} from '@/lib/api'
 import {stripAnsi} from '@/lib/ansi'
 import {cn} from '@/lib/utils'
 import {useQuery} from '@tanstack/react-query'
 import {Activity, Bell, List, Loader2, Zap} from 'lucide-react'
 import {useMemo} from 'react'
-import {derivePatternString, splitPatternSegments} from './logContextHelpers'
+import {derivePatternString, type PatternSegment, splitPatternSegments} from './logContextHelpers'
 import {levelText, normalizeLevel} from './logLevelStyles'
 import {Hint, SecLabel} from './ViewerPrimitives'
 
@@ -48,7 +48,7 @@ function relativeFromIso(iso: string): string {
   return `${Math.floor(diff / 86_400_000)}d ago`
 }
 
-function Sparkline({values}: {values: number[]}) {
+function Sparkline({values}: Readonly<{values: number[]}>) {
   if (values.length < 2) return null
   const w = 150
   const h = 40
@@ -66,7 +66,7 @@ function Sparkline({values}: {values: number[]}) {
   )
 }
 
-function Breakdown({title, rows}: {title: string; rows: LogPatternBreakdown[]}) {
+function Breakdown({title, rows}: Readonly<{title: string; rows: LogPatternBreakdown[]}>) {
   if (rows.length === 0) return null
   const max = Math.max(1, ...rows.map((r) => r.count))
   const fills = ['bg-primary', 'bg-teal-500', 'bg-orange-500', 'bg-violet-500', 'bg-amber-500']
@@ -86,7 +86,49 @@ function Breakdown({title, rows}: {title: string; rows: LogPatternBreakdown[]}) 
   )
 }
 
-export function PatternsPanel({log, from, to, onViewMatching, onCreateMetric, onCreateMonitor}: PatternsPanelProps) {
+function patternSegmentKey(text: string, offset: number, wildcard: boolean): string {
+  return `${offset}:${wildcard ? 'wildcard' : 'literal'}:${text.length}`
+}
+
+interface KeyedPatternSegment {
+  key: string
+  segment: PatternSegment
+}
+
+function keyPatternSegments(segments: PatternSegment[]): KeyedPatternSegment[] {
+  let offset = 0
+  return segments.map((segment) => {
+    const key = patternSegmentKey(segment.text, offset, segment.wildcard)
+    offset += segment.text.length
+    return {key, segment}
+  })
+}
+
+function PatternCount({isLoading, data}: Readonly<{isLoading: boolean; data?: LogPatternResponse}>) {
+  if (isLoading) {
+    return <Loader2 className="ml-auto h-5 w-5 animate-spin text-muted-foreground" />
+  }
+
+  if (!data) {
+    return <span className="text-base text-muted-foreground">-</span>
+  }
+
+  return (
+    <>
+      {formatCount(data.count)}
+      <span className="ml-1 text-xs font-medium text-muted-foreground">/ {data.windowLabel}</span>
+    </>
+  )
+}
+
+export function PatternsPanel({
+  log,
+  from,
+  to,
+  onViewMatching,
+  onCreateMetric,
+  onCreateMonitor,
+}: Readonly<PatternsPanelProps>) {
   const message = stripAnsi(log.message || log.body || '')
 
   const {data, isLoading, isError} = useQuery({
@@ -99,6 +141,7 @@ export function PatternsPanel({log, from, to, onViewMatching, onCreateMetric, on
 
   const patternString = data?.pattern || derivePatternString(message)
   const segments = useMemo(() => splitPatternSegments(patternString), [patternString])
+  const keyedSegments = useMemo(() => keyPatternSegments(segments), [segments])
   const level = normalizeLevel(data?.level || log.level)
   const analyticsMissing = !isLoading && (isError || !data)
 
@@ -111,18 +154,15 @@ export function PatternsPanel({log, from, to, onViewMatching, onCreateMetric, on
               Matched pattern
             </div>
             <div className="break-words font-mono text-sm leading-snug text-foreground">
-              {segments.map((s, i) =>
-                s.wildcard ? (
-                  <span
-                    key={i}
-                    className="mx-px rounded-sm border border-primary/40 bg-primary/10 px-1 text-primary"
-                  >
-                    {s.text}
+              {keyedSegments.map(({key, segment}) => {
+                return segment.wildcard ? (
+                  <span key={key} className="mx-px rounded-sm border border-primary/40 bg-primary/10 px-1 text-primary">
+                    {segment.text}
                   </span>
                 ) : (
-                  <span key={i}>{s.text}</span>
+                  <span key={key}>{segment.text}</span>
                 )
-              )}
+              })}
             </div>
             <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-xs text-muted-foreground">
               <span>
@@ -150,16 +190,7 @@ export function PatternsPanel({log, from, to, onViewMatching, onCreateMetric, on
           </div>
           <div className="shrink-0 text-right">
             <div className="font-mono text-2xl font-bold leading-none text-foreground">
-              {isLoading ? (
-                <Loader2 className="ml-auto h-5 w-5 animate-spin text-muted-foreground" />
-              ) : data ? (
-                <>
-                  {formatCount(data.count)}
-                  <span className="ml-1 text-xs font-medium text-muted-foreground">/ {data.windowLabel}</span>
-                </>
-              ) : (
-                <span className="text-base text-muted-foreground">—</span>
-              )}
+              <PatternCount isLoading={isLoading} data={data} />
             </div>
             {data && <Sparkline values={data.sparkline} />}
           </div>

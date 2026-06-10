@@ -17,7 +17,7 @@
 import {cn} from '@/lib/utils'
 import {Fragment, type ReactNode} from 'react'
 import {CopyButton} from './CopyButton'
-import {type JsonKind, tokenizeJson} from './logContextHelpers'
+import {type JsonKind, type JsonToken, tokenizeJson} from './logContextHelpers'
 
 interface CodeBoxProps {
   /** Value placed on the clipboard by the floating copy button. */
@@ -29,7 +29,7 @@ interface CodeBoxProps {
 }
 
 /** Bordered monospace block with a hover-revealed floating copy button. */
-export function CodeBox({copyValue, copyLabel, variant = 'default', className, children}: CodeBoxProps) {
+export function CodeBox({copyValue, copyLabel, variant = 'default', className, children}: Readonly<CodeBoxProps>) {
   return (
     <div
       className={cn(
@@ -62,8 +62,22 @@ const kindClass: Record<JsonKind, string> = {
   plain: '',
 }
 
+interface KeyedJsonToken {
+  key: string
+  token: JsonToken
+}
+
+function keyJsonTokens(tokens: JsonToken[]): KeyedJsonToken[] {
+  let offset = 0
+  return tokens.map((token) => {
+    const key = tokenKey(token, offset)
+    offset += token.text.length
+    return {key, token}
+  })
+}
+
 /** Render a JSON string (or value) with light syntax highlighting. */
-export function JsonHighlight({value}: {value: string | unknown}) {
+export function JsonHighlight({value}: Readonly<{value: unknown}>) {
   let json: string
   if (typeof value === 'string') {
     try {
@@ -74,14 +88,20 @@ export function JsonHighlight({value}: {value: string | unknown}) {
   } else {
     json = JSON.stringify(value, null, 2)
   }
-  const tokens = tokenizeJson(json)
+  const tokens = keyJsonTokens(tokenizeJson(json))
   return (
     <>
-      {tokens.map((t, i) => (
-        <Fragment key={i}>
-          {t.kind === 'plain' ? t.text : <span className={kindClass[t.kind]}>{t.text}</span>}
-        </Fragment>
-      ))}
+      {tokens.map(({key, token}) => {
+        return (
+          <Fragment key={key}>
+            {token.kind === 'plain' ? token.text : <span className={kindClass[token.kind]}>{token.text}</span>}
+          </Fragment>
+        )
+      })}
     </>
   )
+}
+
+function tokenKey(token: JsonToken, offset: number): string {
+  return `${offset}:${token.kind}`
 }

@@ -21,7 +21,7 @@ import {useTimezone} from '@/hooks/useTimezone'
 import {formatTimeWithMs} from '@/lib/date-format'
 import {useQuery} from '@tanstack/react-query'
 import {ChevronDown, ChevronUp, Loader2, MoveRight} from 'lucide-react'
-import {useEffect, useMemo, useRef, useState} from 'react'
+import {type RefObject, useEffect, useMemo, useRef, useState} from 'react'
 import {buildContextVolume, formatDeltaMs} from './logContextHelpers'
 import {levelDot, normalizeLevel} from './logLevelStyles'
 import {Hint} from './ViewerPrimitives'
@@ -40,20 +40,108 @@ const scopeLabel: Record<Scope, string> = {
   all: 'all logs',
 }
 
-export function ContextPanel({log}: ContextPanelProps) {
+const scopes = ['host', 'service', 'trace', 'all'] as const
+
+function normalizeScope(scope: Scope, log: LogEntry): Scope {
+  if (scope === 'host' && !log.host) return 'all'
+  if (scope === 'service' && !log.service) return 'all'
+  if (scope === 'trace' && !log.traceId) return 'all'
+  return scope
+}
+
+function scopeButtonDisabled(scope: Scope, log: LogEntry): boolean {
+  if (scope === 'host') return !log.host
+  if (scope === 'service') return !log.service
+  if (scope === 'trace') return !log.traceId
+  return false
+}
+
+function scopeButtonText(scope: Scope): string {
+  if (scope === 'host') return 'This host'
+  if (scope === 'trace') return 'This trace'
+  if (scope === 'all') return 'All logs'
+  return 'Service'
+}
+
+interface ContextRowsProps {
+  isLoading: boolean
+  isError: boolean
+  rows: LogEntry[]
+  anchorLogId: string
+  anchorMs: number
+  anchorRef: RefObject<HTMLDivElement | null>
+  timezone: string
+}
+
+function ContextRows({
+  isLoading,
+  isError,
+  rows,
+  anchorLogId,
+  anchorMs,
+  anchorRef,
+  timezone,
+}: Readonly<ContextRowsProps>) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading surrounding logs...
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="py-8 text-center text-xs text-muted-foreground">
+        Surrounding logs are unavailable for this window.
+      </div>
+    )
+  }
+
+  return rows.map((row) => {
+    const isAnchor = row.logId === anchorLogId
+    const delta = new Date(row.timestamp).getTime() - anchorMs
+    const lvl = normalizeLevel(row.level)
+    return (
+      <div
+        key={`${row.logId}:${row.timestamp}`}
+        ref={isAnchor ? anchorRef : undefined}
+        className={cn(
+          'relative grid grid-cols-[62px_92px_16px_1fr] items-start gap-2.5 border-b border-border/50 px-2.5 py-1.5 font-mono text-[11px] last:border-b-0',
+          isAnchor ? 'bg-primary/[0.07]' : 'hover:bg-accent/40'
+        )}
+      >
+        {isAnchor && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
+        <span
+          className={cn(
+            'pt-px text-right text-[10px]',
+            isAnchor ? 'font-semibold text-primary' : 'text-muted-foreground/70'
+          )}
+        >
+          {formatDeltaMs(delta)}
+        </span>
+        <span className="text-muted-foreground">{formatTimeWithMs(new Date(row.timestamp), timezone)}</span>
+        <span className={cn('mt-[5px] h-[7px] w-[7px] rounded-[2px]', levelDot(lvl))} />
+        <span className={cn('break-words leading-snug', isAnchor ? 'font-medium text-foreground' : 'text-foreground/80')}>
+          {stripAnsi(row.message || row.body) || '-'}
+          {isAnchor && (
+            <span className="ml-2 inline-block rounded-sm border border-primary/40 bg-primary/10 px-1.5 align-middle font-sans text-[9px] font-bold uppercase tracking-wide text-primary">
+              This event
+            </span>
+          )}
+        </span>
+      </div>
+    )
+  })
+}
+
+export function ContextPanel({log}: Readonly<ContextPanelProps>) {
   const {timezone} = useTimezone()
   const anchorMs = useMemo(() => new Date(log.timestamp).getTime(), [log.timestamp])
   const hasValidAnchor = Number.isFinite(anchorMs)
 
   const [scope, setScope] = useState<Scope>(log.host ? 'host' : 'all')
-  const effectiveScope: Scope =
-    scope === 'host' && !log.host
-      ? 'all'
-      : scope === 'service' && !log.service
-        ? 'all'
-        : scope === 'trace' && !log.traceId
-          ? 'all'
-          : scope
+  const effectiveScope = normalizeScope(scope, log)
 
   const [beforeSec, setBeforeSec] = useState(WINDOW_STEP)
   const [afterSec, setAfterSec] = useState(WINDOW_STEP)
@@ -125,8 +213,8 @@ export function ContextPanel({log}: ContextPanelProps) {
     <div className="p-3.5">
       <div className="mb-2.5 flex flex-wrap items-center gap-2.5">
         <div className="flex overflow-hidden rounded-md border border-border">
-          {(['host', 'service', 'trace', 'all'] as const).map((s) => {
-            const disabled = (s === 'host' && !log.host) || (s === 'service' && !log.service) || (s === 'trace' && !log.traceId)
+          {scopes.map((s) => {
+            const disabled = scopeButtonDisabled(s, log)
             return (
               <button
                 key={s}
@@ -142,7 +230,7 @@ export function ContextPanel({log}: ContextPanelProps) {
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
               >
-                {s === 'host' ? 'This host' : s === 'trace' ? 'This trace' : s === 'all' ? 'All logs' : 'Service'}
+                {scopeButtonText(s)}
               </button>
             )
           })}
@@ -154,9 +242,9 @@ export function ContextPanel({log}: ContextPanelProps) {
 
       {/* volume strip */}
       <div className="relative mb-2 flex h-[34px] items-end gap-0.5 px-0.5">
-        {volume.buckets.map((b, i) => (
+        {volume.buckets.map((b) => (
           <div
-            key={i}
+            key={b.id}
             className={cn('min-h-[3px] flex-1 rounded-[1px]', b.hot ? 'bg-red-500' : 'bg-muted-foreground/40')}
             style={{height: `${6 + (b.count / maxVol) * 26}px`}}
           />
@@ -176,56 +264,15 @@ export function ContextPanel({log}: ContextPanelProps) {
           <ChevronUp className="h-3 w-3" /> Load earlier
         </button>
 
-        {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading surrounding logs…
-          </div>
-        ) : isError ? (
-          <div className="py-8 text-center text-xs text-muted-foreground">
-            Surrounding logs are unavailable for this window.
-          </div>
-        ) : (
-          rows.map((row) => {
-            const isAnchor = row.logId === log.logId
-            const delta = new Date(row.timestamp).getTime() - anchorMs
-            const lvl = normalizeLevel(row.level)
-            return (
-              <div
-                key={`${row.logId}:${row.timestamp}`}
-                ref={isAnchor ? anchorRef : undefined}
-                className={cn(
-                  'relative grid grid-cols-[62px_92px_16px_1fr] items-start gap-2.5 border-b border-border/50 px-2.5 py-1.5 font-mono text-[11px] last:border-b-0',
-                  isAnchor ? 'bg-primary/[0.07]' : 'hover:bg-accent/40'
-                )}
-              >
-                {isAnchor && <span className="absolute inset-y-0 left-0 w-0.5 bg-primary" />}
-                <span
-                  className={cn(
-                    'pt-px text-right text-[10px]',
-                    isAnchor ? 'font-semibold text-primary' : 'text-muted-foreground/70'
-                  )}
-                >
-                  {formatDeltaMs(delta)}
-                </span>
-                <span className="text-muted-foreground">{formatTimeWithMs(new Date(row.timestamp), timezone)}</span>
-                <span className={cn('mt-[5px] h-[7px] w-[7px] rounded-[2px]', levelDot(lvl))} />
-                <span
-                  className={cn(
-                    'break-words leading-snug',
-                    isAnchor ? 'font-medium text-foreground' : 'text-foreground/80'
-                  )}
-                >
-                  {stripAnsi(row.message || row.body) || '—'}
-                  {isAnchor && (
-                    <span className="ml-2 inline-block rounded-sm border border-primary/40 bg-primary/10 px-1.5 align-middle font-sans text-[9px] font-bold uppercase tracking-wide text-primary">
-                      This event
-                    </span>
-                  )}
-                </span>
-              </div>
-            )
-          })
-        )}
+        <ContextRows
+          isLoading={isLoading}
+          isError={isError}
+          rows={rows}
+          anchorLogId={log.logId}
+          anchorMs={anchorMs}
+          anchorRef={anchorRef}
+          timezone={timezone}
+        />
 
         <button
           type="button"

@@ -26,15 +26,17 @@ interface CopyButtonProps {
 }
 
 /** Small clipboard button that flashes a check on success. */
-export function CopyButton({value, label, className, iconClassName}: CopyButtonProps) {
+export function CopyButton({value, label, className, iconClassName}: Readonly<CopyButtonProps>) {
   const [copied, setCopied] = useState(false)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleCopy = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation()
+      const clipboard = globalThis.navigator?.clipboard
+      if (!clipboard) return
       try {
-        await navigator.clipboard.writeText(value)
+        await clipboard.writeText(value)
         setCopied(true)
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
         timeoutRef.current = setTimeout(() => setCopied(false), 1100)
