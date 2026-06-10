@@ -16,8 +16,7 @@
 
 import {memo, type ComponentProps, type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
-import type {BatchQueryResultMetadata, DashboardWidget, QueryDsl, TimeRangeDef} from '@/lib/api'
-import {api} from '@/lib/api'
+import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {
     Area,
     AreaChart,
@@ -47,6 +46,7 @@ import {formatValue} from './formatValue'
 import {pivotData, valueKeySeries} from './widgetSeries'
 import {isWarningThresholdValid, type AlertThresholdPreview} from './alertThresholds'
 import {widgetQueryFingerprint} from './widgetQueryFingerprint'
+import {fetchWidgetRows, TIME_KEYS} from './widgetRows'
 
 const COLORS = [
   'hsl(var(--chart-1))',
@@ -57,26 +57,6 @@ const COLORS = [
   '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00C49F',
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
 ]
-
-const TIME_KEYS = new Set(['time_bucket', 'timestamp', 'time', 'Time', 'day', 'Day'])
-const GENERATED_REF_IDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
-
-function queryForBatchResult(
-  queries: QueryDsl[],
-  refId: string,
-  metadata?: BatchQueryResultMetadata,
-): QueryDsl | undefined {
-  if (metadata?.original_ref_id != null) {
-    const byOriginalRefId = queries.find(q => q.ref_id === metadata.original_ref_id)
-    if (byOriginalRefId != null) return byOriginalRefId
-  }
-
-  const byResponseRefId = queries.find(q => q.ref_id === refId)
-  if (byResponseRefId != null) return byResponseRefId
-
-  const generatedIndex = metadata?.query_index ?? GENERATED_REF_IDS.indexOf(refId)
-  return generatedIndex >= 0 ? queries[generatedIndex] : undefined
-}
 
 /**
  * Parse a ClickHouse datetime string as UTC epoch ms.
@@ -168,51 +148,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 
   const {data, isLoading, error} = useQuery({
     queryKey: ['widget-data', widget.id, dashboardId, projectId, timeRange, queryFingerprint, variables],
-    queryFn: async () => {
-      if (!projectId) return []
-      const effectiveProjectId = projectId
-      if (isBatch) {
-        const result = await api.executeBatchQuery(dashboardId, queries, effectiveProjectId, timeRange, variables)
-        // Merge batch results: use legendFormat alias as series name, group by timestamp
-        const mergedByTime = new Map<unknown, Record<string, unknown>>()
-        for (const [refId, rows] of Object.entries(result.results)) {
-          const resultMetadata = result.metadata?.[refId]
-          if (queries.length === 1) {
-            for (const row of rows) {
-              const timeVal = Object.entries(row).find(([k]) => TIME_KEYS.has(k))
-              const key = timeVal ? timeVal[1] : rows.indexOf(row)
-              if (!mergedByTime.has(key)) mergedByTime.set(key, {})
-              Object.assign(mergedByTime.get(key)!, row)
-            }
-          } else {
-            const query = queryForBatchResult(queries, refId, resultMetadata)
-            const alias = query?.metrics?.[0]?.alias
-            const labelRefId = resultMetadata?.original_ref_id ?? refId
-            for (const row of rows) {
-              let timeKey: string | undefined
-              let timeVal: unknown
-              const values: Record<string, unknown> = {}
-              for (const [k, v] of Object.entries(row)) {
-                if (TIME_KEYS.has(k)) {
-                  timeKey = k
-                  timeVal = v
-                } else if (typeof v === 'number') {
-                  values[alias || `${labelRefId}: ${k}`] = v
-                }
-              }
-              if (timeKey != null) {
-                if (!mergedByTime.has(timeVal)) mergedByTime.set(timeVal, {[timeKey]: timeVal})
-                Object.assign(mergedByTime.get(timeVal)!, values)
-              }
-            }
-          }
-        }
-        return Array.from(mergedByTime.values())
-      }
-      return queries[0]
-        ? api.executeWidgetQuery(dashboardId, queries[0], effectiveProjectId, timeRange, variables)
-        : []
-    },
+    queryFn: () => fetchWidgetRows({dashboardId, projectId, queries, isBatch, timeRange, variables}),
     enabled: !!projectId && isQueryDrivenWidget(widgetType) && queries.length > 0,
     refetchInterval: autoRefresh ? 30000 : false,
   })

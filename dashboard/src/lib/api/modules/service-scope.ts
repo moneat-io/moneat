@@ -1,8 +1,6 @@
-export type ServiceScopeId = string
-
 export interface ServiceScopeParams {
   services?: readonly string[]
-  serviceIds?: readonly ServiceScopeId[]
+  serviceIds?: readonly string[]
 }
 
 export function appendServiceScopeParams(qs: URLSearchParams, params?: ServiceScopeParams) {

@@ -61,7 +61,7 @@ export const Route = createFileRoute('/dashboards/')({
   component: DashboardListPage,
 })
 
-type FolderFilter = 'all' | 'favorites' | 'uncategorized' | string
+type FolderFilter = string
 
 type DashboardPageTitleProps = Readonly<{
   isFirstRun: boolean
@@ -749,9 +749,11 @@ function getAccentColor(id: string) {
 
 function hashIdentifier(value: string) {
   let hash = 0
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash) + value.charCodeAt(index)
-    hash |= 0
+  let index = 0
+  while (index < value.length) {
+    const codePoint = value.codePointAt(index) ?? 0
+    hash = Math.trunc((hash * 31 + codePoint) % Number.MAX_SAFE_INTEGER)
+    index += codePoint > 0xffff ? 2 : 1
   }
   return hash
 }

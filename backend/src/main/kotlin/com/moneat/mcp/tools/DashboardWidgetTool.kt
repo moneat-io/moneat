@@ -531,8 +531,8 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         requestedProjectId: String?,
         dashboardProjectId: String,
     ) {
-        if (requestedProjectId != null && dashboardProjectId != requestedProjectId) {
-            throw IllegalArgumentException("Dashboard is scoped to project $dashboardProjectId")
+        require(!(requestedProjectId != null && dashboardProjectId != requestedProjectId)) {
+            "Dashboard is scoped to project $dashboardProjectId"
         }
     }
 
@@ -557,8 +557,8 @@ class PreviewDashboardWidgetQueryTool : McpTool {
 
         val sourceResourceId = dashboardWidgetQueryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
             ?: throw IllegalArgumentException("Invalid custom data source ID")
-        if (!dashboardWidgetDataSourceService.isValidResourceId(sourceResourceId)) {
-            throw IllegalArgumentException("Invalid custom data source ID")
+        require(dashboardWidgetDataSourceService.isValidResourceId(sourceResourceId)) {
+            "Invalid custom data source ID"
         }
         val sourceId = dashboardWidgetDataSourceService.resolveDataSourceId(sourceResourceId, orgId)
             ?: throw IllegalArgumentException("Data source not found")

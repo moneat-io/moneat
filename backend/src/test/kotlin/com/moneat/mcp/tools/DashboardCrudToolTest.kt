@@ -302,6 +302,90 @@ class DashboardCrudToolTest {
     }
 
     @Test
+    fun `dashboard CRUD tools require dashboard resource IDs`() = runBlocking {
+        val cases = listOf(
+            ToolCase(
+                UpdateDashboardTool(),
+                JsonObject(mapOf("title" to JsonPrimitive("Renamed"))),
+                "dashboard_id is required",
+            ),
+            ToolCase(
+                DeleteDashboardTool(),
+                JsonObject(emptyMap()),
+                "dashboard_id is required",
+            ),
+            ToolCase(
+                CreateDashboardAlertTool(),
+                JsonObject(
+                    mapOf(
+                        "widget_id" to JsonPrimitive(WIDGET_RESOURCE_ID),
+                        "name" to JsonPrimitive("CPU high"),
+                        "condition" to JsonPrimitive("gt"),
+                        "threshold" to JsonPrimitive(0.85),
+                    )
+                ),
+                "dashboard_id is required",
+            ),
+            ToolCase(
+                DeleteDashboardAlertTool(),
+                JsonObject(mapOf("alert_id" to JsonPrimitive(MISSING_ALERT_RESOURCE_ID))),
+                "dashboard_id is required",
+            ),
+        )
+
+        cases.forEach { case ->
+            assertToolError(case.tool, case.args, case.expectedMessage)
+        }
+    }
+
+    @Test
+    fun `dashboard CRUD tools report missing dashboard resource IDs`() = runBlocking {
+        val alertArgs = mapOf(
+            "dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID),
+            "widget_id" to JsonPrimitive(WIDGET_RESOURCE_ID),
+            "name" to JsonPrimitive("CPU high"),
+            "condition" to JsonPrimitive("gt"),
+            "threshold" to JsonPrimitive(0.85),
+        )
+        val cases = listOf(
+            ToolCase(
+                UpdateDashboardTool(),
+                JsonObject(
+                    mapOf(
+                        "dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID),
+                        "title" to JsonPrimitive("Renamed"),
+                    )
+                ),
+                "Dashboard not found",
+            ),
+            ToolCase(
+                DeleteDashboardTool(),
+                JsonObject(mapOf("dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID))),
+                "Dashboard not found",
+            ),
+            ToolCase(
+                CreateDashboardAlertTool(),
+                JsonObject(alertArgs),
+                "Dashboard not found",
+            ),
+            ToolCase(
+                DeleteDashboardAlertTool(),
+                JsonObject(
+                    mapOf(
+                        "dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID),
+                        "alert_id" to JsonPrimitive(MISSING_ALERT_RESOURCE_ID),
+                    )
+                ),
+                "Dashboard not found",
+            ),
+        )
+
+        cases.forEach { case ->
+            assertToolError(case.tool, case.args, case.expectedMessage)
+        }
+    }
+
+    @Test
     fun `create dashboard alert rejects unknown condition aliases`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
@@ -440,6 +524,22 @@ class DashboardCrudToolTest {
             assertTrue(result.isError)
             assertEquals(expectedMessage, result.content.first().text)
         }
+    }
+
+    @Test
+    fun `delete dashboard alert reports missing alert resource IDs`() = runBlocking {
+        val dashboardId = seedDashboard()
+
+        assertToolError(
+            DeleteDashboardAlertTool(),
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "alert_id" to JsonPrimitive(MISSING_ALERT_RESOURCE_ID),
+                )
+            ),
+            "Alert not found",
+        )
     }
 
     @Test
@@ -1054,6 +1154,7 @@ class DashboardCrudToolTest {
         private const val DATA_SOURCE_ID = 30L
         private const val DATA_SOURCE_RESOURCE_ID = "718f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val MISSING_DATA_SOURCE_RESOURCE_ID = "818f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+        private const val MISSING_ALERT_RESOURCE_ID = "918f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private const val DASHBOARD_JSONB_TYPE = "com.moneat.dashboards.models.JsonbColumnType"
     }
 }

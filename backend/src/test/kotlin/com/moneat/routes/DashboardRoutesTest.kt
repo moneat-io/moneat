@@ -217,7 +217,7 @@ class DashboardRoutesTest {
             .toString()
     }
 
-    private fun seedDashboardScope(orgId: Long): Long = transaction {
+    private fun seedDashboardScope(orgId: Long, projectId: Long? = null): Long = transaction {
         exec(
             """
             CREATE TABLE IF NOT EXISTS dashboards (
@@ -241,6 +241,9 @@ class DashboardRoutesTest {
             it[Dashboards.orgId] = orgId
             it[title] = TEST_DASHBOARD
             it[description] = null
+            if (projectId != null) {
+                it[Dashboards.projectId] = projectId
+            }
             it[createdBy] = 1L
             it[createdAt] = Clock.System.now()
             it[updatedAt] = Clock.System.now()
@@ -730,6 +733,99 @@ class DashboardRoutesTest {
                     setBody("""{"queries":[]}""")
                 }
             assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `POST query returns 400 when project id is missing`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            application { installRoutes(this) }
+
+            val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/query") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"query_config":{"dataSource":"events"}}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `POST query denies project resource ids outside the current org`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val otherOrgId = seedOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val otherProjectId = seedProject(otherOrgId)
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(otherProjectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"query_config":{"dataSource":"events"}}""")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, r.status)
+        }
+
+    @Test
+    fun `POST query rejects project resource ids outside dashboard scope`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardProjectId = seedProject(orgId)
+            val requestedProjectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong(), projectId = dashboardProjectId)
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(requestedProjectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"query_config":{"dataSource":"events"}}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `POST query executes built in query with resource scoped project id`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource("events") } returns false
+            coEvery {
+                mockQueryEngine.executeQuery(any(), projectId, null, any(), orgId.toLong())
+            } returns listOf(mapOf("count" to JsonPrimitive(2)))
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(projectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "query_config": {"dataSource": "events"},
+                      "time_range": {"from": "now-1h", "to": "now"},
+                      "variables": {"service": "api"}
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains(""""count":2"""))
         }
 
     @Test

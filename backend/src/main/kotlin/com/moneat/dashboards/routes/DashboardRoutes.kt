@@ -89,9 +89,15 @@ private const val AUTH_JWT = "auth-jwt"
 private const val ERR_NO_ORGANIZATION = "No organization found"
 private const val ERR_INVALID_DASHBOARD_ID = "Invalid dashboard ID"
 private const val ERR_DASHBOARD_NOT_FOUND = "Dashboard not found"
+private const val ERR_INVALID_FOLDER_ID = "Invalid folder ID"
+private const val ERR_FOLDER_NOT_FOUND = "Folder not found"
+private const val ERR_INVALID_ALERT_ID = "Invalid alert ID"
+private const val ERR_ALERT_NOT_FOUND = "Alert not found"
 private const val ERR_DATA_SOURCE_NOT_FOUND = "Data source not found"
 private const val ERR_UNKNOWN_SOURCE_TYPE = "Unknown source type"
 private const val ERR_INVALID_DATA_SOURCE_ID = "Invalid data source ID"
+private const val ERR_INVALID_QUERY = "Invalid query"
+private const val ERR_FAILED_DECRYPT_CREDENTIALS = "Failed to decrypt credentials"
 
 private fun currentOrgIdFromPrincipal(userId: Int, principal: JWTPrincipal): Long? =
     principal.currentOrgContextOrNull()
@@ -167,12 +173,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveFolderRouteId(
 ): Long? {
     val resourceId = call.parameters["folderId"]
     if (!dashboardService.isValidResourceId(resourceId)) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_FOLDER_ID))
         return null
     }
     val folderId = dashboardService.resolveFolderId(resourceId.orEmpty(), orgId)
     if (folderId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     }
     return folderId
 }
@@ -200,12 +206,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveAlertRouteId(
 ): Long? {
     val resourceId = call.parameters["alertId"]
     if (!dashboardAlertService.isValidResourceId(resourceId)) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_ALERT_ID))
         return null
     }
     val alertId = dashboardAlertService.resolveAlertId(resourceId.orEmpty(), dashboardId, orgId)
     if (alertId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
     }
     return alertId
 }
@@ -272,7 +278,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateFolder(
     val folderId = resolveFolderRouteId(dashboardService, orgId) ?: return
     val request = call.receive<UpdateFolderRequest>()
     val folder = dashboardService.updateFolder(folderId, orgId, request)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     call.respond(folder)
 }
 
@@ -287,7 +293,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteFolder(
     if (dashboardService.deleteFolder(folderId, orgId)) {
         call.respond(HttpStatusCode.NoContent, "")
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     }
 }
 
@@ -327,10 +333,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleMoveDashboardToF
     val request = call.receive<MoveToFolderRequest>()
     val folderId = request.folderId?.let {
         if (!dashboardService.isValidResourceId(it)) {
-            return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
+            return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_FOLDER_ID))
         }
         dashboardService.resolveFolderId(it, orgId)
-            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     }
     if (dashboardService.moveDashboardToFolder(id, orgId, folderId)) {
         call.respond(HttpStatusCode.OK, mapOf("folder_id" to request.folderId))
@@ -419,9 +425,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     try {
         call.respond(executeDashboardQuery(effectiveQuery, queryContext, dependencies))
     } catch (e: DashboardQueryRouteException) {
-        call.respond(e.status, ErrorResponse(e.message ?: "Invalid query"))
+        call.respond(e.status, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     } catch (e: IllegalArgumentException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
 }
 
@@ -518,7 +524,7 @@ private suspend fun executeCustomDashboardQuery(
     val source = dependencies.dataSourceService.getDataSource(sourceId, orgId)
         ?: throw DashboardQueryRouteException(HttpStatusCode.NotFound, ERR_DATA_SOURCE_NOT_FOUND)
     val creds = dependencies.dataSourceService.getDecryptedCredentials(sourceId, orgId)
-        ?: throw DashboardQueryRouteException(HttpStatusCode.InternalServerError, "Failed to decrypt credentials")
+        ?: throw DashboardQueryRouteException(HttpStatusCode.InternalServerError, ERR_FAILED_DECRYPT_CREDENTIALS)
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
         ?: throw DashboardQueryRouteException(HttpStatusCode.BadRequest, ERR_UNKNOWN_SOURCE_TYPE)
     val rawQuery = effectiveQuery.rawQuery
@@ -804,7 +810,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
     val request = receiveUpdateAlertRequest()
     try {
         val updated = dashboardAlertService.updateAlert(alertId, id, orgId, request)
-            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
         call.respond(updated)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
@@ -835,7 +841,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAlert(
     if (dashboardAlertService.deleteAlert(alertId, id, orgId)) {
         call.respond(HttpStatusCode.NoContent, "")
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
     }
 }
 
@@ -1013,7 +1019,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDataSourceSch
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     val creds = dataSourceService.getDecryptedCredentials(id, orgId)
         ?: return call.respond(
-            HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
+            HttpStatusCode.InternalServerError, ErrorResponse(ERR_FAILED_DECRYPT_CREDENTIALS)
         )
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
@@ -1041,7 +1047,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     val creds = dataSourceService.getDecryptedCredentials(id, orgId)
         ?: return call.respond(
-            HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
+            HttpStatusCode.InternalServerError, ErrorResponse(ERR_FAILED_DECRYPT_CREDENTIALS)
         )
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
@@ -1052,7 +1058,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
         )
         call.respond(results)
     } catch (e: IllegalArgumentException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
 }
 
