@@ -26,5 +26,5 @@ interface LogRepository {
     suspend fun executeClickHouseQuery(
         sql: String,
         queryParameters: Map<String, String>
-    ): String = executeClickHouseQuery(sql)
+    ): String
 }

@@ -874,6 +874,10 @@ class LogServicesExtendedTest {
     private class FakeLogRepository : LogRepository {
         override suspend fun executeClickHouseInsert(sql: String): Boolean = true
         override suspend fun executeClickHouseQuery(sql: String): String = ""
+        override suspend fun executeClickHouseQuery(
+            sql: String,
+            queryParameters: Map<String, String>
+        ): String = executeClickHouseQuery(sql)
     }
 
     /**
@@ -889,6 +893,14 @@ class LogServicesExtendedTest {
 
         override suspend fun executeClickHouseQuery(sql: String): String {
             val response = ClickHouseClient.execute(sql)
+            return response.bodyAsText()
+        }
+
+        override suspend fun executeClickHouseQuery(
+            sql: String,
+            queryParameters: Map<String, String>
+        ): String {
+            val response = ClickHouseClient.execute(sql, queryParameters = queryParameters)
             return response.bodyAsText()
         }
     }
