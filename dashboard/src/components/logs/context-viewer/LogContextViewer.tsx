@@ -63,6 +63,10 @@ export interface LogContextViewerProps {
   onAddFacetFilter?: (key: string, value: string, exclude?: boolean) => void
   /** Current explorer time window, used to scope pattern rollups. */
   timeRange?: {from?: string; to?: string}
+  /** Open the create-metric flow seeded from this log's pattern. */
+  onCreateMetric?: () => void
+  /** Open the create-monitor flow seeded from this log's pattern. */
+  onCreateMonitor?: () => void
   expanded?: boolean
   onToggleExpand?: () => void
   className?: string
@@ -183,6 +187,8 @@ export function LogContextViewer({
   onClose,
   onAddFacetFilter,
   timeRange,
+  onCreateMetric,
+  onCreateMonitor,
   expanded,
   onToggleExpand,
   className,
@@ -476,6 +482,8 @@ export function LogContextViewer({
             onViewMatching={
               onAddFacetFilter ? (pattern) => onAddFacetFilter('message_pattern', pattern) : undefined
             }
+            onCreateMetric={onCreateMetric}
+            onCreateMonitor={onCreateMonitor}
           />
         )}
       </div>

@@ -29,6 +29,8 @@ interface PatternsPanelProps {
   from?: string
   to?: string
   onViewMatching?: (pattern: string) => void
+  onCreateMetric?: () => void
+  onCreateMonitor?: () => void
 }
 
 function formatCount(n: number): string {
@@ -84,7 +86,7 @@ function Breakdown({title, rows}: {title: string; rows: LogPatternBreakdown[]}) 
   )
 }
 
-export function PatternsPanel({log, from, to, onViewMatching}: PatternsPanelProps) {
+export function PatternsPanel({log, from, to, onViewMatching, onCreateMetric, onCreateMonitor}: PatternsPanelProps) {
   const message = stripAnsi(log.message || log.body || '')
 
   const {data, isLoading, isError} = useQuery({
@@ -184,18 +186,22 @@ export function PatternsPanel({log, from, to, onViewMatching}: PatternsPanelProp
         >
           <List className="h-3.5 w-3.5" /> {data ? `View ${formatCount(data.count)} matching logs` : 'View matching logs'}
         </button>
-        <a
-          href="/log-management"
-          className="inline-flex h-[30px] items-center gap-2 rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-accent"
+        <button
+          type="button"
+          onClick={onCreateMetric}
+          disabled={!onCreateMetric}
+          className="inline-flex h-[30px] items-center gap-2 rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50"
         >
           <Activity className="h-3.5 w-3.5" /> Create log metric
-        </a>
-        <a
-          href="/log-management"
-          className="inline-flex h-[30px] items-center gap-2 rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-accent"
+        </button>
+        <button
+          type="button"
+          onClick={onCreateMonitor}
+          disabled={!onCreateMonitor}
+          className="inline-flex h-[30px] items-center gap-2 rounded-md border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-accent disabled:opacity-50"
         >
           <Bell className="h-3.5 w-3.5" /> Create monitor
-        </a>
+        </button>
       </div>
 
       <Hint icon={<Zap className="h-3 w-3" />}>

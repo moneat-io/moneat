@@ -216,4 +216,18 @@ describe('LogContextViewer', () => {
     })
     expect(mockApi.getLogPattern).toHaveBeenCalledTimes(2)
   })
+
+  it('launches create-metric and create-monitor from the Patterns tab', async () => {
+    const onCreateMetric = vi.fn()
+    const onCreateMonitor = vi.fn()
+    renderViewer({onCreateMetric, onCreateMonitor})
+
+    fireEvent.click(screen.getByText('Patterns'))
+
+    fireEvent.click(await screen.findByRole('button', {name: /Create log metric/}))
+    expect(onCreateMetric).toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', {name: /Create monitor/}))
+    expect(onCreateMonitor).toHaveBeenCalled()
+  })
 })

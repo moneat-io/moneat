@@ -62,6 +62,7 @@ import {
 import {type FacetFilter, type FacetRailSection, type FacetSchema} from '@/lib/filters/types'
 import {TIME_PRESETS} from '@/lib/filters/time'
 import {logLevelBadgeClass} from '@/lib/severity'
+import {normalizeLevel} from '@/components/logs/context-viewer/logLevelStyles'
 import {cn} from '@/lib/utils'
 import {
   Activity,
@@ -960,6 +961,9 @@ export function LogExplorer({
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [viewerExpanded, setViewerExpanded] = useState(false)
+  // Seed for the create-metric/monitor dialogs. null = use the explorer-wide
+  // query + levels (toolbar); set = scoped to a specific log's pattern (viewer).
+  const [createSeed, setCreateSeed] = useState<{query: string; levels: string[]} | null>(null)
 
   // Log management sheet (controlled so contextual actions can open a specific tab)
   const [managementOpen, setManagementOpen] = useState(false)
@@ -1471,6 +1475,23 @@ export function LogExplorer({
     ])
   }, [])
 
+  // Seed a create dialog from the selected log: keep the active explorer query
+  // and narrow to the log's own level so the monitor/metric opens scoped.
+  const buildLogCreateSeed = useCallback((): {query: string; levels: string[]} => {
+    const level = selectedLog ? normalizeLevel(selectedLog.level) : ''
+    return {query: contextQuery, levels: LOG_LEVELS.has(level) ? [level] : []}
+  }, [selectedLog, contextQuery])
+
+  const handleCreateMetricFromLog = useCallback(() => {
+    setCreateSeed(buildLogCreateSeed())
+    setCreateMetricOpen(true)
+  }, [buildLogCreateSeed])
+
+  const handleCreateMonitorFromLog = useCallback(() => {
+    setCreateSeed(buildLogCreateSeed())
+    setCreateMonitorOpen(true)
+  }, [buildLogCreateSeed])
+
   const handlePreviousPage = () => {
     if (cursorHistory.length === 0) return
     const previous = cursorHistory[cursorHistory.length - 1] ?? null
@@ -1609,15 +1630,21 @@ export function LogExplorer({
             isInitialLoadingState={isInitialLoadingState}
             logsCount={logs.length}
             systemId={systemId}
-            onCreateMetric={() => setCreateMetricOpen(true)}
-            onCreateMonitor={() => setCreateMonitorOpen(true)}
+            onCreateMetric={() => {
+              setCreateSeed(null)
+              setCreateMetricOpen(true)
+            }}
+            onCreateMonitor={() => {
+              setCreateSeed(null)
+              setCreateMonitorOpen(true)
+            }}
             onExportCsv={handleExportCsv}
             cursorHistoryLength={cursorHistory.length}
             onPreviousPage={handlePreviousPage}
           />
         )}
       >
-        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
           <LogExplorerVisualizations
             vizMode={vizMode}
             aggregateData={aggregateData}
@@ -1627,7 +1654,7 @@ export function LogExplorer({
             onHistogramBucketClick={handleHistogramBucketClick}
             onTopValueClick={handleTopValueClick}
           />
-          <div className="relative flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             <LogExplorerContent
               showEmptyState={showEmptyState}
               isInitialLoadingState={isInitialLoadingState}
@@ -1642,32 +1669,37 @@ export function LogExplorer({
               logContainerRef={logContainerRef}
               sdkVersions={sdkVersions}
             />
-            {detailOpen && selectedLog && (
-              <>
-                <div
-                  className="absolute inset-0 z-30 bg-black/40 lg:hidden"
-                  onClick={() => setDetailOpen(false)}
-                  aria-hidden="true"
-                />
-                <LogContextViewer
-                  className={cn(
-                    'absolute inset-y-0 right-0 z-40 w-full max-w-[860px] sm:w-[88%] lg:relative lg:inset-auto lg:z-auto',
-                    viewerExpanded ? 'lg:w-full lg:max-w-none' : 'lg:w-[60%] lg:min-w-[460px]'
-                  )}
-                  log={selectedLog}
-                  logs={accumulatedLogs}
-                  index={Math.max(0, accumulatedLogs.findIndex((log) => log.logId === selectedLog.logId))}
-                  total={aggregateData?.totalCount ?? totalCount ?? accumulatedLogs.length}
-                  onNavigate={handleViewerNavigate}
-                  onClose={() => setDetailOpen(false)}
-                  onAddFacetFilter={handleAddFacetFilter}
-                  timeRange={timeRange}
-                  expanded={viewerExpanded}
-                  onToggleExpand={() => setViewerExpanded((value) => !value)}
-                />
-              </>
-            )}
           </div>
+          {/* Full-height slide-out over the whole content area (histogram + list). */}
+          {detailOpen && selectedLog && (
+            <>
+              <div
+                className="absolute inset-0 z-30 bg-black/40 animate-in fade-in-0 duration-200"
+                onClick={() => setDetailOpen(false)}
+                aria-hidden="true"
+              />
+              <LogContextViewer
+                className={cn(
+                  'absolute inset-y-0 right-0 z-40 shadow-2xl animate-in slide-in-from-right duration-300 ease-out',
+                  viewerExpanded
+                    ? 'w-full max-w-none'
+                    : 'w-full sm:w-[90%] lg:w-[58%] lg:min-w-[480px] lg:max-w-[980px]'
+                )}
+                log={selectedLog}
+                logs={accumulatedLogs}
+                index={Math.max(0, accumulatedLogs.findIndex((log) => log.logId === selectedLog.logId))}
+                total={aggregateData?.totalCount ?? totalCount ?? accumulatedLogs.length}
+                onNavigate={handleViewerNavigate}
+                onClose={() => setDetailOpen(false)}
+                onAddFacetFilter={handleAddFacetFilter}
+                timeRange={timeRange}
+                onCreateMetric={handleCreateMetricFromLog}
+                onCreateMonitor={handleCreateMonitorFromLog}
+                expanded={viewerExpanded}
+                onToggleExpand={() => setViewerExpanded((value) => !value)}
+              />
+            </>
+          )}
         </div>
       </ExplorerShell>
 
@@ -1685,23 +1717,24 @@ export function LogExplorer({
         />
       )}
 
-      {/* Focused create dialogs, seeded from the active query + level filter. */}
+      {/* Focused create dialogs. Seeded explorer-wide from the toolbar, or
+          scoped to a single log's pattern when launched from the viewer. */}
       {!systemId && (
         <>
           <CreateLogMetricDialog
             open={createMetricOpen}
             onOpenChange={setCreateMetricOpen}
-            query={query}
-            levels={hasCustomLevelFilter ? levels : []}
-            facetFilters={facetFilters}
-            groupByField={groupBy}
+            query={createSeed ? createSeed.query : query}
+            levels={createSeed ? createSeed.levels : hasCustomLevelFilter ? levels : []}
+            facetFilters={createSeed ? [] : facetFilters}
+            groupByField={createSeed ? '' : groupBy}
             timeRange={timeRange}
           />
           <CreateLogMonitorDialog
             open={createMonitorOpen}
             onOpenChange={setCreateMonitorOpen}
-            query={contextQuery}
-            levels={hasCustomLevelFilter ? levels : []}
+            query={createSeed ? createSeed.query : contextQuery}
+            levels={createSeed ? createSeed.levels : hasCustomLevelFilter ? levels : []}
           />
         </>
       )}
