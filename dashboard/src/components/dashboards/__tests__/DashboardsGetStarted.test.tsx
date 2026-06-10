@@ -142,6 +142,15 @@ describe('DashboardsGetStarted', () => {
     )
   })
 
+  it('uses a native labelled group for category filters', () => {
+    setup()
+
+    const filters = screen.getByRole('group', {name: /filter templates by category/i})
+
+    expect(filters.tagName.toLowerCase()).toBe('fieldset')
+    expect(within(filters).getByText('Filter templates by category')).toHaveClass('sr-only')
+  })
+
   it('shows a loading gallery while template metadata is pending', () => {
     const {container} = setup([], true)
 
