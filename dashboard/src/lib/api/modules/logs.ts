@@ -24,12 +24,14 @@ import type {
   LogAggregateResponse,
   LogTopResponse,
   CreateOtlpApiKeyResponse,
+  LogPatternResponse,
   OtlpObservedService,
   OtlpServiceMapping,
   RawLogResponse,
   RawLogFilterResponse,
   RawLogAggregateResponse,
   RawLogTopResponse,
+  RawLogPatternResponse,
 } from '../types'
 
 function mapLogRow(row: Record<string, unknown>): LogEntry {
@@ -108,6 +110,9 @@ function buildLogFilterParams(options: {
   levels?: string[]
   service?: string
   environment?: string
+  host?: string
+  traceId?: string
+  messagePattern?: string
   from?: string
   to?: string
   tags?: Record<string, string>
@@ -123,6 +128,9 @@ function buildLogFilterParams(options: {
   }
   if (options.service) params.set('service', options.service)
   if (options.environment) params.set('environment', options.environment)
+  if (options.host) params.set('host', options.host)
+  if (options.traceId) params.set('traceId', options.traceId)
+  if (options.messagePattern) params.set('pattern', options.messagePattern)
   if (options.from) params.set('from', options.from)
   if (options.to) params.set('to', options.to)
   if (options.tags) {
@@ -153,11 +161,13 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         containerName?: string
         from?: string
         to?: string
         tags?: Record<string, string>
-        traceId?: string
         excludeService?: string
         excludeEnvironment?: string
         excludeContainerName?: string
@@ -168,7 +178,6 @@ export function logsMethods(core: ApiClientCore) {
       if (options.cursor) params.set('cursor', options.cursor)
       params.set('limit', String(options.limit ?? 100))
       if (options.containerName) params.set('containerName', options.containerName)
-      if (options.traceId) params.set('traceId', options.traceId)
       const response = await core.request<RawLogResponse>(`${base}/logs?${params.toString()}`)
       return mapRawLogResponse(response)
     },
@@ -322,6 +331,44 @@ export function logsMethods(core: ApiClientCore) {
       })
     },
 
+    getLogPattern: async (
+      options: {
+        logId?: string
+        message?: string
+        service?: string
+        from?: string
+        to?: string
+      }
+    ): Promise<LogPatternResponse> => {
+      const params = new URLSearchParams()
+      if (options.logId) params.set('logId', options.logId)
+      if (options.message) params.set('message', options.message)
+      if (options.service) params.set('service', options.service)
+      if (options.from) params.set('from', options.from)
+      if (options.to) params.set('to', options.to)
+      const response = await core.request<RawLogPatternResponse>(
+        `${base}/logs/pattern?${params.toString()}`
+      )
+      return {
+        pattern: response.pattern ?? '',
+        level: response.level ?? 'info',
+        count: response.count ?? 0,
+        windowLabel: response.windowLabel ?? response.window_label ?? '24h',
+        firstSeen: response.firstSeen ?? response.first_seen ?? '',
+        lastSeen: response.lastSeen ?? response.last_seen ?? '',
+        trendPct: response.trendPct ?? response.trend_pct ?? null,
+        sparkline: response.sparkline ?? [],
+        topServices: (response.topServices ?? response.top_services ?? []).map((item) => ({
+          value: item.value,
+          count: item.count ?? 0,
+        })),
+        topHosts: (response.topHosts ?? response.top_hosts ?? []).map((item) => ({
+          value: item.value,
+          count: item.count ?? 0,
+        })),
+      }
+    },
+
     getLogAggregate: async (
       options: {
         from?: string
@@ -331,6 +378,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         tags?: Record<string, string>
         excludeService?: string
         excludeEnvironment?: string
@@ -366,6 +416,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         tags?: Record<string, string>
         excludeService?: string
         excludeEnvironment?: string
@@ -397,6 +450,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         tags?: Record<string, string>
         excludeService?: string
         excludeEnvironment?: string

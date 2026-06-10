@@ -47,13 +47,6 @@ import {Textarea} from '@/components/ui/textarea'
 import {Badge} from '@/components/ui/badge'
 import {Switch} from '@/components/ui/switch'
 import {Checkbox} from '@/components/ui/checkbox'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {SectionCard} from '@/components/ui/section-card'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot} from '@/components/ui/status-dot'
@@ -68,11 +61,19 @@ import {
 import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
 import {
+  DEFAULT_MONITOR_THRESHOLD,
+  DEFAULT_MONITOR_WINDOW_MINUTES,
   GROUP_BY_NONE,
-  LOG_MONITOR_CONDITIONS,
+  MIN_MONITOR_THRESHOLD,
+  MIN_MONITOR_WINDOW_MINUTES,
   toGroupByValue,
 } from '@/components/logs/logManagementShared'
-import {GroupBySelect, LevelChips} from '@/components/logs/LogManagementControls'
+import {
+  ConditionSelect,
+  GroupBySelect,
+  LevelChips,
+  LevelSelect,
+} from '@/components/logs/LogManagementControls'
 import {
   Activity,
   ArrowRight,
@@ -145,14 +146,10 @@ const MIN_DAILY_QUOTA_GB = 0
 const DEFAULT_PIPELINE_PATTERN = String.raw`(?i)(password|token|secret)=([^\s]+)`
 const DEFAULT_PIPELINE_REPLACEMENT = '$1=[redacted]'
 const DEFAULT_METRIC_INTERVAL = '5m'
-const DEFAULT_MONITOR_THRESHOLD = 10
-const MIN_MONITOR_THRESHOLD = 0
 const BYTES_PER_GB = 1024 * 1024 * 1024
 const PREVIEW_LOG_LIMIT = 3
 const PREVIEW_BUCKET_LIMIT = 6
 const SAMPLE_LINE_PLACEHOLDER = 'request failed credential=[sample] value=[sample]'
-const DEFAULT_MONITOR_WINDOW_MINUTES = 5
-const MIN_MONITOR_WINDOW_MINUTES = 1
 
 function entryText(entry: LogPipelinePreviewEntry | null | undefined): string {
   if (!entry) return ''
@@ -992,12 +989,13 @@ function MetricsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
   const [name, setName] = useState('')
   const [query, setQuery] = useState(currentQuery)
   const [groupBy, setGroupBy] = useState('service')
+  const [levels, setLevels] = useState(currentLevels)
   const [preview, setPreview] = useState<LogAggregateResponse | null>(null)
   const {data} = useQuery({queryKey: ['log-metric-rules'], queryFn: () => api.getLogMetricRules()})
   const metricRequest = {
     name,
     query,
-    levels: currentLevels,
+    levels,
     group_by: toGroupByValue(groupBy),
     interval: DEFAULT_METRIC_INTERVAL,
   }
@@ -1050,9 +1048,14 @@ function MetricsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
             <p className="text-[11px] text-muted-foreground">Creates one metric series per selected value.</p>
           </Field>
         </div>
+        <div className="mt-3">
+          <Field label="Levels">
+            <LevelSelect levels={levels} onChange={setLevels} />
+          </Field>
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
           <span>Count of matching logs</span>
-          <LevelChips levels={currentLevels} />
+          <LevelChips levels={levels} />
           <span>/ every {DEFAULT_METRIC_INTERVAL}</span>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1155,12 +1158,13 @@ function MonitorsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
   const [threshold, setThreshold] = useState(DEFAULT_MONITOR_THRESHOLD)
   const [windowMinutes, setWindowMinutes] = useState(DEFAULT_MONITOR_WINDOW_MINUTES)
   const [groupBy, setGroupBy] = useState(GROUP_BY_NONE)
+  const [levels, setLevels] = useState(currentLevels)
   const {data} = useQuery({queryKey: ['log-monitors'], queryFn: () => api.getLogMonitors()})
   const createMonitor = useMutation({
     mutationFn: () => api.createLogMonitor({
       name,
       query,
-      levels: currentLevels,
+      levels,
       group_by: toGroupByValue(groupBy),
       condition,
       threshold,
@@ -1229,6 +1233,11 @@ function MonitorsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
             />
           </Field>
         </div>
+        <div className="mt-3">
+          <Field label="Levels">
+            <LevelSelect levels={levels} onChange={setLevels} />
+          </Field>
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span>Alerts when matching logs</span>
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">{condition} {threshold}</code>
@@ -1236,7 +1245,7 @@ function MonitorsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
             {query.trim() || 'All logs'}
           </code>
-          <LevelChips levels={currentLevels} />
+          <LevelChips levels={levels} />
         </div>
         <Button
           className="mt-3"
@@ -1273,29 +1282,6 @@ function MonitorsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
         )}
       </SectionCard>
     </div>
-  )
-}
-
-function ConditionSelect({
-  value,
-  onChange,
-}: {
-  readonly value: LogMonitorCondition
-  readonly onChange: (next: LogMonitorCondition) => void
-}) {
-  return (
-    <Select value={value} onValueChange={(next) => onChange(next as LogMonitorCondition)}>
-      <SelectTrigger className="h-9">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {LOG_MONITOR_CONDITIONS.map((option) => (
-          <SelectItem key={option} value={option}>
-            {option}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   )
 }
 

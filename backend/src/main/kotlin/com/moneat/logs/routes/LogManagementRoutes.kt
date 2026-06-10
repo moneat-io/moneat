@@ -24,6 +24,7 @@ import com.moneat.logs.LogPermissions
 import com.moneat.logs.models.CreateLogMetricRuleRequest
 import com.moneat.logs.models.CreateLogMonitorRequest
 import com.moneat.logs.models.LogAggregateResponse
+import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogMonitorDraftRequest
 import com.moneat.logs.models.LogMonitorDraftResponse
 import com.moneat.logs.models.LogPipelinePreviewRequest
@@ -460,18 +461,13 @@ private suspend fun LogService.aggregateForMetricPreview(
     val (from, to) = metricRollupWindow(request.interval)
     return aggregateLogs(
         organizationId = organizationId,
-        from = from,
-        to = to,
+        filters = LogAnalyticsFilters(
+            from = from,
+            to = to,
+            query = request.query,
+            levels = request.levels
+        ),
         interval = request.interval,
-        query = request.query,
-        levels = request.levels,
-        service = null,
-        environment = null,
-        tags = emptyMap(),
-        excludeService = null,
-        excludeEnvironment = null,
-        excludeContainerName = null,
-        excludeTags = emptyMap(),
         groupBy = LogManagementService.normalizeMetricGroupBy(request.groupBy)
     )
 }

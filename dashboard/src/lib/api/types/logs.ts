@@ -82,6 +82,55 @@ export interface LogTopResponse {
   totalCount: number
 }
 
+/** A single key/count breakdown row (e.g. top service or host for a pattern). */
+export interface LogPatternBreakdown {
+  value: string
+  count: number
+}
+
+/**
+ * Structural pattern that the selected log belongs to, plus rollups across the
+ * window. Backs the Patterns tab of the log context viewer.
+ */
+export interface LogPatternResponse {
+  /** Pattern string with variable tokens collapsed to placeholders (e.g. `<int>`). */
+  pattern: string
+  /** Dominant severity for the cluster. */
+  level: string
+  /** Match count within the rollup window. */
+  count: number
+  /** Human label for the rollup window (e.g. "24h"). */
+  windowLabel: string
+  /** First/last time the pattern was seen (ISO timestamps). */
+  firstSeen: string
+  lastSeen: string
+  /** Percent change versus the previous comparable window; null when unknown. */
+  trendPct: number | null
+  /** Per-bucket counts for the trend sparkline. */
+  sparkline: number[]
+  topServices: LogPatternBreakdown[]
+  topHosts: LogPatternBreakdown[]
+}
+
+export interface RawLogPatternResponse {
+  pattern?: string
+  level?: string
+  count?: number
+  windowLabel?: string
+  window_label?: string
+  firstSeen?: string
+  first_seen?: string
+  lastSeen?: string
+  last_seen?: string
+  trendPct?: number | null
+  trend_pct?: number | null
+  sparkline?: number[]
+  topServices?: { value: string; count?: number }[]
+  top_services?: { value: string; count?: number }[]
+  topHosts?: { value: string; count?: number }[]
+  top_hosts?: { value: string; count?: number }[]
+}
+
 export interface OtlpApiKey {
   id: number
   name: string

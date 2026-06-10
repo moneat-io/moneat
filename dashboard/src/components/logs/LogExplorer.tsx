@@ -41,7 +41,7 @@ import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import {TimeRangePicker} from '@/components/filters/TimeRangePicker'
 import {LogTable} from '@/components/logs/LogTable'
-import {LogDetail} from '@/components/logs/LogDetail'
+import {LogContextViewer} from '@/components/logs/context-viewer'
 import {AutoRefreshToggle, type RefreshInterval} from '@/components/logs/AutoRefreshToggle'
 import {LogSetupGuide} from '@/components/logs/LogSetupGuide'
 import {type LogVizMode, LogVizTabs} from '@/components/logs/LogVizTabs'
@@ -62,8 +62,8 @@ import {
 import {type FacetFilter, type FacetRailSection, type FacetSchema} from '@/lib/filters/types'
 import {TIME_PRESETS} from '@/lib/filters/time'
 import {logLevelBadgeClass} from '@/lib/severity'
+import {normalizeLevel} from '@/components/logs/context-viewer/logLevelStyles'
 import {cn} from '@/lib/utils'
-import {parseDate} from '@/lib/date-format'
 import {
   Activity,
   Bell,
@@ -121,6 +121,9 @@ type LogExplorerInitialState = {
 type DerivedLogFilters = {
   service?: string
   environment?: string
+  host?: string
+  traceId?: string
+  messagePattern?: string
   containerName?: string
   tags: Record<string, string>
   excludeService?: string
@@ -132,6 +135,11 @@ type DerivedLogFilters = {
 type TimeRange = {
   from?: string
   to?: string
+}
+
+type LogCreateSeed = {
+  query: string
+  levels: string[]
 }
 
 type LogExplorerActionsProps = Readonly<{
@@ -198,6 +206,8 @@ const LOG_FACET_CHIP_COLORS: Record<string, string> = {
   environment: 'bg-success-bg text-success-fg border-success-border',
   host: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]',
   source: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]',
+  trace_id: 'bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3)/0.3)]',
+  message_pattern: 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]',
 }
 
 function shouldOpenFacetRail(enableFacets: boolean): boolean {
@@ -363,6 +373,12 @@ function applyIncludedLogFilter(derived: DerivedLogFilters, filter: FacetFilter)
     derived.service = filter.value
   } else if (filter.key === 'environment') {
     derived.environment = filter.value
+  } else if (filter.key === 'host') {
+    derived.host = filter.value
+  } else if (filter.key === 'trace_id' || filter.key === 'traceId') {
+    derived.traceId = filter.value
+  } else if (filter.key === 'message_pattern' || filter.key === 'messagePattern') {
+    derived.messagePattern = filter.value
   } else if (filter.key === 'container_name') {
     derived.containerName = filter.value
   } else {
@@ -418,6 +434,79 @@ function upsertFacetFilter(filters: FacetFilter[], key: string, value: string): 
 
 function isAggregateVizMode(vizMode: LogVizMode): boolean {
   return vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'
+}
+
+function hasCustomLogLevelFilter(levels: string[]): boolean {
+  return levels.length > 0 && levels.length < LEVEL_OPTIONS.length
+}
+
+function logLevelsKey(levels: string[], hasCustomLevelFilter: boolean): string {
+  if (!hasCustomLevelFilter) return '__all__'
+  return levels.join(',')
+}
+
+function customLogLevelsOrEmpty(hasCustomLevelFilter: boolean, levels: string[]): string[] {
+  if (!hasCustomLevelFilter) return []
+  return levels
+}
+
+function shouldLoadLogFilters(systemId: string | undefined, enableFacets: boolean): boolean {
+  return !systemId && enableFacets
+}
+
+function shouldLoadTopValues(systemId: string | undefined, vizMode: LogVizMode): boolean {
+  return !systemId && isAggregateVizMode(vizMode)
+}
+
+function createSeedQuery(seed: LogCreateSeed | null, fallback: string): string {
+  return seed?.query ?? fallback
+}
+
+function createSeedLevels(seed: LogCreateSeed | null, fallback: string[]): string[] {
+  return seed?.levels ?? fallback
+}
+
+function createSeedFacetFilters(seed: LogCreateSeed | null, fallback: FacetFilter[]): FacetFilter[] {
+  if (seed) return []
+  return fallback
+}
+
+function createSeedGroupBy(seed: LogCreateSeed | null, fallback: string): string {
+  if (seed) return ''
+  return fallback
+}
+
+function viewerWidthClass(expanded: boolean): string {
+  if (expanded) return 'w-full max-w-none'
+  return 'w-full sm:w-[90%] lg:w-[58%] lg:min-w-[480px] lg:max-w-[980px]'
+}
+
+function isInitialLogLoading(accumulatedCount: number, isInitialLoading: boolean, loadedCount: number): boolean {
+  return accumulatedCount === 0 && (isInitialLoading || loadedCount > 0)
+}
+
+function hasActiveTimeFilter(timePreset: string, defaultTimeRange: string, customFrom: string, customTo: string): boolean {
+  return timePreset !== defaultTimeRange || customFrom !== '' || customTo !== ''
+}
+
+function shouldShowLogEmptyState(options: {
+  isInitialLoadingState: boolean
+  logsCount: number
+  query: string
+  facetFilterCount: number
+  hasCustomLevelFilter: boolean
+  hasTimeRangeFilter: boolean
+  totalCount: number | null
+}): boolean {
+  return (
+    !options.isInitialLoadingState &&
+    options.logsCount === 0 &&
+    !options.query &&
+    options.facetFilterCount === 0 &&
+    !options.hasCustomLevelFilter &&
+    !options.hasTimeRangeFilter &&
+    (options.totalCount === 0 || options.totalCount === null)
+  )
 }
 
 function formatResultSummary(aggregateData: LogAggregateResponse | undefined, logsCount: number): string {
@@ -949,6 +1038,10 @@ export function LogExplorer({
   // Detail panel
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
+  const [viewerExpanded, setViewerExpanded] = useState(false)
+  // Seed for the create-metric/monitor dialogs. null = use the explorer-wide
+  // query + levels (toolbar); set = scoped to a specific log's pattern (viewer).
+  const [createSeed, setCreateSeed] = useState<LogCreateSeed | null>(null)
 
   // Log management sheet (controlled so contextual actions can open a specific tab)
   const [managementOpen, setManagementOpen] = useState(false)
@@ -1051,8 +1144,8 @@ export function LogExplorer({
   // Derive service/environment/tags/containerName from facetFilters
   const derivedFilters = useMemo(() => deriveLogFilters(facetFilters), [facetFilters])
 
-  const hasCustomLevelFilter = levels.length > 0 && levels.length < LEVEL_OPTIONS.length
-  const levelsKey = hasCustomLevelFilter ? levels.join(',') : '__all__'
+  const hasCustomLevelFilter = hasCustomLogLevelFilter(levels)
+  const levelsKey = logLevelsKey(levels, hasCustomLevelFilter)
   const facetFiltersKey = JSON.stringify(facetFilters)
 
 
@@ -1075,7 +1168,7 @@ export function LogExplorer({
       }
       return api.getLogFilters({from: timeRange.from, to: timeRange.to})
     },
-    enabled: !systemId && enableFacets,
+    enabled: shouldLoadLogFilters(systemId, enableFacets),
     placeholderData: keepPreviousLogFilterOptions,
   })
 
@@ -1101,6 +1194,8 @@ export function LogExplorer({
       },
       {key: 'host', color: LOG_FACET_CHIP_COLORS.host},
       {key: 'level', allowExclude: false, suggestions: LEVEL_OPTIONS},
+      {key: 'trace_id', color: LOG_FACET_CHIP_COLORS.trace_id},
+      {key: 'message_pattern', color: LOG_FACET_CHIP_COLORS.message_pattern},
       {
         key: 'service',
         color: LOG_FACET_CHIP_COLORS.service,
@@ -1188,6 +1283,9 @@ export function LogExplorer({
       timeRange.to,
       derivedFilters.service,
       derivedFilters.environment,
+      derivedFilters.host,
+      derivedFilters.traceId,
+      derivedFilters.messagePattern,
       derivedFilters.containerName,
       JSON.stringify(derivedFilters.tags),
       derivedFilters.excludeService,
@@ -1203,6 +1301,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         containerName: derivedFilters.containerName,
         from: timeRange.from,
         to: timeRange.to,
@@ -1329,6 +1430,7 @@ export function LogExplorer({
     queryKey: [
       'log-aggregate', systemId, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      derivedFilters.host, derivedFilters.traceId, derivedFilters.messagePattern,
       JSON.stringify(derivedFilters.tags), groupBy,
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
       derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
@@ -1342,6 +1444,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         tags: hasRecordValues(derivedFilters.tags) ? derivedFilters.tags : undefined,
         excludeService: derivedFilters.excludeService,
         excludeEnvironment: derivedFilters.excludeEnvironment,
@@ -1358,6 +1463,7 @@ export function LogExplorer({
     queryKey: [
       'log-top', systemId, topField, timeRange.from, timeRange.to,
       query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      derivedFilters.host, derivedFilters.traceId, derivedFilters.messagePattern,
       JSON.stringify(derivedFilters.tags),
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
       derivedFilters.excludeContainerName, JSON.stringify(derivedFilters.excludeTags),
@@ -1373,6 +1479,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         tags: hasRecordValues(derivedFilters.tags) ? derivedFilters.tags : undefined,
         excludeService: derivedFilters.excludeService,
         excludeEnvironment: derivedFilters.excludeEnvironment,
@@ -1380,7 +1489,7 @@ export function LogExplorer({
         excludeTags: hasRecordValues(derivedFilters.excludeTags) ? derivedFilters.excludeTags : undefined,
       })
     },
-    enabled: !systemId && (vizMode === 'toplist' || vizMode === 'pie' || vizMode === 'table'),
+    enabled: shouldLoadTopValues(systemId, vizMode),
   })
 
   const handleExportCsv = useCallback(async () => {
@@ -1393,6 +1502,9 @@ export function LogExplorer({
         levels: hasCustomLevelFilter ? levels : undefined,
         service: derivedFilters.service,
         environment: derivedFilters.environment,
+        host: derivedFilters.host,
+        traceId: derivedFilters.traceId,
+        messagePattern: derivedFilters.messagePattern,
         tags: hasRecordValues(derivedFilters.tags) ? derivedFilters.tags : undefined,
         excludeService: derivedFilters.excludeService,
         excludeEnvironment: derivedFilters.excludeEnvironment,
@@ -1424,34 +1536,39 @@ export function LogExplorer({
     setDetailOpen(true)
   }, [])
   
-  // View in context: clear filters and show ±5 minute window around selected log
-  const handleViewInContext = useCallback((log: LogEntry) => {
-    const logTime = parseDate(log.timestamp)
-    if (Number.isNaN(logTime.getTime())) return
-    
-    // Calculate ±5 minutes
-    const fiveMinutesMs = 5 * 60 * 1000
-    const contextFrom = new Date(logTime.getTime() - fiveMinutesMs)
-    const contextTo = new Date(logTime.getTime() + fiveMinutesMs)
-    
-    // Clear filters and query
-    setQuery('')
-    setFacetFilters([])
-    setLevels([...LEVEL_OPTIONS])
-    
-    // Set custom time range
-    setTimePreset('custom')
-    setCustomFrom(toDateTimeLocalValue(contextFrom))
-    setCustomTo(toDateTimeLocalValue(contextTo))
-    
-    // Reset pagination
-    setCursor(null)
-    setCursorHistory([])
-    
-    // Keep the log selected for highlight
-    setSelectedLog(log)
-    setDetailOpen(false)
+  const handleViewerNavigate = useCallback((delta: number) => {
+    setSelectedLog((current) => {
+      if (!current) return current
+      const currentIndex = accumulatedLogs.findIndex((log) => log.logId === current.logId)
+      if (currentIndex === -1) return current
+      const nextIndex = Math.min(Math.max(currentIndex + delta, 0), accumulatedLogs.length - 1)
+      return accumulatedLogs[nextIndex] ?? current
+    })
+  }, [accumulatedLogs])
+
+  const handleAddFacetFilter = useCallback((key: string, value: string, exclude = false) => {
+    setFacetFilters((prev) => [
+      ...prev.filter((filter) => !(filter.key === key && filter.value === value)),
+      {key, value, exclude},
+    ])
   }, [])
+
+  // Seed a create dialog from the selected log: keep the active explorer query
+  // and narrow to the log's own level so the monitor/metric opens scoped.
+  const buildLogCreateSeed = useCallback((): LogCreateSeed => {
+    const level = selectedLog ? normalizeLevel(selectedLog.level) : ''
+    return {query: contextQuery, levels: LOG_LEVELS.has(level) ? [level] : []}
+  }, [selectedLog, contextQuery])
+
+  const handleCreateMetricFromLog = useCallback(() => {
+    setCreateSeed(buildLogCreateSeed())
+    setCreateMetricOpen(true)
+  }, [buildLogCreateSeed])
+
+  const handleCreateMonitorFromLog = useCallback(() => {
+    setCreateSeed(buildLogCreateSeed())
+    setCreateMonitorOpen(true)
+  }, [buildLogCreateSeed])
 
   const handlePreviousPage = () => {
     if (cursorHistory.length === 0) return
@@ -1508,18 +1625,29 @@ export function LogExplorer({
   // Show loading when no accumulated logs yet — covers both the first fetch
   // (isInitialLoading) and revisiting the page with stale cache data that
   // hasn't been accumulated yet.
-  const isInitialLoadingState =
-    accumulatedLogs.length === 0 &&
-    (isInitialLoading || (logPage?.logs?.length ?? 0) > 0)
-  const hasTimeRangeFilter = timePreset !== defaultTimeRange || customFrom !== '' || customTo !== ''
-  const showEmptyState =
-    !isInitialLoadingState &&
-    logs.length === 0 &&
-    !query &&
-    facetFilters.length === 0 &&
-    !hasCustomLevelFilter &&
-    !hasTimeRangeFilter &&
-    (totalCount === 0 || totalCount === null)
+  const defaultCreateLevels = customLogLevelsOrEmpty(hasCustomLevelFilter, levels)
+  const currentManagementLevels = customLogLevelsOrEmpty(hasCustomLevelFilter, levels)
+  const metricDialogQuery = createSeedQuery(createSeed, query)
+  const metricDialogLevels = createSeedLevels(createSeed, defaultCreateLevels)
+  const metricDialogFacetFilters = createSeedFacetFilters(createSeed, facetFilters)
+  const metricDialogGroupBy = createSeedGroupBy(createSeed, groupBy)
+  const monitorDialogQuery = createSeedQuery(createSeed, contextQuery)
+  const monitorDialogLevels = createSeedLevels(createSeed, defaultCreateLevels)
+  const isInitialLoadingState = isInitialLogLoading(
+    accumulatedLogs.length,
+    isInitialLoading,
+    logPage?.logs?.length ?? 0
+  )
+  const hasTimeRangeFilter = hasActiveTimeFilter(timePreset, defaultTimeRange, customFrom, customTo)
+  const showEmptyState = shouldShowLogEmptyState({
+    isInitialLoadingState,
+    logsCount: logs.length,
+    query,
+    facetFilterCount: facetFilters.length,
+    hasCustomLevelFilter,
+    hasTimeRangeFilter,
+    totalCount,
+  })
 
   return (
     <>
@@ -1591,15 +1719,21 @@ export function LogExplorer({
             isInitialLoadingState={isInitialLoadingState}
             logsCount={logs.length}
             systemId={systemId}
-            onCreateMetric={() => setCreateMetricOpen(true)}
-            onCreateMonitor={() => setCreateMonitorOpen(true)}
+            onCreateMetric={() => {
+              setCreateSeed(null)
+              setCreateMetricOpen(true)
+            }}
+            onCreateMonitor={() => {
+              setCreateSeed(null)
+              setCreateMonitorOpen(true)
+            }}
             onExportCsv={handleExportCsv}
             cursorHistoryLength={cursorHistory.length}
             onPreviousPage={handlePreviousPage}
           />
         )}
       >
-        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
           <LogExplorerVisualizations
             vizMode={vizMode}
             aggregateData={aggregateData}
@@ -1609,30 +1743,52 @@ export function LogExplorer({
             onHistogramBucketClick={handleHistogramBucketClick}
             onTopValueClick={handleTopValueClick}
           />
-          <LogExplorerContent
-            showEmptyState={showEmptyState}
-            isInitialLoadingState={isInitialLoadingState}
-            logs={logs}
-            selectedLogId={selectedLog?.logId}
-            onSelectLog={handleSelectLog}
-            isLoadingMore={isLoadingMore}
-            isFetching={isFetching}
-            hasMore={logPage?.hasMore}
-            logPageLoaded={Boolean(logPage)}
-            scrollSentinelRef={scrollSentinelRef}
-            logContainerRef={logContainerRef}
-            sdkVersions={sdkVersions}
-          />
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <LogExplorerContent
+              showEmptyState={showEmptyState}
+              isInitialLoadingState={isInitialLoadingState}
+              logs={logs}
+              selectedLogId={selectedLog?.logId}
+              onSelectLog={handleSelectLog}
+              isLoadingMore={isLoadingMore}
+              isFetching={isFetching}
+              hasMore={logPage?.hasMore}
+              logPageLoaded={Boolean(logPage)}
+              scrollSentinelRef={scrollSentinelRef}
+              logContainerRef={logContainerRef}
+              sdkVersions={sdkVersions}
+            />
+          </div>
+          {/* Full-height slide-out over the whole content area (histogram + list). */}
+          {detailOpen && selectedLog && (
+            <>
+              <div
+                className="absolute inset-0 z-30 bg-black/40 animate-in fade-in-0 duration-200"
+                onClick={() => setDetailOpen(false)}
+                aria-hidden="true"
+              />
+              <LogContextViewer
+                className={cn(
+                  'absolute inset-y-0 right-0 z-40 shadow-2xl animate-in slide-in-from-right duration-300 ease-out',
+                  viewerWidthClass(viewerExpanded)
+                )}
+                log={selectedLog}
+                logs={accumulatedLogs}
+                index={Math.max(0, accumulatedLogs.findIndex((log) => log.logId === selectedLog.logId))}
+                total={aggregateData?.totalCount ?? totalCount ?? accumulatedLogs.length}
+                onNavigate={handleViewerNavigate}
+                onClose={() => setDetailOpen(false)}
+                onAddFacetFilter={handleAddFacetFilter}
+                timeRange={timeRange}
+                onCreateMetric={handleCreateMetricFromLog}
+                onCreateMonitor={handleCreateMonitorFromLog}
+                expanded={viewerExpanded}
+                onToggleExpand={() => setViewerExpanded((value) => !value)}
+              />
+            </>
+          )}
         </div>
       </ExplorerShell>
-
-      {/* Log detail sheet */}
-      <LogDetail
-        log={selectedLog}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        onViewInContext={enableUrlSync ? handleViewInContext : undefined}
-      />
 
       {/* Log management sheet, controlled so Explorer actions can open a specific tab. */}
       {!systemId && (
@@ -1641,30 +1797,31 @@ export function LogExplorer({
           onOpenChange={setManagementOpen}
           defaultTab={managementTab}
           currentQuery={contextQuery}
-          currentLevels={hasCustomLevelFilter ? levels : []}
+          currentLevels={currentManagementLevels}
           currentViewState={currentSavedViewState}
           currentLogs={logs}
           onApplySavedView={applySavedView}
         />
       )}
 
-      {/* Focused create dialogs, seeded from the active query + level filter. */}
+      {/* Focused create dialogs. Seeded explorer-wide from the toolbar, or
+          scoped to a single log's pattern when launched from the viewer. */}
       {!systemId && (
         <>
           <CreateLogMetricDialog
             open={createMetricOpen}
             onOpenChange={setCreateMetricOpen}
-            query={query}
-            levels={hasCustomLevelFilter ? levels : []}
-            facetFilters={facetFilters}
-            groupByField={groupBy}
+            query={metricDialogQuery}
+            levels={metricDialogLevels}
+            facetFilters={metricDialogFacetFilters}
+            groupByField={metricDialogGroupBy}
             timeRange={timeRange}
           />
           <CreateLogMonitorDialog
             open={createMonitorOpen}
             onOpenChange={setCreateMonitorOpen}
-            query={contextQuery}
-            levels={hasCustomLevelFilter ? levels : []}
+            query={monitorDialogQuery}
+            levels={monitorDialogLevels}
           />
         </>
       )}

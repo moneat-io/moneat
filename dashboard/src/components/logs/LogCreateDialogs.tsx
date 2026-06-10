@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useState} from 'react'
+import {useMemo, useState} from 'react'
 import type {ReactNode} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {Activity, Bell, Loader2} from 'lucide-react'
+import {Activity, AlertTriangle, Bell, Loader2} from 'lucide-react'
 
 import {api, type CreateWidgetRequest, type DashboardWidget, type LogMonitorCondition} from '@/lib/api'
 import type {FacetFilter} from '@/lib/filters/types'
@@ -40,28 +40,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {getNow} from '@/lib/demo'
 import {useToast} from '@/hooks/useToast'
 import {WidgetConfigPanel} from '@/components/dashboards/WidgetConfigPanel'
 import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 import {buildLogMetricWidget, defaultLogMetricTitle} from '@/components/logs/logWidgetSeed'
-import {LOG_MONITOR_CONDITIONS, toGroupByValue} from '@/components/logs/logManagementShared'
-import {GroupBySelect, LevelChips} from '@/components/logs/LogManagementControls'
+import {
+  DEFAULT_MONITOR_THRESHOLD,
+  DEFAULT_MONITOR_WINDOW_MINUTES,
+  GROUP_BY_NONE,
+  MIN_MONITOR_THRESHOLD,
+  MIN_MONITOR_WINDOW_MINUTES,
+  suggestMonitorName,
+  toGroupBySelectValue,
+  toGroupByValue,
+  useLogVolume,
+} from '@/components/logs/logManagementShared'
+import {
+  ConditionSelect,
+  GroupBySelect,
+  LevelSelect,
+  LogVolumeBars,
+} from '@/components/logs/LogManagementControls'
 
 /**
- * Create actions launched from the Log Explorer's Export menu.
+ * Create actions launched from the Log Explorer's Export menu and the log
+ * context viewer's Patterns tab. Both seed the form from the active query and
+ * level filter, then let the user refine before saving — they should open
+ * "mostly completed", never blank.
  *
  * "Create metric" reuses the real dashboard widget editor: it seeds a `logs`
  * count widget from the current query, lets the user pick (or create) a target
  * dashboard, then hands off to {@link WidgetConfigPanel} for a live preview and
- * refinement before saving. "Create monitor" stays a focused threshold form.
+ * refinement before saving. "Create monitor" is a focused threshold form that
+ * previews live match volume so the threshold is set against a real number.
  */
 
 const NEW_DASHBOARD_VALUE = '__new__'
-const DEFAULT_MONITOR_THRESHOLD = 10
-const MIN_MONITOR_THRESHOLD = 0
-const DEFAULT_MONITOR_WINDOW_MINUTES = 5
-const MIN_MONITOR_WINDOW_MINUTES = 1
-const GROUP_BY_NONE = 'none'
 
 type CreateDialogProps = Readonly<{
   open: boolean
@@ -76,6 +91,23 @@ function parseBoundedInt(value: string, fallback: number, min: number): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return fallback
   return Math.max(Math.trunc(parsed), min)
+}
+
+function crossesThreshold(value: number, condition: LogMonitorCondition, threshold: number): boolean {
+  switch (condition) {
+    case '>':
+      return value > threshold
+    case '>=':
+      return value >= threshold
+    case '<':
+      return value < threshold
+    case '<=':
+      return value <= threshold
+    case '==':
+      return value === threshold
+    default:
+      return false
+  }
 }
 
 function DialogField({label, children}: {readonly label: string; readonly children: ReactNode}) {
@@ -102,36 +134,62 @@ function toWidgetRequest(widget: DashboardWidget, sortOrder: number): CreateWidg
   }
 }
 
-function MonitorForm({query, levels, onClose}: {
+function MonitorForm({
+  query,
+  levels: seedLevels,
+  onClose,
+}: {
   readonly query: string
   readonly levels: string[]
   readonly onClose: () => void
 }) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => suggestMonitorName(seedLevels))
   const [queryText, setQueryText] = useState(query)
+  const [levels, setLevels] = useState(seedLevels)
   const [condition, setCondition] = useState<LogMonitorCondition>('>')
   const [threshold, setThreshold] = useState(DEFAULT_MONITOR_THRESHOLD)
   const [windowMinutes, setWindowMinutes] = useState(DEFAULT_MONITOR_WINDOW_MINUTES)
   const [groupBy, setGroupBy] = useState(GROUP_BY_NONE)
 
+  // Count matching logs over the same trailing window the monitor evaluates, so
+  // the threshold is set against a real "right now" number, not a guess. The
+  // window is memoised on windowMinutes so "now" doesn't churn every render.
+  const windowRange = useMemo(() => {
+    const now = getNow()
+    return {
+      from: new Date(now - windowMinutes * 60_000).toISOString(),
+      to: new Date(now).toISOString(),
+    }
+  }, [windowMinutes])
+  const volume = useLogVolume({
+    query: queryText,
+    levels,
+    groupBy: toGroupByValue(groupBy),
+    from: windowRange.from,
+    to: windowRange.to,
+  })
+  const alreadyCrossing = !volume.isFetching && crossesThreshold(volume.total, condition, threshold)
+
   const createMonitor = useMutation({
-    mutationFn: () => api.createLogMonitor({
-      name,
-      query: queryText,
-      levels,
-      group_by: toGroupByValue(groupBy),
-      condition,
-      threshold,
-      window_minutes: windowMinutes,
-    }),
+    mutationFn: () =>
+      api.createLogMonitor({
+        name,
+        query: queryText,
+        levels,
+        group_by: toGroupByValue(groupBy),
+        condition,
+        threshold,
+        window_minutes: windowMinutes,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['log-monitors']})
       toast({title: 'Monitor created'})
       onClose()
     },
   })
+  const groupBySummary = groupBy === GROUP_BY_NONE ? '' : `, per ${groupBy}`
 
   return (
     <>
@@ -142,14 +200,6 @@ function MonitorForm({query, levels, onClose}: {
         </DialogDescription>
       </DialogHeader>
       <div className="space-y-3 py-1">
-        <DialogField label="Search query">
-          <Textarea
-            value={queryText}
-            onChange={(event) => setQueryText(event.target.value)}
-            className="h-16 font-mono text-xs"
-            placeholder="catch-all"
-          />
-        </DialogField>
         <DialogField label="Monitor name">
           <Input
             autoFocus
@@ -158,20 +208,20 @@ function MonitorForm({query, levels, onClose}: {
             placeholder="High error log volume"
           />
         </DialogField>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <DialogField label="Search query">
+          <Textarea
+            value={queryText}
+            onChange={(event) => setQueryText(event.target.value)}
+            className="h-14 font-mono text-xs"
+            placeholder="catch-all"
+          />
+        </DialogField>
+        <DialogField label="Levels">
+          <LevelSelect levels={levels} onChange={setLevels} />
+        </DialogField>
+        <div className="grid gap-3 sm:grid-cols-3">
           <DialogField label="Condition">
-            <Select value={condition} onValueChange={(next) => setCondition(next as LogMonitorCondition)}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {LOG_MONITOR_CONDITIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ConditionSelect value={condition} onChange={setCondition} />
           </DialogField>
           <DialogField label="Threshold">
             <Input
@@ -183,8 +233,6 @@ function MonitorForm({query, levels, onClose}: {
               }}
             />
           </DialogField>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
           <DialogField label="Window (min)">
             <Input
               type="number"
@@ -195,20 +243,49 @@ function MonitorForm({query, levels, onClose}: {
               }}
             />
           </DialogField>
-          <DialogField label="Group by">
-            <GroupBySelect value={groupBy} onChange={setGroupBy} />
-          </DialogField>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span>Alerts when logs</span>
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">{condition} {threshold}</code>
-          <span>over {windowMinutes}m</span>
-          <span aria-hidden>·</span>
-          <LevelChips levels={levels} />
+        <DialogField label="Group by">
+          <GroupBySelect value={groupBy} onChange={setGroupBy} />
+        </DialogField>
+
+        <div className="rounded-md border border-border bg-muted/30 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">
+              Matching now · last {windowMinutes}m
+            </span>
+            <span className="font-mono text-sm font-semibold text-foreground">
+              {volume.isFetching && volume.buckets.length === 0
+                ? '…'
+                : volume.total.toLocaleString('en-US')}
+            </span>
+          </div>
+          <div className="mt-1.5">
+            <LogVolumeBars
+              buckets={volume.buckets}
+              isFetching={volume.isFetching}
+              emptyLabel="No matching logs in the last window."
+            />
+          </div>
+          {alreadyCrossing && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-3 w-3" />
+              Current volume already meets this condition — it would alert now.
+            </p>
+          )}
         </div>
+
+        <p className="text-[11px] text-muted-foreground">
+          Alerts when matching logs{' '}
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">
+            {condition} {threshold}
+          </code>{' '}
+          over {windowMinutes}m{groupBySummary}.
+        </p>
       </div>
       <DialogFooter className="mt-2">
-        <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
         <Button
           size="sm"
           onClick={() => createMonitor.mutate()}
@@ -242,10 +319,11 @@ type CreateLogMetricDialogProps = Readonly<{
 }>
 
 /**
- * "Create metric": seed a `logs` count widget from the current query, choose a
- * destination dashboard (existing or new), then open the real widget editor to
- * preview and refine before saving. A freshly created dashboard is discarded if
- * the user backs out of the editor without saving a widget.
+ * "Create metric": seed a `logs` count widget from the current query, refine
+ * the levels / group-by with a live volume estimate, choose a destination
+ * dashboard (existing or new), then open the real widget editor to preview and
+ * refine before saving. A freshly created dashboard is discarded if the user
+ * backs out of the editor without saving a widget.
  */
 export function CreateLogMetricDialog({
   open,
@@ -266,6 +344,20 @@ export function CreateLogMetricDialog({
   const [selected, setSelected] = useState('')
   const [newName, setNewName] = useState('')
   const [title, setTitle] = useState('')
+  const [levelSel, setLevelSel] = useState(levels)
+  const [groupBySel, setGroupBySel] = useState(() => toGroupBySelectValue(groupByField || null))
+
+  // Re-seed the editable fields each time the dialog opens, since the same
+  // mounted instance is reused for both the toolbar and per-pattern entry
+  // points (which pass different seeds).
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
+    if (open) {
+      setLevelSel(levels)
+      setGroupBySel(toGroupBySelectValue(groupByField || null))
+    }
+  }
 
   const reset = () => {
     setStage('choose')
@@ -280,6 +372,17 @@ export function CreateLogMetricDialog({
     reset()
     onOpenChange(false)
   }
+
+  const groupByField2 = groupBySel === GROUP_BY_NONE ? '' : groupBySel
+
+  const volume = useLogVolume({
+    query,
+    levels: levelSel,
+    groupBy: toGroupByValue(groupBySel),
+    from: timeRange.from,
+    to: timeRange.to,
+    enabled: open && stage === 'choose',
+  })
 
   const dashboardsQuery = useQuery({
     queryKey: ['custom-dashboards'],
@@ -309,7 +412,9 @@ export function CreateLogMetricDialog({
     onSuccess: ({id, created}) => {
       setDashboardId(id)
       setCreatedNew(created)
-      setWidget(buildLogMetricWidget({query, levels, facetFilters, groupByField, timeRange, title}))
+      setWidget(
+        buildLogMetricWidget({query, levels: levelSel, facetFilters, groupByField: groupByField2, timeRange, title})
+      )
       setStage('edit')
     },
   })
@@ -357,12 +462,12 @@ export function CreateLogMetricDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-base">Create metric</DialogTitle>
           <DialogDescription>
-            Chart this query as a log-count widget. Choose where it lives, then preview and refine it
-            in the widget editor.
+            Chart this query as a log-count widget. Tune the filter, then preview and refine it in the
+            widget editor.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-1">
@@ -374,21 +479,26 @@ export function CreateLogMetricDialog({
               placeholder={defaultLogMetricTitle(query)}
             />
           </DialogField>
-          <DialogField label="Add to dashboard">
-            <Select value={effectiveSelected} onValueChange={setSelected}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {dashboards.map((dashboard) => (
-                  <SelectItem key={dashboard.id} value={String(dashboard.id)}>
-                    {dashboard.title}
-                  </SelectItem>
-                ))}
-                <SelectItem value={NEW_DASHBOARD_VALUE}>＋ New dashboard…</SelectItem>
-              </SelectContent>
-            </Select>
-          </DialogField>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <DialogField label="Add to dashboard">
+              <Select value={effectiveSelected} onValueChange={setSelected}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {dashboards.map((dashboard) => (
+                    <SelectItem key={dashboard.id} value={String(dashboard.id)}>
+                      {dashboard.title}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NEW_DASHBOARD_VALUE}>＋ New dashboard…</SelectItem>
+                </SelectContent>
+              </Select>
+            </DialogField>
+            <DialogField label="Group by">
+              <GroupBySelect value={groupBySel} onChange={setGroupBySel} />
+            </DialogField>
+          </div>
           {isNew && (
             <DialogField label="New dashboard name">
               <Input
@@ -398,14 +508,32 @@ export function CreateLogMetricDialog({
               />
             </DialogField>
           )}
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span>Counts matching logs over time</span>
-            <span aria-hidden>·</span>
-            <LevelChips levels={levels} />
+          <DialogField label="Levels">
+            <LevelSelect levels={levelSel} onChange={setLevelSel} />
+          </DialogField>
+
+          <div className="rounded-md border border-border bg-muted/30 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-muted-foreground">Matching logs in selected range</span>
+              <span className="font-mono text-sm font-semibold text-foreground">
+                {volume.isFetching && volume.buckets.length === 0
+                  ? '…'
+                  : volume.total.toLocaleString('en-US')}
+              </span>
+            </div>
+            <div className="mt-1.5">
+              <LogVolumeBars
+                buckets={volume.buckets}
+                isFetching={volume.isFetching}
+                emptyLabel="No matching logs in this range."
+              />
+            </div>
           </div>
         </div>
         <DialogFooter className="mt-2">
-          <Button variant="outline" size="sm" onClick={close}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={close}>
+            Cancel
+          </Button>
           <Button size="sm" onClick={() => openEditor.mutate()} disabled={continueDisabled}>
             {openEditor.isPending ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

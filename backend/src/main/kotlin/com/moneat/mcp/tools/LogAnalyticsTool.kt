@@ -16,12 +16,13 @@
 
 package com.moneat.mcp.tools
 
+import com.moneat.logs.models.LogAnalyticsFilters
+import com.moneat.logs.repositories.LogRepositoryImpl
+import com.moneat.logs.services.LogService
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.ToolCallResult
-import com.moneat.logs.repositories.LogRepositoryImpl
-import com.moneat.logs.services.LogService
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
@@ -88,18 +89,14 @@ class AggregateLogsTool : McpTool {
         return try {
             val result = logAnalyticsService.aggregateLogs(
                 organizationId = context.organizationId.toLong(),
-                from = args["from"]?.jsonPrimitive?.content,
-                to = args["to"]?.jsonPrimitive?.content,
+                filters = LogAnalyticsFilters(
+                    from = args["from"]?.jsonPrimitive?.content,
+                    to = args["to"]?.jsonPrimitive?.content,
+                    query = args["query"]?.jsonPrimitive?.content,
+                    levels = levels,
+                    service = args["service"]?.jsonPrimitive?.content
+                ),
                 interval = args["interval"]?.jsonPrimitive?.content,
-                query = args["query"]?.jsonPrimitive?.content,
-                levels = levels,
-                service = args["service"]?.jsonPrimitive?.content,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap(),
                 groupBy = groupBy
             )
             jsonResult(result)
@@ -159,17 +156,11 @@ class GetLogTopValuesTool : McpTool {
                 organizationId = context.organizationId.toLong(),
                 field = field,
                 limit = limit,
-                from = args["from"]?.jsonPrimitive?.content,
-                to = args["to"]?.jsonPrimitive?.content,
-                query = args["query"]?.jsonPrimitive?.content,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = null,
-                excludeEnvironment = null,
-                excludeContainerName = null,
-                excludeTags = emptyMap()
+                filters = LogAnalyticsFilters(
+                    from = args["from"]?.jsonPrimitive?.content,
+                    to = args["to"]?.jsonPrimitive?.content,
+                    query = args["query"]?.jsonPrimitive?.content
+                )
             )
             jsonResult(result)
         } catch (e: CancellationException) {

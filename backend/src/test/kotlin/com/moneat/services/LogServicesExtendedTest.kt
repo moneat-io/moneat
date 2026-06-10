@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.models.LogQueryRequest
 import com.moneat.logs.repositories.LogRepository
@@ -78,33 +79,13 @@ class LogServicesExtendedTest {
         organizationId = orgId,
         field = field,
         limit = limit,
-        from = null,
-        to = null,
-        query = null,
-        levels = emptyList(),
-        service = null,
-        environment = null,
-        tags = emptyMap(),
-        excludeService = null,
-        excludeEnvironment = null,
-        excludeContainerName = null,
-        excludeTags = emptyMap()
+        filters = LogAnalyticsFilters()
     )
 
     private suspend fun LogService.exportCsvWithEmptyFilters(orgId: Long, limit: Int = 100) =
         exportCsv(
             organizationId = orgId,
-            from = null,
-            to = null,
-            query = null,
-            levels = emptyList(),
-            service = null,
-            environment = null,
-            tags = emptyMap(),
-            excludeService = null,
-            excludeEnvironment = null,
-            excludeContainerName = null,
-            excludeTags = emptyMap(),
+            filters = LogAnalyticsFilters(),
             limit = limit
         )
 
@@ -116,18 +97,8 @@ class LogServicesExtendedTest {
         groupBy: String? = null
     ) = aggregateLogs(
         organizationId = orgId,
-        from = from,
-        to = to,
+        filters = LogAnalyticsFilters(from = from, to = to),
         interval = interval,
-        query = null,
-        levels = emptyList(),
-        service = null,
-        environment = null,
-        tags = emptyMap(),
-        excludeService = null,
-        excludeEnvironment = null,
-        excludeContainerName = null,
-        excludeTags = emptyMap(),
         groupBy = groupBy
     )
 
@@ -187,6 +158,28 @@ class LogServicesExtendedTest {
     }
 
     @Test
+    fun `topValues maps API aliases to top-level columns`() = runBlocking {
+        val capturedQueries = mutableListOf<String>()
+        val handler = queryBasedClickHouseHandler(
+            AS_FIELD_VALUE to """{"field_value":"api","cnt":10}""",
+            "$SELECT_COUNT" to """{"cnt":10}""",
+            captureQueries = capturedQueries
+        )
+        withClickHouseMockServer(handler) { server ->
+            val service = newService(ClickHouseLogRepository(server.baseUrl))
+
+            service.topValuesWithEmptyFilters(1L, "service_name", 5)
+            service.topValuesWithEmptyFilters(1L, "message", 5)
+
+            val allQueries = capturedQueries.joinToString("\n")
+            assertTrue(allQueries.contains("SELECT service AS field_value"))
+            assertTrue(allQueries.contains("SELECT message AS field_value"))
+            assertFalse(allQueries.contains("tags['service_name']"))
+            assertFalse(allQueries.contains("tags['message']"))
+        }
+    }
+
+    @Test
     fun `topValues with filters applies conditions`() = runBlocking {
         val capturedQueries = mutableListOf<String>()
         val handler = queryBasedClickHouseHandler(
@@ -201,17 +194,19 @@ class LogServicesExtendedTest {
                 organizationId = 1L,
                 field = "level",
                 limit = 10,
-                from = FROM_2026_01_01,
-                to = TO_2026_01_02,
-                query = "database",
-                levels = listOf("error"),
-                service = "api",
-                environment = "prod",
-                tags = mapOf("region" to US_EAST),
-                excludeService = "worker",
-                excludeEnvironment = "staging",
-                excludeContainerName = "test-container",
-                excludeTags = mapOf("debug" to "true")
+                filters = LogAnalyticsFilters(
+                    from = FROM_2026_01_01,
+                    to = TO_2026_01_02,
+                    query = "database",
+                    levels = listOf("error"),
+                    service = "api",
+                    environment = "prod",
+                    tags = mapOf("region" to US_EAST),
+                    excludeService = "worker",
+                    excludeEnvironment = "staging",
+                    excludeContainerName = "test-container",
+                    excludeTags = mapOf("debug" to "true")
+                )
             )
 
             val allQueries = capturedQueries.joinToString("\n")
@@ -697,18 +692,13 @@ class LogServicesExtendedTest {
 
             service.aggregateLogs(
                 organizationId = 1L,
-                from = null,
-                to = null,
+                filters = LogAnalyticsFilters(
+                    excludeService = "worker",
+                    excludeEnvironment = "staging",
+                    excludeContainerName = "test-ctr",
+                    excludeTags = mapOf("debug" to "true")
+                ),
                 interval = "1h",
-                query = null,
-                levels = emptyList(),
-                service = null,
-                environment = null,
-                tags = emptyMap(),
-                excludeService = "worker",
-                excludeEnvironment = "staging",
-                excludeContainerName = "test-ctr",
-                excludeTags = mapOf("debug" to "true"),
                 groupBy = null
             )
 
@@ -884,6 +874,10 @@ class LogServicesExtendedTest {
     private class FakeLogRepository : LogRepository {
         override suspend fun executeClickHouseInsert(sql: String): Boolean = true
         override suspend fun executeClickHouseQuery(sql: String): String = ""
+        override suspend fun executeClickHouseQuery(
+            sql: String,
+            queryParameters: Map<String, String>
+        ): String = executeClickHouseQuery(sql)
     }
 
     /**
@@ -899,6 +893,14 @@ class LogServicesExtendedTest {
 
         override suspend fun executeClickHouseQuery(sql: String): String {
             val response = ClickHouseClient.execute(sql)
+            return response.bodyAsText()
+        }
+
+        override suspend fun executeClickHouseQuery(
+            sql: String,
+            queryParameters: Map<String, String>
+        ): String {
+            val response = ClickHouseClient.execute(sql, queryParameters = queryParameters)
             return response.bodyAsText()
         }
     }

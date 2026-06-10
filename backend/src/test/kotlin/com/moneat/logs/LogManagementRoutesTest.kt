@@ -268,18 +268,8 @@ class LogManagementRoutesTest {
             coEvery {
                 logService.aggregateLogs(
                     organizationId = any(),
-                    from = any(),
-                    to = any(),
+                    filters = any(),
                     interval = any(),
-                    query = any(),
-                    levels = any(),
-                    service = any(),
-                    environment = any(),
-                    tags = any(),
-                    excludeService = any(),
-                    excludeEnvironment = any(),
-                    excludeContainerName = any(),
-                    excludeTags = any(),
                     groupBy = any()
                 )
             } returns aggregate

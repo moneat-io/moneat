@@ -31,8 +31,11 @@ const {mockApi} = vi.hoisted(() => ({
     updateDashboard: vi.fn(),
     deleteDashboard: vi.fn(),
     createLogMonitor: vi.fn(),
+    getLogAggregate: vi.fn(),
   },
 }))
+
+const EMPTY_AGGREGATE = {buckets: [], totalCount: 0, interval: '5m'}
 
 vi.mock('@/lib/api', () => ({api: mockApi}))
 
@@ -77,6 +80,7 @@ const metricSeed = {
 describe('CreateLogMetricDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.getLogAggregate.mockResolvedValue(EMPTY_AGGREGATE)
     mockApi.getProjects.mockResolvedValue([])
     mockApi.getDashboards.mockResolvedValue([{id: 7, title: 'Payments', widgets: []}])
     mockApi.getDashboard.mockResolvedValue({id: 7, title: 'Payments', widgets: []})
@@ -161,6 +165,7 @@ describe('CreateLogMetricDialog', () => {
 describe('CreateLogMonitorDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.getLogAggregate.mockResolvedValue(EMPTY_AGGREGATE)
     mockApi.createLogMonitor.mockResolvedValue({id: 1})
   })
 
@@ -194,5 +199,36 @@ describe('CreateLogMonitorDialog', () => {
       })
     })
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+  })
+
+  it('pre-fills the name from a single-level seed and edits the level filter', async () => {
+    const onOpenChange = vi.fn()
+    renderWithClient(
+      <CreateLogMonitorDialog open onOpenChange={onOpenChange} query="service:api" levels={['error']} />
+    )
+
+    const dialog = screen.getByRole('dialog')
+    // A single seeded level suggests a name, so the monitor opens ready to create.
+    expect(within(dialog).getByDisplayValue('High error log volume')).toBeInTheDocument()
+    const createButton = within(dialog).getByRole('button', {name: 'Create monitor'})
+    expect(createButton).toBeEnabled()
+
+    // Levels are editable (not frozen to the seed): add "warn".
+    fireEvent.click(within(dialog).getByRole('button', {name: 'warn'}))
+    fireEvent.click(createButton)
+
+    await waitFor(() => {
+      expect(mockApi.createLogMonitor).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'High error log volume',
+          query: 'service:api',
+          levels: ['warn', 'error'],
+          condition: '>',
+          threshold: 10,
+          window_minutes: 5,
+          group_by: null,
+        })
+      )
+    })
   })
 })

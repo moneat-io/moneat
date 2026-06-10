@@ -14,17 +14,5 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.logs.repositories
-
-/**
- * Repository for log data access.
- * Abstracts ClickHouse log queries and PostgreSQL (LogIndexes, OtlpApiKeys).
- */
-interface LogRepository {
-    suspend fun executeClickHouseInsert(sql: String): Boolean
-    suspend fun executeClickHouseQuery(sql: String): String
-    suspend fun executeClickHouseQuery(
-        sql: String,
-        queryParameters: Map<String, String>
-    ): String
-}
+export {LogContextViewer} from './LogContextViewer'
+export type {LogContextViewerProps} from './LogContextViewer'

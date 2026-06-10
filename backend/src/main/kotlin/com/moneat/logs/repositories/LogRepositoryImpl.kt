@@ -37,8 +37,14 @@ class LogRepositoryImpl : LogRepository {
         }
 
     override suspend fun executeClickHouseQuery(sql: String): String =
+        executeClickHouseQuery(sql, emptyMap())
+
+    override suspend fun executeClickHouseQuery(
+        sql: String,
+        queryParameters: Map<String, String>
+    ): String =
         suspendRunCatching {
-            val response = ClickHouseClient.execute(sql)
+            val response = ClickHouseClient.execute(sql, queryParameters = queryParameters)
             response.bodyAsText()
         }.getOrElse { e ->
             logger.error(e) { "ClickHouse log query failed" }
