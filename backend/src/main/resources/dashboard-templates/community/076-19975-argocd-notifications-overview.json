@@ -1,0 +1,180 @@
+{
+    "id": "076-19975-argocd-notifications-overview",
+    "title": "ArgoCD / Notifications / Overview",
+    "description": "Prebuilt Moneat dashboard for ArgoCD / Notifications / Overview telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 3,
+    "variable_count": 5,
+    "warnings": [],
+    "dashboard": {
+        "title": "ArgoCD / Notifications / Overview",
+        "description": "Prebuilt Moneat dashboard for ArgoCD / Notifications / Overview telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data source",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": "Cluster",
+                "type": "query",
+                "query": "label_values(argocd_app_info{}, cluster)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "namespace",
+                "label": "Namespace",
+                "type": "query",
+                "query": "label_values(argocd_app_info{cluster=\"$cluster\"}, namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "job",
+                "label": "Job",
+                "type": "query",
+                "query": "label_values(argocd_notifications_deliveries_total{cluster=\"$cluster\", namespace=~\"$namespace\"}, job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "exported_service",
+                "label": "Notifications Service",
+                "type": "query",
+                "query": "label_values(argocd_notifications_deliveries_total{cluster=\"$cluster\", namespace=~\"$namespace\", job=~\"$job\"}, exported_service)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Summary",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Notification Deliveries",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ exported_service }} - Succeeded: {{ succeeded }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  increase(\n    argocd_notifications_deliveries_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n,\nexported_service=~\"$exported_service\"\n\n    }[$__rate_interval]\n  )\n) by (exported_service, succeeded)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Trigger Evaluations",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ name }} - Triggered: {{ triggered }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(\n  increase(\n    argocd_notifications_trigger_eval_total{\n      cluster=\"$cluster\",\nnamespace=~\"$namespace\",\njob=~\"$job\"\n\n\n    }[$__rate_interval]\n  )\n) by (name, triggered)\n",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "lineWidth": "1",
+                    "fillOpacity": "1.0",
+                    "stackMode": "normal",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 2
+            }
+        ]
+    }
+}

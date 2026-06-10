@@ -16,6 +16,7 @@
 
 package com.moneat.events.services
 
+import com.moneat.analytics.services.GeoIpService
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.EventTraceResponse
 import com.moneat.events.models.FeedbackDetailResponse
@@ -48,6 +49,7 @@ class DashboardService(
     private val projectRepository: ProjectRepository,
     private val issueRepository: IssueRepository,
     private val queryHelper: DashboardQueryHelper = DashboardQueryHelper(),
+    private val geoIpService: GeoIpService = GeoIpService(),
 ) {
     companion object {
         fun create(): DashboardService {
@@ -58,12 +60,13 @@ class DashboardService(
                 },
                 issueRepository = IssueRepositoryImpl(queryHelper),
                 queryHelper = queryHelper,
+                geoIpService = GeoIpService(),
             )
         }
     }
     private val feedbackService = FeedbackService(queryHelper)
     private val releaseStatsService = ReleaseStatsService(queryHelper)
-    private val replayService = ReplayService(queryHelper)
+    private val replayService = ReplayService(queryHelper, geoIpService = geoIpService)
     private val projectService = ProjectService(projectRepository, queryHelper)
     private val projectStatsService = ProjectStatsService(queryHelper)
     private val transactionService = TransactionService(queryHelper)

@@ -39,6 +39,7 @@ import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.events.repositories.ProjectRepository
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlin.test.BeforeTest
@@ -483,6 +484,44 @@ class CustomDashboardServiceTest {
         every { dashboardRepository.delete(999L, ORG_ID) } returns false
 
         assertFalse(service.deleteDashboard(999L, ORG_ID))
+    }
+
+    // ──── setDefaultDashboard ────
+
+    @Test
+    fun `setDefaultDashboard delegates to repository`() = runBlocking {
+        every { dashboardRepository.setDefault(3L, ORG_ID) } returns true
+
+        assertTrue(service.setDefaultDashboard(3L, ORG_ID))
+        verify { dashboardRepository.setDefault(3L, ORG_ID) }
+    }
+
+    // ──── duplicateDashboard ────
+
+    @Test
+    fun `duplicateDashboard copies title with suffix and widgets`() = runBlocking {
+        val flag = buildDashboardFlag(DashboardFlagParams(id = 7L, title = "Test Dashboard"))
+        val widget = buildWidgetData(id = 70L, dashboardId = 7L)
+        every { dashboardRepository.getById(7L, ORG_ID, USER_ID_INT) } returns flag
+        every { widgetRepository.listByDashboardId(7L) } returns listOf(widget)
+        val request = slot<CreateDashboardRequest>()
+        every {
+            dashboardRepository.create(ORG_ID, USER_ID_LONG, capture(request))
+        } returns buildCreatedDashboardData(id = 99L, title = "Test Dashboard (Copy)")
+
+        val result = service.duplicateDashboard(7L, ORG_ID, USER_ID_LONG)
+
+        assertNotNull(result)
+        assertEquals("Test Dashboard (Copy)", request.captured.title)
+        assertEquals(1, request.captured.widgets.size)
+        assertFalse(request.captured.isDefault)
+    }
+
+    @Test
+    fun `duplicateDashboard returns null when source missing`() = runBlocking {
+        every { dashboardRepository.getById(404L, ORG_ID, USER_ID_INT) } returns null
+
+        assertNull(service.duplicateDashboard(404L, ORG_ID, USER_ID_LONG))
     }
 
     // ──── moveDashboardToFolder ────

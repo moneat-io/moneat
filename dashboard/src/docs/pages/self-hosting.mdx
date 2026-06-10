@@ -5,12 +5,14 @@ description: Deploy Moneat on your own infrastructure with Docker Compose.
 
 # Self-Hosting
 
-Moneat can be self-hosted using Docker Compose. The self-hosted edition includes all core features with no event limits. Enterprise features (On-Call, SSO) require a license.
+Moneat can be self-hosted using Docker Compose. The self-hosted edition includes core observability
+features without SaaS plan limits. OIDC SSO is included; SAML SSO, SSO enforcement, and licensed
+enterprise modules require a license.
 
 ## Requirements
 
 - Docker v20.10+ and Docker Compose v2.0+
-- 2 CPU cores and 3 GB RAM minimum (4 GB recommended)
+- 4 CPU cores and 8 GB RAM recommended for the full Docker Compose stack
 - A Linux server (Ubuntu 22.04+, Debian 12+, or similar)
 
 ## Install
@@ -32,8 +34,8 @@ bash <(wget -qO- https://raw.githubusercontent.com/moneat-io/moneat/main/install
 If you prefer to set things up manually:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/docker-compose.yml -o docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/.env.example -o .env.example
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/main/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/main/.env.example -o .env.example
 cp .env.example .env
 ```
 
@@ -55,6 +57,7 @@ Edit `.env` and set these required values:
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
 | `BACKEND_URL` | Public URL of the API (e.g. `https://api.moneat.example.com`). |
 | `SELF_HOSTED` | Set to `true`. |
+| `MONEAT_LICENSE_KEY` | Optional. Enables licensed self-hosted modules such as SAML SSO, SSO enforcement, and On-Call when the key includes those features. |
 
 Then start:
 
@@ -75,6 +78,6 @@ Database migrations run automatically on backend startup.
 
 Self-hosted deployments send a periodic telemetry pulse. These are the exact fields included:
 Moneat version, CPU count, memory usage, OS name and architecture, JVM version, aggregate
-project/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
+service/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
 are included in the telemetry payload. Turn it off by setting
 `TELEMETRY_ENABLED=false` in your `.env`.

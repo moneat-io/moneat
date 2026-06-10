@@ -1,0 +1,2233 @@
+{
+    "id": "068-15760-kubernetes-views-pods",
+    "title": "Kubernetes / Views / Pods",
+    "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Pods telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 29,
+    "variable_count": 6,
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes / Views / Pods",
+        "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Pods telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_node_info,cluster)",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "namespace",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_info{cluster=\"$cluster\"}, namespace)",
+                "default_value": "monitoring",
+                "current": "monitoring",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "pod",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_info{namespace=\"$namespace\", cluster=\"$cluster\"}, pod)",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "resolution",
+                "label": null,
+                "type": "custom",
+                "query": "1s, 15s, 30s, 1m, 3m, 5m",
+                "default_value": "30s",
+                "current": "30s",
+                "options": [
+                    "1s",
+                    "15s",
+                    "30s",
+                    "1m",
+                    "3m",
+                    "5m"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "job",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_info{namespace=\"$namespace\", cluster=\"$cluster\"},job)",
+                "default_value": "kube-state-metrics",
+                "current": "kube-state-metrics",
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Information",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Created by",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 6,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ created_by_kind }}: {{ created_by_name }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_info{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Running on",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ node }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_info{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "Pod IP",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ pod_ip }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_info{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Priority Class",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 3,
+                "grid_w": 2,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ priority_class }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "priority_class",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_info{namespace=\"$namespace\", pod=~\"$pod\", priority_class!=\"\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"rgb(255, 255, 255)\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "QOS Class",
+                "widget_type": "stat",
+                "grid_x": 2,
+                "grid_y": 3,
+                "grid_w": 4,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ qos_class }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_status_qos_class{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"} > 0",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Last Terminated Reason",
+                "widget_type": "stat",
+                "grid_x": 6,
+                "grid_y": 3,
+                "grid_w": 3,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ reason }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_container_status_last_terminated_reason{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"text\"},{\"value\":1,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "Last Terminated Exit Code",
+                "widget_type": "stat",
+                "grid_x": 9,
+                "grid_y": 3,
+                "grid_w": 3,
+                "grid_h": 2,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_container_status_last_terminated_exitcode{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"text\"},{\"value\":1,\"color\":\"red\"},{\"value\":2,\"color\":\"#EAB839\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Resources",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "Total pod CPU Requests usage",
+                "widget_type": "gauge",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 1,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) / sum(kube_pod_container_resource_requests{namespace=\"$namespace\", pod=~\"$pod\", resource=\"cpu\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"#EAB839\"},{\"value\":75,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "Total pod CPU Limits usage",
+                "widget_type": "gauge",
+                "grid_x": 1,
+                "grid_y": 6,
+                "grid_w": 2,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "Limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) / sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$pod\", resource=\"cpu\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"#EAB839\"},{\"value\":75,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Total pod RAM Requests usage",
+                "widget_type": "gauge",
+                "grid_x": 3,
+                "grid_y": 6,
+                "grid_w": 1,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}) / sum(kube_pod_container_resource_requests{namespace=\"$namespace\", pod=~\"$pod\", resource=\"memory\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"blue\"},{\"value\":80,\"color\":\"#EAB839\"},{\"value\":99,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "Total pod RAM Limits usage",
+                "widget_type": "gauge",
+                "grid_x": 4,
+                "grid_y": 6,
+                "grid_w": 2,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "Limits"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}) / sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$pod\", resource=\"memory\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) ",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":60,\"color\":\"#EAB839\"},{\"value\":75,\"color\":\"red\"}]",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1",
+                    "orientation": "auto"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Resources by container",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 6,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\", pod=~\"$pod\", resource=\"cpu\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$pod\", resource=\"cpu\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_requests{namespace=\"$namespace\", pod=~\"$pod\", resource=\"memory\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$pod\", resource=\"memory\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", container!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (container)",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", container!=\"\", cluster=\"$cluster\"}) by (container)",
+                        "ref_id": "F"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "4",
+                    "thresholds": "[{\"value\":0,\"color\":\"blue\"}]",
+                    "fieldRenames": "{\"Value #A\":\"CPU Requests\",\"Value #B\":\"CPU Limits\",\"Value #C\":\"Memory Requests\",\"Value #D\":\"Memory Limits\",\"Value #E\":\"CPU Used\",\"Value #F\":\"Memory Used\",\"container\":\"Container\"}"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "CPU Usage / Requests & Limits by container",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ container }}  REQUESTS"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (container) / sum(kube_pod_container_resource_requests{namespace=\"$namespace\", pod=~\"$pod\", resource=\"cpu\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ container }}  LIMITS"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (container) / sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$pod\", resource=\"cpu\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":20,\"color\":\"yellow\"},{\"value\":30,\"color\":\"green\"},{\"value\":70,\"color\":\"yellow\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1"
+                },
+                "sort_order": 14
+            },
+            {
+                "title": "Memory Usage / Requests & Limits by container",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 14,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "{{ container }} REQUESTS"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}) by (container) / sum(kube_pod_container_resource_requests{namespace=\"$namespace\", pod=~\"$pod\", resource=\"memory\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "{{ container }} LIMITS"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", cluster=\"$cluster\"}) by (container) / sum(kube_pod_container_resource_limits{namespace=\"$namespace\", pod=~\"$pod\", resource=\"memory\", job=~\"$job\", cluster=\"$cluster\"} and on(namespace, pod) max by (namespace, pod) (kube_pod_status_phase{phase=\"Running\", namespace=\"$namespace\", pod=~\"$pod\", job=~\"$job\", cluster=\"$cluster\"} == 1)) by (container)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":20,\"color\":\"yellow\"},{\"value\":30,\"color\":\"green\"},{\"value\":70,\"color\":\"#EAB839\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": "CPU Usage by container",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ container }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", container!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (container, id)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "4",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "Memory Usage by container",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 22,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": "mem_used",
+                                "alias": "{{ container }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", container!=\"\", cluster=\"$cluster\"}) by (container, id)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "CPU Throttled seconds by container",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 30,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ container }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "image",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "container",
+                                "op": "neq",
+                                "value": "",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_cpu_cfs_throttled_seconds_total{namespace=\"$namespace\", pod=~\"$pod\", image!=\"\", container!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (container)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table"
+                },
+                "sort_order": 18
+            },
+            {
+                "title": "Kubernetes",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 38,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 19
+            },
+            {
+                "title": "OOM Events by container",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 39,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ container }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(container_oom_events_total{namespace=\"${namespace}\", pod=~\"${pod}\", container!=\"\", cluster=\"$cluster\"}[$__rate_interval])) by (container) > 0",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1"
+                },
+                "sort_order": 20
+            },
+            {
+                "title": "Container Restarts by container",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 39,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ container }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(kube_pod_container_status_restarts_total{namespace=\"${namespace}\", pod=~\"${pod}\", container!=\"\", job=~\"$job\", cluster=\"$cluster\"}[$__rate_interval])) by (container) > 0",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "right",
+                    "legendMode": "table",
+                    "gaugeMin": "0",
+                    "gaugeMax": "1"
+                },
+                "sort_order": 21
+            },
+            {
+                "title": "Pods with Container Issues",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 47,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "reason",
+                                "op": "like",
+                                "value": "ErrImagePull|ImagePullBackOff|CrashLoopBackOff",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_container_status_waiting_reason{reason=~\"ErrImagePull|ImagePullBackOff|CrashLoopBackOff\"} == 1",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":1,\"color\":\"#EAB839\"},{\"value\":5,\"color\":\"red\"}]",
+                    "visibleFields": "namespace,pod,reason,container",
+                    "fieldRenames": "{\"container\":\"Container\",\"namespace\":\"Namespace\",\"pod\":\"Pod Name\",\"reason\":\"Reason\"}"
+                },
+                "sort_order": 22
+            },
+            {
+                "title": "Unscheduled Pods",
+                "widget_type": "table",
+                "grid_x": 6,
+                "grid_y": 47,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "__auto"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "condition",
+                                "op": "eq",
+                                "value": "false",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "kube_pod_status_scheduled{condition=\"false\"} == 1",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":1,\"color\":\"#EAB839\"},{\"value\":5,\"color\":\"red\"}]",
+                    "visibleFields": "container,namespace,pod,condition",
+                    "fieldRenames": "{\"condition\":\"Condition\",\"container\":\"Container\",\"namespace\":\"Namespace\",\"pod\":\"Pod Name\"}"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Network",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 55,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 24
+            },
+            {
+                "title": "Network - Bandwidth",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_network_receive_bytes_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(container_network_transmit_bytes_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "binBps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 25
+            },
+            {
+                "title": "Network - Packets Rate",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 56,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_network_receive_packets_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(container_network_transmit_packets_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "pps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 26
+            },
+            {
+                "title": "Network - Packets Dropped",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 64,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_network_receive_packets_dropped_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(container_network_transmit_packets_dropped_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "pps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 27
+            },
+            {
+                "title": "Network - Errors",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 64,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_recv_bytes",
+                                "alias": "Received"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(container_network_receive_errors_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "net_sent_bytes",
+                                "alias": "Transmitted"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "pod",
+                                "op": "like",
+                                "value": "$pod",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "eq",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "- sum(rate(container_network_transmit_errors_total{namespace=\"$namespace\", pod=~\"$pod\", cluster=\"$cluster\"}[$__rate_interval]))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "pps",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 28
+            }
+        ]
+    }
+}

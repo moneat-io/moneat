@@ -1,0 +1,122 @@
+{
+    "id": "052-13639-logs-app",
+    "title": "Logs / App",
+    "description": "Prebuilt Moneat dashboard for Logs / App telemetry.",
+    "category": "logs",
+    "tags": [
+        "Logs",
+        "Loki"
+    ],
+    "required_sources": [
+        "Loki"
+    ],
+    "widget_count": 2,
+    "variable_count": 2,
+    "warnings": [
+        "Panel 1: couldn't parse PromQL '{job=\"$app\"} |= \"$search\" | logfmt', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Logs / App",
+        "description": "Prebuilt Moneat dashboard for Logs / App telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "app",
+                "label": "App",
+                "type": "query",
+                "query": "label_values(job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__loki"
+            },
+            {
+                "name": "search",
+                "label": "String Match",
+                "type": "textbox",
+                "query": "",
+                "default_value": "",
+                "current": "",
+                "options": [
+                    ""
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(count_over_time({job=\"$app\"} |= \"$search\" [$__interval]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 3,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{job=\"$app\"} |= \"$search\" | logfmt",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            }
+        ]
+    }
+}

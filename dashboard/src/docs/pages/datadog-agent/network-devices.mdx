@@ -9,8 +9,9 @@ description: Monitor SNMP network devices, traps, flow data, and network paths w
 
 Network Device Monitoring (NDM) lets you monitor routers, switches, firewalls, and other SNMP-enabled devices. The Datadog Agent polls devices via SNMP and collects traps, NetFlow/sFlow data, and network path information - all visible in the Moneat dashboard.
 
-:::info[Enterprise feature]
-Network Device Monitoring requires the Datadog Agent integration, available on Enterprise plans.
+:::info[Availability]
+Network Device Monitoring is included on standard plans. For self-hosted builds that use module licensing,
+enable the `datadog` module to expose the network device dashboards.
 :::
 
 ## Prerequisites
@@ -18,7 +19,7 @@ Network Device Monitoring requires the Datadog Agent integration, available on E
 - SNMP-enabled network devices (routers, switches, firewalls, etc.)
 - The Datadog Agent deployed on a host with network access to the devices (see [Agent Setup](/docs/datadog-agent/agent-setup))
 - SNMP community strings or v3 credentials for your devices
-- The Enterprise `datadog` module enabled
+- For self-hosted module-licensed builds, the `datadog` module enabled
 
 ## Enable Network Device Monitoring
 

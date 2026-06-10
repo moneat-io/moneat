@@ -1,0 +1,1157 @@
+{
+    "id": "050-11022-envoy-global",
+    "title": "Envoy Global",
+    "description": "Prebuilt Moneat dashboard for Envoy Global telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Network",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 22,
+    "variable_count": 3,
+    "warnings": [],
+    "dashboard": {
+        "title": "Envoy Global",
+        "description": "Prebuilt Moneat dashboard for Envoy Global telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "Namespace",
+                "label": null,
+                "type": "query",
+                "query": "label_values(envoy_cluster_upstream_rq_time_bucket,namespace)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "Service",
+                "label": null,
+                "type": "query",
+                "query": "label_values(envoy_cluster_upstream_rq_time_bucket,service)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "DownStream",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Downstream RPS",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_http_downstream_rq_total[1m])) by (service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Downstream CPS",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_http_downstream_cx_total[1m])) by (service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Downstream Latency",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} 90%"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(0.9, sum(rate(envoy_http_downstream_rq_time_bucket[1m])) by (le, service))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} 50% "
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(0.5, sum(rate(envoy_http_downstream_rq_time_bucket[1m])) by (le, service))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{service}} 99%"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(0.99, sum(rate(envoy_http_downstream_rq_time_bucket[1m])) by (le, service))",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Downstream Total Connections",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 1,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(envoy_http_downstream_cx_active) by (service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "Drill down to cluster",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "Service Total",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(envoy_cluster_upstream_cx_active{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(envoy_http_downstream_cx_active) by (service)",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(envoy_cluster_membership_healthy{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service) / avg(envoy_cluster_membership_total{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "UpStream",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Upstream RPS",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 16,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_cluster_upstream_rq_total{namespace=~\"$Namespace\",service=~\"$Service\"}[1m])) by (service,namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Upstream CPS",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 16,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_cluster_upstream_cx_total{namespace=~\"$Namespace\",service=~\"$Service\"}[1m])) by (namespace, service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Upstream Latency",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 16,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}} 99%"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(0.99, sum(rate(envoy_cluster_upstream_rq_time_bucket{service=~\"$Service\",namespace=~\"$Namespace\"}[1m])) by (le, service, namespace))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}} 90%"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(0.9, sum(rate(envoy_cluster_upstream_rq_time_bucket{service=~\"$Service\",namespace=~\"$Namespace\"}[1m])) by (le, service, namespace))",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}} 50% "
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "histogram_quantile(0.5, sum(rate(envoy_cluster_upstream_rq_time_bucket{service=~\"$Service\",namespace=~\"$Namespace\"}[1m])) by (le, service, namespace))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Upstream Total Connections",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 16,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(envoy_cluster_upstream_cx_active{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "UpStream x",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 24,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "Upstream 2xx Responses",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 25,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "envoy_response_code_class",
+                                "op": "like",
+                                "value": "2",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_cluster_upstream_rq_xx{namespace=~\"$Namespace\",service=~\"$Service\",envoy_response_code_class=~\"2\"}[1m])) by (namespace,service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Upstream 3xx Responses",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 25,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "envoy_response_code_class",
+                                "op": "eq",
+                                "value": "3",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_cluster_upstream_rq_xx{namespace=~\"$Namespace\",service=~\"$Service\",envoy_response_code_class=\"3\"}[1m])) by (namespace,service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Upstream 4xx Responses",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 25,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "envoy_response_code_class",
+                                "op": "eq",
+                                "value": "4",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_cluster_upstream_rq_xx{namespace=~\"$Namespace\",service=~\"$Service\",envoy_response_code_class=\"4\"}[1m])) by (namespace,service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Upstream 5xx Responses",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 25,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            },
+                            {
+                                "field": "envoy_response_code_class",
+                                "op": "eq",
+                                "value": "5",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(envoy_cluster_upstream_rq_xx{namespace=~\"$Namespace\",service=~\"$Service\",envoy_response_code_class=\"5\"}[1m])) by (namespace,service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            },
+            {
+                "title": "Total",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 33,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 17
+            },
+            {
+                "title": "Endpoint Percentage Health",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 34,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(envoy_cluster_membership_healthy{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service) / avg(envoy_cluster_membership_total{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            },
+            {
+                "title": "Total Endpoints",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 34,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(envoy_cluster_membership_total{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 19
+            },
+            {
+                "title": "Healthy Endpoints",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 34,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(envoy_cluster_membership_healthy{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 20
+            },
+            {
+                "title": "Unhealthy Endpoints",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 34,
+                "grid_w": 3,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{namespace}}/{{service}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$Namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "service",
+                                "op": "like",
+                                "value": "$Service",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "avg(envoy_cluster_membership_total{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service) - avg(envoy_cluster_membership_healthy{namespace=~\"$Namespace\",service=~\"$Service\"}) by (namespace, service)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 21
+            }
+        ]
+    }
+}

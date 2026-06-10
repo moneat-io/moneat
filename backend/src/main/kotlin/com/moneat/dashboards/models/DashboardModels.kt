@@ -56,7 +56,11 @@ data class DashboardVariable(
     @SerialName("default_value") val defaultValue: String? = null,
     val current: String? = null,
     val options: List<String> = emptyList(),
-    val datasource: String? = null
+    val datasource: String? = null,
+    /** When true, the variable accepts several values at once (stored as a comma-joined string). */
+    val multi: Boolean = false,
+    /** When true, an "All" choice is offered (selected value `${'$'}__all`). */
+    @SerialName("include_all") val includeAll: Boolean = false
 )
 
 // Exposed table definitions
@@ -261,7 +265,14 @@ data class ExecuteBatchQueryRequest(
 
 @Serializable
 data class BatchQueryResult(
-    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>
+    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>,
+    val metadata: Map<String, BatchQueryResultMetadata> = emptyMap()
+)
+
+@Serializable
+data class BatchQueryResultMetadata(
+    @SerialName("original_ref_id") val originalRefId: String? = null,
+    @SerialName("query_index") val queryIndex: Int
 )
 
 @Serializable
@@ -275,4 +286,42 @@ data class DashboardImportResult(
     val dashboard: DashboardResponse,
     val warnings: List<String> = emptyList(),
     val variables: List<DashboardVariable> = emptyList()
+)
+
+@Serializable
+data class DashboardTemplateCatalog(
+    val templates: List<DashboardTemplateSummary> = emptyList()
+)
+
+@Serializable
+data class DashboardTemplateSummary(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val category: String = "community",
+    val tags: List<String> = emptyList(),
+    @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
+    @SerialName("widget_count") val widgetCount: Int = 0,
+    @SerialName("variable_count") val variableCount: Int = 0,
+    @SerialName("resource_path") val resourcePath: String
+)
+
+@Serializable
+data class DashboardTemplateDetail(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val category: String = "community",
+    val tags: List<String> = emptyList(),
+    @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
+    @SerialName("widget_count") val widgetCount: Int = 0,
+    @SerialName("variable_count") val variableCount: Int = 0,
+    val warnings: List<String> = emptyList(),
+    val dashboard: CreateDashboardRequest
+)
+
+@Serializable
+data class InstantiateDashboardTemplateRequest(
+    @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("folder_id") val folderId: Long? = null
 )

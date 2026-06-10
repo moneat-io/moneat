@@ -42,7 +42,7 @@ function DocPage() {
         {doc.description && <meta name="description" content={doc.description} />}
         <link rel="canonical" href={`${SITE_ORIGIN}/docs/${doc.slug}`} />
       </Helmet>
-      <article className="px-4 py-12 sm:px-8 lg:px-12">
+      <article className="mx-auto max-w-3xl px-6 py-12 sm:px-10 lg:px-14">
         <div className="prose prose-invert max-w-none prose-headings:text-white prose-p:text-slate-300 prose-li:text-slate-300 prose-strong:text-white prose-a:text-indigo-300 hover:prose-a:text-indigo-200 prose-code:font-brandmono prose-code:text-slate-200 prose-pre:bg-[#07080e] prose-pre:border prose-pre:border-white/10 [&_code]:before:content-none [&_code]:after:content-none">
           <Component components={mdxComponents} />
         </div>

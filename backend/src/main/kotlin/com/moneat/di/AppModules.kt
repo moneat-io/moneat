@@ -48,6 +48,7 @@ import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.dashboards.services.DashboardTemplateCatalogService
 import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.repositories.IssueRepository
@@ -244,7 +245,7 @@ val eventsModule = module {
     single { ReleaseService() }
     single { NotificationService(get(), get()) }
     single { EventService(get(), get(), get()) }
-    single { DashboardService(get(), get(), get()) }
+    single { DashboardService(get(), get(), get(), get()) }
 }
 
 /** Infrastructure monitoring and alerting. */
@@ -301,6 +302,7 @@ val dashboardsModule = module {
     single<DashboardWidgetRepository> { DashboardWidgetRepositoryImpl() }
 
     single { DashboardQueryEngine() }
+    single { DashboardTemplateCatalogService() }
     single {
         DashboardAlertService(
             incidentService = get(),

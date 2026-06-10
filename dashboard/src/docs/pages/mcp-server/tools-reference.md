@@ -264,13 +264,6 @@ Get status for a specific host.
 |-----------|------|----------|-------------|
 | `host_id` | integer | Yes | Host ID |
 
-### ✏️ `create_host`
-Register a new monitored host.
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | string | Yes | Host name |
-
 ### ✏️ `delete_host`
 Delete a monitored host.
 

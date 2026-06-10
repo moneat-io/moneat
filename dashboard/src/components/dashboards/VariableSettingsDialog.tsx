@@ -27,6 +27,7 @@ import {
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
+import {Checkbox} from '@/components/ui/checkbox'
 import {Plus, Trash2, GripVertical, ChevronDown, ChevronRight} from 'lucide-react'
 
 const VARIABLE_TYPES = [
@@ -209,6 +210,25 @@ export function VariableSettingsDialog({
                         />
                       </div>
                     </div>
+
+                    {(v.type === 'custom' || v.type === 'query') && (
+                      <div className="flex flex-wrap gap-x-5 gap-y-2">
+                        <label className="flex items-center gap-2 text-xs">
+                          <Checkbox
+                            checked={!!v.multi}
+                            onCheckedChange={(c) => updateVar(i, {multi: c === true})}
+                          />
+                          Allow multiple values
+                        </label>
+                        <label className="flex items-center gap-2 text-xs">
+                          <Checkbox
+                            checked={!!v.include_all}
+                            onCheckedChange={(c) => updateVar(i, {include_all: c === true})}
+                          />
+                          Include an &ldquo;All&rdquo; option
+                        </label>
+                      </div>
+                    )}
 
                     {v.type === 'query' && (
                       <div className="space-y-1">

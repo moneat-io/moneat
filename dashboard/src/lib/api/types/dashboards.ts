@@ -23,6 +23,10 @@ export interface DashboardVariable {
   current?: string | null
   options: string[]
   datasource?: string | null
+  /** Accepts several values at once; the selected value is stored comma-joined. */
+  multi?: boolean
+  /** Offers an "All" choice (selected value `$__all`). */
+  include_all?: boolean
 }
 
 export interface MetricDef {
@@ -138,6 +142,12 @@ export interface UpdateDashboardAlertRequest {
 
 export interface BatchQueryResult {
   results: Record<string, Record<string, unknown>[]>
+  metadata?: Record<string, BatchQueryResultMetadata>
+}
+
+export interface BatchQueryResultMetadata {
+  original_ref_id?: string | null
+  query_index: number
 }
 
 export interface CustomDashboard {
@@ -234,6 +244,28 @@ export interface DashboardImportResult {
   dashboard: CustomDashboard
   warnings: string[]
   variables?: DashboardVariable[]
+}
+
+export interface DashboardTemplateSummary {
+  id: string
+  title: string
+  description?: string | null
+  category: string
+  tags: string[]
+  required_sources: string[]
+  widget_count: number
+  variable_count: number
+  resource_path: string
+}
+
+export interface DashboardTemplateDetail extends Omit<DashboardTemplateSummary, 'resource_path'> {
+  warnings: string[]
+  dashboard: CreateDashboardRequest
+}
+
+export interface InstantiateDashboardTemplateRequest {
+  project_id?: number | null
+  folder_id?: number | null
 }
 
 export interface DataSourceField {

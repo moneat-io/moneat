@@ -1,23 +1,29 @@
 ---
-title: SDK Setup
-description: Install and configure Sentry-compatible SDKs.
+title: Sentry-Compatible SDKs
+description: Connect existing Sentry-compatible SDKs to Moneat.
 ---
 
-# SDK Setup
+# Sentry-Compatible SDKs
 
-Install and configure Sentry-compatible SDKs for your platform to start capturing errors.
+Use this source setup when your application already uses a Sentry SDK, or when you need
+Sentry-compatible features such as exception envelopes, breadcrumbs, session replay, and source-map
+upload workflows. For new vendor-neutral logs, traces, and metrics, start with
+[OpenTelemetry](/docs/opentelemetry).
 
 ## Sentry SDK Compatibility
 
-Moneat uses the Sentry protocol for event ingestion. You can use any official Sentry SDK to send errors to Moneat by pointing the DSN to your Moneat instance.
+Moneat accepts Sentry protocol envelopes. You can use any official Sentry SDK by pointing its DSN
+to your Moneat service.
 
 :::info[90+ platforms supported]
-Any platform with a Sentry SDK works with Moneat. This includes all major languages, frameworks, and mobile platforms.
+Any platform with a Sentry SDK works with Moneat. This includes all major languages, frameworks,
+and mobile platforms.
 :::
 
 ## Finding Your DSN
 
-Your DSN (Data Source Name) is available in your service settings. Navigate to **Sources / Ingestion → Service settings** to find it. The DSN format is:
+Your DSN (Data Source Name) is available in your service settings under the Sentry-compatible source.
+The DSN format is:
 
 ```text
 https://<public_key>@api.moneat.io/api/<project_id>
@@ -25,25 +31,29 @@ https://<public_key>@api.moneat.io/api/<project_id>
 
 ## Platform-Specific Setup
 
-Select your platform below to see the setup steps. Replace `YOUR_DSN_HERE` with your service DSN from the dashboard.
+Select your platform below to see the setup steps. Replace `YOUR_DSN_HERE` with your service DSN
+from the dashboard.
 
 <SdkSetup />
 
 ## Other Platforms
 
-Moneat works with any Sentry SDK. For platforms not listed above, refer to the [official Sentry SDK documentation](https://docs.sentry.io/platforms/) and replace the DSN with your Moneat DSN.
+For platforms not listed above, refer to the
+[official Sentry SDK documentation](https://docs.sentry.io/platforms/) and replace the DSN with your
+Moneat DSN.
 
 ## Common Options
 
-These SDK options work across all platforms:
+These SDK options work across Sentry-compatible SDKs:
 
-- `dsn` - Your Moneat service DSN (required)
+- `dsn` - Your Moneat service DSN
 - `release` - Your app version for release tracking
-- `environment` - Deployment environment (production, staging, etc.)
-- `tracesSampleRate` - Percentage of transactions to capture (0.0 to 1.0)
+- `environment` - Deployment environment such as production or staging
+- `tracesSampleRate` - Percentage of transactions to capture
 - `beforeSend` - Callback to modify or filter events before sending
-- `sampleRate` - Percentage of error events to capture (0.0 to 1.0)
+- `sampleRate` - Percentage of error events to capture
 
 :::tip[Start with full sampling]
-Set `tracesSampleRate: 1.0` during development. In production, lower it to reduce data volume and costs (e.g., 0.1 for 10% sampling).
+Set `tracesSampleRate: 1.0` during development. In production, lower it to reduce data volume and
+costs, for example `0.1` for 10% transaction sampling.
 :::

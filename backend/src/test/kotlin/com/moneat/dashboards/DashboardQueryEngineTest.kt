@@ -17,6 +17,7 @@
 package com.moneat.dashboards
 
 import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.GroupByDef
@@ -25,7 +26,10 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.OrderByDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
+import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import io.mockk.every
+import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -500,6 +504,38 @@ class DashboardQueryEngineTest {
         }
     }
 
+    @Test
+    fun `resolveTemplateDataSource maps marker to enabled custom source`() {
+        val dataSourceService = mockk<CustomDataSourceService>()
+        every { dataSourceService.listDataSources(1L) } returns listOf(
+            customDataSource(id = 42, sourceType = "prometheus", enabled = true)
+        )
+
+        val resolved = engine.resolveTemplateDataSource(
+            QueryDsl(dataSource = "__prometheus", rawQuery = "up"),
+            1L,
+            dataSourceService,
+        )
+
+        assertEquals("custom:42", resolved.dataSource)
+    }
+
+    @Test
+    fun `resolveTemplateDataSource leaves marker unchanged without enabled source`() {
+        val dataSourceService = mockk<CustomDataSourceService>()
+        every { dataSourceService.listDataSources(1L) } returns listOf(
+            customDataSource(id = 42, sourceType = "prometheus", enabled = false)
+        )
+
+        val resolved = engine.resolveTemplateDataSource(
+            QueryDsl(dataSource = "__prometheus", rawQuery = "up"),
+            1L,
+            dataSourceService,
+        )
+
+        assertEquals("__prometheus", resolved.dataSource)
+    }
+
     // ──── applyVariables ────
 
     @Test
@@ -567,4 +603,77 @@ class DashboardQueryEngineTest {
         // The raw unescaped single quote should not appear without a preceding backslash
         assertFalse(value.startsWith("';"), "Value should not start with unescaped quote")
     }
+
+    @Test
+    fun `applyVariables expands a multi-value selection into an IN list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.EQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "pod-a,pod-b,pod-c"))
+        assertEquals(1, result.filters.size)
+        assertEquals(FilterOp.IN, result.filters[0].op)
+        assertEquals(listOf("pod-a", "pod-b", "pod-c"), result.filters[0].values)
+        assertNull(result.filters[0].value)
+    }
+
+    @Test
+    fun `applyVariables expands a multi-value NEQ into a NOT IN list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.NEQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "a,b"))
+        assertEquals(FilterOp.NOT_IN, result.filters[0].op)
+        assertEquals(listOf("a", "b"), result.filters[0].values)
+    }
+
+    @Test
+    fun `applyVariables drops a pure-reference filter when All is selected`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "env", op = FilterOp.EQ, value = "\$env"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("env" to "\$__all"))
+        assertTrue(result.filters.isEmpty())
+    }
+
+    @Test
+    fun `applyVariables renders multi-value as a regex alternation in rawQuery`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            rawQuery = "pod=~\"\$pod\""
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "a,b"))
+        assertEquals("pod=~\"(a|b)\"", result.rawQuery)
+    }
+
+    @Test
+    fun `applyVariables keeps a single value as equality`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.EQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "only-one"))
+        assertEquals(FilterOp.EQ, result.filters[0].op)
+        assertEquals("only-one", result.filters[0].value)
+    }
+
+    private fun customDataSource(
+        id: Long,
+        sourceType: String,
+        enabled: Boolean,
+    ): CustomDataSourceResponse =
+        CustomDataSourceResponse(
+            id = id,
+            orgId = 1,
+            name = sourceType,
+            sourceType = sourceType,
+            host = "localhost",
+            port = 9090,
+            enabled = enabled,
+            createdBy = 1,
+            createdAt = "2026-01-01T00:00:00Z",
+            updatedAt = "2026-01-01T00:00:00Z",
+        )
 }

@@ -1,0 +1,677 @@
+{
+    "id": "026-14361-aws-alb-cloudwatch-metrics",
+    "title": "AWS ALB Cloudwatch Metrics",
+    "description": "Prebuilt Moneat dashboard for AWS ALB Cloudwatch Metrics telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 12,
+    "variable_count": 3,
+    "warnings": [],
+    "dashboard": {
+        "title": "AWS ALB Cloudwatch Metrics",
+        "description": "Prebuilt Moneat dashboard for AWS ALB Cloudwatch Metrics telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data Source",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": "cloudwatch",
+                "current": "cloudwatch",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "loadbalancer",
+                "label": "Load Balancer",
+                "type": "query",
+                "query": "dimension_values($region, AWS/ApplicationELB, ActiveConnectionCount, LoadBalancer)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Healthy targets",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HealthyHostCount\",\"Period\":\"\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"},{\"Name\":\"TargetGroup\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "UnHealthy targets",
+                "widget_type": "stat",
+                "grid_x": 4,
+                "grid_y": 0,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"UnHealthyHostCount\",\"Period\":\"\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"},{\"Name\":\"TargetGroup\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "horizontal"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Consumed LCUs",
+                "widget_type": "stat",
+                "grid_x": 8,
+                "grid_y": 0,
+                "grid_w": 4,
+                "grid_h": 5,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"ConsumedLCUs\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "orientation": "auto"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "HTTP Response",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Target HTTP Response",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_Target_2XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_Target_3XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_Target_4XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_Target_5XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            },
+            {
+                "title": "ELB HTTP Response",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 6,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_3XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_4XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_5XX_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "ELB 500 Errors",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 6,
+                "grid_w": 4,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_500_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_502_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_503_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"HTTPCode_ELB_504_Count\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Clients",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "Connections",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 4,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"ActiveConnectionCount\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"NewConnectionCount\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"RejectedConnectionCount\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"TargetConnectionErrorCount\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Requests",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 15,
+                "grid_w": 4,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"RequestCount\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"NonStickyRequestCount\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"RequestCountPerTarget\",\"Period\":\"\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Processed bytes",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 15,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"ProcessedBytes\",\"Period\":\"\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Target Response Time",
+                "widget_type": "timeseries",
+                "grid_x": 8,
+                "grid_y": 21,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ApplicationELB\",\"MetricName\":\"TargetResponseTime\",\"Period\":\"\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"LoadBalancer\",\"Value\":\"$loadbalancer\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s"
+                },
+                "sort_order": 11
+            }
+        ]
+    }
+}

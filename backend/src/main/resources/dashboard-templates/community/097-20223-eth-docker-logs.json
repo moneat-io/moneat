@@ -1,0 +1,160 @@
+{
+    "id": "097-20223-eth-docker-logs",
+    "title": "ETH Docker Logs",
+    "description": "Prebuilt Moneat dashboard for ETH Docker Logs telemetry.",
+    "category": "logs",
+    "tags": [
+        "Logs",
+        "Loki"
+    ],
+    "required_sources": [
+        "Loki"
+    ],
+    "widget_count": 4,
+    "variable_count": 0,
+    "warnings": [
+        "Panel 0: couldn't parse PromQL '{container_name=~\".+-execution-1\"}', stored as rawQuery",
+        "Panel 1: couldn't parse PromQL '{container_name=~\".+-consensus-1\"}', stored as rawQuery",
+        "Panel 2: couldn't parse PromQL '{container_name=~\".+-validator-1\"}', stored as rawQuery",
+        "Panel 3: couldn't parse PromQL '{container_name=~\".+-mev-boost-1\"}', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "ETH Docker Logs",
+        "description": "Prebuilt Moneat dashboard for ETH Docker Logs telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [],
+        "widgets": [
+            {
+                "title": "Execution Logs",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{container_name=~\".+-execution-1\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "Consensus Logs",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{container_name=~\".+-consensus-1\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Validator Logs",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{container_name=~\".+-validator-1\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "MEV Boost Logs",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__loki",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{container_name=~\".+-mev-boost-1\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            }
+        ]
+    }
+}

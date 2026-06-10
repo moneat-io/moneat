@@ -16,7 +16,7 @@
 
 import {memo, type ComponentProps, type CSSProperties, type ReactNode, useEffect, useId, useMemo, useRef, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
-import type {DashboardWidget, TimeRangeDef} from '@/lib/api'
+import type {BatchQueryResultMetadata, DashboardWidget, QueryDsl, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {isDemo} from '@/lib/demo'
 import {
@@ -60,6 +60,24 @@ const COLORS = [
 ]
 
 const TIME_KEYS = new Set(['time_bucket', 'timestamp', 'time', 'Time', 'day', 'Day'])
+const GENERATED_REF_IDS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+
+function queryForBatchResult(
+  queries: QueryDsl[],
+  refId: string,
+  metadata?: BatchQueryResultMetadata,
+): QueryDsl | undefined {
+  if (metadata?.original_ref_id != null) {
+    const byOriginalRefId = queries.find(q => q.ref_id === metadata.original_ref_id)
+    if (byOriginalRefId != null) return byOriginalRefId
+  }
+
+  const byResponseRefId = queries.find(q => q.ref_id === refId)
+  if (byResponseRefId != null) return byResponseRefId
+
+  const generatedIndex = metadata?.query_index ?? GENERATED_REF_IDS.indexOf(refId)
+  return generatedIndex >= 0 ? queries[generatedIndex] : undefined
+}
 
 /**
  * Parse a ClickHouse datetime string as UTC epoch ms.
@@ -159,6 +177,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
         // Merge batch results: use legendFormat alias as series name, group by timestamp
         const mergedByTime = new Map<unknown, Record<string, unknown>>()
         for (const [refId, rows] of Object.entries(result.results)) {
+          const resultMetadata = result.metadata?.[refId]
           if (queries.length === 1) {
             for (const row of rows) {
               const timeVal = Object.entries(row).find(([k]) => TIME_KEYS.has(k))
@@ -167,9 +186,9 @@ export const WidgetRenderer = memo(function WidgetRenderer({
               Object.assign(mergedByTime.get(key)!, row)
             }
           } else {
-            const queryIdx = queries.findIndex(q => q.ref_id === refId)
-            const query = queryIdx >= 0 ? queries[queryIdx] : queries[refId.charCodeAt(0) - 65]
+            const query = queryForBatchResult(queries, refId, resultMetadata)
             const alias = query?.metrics?.[0]?.alias
+            const labelRefId = resultMetadata?.original_ref_id ?? refId
             for (const row of rows) {
               let timeKey: string | undefined
               let timeVal: unknown
@@ -179,7 +198,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
                   timeKey = k
                   timeVal = v
                 } else if (typeof v === 'number') {
-                  values[alias || `${refId}: ${k}`] = v
+                  values[alias || `${labelRefId}: ${k}`] = v
                 }
               }
               if (timeKey != null) {

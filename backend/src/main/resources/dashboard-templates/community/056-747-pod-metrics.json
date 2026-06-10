@@ -1,0 +1,74 @@
+{
+    "id": "056-747-pod-metrics",
+    "title": "Kubernetes Pod Metrics",
+    "description": "Prebuilt Moneat dashboard for Kubernetes Pod Metrics telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 5,
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes Pod Metrics",
+        "description": "Prebuilt Moneat dashboard for Kubernetes Pod Metrics telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "Node",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kubernetes_io_hostname)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "Pod",
+                "label": "Pod",
+                "type": "query",
+                "query": "label_values(kube_pod_info, pod)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "Pod_ip",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_info, pod_ip)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "phase",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_status_phase, phase)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "container",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_pod_container_info, container)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": []
+    }
+}

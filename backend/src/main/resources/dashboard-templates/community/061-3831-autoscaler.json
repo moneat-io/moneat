@@ -1,0 +1,23 @@
+{
+    "id": "061-3831-autoscaler",
+    "title": "Kubernetes Cluster Autoscaler (via Prometheus)",
+    "description": "Prebuilt Moneat dashboard for Kubernetes Cluster Autoscaler (via Prometheus) telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 0,
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes Cluster Autoscaler (via Prometheus)",
+        "description": "Prebuilt Moneat dashboard for Kubernetes Cluster Autoscaler (via Prometheus) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [],
+        "widgets": []
+    }
+}

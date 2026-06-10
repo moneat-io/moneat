@@ -1,0 +1,114 @@
+---
+title: OpenTelemetry
+description: Send logs, traces, and metrics to Moneat with OTLP.
+---
+
+# OpenTelemetry
+
+OpenTelemetry is the recommended setup path for new services. Moneat accepts OTLP logs, traces, and
+metrics, then normalizes them into the same service, performance, log, dashboard, and billing views
+used by every telemetry source.
+
+## Create an OTLP API Key
+
+Open **Settings -> API Keys -> OpenTelemetry** and create an OTLP API key. OTLP API keys are
+organization-level and can be used for logs, traces, metrics, and OTLP feedback.
+
+Authenticate ingestion requests with:
+
+```http
+Authorization: Bearer <MONEAT_OTLP_API_KEY>
+```
+
+## Endpoints
+
+Use `https://api.moneat.io` for Moneat Cloud, or your self-hosted backend URL.
+
+| Signal | Standard OTLP/HTTP endpoint | Moneat convention alias |
+|--------|-----------------------------|--------------------------|
+| Traces | `POST {{BACKEND_URL}}/v1/traces` | `POST {{BACKEND_URL}}/v1/traces/otlp` |
+| Metrics | `POST {{BACKEND_URL}}/v1/metrics` | `POST {{BACKEND_URL}}/v1/metrics/otlp` |
+| Logs | `POST {{BACKEND_URL}}/v1/logs` | `POST {{BACKEND_URL}}/v1/logs/otlp` |
+
+All endpoints accept OTLP JSON and OTLP protobuf:
+
+```http
+Content-Type: application/json
+Content-Type: application/x-protobuf
+```
+
+## SDK Environment Variables
+
+Most OpenTelemetry SDKs support per-signal endpoint environment variables:
+
+```bash
+export OTEL_SERVICE_NAME=checkout-api
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production,service.version=1.2.3"
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT={{BACKEND_URL}}/v1/traces
+export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT={{BACKEND_URL}}/v1/metrics
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT={{BACKEND_URL}}/v1/logs
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <MONEAT_OTLP_API_KEY>"
+```
+
+If your SDK requires escaped header values, encode the space in `Bearer <key>` as `%20`.
+
+## Collector Example
+
+For an OpenTelemetry Collector, configure the OTLP HTTP exporter with explicit per-signal
+endpoints:
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  otlphttp/moneat:
+    traces_endpoint: {{BACKEND_URL}}/v1/traces
+    metrics_endpoint: {{BACKEND_URL}}/v1/metrics
+    logs_endpoint: {{BACKEND_URL}}/v1/logs
+    headers:
+      Authorization: Bearer ${MONEAT_OTLP_API_KEY}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/moneat]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/moneat]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/moneat]
+```
+
+## Service Identity
+
+Moneat uses OpenTelemetry resource attributes to associate telemetry with services, environments,
+and releases:
+
+| Attribute | Use |
+|-----------|-----|
+| `service.name` | Primary service identity |
+| `service.namespace` | Optional namespace for grouping related services |
+| `service.version` | Release version |
+| `deployment.environment.name` | Environment such as production or staging |
+
+If an observed `service.name` does not match an existing Moneat service, map it from
+**Settings -> API Keys -> OpenTelemetry**.
+
+## Next Steps
+
+- [Performance Monitoring](/docs/performance-monitoring) - View traces, spans, and service maps
+- [Structured Logging](/docs/logging) - Search and live-tail logs
+- [User Feedback](/docs/user-feedback) - Submit feedback through OTLP events
+- [Releases & Source Maps](/docs/releases) - Correlate deployments with telemetry

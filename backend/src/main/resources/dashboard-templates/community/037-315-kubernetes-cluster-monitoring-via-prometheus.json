@@ -1,0 +1,34 @@
+{
+    "id": "037-315-kubernetes-cluster-monitoring-via-prometheus",
+    "title": "Kubernetes cluster monitoring (via Prometheus)",
+    "description": "Prebuilt Moneat dashboard for Kubernetes cluster monitoring (via Prometheus) telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 1,
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes cluster monitoring (via Prometheus)",
+        "description": "Prebuilt Moneat dashboard for Kubernetes cluster monitoring (via Prometheus) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "Node",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kubernetes_io_hostname)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": []
+    }
+}

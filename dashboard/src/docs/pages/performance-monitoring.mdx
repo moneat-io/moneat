@@ -5,63 +5,73 @@ description: Distributed tracing, transaction tracking, and service maps.
 
 # Performance Monitoring
 
-Moneat ingests distributed traces and spans from Sentry-compatible SDKs, the Datadog Agent, and any OTLP exporter, then shows them in one Performance view.
+Moneat ingests distributed traces and spans from OpenTelemetry exporters, Sentry-compatible SDKs,
+and Datadog-compatible agents, then shows them in one Performance view.
 
-## Sentry Transactions
+## OpenTelemetry Traces
 
-When using a Sentry SDK with `tracesSampleRate` configured, the SDK sends transaction and span data to Moneat via the envelope endpoint. Transactions represent top-level operations (e.g. an HTTP request or a page load) and contain child spans for individual units of work.
+Send traces to Moneat using any OpenTelemetry SDK or Collector:
+
+```text
+POST {{BACKEND_URL}}/v1/traces
+POST {{BACKEND_URL}}/v1/traces/otlp
+```
+
+Authenticate with an OTLP API key passed as a `Bearer` token in the `Authorization` header. Create
+OTLP API keys from **Settings -> API Keys -> OpenTelemetry**.
+
+OTLP spans are parsed, stored in ClickHouse, and shown in the same traces view as other sources.
+Moneat extracts error information from OTLP span status and exception events.
+
+:::tip[OTLP API keys]
+OTLP API keys are organization-level and shared across logs, traces, metrics, and OTLP feedback.
+:::
+
+## OpenTelemetry Metrics
+
+Moneat supports OTLP metric ingestion for gauges, sums, and histograms:
+
+```text
+POST {{BACKEND_URL}}/v1/metrics
+POST {{BACKEND_URL}}/v1/metrics/otlp
+```
+
+Metrics are stored in ClickHouse and available for querying through custom dashboards.
+
+## Sentry-Compatible Transactions
+
+When using a Sentry-compatible SDK with `tracesSampleRate` configured, the SDK sends transaction and
+span data to Moneat through the envelope endpoint. Transactions represent top-level operations, such
+as an HTTP request or page load, and contain child spans for individual units of work.
 
 The performance overview shows:
 
 - Transaction groups with p50, p75, and p95 latencies
-- Throughput (transactions per minute)
+- Throughput
 - Failure rate and Apdex score
 - Slowest transactions over time
 
-Click a transaction to see its span waterfall and any related errors.
+Click a transaction to see its span waterfall and related errors.
 
-## Datadog APM Traces
+## Datadog-Compatible APM Traces
 
-If you run the Datadog Agent, APM traces are ingested via the standard Datadog trace endpoints. Spans are stored in ClickHouse with service, resource, and operation metadata.
+If you run a compatible Datadog Agent, APM traces are ingested through the Datadog trace endpoints.
+Spans are stored with service, resource, and operation metadata.
 
 The traces view shows:
 
 - Trace list with service and duration filters
 - Trace detail with a span waterfall
-- Resource-level aggregated stats (hits, errors, latency percentiles)
-
-## OpenTelemetry (OTLP) Traces
-
-You can send traces to Moneat using any OpenTelemetry SDK or Collector. Configure your OTLP exporter to send trace data to:
-
-```text
-POST {{BACKEND_URL}}/v1/traces/otlp
-```
-
-Authenticate using an OTLP API key passed as a `Bearer` token in the `Authorization` header. Create OTLP API keys from **Settings → OTLP API Keys** in the dashboard.
-
-OTLP spans are parsed, stored in ClickHouse alongside Sentry and Datadog traces, and appear in the same traces view with full span waterfall support. Moneat automatically extracts error information from OTLP span status and events.
-
-:::tip[OTLP API keys]
-OTLP API keys are organization-level and shared across logs, traces, and metrics ingestion. A single key works for all three signal types.
-:::
-
-## OTLP Metrics
-
-Moneat also supports OTLP metric ingestion. Send metrics (gauges, sums, and histograms) to:
-
-```text
-POST {{BACKEND_URL}}/v1/metrics/otlp
-```
-
-Metrics are stored in ClickHouse and available for querying via custom dashboards.
+- Resource-level aggregate stats, including hits, errors, and latency percentiles
 
 ## Service Map
 
-The service map is built from APM spans across all telemetry sources. It shows services as nodes and inter-service calls as edges, with error rates and average durations per edge. The map uses automatic layout via Dagre.
+The service map is built from APM spans across all telemetry sources. It shows services as nodes and
+inter-service calls as edges, with error rates and average durations per edge.
 
 Available at **Performance > Service Map**.
 
 ## Data Retention
 
-Stored APM traces and trace resource stats use the APM trace retention window configured for your plan.
+Stored APM traces and trace resource stats use the APM trace retention window configured for your
+plan. See [Billing & Plans](/docs/billing) for current limits.

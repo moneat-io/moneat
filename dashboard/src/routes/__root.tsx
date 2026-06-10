@@ -122,8 +122,8 @@ const FEATURE_ROUTES = [
   '/signoz-alternative',
 ] as const
 
-// Public routes that don't require authentication or verification checks
-const PUBLIC_ROUTES = new Set([
+// Public routes that don't require authentication, verification checks, or the authenticated app shell.
+const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   '/login',
   '/signup',
   '/verify-email',
@@ -133,13 +133,45 @@ const PUBLIC_ROUTES = new Set([
   '/onboarding',
   '/terms',
   '/privacy',
+  '/accept-invite',
   '/demo',
+  '/impersonate-callback',
+  '/pricing-calculator',
   ...FEATURE_ROUTES,
 ])
+
+const PUBLIC_ROUTE_PREFIXES = ['/s', '/auth', '/legal', '/docs', '/blog'] as const
 
 function normalizePath(pathname: string): string {
   if (!pathname || pathname === '/') return '/'
   return pathname.replace(/\/+$/, '')
+}
+
+function isRouteBranch(pathname: string, routeRoot: string): boolean {
+  return pathname === routeRoot || pathname.startsWith(`${routeRoot}/`)
+}
+
+export function isPublicAppRoute(pathname: string, search: unknown): boolean {
+  const normalizedPath = normalizePath(pathname)
+  return (
+    isPublicLandingRoute(normalizedPath, search) ||
+    PUBLIC_ROUTES.has(normalizedPath) ||
+    PUBLIC_ROUTE_PREFIXES.some((routeRoot) => isRouteBranch(normalizedPath, routeRoot))
+  )
+}
+
+interface AuthenticatedSidebarVisibilityOptions {
+  readonly isAuthenticated: boolean
+  readonly pathname: string
+  readonly search: unknown
+}
+
+export function shouldShowAuthenticatedSidebar({
+  isAuthenticated,
+  pathname,
+  search,
+}: AuthenticatedSidebarVisibilityOptions): boolean {
+  return isAuthenticated && !isPublicAppRoute(pathname, search)
 }
 
 function formatEntityId(rawValue: string): string {
@@ -273,14 +305,7 @@ function RootComponent() {
   const demoEpochMs = user?.demoEpochMs ?? null
   const showDemoBanner = demoEpochMs !== null && !isUserFetching && isDemo()
   const isLandingPage = isPublicLandingRoute(currentPath, router.location.search)
-  const isPublicRoute = (
-    isLandingPage ||
-    PUBLIC_ROUTES.has(currentPath) ||
-    currentPath.startsWith('/s/') ||
-    currentPath.startsWith('/auth/') ||
-    currentPath.startsWith('/legal/') ||
-    currentPath.startsWith('/docs')
-  )
+  const isPublicRoute = isPublicAppRoute(currentPath, router.location.search)
 
   useEffect(() => {
     document.title = getDocumentTitle(currentPath, isLandingPage)
@@ -334,19 +359,11 @@ function RootComponent() {
     }
   }, [currentPath, isAuthenticated, isPublicRoute, navigate, user])
   
-  // Don't show sidebar on auth pages, landing page, or public status pages
-  const isAuthPage = [
-    '/login',
-    '/signup',
-    '/verify-email',
-    '/verify-email-required',
-    '/forgot-password',
-    '/reset-password',
-    '/onboarding',
-  ].includes(currentPath)
-  const isPublicStatusPage = currentPath.startsWith('/s/')
-  const isFeaturePage = (FEATURE_ROUTES as readonly string[]).includes(currentPath)
-  const showSidebar = isAuthenticated && !isAuthPage && !isLandingPage && !isPublicStatusPage && !isFeaturePage
+  const showSidebar = shouldShowAuthenticatedSidebar({
+    isAuthenticated,
+    pathname: currentPath,
+    search: router.location.search,
+  })
   const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
 
   // Show loading state while checking auth and onboarding
@@ -421,12 +438,19 @@ function AuthenticatedContent({
     )
   }
 
+  // Fixed region below the header and right of the sidebar (mirrors the split-panel
+  // branch above). This gives in-flow pages a definite height, so an ExplorerShell —
+  // or any `h-full` page — reaches the bottom of the viewport; taller content scrolls
+  // within this region instead of the body.
   return (
     <div
-      className="relative z-0 transition-[margin-left] duration-300"
+      className="z-0 overflow-y-auto transition-[left,top] duration-300"
       style={{
-        marginLeft: sidebarWidth,
-        paddingTop: headerHeight,
+        position: 'fixed',
+        top: headerHeight,
+        left: sidebarWidth,
+        right: 0,
+        bottom: 0,
         '--header-height': `${headerHeight}px`,
         '--sidebar-width': `${sidebarWidth}px`,
       } as React.CSSProperties}

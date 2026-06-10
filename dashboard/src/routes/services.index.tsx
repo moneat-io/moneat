@@ -93,7 +93,6 @@ function ServicesCatalogPage() {
 
   return (
     <ExplorerShell
-      className="min-h-[calc(100vh-3.5rem)]"
       title="Services"
       icon={<Boxes className="h-4 w-4 text-muted-foreground" />}
       searchBar={

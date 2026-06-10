@@ -131,6 +131,32 @@ describe('dashboardsMethods', () => {
     })
   })
 
+  describe('duplicateDashboard', () => {
+    it('duplicates a dashboard', async () => {
+      const mock = { id: 2, title: 'Dashboard (Copy)' }
+      server.use(
+        http.post(`${API_BASE}/v1/dashboards/1/duplicate`, () => {
+          return HttpResponse.json(mock, { status: 201 })
+        })
+      )
+      const result = await api.duplicateDashboard(1)
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('setDefaultDashboard', () => {
+    it('marks a dashboard as default', async () => {
+      const mock = { is_default: true }
+      server.use(
+        http.post(`${API_BASE}/v1/dashboards/1/default`, () => {
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.setDefaultDashboard(1)
+      expect(result).toEqual(mock)
+    })
+  })
+
   describe('moveDashboardToFolder', () => {
     it('moves dashboard to a folder', async () => {
       const mock = { folder_id: 7 }
@@ -450,14 +476,72 @@ describe('dashboardsMethods', () => {
   })
 
   describe('getDashboardTemplates', () => {
-    it('fetches dashboard templates', async () => {
-      const mock = [{ name: 'Error Overview' }]
+    it('fetches dashboard template summaries', async () => {
+      const mock = [{
+        id: 'node-exporter-full',
+        title: 'Node Exporter Full',
+        description: 'Prebuilt Moneat dashboard for host telemetry.',
+        category: 'infrastructure',
+        tags: ['Infrastructure', 'Prometheus'],
+        required_sources: ['Prometheus'],
+        widget_count: 140,
+        variable_count: 4,
+        resource_path: 'dashboard-templates/community/node-exporter-full.json',
+      }]
       server.use(
         http.get(`${API_BASE}/v1/dashboards/templates`, () => {
           return HttpResponse.json(mock)
         })
       )
       const result = await api.getDashboardTemplates()
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('getDashboardTemplate', () => {
+    it('fetches a dashboard template detail by id', async () => {
+      const mock = {
+        id: 'node-exporter-full',
+        title: 'Node Exporter Full',
+        description: 'Prebuilt Moneat dashboard for host telemetry.',
+        category: 'infrastructure',
+        tags: ['Infrastructure', 'Prometheus'],
+        required_sources: ['Prometheus'],
+        widget_count: 140,
+        variable_count: 4,
+        warnings: [],
+        dashboard: {
+          title: 'Node Exporter Full',
+          widgets: [],
+        },
+      }
+      server.use(
+        http.get(`${API_BASE}/v1/dashboards/templates/node-exporter-full`, () => {
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.getDashboardTemplate('node-exporter-full')
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('createDashboardFromTemplate', () => {
+    it('creates a dashboard from a template', async () => {
+      const mock = { id: 20, title: 'Node Exporter Full' }
+      server.use(
+        http.post(
+          `${API_BASE}/v1/dashboards/templates/node-exporter-full`,
+          async ({ request }) => {
+            const body = (await request.json()) as Record<string, unknown>
+            expect(body.folder_id).toBe(7)
+            return HttpResponse.json(mock)
+          }
+        )
+      )
+      const result = await api.createDashboardFromTemplate(
+        'node-exporter-full',
+        {folder_id: 7}
+      )
       expect(result).toEqual(mock)
     })
   })

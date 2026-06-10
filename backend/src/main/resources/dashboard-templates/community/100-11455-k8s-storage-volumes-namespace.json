@@ -1,0 +1,1249 @@
+{
+    "id": "100-11455-k8s-storage-volumes-namespace",
+    "title": "K8s / Storage / Volumes / Namespace",
+    "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Namespace telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 27,
+    "variable_count": 4,
+    "warnings": [
+        "Panel 5: couldn't parse PromQL '(\n  (\n    (kubelet_volume_stats_available_bytes {namespace=~\"(openshift-.*|kube-.*|default|logging)\"} ) \n    and\n    (predict_linear(kubelet_volume_stats_available_bytes {namespace=~\"(openshift-.*|kube-.*|default|logging)\"}[1w], 7 * 24 * 60 * 60) < 0)\n  )\n)', stored as rawQuery",
+        "Panel 6: couldn't parse PromQL '(\n  (\n    ((kubelet_volume_stats_used_bytes {namespace=\"$namespace\"} ) * 0) + 1\n    and\n    (predict_linear(kubelet_volume_stats_available_bytes {namespace=\"$namespace\"}[1d], 7 * 24 * 60 * 60) < 0)\n  )\n)', stored as rawQuery",
+        "Panel 7: couldn't parse PromQL '(\n  (predict_linear(kubelet_volume_stats_available_bytes {namespace=\"$namespace\"}[1d], 7 * 24 * 60 * 60) < 0)\n)', stored as rawQuery",
+        "Panel 8: couldn't parse PromQL '(\n  (kube_persistentvolumeclaim_info {namespace=\"$namespace\"})\n  and\n  (\n    (\n      (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}))\n      /\n      (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"}))\n    ) >= ($pvc_percent_used_warning_threshold / 100)\n  )\n)', stored as rawQuery",
+        "Panel 8: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) and ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100))', stored as rawQuery",
+        "Panel 8: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) and ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100))', stored as rawQuery",
+        "Panel 8: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_available_bytes {namespace=\"$namespace\"})) and ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100))', stored as rawQuery",
+        "Panel 8: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100)', stored as rawQuery",
+        "Panel 9: couldn't parse PromQL '(\n  ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) * 0 +1)\n  and\n  (\n    (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"}))\n  ) >= ($pvc_percent_used_warning_threshold / 100)\n)', stored as rawQuery",
+        "Panel 12: couldn't parse PromQL ' (kube_persistentvolumeclaim_info { namespace = \"$namespace\" })', stored as rawQuery",
+        "Panel 12: couldn't parse PromQL '(1-max by (persistentvolumeclaim, namespace) (kube_persistentvolumeclaim_info { namespace = \"$namespace\" }) ) unless (max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })) or ((max by (persistentvolumeclaim, namespace) (kube_persistentvolumeclaim_info { namespace = \"$namespace\" }) ) and (max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })))', stored as rawQuery",
+        "Panel 12: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes { namespace = \"$namespace\" }))', stored as rawQuery",
+        "Panel 14: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) * 100', stored as rawQuery",
+        "Panel 15: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}))', stored as rawQuery",
+        "Panel 17: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 17: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 18: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 18: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 19: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 19: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 20: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 20: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 21: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 21: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 22: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery",
+        "Panel 22: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "K8s / Storage / Volumes / Namespace",
+        "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Namespace telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "DS_OPENSHIFT_PROMETHEUS",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "openshift-prometheus",
+                "current": "openshift-prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "namespace",
+                "label": "namespace",
+                "type": "query",
+                "query": "label_values(kube_namespace_created,namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "pvc_percent_used_warning_threshold",
+                "label": "PVC % Used Warning Threshold",
+                "type": "textbox",
+                "query": "80",
+                "default_value": "80",
+                "current": "80",
+                "options": [
+                    "80"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "persistentvolumeclaim",
+                "label": "",
+                "type": "query",
+                "query": "label_values(kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}, persistentvolumeclaim)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Current Alerts",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Volumes Full in Week Based on Daily Use Rate",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 7,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "alerts"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(\n count (\n   (kubelet_volume_stats_available_bytes {namespace=\"$namespace\"})\n   and\n   (predict_linear(kubelet_volume_stats_available_bytes {namespace=\"$namespace\"}[1d], 7 * 24 * 60 * 60) < 0)\n )\n)\nor\nvector(0)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Running PVCs Above % Used Warning Threshold",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 3,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "count (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}) and (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100)) or vector (0)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Unbound PVCs",
+                "widget_type": "stat",
+                "grid_x": 3,
+                "grid_y": 4,
+                "grid_w": 4,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max (sum by (exported_namespace) (pv_collector_unbound_pvc_count {exported_namespace = \"$namespace\"}))) or (vector(0))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Alert Details",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Volumes Full in Week Based on Daily Use Rate - Current",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 4,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": ""
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(\n  (\n    (kubelet_volume_stats_available_bytes {namespace=~\"(openshift-.*|kube-.*|default|logging)\"} ) \n    and\n    (predict_linear(kubelet_volume_stats_available_bytes {namespace=~\"(openshift-.*|kube-.*|default|logging)\"}[1w], 7 * 24 * 60 * 60) < 0)\n  )\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Volumes Full in Week Based on Daily Use Rate - Alert History",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 8,
+                "grid_w": 8,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{persistentvolumeclaim}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(\n  (\n    ((kubelet_volume_stats_used_bytes {namespace=\"$namespace\"} ) * 0) + 1\n    and\n    (predict_linear(kubelet_volume_stats_available_bytes {namespace=\"$namespace\"}[1d], 7 * 24 * 60 * 60) < 0)\n  )\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Volumes Full in Week Based on Daily Use Rate -  Predicted Available Space History",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 15,
+                "grid_w": 8,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{persistentvolumeclaim}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(\n  (predict_linear(kubelet_volume_stats_available_bytes {namespace=\"$namespace\"}[1d], 7 * 24 * 60 * 60) < 0)\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Running PVCs Above % Used Warning Threshold Stats - Current",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 4,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(\n  (kube_persistentvolumeclaim_info {namespace=\"$namespace\"})\n  and\n  (\n    (\n      (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}))\n      /\n      (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"}))\n    ) >= ($pvc_percent_used_warning_threshold / 100)\n  )\n)",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) and ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) and ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100))",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_available_bytes {namespace=\"$namespace\"})) and ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100))",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) >= ($pvc_percent_used_warning_threshold / 100)",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Running PVCs Above % Used Warning Threshold",
+                "widget_type": "timeseries",
+                "grid_x": 4,
+                "grid_y": 22,
+                "grid_w": 8,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(\n  ((max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) * 0 +1)\n  and\n  (\n    (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"}))\n  ) >= ($pvc_percent_used_warning_threshold / 100)\n)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Stats",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Bound PVCs",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 3,
+                "grid_w": 1,
+                "grid_h": 4,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(sum (pv_collector_bound_pvc_count {exported_namespace = \"$namespace\"})) or vector(0)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "PVC Stats",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": " (kube_persistentvolumeclaim_info { namespace = \"$namespace\" })",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(1-max by (persistentvolumeclaim, namespace) (kube_persistentvolumeclaim_info { namespace = \"$namespace\" }) ) unless (max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })) or ((max by (persistentvolumeclaim, namespace) (kube_persistentvolumeclaim_info { namespace = \"$namespace\" }) ) and (max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })))",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes { namespace = \"$namespace\" })",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "max",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_available_bytes { namespace = \"$namespace\" })",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "value"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes { namespace = \"$namespace\" })) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes { namespace = \"$namespace\" }))",
+                        "ref_id": "D"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Use",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 13
+            },
+            {
+                "title": "Running PVCs % Used",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 4,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{persistentvolumeclaim}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"})) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\"})) * 100",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "All Running PVCs Used Bytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{persistentvolumeclaim}}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 15
+            },
+            {
+                "title": "Use vs Capacity",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 10,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 16
+            },
+            {
+                "title": "$persistentvolumeclaim",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 17
+            },
+            {
+                "title": "$persistentvolumeclaim",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 5,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 18
+            },
+            {
+                "title": "$persistentvolumeclaim",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 5,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 19
+            },
+            {
+                "title": "$persistentvolumeclaim",
+                "widget_type": "timeseries",
+                "grid_x": 9,
+                "grid_y": 5,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 20
+            },
+            {
+                "title": "$persistentvolumeclaim",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 21
+            },
+            {
+                "title": "$persistentvolumeclaim",
+                "widget_type": "timeseries",
+                "grid_x": 3,
+                "grid_y": 12,
+                "grid_w": 3,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Used"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "Capacity"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 22
+            },
+            {
+                "title": "Use Rate",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 23
+            },
+            {
+                "title": "Hourly Volume Use Rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 6,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}} ({{persistentvolumeclaim}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}[1h])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 24
+            },
+            {
+                "title": "Daily Volume Use Rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 12,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}} ({{persistentvolumeclaim}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}[1d])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 25
+            },
+            {
+                "title": "Weekly Volume Use Rate",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 6,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}} ({{persistentvolumeclaim}})"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "namespace",
+                                "op": "eq",
+                                "value": "$namespace",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(kubelet_volume_stats_used_bytes {namespace=\"$namespace\"}[1w])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 26
+            }
+        ]
+    }
+}

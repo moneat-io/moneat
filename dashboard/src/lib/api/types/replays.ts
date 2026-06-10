@@ -14,6 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+/**
+ * Behavioural signals surfaced as list badges / facets. `error` is derived from
+ * errorCount today; the rest are populated once the backend computes them.
+ */
+export type ReplaySignal = 'error' | 'rage_click' | 'dead_click' | 'bounce' | 'purchase'
+
 export interface Replay {
   replayId: string
   projectId: number
@@ -29,6 +35,11 @@ export interface Replay {
   osName?: string
   osVersion?: string
   activity: number
+  // Optional — populated once the backend emits behavioural signals; until then
+  // the list derives the `error` badge from errorCount and leaves the rest empty.
+  signals?: ReplaySignal[]
+  /** First page of the session; falls back to urls[0] when absent. */
+  entryUrl?: string
 }
 
 export interface ReplayDetail extends Replay {
@@ -39,6 +50,12 @@ export interface ReplayDetail extends Replay {
   release?: string
   platform?: string
   tags: Record<string, string>
+  // Optional context cards — backend-pending; rendered only when present.
+  ipAddress?: string
+  geo?: string
+  viewport?: string
+  connection?: string
+  userSessionCount?: number
 }
 
 export interface ReplayRecordingResponse {
@@ -90,6 +107,10 @@ export interface ReplayTimelineItem {
   eventId?: string
   issueId?: string
   traceId?: string
+  /** HTTP status for network events — drives the inline status badge (backend-pending). */
+  statusCode?: number
+  /** Marks a rage-click / frustration signal — drives the "rage" badge (backend-pending). */
+  rage?: boolean
 }
 
 export interface ReplayTimelineResponse {

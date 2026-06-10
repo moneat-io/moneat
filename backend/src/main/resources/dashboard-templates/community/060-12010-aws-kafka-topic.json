@@ -1,0 +1,229 @@
+{
+    "id": "060-12010-aws-kafka-topic",
+    "title": "AWS Kafka Topic",
+    "description": "Prebuilt Moneat dashboard for AWS Kafka Topic telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch",
+        "Messaging"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 5,
+    "variable_count": 4,
+    "warnings": [],
+    "dashboard": {
+        "title": "AWS Kafka Topic",
+        "description": "Prebuilt Moneat dashboard for AWS Kafka Topic telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "brokerid",
+                "label": "Broker ID",
+                "type": "query",
+                "query": "dimension_values($region,AWS/Kafka, BytesInPerSec, Broker ID)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "clustername",
+                "label": "Cluster Name",
+                "type": "query",
+                "query": "dimension_values($region,AWS/Kafka, BytesInPerSec,Cluster Name)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "topic",
+                "label": "Topic",
+                "type": "query",
+                "query": "dimension_values($region,AWS/Kafka, BytesInPerSec,Topic)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "MessagesIn Per Sec",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Kafka\",\"MetricName\":\"MessagesInPerSec\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"Broker ID\",\"Value\":\"$brokerid\"},{\"Name\":\"Cluster Name\",\"Value\":\"$clustername\"},{\"Name\":\"Topic\",\"Value\":\"$topic\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 0
+            },
+            {
+                "title": "FetchMessage Conversions Per Sec",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Kafka\",\"MetricName\":\"FetchMessageConversionsPerSec\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"Broker ID\",\"Value\":\"$brokerid\"},{\"Name\":\"Cluster Name\",\"Value\":\"$clustername\"},{\"Name\":\"Topic\",\"Value\":\"$topic\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Produce Message Conversions Per Sec",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 9,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Kafka\",\"MetricName\":\"FetchMessageConversionsPerSec\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"Broker ID\",\"Value\":\"$brokerid\"},{\"Name\":\"Cluster Name\",\"Value\":\"$clustername\"},{\"Name\":\"Topic\",\"Value\":\"$topic\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "BytesIn Per Sec",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 12,
+                "grid_h": 12,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Kafka\",\"MetricName\":\"BytesInPerSec\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"Broker ID\",\"Value\":\"$brokerid\"},{\"Name\":\"Cluster Name\",\"Value\":\"$clustername\"},{\"Name\":\"Topic\",\"Value\":\"$topic\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Bytes out Per Sec",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 39,
+                "grid_w": 12,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/Kafka\",\"MetricName\":\"BytesOutPerSec\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"Broker ID\",\"Value\":\"$brokerid\"},{\"Name\":\"Cluster Name\",\"Value\":\"$clustername\"},{\"Name\":\"Topic\",\"Value\":\"$topic\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 4
+            }
+        ]
+    }
+}

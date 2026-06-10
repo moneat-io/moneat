@@ -1,0 +1,65 @@
+{
+    "id": "088-3662-prometheus-2-0-overview",
+    "title": "Prometheus 2.0 Overview",
+    "description": "Prebuilt Moneat dashboard for Prometheus 2.0 Overview telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Infrastructure"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 3,
+    "warnings": [],
+    "dashboard": {
+        "title": "Prometheus 2.0 Overview",
+        "description": "Prebuilt Moneat dashboard for Prometheus 2.0 Overview telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "job",
+                "label": null,
+                "type": "query",
+                "query": "query_result(prometheus_tsdb_head_samples_appended_total)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": null,
+                "type": "query",
+                "query": "query_result(up{job=~\"$job\"})",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "interval",
+                "label": null,
+                "type": "custom",
+                "query": "1h, 3h, 6h, 12h, 1d, 2d, 7d, 30d, 90d, 180d",
+                "default_value": "1h",
+                "current": "1h",
+                "options": [
+                    "1h",
+                    "3h",
+                    "6h",
+                    "12h",
+                    "1d",
+                    "2d",
+                    "7d",
+                    "30d",
+                    "90d",
+                    "180d"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": []
+    }
+}

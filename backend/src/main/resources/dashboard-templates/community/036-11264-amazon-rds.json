@@ -1,0 +1,549 @@
+{
+    "id": "036-11264-amazon-rds",
+    "title": "Amazon RDS",
+    "description": "Prebuilt Moneat dashboard for Amazon RDS telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 17,
+    "variable_count": 3,
+    "warnings": [],
+    "dashboard": {
+        "title": "Amazon RDS",
+        "description": "Prebuilt Moneat dashboard for Amazon RDS telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Data source",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": "default",
+                "current": "default",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "period",
+                "label": "Period [sec]",
+                "type": "custom",
+                "query": "60,300,3600",
+                "default_value": "300",
+                "current": "300",
+                "options": [
+                    "60",
+                    "300",
+                    "3600"
+                ],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Cluster metrics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "CPU utilization per cluster [%]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 1,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"CPUUtilization\",\"Period\":\"$period\",\"Statistics\":[\"Maximum\"],\"Dimensions\":[{\"Name\":\"DBClusterIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 1
+            },
+            {
+                "title": "Database connections [count sum]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"DatabaseConnections\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"DBClusterIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Available RAM [bytes]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 9,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"FreeableMemory\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBClusterIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 3
+            },
+            {
+                "title": "Instance metrics",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 17,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "true"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "CPU utilization per instance [%]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 5,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"CPUUtilization\",\"Period\":\"$period\",\"Statistics\":[\"Maximum\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            },
+            {
+                "title": "Database connections [count sum]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 13,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"DatabaseConnections\",\"Period\":\"$period\",\"Statistics\":[\"Sum\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 6
+            },
+            {
+                "title": "Available storage space [bytes]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"FreeStorageSpace\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 7
+            },
+            {
+                "title": "Available RAM [bytes]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 21,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"FreeableMemory\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 8
+            },
+            {
+                "title": "Read throughput [bytes/sec]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 29,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"ReadThroughput\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 9
+            },
+            {
+                "title": "Write throughput [bytes/sec]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 29,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"WriteThroughput\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 10
+            },
+            {
+                "title": "Read latency [sec]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 37,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"ReadLatency\",\"Period\":\"$period\",\"Statistics\":[\"Maximum\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            },
+            {
+                "title": "Write latency [sec]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 37,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"WriteLatency\",\"Period\":\"$period\",\"Statistics\":[\"Maximum\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 12
+            },
+            {
+                "title": "Read operations [IOPS]",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 45,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"ReadIOPS\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 13
+            },
+            {
+                "title": "Write operations [IOPS]",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 45,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/RDS\",\"MetricName\":\"WriteIOPS\",\"Period\":\"$period\",\"Statistics\":[\"Average\"],\"Dimensions\":[{\"Name\":\"DBInstanceIdentifier\",\"Value\":\"*\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 14
+            },
+            {
+                "title": "Information",
+                "widget_type": "section",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 1,
+                "query_configs": [],
+                "display_config": {
+                    "collapsed": "false"
+                },
+                "sort_order": 15
+            },
+            {
+                "title": " ",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 19,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"\",\"MetricName\":\"\",\"Statistics\":[\"Average\"],\"Dimensions\":[]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 16
+            }
+        ]
+    }
+}

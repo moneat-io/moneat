@@ -474,7 +474,9 @@ data class ReplayListItem(
     val browserVersion: String?,
     val osName: String?,
     val osVersion: String?,
-    val activity: Int
+    val activity: Int,
+    val signals: List<String> = emptyList(),
+    val entryUrl: String? = null
 )
 
 @Serializable
@@ -499,7 +501,14 @@ data class ReplayDetailResponse(
     val osName: String?,
     val osVersion: String?,
     val activity: Int,
-    val tags: Map<String, String>
+    val tags: Map<String, String>,
+    val signals: List<String> = emptyList(),
+    val entryUrl: String? = null,
+    val ipAddress: String? = null,
+    val geo: String? = null,
+    val viewport: String? = null,
+    val connection: String? = null,
+    val userSessionCount: Int? = null
 )
 
 @Serializable
@@ -519,7 +528,9 @@ data class ReplayTimelineItem(
     val category: String? = null,
     val eventId: String? = null,
     val issueId: String? = null,
-    val traceId: String? = null
+    val traceId: String? = null,
+    val statusCode: Int? = null,
+    val rage: Boolean? = null
 )
 
 @Serializable
