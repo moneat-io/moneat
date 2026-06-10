@@ -145,7 +145,7 @@ snowflake-jdbc = { module = "net.snowflake:snowflake-jdbc", version = "4.0.2" }
 
 # Non-JDBC data clients / SDKs
 mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version = "5.6.5" }
-aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.91" }
+aws-sdk-cloudwatch = { module = "aws.sdk.kotlin:cloudwatch", version = "1.6.92" }
 google-cloud-bigquery = { module = "com.google.cloud:google-cloud-bigquery", version = "2.61.0" }
 
 # Detekt
