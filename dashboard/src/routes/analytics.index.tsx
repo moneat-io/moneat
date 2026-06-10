@@ -659,7 +659,7 @@ function ProductAnalyticsContent({
   )
 }
 
-function WebAnalyticsEmptyState({service}: {service?: Project}) {
+function WebAnalyticsEmptyState({service}: Readonly<{service?: Project}>) {
   const scriptHost = getServiceApiHost(service)
   const publicKey = getServicePublicKey(service)
   const scriptCode = `<script
@@ -722,7 +722,7 @@ function getServicePublicKey(service?: Project): string {
   }
 }
 
-function ProductAnalyticsTab({scopeId, params}: {scopeId: AnalyticsScopeId; params: AnalyticsParams}) {
+function ProductAnalyticsTab({scopeId, params}: Readonly<{scopeId: AnalyticsScopeId; params: AnalyticsParams}>) {
   const {data: productEvents, isLoading: productEventsLoading} = useQuery({
     queryKey: ['analytics-product-events', 'organization', params],
     queryFn: () => api.getAnalyticsEvents(scopeId, params, {
@@ -758,7 +758,7 @@ function ProductAnalyticsTab({scopeId, params}: {scopeId: AnalyticsScopeId; para
   )
 }
 
-function ProductFunnelPanel({scopeId, params}: {scopeId: AnalyticsScopeId; params: AnalyticsParams}) {
+function ProductFunnelPanel({scopeId, params}: Readonly<{scopeId: AnalyticsScopeId; params: AnalyticsParams}>) {
   const [steps, setSteps] = useState(DEFAULT_PRODUCT_FUNNEL_STEPS)
   const validSteps = steps.map(step => step.trim()).filter(Boolean)
   const {data: funnel, isLoading} = useQuery({
@@ -877,7 +877,7 @@ function ProductFunnelResults({
   )
 }
 
-function ProductAnalyticsEmptyState({service, serviceId}: {service?: Project; serviceId: string}) {
+function ProductAnalyticsEmptyState({service, serviceId}: Readonly<{service?: Project; serviceId: string}>) {
   const apiHost = getServiceApiHost(service)
   const endpoint = `${apiHost}/v1/analytics/${serviceId}/events`
   const nodeCode = `await fetch('${endpoint}', {

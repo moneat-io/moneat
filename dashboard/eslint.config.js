@@ -3,7 +3,8 @@ import globals from 'globals'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
 import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
+import {reactRefresh} from 'eslint-plugin-react-refresh'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import checkFile from 'eslint-plugin-check-file'
 
 export default [
@@ -26,7 +27,8 @@ export default [
     plugins: {
       '@typescript-eslint': tsPlugin,
       'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
+      'react-refresh': reactRefresh.plugin,
+      'jsx-a11y': jsxA11y,
     },
     rules: {
       ...tsPlugin.configs.recommended.rules,
@@ -36,6 +38,21 @@ export default [
         { allowConstantExport: true },
       ],
       'react-hooks/exhaustive-deps': 'off',
+      'jsx-a11y/aria-props': 'error',
+      'jsx-a11y/aria-proptypes': 'error',
+      'jsx-a11y/aria-role': 'error',
+      'jsx-a11y/aria-unsupported-elements': 'error',
+      'jsx-a11y/role-has-required-aria-props': 'error',
+      'jsx-a11y/role-supports-aria-props': 'error',
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "JSXOpeningElement[name.type='JSXIdentifier'][name.name=/^[a-z]/] > JSXAttribute[name.name='role'][value.value='group']",
+          message:
+            'Use a native grouping element such as fieldset, details, optgroup, or address instead of role="group".',
+        },
+      ],
       // TypeScript handles undefined variable checking; disabling avoids false positives
       // for React namespace, browser/Node types, and other TS-resolved globals.
       'no-undef': 'off',

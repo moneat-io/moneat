@@ -89,7 +89,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       {name: 'analytics_events', label: 'Analytics Events', fields: []},
     ]
     
-    const custom = (customDataSourcesData || []).map(ds => ({
+    const custom = (customDataSourcesData ?? []).map(ds => ({
       name: `custom:${ds.id}`,
       label: `${ds.name} (${ds.source_type})`,
       fields: [],
@@ -392,7 +392,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
           {mode === 'import' ? (
             <>
-              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Import format">
+              <fieldset className="grid grid-cols-2 gap-2">
+                <legend className="sr-only">Import format</legend>
                 <Button
                   variant={format === 'grafana' ? 'default' : 'outline'}
                   size="sm"
@@ -409,7 +410,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                 >
                   Datadog
                 </Button>
-              </div>
+              </fieldset>
 
               {/* Format logo/info */}
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">

@@ -410,14 +410,15 @@ export function AlertsTab({hostId}: AlertsTabProps) {
               </p>
             </div>
           </div>
-          {isLoading ? (
+          {isLoading && (
             <div className="flex items-center justify-center py-8">
               <div className="flex flex-col items-center gap-2">
                 <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 <p className="text-muted-foreground text-xs">Loading alerts...</p>
               </div>
             </div>
-          ) : alerts.length > 0 ? (
+          )}
+          {!isLoading && alerts.length > 0 && (
             <div className="space-y-2">
               {alerts.map((alert) => (
                 <div
@@ -498,7 +499,8 @@ export function AlertsTab({hostId}: AlertsTabProps) {
                 </div>
               ))}
             </div>
-          ) : (
+          )}
+          {!isLoading && alerts.length === 0 && (
             <div className="text-center py-10">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-warning-bg">
                 <Bell className="h-6 w-6 text-warning-fg" />

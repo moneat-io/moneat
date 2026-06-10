@@ -94,11 +94,20 @@ function ReplaysLayout() {
 function formatDate(isoString: string, timezone: string) {
   if (!isoString) return 'N/A'
   const date = parseDate(isoString)
-  if (isNaN(date.getTime())) return 'Invalid Date'
+  if (Number.isNaN(date.getTime())) return 'Invalid Date'
   return formatDateUtil(date, timezone)
 }
 
+type ReplayPeriod = '24h' | '7d' | '30d' | '90d'
 type ReplayView = 'all' | 'errors' | 'mobile'
+
+export const replaysHelperTestHooks = {
+  ReplaysLayout,
+  ReplayContent,
+  ReplayRow,
+  formatDate,
+  matchesView,
+}
 
 const VIEWS: ReadonlyArray<{ value: ReplayView; label: string }> = [
   { value: 'all', label: 'All sessions' },
@@ -363,7 +372,7 @@ function ReplayContent({
 function ReplaysPage() {
   const navigate = useNavigate()
   const { timezone } = useTimezone()
-  const [period, setPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d')
+  const [period, setPeriod] = useState<ReplayPeriod>('7d')
   const [page, setPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
@@ -435,7 +444,7 @@ function ReplaysPage() {
 
   const effectivePeriod = (availablePeriods.some((option) => option.value === period)
     ? period
-    : availablePeriods[availablePeriods.length - 1]?.value ?? '7d') as '24h' | '7d' | '30d' | '90d'
+    : availablePeriods.at(-1)?.value ?? '7d')
 
   const { data: replays = [], isLoading } = useQuery({
     queryKey: ['replays', 'organization', scopeKey, effectivePeriod, environment ?? 'all-env', page, serviceScopeParams],
@@ -512,7 +521,7 @@ function ReplaysPage() {
         />
       }
       actions={
-        <Select value={effectivePeriod} onValueChange={(value) => { setPeriod(value as '24h' | '7d' | '30d' | '90d'); setPage(1) }}>
+        <Select value={effectivePeriod} onValueChange={(value) => { setPeriod(value as ReplayPeriod); setPage(1) }}>
           <SelectTrigger className="w-[140px] h-7 text-xs">
             <SelectValue />
           </SelectTrigger>

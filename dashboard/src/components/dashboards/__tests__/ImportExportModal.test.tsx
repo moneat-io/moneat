@@ -117,7 +117,9 @@ describe('ImportExportModal', () => {
       )
       const grafanaButton = screen.getByRole('button', {name: 'Grafana'})
       const datadogButton = screen.getByRole('button', {name: 'Datadog'})
-      expect(screen.getByRole('group', {name: 'Import format'})).toBeInTheDocument()
+      const formatGroup = screen.getByRole('group', {name: 'Import format'})
+      expect(formatGroup.tagName.toLowerCase()).toBe('fieldset')
+      expect(screen.getByText('Import format')).toHaveClass('sr-only')
       expect(grafanaButton).toHaveAttribute('aria-pressed', 'true')
       expect(datadogButton).toHaveAttribute('aria-pressed', 'false')
 
