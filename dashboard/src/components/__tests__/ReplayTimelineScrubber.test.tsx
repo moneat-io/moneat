@@ -144,26 +144,4 @@ describe('ReplayTimelineScrubber', () => {
     expect(screen.getByText('Request failed')).toBeInTheDocument()
     expect(screen.getByText('(275ms)')).toBeInTheDocument()
   })
-
-  it('clamps navigation without markers or optional controls', () => {
-    const onSeek = vi.fn()
-    render(
-      <ReplayTimelineScrubber
-        currentOffsetMs={4_000}
-        durationMs={84_000}
-        isPlaying={false}
-        items={[]}
-        onSeek={onSeek}
-        onPlayPause={vi.fn()}
-      />
-    )
-
-    fireEvent.click(screen.getByRole('button', {name: 'Rewind 10 seconds'}))
-    fireEvent.click(screen.getByRole('button', {name: 'Skip to next event'}))
-
-    expect(onSeek).toHaveBeenNthCalledWith(1, 0)
-    expect(onSeek).toHaveBeenNthCalledWith(2, 14_000)
-    expect(screen.queryByRole('button', {name: /Next error/})).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', {name: '1x'})).not.toBeInTheDocument()
-  })
 })

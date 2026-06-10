@@ -375,6 +375,37 @@ class ReplayServiceTest {
     }
 
     @Test
+    fun `getReplay formats country only geo when locality is unavailable`() = runBlocking {
+        val replayId = REPLAY_UUID
+        every { geoIpService.resolve(GEO_TEST_IP) } returns GeoIpService.GeoResult(countryCode = "FR")
+        val detailRow = """
+{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_ids":[],"trace_ids":[],"segment_count":1,"environment":"","release":"","platform":"javascript","user_id":"u-1","user_email":"","user_username":"","user_ip_address":"$GEO_TEST_IP","browser_name":"","browser_version":"","os_name":"","os_version":"","activity":8,"tags":"{}"}
+        """.trimIndent()
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("GROUP BY replay_id") ->
+                    exchange.respond(200, detailRow, TEXT_PLAIN)
+                query.contains("countDistinct(event_id)") ->
+                    exchange.respond(200, """{"count":0}""", TEXT_PLAIN)
+                query.contains("SELECT contexts, breadcrumbs") ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+                query.contains("countDistinct(replay_id)") ->
+                    exchange.respond(200, """{"count":0}""", TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplay(replayId)
+            assertNotNull(result)
+            assertEquals("FR", result.geo)
+        }
+    }
+
+    @Test
     fun `getReplay returns null for invalid uuid`() = runBlocking {
         assertNull(service.getReplay("bad-id"))
     }
