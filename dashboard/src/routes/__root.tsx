@@ -438,12 +438,19 @@ function AuthenticatedContent({
     )
   }
 
+  // Fixed region below the header and right of the sidebar (mirrors the split-panel
+  // branch above). This gives in-flow pages a definite height, so an ExplorerShell —
+  // or any `h-full` page — reaches the bottom of the viewport; taller content scrolls
+  // within this region instead of the body.
   return (
     <div
-      className="relative z-0 transition-[margin-left] duration-300"
+      className="z-0 overflow-y-auto transition-[left,top] duration-300"
       style={{
-        marginLeft: sidebarWidth,
-        paddingTop: headerHeight,
+        position: 'fixed',
+        top: headerHeight,
+        left: sidebarWidth,
+        right: 0,
+        bottom: 0,
         '--header-height': `${headerHeight}px`,
         '--sidebar-width': `${sidebarWidth}px`,
       } as React.CSSProperties}

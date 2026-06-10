@@ -3,7 +3,7 @@ import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {fireEvent, screen, waitFor} from '@testing-library/react'
 import {clearAuthStorage, renderRoute} from '@/test/utils'
 
-const {mockApi, mockRouteParams} = vi.hoisted(() => {
+const {mockApi, mockRouteParams, mockNavigate} = vi.hoisted(() => {
   type MockRouteParams = {
     feedbackId?: string
     version?: string
@@ -28,6 +28,7 @@ const {mockApi, mockRouteParams} = vi.hoisted(() => {
     mockRouteParams: {
       current: {version: '1.0.0'} as MockRouteParams,
     },
+    mockNavigate: vi.fn(),
   }
 })
 
@@ -63,7 +64,7 @@ vi.mock('@tanstack/react-router', () => ({
   Outlet: () => null,
   redirect: (opts: Record<string, unknown>) => ({...opts, __redirect: true}),
   useMatches: () => [],
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }))
 
 import {Route as FeedbackRoute} from '../feedback'
@@ -335,6 +336,28 @@ describe('release, replay, and feedback service facets', () => {
     })
   })
 
+  it('opens replay rows from keyboard activation', async () => {
+    mockApi.getOrganizationReplays.mockResolvedValue(replayVariants)
+
+    renderRoute(ReplaysRoute)
+
+    const replayRow = await screen.findByRole('button', {name: /Open replay replay-1 for user@example.com/})
+    fireEvent.keyDown(replayRow, {key: 'Enter'})
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/replays/$replayId',
+      params: {replayId: 'replay-1'},
+    })
+
+    mockNavigate.mockClear()
+    fireEvent.keyDown(replayRow, {key: ' '})
+
+    expect(mockNavigate).toHaveBeenCalledWith({
+      to: '/replays/$replayId',
+      params: {replayId: 'replay-1'},
+    })
+  })
+
   it('renders replay empty and search-empty states', async () => {
     mockApi.getOrganizationReplays.mockResolvedValueOnce([])
 
@@ -348,9 +371,10 @@ describe('release, replay, and feedback service facets', () => {
     renderRoute(ReplaysRoute)
 
     await screen.findByText('user@example.com')
-    fireEvent.change(screen.getByPlaceholderText('Search by user, URL, or browser...'), {
-      target: {value: 'does-not-exist'},
-    })
+    // The shared search bar commits free text on Enter (not on change).
+    const searchInput = screen.getByRole('textbox')
+    fireEvent.change(searchInput, {target: {value: 'does-not-exist'}})
+    fireEvent.keyDown(searchInput, {key: 'Enter'})
 
     expect(await screen.findByText('No replays match your search')).toBeInTheDocument()
   })

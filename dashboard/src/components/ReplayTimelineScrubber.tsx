@@ -18,6 +18,7 @@ import {useRef, useState, useCallback, useMemo} from 'react'
 import type {ReplayTimelineItem} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {
+  AlertTriangle,
   Pause,
   Play,
   RotateCcw,
@@ -52,16 +53,30 @@ function formatClock(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-function markerColor(type: ReplayTimelineItem['type']): string {
+// Tokenized marker colors — never raw ramp values (semantic tokens only).
+function markerBgClass(type: ReplayTimelineItem['type']): string {
   switch (type) {
     case 'error':
-      return '#ef4444'
+      return 'bg-danger-solid'
     case 'transaction':
-      return '#3b82f6'
+      return 'bg-info-solid'
     case 'span':
-      return '#14b8a6'
+      return 'bg-chart-4'
     default:
-      return '#94a3b8'
+      return 'bg-muted-foreground'
+  }
+}
+
+function markerTextClass(type: ReplayTimelineItem['type']): string {
+  switch (type) {
+    case 'error':
+      return 'text-danger-fg'
+    case 'transaction':
+      return 'text-info-fg'
+    case 'span':
+      return 'text-chart-4'
+    default:
+      return 'text-muted-foreground'
   }
 }
 
@@ -95,6 +110,11 @@ export function ReplayTimelineScrubber({
       percent: Math.max(0, Math.min((item.offsetMs / durationMs) * 100, 100)),
     }))
   }, [items, durationMs])
+
+  const hoveredMarkerData = useMemo(
+    () => markers.find((m) => m.id === hoveredMarker) ?? null,
+    [markers, hoveredMarker]
+  )
 
   const seekFromPointer = useCallback(
     (clientX: number) => {
@@ -139,6 +159,13 @@ export function ReplayTimelineScrubber({
       onSeek(Math.min(durationMs, currentOffsetMs + 10_000))
     }
   }, [items, currentOffsetMs, durationMs, onSeek])
+
+  const errorItems = useMemo(() => items.filter((item) => item.type === 'error'), [items])
+
+  const handleNextError = useCallback(() => {
+    const next = errorItems.find((item) => item.offsetMs > currentOffsetMs + 200) ?? errorItems[0]
+    if (next) onSeek(next.offsetMs)
+  }, [errorItems, currentOffsetMs, onSeek])
 
   const handleCycleSpeed = useCallback(() => {
     if (!onSpeedChange) return
@@ -200,47 +227,47 @@ export function ReplayTimelineScrubber({
               }}
               onMouseEnter={() => setHoveredMarker(marker.id)}
               onMouseLeave={() => setHoveredMarker((cur) => (cur === marker.id ? null : cur))}
-              className="absolute top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 rounded-full hover:scale-150 transition-transform appearance-none p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              style={{
-                left: `${marker.percent}%`,
-                width: 10,
-                height: 10,
-                backgroundColor: markerColor(marker.type),
-                border: '1.5px solid hsl(var(--background))',
-                boxShadow: isHovered
-                  ? `0 0 6px 2px ${markerColor(marker.type)}`
-                  : '0 0 0 0.5px rgba(0,0,0,0.2)',
-              }}
-              aria-label={`${marker.title} at ${formatClock(marker.offsetMs)}`}
-            >
-              {isHovered && (
-                <div
-                  className="pointer-events-none absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border bg-popover p-2 text-left overflow-hidden"
-                  style={{ bottom: 'calc(100% + 10px)' }}
-                >
-                  <div className="text-xs font-semibold truncate min-w-0" style={{ color: markerColor(marker.type) }} title={marker.title}>
-                    {marker.title}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                    {formatClock(marker.offsetMs)}
-                    {marker.durationMs != null && marker.durationMs > 0 && (
-                      <span className="ml-1.5 opacity-70">
-                        ({marker.durationMs >= 1000
-                          ? `${(marker.durationMs / 1000).toFixed(2)}s`
-                          : `${Math.round(marker.durationMs)}ms`})
-                      </span>
-                    )}
-                  </div>
-                  {marker.description && (
-                    <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                      {marker.description}
-                    </div>
-                  )}
-                </div>
+              className={cn(
+                'absolute top-1/2 z-20 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 appearance-none rounded-full border-[1.5px] border-background p-0 transition-transform hover:scale-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                markerBgClass(marker.type),
+                isHovered && 'scale-150 ring-2 ring-primary/40'
               )}
-            </button>
+              style={{ left: `${marker.percent}%` }}
+              aria-label={`${marker.title} at ${formatClock(marker.offsetMs)}`}
+            />
           )
         })}
+
+        {/* Hover card — anchored to the track and clamped to the track edges, so it
+            stays on-screen for any marker position regardless of the track's width. */}
+        {hoveredMarkerData && (
+          <div
+            className="pointer-events-none absolute z-50 w-52 rounded-lg border bg-popover p-2 text-left overflow-hidden"
+            style={{
+              bottom: 'calc(100% + 10px)',
+              left: `clamp(0px, calc(${hoveredMarkerData.percent}% - 6.5rem), calc(100% - 13rem))`,
+            }}
+          >
+            <div className={cn('text-xs font-semibold truncate min-w-0', markerTextClass(hoveredMarkerData.type))} title={hoveredMarkerData.title}>
+              {hoveredMarkerData.title}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+              {formatClock(hoveredMarkerData.offsetMs)}
+              {hoveredMarkerData.durationMs != null && hoveredMarkerData.durationMs > 0 && (
+                <span className="ml-1.5 opacity-70">
+                  ({hoveredMarkerData.durationMs >= 1000
+                    ? `${(hoveredMarkerData.durationMs / 1000).toFixed(2)}s`
+                    : `${Math.round(hoveredMarkerData.durationMs)}ms`})
+                </span>
+              )}
+            </div>
+            {hoveredMarkerData.description && (
+              <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                {hoveredMarkerData.description}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Playhead */}
         <div
@@ -297,6 +324,19 @@ export function ReplayTimelineScrubber({
 
         {/* Spacer */}
         <div className="flex-1" />
+
+        {/* Jump to next error */}
+        {errorItems.length > 0 && (
+          <button
+            type="button"
+            onClick={handleNextError}
+            className="inline-flex items-center gap-1 rounded border border-danger-border bg-danger-bg px-2 py-0.5 text-xs font-medium text-danger-fg transition-colors hover:bg-danger-bg/70"
+            title="Jump to next error"
+          >
+            <AlertTriangle className="h-3 w-3" />
+            Next error
+          </button>
+        )}
 
         {/* Speed */}
         {onSpeedChange && (

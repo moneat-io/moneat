@@ -16,8 +16,8 @@
 
 import {createFileRoute, Link, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {useCallback, useMemo, useRef, useState} from 'react'
-import {api} from '@/lib/api'
+import {type RefObject, useCallback, useMemo, useRef, useState} from 'react'
+import {api, type ReplayDetail} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime as formatDateTimeUtil, parseDate} from '@/lib/date-format'
@@ -28,6 +28,7 @@ import {ReplayTimelineScrubber} from '@/components/ReplayTimelineScrubber'
 import {BrowserWindowContainer} from '@/components/replay-containers/BrowserWindowContainer'
 import {MobileDeviceContainer} from '@/components/replay-containers/MobileDeviceContainer'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import {
     AlertCircle,
     ArrowUpRight,
@@ -40,7 +41,6 @@ import {
     Layers,
     Loader2,
     Monitor,
-    Play,
     Smartphone,
     Tag,
     User,
@@ -149,6 +149,48 @@ interface MobileReplayEventForTiming {
     tag?: string
     payload?: Record<string, unknown> & { duration?: number | string }
   }
+}
+
+type MobileReplayOrientation = 'portrait' | 'landscape'
+
+function isNativeMobilePlatform(platform?: string): platform is 'android' | 'ios' {
+  return platform === 'android' || platform === 'ios'
+}
+
+function mobilePlatform(platform?: string): 'android' | 'ios' {
+  return platform === 'ios' ? 'ios' : 'android'
+}
+
+function eventType(event: unknown): unknown {
+  if (typeof event !== 'object' || event === null || !('type' in event)) return undefined
+  return (event as { type: unknown }).type
+}
+
+function hasMobileVideoSegments(events: unknown[]): boolean {
+  return events.some((event) => eventType(event) === 'mobile_replay_video')
+}
+
+function isMobileUnsupportedRecording(events: unknown[]): boolean {
+  return events.length === 1 && eventType(events[0]) === 'mobile_replay_not_supported'
+}
+
+function isMobileReplaySession(replay: ReplayDetail | undefined, events: unknown[]): boolean {
+  return isNativeMobilePlatform(replay?.platform) || hasMobileVideoSegments(events) || isMobileUnsupportedRecording(events)
+}
+
+function replayDurationMs(recordingDurationMs: number, computedDurationMs: number, replayDuration?: number): number {
+  if (recordingDurationMs > 0) return recordingDurationMs
+  if (computedDurationMs > 0) return computedDurationMs
+  return replayDuration ?? 0
+}
+
+function replayProjectResourceId(replay: ReplayDetail | undefined): string | undefined {
+  if (replay?.projectResourceId) return replay.projectResourceId
+  return replay?.projectId === undefined ? undefined : String(replay.projectId)
+}
+
+function replayPlatformLabel(platform?: string): string | null {
+  return platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : null
 }
 
 function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestampMs: number) => number) | null {
@@ -293,6 +335,431 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
   }
 }
 
+interface ReplayRecordingStageProps {
+  readonly recordingLoading: boolean
+  readonly replay: ReplayDetail
+  readonly events: unknown[]
+  readonly isMobileReplay: boolean
+  readonly hasRecording: boolean
+  readonly replayPlayerRef: RefObject<ReplayPlayerHandle | null>
+  readonly mobileReplayViewerRef: RefObject<MobileReplayViewerHandle | null>
+  readonly mobileReplayOrientation: MobileReplayOrientation
+  readonly mobileStatusBarContext: ReplayStatusBarContext
+  readonly onTimeUpdate: (offsetMs: number) => void
+  readonly onDurationReady: (durationMs: number) => void
+  readonly onPlayingChange: (isPlaying: boolean) => void
+  readonly onOrientationChange: (orientation: MobileReplayOrientation) => void
+  readonly onStatusBarContextChange: (context: ReplayStatusBarContext) => void
+}
+
+function ReplayRecordingStage({
+  recordingLoading,
+  replay,
+  events,
+  isMobileReplay,
+  hasRecording,
+  replayPlayerRef,
+  mobileReplayViewerRef,
+  mobileReplayOrientation,
+  mobileStatusBarContext,
+  onTimeUpdate,
+  onDurationReady,
+  onPlayingChange,
+  onOrientationChange,
+  onStatusBarContextChange,
+}: ReplayRecordingStageProps) {
+  if (recordingLoading) {
+    if (isNativeMobilePlatform(replay.platform)) {
+      return (
+        <MobileDeviceContainer
+          platform={mobilePlatform(replay.platform)}
+          orientation="portrait"
+          className="py-2"
+        >
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading recording...</p>
+          </div>
+        </MobileDeviceContainer>
+      )
+    }
+
+    return (
+      <BrowserWindowContainer url={replay.urls?.[0]}>
+        <div className="w-full h-[450px] flex flex-col items-center justify-center gap-3 bg-black">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Loading recording...</p>
+        </div>
+      </BrowserWindowContainer>
+    )
+  }
+
+  if (isMobileReplay) {
+    return (
+      <MobileDeviceContainer
+        platform={mobilePlatform(replay.platform)}
+        orientation={mobileReplayOrientation}
+        className="py-2"
+        statusBarContext={mobileStatusBarContext}
+      >
+        <MobileReplayViewer
+          ref={mobileReplayViewerRef}
+          events={events}
+          platform={replay.platform || 'mobile'}
+          hideControls
+          onTimeUpdate={onTimeUpdate}
+          onDurationReady={onDurationReady}
+          onPlayingChange={onPlayingChange}
+          onOrientationChange={onOrientationChange}
+          onStatusBarContextChange={onStatusBarContextChange}
+        />
+      </MobileDeviceContainer>
+    )
+  }
+
+  if (hasRecording) {
+    return (
+      <BrowserWindowContainer url={replay.urls?.[0]}>
+        <ReplayPlayer
+          ref={replayPlayerRef}
+          events={events}
+          width={800}
+          height={450}
+          autoPlay={false}
+          showController={false}
+          className="w-full"
+          onTimeUpdate={onTimeUpdate}
+          onDurationReady={onDurationReady}
+          onPlayingChange={onPlayingChange}
+        />
+      </BrowserWindowContainer>
+    )
+  }
+
+  return <p className="text-sm text-muted-foreground">No recording data available for this replay</p>
+}
+
+interface ReplayHeaderProps {
+  readonly replay: ReplayDetail
+  readonly replayId: string
+  readonly durationMs: number
+  readonly platformLabel: string | null
+}
+
+function ReplayHeader({ replay, replayId, durationMs, platformLabel }: ReplayHeaderProps) {
+  const userLabel = replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b px-3 py-2.5 text-sm lg:px-5">
+      <Link
+        to="/replays"
+        className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+        Replays
+      </Link>
+      <span className="text-muted-foreground/40">/</span>
+      <span className="font-mono text-xs text-muted-foreground" title={replayId}>
+        {replayId.slice(0, 8)}...
+      </span>
+      <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+      <StatusDot tone={replay.errorCount > 0 ? 'danger' : 'success'} />
+      <span className="font-semibold">{userLabel}</span>
+      {replay.errorCount > 0 && (
+        <Badge variant="destructive" className="flex items-center gap-1 text-[11px]">
+          <AlertCircle className="h-3 w-3" />
+          {replay.errorCount} error{replay.errorCount === 1 ? '' : 's'}
+        </Badge>
+      )}
+      {platformLabel && (
+        <Badge variant="outline" className="flex items-center gap-1 text-[11px]">
+          {isNativeMobilePlatform(replay.platform) ? (
+            <Smartphone className="h-3 w-3" />
+          ) : (
+            <Monitor className="h-3 w-3" />
+          )}
+          {platformLabel}
+        </Badge>
+      )}
+      {replay.environment && (
+        <Badge variant="outline" className="text-[11px]">{replay.environment}</Badge>
+      )}
+      <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Clock3 className="h-3 w-3" />
+        {formatRelativeTime(replay.startedAt)}
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-xs">
+        <span className="font-semibold text-primary tabular-nums">{formatDuration(durationMs)}</span>
+        <span className="text-muted-foreground">duration</span>
+      </span>
+    </div>
+  )
+}
+
+interface ReplayDetailsDrawerProps {
+  readonly replay: ReplayDetail
+  readonly durationMs: number
+  readonly timezone: string
+  readonly platformLabel: string | null
+  readonly replayProjectId: string | undefined
+  readonly expanded: boolean
+  readonly onToggle: () => void
+}
+
+function ReplayDetailsDrawer({
+  replay,
+  durationMs,
+  timezone,
+  platformLabel,
+  replayProjectId,
+  expanded,
+  onToggle,
+}: ReplayDetailsDrawerProps) {
+  return (
+    <div className="shrink-0 border-t px-3 py-2 lg:px-5">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        Session Details
+        <span className="flex-1 border-b border-border ml-2" />
+      </button>
+
+      {expanded && (
+        <div className="mt-3 grid max-h-[42vh] grid-cols-1 gap-3 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <ReplaySessionInfoCard
+            replay={replay}
+            durationMs={durationMs}
+            timezone={timezone}
+            platformLabel={platformLabel}
+          />
+          <ReplayUserCard replay={replay} />
+          <ReplayBrowserOsCard replay={replay} />
+          <ReplayUrlsCard replay={replay} />
+          <ReplayErrorsCard replay={replay} replayProjectId={replayProjectId} />
+          <ReplayTracesCard replay={replay} />
+          <ReplayTagsCard replay={replay} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReplaySessionInfoCard({
+  replay,
+  durationMs,
+  timezone,
+  platformLabel,
+}: Pick<ReplayDetailsDrawerProps, 'replay' | 'durationMs' | 'timezone' | 'platformLabel'>) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <Layers className="h-3.5 w-3.5" />
+        Session
+      </div>
+      <div className="space-y-1.5 text-sm">
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground">Duration</span>
+          <span className="font-medium">{formatDuration(durationMs)}</span>
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground">Started</span>
+          <span className="text-xs">{formatDate(replay.startedAt, timezone)}</span>
+        </div>
+        <div className="flex justify-between gap-2">
+          <span className="text-muted-foreground">Finished</span>
+          <span className="text-xs">{formatDate(replay.finishedAt, timezone)}</span>
+        </div>
+        {replay.environment && (
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Environment</span>
+            <Badge variant="outline" className="text-xs">{replay.environment}</Badge>
+          </div>
+        )}
+        {replay.release && (
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-muted-foreground">Release</span>
+            <span className="text-right min-w-0 max-w-[65%] break-words [overflow-wrap:anywhere] text-xs">
+              {replay.release}
+            </span>
+          </div>
+        )}
+        {platformLabel && (
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Platform</span>
+            <span>{platformLabel}</span>
+          </div>
+        )}
+        {replay.segmentCount > 0 && (
+          <div className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Segments</span>
+            <span>{replay.segmentCount}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ReplayUserCard({ replay }: Pick<ReplayDetailsDrawerProps, 'replay'>) {
+  const hasUser = replay.user?.email || replay.user?.username || replay.user?.id
+  const hasContext = replay.geo || replay.ipAddress || replay.userSessionCount != null
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <User className="h-3.5 w-3.5" />
+        User
+      </div>
+      {hasUser ? (
+        <div className="space-y-1 text-sm">
+          {replay.user?.email && <div>{replay.user.email}</div>}
+          {replay.user?.username && <div className="text-muted-foreground">{replay.user.username}</div>}
+          {replay.user?.id && (
+            <div className="text-muted-foreground font-mono text-xs">{replay.user.id}</div>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Anonymous</p>
+      )}
+      {hasContext && (
+        <div className="mt-2 space-y-1 border-t pt-2 text-xs text-muted-foreground">
+          {replay.geo && <div>{replay.geo}</div>}
+          {replay.ipAddress && <div className="font-mono">{replay.ipAddress}</div>}
+          {replay.userSessionCount != null && <div>{replay.userSessionCount} prior sessions</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReplayBrowserOsCard({ replay }: Pick<ReplayDetailsDrawerProps, 'replay'>) {
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <Monitor className="h-3.5 w-3.5" />
+        Browser / OS
+      </div>
+      <div className="space-y-1 text-sm">
+        {replay.browserName && (
+          <div>
+            {replay.browserName}
+            {replay.browserVersion && ` ${replay.browserVersion}`}
+          </div>
+        )}
+        {replay.osName && (
+          <div className="text-muted-foreground">
+            {replay.osName}
+            {replay.osVersion && ` ${replay.osVersion}`}
+          </div>
+        )}
+        {!replay.browserName && !replay.osName && (
+          <p className="text-muted-foreground">Not recorded</p>
+        )}
+        {replay.viewport && <div className="font-mono text-xs text-muted-foreground">{replay.viewport}</div>}
+        {replay.connection && <div className="text-xs text-muted-foreground">{replay.connection}</div>}
+      </div>
+    </div>
+  )
+}
+
+function ReplayUrlsCard({ replay }: Pick<ReplayDetailsDrawerProps, 'replay'>) {
+  if (!replay.urls?.length) return null
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <Globe className="h-3.5 w-3.5" />
+        URLs ({replay.urls.length})
+      </div>
+      <ul className="space-y-1 text-sm max-h-32 overflow-y-auto">
+        {replay.urls.map((url) => (
+          <li key={url} className="truncate text-muted-foreground text-xs" title={url}>
+            {url}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function ReplayErrorsCard({
+  replay,
+  replayProjectId,
+}: Pick<ReplayDetailsDrawerProps, 'replay' | 'replayProjectId'>) {
+  if (!replay.errorIds?.length) return null
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <AlertCircle className="h-3.5 w-3.5 text-danger-fg" />
+        Errors ({replay.errorIds.length})
+      </div>
+      <div className="space-y-1.5 max-h-[160px] overflow-auto">
+        {replay.errorIds.map((errorId) => (
+          <Link
+            key={errorId}
+            to="/issues/$issueId"
+            params={{ issueId: errorId }}
+            search={{ projectId: replayProjectId }}
+            className="flex items-center justify-between rounded border p-1.5 transition-colors hover:bg-accent group"
+          >
+            <span className="font-mono text-xs text-muted-foreground truncate min-w-0">{errorId}</span>
+            <ArrowUpRight className="h-3 w-3 text-muted-foreground flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </Link>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ReplayTracesCard({ replay }: Pick<ReplayDetailsDrawerProps, 'replay'>) {
+  if (!replay.traceIds?.length) return null
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <DatabaseZap className="h-3.5 w-3.5" />
+        Traces ({replay.traceIds.length})
+      </div>
+      <ul className="space-y-1 font-mono text-xs text-muted-foreground max-h-[160px] overflow-auto">
+        {replay.traceIds.map((traceId) => (
+          <li key={traceId} className="truncate" title={traceId}>
+            {traceId}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function ReplayTagsCard({ replay }: Pick<ReplayDetailsDrawerProps, 'replay'>) {
+  const entries = Object.entries(replay.tags ?? {})
+  if (entries.length === 0) return null
+
+  return (
+    <div className="rounded-lg border bg-card p-3">
+      <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+        <Tag className="h-3.5 w-3.5" />
+        Tags ({entries.length})
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {entries.map(([key, value]) => (
+          <div
+            key={key}
+            className="inline-flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-0.5 text-[11px]"
+          >
+            <span className="text-muted-foreground">{key}:</span>
+            <span className="font-mono font-medium">{value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ReplayDetailPage() {
   const { replayId } = Route.useParams()
   const { timezone } = useTimezone()
@@ -320,25 +787,13 @@ function ReplayDetailPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [playbackSpeed, setPlaybackSpeed] = useState(1)
   const [detailsExpanded, setDetailsExpanded] = useState(false)
-  const [mobileReplayOrientation, setMobileReplayOrientation] = useState<'portrait' | 'landscape'>('portrait')
+  const [mobileReplayOrientation, setMobileReplayOrientation] = useState<MobileReplayOrientation>('portrait')
   const [mobileStatusBarContext, setMobileStatusBarContext] = useState<ReplayStatusBarContext>({})
   const replayPlayerRef = useRef<ReplayPlayerHandle>(null)
   const mobileReplayViewerRef = useRef<MobileReplayViewerHandle>(null)
 
   const events = useMemo(() => recording?.events ?? [], [recording?.events])
-  const hasMobileVideoSegments = events.some((event) => {
-    if (typeof event !== 'object' || event === null || !('type' in event)) return false
-    return (event as { type: unknown }).type === 'mobile_replay_video'
-  })
-  const isMobileReplay =
-    replay?.platform === 'android' ||
-    replay?.platform === 'ios' ||
-    hasMobileVideoSegments ||
-    (events.length === 1 &&
-      typeof events[0] === 'object' &&
-      events[0] !== null &&
-      'type' in events[0] &&
-      (events[0] as { type: unknown }).type === 'mobile_replay_not_supported')
+  const isMobileReplay = isMobileReplaySession(replay, events)
 
   // Prefer player-reported duration (onDurationReady); fallback to computed or backend
   const computedDurationMs = useMemo(
@@ -349,10 +804,8 @@ function ReplayDetailPage() {
     () => getRecordingStartMs(events),
     [events]
   )
-  const durationMs =
-    recordingDurationMs > 0 ? recordingDurationMs : computedDurationMs > 0 ? computedDurationMs : (replay?.durationMs ?? 0)
-  const replayProjectId = replay?.projectResourceId ??
-    (replay?.projectId != null ? String(replay.projectId) : undefined)
+  const durationMs = replayDurationMs(recordingDurationMs, computedDurationMs, replay?.durationMs)
+  const replayProjectId = replayProjectResourceId(replay)
   const mobileCompressedTimeMapper = useMemo(
     () => (isMobileReplay ? createMobileCompressedTimeMapper(events) : null),
     [events, isMobileReplay]
@@ -529,355 +982,80 @@ function ReplayDetailPage() {
   }
 
   const hasRecording = events.length > 0 && !isMobileReplay
-  const platformLabel = replay.platform
-    ? replay.platform.charAt(0).toUpperCase() + replay.platform.slice(1)
-    : null
+  const platformLabel = replayPlatformLabel(replay.platform)
 
   return (
-    <div className="flex flex-col">
-      {/* ───── Header ───── */}
-      <div className="px-3 py-3 lg:px-5 lg:py-3">
-        {/* Breadcrumb nav */}
-        <nav className="mb-2 flex items-center gap-2 text-sm">
-          <Link
-            to="/replays"
-            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Replays
-          </Link>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="text-foreground font-medium truncate max-w-[200px] sm:max-w-none font-mono text-xs" title={replayId}>
-            {replayId.slice(0, 8)}...
-          </span>
-        </nav>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <ReplayHeader
+        replay={replay}
+        replayId={replayId}
+        durationMs={durationMs}
+        platformLabel={platformLabel}
+      />
 
-        {/* Compact header bar */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
-          <div className="flex items-center gap-2">
-            <Play className="h-4 w-4 text-primary" />
-            <span className="font-semibold text-base">
-              {replay.user?.email || replay.user?.username || replay.user?.id || 'Anonymous'}
-            </span>
+      {/* ───── Player-hero: recording + scrubber  |  event rail ───── */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 pt-3 lg:grid-cols-[1.2fr_1fr] lg:px-5">
+        {/* Left: recording (hero) on a stage + docked scrubber */}
+        <div className="flex min-h-0 min-w-0 flex-col gap-2.5">
+          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto rounded-lg border bg-muted/30 p-3">
+            <ReplayRecordingStage
+              recordingLoading={recordingLoading}
+              replay={replay}
+              events={events}
+              isMobileReplay={isMobileReplay}
+              hasRecording={hasRecording}
+              replayPlayerRef={replayPlayerRef}
+              mobileReplayViewerRef={mobileReplayViewerRef}
+              mobileReplayOrientation={mobileReplayOrientation}
+              mobileStatusBarContext={mobileStatusBarContext}
+              onTimeUpdate={setCurrentOffsetMs}
+              onDurationReady={setRecordingDurationMs}
+              onPlayingChange={setIsPlaying}
+              onOrientationChange={setMobileReplayOrientation}
+              onStatusBarContextChange={setMobileStatusBarContext}
+            />
           </div>
-          {replay.errorCount > 0 && (
-            <Badge variant="destructive" className="flex items-center gap-1 text-[11px]">
-              <AlertCircle className="h-3 w-3" />
-              {replay.errorCount} error{replay.errorCount !== 1 ? 's' : ''}
-            </Badge>
-          )}
-          {platformLabel && (
-            <Badge variant="outline" className="flex items-center gap-1 text-[11px]">
-              {(replay.platform === 'android' || replay.platform === 'ios') ? (
-                <Smartphone className="h-3 w-3" />
-              ) : (
-                <Monitor className="h-3 w-3" />
-              )}
-              {platformLabel}
-            </Badge>
-          )}
-          {replay.environment && (
-            <Badge variant="outline" className="text-[11px]">{replay.environment}</Badge>
-          )}
-          <span className="hidden sm:inline text-muted-foreground/40">|</span>
-          <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Clock3 className="h-3 w-3" />
-            {formatRelativeTime(replay.startedAt)}
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-xs">
-            <span className="font-semibold text-primary tabular-nums">{formatDuration(durationMs)}</span>
-            <span className="text-muted-foreground">duration</span>
-          </span>
-        </div>
-      </div>
 
-      {/* ───── Two-column main content ───── */}
-      <div className="flex-1 px-3 lg:px-5 grid grid-cols-1 lg:grid-cols-12 gap-3 min-h-0">
-        {/* Left column: Device container + replay */}
-        <div className="lg:col-span-5 flex flex-col min-h-0">
-          {recordingLoading ? (
-            replay.platform === 'android' || replay.platform === 'ios' ? (
-              <MobileDeviceContainer
-                platform={replay.platform === 'ios' ? 'ios' : 'android'}
-                orientation="portrait"
-                className="py-2"
-              >
-                <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-black">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Loading recording...</p>
-                </div>
-              </MobileDeviceContainer>
-            ) : (
-              <BrowserWindowContainer
-                url={replay.urls?.[0]}
-              >
-                <div className="w-full h-[450px] flex flex-col items-center justify-center gap-3 bg-black">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Loading recording...</p>
-                </div>
-              </BrowserWindowContainer>
-            )
-          ) : isMobileReplay ? (
-            <MobileDeviceContainer
-              platform={replay.platform === 'ios' ? 'ios' : 'android'}
-              orientation={mobileReplayOrientation}
-              className="py-2"
-              statusBarContext={mobileStatusBarContext}
-            >
-              <MobileReplayViewer
-                ref={mobileReplayViewerRef}
-                events={events}
-                platform={replay.platform || 'mobile'}
-                hideControls
-                onTimeUpdate={setCurrentOffsetMs}
-                onDurationReady={setRecordingDurationMs}
-                onPlayingChange={setIsPlaying}
-                onOrientationChange={setMobileReplayOrientation}
-                onStatusBarContextChange={setMobileStatusBarContext}
-              />
-            </MobileDeviceContainer>
-          ) : hasRecording ? (
-            <BrowserWindowContainer
-              url={replay.urls?.[0]}
-            >
-              <ReplayPlayer
-                ref={replayPlayerRef}
-                events={events}
-                width={800}
-                height={450}
-                autoPlay={false}
-                showController={false}
-                className="w-full"
-                onTimeUpdate={setCurrentOffsetMs}
-                onDurationReady={setRecordingDurationMs}
-                onPlayingChange={setIsPlaying}
-              />
-            </BrowserWindowContainer>
+          {/* Scrubber docked directly under the recording */}
+          <ReplayTimelineScrubber
+            currentOffsetMs={currentOffsetMs}
+            durationMs={durationMs}
+            isPlaying={isPlaying}
+            items={timelineItems}
+            onSeek={handleSeek}
+            onPlayPause={handlePlayPause}
+            onSpeedChange={handleSpeedChange}
+            speed={playbackSpeed}
+            className="shrink-0 rounded-lg border"
+          />
+        </div>
+
+        {/* Right: event rail */}
+        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border bg-card">
+          {timelineItems.length > 0 ? (
+            <ReplayTimelinePanel
+              items={timelineItems}
+              currentOffsetMs={currentOffsetMs}
+              projectId={replayProjectId}
+              onSeek={handleSeek}
+            />
           ) : (
-            <div className="flex items-center justify-center h-[400px] rounded-lg border bg-muted">
-              <p className="text-muted-foreground">No recording data available for this replay</p>
+            <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
+              No breadcrumb events for this replay.
             </div>
           )}
         </div>
-
-        {/* Right column: replay timeline */}
-        <div className="lg:col-span-7 flex flex-col min-h-0">
-          <div className="flex flex-col min-h-[400px] max-h-[400px] lg:min-h-[calc(100vh-220px)] lg:max-h-[calc(100vh-220px)]">
-            {timelineItems.length > 0 ? (
-              <ReplayTimelinePanel
-                items={timelineItems}
-                currentOffsetMs={currentOffsetMs}
-                projectId={replayProjectId}
-                onSeek={handleSeek}
-              />
-            ) : (
-              <div className="flex-1 rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
-                No breadcrumb events for this replay.
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* ───── Full-width timeline scrubber ───── */}
-      <div className="mt-3">
-        <ReplayTimelineScrubber
-          currentOffsetMs={currentOffsetMs}
-          durationMs={durationMs}
-          isPlaying={isPlaying}
-          items={timelineItems}
-          onSeek={handleSeek}
-          onPlayPause={handlePlayPause}
-          onSpeedChange={handleSpeedChange}
-          speed={playbackSpeed}
-        />
-      </div>
-
-      {/* ───── Collapsible session details ───── */}
-      <div className="px-3 lg:px-5 py-3">
-        <button
-          type="button"
-          onClick={() => setDetailsExpanded(!detailsExpanded)}
-          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
-        >
-          {detailsExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          Session Details
-          <span className="flex-1 border-b border-border ml-2" />
-        </button>
-
-        {detailsExpanded && (
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {/* Session info */}
-            <div className="rounded-lg border bg-card p-3">
-              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Layers className="h-3.5 w-3.5" />
-                Session
-              </div>
-              <div className="space-y-1.5 text-sm">
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Duration</span>
-                  <span className="font-medium">{formatDuration(durationMs)}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Started</span>
-                  <span className="text-xs">{formatDate(replay.startedAt, timezone)}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">Finished</span>
-                  <span className="text-xs">{formatDate(replay.finishedAt, timezone)}</span>
-                </div>
-                {replay.environment && (
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Environment</span>
-                    <Badge variant="outline" className="text-xs">{replay.environment}</Badge>
-                  </div>
-                )}
-                {replay.release && (
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-muted-foreground">Release</span>
-                    <span className="text-right min-w-0 max-w-[65%] break-words [overflow-wrap:anywhere] text-xs">{replay.release}</span>
-                  </div>
-                )}
-                {platformLabel && (
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Platform</span>
-                    <span>{platformLabel}</span>
-                  </div>
-                )}
-                {replay.segmentCount > 0 && (
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Segments</span>
-                    <span>{replay.segmentCount}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* User */}
-            <div className="rounded-lg border bg-card p-3">
-              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />
-                User
-              </div>
-              {replay.user?.email || replay.user?.username || replay.user?.id ? (
-                <div className="space-y-1 text-sm">
-                  {replay.user.email && <div>{replay.user.email}</div>}
-                  {replay.user.username && <div className="text-muted-foreground">{replay.user.username}</div>}
-                  {replay.user.id && (
-                    <div className="text-muted-foreground font-mono text-xs">{replay.user.id}</div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Anonymous</p>
-              )}
-            </div>
-
-            {/* Browser / OS */}
-            <div className="rounded-lg border bg-card p-3">
-              <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Monitor className="h-3.5 w-3.5" />
-                Browser / OS
-              </div>
-              <div className="space-y-1 text-sm">
-                {replay.browserName && (
-                  <div>
-                    {replay.browserName}
-                    {replay.browserVersion && ` ${replay.browserVersion}`}
-                  </div>
-                )}
-                {replay.osName && (
-                  <div className="text-muted-foreground">
-                    {replay.osName}
-                    {replay.osVersion && ` ${replay.osVersion}`}
-                  </div>
-                )}
-                {!replay.browserName && !replay.osName && (
-                  <p className="text-muted-foreground">Not recorded</p>
-                )}
-              </div>
-            </div>
-
-            {/* Visited URLs */}
-            {replay.urls && replay.urls.length > 0 && (
-              <div className="rounded-lg border bg-card p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <Globe className="h-3.5 w-3.5" />
-                  URLs ({replay.urls.length})
-                </div>
-                <ul className="space-y-1 text-sm max-h-32 overflow-y-auto">
-                  {replay.urls.map((url, i) => (
-                    <li key={i} className="truncate text-muted-foreground text-xs" title={url}>
-                      {url}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Error IDs */}
-            {replay.errorIds && replay.errorIds.length > 0 && (
-              <div className="rounded-lg border bg-card p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <AlertCircle className="h-3.5 w-3.5 text-danger-fg" />
-                  Errors ({replay.errorIds.length})
-                </div>
-                <div className="space-y-1.5 max-h-[160px] overflow-auto">
-                  {replay.errorIds.map((errorId) => (
-                    <Link
-                      key={errorId}
-                      to="/issues/$issueId"
-                      params={{ issueId: errorId }}
-                      search={{ projectId: replayProjectId }}
-                      className="flex items-center justify-between rounded border p-1.5 transition-colors hover:bg-accent group"
-                    >
-                      <span className="font-mono text-xs text-muted-foreground truncate min-w-0">{errorId}</span>
-                      <ArrowUpRight className="h-3 w-3 text-muted-foreground flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Trace IDs */}
-            {replay.traceIds && replay.traceIds.length > 0 && (
-              <div className="rounded-lg border bg-card p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <DatabaseZap className="h-3.5 w-3.5" />
-                  Traces ({replay.traceIds.length})
-                </div>
-                <ul className="space-y-1 font-mono text-xs text-muted-foreground max-h-[160px] overflow-auto">
-                  {replay.traceIds.map((traceId) => (
-                    <li key={traceId} className="truncate" title={traceId}>
-                      {traceId}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Tags */}
-            {replay.tags && Object.keys(replay.tags).length > 0 && (
-              <div className="rounded-lg border bg-card p-3">
-                <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <Tag className="h-3.5 w-3.5" />
-                  Tags ({Object.keys(replay.tags).length})
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(replay.tags).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="inline-flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-0.5 text-[11px]"
-                    >
-                      <span className="text-muted-foreground">{key}:</span>
-                      <span className="font-mono font-medium">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <ReplayDetailsDrawer
+        replay={replay}
+        durationMs={durationMs}
+        timezone={timezone}
+        platformLabel={platformLabel}
+        replayProjectId={replayProjectId}
+        expanded={detailsExpanded}
+        onToggle={() => setDetailsExpanded((expanded) => !expanded)}
+      />
     </div>
   )
 }

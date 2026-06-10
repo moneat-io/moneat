@@ -245,7 +245,7 @@ val eventsModule = module {
     single { ReleaseService() }
     single { NotificationService(get(), get()) }
     single { EventService(get(), get(), get()) }
-    single { DashboardService(get(), get(), get()) }
+    single { DashboardService(get(), get(), get(), get()) }
 }
 
 /** Infrastructure monitoring and alerting. */

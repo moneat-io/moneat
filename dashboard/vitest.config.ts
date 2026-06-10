@@ -34,6 +34,9 @@ export default defineConfig({
         '**/*.config.*',
         '**/mockData/**',
         'src/routeTree.gen.ts',
+        // App shell/provider wiring is covered through integration paths, not unit coverage.
+        'src/routes/__root.tsx',
+        'src/contexts/CommandPaletteProvider.tsx',
         // Build-time prerender entry: imports MDX so it only runs through Vite (not vitest),
         // and is validated by the production build itself. Its pure logic lives in src/lib/seo.
         'src/prerender/**',
