@@ -61,8 +61,6 @@ export const Route = createFileRoute('/dashboards/')({
   component: DashboardListPage,
 })
 
-type FolderFilter = string
-
 type DashboardPageTitleProps = Readonly<{
   isFirstRun: boolean
 }>
@@ -89,12 +87,12 @@ type DashboardWorkspaceProps = Readonly<{
   filteredDashboards: readonly CustomDashboard[]
   favoritesCount: number
   uncategorizedCount: number
-  selectedFolder: FolderFilter
+  selectedFolder: string
   folderLabel: string
   isCreatingFolder: boolean
   newFolderName: string
   now: number
-  onSelectFolder: (folder: FolderFilter) => void
+  onSelectFolder: (folder: string) => void
   onStartCreatingFolder: () => void
   onCancelCreatingFolder: () => void
   onNewFolderNameChange: (name: string) => void
@@ -112,8 +110,8 @@ type MobileFolderPillsProps = Readonly<{
   folders: readonly DashboardFolder[]
   favoritesCount: number
   uncategorizedCount: number
-  selectedFolder: FolderFilter
-  onSelectFolder: (folder: FolderFilter) => void
+  selectedFolder: string
+  onSelectFolder: (folder: string) => void
 }>
 
 type FolderSidebarProps = Readonly<{
@@ -121,10 +119,10 @@ type FolderSidebarProps = Readonly<{
   folders: readonly DashboardFolder[]
   favoritesCount: number
   uncategorizedCount: number
-  selectedFolder: FolderFilter
+  selectedFolder: string
   isCreatingFolder: boolean
   newFolderName: string
-  onSelectFolder: (folder: FolderFilter) => void
+  onSelectFolder: (folder: string) => void
   onDeleteFolder: (folderId: string) => void
   onStartCreatingFolder: () => void
   onCancelCreatingFolder: () => void
@@ -150,7 +148,7 @@ type SidebarButtonProps = Readonly<{
 }>
 
 type DashboardsEmptyStateProps = Readonly<{
-  selectedFolder: FolderFilter
+  selectedFolder: string
   folderLabel: string
   onCreateBlank: () => void
 }>
@@ -177,7 +175,7 @@ function DashboardListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showImport, setShowImport] = useState(false)
-  const [selectedFolder, setSelectedFolder] = useState<FolderFilter>('all')
+  const [selectedFolder, setSelectedFolder] = useState('all')
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [now] = useState(() => Date.now())
@@ -366,7 +364,7 @@ function DashboardListPage() {
 
 function filterDashboards(
   dashboards: readonly CustomDashboard[],
-  selectedFolder: FolderFilter,
+  selectedFolder: string,
 ): readonly CustomDashboard[] {
   if (selectedFolder === 'all') return dashboards
   if (selectedFolder === 'favorites') return dashboards.filter((dashboard) => dashboard.is_favorited)
@@ -374,7 +372,7 @@ function filterDashboards(
   return dashboards.filter((dashboard) => dashboard.folder_id === selectedFolder)
 }
 
-function isConcreteFolder(selectedFolder: FolderFilter): selectedFolder is string {
+function isConcreteFolder(selectedFolder: string): boolean {
   return !['all', 'favorites', 'uncategorized'].includes(selectedFolder)
 }
 
@@ -390,7 +388,7 @@ function countDashboardsInFolder(dashboards: readonly CustomDashboard[], folderI
   return dashboards.filter((dashboard) => dashboard.folder_id === folderId).length
 }
 
-function getFolderLabel(selectedFolder: FolderFilter, folders: readonly DashboardFolder[]) {
+function getFolderLabel(selectedFolder: string, folders: readonly DashboardFolder[]) {
   if (selectedFolder === 'all') return 'All'
   if (selectedFolder === 'favorites') return 'Favorites'
   if (selectedFolder === 'uncategorized') return 'Uncategorized'

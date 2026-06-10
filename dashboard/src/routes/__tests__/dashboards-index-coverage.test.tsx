@@ -284,6 +284,10 @@ describe('Dashboards index route', () => {
       }))
     })
 
+    fireEvent.click(screen.getAllByRole('button', {name: /^Ops$/})[0])
+    fireEvent.click(screen.getAllByRole('button', {name: /Delete folder/})[0])
+    await waitFor(() => expect(mockApi.deleteDashboardFolder).toHaveBeenCalledWith(OPS_FOLDER_ID))
+
     fireEvent.click(screen.getAllByRole('button', {name: /Move to folder/})[0])
     fireEvent.click(screen.getAllByRole('button', {name: /^Uncategorized$/})[0])
     const opsButtons = screen.getAllByRole('button', {name: /^Ops$/})
