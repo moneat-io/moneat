@@ -44,7 +44,10 @@ const SOURCE_CONFIG: Record<string, {label: string; className: string}> = {
   },
 }
 
-export function SourceBadge({source, className}: {source?: string | null; className?: string}) {
+export function SourceBadge({
+  source,
+  className,
+}: Readonly<{source?: string | null; className?: string}>) {
   const rawSource = source?.trim() ?? ''
   const key = rawSource.toLowerCase()
   const config =

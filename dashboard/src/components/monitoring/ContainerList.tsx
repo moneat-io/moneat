@@ -47,6 +47,7 @@ import {
 import {useState, useMemo} from 'react'
 import {cn, formatRelativeTime} from '@/lib/utils'
 import {parseDate} from '@/lib/date-format'
+import {containerIconClassName, stateFilterCount, type StateFilter} from './ContainerList.helpers'
 
 function parseTimestamp(ts: string | undefined): number {
   if (!ts) return 0
@@ -92,8 +93,6 @@ function getMemBarColor(percent: number): string {
   return 'bg-success-solid'
 }
 
-type StateFilter = 'all' | 'running' | 'stopped'
-
 function StateIcon({state}: {state: string}) {
   switch (state) {
     case 'running':
@@ -116,6 +115,42 @@ function stateBadgeVariant(state: string): 'success' | 'danger' | 'warning' {
     default:
       return 'warning'
   }
+}
+
+function ContainerLoadingState() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-muted-foreground text-sm">Loading containers...</p>
+      </div>
+    </div>
+  )
+}
+
+function NoContainersState() {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="py-16 text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+          <Box className="h-10 w-10" />
+        </div>
+        <h3 className="text-xl font-semibold mb-2">No containers found</h3>
+        <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
+          Containers will appear when a monitoring agent with Docker socket access sends container data.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function NoContainerMatchesState() {
+  return (
+    <div className="text-center py-12 text-muted-foreground">
+      <p className="font-medium">No containers match your filters</p>
+      <p className="text-sm mt-1">Try adjusting your search or state filter.</p>
+    </div>
+  )
 }
 
 export function ContainerList() {
@@ -249,11 +284,7 @@ export function ContainerList() {
               {f === 'all' && <StatusDot tone="neutral" size="sm" />}
               <span className="capitalize">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">
-                {f === 'all'
-                  ? containers.length
-                  : f === 'running'
-                    ? runningCount
-                    : stoppedCount}
+                {stateFilterCount(f, containers.length, runningCount, stoppedCount)}
               </span>
             </button>
           ))}
@@ -266,31 +297,10 @@ export function ContainerList() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground text-sm">Loading containers...</p>
-          </div>
-        </div>
-      ) : containers.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-              <Box className="h-10 w-10" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">No containers found</h3>
-            <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
-              Containers will appear when a monitoring agent with Docker socket access sends container data.
-            </p>
-          </CardContent>
-        </Card>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No containers match your filters</p>
-          <p className="text-sm mt-1">Try adjusting your search or state filter.</p>
-        </div>
-      ) : (
+      {isLoading && <ContainerLoadingState />}
+      {!isLoading && containers.length === 0 && <NoContainersState />}
+      {!isLoading && containers.length > 0 && filtered.length === 0 && <NoContainerMatchesState />}
+      {!isLoading && filtered.length > 0 && (
         <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[980px]">
@@ -319,11 +329,7 @@ export function ContainerList() {
                           <div
                             className={cn(
                               'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                              c.state === 'running'
-                                ? 'bg-success-bg text-success-fg'
-                                : c.state === 'exited' || c.state === 'dead'
-                                  ? 'bg-danger-bg text-danger-fg'
-                                  : 'bg-warning-bg text-warning-fg'
+                              containerIconClassName(c.state)
                             )}
                           >
                             <Box className="h-4 w-4" />

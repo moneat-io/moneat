@@ -42,7 +42,7 @@ function ServiceExplorerPage() {
   return <SeededServiceExplorerPage key={routeService} routeService={routeService} />
 }
 
-function SeededServiceExplorerPage({routeService}: {routeService: string}) {
+function SeededServiceExplorerPage({routeService}: Readonly<{routeService: string}>) {
   const [query, setQuery] = useState('')
   const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => [
     serviceFacet(routeService),
@@ -235,7 +235,7 @@ function profileTypeValues(services: readonly ProfileServiceSummary[]): string[]
 }
 
 function uniqueSorted(values: readonly string[]): string[] {
-  return Array.from(new Set(values.filter((value) => value.trim() !== ''))).sort()
+  return Array.from(new Set(values.filter((value) => value.trim() !== ''))).sort((a, b) => a.localeCompare(b))
 }
 
 function firstFacetValue(filters: readonly FacetFilter[], key: string): string | undefined {

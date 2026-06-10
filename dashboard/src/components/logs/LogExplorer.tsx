@@ -435,9 +435,9 @@ function LogLevelPicker({
   onToggleLevel,
   onResetLevels,
 }: {
-  levels: string[]
-  onToggleLevel: (level: string) => void
-  onResetLevels: () => void
+  readonly levels: string[]
+  readonly onToggleLevel: (level: string) => void
+  readonly onResetLevels: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)

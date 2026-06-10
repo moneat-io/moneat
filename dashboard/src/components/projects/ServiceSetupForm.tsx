@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState, type FormEvent} from 'react'
+import {type SyntheticEvent, useMemo, useState} from 'react'
 import {Check, Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
@@ -119,7 +119,7 @@ export function ServiceSetupForm({
     )
   }
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!canSubmit || !selectedPlatform) return
 

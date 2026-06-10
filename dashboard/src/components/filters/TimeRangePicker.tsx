@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect, useMemo, useRef, useState} from 'react'
+import {useEffect, useId, useMemo, useRef, useState} from 'react'
 import {ChevronDown, Clock} from 'lucide-react'
 import {format} from 'date-fns'
 
@@ -23,7 +23,7 @@ import {Button} from '@/components/ui/button'
 import {DateTimePicker} from '@/components/ui/datetime-picker'
 import {type TimeRangePreset, TIME_PRESETS} from '@/lib/filters/time'
 
-interface TimeRangePickerProps {
+type TimeRangePickerProps = Readonly<{
   timePreset: string
   onTimePresetChange: (preset: string) => void
   customFrom: string
@@ -34,6 +34,43 @@ interface TimeRangePickerProps {
   presets?: TimeRangePreset[]
   /** Allow a custom from/to range. Defaults to true. */
   allowCustom?: boolean
+}>
+
+function formatCustomRangeLabel(customFrom: string, customTo: string): string {
+  if (!customFrom && !customTo) return 'Custom range'
+  try {
+    const fromDate = customFrom ? new Date(customFrom) : null
+    const toDate = customTo ? new Date(customTo) : null
+    return formatCustomRangeDates(fromDate, toDate)
+  } catch {
+    return 'Custom range'
+  }
+}
+
+function formatCustomRangeDates(fromDate: Date | null, toDate: Date | null): string {
+  if (fromDate && toDate) {
+    return formatDatePair(fromDate, toDate)
+  }
+  if (fromDate) return `From ${format(fromDate, 'MMM d, HH:mm')}`
+  if (toDate) return `Until ${format(toDate, 'MMM d, HH:mm')}`
+  return 'Custom range'
+}
+
+function formatDatePair(fromDate: Date, toDate: Date): string {
+  const sameDay = format(fromDate, 'yyyy-MM-dd') === format(toDate, 'yyyy-MM-dd')
+  if (sameDay) return `${format(fromDate, 'MMM d, HH:mm')} - ${format(toDate, 'HH:mm')}`
+  return `${format(fromDate, 'MMM d, HH:mm')} - ${format(toDate, 'MMM d, HH:mm')}`
+}
+
+function activeTimeRangeLabel(
+  timePreset: string,
+  customFrom: string,
+  customTo: string,
+  presets: TimeRangePreset[],
+): string {
+  if (timePreset === 'custom') return formatCustomRangeLabel(customFrom, customTo)
+  const preset = presets.find((p) => p.value === timePreset)
+  return preset?.label ?? presets[0]?.label ?? 'Custom range'
 }
 
 /**
@@ -53,6 +90,8 @@ export function TimeRangePicker({
 }: TimeRangePickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const customFromId = useId()
+  const customToId = useId()
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -64,29 +103,10 @@ export function TimeRangePicker({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const activeLabel = useMemo(() => {
-    if (timePreset === 'custom') {
-      if (!customFrom && !customTo) return 'Custom range'
-      try {
-        const fromDate = customFrom ? new Date(customFrom) : null
-        const toDate = customTo ? new Date(customTo) : null
-        if (fromDate && toDate) {
-          const sameDay = format(fromDate, 'yyyy-MM-dd') === format(toDate, 'yyyy-MM-dd')
-          if (sameDay) {
-            return `${format(fromDate, 'MMM d, HH:mm')} - ${format(toDate, 'HH:mm')}`
-          }
-          return `${format(fromDate, 'MMM d, HH:mm')} - ${format(toDate, 'MMM d, HH:mm')}`
-        }
-        if (fromDate) return `From ${format(fromDate, 'MMM d, HH:mm')}`
-        if (toDate) return `Until ${format(toDate, 'MMM d, HH:mm')}`
-      } catch {
-        // Invalid date
-      }
-      return 'Custom range'
-    }
-    const preset = presets.find((p) => p.value === timePreset)
-    return preset?.label ?? presets[0]?.label ?? 'Custom range'
-  }, [timePreset, customFrom, customTo, presets])
+  const activeLabel = useMemo(
+    () => activeTimeRangeLabel(timePreset, customFrom, customTo, presets),
+    [timePreset, customFrom, customTo, presets]
+  )
 
   return (
     <div className="relative" ref={ref}>
@@ -138,20 +158,28 @@ export function TimeRangePicker({
               {timePreset === 'custom' && (
                 <div className="space-y-2 px-3 py-2">
                   <div>
-                    <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <label
+                      htmlFor={customFromId}
+                      className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground"
+                    >
                       From
                     </label>
                     <DateTimePicker
+                      id={customFromId}
                       value={customFrom}
                       onChange={onCustomFromChange}
                       placeholder="Select start time"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <label
+                      htmlFor={customToId}
+                      className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground"
+                    >
                       To
                     </label>
                     <DateTimePicker
+                      id={customToId}
                       value={customTo}
                       onChange={onCustomToChange}
                       placeholder="Select end time"

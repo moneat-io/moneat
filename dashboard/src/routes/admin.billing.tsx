@@ -409,6 +409,179 @@ function buildCreateTierVersionRequest(form: CreateFormState): CreateTierVersion
   }
 }
 
+type UpdatePriceFormData = {
+  stripeBasePriceId: string
+  stripeOveragePriceId: string
+  stripeYearlyBasePriceId: string
+  stripeYearlyOveragePriceId: string
+  stripeOncallPriceId: string
+  stripeOncallYearlyPriceId: string
+}
+
+const EMPTY_UPDATE_PRICE_FORM: UpdatePriceFormData = {
+  stripeBasePriceId: '',
+  stripeOveragePriceId: '',
+  stripeYearlyBasePriceId: '',
+  stripeYearlyOveragePriceId: '',
+  stripeOncallPriceId: '',
+  stripeOncallYearlyPriceId: '',
+}
+
+function toBillingPlans(value: unknown): BillingPlan[] {
+  if (!Array.isArray(value)) return []
+  const first = value[0]
+  if (first == null || typeof first !== 'object' || !('tier' in first)) return []
+  return value as BillingPlan[]
+}
+
+function toBillingTierConfigs(value: unknown): BillingTierConfig[] {
+  if (!Array.isArray(value)) return []
+  return value as BillingTierConfig[]
+}
+
+function tierVersionKey(config: BillingTierConfig | undefined): string | undefined {
+  if (!config) return undefined
+  return `${config.tierName}-${config.version}`
+}
+
+function resolveCreateForm(
+  formState: {tierVersion: string | undefined; data: CreateFormState},
+  currentTierVersion: string | undefined,
+  currentTierConfig: BillingTierConfig | undefined,
+): CreateFormState {
+  if (formState.tierVersion === currentTierVersion && currentTierVersion !== undefined) return formState.data
+  if (currentTierConfig) return buildCreateFormFromConfig(currentTierConfig)
+  return DEFAULT_FORM
+}
+
+function buildUpdatePriceForm(config: BillingTierConfig | undefined): UpdatePriceFormData {
+  if (!config) return EMPTY_UPDATE_PRICE_FORM
+  return {
+    stripeBasePriceId: config.stripeBasePriceId ?? '',
+    stripeOveragePriceId: config.stripeOveragePriceId ?? '',
+    stripeYearlyBasePriceId: config.stripeYearlyBasePriceId ?? '',
+    stripeYearlyOveragePriceId: config.stripeYearlyOveragePriceId ?? '',
+    stripeOncallPriceId: config.stripeOncallPriceId ?? '',
+    stripeOncallYearlyPriceId: config.stripeOncallYearlyPriceId ?? '',
+  }
+}
+
+function resolveUpdatePriceForm(
+  formState: {tierVersion: string | undefined; data: UpdatePriceFormData},
+  currentTierVersion: string | undefined,
+  selectedConfig: BillingTierConfig | undefined,
+): UpdatePriceFormData {
+  if (formState.tierVersion === currentTierVersion && currentTierVersion !== undefined) return formState.data
+  return buildUpdatePriceForm(selectedConfig)
+}
+
+function filterSubscriptionsByText(
+  subscriptions: AdminBillingSubscription[],
+  filter: string,
+): AdminBillingSubscription[] {
+  if (!filter) return subscriptions
+  const lower = filter.toLowerCase()
+  return subscriptions.filter(
+    (subscription) =>
+      subscription.organizationName.toLowerCase().includes(lower) ||
+      subscription.plan.toLowerCase().includes(lower) ||
+      subscription.status.toLowerCase().includes(lower),
+  )
+}
+
+function availableBillingTiers(currentPlans: BillingPlan[]): string[] {
+  const fromPlans = currentPlans.map((plan) => plan.tier.tierName)
+  const combined = new Set([...KNOWN_TIERS, ...fromPlans])
+  return Array.from(combined).sort((a, b) => a.localeCompare(b))
+}
+
+function numberFromText(value: string): number | null {
+  if (!value.trim()) return null
+  return Number(value)
+}
+
+function buildDraftPricingTier(
+  createTier: string,
+  createForm: CreateFormState,
+  currentTierConfig: BillingTierConfig | undefined,
+): PricingCardTierInput | null {
+  if (!currentTierConfig) return null
+  return {
+    tierName: createTier,
+    monthlyPriceCents: createForm.monthlyPriceCents,
+    yearlyPriceCents: createForm.yearlyPriceCents,
+    trialDays: createForm.trialDays,
+    monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
+    monthlyLlmEventLimit: createForm.monthlyLlmEventLimit,
+    retentionDays: createForm.retentionDays,
+    apmTraceRetentionDays: createForm.apmTraceRetentionDays,
+    maxProjects: numberFromText(createForm.maxProjects),
+    maxSystems: createForm.maxSystems,
+    monitorIntervalSeconds: createForm.monitorIntervalSeconds,
+    sessionReplayEnabled: currentTierConfig.sessionReplayEnabled,
+    statusPagesEnabled: currentTierConfig.statusPagesEnabled,
+    statusPageCustomDomainEnabled: currentTierConfig.statusPageCustomDomainEnabled,
+    slackEnabled: currentTierConfig.slackEnabled,
+    discordEnabled: currentTierConfig.discordEnabled,
+    incidentIoEnabled: currentTierConfig.incidentIoEnabled,
+    samlEnabled: currentTierConfig.samlEnabled,
+    oidcEnabled: currentTierConfig.oidcEnabled,
+    prioritySupportEnabled: currentTierConfig.prioritySupportEnabled,
+    slaEnabled: currentTierConfig.slaEnabled,
+    customRetentionEnabled: currentTierConfig.customRetentionEnabled,
+    oncallEnabled: createForm.oncallEnabled,
+    oncallPerUserMonthlyCents: createForm.oncallPerUserMonthlyCents,
+    maxAnalyticsSites: numberFromText(createForm.maxAnalyticsSites),
+    analyticsRetentionDays: createForm.analyticsRetentionDays,
+    monthlyAnalyticsPageviewLimit: createForm.monthlyAnalyticsPageviewLimit,
+    analyticsPageviewOverageRateCentsPer100k: createForm.analyticsPageviewOverageRateCentsPer100k,
+  }
+}
+
+function mergePreviewTier(
+  tier: PricingCardTierInput,
+  createTier: string,
+  draftTier: PricingCardTierInput | null,
+  plansByTier: Map<string, BillingPlan>,
+): PricingCardTierInput {
+  if (tier.tierName === createTier && draftTier) return draftTier
+  return {
+    ...tier,
+    trialDays: plansByTier.get(tier.tierName)?.trialDays ?? tier.trialDays,
+  }
+}
+
+function buildPreviewCards(
+  currentPlans: BillingPlan[],
+  createTier: string,
+  createForm: CreateFormState,
+  currentTierConfig: BillingTierConfig | undefined,
+  previewInterval: BillingInterval,
+) {
+  const plansByTier = new Map(currentPlans.map((plan) => [plan.tier.tierName, plan]))
+  const draftTier = buildDraftPricingTier(createTier, createForm, currentTierConfig)
+
+  return currentPlans
+    .map((plan) => mergePreviewTier(plan.tier, createTier, draftTier, plansByTier))
+    .sort((a, b) => (TIER_ORDER[a.tierName] ?? 99) - (TIER_ORDER[b.tierName] ?? 99))
+    .map((tier) => buildPricingCardModel(tier, previewInterval))
+}
+
+export const adminBillingHelperTestHooks = {
+  DEFAULT_FORM,
+  EMPTY_UPDATE_PRICE_FORM,
+  availableBillingTiers,
+  buildPreviewCards,
+  buildUpdatePriceForm,
+  filterSubscriptionsByText,
+  numberFromText,
+  resolveCreateForm,
+  resolveUpdatePriceForm,
+  tierVersionKey,
+  toBillingPlans,
+  toBillingTierConfigs,
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 function AdminBillingPage() {
@@ -429,24 +602,10 @@ function AdminBillingPage() {
   const [previewInterval, setPreviewInterval] = useState<BillingInterval>('monthly')
   const [updatePriceFormState, setUpdatePriceFormState] = useState<{
     tierVersion: string | undefined
-    data: {
-      stripeBasePriceId: string
-      stripeOveragePriceId: string
-      stripeYearlyBasePriceId: string
-      stripeYearlyOveragePriceId: string
-      stripeOncallPriceId: string
-      stripeOncallYearlyPriceId: string
-    }
+    data: UpdatePriceFormData
   }>({
     tierVersion: undefined,
-    data: {
-      stripeBasePriceId: '',
-      stripeOveragePriceId: '',
-      stripeYearlyBasePriceId: '',
-      stripeYearlyOveragePriceId: '',
-      stripeOncallPriceId: '',
-      stripeOncallYearlyPriceId: '',
-    },
+    data: EMPTY_UPDATE_PRICE_FORM,
   })
   const [showCreateConfirm, setShowCreateConfirm] = useState(false)
   const [showMigrateConfirm, setShowMigrateConfirm] = useState(false)
@@ -482,21 +641,15 @@ function AdminBillingPage() {
 
   // ─── Derived Data ─────────────────────────────────────────────────────────
 
-  const currentPlans = useMemo(
-    () =>
-      (Array.isArray(currentPlansRaw) && currentPlansRaw.length > 0 && 'tier' in currentPlansRaw[0]
-        ? currentPlansRaw
-        : []) as BillingPlan[],
-    [currentPlansRaw],
-  )
+  const currentPlans = useMemo(() => toBillingPlans(currentPlansRaw), [currentPlansRaw])
 
   const createTierVersions = useMemo(
-    () => (Array.isArray(createTierVersionsRaw) ? createTierVersionsRaw : []) as BillingTierConfig[],
+    () => toBillingTierConfigs(createTierVersionsRaw),
     [createTierVersionsRaw],
   )
 
   const migrateTierVersions = useMemo(
-    () => (Array.isArray(migrateTierVersionsRaw) ? migrateTierVersionsRaw : []) as BillingTierConfig[],
+    () => toBillingTierConfigs(migrateTierVersionsRaw),
     [migrateTierVersionsRaw],
   )
 
@@ -505,10 +658,8 @@ function AdminBillingPage() {
     [createTierVersions],
   )
 
-  const currentTierVersion = currentTierConfig ? `${currentTierConfig.tierName}-${currentTierConfig.version}` : undefined
-  const createForm = (createFormState.tierVersion === currentTierVersion && currentTierVersion !== undefined)
-    ? createFormState.data
-    : (currentTierConfig ? buildCreateFormFromConfig(currentTierConfig) : DEFAULT_FORM)
+  const currentTierVersion = tierVersionKey(currentTierConfig)
+  const createForm = resolveCreateForm(createFormState, currentTierVersion, currentTierConfig)
   const setCreateForm = (updater: CreateFormState | ((prev: CreateFormState) => CreateFormState)) => {
     setCreateFormState({
       tierVersion: currentTierVersion,
@@ -532,7 +683,7 @@ function AdminBillingPage() {
   )
 
   const updateTierVersions = useMemo(
-    () => (Array.isArray(updateTierVersionsRaw) ? updateTierVersionsRaw : []) as BillingTierConfig[],
+    () => toBillingTierConfigs(updateTierVersionsRaw),
     [updateTierVersionsRaw],
   )
 
@@ -541,92 +692,32 @@ function AdminBillingPage() {
     [updateTierVersions, updateVersion],
   )
 
-  const currentUpdateTierVersion = selectedUpdateTierConfig ? String(selectedUpdateTierConfig.version) : undefined
-  const updatePriceForm = (updatePriceFormState.tierVersion === currentUpdateTierVersion && currentUpdateTierVersion !== undefined)
-    ? updatePriceFormState.data
-    : {
-        stripeBasePriceId: selectedUpdateTierConfig?.stripeBasePriceId ?? '',
-        stripeOveragePriceId: selectedUpdateTierConfig?.stripeOveragePriceId ?? '',
-        stripeYearlyBasePriceId: selectedUpdateTierConfig?.stripeYearlyBasePriceId ?? '',
-        stripeYearlyOveragePriceId: selectedUpdateTierConfig?.stripeYearlyOveragePriceId ?? '',
-        stripeOncallPriceId: selectedUpdateTierConfig?.stripeOncallPriceId ?? '',
-        stripeOncallYearlyPriceId: selectedUpdateTierConfig?.stripeOncallYearlyPriceId ?? '',
-      }
-  const setUpdatePriceForm = (updater: typeof updatePriceFormState.data | ((prev: typeof updatePriceFormState.data) => typeof updatePriceFormState.data)) => {
+  const currentUpdateTierVersion = selectedUpdateTierConfig?.version.toString()
+  const updatePriceForm = resolveUpdatePriceForm(
+    updatePriceFormState,
+    currentUpdateTierVersion,
+    selectedUpdateTierConfig,
+  )
+  const setUpdatePriceForm = (updater: UpdatePriceFormData | ((prev: UpdatePriceFormData) => UpdatePriceFormData)) => {
     setUpdatePriceFormState({
       tierVersion: currentUpdateTierVersion,
       data: typeof updater === 'function' ? updater(updatePriceForm) : updater,
     })
   }
 
-  const filteredSubscriptions = useMemo(() => {
-    if (!subFilter) return subscriptions
-    const lower = subFilter.toLowerCase()
-    return subscriptions.filter(
-      (s: AdminBillingSubscription) =>
-        s.organizationName.toLowerCase().includes(lower) ||
-        s.plan.toLowerCase().includes(lower) ||
-        s.status.toLowerCase().includes(lower),
-    )
-  }, [subscriptions, subFilter])
+  const filteredSubscriptions = useMemo(
+    () => filterSubscriptionsByText(subscriptions, subFilter),
+    [subscriptions, subFilter],
+  )
 
   const validationErrors = useMemo(() => validateCreateForm(createForm), [createForm])
   const hasValidationErrors = Object.keys(validationErrors).length > 0
 
   // Unique tier names from current plans for the dropdown
-  const availableTiers = useMemo(() => {
-    const fromPlans = currentPlans.map((p) => p.tier.tierName)
-    const combined = new Set([...KNOWN_TIERS, ...fromPlans])
-    return Array.from(combined).sort()
-  }, [currentPlans])
+  const availableTiers = useMemo(() => availableBillingTiers(currentPlans), [currentPlans])
 
   const previewCards = useMemo(() => {
-    const plansByTier = new Map(currentPlans.map((plan) => [plan.tier.tierName, plan]))
-    const sourceTiers = currentPlans.map((plan) => plan.tier)
-    const draftTier: PricingCardTierInput | null = currentTierConfig
-      ? {
-          tierName: createTier,
-          monthlyPriceCents: createForm.monthlyPriceCents,
-          yearlyPriceCents: createForm.yearlyPriceCents,
-          trialDays: createForm.trialDays,
-          monthlyGbLimit: Math.max(0, Math.round(createForm.monthlyGbLimitGb * BYTES_PER_GB)),
-          monthlyLlmEventLimit: createForm.monthlyLlmEventLimit,
-          retentionDays: createForm.retentionDays,
-          apmTraceRetentionDays: createForm.apmTraceRetentionDays,
-          maxProjects: createForm.maxProjects.trim() ? Number(createForm.maxProjects) : null,
-          maxSystems: createForm.maxSystems,
-          monitorIntervalSeconds: createForm.monitorIntervalSeconds,
-          sessionReplayEnabled: currentTierConfig.sessionReplayEnabled,
-          statusPagesEnabled: currentTierConfig.statusPagesEnabled,
-          statusPageCustomDomainEnabled: currentTierConfig.statusPageCustomDomainEnabled,
-          slackEnabled: currentTierConfig.slackEnabled,
-          discordEnabled: currentTierConfig.discordEnabled,
-          incidentIoEnabled: currentTierConfig.incidentIoEnabled,
-          samlEnabled: currentTierConfig.samlEnabled,
-          oidcEnabled: currentTierConfig.oidcEnabled,
-          prioritySupportEnabled: currentTierConfig.prioritySupportEnabled,
-          slaEnabled: currentTierConfig.slaEnabled,
-          customRetentionEnabled: currentTierConfig.customRetentionEnabled,
-          oncallEnabled: createForm.oncallEnabled,
-          oncallPerUserMonthlyCents: createForm.oncallPerUserMonthlyCents,
-          maxAnalyticsSites: createForm.maxAnalyticsSites.trim() ? Number(createForm.maxAnalyticsSites) : null,
-          analyticsRetentionDays: createForm.analyticsRetentionDays,
-          monthlyAnalyticsPageviewLimit: createForm.monthlyAnalyticsPageviewLimit,
-          analyticsPageviewOverageRateCentsPer100k: createForm.analyticsPageviewOverageRateCentsPer100k,
-        }
-      : null
-
-    const merged = sourceTiers.map((tier) => {
-      if (tier.tierName === createTier && draftTier) return draftTier
-      return {
-        ...tier,
-        trialDays: plansByTier.get(tier.tierName)?.trialDays ?? tier.trialDays,
-      }
-    })
-
-    return merged
-      .sort((a, b) => (TIER_ORDER[a.tierName] ?? 99) - (TIER_ORDER[b.tierName] ?? 99))
-      .map((tier) => buildPricingCardModel(tier, previewInterval))
+    return buildPreviewCards(currentPlans, createTier, createForm, currentTierConfig, previewInterval)
   }, [createForm, createTier, currentPlans, currentTierConfig, previewInterval])
 
   // ─── Mutations ────────────────────────────────────────────────────────────

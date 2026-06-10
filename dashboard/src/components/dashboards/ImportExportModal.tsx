@@ -89,7 +89,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       {name: 'analytics_events', label: 'Analytics Events', fields: []},
     ]
     
-    const custom = (customDataSourcesData || []).map(ds => ({
+    const custom = (customDataSourcesData ?? []).map(ds => ({
       name: `custom:${ds.id}`,
       label: `${ds.name} (${ds.source_type})`,
       fields: [],

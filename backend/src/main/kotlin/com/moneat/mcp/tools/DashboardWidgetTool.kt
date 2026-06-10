@@ -452,8 +452,11 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         if (dashboard.projectId != null && requestedProjectId != null && dashboard.projectId != requestedProjectId) {
             return errorResult("Dashboard is scoped to project ${dashboard.projectId}")
         }
-        val projectId = dashboard.projectId ?: requestedProjectId
-            ?: return errorResult("project_id is required when dashboard is not scoped to a project")
+        val projectId = when {
+            dashboard.projectId != null -> dashboard.projectId
+            requestedProjectId != null -> requestedProjectId
+            else -> return errorResult("project_id is required when dashboard is not scoped to a project")
+        }
 
         val withTimeRange = timeRange?.let { queryConfig.copy(timeRange = it) } ?: queryConfig
         val effectiveQuery = dashboardWidgetQueryEngine.resolvePrometheusDataSource(

@@ -36,13 +36,13 @@ import {
   profileTypeBadgeClass,
 } from './profileFormat'
 
-interface Props {
+type Props = Readonly<{
   serviceFilter?: string
   serviceFilters?: readonly string[]
   typeFilter?: string
   query?: string
   onServiceFilterChange?: (val: string) => void
-}
+}>
 
 export function ProfileServiceList({
   serviceFilter = '',
