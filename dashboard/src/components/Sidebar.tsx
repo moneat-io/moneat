@@ -483,7 +483,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                     Settings
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={async () => { await api.logout(); window.location.href = '/login' }}>
+                  <DropdownMenuItem onClick={async () => { await api.logout(); globalThis.window.location.href = '/login' }}>
                     <LogOut className="h-4 w-4 mr-2" />
                     Logout
                   </DropdownMenuItem>
