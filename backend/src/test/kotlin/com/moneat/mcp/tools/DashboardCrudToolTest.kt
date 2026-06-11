@@ -73,7 +73,22 @@ class DashboardCrudToolTest {
             exec("DROP TABLE IF EXISTS custom_data_sources")
             exec("DROP TABLE IF EXISTS dashboards")
             exec("DROP TABLE IF EXISTS projects")
+            exec("DROP TABLE IF EXISTS users")
             patchJsonbForH2(DashboardWidgets, DashboardWidgetAlerts)
+            exec(
+                """
+                CREATE TABLE users (
+                    id INT PRIMARY KEY,
+                    "name" VARCHAR(255)
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                INSERT INTO users (id, "name")
+                VALUES ($CREATED_BY, 'MCP Test User')
+                """.trimIndent()
+            )
             exec(
                 """
                 CREATE TABLE projects (
