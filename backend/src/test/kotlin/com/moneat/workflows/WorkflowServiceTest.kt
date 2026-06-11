@@ -993,6 +993,36 @@ class WorkflowServiceTest {
             assertEquals("canceled", canceled?.status)
             assertEquals(listOf(run.temporalWorkflowId), workflowEngine.canceledWorkflowIds)
             assertEquals("canceled", service.getRun(orgId, workflow.id, run.id)?.status)
+
+            val manualRun = service.runWorkflow(orgId, workflow.id)
+            assertNotNull(manualRun)
+            assertNull(service.resolveWorkflowId(orgId, "not-a-workflow-id"))
+            assertNull(service.resolveWorkflowId("not-a-workflow-id"))
+            assertNull(service.resolveRunId("not-a-run-id"))
+            assertNull(service.runWorkflow(orgId, "not-a-workflow-id"))
+            assertNull(
+                service.createWorkflowInstance(
+                    organizationId = orgId,
+                    workflowId = "not-a-workflow-id",
+                    request = WorkflowRunInstanceRequest(),
+                    callerUserId = verifiedUserId
+                )
+            )
+            assertNull(service.getRun(orgId, "not-a-workflow-id", run.id))
+            assertNull(service.getRun(orgId, workflow.id, "not-a-run-id"))
+            assertNull(service.cancelRun(orgId, "not-a-workflow-id", run.id))
+            assertNull(service.cancelRun(orgId, workflow.id, "not-a-run-id"))
+            assertTrue(service.listRuns(orgId, "not-a-workflow-id").isEmpty())
+            assertNull(service.webhookSigningInfo(orgId, "not-a-workflow-id"))
+            assertFalse(service.verifyWebhookSignature("not-a-workflow-id", "payload", "sha256=signature"))
+            service.executeRun("not-a-run-id")
+
+            val missingResourceId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val internalWorkflowId = service.resolveWorkflowId(orgId, workflow.id) ?: error("Workflow not found")
+            assertNull(service.resolveWorkflowId(orgId, missingResourceId))
+            assertNull(service.resolveWorkflowId(missingResourceId))
+            assertNull(service.resolveRunId(orgId, internalWorkflowId, missingResourceId))
+            assertNull(service.resolveRunId(missingResourceId))
         }
 
     @Test

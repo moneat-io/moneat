@@ -54,6 +54,22 @@ describe('ai chat history', () => {
     expect(globalThis.localStorage.getItem(ACTIVE_CHAT_KEY)).toBeNull()
   })
 
+  it('discards malformed active chat payloads', () => {
+    globalThis.localStorage.setItem(ACTIVE_CHAT_KEY, JSON.stringify(null))
+    expect(loadActiveChat()).toBeNull()
+
+    globalThis.localStorage.setItem(
+      ACTIVE_CHAT_KEY,
+      JSON.stringify({
+        id: 'malformed',
+        conversationId: CONVERSATION_ID,
+        messages: [],
+        timestamp: Date.now(),
+      }),
+    )
+    expect(loadActiveChat()).toBeNull()
+  })
+
   it('filters legacy numeric conversation IDs from archived history', () => {
     globalThis.localStorage.setItem(
       CHAT_HISTORY_KEY,

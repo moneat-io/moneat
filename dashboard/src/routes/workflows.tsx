@@ -322,13 +322,13 @@ function WorkflowList({
   selectedWorkflowId,
   loading,
   onSelect,
-}: {
+}: Readonly<{
   workflows: WorkflowResponse[]
   catalog?: WorkflowCatalogResponse
   selectedWorkflowId: string | null
   loading: boolean
   onSelect: (workflowId: string) => void
-}) {
+}>) {
   if (loading) {
     return <div className="flex h-40 items-center justify-center rounded-md border"><Loader2 className="h-5 w-5 animate-spin" /></div>
   }

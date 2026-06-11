@@ -49,6 +49,8 @@ import org.koin.core.context.GlobalContext
 import kotlin.uuid.Uuid
 
 private const val DEFAULT_LIMIT = 100
+private const val NO_ORGANIZATION_ACCESS_MESSAGE = "No organization access"
+private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -82,7 +84,7 @@ private suspend fun resolveHostFromPath(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val organizationIds = getOrganizationIdsForUser(userId, principal)
     if (organizationIds.isEmpty()) {
-        call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
         return null
     }
 
@@ -113,7 +115,7 @@ private suspend fun resolveAlertIdFromPath(
 
     val alertId = monitorService.resolveAlertId(alertResourceId, host.id, host.organizationId, scope)
     if (alertId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
         return null
     }
     return alertId
@@ -158,7 +160,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@get
                 }
 
@@ -195,7 +197,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@get
                 }
 
@@ -384,7 +386,7 @@ fun Route.monitorRoutes(
                 val request = call.receive<UpdateAlertRequest>()
                 val updated = monitorService.updateAlert(alertId, host.id, host.organizationId, request, scope)
                 if (!updated) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -405,7 +407,7 @@ fun Route.monitorRoutes(
                 val alertId = resolveAlertIdFromPath(call, monitorService, host, scope) ?: return@delete
                 val deleted = monitorService.deleteAlert(alertId, host.id, host.organizationId, scope)
                 if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -420,7 +422,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@get
                 }
 
@@ -434,7 +436,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@post
                 }
 
@@ -460,7 +462,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@delete
                 }
 

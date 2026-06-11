@@ -673,6 +673,65 @@ class MonitorRoutesMockTest {
             assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
+    @Test
+    fun `PUT alert returns 400 for invalid alert resource ID`() =
+        testApplication {
+            val userId = seedUser()
+            val orgId = seedOrg()
+            seedMembership(userId, orgId)
+            val system = makeHostData(orgId)
+
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+
+            application {
+                installAuth()
+                routing {
+                    monitorRoutes(
+                        monitorService = mockMonitorService,
+                        logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
+                    )
+                }
+            }
+
+            val response = client.put("/v1/monitor/hosts/${hostPath(system)}/alerts/not-a-uuid") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"enabled":false}""")
+            }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+        }
+
+    @Test
+    fun `PUT alert returns 404 when alert resource ID is unresolved`() =
+        testApplication {
+            val userId = seedUser()
+            val orgId = seedOrg()
+            seedMembership(userId, orgId)
+            val system = makeHostData(orgId)
+
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+            every { mockMonitorService.resolveAlertId(any(), system.id, orgId, "host") } returns null
+
+            application {
+                installAuth()
+                routing {
+                    monitorRoutes(
+                        monitorService = mockMonitorService,
+                        logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
+                    )
+                }
+            }
+
+            val response = client.put("/v1/monitor/hosts/${hostPath(system)}/alerts/${alertPath(404)}") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"enabled":false}""")
+            }
+            assertEquals(HttpStatusCode.NotFound, response.status)
+        }
+
     // ──── DELETE /systems/{systemId}/alerts/{alertId} ────
 
     @Test
@@ -702,6 +761,61 @@ class MonitorRoutesMockTest {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
+        }
+
+    @Test
+    fun `DELETE alert returns 400 for invalid alert resource ID`() =
+        testApplication {
+            val userId = seedUser()
+            val orgId = seedOrg()
+            seedMembership(userId, orgId)
+            val system = makeHostData(orgId)
+
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+
+            application {
+                installAuth()
+                routing {
+                    monitorRoutes(
+                        monitorService = mockMonitorService,
+                        logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
+                    )
+                }
+            }
+
+            val response = client.delete("/v1/monitor/hosts/${hostPath(system)}/alerts/not-a-uuid") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+            }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+        }
+
+    @Test
+    fun `DELETE alert returns 404 when alert resource ID is unresolved`() =
+        testApplication {
+            val userId = seedUser()
+            val orgId = seedOrg()
+            seedMembership(userId, orgId)
+            val system = makeHostData(orgId)
+
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+            every { mockMonitorService.resolveAlertId(any(), system.id, orgId, "host") } returns null
+
+            application {
+                installAuth()
+                routing {
+                    monitorRoutes(
+                        monitorService = mockMonitorService,
+                        logService = mockLogService,
+                        monitorAlertService = mockMonitorAlertService,
+                    )
+                }
+            }
+
+            val response = client.delete("/v1/monitor/hosts/${hostPath(system)}/alerts/${alertPath(404)}") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+            }
+            assertEquals(HttpStatusCode.NotFound, response.status)
         }
 
     // ──── GET /systems/{id}/containers/{name}/metrics ────

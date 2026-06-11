@@ -86,9 +86,7 @@ object DatadogService {
         projectId: Int? = null,
     ): CreateDdApiKeyResponse =
         transaction {
-            if (projectId != null && !projectBelongsToOrg(projectId, organizationId)) {
-                throw IllegalArgumentException("Project not found")
-            }
+            require(!(projectId != null && !projectBelongsToOrg(projectId, organizationId))) { "Project not found" }
             val key = generateApiKey()
             val keyHash = hashKey(key)
             val keyPrefix = key.take(PREFIX_LENGTH)

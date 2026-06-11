@@ -268,4 +268,25 @@ describe('workflows phase 4 API', () => {
       expect(result).toEqual({ id: WORKFLOW_IMPORTED_ID, name: 'Imported' })
     })
   })
+
+  // ──── Connections ────
+
+  describe('workflow connections', () => {
+    it('rotates and deletes connections with encoded ids', async () => {
+      const connectionId = 'connection/id'
+      const rotated = {id: WORKFLOW_ID, name: 'PagerDuty', type: 'pagerduty'}
+      server.use(
+        http.put(`${API_BASE}/v1/workflows/connections/connection%2Fid/rotate`, async ({request}) => {
+          await expect(request.json()).resolves.toEqual({secret: 'new-secret'})
+          return HttpResponse.json(rotated)
+        }),
+        http.delete(`${API_BASE}/v1/workflows/connections/connection%2Fid`, () =>
+          new HttpResponse(null, {status: 204})
+        )
+      )
+
+      await expect(api.rotateWorkflowConnection(connectionId, {secret: 'new-secret'})).resolves.toEqual(rotated)
+      await expect(api.deleteWorkflowConnection(connectionId)).resolves.toBeUndefined()
+    })
+  })
 })

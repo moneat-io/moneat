@@ -802,7 +802,7 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
   )
 }
 
-function FlagDetail(props: {
+function FlagDetail(props: Readonly<{
   flag: FeatureFlag
   config: FeatureFlagConfig | null
   configDraft: ConfigDraft
@@ -827,7 +827,7 @@ function FlagDetail(props: {
   onRevokeSdkKey: (id: string) => void
   createdKey: CreatedFeatureFlagSdkKey | null
   kotlinExample: string
-}) {
+}>) {
   const flagAnalytics = props.analytics?.variants.filter((item) => item.flagKey === props.flag.key) ?? []
 
   return (

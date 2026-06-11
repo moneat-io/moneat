@@ -234,7 +234,7 @@ function RoleLoadingState() {
   )
 }
 
-function EmptyRolesState({onCreate}: {onCreate: () => void}) {
+function EmptyRolesState({onCreate}: Readonly<{onCreate: () => void}>) {
   return (
     <Card>
       <CardHeader>
@@ -257,11 +257,11 @@ function RoleList({
   roles,
   selectedRoleId,
   onSelectRole,
-}: {
+}: Readonly<{
   roles: RbacRole[]
   selectedRoleId: string | null
   onSelectRole: (roleId: string) => void
-}) {
+}>) {
   return (
     <Card>
       <CardHeader>

@@ -374,6 +374,24 @@ describe('authMethods', () => {
     })
   })
 
+  describe('auth tokens', () => {
+    it('updates and deletes auth tokens with encoded ids', async () => {
+      const tokenId = 'token/id'
+      server.use(
+        http.put(`${API_BASE}/v1/auth-tokens/token%2Fid`, async ({request}) => {
+          await expect(request.json()).resolves.toEqual({name: 'Build token'})
+          return new HttpResponse(null, {status: 204})
+        }),
+        http.delete(`${API_BASE}/v1/auth-tokens/token%2Fid`, () =>
+          new HttpResponse(null, {status: 204})
+        )
+      )
+
+      await expect(api.updateAuthToken(tokenId, {name: 'Build token'})).resolves.toBeUndefined()
+      await expect(api.deleteAuthToken(tokenId)).resolves.toBeUndefined()
+    })
+  })
+
   describe('checkAuth', () => {
     it('returns true when user endpoint responds 200', async () => {
       server.use(

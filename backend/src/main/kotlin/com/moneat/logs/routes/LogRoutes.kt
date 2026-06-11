@@ -91,6 +91,7 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val MILLIS_IN_24_HOURS = 24L * 60 * 60 * 1000
 private const val SSE_POLL_TIMEOUT_SECONDS = 15L
 private const val INVALID_TOKEN_MESSAGE = "Invalid token"
+private const val INDEX_NOT_FOUND_MESSAGE = "Index not found"
 
 data class LogRouteDependencies(
     val logService: LogService = GlobalContext.get().get(),
@@ -261,12 +262,12 @@ private suspend fun ApplicationCall.updateLogIndex(logIndexService: LogIndexServ
     }
     val id = resolveLogIndexId(organizationId, resourceId)
     if (id == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(INDEX_NOT_FOUND_MESSAGE))
         return
     }
     val updated = logIndexService.update(organizationId, id, receive<UpdateLogIndexRequest>())
     if (updated == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(INDEX_NOT_FOUND_MESSAGE))
         return
     }
     respond(HttpStatusCode.OK, updated)
@@ -281,12 +282,12 @@ private suspend fun ApplicationCall.deleteLogIndex(logIndexService: LogIndexServ
     }
     val id = resolveLogIndexId(organizationId, resourceId)
     if (id == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(INDEX_NOT_FOUND_MESSAGE))
         return
     }
     val deleted = logIndexService.delete(organizationId, id)
     if (!deleted) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(INDEX_NOT_FOUND_MESSAGE))
         return
     }
     respond(HttpStatusCode.NoContent)

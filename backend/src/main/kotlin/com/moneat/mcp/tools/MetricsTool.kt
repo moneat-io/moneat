@@ -32,6 +32,8 @@ private val metricsMonitorService = MonitorService(HostRepositoryImpl(), HostAle
 private const val DEFAULT_METRIC_HOURS = 24
 private const val MAX_METRIC_HOURS = 168
 private const val MILLIS_PER_HOUR = 3_600_000L
+private const val HOST_RESOURCE_ID_DESCRIPTION = "Host resource ID"
+private const val INVALID_HOST_ID_MESSAGE = "Invalid host_id"
 
 class GetHostMetricsTool : McpTool {
     override val name = "get_host_metrics"
@@ -40,7 +42,7 @@ class GetHostMetricsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaResourceId("Host resource ID"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "hours" to schemaNumber(
                     "Hours of history (default 24, max 168)"
                 )
@@ -54,7 +56,7 @@ class GetHostMetricsTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, metricsMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
         val hrs = args["hours"]?.jsonPrimitive?.intOrNull
             ?.coerceIn(1, MAX_METRIC_HOURS) ?: DEFAULT_METRIC_HOURS
@@ -78,7 +80,7 @@ class GetContainerMetricsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaResourceId("Host resource ID"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "container_name" to schemaString("Container name")
             )
         ),
@@ -90,7 +92,7 @@ class GetContainerMetricsTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, metricsMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
 
         val containers = metricsMonitorService
@@ -115,7 +117,7 @@ class GetHostLogsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaResourceId("Host resource ID"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "hours" to schemaNumber(
                     "Hours of history (default 24)"
                 ),
@@ -149,7 +151,7 @@ class GetAlertConfigTool : McpTool {
         "Get current alert configuration for a host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaResourceId("Host resource ID"))
+            mapOf("host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION))
         ),
         required = listOf("host_id")
     )
@@ -159,7 +161,7 @@ class GetAlertConfigTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, metricsMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
         val alerts = metricsMonitorService.listAlerts(hostId, context.organizationId)
         return jsonResult(alerts)
