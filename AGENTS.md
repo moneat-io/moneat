@@ -249,6 +249,29 @@ When adding or extending the repository layer:
 - Migration naming: `V{number}__{description}.sql` (e.g., `V1__initial_schema.sql`)
 - Never modify existing migrations; always create new ones
 
+### Public Resource IDs
+Public Moneat-owned resources should use opaque UUID `resource_id` values at API boundaries. Keep numeric primary keys
+for internal joins, repository internals, ClickHouse joins, queue payloads, and auth claims unless those values are
+directly serialized to users.
+
+- Do not expose auto-increment database IDs in public JSON responses or accept them in public route params.
+- Public DTO `id` fields should usually remain named `id`, but their value should be the UUID `resource_id`; avoid
+  exposing both `id` and `resourceId` after cleanup.
+- Add `resource_id UUID NOT NULL DEFAULT gen_random_uuid()` to user-facing PostgreSQL tables that lack a public ID.
+  Mirror the column in Exposed with UUID types.
+- Add scoped uniqueness for new public IDs. Use `UNIQUE (organization_id, resource_id)` for organization-owned
+  resources, `UNIQUE (user_id, resource_id)` for user-owned resources, `UNIQUE (parent_id, resource_id)` when route
+  resolution is always parent-scoped, and `UNIQUE (resource_id)` only for truly global resources.
+- Resolver helpers should parse UUID route params, reject malformed IDs with 400, resolve the numeric primary key under
+  the caller's organization/user scope, and return 404 for unknown or inaccessible resources.
+- Update backend DTOs, route params, frontend API types, query keys, forms, and tests in the same branch so no numeric
+  public ID contract remains.
+- Add route or contract tests proving numeric path IDs are rejected, UUID path IDs resolve only within caller scope, and
+  serialized public responses do not include numeric DB IDs.
+- Do not migrate protocol-native or third-party IDs just because they look numeric or UUID-like. Leave trace IDs, span
+  IDs, event IDs, replay IDs, container IDs, PIDs, status codes, and externally supplied cloud/security `resource_id`
+  values in their native format unless Moneat owns that resource identity.
+
 ### Event Fingerprinting
 Events are grouped into issues using fingerprints generated from:
 1. Exception type + message
