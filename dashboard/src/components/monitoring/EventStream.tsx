@@ -250,16 +250,16 @@ export function EventStream() {
       ) : (
         <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
-            <Table className="min-w-[800px]">
+            <Table className="min-w-[980px] table-fixed">
               <TableHeader>
                 <TableRow className="hover:bg-transparent bg-muted/30">
                   <TableHead className="pl-4 w-8" />
-                  <TableHead>Event</TableHead>
-                  <TableHead>Alert</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Host</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead className="text-right pr-4">Time</TableHead>
+                  <TableHead className="w-[46%]">Event</TableHead>
+                  <TableHead className="w-[140px]">Alert</TableHead>
+                  <TableHead className="w-[110px]">Priority</TableHead>
+                  <TableHead className="w-[180px]">Host</TableHead>
+                  <TableHead className="w-[220px]">Source</TableHead>
+                  <TableHead className="w-[100px] text-right pr-4">Time</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -290,12 +290,12 @@ export function EventStream() {
                         ) : null}
                       </TableCell>
 
-                      <TableCell className="max-w-md">
+                      <TableCell className="max-w-0">
                         <div className="min-w-0">
                           <TooltipProvider delayDuration={300}>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <p className="font-medium text-sm truncate max-w-[350px]">{event.title}</p>
+                                <p className="truncate text-sm font-medium">{event.title}</p>
                               </TooltipTrigger>
                               <TooltipContent side="top" className="max-w-md">
                                 <p className="text-xs break-all">{event.title}</p>
@@ -303,7 +303,7 @@ export function EventStream() {
                             </Tooltip>
                           </TooltipProvider>
                           {!isExpanded && event.text && (
-                            <p className="text-[11px] text-muted-foreground truncate max-w-[350px] mt-0.5">
+                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                               {event.text}
                             </p>
                           )}
@@ -315,17 +315,17 @@ export function EventStream() {
                                 </p>
                               )}
                               {(event.aggregationKey || event.deviceName) && (
-                                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                                <div className="space-y-1 text-[11px] text-muted-foreground">
                                   {event.aggregationKey && (
-                                    <span>
-                                      <span className="font-medium text-foreground/70">agg:</span>{' '}
-                                      <span className="font-mono">{event.aggregationKey}</span>
+                                    <span className="block min-w-0">
+                                      <span className="mr-1 font-medium text-foreground/70">agg:</span>
+                                      <span className="break-all font-mono">{event.aggregationKey}</span>
                                     </span>
                                   )}
                                   {event.deviceName && (
-                                    <span>
-                                      <span className="font-medium text-foreground/70">device:</span>{' '}
-                                      <span className="font-mono">{event.deviceName}</span>
+                                    <span className="block min-w-0">
+                                      <span className="mr-1 font-medium text-foreground/70">device:</span>
+                                      <span className="break-all font-mono">{event.deviceName}</span>
                                     </span>
                                   )}
                                 </div>
@@ -348,31 +348,31 @@ export function EventStream() {
                         </div>
                       </TableCell>
 
-                      <TableCell>
+                      <TableCell className="w-[140px]">
                         <Badge
                           variant={alertBadgeVariant(event.alertType)}
-                          className="text-[11px] gap-1.5 font-medium"
+                          className="gap-1.5 whitespace-nowrap text-[11px] font-medium"
                         >
                           {alertIcon(event.alertType)}
                           {event.alertType}
                         </Badge>
                       </TableCell>
 
-                      <TableCell>
+                      <TableCell className="w-[110px]">
                         <span className="text-xs capitalize text-muted-foreground">
                           {priorityLabel(event.priority)}
                         </span>
                       </TableCell>
 
-                      <TableCell>
-                        <span className="font-mono text-xs">{event.host || '—'}</span>
+                      <TableCell className="w-[180px]">
+                        <span className="block truncate font-mono text-xs">{event.host || '—'}</span>
                       </TableCell>
 
-                      <TableCell>
-                        <span className="text-xs">{event.sourceTypeName || '—'}</span>
+                      <TableCell className="w-[220px]">
+                        <span className="block truncate text-xs">{event.sourceTypeName || '—'}</span>
                       </TableCell>
 
-                      <TableCell className="text-right pr-4 text-xs text-muted-foreground">
+                      <TableCell className="w-[100px] text-right pr-4 text-xs text-muted-foreground">
                         {formatRelativeTime(event.timestamp)}
                       </TableCell>
                     </TableRow>

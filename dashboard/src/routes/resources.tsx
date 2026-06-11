@@ -14,19 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// The Infrastructure landing is the source-neutral Resource Catalog: a unified
-// inventory of hosts, containers, pods, services, cloud resources and network
-// devices. Per-kind browsing is a facet of the catalog; the classic host
-// inventory now lives at /monitoring/hosts.
-
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
 import {ResourceCatalog} from '@/components/monitoring/catalog/ResourceCatalog'
 
-export const Route = createFileRoute('/monitoring/')({
-  beforeLoad: () => {
+export const Route = createFileRoute('/resources')({
+  beforeLoad: async () => {
     if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
+      const hasSession = await api.checkAuth()
+      if (!hasSession) throw redirect({to: '/login'})
     }
   },
   component: ResourceCatalog,

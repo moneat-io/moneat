@@ -265,7 +265,7 @@ const TAB_DOCS_URLS: Record<string, string> = {
 }
 
 const allTabs: MonitoringTab[] = [
-  {id: 'catalog', label: 'Catalog', href: '/monitoring', icon: Boxes},
+  {id: 'catalog', label: 'Resources', href: '/resources', icon: Boxes},
   {id: 'map', label: 'Map', href: '/monitoring/map', icon: MapIcon},
   {id: 'processes', label: 'Processes', href: '/monitoring/processes', icon: Terminal, requiresDatadog: true},
   {id: 'network', label: 'Network', href: '/monitoring/network', icon: Network, requiresDatadog: true},
@@ -305,9 +305,9 @@ function MonitoringLayout() {
         <div className="border-b bg-card/50">
           <div className="container mx-auto px-4 py-4">
             <Button variant="ghost" size="sm" asChild className="gap-2 text-muted-foreground hover:text-foreground">
-              <Link to="/monitoring">
+              <Link to="/resources">
                 <ArrowLeft className="h-4 w-4" />
-                Back to Infrastructure
+                Back to Resources
               </Link>
             </Button>
           </div>

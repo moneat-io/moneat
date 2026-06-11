@@ -88,7 +88,7 @@ const PAGE_ITEMS: Array<{
   {label: 'Logs', description: 'Search and explore log events', href: '/logs', icon: ScrollText, keywords: ['logging']},
   {label: 'Dashboards', description: 'Custom metrics and visualizations', href: '/dashboards', icon: LayoutDashboard, keywords: ['widgets']},
   {label: 'Feature Flags', description: 'OpenFeature flags and experiments', href: '/feature-flags', icon: Flag, keywords: ['flags', 'openfeature', 'ofrep', 'experiments']},
-  {label: 'Resources', description: 'Infrastructure resource catalog', href: '/monitoring', icon: Server, keywords: ['infrastructure', 'monitoring', 'catalog', 'inventory', 'systems', 'servers', 'hosts', 'containers']},
+  {label: 'Resources', description: 'Infrastructure resource catalog', href: '/resources', icon: Server, keywords: ['infrastructure', 'monitoring', 'catalog', 'inventory', 'systems', 'servers', 'hosts', 'containers']},
   {label: 'Infrastructure – Map', description: 'Visual map for services, hosts, and containers', href: '/monitoring/map?scope=services', icon: MapIcon, keywords: ['infrastructure map', 'host map', 'containers', 'tags', 'topology', 'monitoring']},
   {label: 'Service Map', description: 'Service dependency topology', href: '/monitoring/map?scope=services', icon: Network, keywords: ['service map', 'dependencies', 'traces', 'topology']},
   {label: 'Infrastructure – Hosts', description: 'Host metrics and system resources', href: '/monitoring/hosts', icon: Server, keywords: ['infrastructure', 'servers', 'cpu', 'memory', 'disk', 'monitoring']},

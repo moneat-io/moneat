@@ -50,7 +50,7 @@ const emptyResource: Resource = {
   health: 'unknown',
   owner: null,
   tags: [],
-  telemetry: {cpuPct: 18, memPct: 24},
+  telemetry: {cpuPct: null, memPct: null},
   vulns: {critical: 0, high: 0, medium: 0, low: 0},
   posture: [],
   monthlyUsd: 0,
@@ -124,12 +124,14 @@ describe('ResourceCatalog', () => {
 
     await user.click(screen.getByRole('tab', {name: 'Telemetry'}))
     expect(screen.getByRole('link', {name: /Open in Metrics/})).toHaveAttribute('href', '/monitoring/hosts/$hostId')
+    expect(screen.getByText('No telemetry data')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Relationships'}))
     expect(screen.getByText('No mapped relationships')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Ownership & Tags'}))
     expect(screen.getByText('No owner assigned')).toBeInTheDocument()
+    expect(screen.getByRole('link', {name: /Claim ownership/})).toHaveAttribute('href', '/settings')
     expect(screen.getByText('No tags.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Security'}))

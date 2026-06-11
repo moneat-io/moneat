@@ -29,7 +29,7 @@ export function InfraSummaryWidget() {
       title="Infrastructure"
       icon={Boxes}
       count={d.upLabel}
-      actions={<PanelLink to="/monitoring">Map</PanelLink>}
+      actions={<PanelLink to="/monitoring/map">Map</PanelLink>}
     >
       <div className="space-y-1.5">
         {d.gauges.map((g) => (

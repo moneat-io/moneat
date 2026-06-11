@@ -85,20 +85,21 @@ class ResourceCatalogService(
             .toMap()
 
     private fun hostResource(host: HostData, metrics: LatestMetrics?): CatalogResource {
-        val tags = listOf("source:host-agent")
+        val tags = host.tags.toCatalogTags() + "source:host-agent"
+        val cloud = tags.cloudFromTags()
         return CatalogResource(
             id = stableId("host", "${host.organizationId}:${host.id}"),
             name = host.displayName ?: host.hostname,
             kind = "host",
             health = host.status.toCatalogHealth(),
-            environment = "prod",
-            region = "unknown",
-            cloud = CLOUD_ON_PREM,
+            environment = tags.envFromTags(),
+            region = tags.regionFromTags(cloud),
+            cloud = cloud,
             owner = null,
             tags = tags,
             telemetry = CatalogResourceTelemetry(
-                cpuPct = metrics?.cpuPercent.toPct(),
-                memPct = metrics?.memPercent.toPct()
+                cpuPct = metrics?.cpuPercent?.toPct(),
+                memPct = metrics?.memPercent?.toPct()
             ),
             vulns = CatalogVulnerabilityCounts(),
             sbomComponents = 0,
@@ -124,13 +125,11 @@ class ResourceCatalogService(
             kind = "service",
             health = serviceHealth(spanCount, errorRate),
             environment = row.s("env").toEnvironment(),
-            region = "unknown",
+            region = "global",
             cloud = CLOUD_ON_PREM,
             owner = null,
             tags = listOf("source:apm"),
             telemetry = CatalogResourceTelemetry(
-                cpuPct = 0,
-                memPct = 0,
                 latencyMs = row.i("latency_ms"),
                 errorRatePct = errorRate,
                 throughput = row.s("span_count")?.let { "$it spans/24h" }
@@ -158,20 +157,21 @@ class ResourceCatalogService(
         val host = row.s("host")
         val memLimit = row.d("mem_limit") ?: 0.0
         val memUsage = row.d("mem_usage") ?: 0.0
-        val memPct = if (memLimit > 0) (memUsage / memLimit * PERCENT_SCALE).roundToInt() else 0
+        val memPct = if (memLimit > 0) (memUsage / memLimit * PERCENT_SCALE).roundToInt() else null
+        val cloud = tags.cloudFromTags()
         return CatalogResource(
             id = organizationScopedId("container", row.s("organization_id"), id),
             name = row.s("name") ?: row.s("image") ?: id,
             kind = "container",
             health = row.s("state").containerHealth(),
             environment = tags.envFromTags(),
-            region = "unknown",
-            cloud = tags.cloudFromTags(),
+            region = tags.regionFromTags(cloud),
+            cloud = cloud,
             owner = null,
             tags = tags,
             telemetry = CatalogResourceTelemetry(
-                cpuPct = row.d("cpu_percent").toPct(),
-                memPct = memPct.coerceIn(ZERO_PERCENT, FULL_PERCENT)
+                cpuPct = row.d("cpu_percent")?.toPct(),
+                memPct = memPct?.coerceIn(ZERO_PERCENT, FULL_PERCENT)
             ),
             vulns = CatalogVulnerabilityCounts(),
             sbomComponents = 0,
@@ -196,17 +196,18 @@ class ResourceCatalogService(
     private fun podResource(row: JsonObject): CatalogResource? {
         val id = row.s("id") ?: return null
         val tags = row.tags() + row.labels().map { "label:$it" } + "source:kubernetes"
+        val cloud = tags.cloudFromTags()
         return CatalogResource(
             id = organizationScopedId("pod", row.s("organization_id"), id),
             name = row.s("name") ?: id,
             kind = "pod",
             health = row.s("status").podHealth(),
             environment = tags.envFromTags(),
-            region = "unknown",
-            cloud = tags.cloudFromTags(),
+            region = tags.regionFromTags(cloud),
+            cloud = cloud,
             owner = null,
             tags = tags,
-            telemetry = CatalogResourceTelemetry(cpuPct = 0, memPct = 0),
+            telemetry = CatalogResourceTelemetry(),
             vulns = CatalogVulnerabilityCounts(),
             sbomComponents = 0,
             posture = emptyList(),
@@ -234,11 +235,11 @@ class ResourceCatalogService(
             kind = "network-device",
             health = row.s("reachability")?.toCatalogHealth() ?: row.s("status").toCatalogHealth(),
             environment = tags.envFromTags(),
-            region = "unknown",
+            region = tags.regionFromTags(CLOUD_ON_PREM),
             cloud = CLOUD_ON_PREM,
             owner = null,
             tags = tags,
-            telemetry = CatalogResourceTelemetry(cpuPct = 0, memPct = 0),
+            telemetry = CatalogResourceTelemetry(),
             vulns = CatalogVulnerabilityCounts(),
             sbomComponents = 0,
             posture = emptyList(),
@@ -274,8 +275,8 @@ class ResourceCatalogService(
             owner = null,
             tags = tags,
             telemetry = CatalogResourceTelemetry(
-                cpuPct = row.d("cpu_percent").toPct(),
-                memPct = row.d("mem_percent").toPct()
+                cpuPct = row.d("cpu_percent")?.toPct(),
+                memPct = row.d("mem_percent")?.toPct()
             ),
             vulns = CatalogVulnerabilityCounts(),
             sbomComponents = 0,
@@ -399,6 +400,16 @@ private fun List<String>.cloudFromTags(): String =
         else -> CLOUD_ON_PREM
     }
 
+private fun List<String>.regionFromTags(cloud: String): String =
+    firstTagValue("region")
+        ?: firstTagValue("cloud.region")
+        ?: firstTagValue("datacenter")
+        ?: firstTagValue("dc")
+        ?: firstTagValue("availability_zone")
+        ?: firstTagValue("availability-zone")
+        ?: firstTagValue("az")
+        ?: if (cloud == CLOUD_ON_PREM) "local" else "global"
+
 private fun String?.toCloudProvider(): String =
     when (this?.lowercase()) {
         "aws" -> "aws"
@@ -410,11 +421,20 @@ private fun String?.toCloudProvider(): String =
 private fun List<String>.firstTagValue(key: String): String? =
     firstOrNull { it.startsWith("$key:") }?.substringAfter(":")?.takeIf { it.isNotBlank() }
 
-private fun Float?.toPct(): Int =
-    this?.roundToInt()?.coerceIn(ZERO_PERCENT, FULL_PERCENT) ?: ZERO_PERCENT
+private fun Map<String, String>.toCatalogTags(): List<String> =
+    entries
+        .sortedBy { it.key }
+        .mapNotNull { (key, value) ->
+            val cleanKey = key.takeIf { it.isNotBlank() }
+            val cleanValue = value.takeIf { it.isNotBlank() }
+            if (cleanKey == null || cleanValue == null) null else "$cleanKey:$cleanValue"
+        }
 
-private fun Double?.toPct(): Int =
-    this?.roundToInt()?.coerceIn(ZERO_PERCENT, FULL_PERCENT) ?: ZERO_PERCENT
+private fun Float.toPct(): Int =
+    roundToInt().coerceIn(ZERO_PERCENT, FULL_PERCENT)
+
+private fun Double.toPct(): Int =
+    roundToInt().coerceIn(ZERO_PERCENT, FULL_PERCENT)
 
 private fun Instant.toCatalogIso(): String {
     val text = toString()

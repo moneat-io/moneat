@@ -55,7 +55,13 @@ class ResourceCatalogServiceTest {
             id = HOST_ID,
             organizationId = ORGANIZATION_ID,
             hostname = HOSTNAME,
-            status = "online"
+            status = "online",
+            tags = mapOf(
+                "env" to "staging",
+                "region" to "sfo3",
+                "cloud.provider" to "aws",
+                "team" to "payments"
+            )
         )
         val metrics = LatestMetrics(
             cpuPercent = 37.5f,
@@ -93,11 +99,14 @@ class ResourceCatalogServiceTest {
         assertEquals(HOSTNAME, resource.name)
         assertEquals("host", resource.kind)
         assertEquals("healthy", resource.health)
-        assertEquals("prod", resource.environment)
-        assertEquals("on-prem", resource.cloud)
+        assertEquals("staging", resource.environment)
+        assertEquals("sfo3", resource.region)
+        assertEquals("aws", resource.cloud)
         assertEquals(38, resource.telemetry.cpuPct)
         assertEquals(50, resource.telemetry.memPct)
         assertTrue(resource.tags.contains("source:host-agent"))
+        assertTrue(resource.tags.contains("region:sfo3"))
+        assertTrue(resource.tags.contains("team:payments"))
         assertTrue(resource.metadata.any { it.label == "Agent" && it.value == "7.63.0" })
     }
 
@@ -190,7 +199,7 @@ class ResourceCatalogServiceTest {
                       "cpu_percent": 12.4,
                       "mem_usage": 256000000,
                       "mem_limit": 512000000,
-                      "tags": {"env": "staging", "team": "payments"},
+                      "tags": {"env": "staging", "team": "payments", "region": "us-east-2"},
                       "last_seen": "$LAST_SEEN"
                     }
                     """
@@ -218,6 +227,7 @@ class ResourceCatalogServiceTest {
         assertEquals("container:7:abc123", containerResource.id)
         assertEquals(SERVICE_NAME, containerResource.name)
         assertEquals("healthy", containerResource.health)
+        assertEquals("us-east-2", containerResource.region)
         assertEquals(12, containerResource.telemetry.cpuPct)
         assertEquals(50, containerResource.telemetry.memPct)
         assertTrue(containerResource.relationships.any { it.relation == "Runs on" && it.name == HOSTNAME })
@@ -263,7 +273,7 @@ class ResourceCatalogServiceTest {
                       "name": "checkout-api-7f9d",
                       "cluster_name": "prod-us-east",
                       "status": "Pending",
-                      "tags": {"env": "prod", "cloud.provider": "aws"},
+                      "tags": {"env": "prod", "cloud.provider": "aws", "region": "eu-west-1"},
                       "labels": {"app": "checkout"},
                       "first_seen": "$FIRST_SEEN",
                       "last_seen": "$LAST_SEEN"
@@ -285,7 +295,7 @@ class ResourceCatalogServiceTest {
                       "device_type": "switch",
                       "status": "up",
                       "reachability": "unreachable",
-                      "tags": {"env": "dev"},
+                      "tags": {"env": "dev", "region": "dc-east"},
                       "last_seen": "$LAST_SEEN"
                     }
                     """
@@ -302,6 +312,7 @@ class ResourceCatalogServiceTest {
         assertEquals("warn", pod.health)
         assertEquals("prod", pod.environment)
         assertEquals("aws", pod.cloud)
+        assertEquals("eu-west-1", pod.region)
         assertTrue(pod.tags.contains("label:app:checkout"))
         assertTrue(pod.metadata.any { it.label == "Cluster" && it.value == "prod-us-east" })
 
@@ -310,6 +321,7 @@ class ResourceCatalogServiceTest {
         assertEquals("edge-switch-01", networkDevice.name)
         assertEquals("critical", networkDevice.health)
         assertEquals("dev", networkDevice.environment)
+        assertEquals("dc-east", networkDevice.region)
         assertTrue(networkDevice.metadata.any { it.label == "Vendor" && it.value == "Arista" })
     }
 
@@ -384,6 +396,7 @@ class ResourceCatalogServiceTest {
         organizationId: Int,
         hostname: String,
         status: String,
+        tags: Map<String, String> = emptyMap(),
     ): HostData =
         HostData(
             id = id,
@@ -399,6 +412,7 @@ class ResourceCatalogServiceTest {
             processor = "x86_64",
             cpuCores = 8,
             memoryTotalKb = 16_000_000,
+            tags = tags,
             firstSeenAt = Instant.parse("2026-06-01T00:00:00Z"),
             createdAt = Instant.parse("2026-06-01T00:00:00Z")
         )
