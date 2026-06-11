@@ -26,6 +26,7 @@ import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
 import com.moneat.dashboards.services.handlers.ConnectionOptions
 import com.moneat.utils.suspendRunCatching
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -297,14 +298,14 @@ class CustomDataSourceService {
     private fun decodeQueryConfigs(value: String): List<QueryDsl> =
         try {
             json.decodeFromString<List<QueryDsl>>(value)
-        } catch (_: IllegalArgumentException) {
+        } catch (_: SerializationException) {
             emptyList()
         }
 
     private fun decodeQueryConfig(value: String): QueryDsl? =
         try {
             json.decodeFromString<QueryDsl>(value)
-        } catch (_: IllegalArgumentException) {
+        } catch (_: SerializationException) {
             null
         }
 

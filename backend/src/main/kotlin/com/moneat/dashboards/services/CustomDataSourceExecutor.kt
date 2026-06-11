@@ -97,8 +97,8 @@ class CustomDataSourceExecutor {
 
         // Honor the explicit scheme + base path chosen in the dialog (stored in
         // extra_config) by folding them into the host the handler connects to.
-        val effectiveHost = ConnectionOptions.effectiveHttpHost(request.sourceType, request.host, request.extraConfig)
-        return handler.testConnection(request.copy(host = effectiveHost))
+        val effectiveHost = ConnectionOptions.effectiveHttpHost(sourceType.name, request.host, request.extraConfig)
+        return handler.testConnection(request.copy(sourceType = sourceType.name, host = effectiveHost))
     }
 
     /**

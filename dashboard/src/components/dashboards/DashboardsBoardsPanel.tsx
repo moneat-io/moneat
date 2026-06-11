@@ -358,22 +358,23 @@ const FolderRailItem = memo(function FolderRailItem({
   onRename: (name: string) => void
   onDelete: () => void
 }>) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editName, setEditName] = useState(folder.name)
+  const [editDraft, setEditDraft] = useState<string | null>(null)
+  const editName = editDraft ?? folder.name
+  const isEditing = editDraft != null
 
   if (isEditing) {
     return (
       <div className="flex items-center gap-1 px-1 py-0.5">
         <Input
           value={editName}
-          onChange={(e) => setEditName(e.target.value)}
+          onChange={(e) => setEditDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               const trimmed = editName.trim()
               if (trimmed) onRename(trimmed)
-              setIsEditing(false)
+              setEditDraft(null)
             }
-            if (e.key === 'Escape') setIsEditing(false)
+            if (e.key === 'Escape') setEditDraft(null)
           }}
           className="h-7 text-sm"
           autoFocus
@@ -389,7 +390,7 @@ const FolderRailItem = memo(function FolderRailItem({
         active ? 'bg-primary/10 font-medium text-primary' : 'hover:bg-accent',
       )}
     >
-      <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+      <button type="button" onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-2 text-left">
         <span
           className="h-[9px] w-[9px] shrink-0 rounded-sm"
           style={{background: folder.color ?? color}}
@@ -411,7 +412,7 @@ const FolderRailItem = memo(function FolderRailItem({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="bottom" className="w-44">
-            <DropdownMenuItem onClick={() => setIsEditing(true)}>
+            <DropdownMenuItem onClick={() => setEditDraft(folder.name)}>
               <Pencil className="mr-2 h-3.5 w-3.5" />
               Rename
             </DropdownMenuItem>
@@ -556,53 +557,57 @@ const DashboardListRow = memo(function DashboardListRow({
   const owner = ownerAvatar(dashboard)
 
   return (
-    <Link
-      to="/dashboards/$dashboardId"
-      params={{dashboardId: String(dashboard.id)}}
+    <div
       className={cn(
         'group grid items-center gap-2 border-b border-border/60 p-2 last:border-b-0 hover:bg-accent/50',
         LIST_GRID,
       )}
     >
       <FavoriteButton dashboard={dashboard} onToggle={onFavoriteToggle} />
-      <span className="block h-9 w-14 overflow-hidden rounded-sm border border-border/60 bg-[hsl(var(--viz-surface))]">
-        <SparkThumb kind={thumb} />
-      </span>
-      <span className="flex min-w-0 flex-col gap-px">
-        <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
-          <span className="truncate">{dashboard.title}</span>
-          {dashboard.is_default && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-accent-subtle-border bg-accent-subtle-bg px-1.5 text-[10px] font-medium text-accent-subtle-fg">
-              <Home className="h-2.5 w-2.5" />
-              Default
-            </span>
-          )}
+      <Link
+        to="/dashboards/$dashboardId"
+        params={{dashboardId: String(dashboard.id)}}
+        className="col-span-5 grid grid-cols-[56px_1fr_78px_104px_44px] items-center gap-2 text-foreground no-underline"
+      >
+        <span className="block h-9 w-14 overflow-hidden rounded-sm border border-border/60 bg-[hsl(var(--viz-surface))]">
+          <SparkThumb kind={thumb} />
         </span>
-        <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
-          {dashboard.description && <span className="truncate">{dashboard.description}</span>}
-          {folder && (
-            <>
-              <span className="text-muted-foreground/50">·</span>
-              <span
-                className="h-[9px] w-[9px] shrink-0 rounded-sm"
-                style={{background: folderColor(folder, folderIndex(folders, folder.id))}}
-              />
-              <span className="shrink-0">{folder.name}</span>
-            </>
-          )}
-          {sources.length > 0 && <span className="text-muted-foreground/50">·</span>}
-          {sources.map((source) => (
-            <SourceChip key={source} label={source} />
-          ))}
+        <span className="flex min-w-0 flex-col gap-px">
+          <span className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+            <span className="truncate">{dashboard.title}</span>
+            {dashboard.is_default && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-accent-subtle-border bg-accent-subtle-bg px-1.5 text-[10px] font-medium text-accent-subtle-fg">
+                <Home className="h-2.5 w-2.5" />
+                Default
+              </span>
+            )}
+          </span>
+          <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+            {dashboard.description && <span className="truncate">{dashboard.description}</span>}
+            {folder && (
+              <>
+                <span className="text-muted-foreground/50">·</span>
+                <span
+                  className="h-[9px] w-[9px] shrink-0 rounded-sm"
+                  style={{background: folderColor(folder, folderIndex(folders, folder.id))}}
+                />
+                <span className="shrink-0">{folder.name}</span>
+              </>
+            )}
+            {sources.length > 0 && <span className="text-muted-foreground/50">·</span>}
+            {sources.map((source) => (
+              <SourceChip key={source} label={source} />
+            ))}
+          </span>
         </span>
-      </span>
-      <span className="text-right font-mono text-xs text-foreground">{dashboard.widgets.length}</span>
-      <span className="text-right text-xs tabular-nums text-muted-foreground">
-        {formatRelative(now, dashboard.updated_at)}
-      </span>
-      <span className="flex justify-end">
-        <OwnerAvatar owner={owner} />
-      </span>
+        <span className="text-right font-mono text-xs text-foreground">{dashboard.widgets.length}</span>
+        <span className="text-right text-xs tabular-nums text-muted-foreground">
+          {formatRelative(now, dashboard.updated_at)}
+        </span>
+        <span className="flex justify-end">
+          <OwnerAvatar owner={owner} />
+        </span>
+      </Link>
       <BoardActionsMenu
         dashboard={dashboard}
         folders={folders}
@@ -612,7 +617,7 @@ const DashboardListRow = memo(function DashboardListRow({
         onMoveToFolder={onMoveToFolder}
         triggerClassName="opacity-0 group-hover:opacity-100"
       />
-    </Link>
+    </div>
   )
 })
 
@@ -650,46 +655,48 @@ const DashboardGridCard = memo(function DashboardGridCard({
   const sources = getDashboardSources(dashboard).slice(0, 2)
 
   return (
-    <Link
-      to="/dashboards/$dashboardId"
-      params={{dashboardId: String(dashboard.id)}}
-      className="group flex flex-col overflow-hidden rounded-lg border bg-card shadow-xs transition-all hover:-translate-y-px hover:border-primary hover:shadow-sm"
-    >
-      <div className="relative h-[108px] overflow-hidden border-b bg-[hsl(var(--viz-surface))] p-2">
-        <DashboardThumb kind={thumb} />
-        <div className="absolute right-2 top-2 flex gap-1">
-          <FavoriteButton dashboard={dashboard} onToggle={onFavoriteToggle} overlay />
-          <BoardActionsMenu
-            dashboard={dashboard}
-            folders={folders}
-            onDelete={onDelete}
-            onDuplicate={onDuplicate}
-            onSetDefault={onSetDefault}
-            onMoveToFolder={onMoveToFolder}
-            overlay
-          />
+    <div className="group relative flex flex-col overflow-hidden rounded-lg border bg-card shadow-xs transition-all hover:-translate-y-px hover:border-primary hover:shadow-sm">
+      <Link
+        to="/dashboards/$dashboardId"
+        params={{dashboardId: String(dashboard.id)}}
+        className="flex flex-col text-foreground no-underline"
+      >
+        <div className="h-[108px] overflow-hidden border-b bg-[hsl(var(--viz-surface))] p-2">
+          <DashboardThumb kind={thumb} />
         </div>
+        <div className="flex flex-col gap-1.5 px-3 pb-3 pt-2.5">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-foreground">{dashboard.title}</span>
+            <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground/70">
+              {dashboard.widgets.length}w
+            </span>
+          </div>
+          <p className="line-clamp-2 min-h-8 text-xs leading-snug text-muted-foreground">
+            {dashboard.description || 'No description'}
+          </p>
+          <div className="mt-px flex items-center gap-1.5">
+            {sources.map((source) => (
+              <SourceChip key={source} label={source} />
+            ))}
+            <span className="ml-auto text-[10px] text-muted-foreground/70">
+              {formatRelative(now, dashboard.updated_at)}
+            </span>
+          </div>
+        </div>
+      </Link>
+      <div className="absolute right-2 top-2 flex gap-1">
+        <FavoriteButton dashboard={dashboard} onToggle={onFavoriteToggle} overlay />
+        <BoardActionsMenu
+          dashboard={dashboard}
+          folders={folders}
+          onDelete={onDelete}
+          onDuplicate={onDuplicate}
+          onSetDefault={onSetDefault}
+          onMoveToFolder={onMoveToFolder}
+          overlay
+        />
       </div>
-      <div className="flex flex-col gap-1.5 px-3 pb-3 pt-2.5">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-semibold text-foreground">{dashboard.title}</span>
-          <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground/70">
-            {dashboard.widgets.length}w
-          </span>
-        </div>
-        <p className="line-clamp-2 min-h-8 text-xs leading-snug text-muted-foreground">
-          {dashboard.description || 'No description'}
-        </p>
-        <div className="mt-px flex items-center gap-1.5">
-          {sources.map((source) => (
-            <SourceChip key={source} label={source} />
-          ))}
-          <span className="ml-auto text-[10px] text-muted-foreground/70">
-            {formatRelative(now, dashboard.updated_at)}
-          </span>
-        </div>
-      </div>
-    </Link>
+    </div>
   )
 })
 
@@ -1017,7 +1024,7 @@ function formatRelative(now: number, iso: string): string {
     return `${mins}m ago`
   }
   if (diff < day) return `${Math.round(diff / hour)}h ago`
-  if (diff < 2 * day) return 'Today'
-  if (diff < 7 * day) return `${Math.round(diff / day)}d ago`
+  if (diff < 2 * day) return '1d ago'
+  if (diff < 7 * day) return `${Math.floor(diff / day)}d ago`
   return new Date(iso).toLocaleDateString()
 }

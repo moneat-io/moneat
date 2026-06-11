@@ -183,6 +183,7 @@ export function DataSourceConfigureStep({
     const r = smartSplitHost(value)
     if (!r.didSplit) {
       update({host: value})
+      setAdjust(null)
       return
     }
     const prev: Partial<DsFormState> = {host: state.host, scheme: state.scheme, port: state.port, basePath: state.basePath}

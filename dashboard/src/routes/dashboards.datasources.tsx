@@ -42,7 +42,7 @@ export const Route = createFileRoute('/dashboards/datasources')({
 
 function searchFlag(value: unknown): number | undefined {
   if (value === true) return 1
-  return searchResourceId(value) || value === 1 || value === '1' ? 1 : undefined
+  return value === 1 || value === '1' ? 1 : undefined
 }
 
 function searchResourceId(value: unknown): string | null {

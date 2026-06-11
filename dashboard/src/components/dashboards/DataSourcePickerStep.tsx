@@ -16,7 +16,7 @@
 
 import {useState} from 'react'
 import {Search} from 'lucide-react'
-import {groupVendors} from './dataSourceCatalog'
+import {groupVendors, VENDORS} from './dataSourceCatalog'
 import {DataSourceLogo} from './DataSourceLogo'
 
 interface DataSourcePickerStepProps {
@@ -42,7 +42,7 @@ export function DataSourcePickerStep({onPick}: DataSourcePickerStepProps) {
               setQuery('')
             }
           }}
-          placeholder="Search 17 data sources — Postgres, Prometheus, ClickHouse…"
+          placeholder={`Search ${VENDORS.length} data sources — Postgres, Prometheus, ClickHouse…`}
           aria-label="Search data sources"
           className="min-w-0 flex-1 border-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
         />

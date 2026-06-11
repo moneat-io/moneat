@@ -16,6 +16,8 @@
 
 package com.moneat.dashboards.services.handlers
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -30,10 +32,10 @@ class SnowflakeHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDa
         val account = host.removePrefix("https://").removePrefix("http://")
             .replace(".snowflakecomputing.com", "").trim()
         val params = buildList {
-            if (database.isNotBlank()) add("db=$database")
-            options.warehouse?.let { add("warehouse=$it") }
-            options.role?.let { add("role=$it") }
-            options.schema?.let { add("schema=$it") }
+            if (database.isNotBlank()) add("db=${encodeParam(database)}")
+            options.warehouse?.let { add("warehouse=${encodeParam(it)}") }
+            options.role?.let { add("role=${encodeParam(it)}") }
+            options.schema?.let { add("schema=${encodeParam(it)}") }
         }
         return if (params.isNotEmpty()) {
             "jdbc:snowflake://$account.snowflakecomputing.com/?" + params.joinToString("&")
@@ -43,6 +45,9 @@ class SnowflakeHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDa
     }
 
     override fun defaultPort(): Int = 443
+
+    private fun encodeParam(value: String): String =
+        URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
     override fun defaultDatabase(): String = ""
 

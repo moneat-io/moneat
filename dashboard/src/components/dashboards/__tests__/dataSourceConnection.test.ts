@@ -57,6 +57,20 @@ describe('smartSplitHost', () => {
     expect(r.host).toBe('host:notaport')
     expect(r.port).toBeUndefined()
   })
+
+  it('leaves a bare IPv6 literal untouched', () => {
+    const r = smartSplitHost('2001:db8::9090')
+    expect(r.host).toBe('2001:db8::9090')
+    expect(r.port).toBeUndefined()
+    expect(r.didSplit).toBe(false)
+  })
+
+  it('splits a bracketed IPv6 host with an explicit port', () => {
+    const r = smartSplitHost('[2001:db8::1]:9090')
+    expect(r.host).toBe('[2001:db8::1]')
+    expect(r.port).toBe('9090')
+    expect(r.didSplit).toBe(true)
+  })
 })
 
 describe('validatePort', () => {
@@ -231,6 +245,8 @@ describe('isFormReady', () => {
     expect(isFormReady({...defaultFormState('bigquery'), projectId: 'p'})).toBe(true)
     expect(isFormReady({...defaultFormState('snowflake'), account: 'a', warehouse: 'w'})).toBe(true)
     expect(isFormReady({...defaultFormState('cloudwatch'), useRole: true})).toBe(true)
+    expect(isFormReady({...defaultFormState('cloudwatch'), accessKey: 'AKIA'})).toBe(false)
+    expect(isFormReady({...defaultFormState('cloudwatch'), accessKey: 'AKIA', secretKey: 'secret'})).toBe(true)
   })
 
   it('blocks on a bad port and on a missing connection string', () => {

@@ -338,7 +338,7 @@ describe('Dashboards hub route', () => {
     renderRoute(DashboardsRoute)
     await screen.findByText('API Health')
 
-    const row = screen.getByText('API Health').closest('a') as HTMLElement
+    const row = screen.getByText('API Health').closest('a')?.parentElement as HTMLElement
 
     fireEvent.click(within(row).getByRole('button', {name: 'Remove from favorites'}))
     await waitFor(() => expect(mockApi.toggleDashboardFavorite).toHaveBeenCalledWith(API_DASHBOARD_ID))
@@ -347,7 +347,7 @@ describe('Dashboards hub route', () => {
     await waitFor(() => expect(mockApi.duplicateDashboard).toHaveBeenCalledWith(API_DASHBOARD_ID))
     expect(mockApi.getDashboard).not.toHaveBeenCalled()
 
-    const nonDefaultRow = screen.getByText('Queue Depth').closest('a') as HTMLElement
+    const nonDefaultRow = screen.getByText('Queue Depth').closest('a')?.parentElement as HTMLElement
     fireEvent.click(within(nonDefaultRow).getByRole('button', {name: 'Set as default'}))
     await waitFor(() => expect(mockApi.setDefaultDashboard).toHaveBeenCalledWith(QUEUE_DASHBOARD_ID))
 
@@ -402,7 +402,7 @@ describe('Dashboards hub route', () => {
     renderRoute(DashboardsRoute)
     await screen.findByText('API Health')
 
-    fireEvent.click(screen.getByRole('tab', {name: /Data sources/}))
+    fireEvent.click(screen.getByRole('button', {name: /Data sources/}))
 
     expect(await screen.findByText('Moneat telemetry')).toBeInTheDocument()
     expect(screen.getByText('Prometheus prod')).toBeInTheDocument()
@@ -441,8 +441,8 @@ describe('Dashboards hub route', () => {
 
     renderRoute(DashboardsRoute)
 
-    expect(screen.getByRole('tab', {name: /Your dashboards/})).toBeInTheDocument()
-    expect(screen.getByRole('tab', {name: /Templates/})).toBeInTheDocument()
-    expect(screen.getByRole('tab', {name: /Data sources/})).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Your dashboards/})).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Templates/})).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Data sources/})).toBeInTheDocument()
   })
 })

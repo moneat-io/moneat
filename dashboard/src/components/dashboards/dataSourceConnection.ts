@@ -142,6 +142,8 @@ export interface HostSplit {
   didSplit: boolean
 }
 
+const SCHEME_PATTERN = /^([a-z][a-z0-9+.-]*):\/\//i
+
 /**
  * Pulls a scheme, port, path or user:pass@ out of a value pasted into the Host
  * field so the host field only ever holds a bare hostname. Fixes the classic
@@ -154,7 +156,7 @@ export function smartSplitHost(raw: string): HostSplit {
   let path: string | undefined
   let didSplit = false
 
-  const schemeMatch = host.match(/^([a-z][a-z0-9+.-]*):\/\//i)
+  const schemeMatch = SCHEME_PATTERN.exec(host)
   if (schemeMatch) {
     const s = schemeMatch[1].toLowerCase()
     if (s === 'http' || s === 'https') scheme = s
@@ -174,14 +176,24 @@ export function smartSplitHost(raw: string): HostSplit {
   }
   const colon = host.lastIndexOf(':')
   if (colon >= 0) {
+    const isBracketedIpv6 = host.startsWith('[') && host.includes(']')
+    const looksLikeBareIpv6 = !isBracketedIpv6 && countChars(host, ':') > 1
     const p = host.slice(colon + 1)
-    if (/^\d+$/.test(p)) {
+    if (!looksLikeBareIpv6 && /^\d+$/.test(p)) {
       port = p
       host = host.slice(0, colon)
       didSplit = true
     }
   }
   return {scheme, host, port, path, didSplit}
+}
+
+function countChars(value: string, char: string): number {
+  let count = 0
+  for (const current of value) {
+    if (current === char) count += 1
+  }
+  return count
 }
 
 export interface PortValidity {
@@ -286,7 +298,8 @@ export function buildEndpointPreview(state: DsFormState): EndpointPreview {
       {tone: 'path', text: '/'},
       {tone: 'db', text: state.database || 'database'},
     ]
-    sub = `${v.scheme === 'postgresql' ? 'PostgreSQL' : v.scheme} wire protocol · TLS: ${state.tlsMode || 'off'}${v.note ? ` · ${v.note}` : ''}`
+    const noteSuffix = v.note ? ` · ${v.note}` : ''
+    sub = `${v.scheme === 'postgresql' ? 'PostgreSQL' : v.scheme} wire protocol · TLS: ${state.tlsMode || 'off'}${noteSuffix}`
   } else if (v.arch === 'clickhouse') {
     const native = state.chProtocol === 'native'
     segments = [
@@ -557,7 +570,7 @@ export function isFormReady(state: DsFormState): boolean {
   switch (v.arch) {
     case 'file': return state.host.trim() !== ''
     case 'bigquery': return state.projectId.trim() !== ''
-    case 'cloudwatch': return state.useRole || state.accessKey.trim() !== ''
+    case 'cloudwatch': return state.useRole || (state.accessKey.trim() !== '' && state.secretKey.trim() !== '')
     case 'snowflake': return state.account.trim() !== '' && state.warehouse.trim() !== ''
     case 'connstr': return state.manual ? state.host.trim() !== '' : state.connStr.trim() !== ''
     default: return state.host.trim() !== ''

@@ -432,8 +432,7 @@ function HubTab({
   return (
     <button
       type="button"
-      role="tab"
-      aria-selected={active}
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         'inline-flex h-[38px] items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors',
