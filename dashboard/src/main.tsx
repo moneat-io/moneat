@@ -27,9 +27,10 @@ import {shouldRetryQuery} from './lib/query-retry'
 import './index.css'
 
 function configuredEnv(value: string | undefined): string | undefined {
-  if (!value || !value.trim()) return undefined
-  if (value.startsWith('__') && value.endsWith('__')) return undefined
-  return value
+  const normalized = value?.trim()
+  if (!normalized) return undefined
+  if (normalized.startsWith('__') && normalized.endsWith('__')) return undefined
+  return normalized
 }
 
 function sampleRate(value: string | undefined, fallback: number): number {
@@ -63,8 +64,8 @@ if (sentryDsn) {
     // Performance Monitoring
     tracesSampleRate: sampleRate(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE, 0.1),
     // Session Replay
-    replaysSessionSampleRate: sampleRate(import.meta.env.VITE_SENTRY_REPLAYS_SESSION_SAMPLE_RATE, 1.0),
-    replaysOnErrorSampleRate: sampleRate(import.meta.env.VITE_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE, 1.0),
+    replaysSessionSampleRate: sampleRate(import.meta.env.VITE_SENTRY_REPLAYS_SESSION_SAMPLE_RATE, 1),
+    replaysOnErrorSampleRate: sampleRate(import.meta.env.VITE_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE, 1),
   })
 }
 
