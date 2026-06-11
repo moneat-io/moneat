@@ -464,7 +464,7 @@ class AnalyticsIngestRoutesTest {
 
     private fun quotaUsage(orgId: Int): BillingUsageResponse {
         return BillingUsageResponse(
-            organizationId = orgId,
+            organizationId = resourceId(orgId),
             periodStart = "2026-05-01",
             periodEnd = "2026-05-31",
             retentionDays = 30,
@@ -491,6 +491,9 @@ class AnalyticsIngestRoutesTest {
             withinQuota = true
         )
     }
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     private fun usedAnalyticsPageviews(orgId: Int): Long {
         return transaction {

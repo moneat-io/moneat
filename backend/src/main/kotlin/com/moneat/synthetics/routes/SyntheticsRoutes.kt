@@ -18,7 +18,11 @@ package com.moneat.synthetics.routes
 
 import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.config.ClickHouseClient
+import com.moneat.shared.services.parseJavaUuidOrNull
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -43,9 +47,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import java.util.UUID
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -69,6 +71,9 @@ private fun parseLimit(limitParam: String?): Int {
     val limit = limitParam?.toIntOrNull() ?: DEFAULT_LIMIT
     return limit.coerceIn(1, MAX_LIMIT)
 }
+
+private fun parseSyntheticTestId(value: String?) =
+    parseJavaUuidOrNull(value)
 
 private fun snakeToCamel(snake: String): String {
     return snake.split('_').mapIndexed { index, part ->
@@ -214,9 +219,8 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val testId = try {
-                    UUID.fromString(call.parameters["id"])
-                } catch (_: IllegalArgumentException) {
+                val testId = parseSyntheticTestId(call.parameters["id"])
+                if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -249,10 +253,8 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val testId = try {
-                    UUID.fromString(call.parameters["id"])
-                        .toString()
-                } catch (_: IllegalArgumentException) {
+                val testId = parseSyntheticTestId(call.parameters["id"])?.toString()
+                if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -315,10 +317,8 @@ fun Route.syntheticsRoutes() {
                     )
                     return@get
                 }
-                val testId = try {
-                    UUID.fromString(call.parameters["id"])
-                        .toString()
-                } catch (_: IllegalArgumentException) {
+                val testId = parseSyntheticTestId(call.parameters["id"])?.toString()
+                if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -379,9 +379,8 @@ fun Route.syntheticsRoutes() {
                     )
                     return@put
                 }
-                val testId = try {
-                    UUID.fromString(call.parameters["id"])
-                } catch (_: IllegalArgumentException) {
+                val testId = parseSyntheticTestId(call.parameters["id"])
+                if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -416,9 +415,8 @@ fun Route.syntheticsRoutes() {
                     )
                     return@delete
                 }
-                val testId = try {
-                    UUID.fromString(call.parameters["id"])
-                } catch (_: IllegalArgumentException) {
+                val testId = parseSyntheticTestId(call.parameters["id"])
+                if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -451,9 +449,8 @@ fun Route.syntheticsRoutes() {
                     )
                     return@post
                 }
-                val testId = try {
-                    UUID.fromString(call.parameters["id"])
-                } catch (_: IllegalArgumentException) {
+                val testId = parseSyntheticTestId(call.parameters["id"])
+                if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid ID")
@@ -529,7 +526,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@put
                 }
-                val varId = call.parameters["id"]?.toIntOrNull()
+                val varId = call.parameters["id"]?.let(::parseSyntheticVariableResourceId)
                 if (varId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
@@ -565,7 +562,7 @@ fun Route.syntheticsRoutes() {
                     )
                     return@delete
                 }
-                val varId = call.parameters["id"]?.toIntOrNull()
+                val varId = call.parameters["id"]?.let(::parseSyntheticVariableResourceId)
                 if (varId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
@@ -589,3 +586,6 @@ fun Route.syntheticsRoutes() {
         }
     }
 }
+
+private fun parseSyntheticVariableResourceId(value: String): Uuid? =
+    value.toUuidOrNull()

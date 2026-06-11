@@ -41,7 +41,7 @@ class CreateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaInteger("Host ID (integer)"),
+                "host_id" to schemaResourceId("Host resource ID"),
                 "metric" to schemaEnum(
                     "Metric to monitor",
                     listOf(
@@ -67,10 +67,9 @@ class CreateAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = hostIdRaw.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
+        val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: "Invalid host_id")
+        }
         val metric = args["metric"]?.jsonPrimitive?.content
             ?: return errorResult("metric is required")
         val condition = args["condition"]?.jsonPrimitive?.content
@@ -106,8 +105,8 @@ class UpdateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaInteger("Host ID (integer)"),
-                "alert_id" to schemaInteger("Alert ID"),
+                "host_id" to schemaResourceId("Host resource ID"),
+                "alert_id" to schemaResourceId("Alert resource ID"),
                 "condition" to schemaEnum(
                     "Alert condition",
                     listOf("gt", "lt", "eq")
@@ -124,12 +123,17 @@ class UpdateAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = hostIdRaw.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
-        val alertId = args["alert_id"]?.jsonPrimitive?.intOrNull
-            ?: return errorResult("alert_id is required")
+        val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: "Invalid host_id")
+        }
+        val alertResourceId = args.stringContent("alert_id")?.let(::parseResourceId)
+            ?: return errorResult("Invalid alert_id format; expected alert resource ID")
+        val alertId = alertMonitorService.resolveAlertId(
+            alertResourceId,
+            hostId,
+            context.organizationId,
+            MonitorService.ALERT_SCOPE_HOST
+        ) ?: return errorResult("Alert not found")
 
         val request = UpdateAlertRequest(
             metric = args["metric"]?.jsonPrimitive?.content,
@@ -148,7 +152,7 @@ class UpdateAlertTool : McpTool {
             request
         )
         return if (updated) {
-            textResult("Alert $alertId updated")
+            textResult("Alert $alertResourceId updated")
         } else {
             errorResult("Alert not found or update failed")
         }
@@ -162,8 +166,8 @@ class DeleteAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaInteger("Host ID (integer)"),
-                "alert_id" to schemaInteger("Alert ID")
+                "host_id" to schemaResourceId("Host resource ID"),
+                "alert_id" to schemaResourceId("Alert resource ID")
             )
         ),
         required = listOf("host_id", "alert_id")
@@ -173,12 +177,17 @@ class DeleteAlertTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = hostIdRaw.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
-        val alertId = args["alert_id"]?.jsonPrimitive?.intOrNull
-            ?: return errorResult("alert_id is required")
+        val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: "Invalid host_id")
+        }
+        val alertResourceId = args.stringContent("alert_id")?.let(::parseResourceId)
+            ?: return errorResult("Invalid alert_id format; expected alert resource ID")
+        val alertId = alertMonitorService.resolveAlertId(
+            alertResourceId,
+            hostId,
+            context.organizationId,
+            MonitorService.ALERT_SCOPE_HOST
+        ) ?: return errorResult("Alert not found")
 
         val deleted = alertMonitorService.deleteAlert(
             alertId,
@@ -186,7 +195,7 @@ class DeleteAlertTool : McpTool {
             context.organizationId
         )
         return if (deleted) {
-            textResult("Alert $alertId deleted")
+            textResult("Alert $alertResourceId deleted")
         } else {
             errorResult("Alert not found or delete failed")
         }
@@ -246,7 +255,7 @@ class DeleteSilencePeriodTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("id" to schemaNumber("Silence period ID"))
+            mapOf("id" to schemaResourceId("Silence period resource ID"))
         ),
         required = listOf("id")
     )
@@ -255,9 +264,9 @@ class DeleteSilencePeriodTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val id = args["id"]?.jsonPrimitive?.intOrNull
-            ?: return errorResult("id is required")
-        val deleted = silenceAlertService.deleteSilencePeriod(
+        val id = args.stringContent("id")?.let(::parseResourceId)
+            ?: return errorResult("Invalid id format; expected silence period resource ID")
+        val deleted = silenceAlertService.deleteSilencePeriodByResourceId(
             id,
             context.organizationId
         )
@@ -275,7 +284,7 @@ class DeleteHostTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaInteger("Host ID (integer)"))
+            mapOf("host_id" to schemaResourceId("Host resource ID"))
         ),
         required = listOf("host_id")
     )
@@ -284,17 +293,16 @@ class DeleteHostTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = hostIdRaw.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
+        val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: "Invalid host_id")
+        }
 
         val deleted = alertMonitorService.deleteHost(
             hostId,
             context.organizationId
         )
         return if (deleted) {
-            textResult("Host $hostIdRaw deleted")
+            textResult("Host deleted")
         } else {
             errorResult("Host not found or delete failed")
         }

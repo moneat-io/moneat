@@ -262,7 +262,7 @@ class LogIngestionWorkerTest {
         filterQuery: String
     ): LogIndexResponse =
         LogIndexResponse(
-            id = 1,
+            id = resourceId(1),
             name = name,
             filterQuery = filterQuery,
             retentionDays = 30,
@@ -275,7 +275,7 @@ class LogIngestionWorkerTest {
 
     private fun logPipelineResponse(name: String): LogPipelineResponse =
         LogPipelineResponse(
-            id = 1,
+            id = resourceId(1),
             name = name,
             description = "",
             steps = emptyList(),
@@ -284,6 +284,9 @@ class LogIngestionWorkerTest {
             createdAt = "2026-06-04T00:00:00Z",
             updatedAt = "2026-06-04T00:00:00Z"
         )
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     private fun logEntryResponse(
         logId: String,

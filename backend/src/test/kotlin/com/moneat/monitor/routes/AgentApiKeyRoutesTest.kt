@@ -38,6 +38,9 @@ import io.mockk.verify
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
+
+private const val KEY_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
 
 class AgentApiKeyRoutesTest {
 
@@ -47,7 +50,7 @@ class AgentApiKeyRoutesTest {
     fun `GET agent-api-keys uses JWT org`() = testApplication {
         every { service.listKeys(42) } returns listOf(
             AgentApiKeyResponse(
-                id = 1,
+                id = KEY_RESOURCE_ID,
                 name = "collector",
                 keyPrefix = "magt_prefix",
                 createdAt = "2026-01-01T00:00:00Z"
@@ -67,7 +70,7 @@ class AgentApiKeyRoutesTest {
     fun `POST agent-api-keys uses JWT org and user`() = testApplication {
         every { service.createKey(organizationId = 42, name = "collector", createdBy = 7) } returns
             CreateAgentApiKeyResponse(
-                id = 1,
+                id = KEY_RESOURCE_ID,
                 name = "collector",
                 keyPrefix = "magt_prefix",
                 key = "magt_secret",
@@ -90,14 +93,14 @@ class AgentApiKeyRoutesTest {
 
     @Test
     fun `DELETE agent-api-keys uses JWT org`() = testApplication {
-        every { service.deleteKey(organizationId = 42, keyId = 9) } returns true
+        every { service.deleteKey(organizationId = 42, keyResourceId = Uuid.parse(KEY_RESOURCE_ID)) } returns true
 
         installRoutes()
         val token = RouteTestSupport.createToken(userId = 7, orgId = 42)
-        val response = client.delete("/v1/agent-api-keys/9") { withAuth(token) }
+        val response = client.delete("/v1/agent-api-keys/$KEY_RESOURCE_ID") { withAuth(token) }
 
         assertEquals(HttpStatusCode.NoContent, response.status)
-        verify { service.deleteKey(organizationId = 42, keyId = 9) }
+        verify { service.deleteKey(organizationId = 42, keyResourceId = Uuid.parse(KEY_RESOURCE_ID)) }
     }
 
     @Test

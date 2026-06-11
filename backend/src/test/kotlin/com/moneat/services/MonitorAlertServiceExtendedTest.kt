@@ -118,6 +118,24 @@ class MonitorAlertServiceExtendedTest {
             } get Users.id
         }
 
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
+        }
+
     private fun seedHost(orgId: Int, hostname: String = "web-01", status: String = "up"): Int =
         transaction {
             val now = Clock.System.now()
@@ -186,8 +204,8 @@ class MonitorAlertServiceExtendedTest {
 
         val created = service.createSilencePeriod(orgId, userId, request)
         assertEquals("Deploy window", created.reason)
-        assertEquals(orgId, created.organizationId)
-        assertEquals(userId, created.createdBy)
+        assertEquals(organizationResourceId(orgId), created.organizationId)
+        assertEquals(userResourceId(userId), created.createdBy)
         assertTrue(created.createdAt > 0)
     }
 
@@ -243,7 +261,7 @@ class MonitorAlertServiceExtendedTest {
     @Test
     fun `deleteSilencePeriod with wrong id returns false`() {
         val orgId = seedOrg()
-        assertFalse(service.deleteSilencePeriod(9999, orgId))
+        assertFalse(service.deleteSilencePeriod("9999", orgId))
     }
 
     @Test
@@ -266,9 +284,9 @@ class MonitorAlertServiceExtendedTest {
         assertEquals(1, periods.size)
         val p = periods.first()
         assertNotNull(p.id)
-        assertEquals(orgId, p.organizationId)
+        assertEquals(organizationResourceId(orgId), p.organizationId)
         assertEquals("Maintenance", p.reason)
-        assertEquals(userId, p.createdBy)
+        assertEquals(userResourceId(userId), p.createdBy)
         assertTrue(p.startsAt > 0)
         assertTrue(p.endsAt > p.startsAt)
         assertTrue(p.createdAt > 0)

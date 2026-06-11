@@ -47,6 +47,9 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+private const val SIGNAL_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+private const val DETECTION_RULE_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+
 // ──── Resources tests ────
 
 class SecurityResourcesTest {
@@ -102,7 +105,7 @@ private class SecurityResourceGateway : SecurityResourceGatewayBase() {
         SignalListResponse(
             signals = listOf(
                 SignalResponse(
-                    id = 12,
+                    id = SIGNAL_RESOURCE_ID,
                     source = "detection",
                     ruleId = "detection-12",
                     ruleName = "Suspicious exec",
@@ -145,6 +148,9 @@ private abstract class SecurityResourceGatewayBase : SecurityMcpGateway {
         offset: Int,
     ): SignalListResponse = unsupported()
 
+    override fun resolveSignalId(organizationId: Int, signalResourceId: String): Int? =
+        if (signalResourceId == SIGNAL_RESOURCE_ID) 12 else null
+
     override suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? = unsupported()
 
     override suspend fun triageSignal(
@@ -155,6 +161,9 @@ private abstract class SecurityResourceGatewayBase : SecurityMcpGateway {
     ): TriageResult = unsupported()
 
     override suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse = unsupported()
+
+    override fun resolveDetectionRuleId(organizationId: Int, ruleResourceId: String): Int? =
+        if (ruleResourceId == DETECTION_RULE_RESOURCE_ID) 77 else null
 
     override suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? = unsupported()
 

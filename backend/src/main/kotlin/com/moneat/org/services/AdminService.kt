@@ -45,6 +45,7 @@ import com.moneat.shared.models.UserSsoLinks
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.OrgUsageSummary
 import com.moneat.shared.services.UsageTrackingService
+import com.moneat.shared.services.toUuidOrNull
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import kotlinx.datetime.DateTimeUnit
@@ -72,6 +73,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
@@ -95,7 +97,7 @@ data class AdminTimelinePoint(
 
 @Serializable
 data class AdminOrgSummary(
-    val id: Int,
+    val id: String,
     val name: String,
     val slug: String,
     val plan: String,
@@ -108,7 +110,7 @@ data class AdminOrgSummary(
 
 @Serializable
 data class AdminOrgDetail(
-    val id: Int,
+    val id: String,
     val name: String,
     val slug: String,
     val companySize: String?,
@@ -125,7 +127,7 @@ data class AdminOrgDetail(
 
 @Serializable
 data class AdminOrgMember(
-    val userId: Int,
+    val userId: String,
     val email: String,
     val name: String?,
     val role: String
@@ -133,7 +135,7 @@ data class AdminOrgMember(
 
 @Serializable
 data class AdminOrgProject(
-    val id: Long,
+    val id: String,
     val name: String,
     val slug: String,
     val framework: String?
@@ -191,7 +193,7 @@ data class TableSize(
 
 @Serializable
 data class AdminTopConsumer(
-    val orgId: Int,
+    val orgId: String,
     val orgName: String,
     val orgSlug: String,
     val plan: String,
@@ -216,7 +218,7 @@ data class EmailTimelinePoint(
 
 @Serializable
 data class AdminUserSummary(
-    val id: Int,
+    val id: String,
     val email: String,
     val name: String?,
     val emailVerified: Boolean,
@@ -235,7 +237,7 @@ data class UpdateUserRequest(
 
 @Serializable
 data class DeleteUsersRequest(
-    val userIds: List<Int>
+    val userIds: List<String>
 )
 
 @Serializable
@@ -402,7 +404,7 @@ class AdminService(
                     }
 
                 AdminOrgSummary(
-                    id = orgId,
+                    id = row[Organizations.resource_id].toString(),
                     name = row[Organizations.name],
                     slug = row[Organizations.slug],
                     plan = plan,
@@ -476,7 +478,7 @@ class AdminService(
                             Users.selectAll().where { Users.id eq mRow[Memberships.user_id] }.firstOrNull()
                                 ?: return@mapNotNull null
                         AdminOrgMember(
-                            userId = u[Users.id],
+                            userId = u[Users.resource_id].toString(),
                             email = u[Users.email],
                             name = u[Users.name],
                             role = mRow[Memberships.role]
@@ -487,7 +489,7 @@ class AdminService(
                 projects
                     .map { p ->
                         AdminOrgProject(
-                            id = p[Projects.id],
+                            id = p[Projects.resource_id].toString(),
                             name = p[Projects.name],
                             slug = p[Projects.slug],
                             framework = p[Projects.framework]
@@ -495,7 +497,7 @@ class AdminService(
                     }
 
             AdminOrgDetail(
-                id = orgId,
+                id = org[Organizations.resource_id].toString(),
                 name = org[Organizations.name],
                 slug = org[Organizations.slug],
                 companySize = org[Organizations.company_size],
@@ -714,7 +716,7 @@ class AdminService(
                             ?.get(Subscriptions.plan)
                             ?.lowercase() ?: "free"
                     AdminTopConsumer(
-                        orgId = orgId,
+                        orgId = org[Organizations.resource_id].toString(),
                         orgName = org[Organizations.name],
                         orgSlug = org[Organizations.slug],
                         plan = plan,
@@ -907,7 +909,7 @@ class AdminService(
             userRows.map { row ->
                 val userId = row[Users.id]
                 AdminUserSummary(
-                    id = userId,
+                    id = row[Users.resource_id].toString(),
                     email = row[Users.email],
                     name = row[Users.name],
                     emailVerified = row[Users.email_verified],
@@ -928,10 +930,17 @@ class AdminService(
     }
 
     fun updateUser(
-        userId: Int,
+        userResourceId: Uuid,
         updates: UpdateUserRequest
     ): Boolean {
         return transaction {
+            val userId = Users
+                .selectAll()
+                .where { Users.resource_id eq userResourceId }
+                .firstOrNull()
+                ?.get(Users.id)
+                ?: return@transaction false
+
             Users.selectAll().where { Users.id eq userId }.firstOrNull()
                 ?: return@transaction false
 
@@ -944,8 +953,8 @@ class AdminService(
         }
     }
 
-    fun deleteUsers(userIds: List<Int>): DeleteUsersResponse {
-        if (userIds.isEmpty()) {
+    fun deleteUsers(userResourceIds: List<String>): DeleteUsersResponse {
+        if (userResourceIds.isEmpty()) {
             return DeleteUsersResponse(success = false, deletedCount = 0, errors = listOf("No user IDs provided"))
         }
 
@@ -953,11 +962,22 @@ class AdminService(
         var deletedCount = 0
 
         transaction {
-            userIds.forEach { userId ->
+            userResourceIds.forEach { rawUserResourceId ->
                 suspendRunCatching {
-                    val user = Users.selectAll().where { Users.id eq userId }.firstOrNull()
-                    if (user == null) {
-                        errors.add("User $userId not found")
+                    val userResourceId = rawUserResourceId.toUuidOrNull()
+                    if (userResourceId == null) {
+                        errors.add("Invalid user ID: $rawUserResourceId")
+                        return@forEach
+                    }
+
+                    val userId =
+                        Users
+                            .selectAll()
+                            .where { Users.resource_id eq userResourceId }
+                            .firstOrNull()
+                            ?.get(Users.id)
+                    if (userId == null) {
+                        errors.add("User $rawUserResourceId not found")
                         return@forEach
                     }
 
@@ -1002,8 +1022,8 @@ class AdminService(
 
                     deletedCount++
                 }.getOrElse { e ->
-                    logger.error(e) { "Failed to delete user $userId" }
-                    errors.add("Failed to delete user $userId: ${e.message}")
+                    logger.error(e) { "Failed to delete user $rawUserResourceId" }
+                    errors.add("Failed to delete user $rawUserResourceId: ${e.message}")
                 }
             }
         }

@@ -99,7 +99,7 @@ describe('buildRuleRequest', () => {
 describe('ruleToForm', () => {
   it('hydrates editable text fields from a rule', () => {
     const rule: DetectionRuleResponse = {
-      id: 1,
+      id: 'rule-1',
       name: 'Brute force',
       description: 'desc',
       source: 'logs',

@@ -23,6 +23,7 @@ import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.models.DatadogHostMetadata
 import com.moneat.datadog.models.DatadogIntakePayload
 import com.moneat.datadog.services.DatadogHostService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseQueryUtils
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -46,6 +47,7 @@ import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import mu.KotlinLogging
 import com.moneat.utils.suspendRunCatching
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -56,6 +58,9 @@ private val json = Json {
     isLenient = true
     coerceInputValues = true
 }
+
+private fun parseHostResourceId(raw: String?): Uuid? =
+    raw?.toUuidOrNull()
 
 fun Route.datadogHostIngestRoutes() {
     // DD agent intake endpoints
@@ -222,7 +227,7 @@ fun Route.datadogHostQueryRoutes() {
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
                     )
-                val hostId = call.parameters["hostId"]?.toIntOrNull()
+                val hostId = parseHostResourceId(call.parameters["hostId"])
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid host id")
@@ -243,7 +248,7 @@ fun Route.datadogHostQueryRoutes() {
                     call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Missing org context"))
                     return@delete
                 }
-                val hostId = call.parameters["hostId"]?.toIntOrNull()
+                val hostId = parseHostResourceId(call.parameters["hostId"])
                 if (hostId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid host id"))
                     return@delete
@@ -264,7 +269,7 @@ fun Route.datadogHostQueryRoutes() {
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
                     )
-                val hostId = call.parameters["hostId"]?.toIntOrNull()
+                val hostId = parseHostResourceId(call.parameters["hostId"])
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid host id")
@@ -360,12 +365,12 @@ fun Route.datadogHostQueryRoutes() {
                         HttpStatusCode.Unauthorized,
                         mapOf("error" to "Missing org context")
                     )
-                val hostId = call.parameters["hostId"]?.toIntOrNull()
+                val hostId = parseHostResourceId(call.parameters["hostId"])
                     ?: return@get call.respond(
                         HttpStatusCode.BadRequest,
                         mapOf("error" to "Invalid host id")
                     )
-                DatadogHostService.getHost(orgId, hostId)
+                val host = DatadogHostService.getHost(orgId, hostId)
                     ?: return@get call.respond(
                         HttpStatusCode.NotFound,
                         mapOf("error" to "Host not found")
@@ -391,7 +396,7 @@ fun Route.datadogHostQueryRoutes() {
                         formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as ts
                     FROM `$db`.containers_latest_by_host
                     WHERE ${ClickHouseQueryUtils.orgIdClause(orgId.toLong())}
-                      AND host_id = $hostId
+                      AND host_id = ${host.internalId}
                       AND timestamp >= now64(3) - INTERVAL 10 MINUTE
                     GROUP BY container_id
                     ORDER BY max(timestamp) DESC

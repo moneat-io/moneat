@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface DdHostResponse {
-  id: number
+  id: string
   hostname: string
   os: string
   platform: string

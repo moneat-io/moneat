@@ -22,6 +22,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
 import java.util.UUID
+import kotlin.uuid.Uuid
 
 const val RETRY_COUNT_DEFAULT = 0
 const val RETRY_INTERVAL_MS_DEFAULT = 300
@@ -63,6 +64,7 @@ object SyntheticTests : Table("synthetic_tests") {
 
 object SyntheticVariables : Table("synthetic_variables") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val value = text("value").default("")
@@ -156,7 +158,7 @@ data class UpdateSyntheticTestRequest(
 @Serializable
 data class SyntheticTestResponse(
     val id: String,
-    val organizationId: Int,
+    val organizationId: String,
     val name: String,
     val testType: String,
     val active: Boolean,
@@ -233,8 +235,8 @@ data class SyntheticVariableRequest(
 
 @Serializable
 data class SyntheticVariableResponse(
-    val id: Int,
-    val organizationId: Int,
+    val id: String,
+    val organizationId: String,
     val name: String,
     val value: String,
     val isSecret: Boolean,

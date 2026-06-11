@@ -72,6 +72,7 @@ class UptimeServiceTest {
                 """
                 CREATE TABLE IF NOT EXISTS subscriptions (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     organization_id INT NOT NULL,
                     stripe_subscription_id VARCHAR(255),
                     stripe_customer_id VARCHAR(255),
@@ -455,6 +456,7 @@ class UptimeServiceTest {
         return UptimeMonitorData(
             id = UUID.randomUUID(),
             organizationId = 1,
+            organizationResourceId = "11111111-1111-4111-8111-111111111111",
             name = "test-$type",
             type = type,
             active = true,

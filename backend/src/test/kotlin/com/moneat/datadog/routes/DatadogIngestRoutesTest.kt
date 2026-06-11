@@ -71,6 +71,7 @@ class DatadogIngestRoutesTest {
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
         private const val VALID_KEY = "dd-ingest-test-key"
         private const val ORG_ID = 5
+        private const val ORG_RESOURCE_ID = "00000000-0000-0000-0000-000000000005"
 
         @JvmStatic
         @BeforeAll
@@ -193,7 +194,7 @@ class DatadogIngestRoutesTest {
     )
 
     private fun quotaUsageResponse() = BillingUsageResponse(
-        organizationId = ORG_ID,
+        organizationId = ORG_RESOURCE_ID,
         periodStart = "2026-06-01",
         periodEnd = "2026-06-30",
         retentionDays = 30,

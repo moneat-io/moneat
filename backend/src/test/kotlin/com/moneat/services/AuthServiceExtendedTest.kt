@@ -651,9 +651,19 @@ class AuthServiceExtendedTest {
         every { membershipRepository.getFirstMembershipForUser(userId) } returns
             MembershipRow(id = 1, userId = userId, organizationId = firstOrgId, role = "viewer")
         every { organizationRepository.findById(firstOrgId) } returns
-            OrganizationRow(id = firstOrgId, name = "First Org", slug = "first-org")
+            OrganizationRow(
+                id = firstOrgId,
+                resourceId = "11111111-1111-4111-8111-111111111111",
+                name = "First Org",
+                slug = "first-org"
+            )
         every { organizationRepository.findById(tokenOrgId) } returns
-            OrganizationRow(id = tokenOrgId, name = "Token Org", slug = "token-org")
+            OrganizationRow(
+                id = tokenOrgId,
+                resourceId = "22222222-2222-4222-8222-222222222222",
+                name = "Token Org",
+                slug = "token-org"
+            )
 
         val authService = AuthService(
             userRepository,
@@ -685,6 +695,7 @@ class AuthServiceExtendedTest {
         email: String
     ): UserRow = UserRow(
         id = userId,
+        resourceId = "33333333-3333-4333-8333-333333333333",
         email = email,
         passwordHash = "hash",
         name = "Refresh Context",
@@ -698,6 +709,14 @@ class AuthServiceExtendedTest {
         oauthProvider = null,
         oauthProviderId = null
     )
+
+    private fun userIdForResourceId(resourceId: String): Int =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.resource_id eq kotlin.uuid.Uuid.parse(resourceId) }
+                .single()[Users.id]
+        }
 
     private fun testAccessToken(
         userId: Int,
@@ -831,9 +850,10 @@ class AuthServiceExtendedTest {
         assertNotNull(result)
 
         // Verify user is member of the inviter's org
+        val createdUserId = userIdForResourceId(result.user.id)
         val membership = transaction {
             Memberships.selectAll()
-                .where { Memberships.user_id eq result.user.id }
+                .where { Memberships.user_id eq createdUserId }
                 .single()
         }
         assertEquals(orgId, membership[Memberships.organization_id])

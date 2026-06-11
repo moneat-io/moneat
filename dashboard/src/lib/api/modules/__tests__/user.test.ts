@@ -20,6 +20,8 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const USER_ID = '11111111-1111-4111-8111-111111111111'
+const ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222'
 
 describe('User API', () => {
   beforeEach(() => {
@@ -32,7 +34,7 @@ describe('User API', () => {
 
   it('fetches the current user', async () => {
     const mock = {
-      id: 1,
+      id: USER_ID,
       email: 'user@example.com',
       name: 'Test User',
       emailVerified: true,
@@ -52,7 +54,7 @@ describe('User API', () => {
   it('clears stale demo epoch when the current user is not demo', async () => {
     sessionStorage.setItem('demoEpochMs', '1700000000000')
     const mock = {
-      id: 1,
+      id: USER_ID,
       email: 'user@example.com',
       name: 'Test User',
       emailVerified: true,
@@ -143,7 +145,7 @@ describe('User API', () => {
   // ──── getOrganizations ────
 
   it('fetches organizations', async () => {
-    const mock = [{ id: 1, name: 'Acme Corp', slug: 'acme-corp' }]
+    const mock = [{ id: ORGANIZATION_ID, name: 'Acme Corp', slug: 'acme-corp' }]
 
     server.use(
       http.get(`${API_BASE}/v1/organizations`, () => {
@@ -158,15 +160,15 @@ describe('User API', () => {
   // ──── getOrganizationAccountSettings ────
 
   it('fetches organization account settings', async () => {
-    const mock = { id: 1, name: 'Acme Corp', slug: 'acme-corp', memberCount: 5 }
+    const mock = { id: ORGANIZATION_ID, name: 'Acme Corp', slug: 'acme-corp', memberCount: 5 }
 
     server.use(
-      http.get(`${API_BASE}/v1/organizations/1`, () => {
+      http.get(`${API_BASE}/v1/organizations/${ORGANIZATION_ID}`, () => {
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.getOrganizationAccountSettings(1)
+    const result = await api.getOrganizationAccountSettings(ORGANIZATION_ID)
     expect(result).toEqual(mock)
   })
 
@@ -191,12 +193,12 @@ describe('User API', () => {
     const mock = { canDelete: true, warnings: [] }
 
     server.use(
-      http.get(`${API_BASE}/v1/organizations/1/deletion-validation`, () => {
+      http.get(`${API_BASE}/v1/organizations/${ORGANIZATION_ID}/deletion-validation`, () => {
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.getOrganizationDeletionValidation(1)
+    const result = await api.getOrganizationDeletionValidation(ORGANIZATION_ID)
     expect(result).toEqual(mock)
   })
 
@@ -223,14 +225,14 @@ describe('User API', () => {
     const mock = { message: 'Organization deleted' }
 
     server.use(
-      http.delete(`${API_BASE}/v1/organizations/1`, async ({ request }) => {
+      http.delete(`${API_BASE}/v1/organizations/${ORGANIZATION_ID}`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.confirmation).toBe('DELETE')
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.deleteOrganization(1, 'DELETE')
+    const result = await api.deleteOrganization(ORGANIZATION_ID, 'DELETE')
     expect(result).toEqual(mock)
   })
 

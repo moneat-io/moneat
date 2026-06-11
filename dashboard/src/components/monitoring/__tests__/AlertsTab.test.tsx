@@ -28,8 +28,8 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const API_BASE = 'http://localhost:8080'
-const HOST_ID = 5
-const ALERT_ID = 10
+const HOST_ID = 'host-5'
+const ALERT_ID = 'alert-10'
 
 function alertResponse(enabled: boolean) {
   return {

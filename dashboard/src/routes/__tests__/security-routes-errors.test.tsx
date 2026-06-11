@@ -225,7 +225,7 @@ describe('security routes error states', () => {
   })
 
   it('signals detail drawer: shows an error state when the detail query fails', async () => {
-    mockApi.listSignals.mockResolvedValue({signals: [makeSignal({id: 7})], total_count: 1})
+    mockApi.listSignals.mockResolvedValue({signals: [makeSignal({id: 'signal-7'})], total_count: 1})
     mockApi.getSignal.mockRejectedValue(new Error('detail boom'))
     renderRoute(SignalsRoute)
     // Open the drawer by selecting the row.
@@ -241,7 +241,7 @@ describe('security routes error states', () => {
   })
 
   it('detections: creating a rule calls createDetectionRule and toasts success', async () => {
-    mockApi.createDetectionRule.mockResolvedValue({id: 5, name: 'Failed logins'})
+    mockApi.createDetectionRule.mockResolvedValue({id: 'rule-5', name: 'Failed logins'})
     renderRoute(DetectionsRoute)
     await screen.findByText('Detection rules')
     // Empty state and the toolbar each render a "New rule" CTA; use the toolbar (first).
@@ -260,48 +260,48 @@ describe('security routes error states', () => {
   })
 
   it('detections: toggling a rule enables it via updateDetectionRule', async () => {
-    mockApi.listDetectionRules.mockResolvedValue({rules: [makeRule({id: 3, name: 'Brute force'})], total_count: 1})
-    mockApi.updateDetectionRule.mockResolvedValue(makeRule({id: 3, enabled: true}))
+    mockApi.listDetectionRules.mockResolvedValue({rules: [makeRule({id: 'rule-3', name: 'Brute force'})], total_count: 1})
+    mockApi.updateDetectionRule.mockResolvedValue(makeRule({id: 'rule-3', enabled: true}))
     renderRoute(DetectionsRoute)
     fireEvent.click(await screen.findByRole('switch', {name: 'Toggle Brute force'}))
-    await waitFor(() => expect(mockApi.updateDetectionRule).toHaveBeenCalledWith(3, {enabled: true}))
+    await waitFor(() => expect(mockApi.updateDetectionRule).toHaveBeenCalledWith('rule-3', {enabled: true}))
   })
 
   it('detections: confirming delete calls deleteDetectionRule and toasts', async () => {
-    mockApi.listDetectionRules.mockResolvedValue({rules: [makeRule({id: 8, name: 'Brute force'})], total_count: 1})
+    mockApi.listDetectionRules.mockResolvedValue({rules: [makeRule({id: 'rule-8', name: 'Brute force'})], total_count: 1})
     mockApi.deleteDetectionRule.mockResolvedValue(undefined)
     renderRoute(DetectionsRoute)
     fireEvent.click(await screen.findByRole('button', {name: 'Delete'}))
     // Open dialog adds a second "Delete"; confirm via the alertdialog's action button.
     const dialog = await screen.findByRole('alertdialog')
     fireEvent.click(within(dialog).getByRole('button', {name: 'Delete'}))
-    await waitFor(() => expect(mockApi.deleteDetectionRule).toHaveBeenCalledWith(8))
+    await waitFor(() => expect(mockApi.deleteDetectionRule).toHaveBeenCalledWith('rule-8'))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({title: 'Rule deleted'}))
     )
   })
 
   it('detections: editing opens the form prefilled and previews against the saved id', async () => {
-    mockApi.listDetectionRules.mockResolvedValue({rules: [makeRule({id: 4, name: 'Brute force'})], total_count: 1})
-    mockApi.updateDetectionRule.mockResolvedValue(makeRule({id: 4}))
+    mockApi.listDetectionRules.mockResolvedValue({rules: [makeRule({id: 'rule-4', name: 'Brute force'})], total_count: 1})
+    mockApi.updateDetectionRule.mockResolvedValue(makeRule({id: 'rule-4'}))
     mockApi.previewDetectionRule.mockResolvedValue({match_count: 2, samples: [], window_seconds: 300})
     renderRoute(DetectionsRoute)
     fireEvent.click(await screen.findByRole('button', {name: 'Edit'}))
     expect(await screen.findByRole('button', {name: 'Save changes'})).toBeInTheDocument()
     // Preview on an already-saved rule updates then previews against its id.
     fireEvent.click(screen.getByRole('button', {name: 'Preview'}))
-    await waitFor(() => expect(mockApi.previewDetectionRule).toHaveBeenCalledWith(4))
+    await waitFor(() => expect(mockApi.previewDetectionRule).toHaveBeenCalledWith('rule-4'))
   })
 
   it('signals: triaging an open signal calls triageSignal and toasts success', async () => {
-    const signal = makeSignal({id: 7, status: 'open'})
+    const signal = makeSignal({id: 'signal-7', status: 'open'})
     mockApi.listSignals.mockResolvedValue({signals: [signal], total_count: 1})
     mockApi.getSignal.mockResolvedValue({signal, evidence: [], audit: [], sample_events: []})
-    mockApi.triageSignal.mockResolvedValue(makeSignal({id: 7, status: 'under_review'}))
+    mockApi.triageSignal.mockResolvedValue(makeSignal({id: 'signal-7', status: 'under_review'}))
     renderRoute(SignalsRoute)
     fireEvent.click(await screen.findByText('Repeated failed logins'))
     fireEvent.click(await screen.findByRole('button', {name: 'Start review'}))
-    await waitFor(() => expect(mockApi.triageSignal).toHaveBeenCalledWith(7, {status: 'under_review'}))
+    await waitFor(() => expect(mockApi.triageSignal).toHaveBeenCalledWith('signal-7', {status: 'under_review'}))
     await waitFor(() =>
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({title: 'Signal updated'}))
     )
@@ -310,7 +310,7 @@ describe('security routes error states', () => {
 
 function makeFinding() {
   return {
-    signal_id: 42,
+    signal_id: 'signal-42',
     advisory_id: 'GHSA-jf85-cpcp-j695',
     cve_id: 'CVE-2019-10744',
     package_name: 'lodash',

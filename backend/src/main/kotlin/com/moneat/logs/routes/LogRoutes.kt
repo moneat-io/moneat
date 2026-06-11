@@ -46,7 +46,9 @@ import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
 import com.moneat.plugins.getDemoEpochMs
 import com.moneat.plugins.isDemoUser
+import com.moneat.shared.models.LogIndexes
 import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
@@ -73,10 +75,15 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.pubsub.RedisPubSubAdapter
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import java.time.Instant
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -145,14 +152,14 @@ private suspend fun ApplicationCall.listOtlpApiKeys(otlpApiKeyService: OtlpApiKe
 }
 
 private suspend fun ApplicationCall.deleteOtlpApiKey(otlpApiKeyService: OtlpApiKeyService) {
-    val id = parameters["id"]?.toIntOrNull()
+    val id = parameters["id"]?.let(::parsePublicResourceId)
     if (id == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
         return
     }
 
     val organizationId = requiredOrganizationIdOrRespond() ?: return
-    val deleted = otlpApiKeyService.deleteKey(organizationId = organizationId, keyId = id)
+    val deleted = otlpApiKeyService.deleteKey(organizationId = organizationId, keyResourceId = id)
     if (!deleted) {
         respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
         return
@@ -194,7 +201,7 @@ private suspend fun ApplicationCall.upsertOtlpServiceMapping(
 private suspend fun ApplicationCall.deleteOtlpServiceMapping(
     otlpServiceRoutingService: OtlpServiceRoutingService
 ) {
-    val id = parameters["id"]?.toIntOrNull()
+    val id = parameters["id"]?.let(::parsePublicResourceId)
     if (id == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid mapping ID"))
         return
@@ -247,9 +254,14 @@ private suspend fun ApplicationCall.createLogIndex(logIndexService: LogIndexServ
 
 private suspend fun ApplicationCall.updateLogIndex(logIndexService: LogIndexService) {
     val organizationId = requiredOrganizationIdOrRespond() ?: return
-    val id = parameters["id"]?.toIntOrNull()
-    if (id == null) {
+    val resourceId = parameters["id"]?.let(::parsePublicResourceId)
+    if (resourceId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid index ID"))
+        return
+    }
+    val id = resolveLogIndexId(organizationId, resourceId)
+    if (id == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
         return
     }
     val updated = logIndexService.update(organizationId, id, receive<UpdateLogIndexRequest>())
@@ -262,9 +274,14 @@ private suspend fun ApplicationCall.updateLogIndex(logIndexService: LogIndexServ
 
 private suspend fun ApplicationCall.deleteLogIndex(logIndexService: LogIndexService) {
     val organizationId = requiredOrganizationIdOrRespond() ?: return
-    val id = parameters["id"]?.toIntOrNull()
-    if (id == null) {
+    val resourceId = parameters["id"]?.let(::parsePublicResourceId)
+    if (resourceId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid index ID"))
+        return
+    }
+    val id = resolveLogIndexId(organizationId, resourceId)
+    if (id == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Index not found"))
         return
     }
     val deleted = logIndexService.delete(organizationId, id)
@@ -585,6 +602,21 @@ private fun ApplicationCall.demoAwareLogTimeRange(): LogTimeRange {
 
 private fun ApplicationCall.requiredUserId(): Int =
     principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+
+private fun parsePublicResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
+private fun resolveLogIndexId(organizationId: Int, resourceId: Uuid): Int? =
+    transaction {
+        LogIndexes
+            .selectAll()
+            .where {
+                (LogIndexes.organizationId eq organizationId) and
+                    (LogIndexes.resource_id eq resourceId)
+            }
+            .firstOrNull()
+            ?.get(LogIndexes.id)
+    }
 
 private suspend fun ApplicationCall.requiredOrganizationIdOrRespond(): Int? {
     val organizationId = principal<JWTPrincipal>()?.currentOrgIdOrNull()

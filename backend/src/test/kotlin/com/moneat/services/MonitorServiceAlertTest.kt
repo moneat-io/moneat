@@ -42,6 +42,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 /**
  * Tests for MonitorService alert CRUD operations (createAlert, updateAlert, deleteAlert,
@@ -187,7 +188,7 @@ class MonitorServiceAlertTest {
 
         val request = CreateAlertRequest(metric = "load_1", condition = ">", threshold = 2.0)
         val alert = service.createAlert(hostId, orgId, request, ALERT_SCOPE_SYSTEM)
-        assertTrue(alert.id > 0)
+        assertEquals(alert.id, Uuid.parse(alert.id).toString())
     }
 
     // ──── listAlerts ────

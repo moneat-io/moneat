@@ -98,7 +98,7 @@ function EscalationPolicies() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({id, data}: {id: number; data: EscalationPolicyData}) => api.updateEscalationPolicy(id, {
+    mutationFn: ({id, data}: {id: string; data: EscalationPolicyData}) => api.updateEscalationPolicy(id, {
       name: data.name,
       description: data.description || undefined,
       repeatCount: data.repeatCount,
@@ -122,7 +122,7 @@ function EscalationPolicies() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteEscalationPolicy(id),
+    mutationFn: (id: string) => api.deleteEscalationPolicy(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['escalation-policies']})
       toast({title: 'Policy Deleted', description: 'Escalation policy has been removed.'})

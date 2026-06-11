@@ -49,7 +49,7 @@ import type {
 } from '../types'
 
 interface RawInfrastructureMapSavedView {
-  id: number | string
+  id: string
   name: string
   resourceKind?: InfrastructureResourceKind
   resource_kind?: InfrastructureResourceKind
@@ -72,8 +72,8 @@ interface RawInfrastructureMapSavedView {
 function mapHostAlert(row: Record<string, unknown>): HostAlert {
   const rawScope = ((row.scope as string | undefined) ?? '').toLowerCase()
   return {
-    id: row.id as number,
-    hostId: (row.hostId ?? row.host_id) as number | undefined,
+    id: row.id as string,
+    hostId: (row.hostId ?? row.host_id) as string | undefined,
     scope: rawScope === 'global' ? 'global' : 'host',
     metric: row.metric as string,
     condition: row.condition as string,
@@ -88,12 +88,12 @@ function mapHostAlert(row: Record<string, unknown>): HostAlert {
 
 function mapSilencePeriod(row: Record<string, unknown>): SilencePeriod {
   return {
-    id: row.id as number,
-    organizationId: (row.organization_id ?? row.organizationId) as number,
+    id: row.id as string,
+    organizationId: (row.organization_id ?? row.organizationId) as string,
     reason: (row.reason ?? null) as string | null,
     startsAt: (row.starts_at ?? row.startsAt) as number,
     endsAt: (row.ends_at ?? row.endsAt) as number,
-    createdBy: (row.created_by ?? row.createdBy) as number,
+    createdBy: (row.created_by ?? row.createdBy) as string,
     createdAt: (row.created_at ?? row.createdAt) as number,
   }
 }
@@ -171,23 +171,26 @@ export function monitoringMethods(core: ApiClientCore) {
     // Hosts
     getHosts: () => core.request<DdHostListResponse>(`${base}/hosts`),
 
-    getHost: (hostId: number) => core.request<DdHostResponse>(`${base}/hosts/${hostId}`),
+    getHost: (hostId: string) =>
+      core.request<DdHostResponse>(`${base}/hosts/${encodeURIComponent(hostId)}`),
 
-    deleteHost: (hostId: number) =>
-      core.request<void>(`${base}/hosts/${hostId}`, { method: 'DELETE' }),
+    deleteHost: (hostId: string) =>
+      core.request<void>(`${base}/hosts/${encodeURIComponent(hostId)}`, { method: 'DELETE' }),
 
-    getHostMetrics: (hostId: number, from?: string, to?: string) => {
+    getHostMetrics: (hostId: string, from?: string, to?: string) => {
       const params = new URLSearchParams()
       if (from) params.append('from', from)
       if (to) params.append('to', to)
       const qs = params.toString()
       return core.request<SystemMetricsHistory>(
-        urlWithQuery(`${base}/hosts/${hostId}/metrics`, qs)
+        urlWithQuery(`${base}/hosts/${encodeURIComponent(hostId)}/metrics`, qs)
       )
     },
 
-    getHostContainers: (hostId: number) =>
-      core.request<DdContainerListResponse>(`${base}/hosts/${hostId}/containers`),
+    getHostContainers: (hostId: string) =>
+      core.request<DdContainerListResponse>(
+        `${base}/hosts/${encodeURIComponent(hostId)}/containers`
+      ),
 
     // Processes
     getProcesses: (
@@ -249,7 +252,10 @@ export function monitoringMethods(core: ApiClientCore) {
     },
 
     deleteInfrastructureMapSavedView: (viewId: string) =>
-      core.request<void>(`${base}/infra/map/saved-views/${viewId}`, {method: 'DELETE'}),
+      core.request<void>(
+        `${base}/infra/map/saved-views/${encodeURIComponent(viewId)}`,
+        {method: 'DELETE'}
+      ),
 
     // Connections
     getConnections: (
@@ -275,7 +281,7 @@ export function monitoringMethods(core: ApiClientCore) {
         `${base}/agent-api-keys`
       )
       const keys = (response.keys ?? []).map((k) => ({
-        id: k.id as number,
+        id: k.id as string,
         name: k.name as string,
         keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
         createdAt: (k.createdAt ?? k.created_at) as string,
@@ -290,8 +296,8 @@ export function monitoringMethods(core: ApiClientCore) {
         body: JSON.stringify({ name }),
       }),
 
-    deleteAgentApiKey: (id: number) =>
-      core.request<void>(`${base}/agent-api-keys/${id}`, { method: 'DELETE' }),
+    deleteAgentApiKey: (id: string) =>
+      core.request<void>(`${base}/agent-api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
     // Cloud sources
     getCloudSources: () =>
@@ -310,23 +316,23 @@ export function monitoringMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    syncCloudSource: (id: number) =>
-      core.request<CloudSourceResponse>(`${base}/cloud-sources/${id}/sync`, {
+    syncCloudSource: (id: string) =>
+      core.request<CloudSourceResponse>(`${base}/cloud-sources/${encodeURIComponent(id)}/sync`, {
         method: 'POST',
       }),
 
-    deleteCloudSource: (id: number) =>
-      core.request<void>(`${base}/cloud-sources/${id}`, { method: 'DELETE' }),
+    deleteCloudSource: (id: string) =>
+      core.request<void>(`${base}/cloud-sources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
     // Monitor hosts
     getMonitorHosts: () =>
       core.request<MonitorHostResponse[]>(`${base}/monitor/hosts`),
 
-    getMonitorHost: (hostId: number) =>
-      core.request<MonitorHostResponse>(`${base}/monitor/hosts/${hostId}`),
+    getMonitorHost: (hostId: string) =>
+      core.request<MonitorHostResponse>(`${base}/monitor/hosts/${encodeURIComponent(hostId)}`),
 
     getMonitorHostMetrics: (
-      hostId: number,
+      hostId: string,
       from?: string,
       to?: string,
       interval?: string
@@ -337,13 +343,13 @@ export function monitoringMethods(core: ApiClientCore) {
       if (interval) params.append('interval', interval)
       const query = params.toString()
       return core.request<SystemMetricsHistory>(
-        urlWithQuery(`${base}/monitor/hosts/${hostId}/metrics`, query)
+        urlWithQuery(`${base}/monitor/hosts/${encodeURIComponent(hostId)}/metrics`, query)
       )
     },
 
-    getMonitorHostContainers: async (hostId: number) => {
+    getMonitorHostContainers: async (hostId: string) => {
       const response = await core.request<{ containers: RawContainerStats[] }>(
-        `${base}/monitor/hosts/${hostId}/containers`
+        `${base}/monitor/hosts/${encodeURIComponent(hostId)}/containers`
       )
       return response.containers.map((row) => ({
         name: row.name,
@@ -372,14 +378,14 @@ export function monitoringMethods(core: ApiClientCore) {
       const query = params.toString()
       return core.request<ContainerMetricsHistory>(
         urlWithQuery(
-          `${base}/monitor/systems/${systemId}/containers/${encodeURIComponent(containerName)}/metrics`,
+          `${base}/monitor/systems/${encodeURIComponent(systemId)}/containers/${encodeURIComponent(containerName)}/metrics`,
           query
         )
       )
     },
 
     // Host alerts
-    getHostAlertConfig: async (hostId: number) => {
+    getHostAlertConfig: async (hostId: string) => {
       const response = await core.request<{
         scope?: string
         globalAlerts?: Record<string, unknown>[]
@@ -390,7 +396,7 @@ export function monitoringMethods(core: ApiClientCore) {
         system_alerts?: Record<string, unknown>[]
         effectiveAlerts?: Record<string, unknown>[]
         effective_alerts?: Record<string, unknown>[]
-      }>(`${base}/monitor/hosts/${hostId}/alerts/config`)
+      }>(`${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts/config`)
       return {
         scope: response.scope === 'global' ? 'global' : 'host',
         globalAlerts: (response.globalAlerts ?? response.global_alerts ?? []).map(
@@ -409,14 +415,14 @@ export function monitoringMethods(core: ApiClientCore) {
       } as HostAlertConfig
     },
 
-    updateHostAlertScope: (hostId: number, scope: 'global' | 'host') =>
-      core.request<void>(`${base}/monitor/hosts/${hostId}/alerts/scope`, {
+    updateHostAlertScope: (hostId: string, scope: 'global' | 'host') =>
+      core.request<void>(`${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts/scope`, {
         method: 'PUT',
         body: JSON.stringify({ scope }),
       }),
 
     createHostAlert: async (
-      hostId: number,
+      hostId: string,
       alert: {
         metric: string
         condition: string
@@ -428,32 +434,32 @@ export function monitoringMethods(core: ApiClientCore) {
       scope: 'global' | 'host' = 'host'
     ) => {
       const payload = await core.request<Record<string, unknown>>(
-        `${base}/monitor/hosts/${hostId}/alerts?scope=${scope}`,
+        `${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts?scope=${scope}`,
         { method: 'POST', body: JSON.stringify(alert) }
       )
       return mapHostAlert(payload)
     },
 
     updateHostAlert: async (
-      hostId: number,
-      alertId: number,
+      hostId: string,
+      alertId: string,
       updates: Partial<HostAlert>,
       scope: 'global' | 'host' = 'host'
     ) => {
       const payload = await core.request<Record<string, unknown> | undefined>(
-        `${base}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
+        `${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts/${encodeURIComponent(alertId)}?scope=${scope}`,
         { method: 'PUT', body: JSON.stringify(updates) }
       )
       return payload === undefined ? undefined : mapHostAlert(payload)
     },
 
     deleteHostAlert: (
-      hostId: number,
-      alertId: number,
+      hostId: string,
+      alertId: string,
       scope: 'global' | 'host' = 'host'
     ) =>
       core.request<void>(
-        `${base}/monitor/hosts/${hostId}/alerts/${alertId}?scope=${scope}`,
+        `${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts/${encodeURIComponent(alertId)}?scope=${scope}`,
         { method: 'DELETE' }
       ),
 
@@ -466,16 +472,19 @@ export function monitoringMethods(core: ApiClientCore) {
       return core.request<AlertEpisode[]>(urlWithQuery(`${base}/alerts/lifecycles`, query))
     },
 
-    ignoreAlertLifecycle: (episodeId: number, reason?: string) =>
-      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${episodeId}/ignore`, {
+    ignoreAlertLifecycle: (episodeId: string, reason?: string) =>
+      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${encodeURIComponent(episodeId)}/ignore`, {
         method: 'POST',
         body: JSON.stringify(reason === undefined ? {} : {reason}),
       }),
 
-    unignoreAlertLifecycle: (episodeId: number) =>
-      core.request<AlertEpisode>(`${base}/alerts/lifecycles/${episodeId}/unignore`, {
-        method: 'POST',
-      }),
+    unignoreAlertLifecycle: (episodeId: string) =>
+      core.request<AlertEpisode>(
+        `${base}/alerts/lifecycles/${encodeURIComponent(episodeId)}/unignore`,
+        {
+          method: 'POST',
+        }
+      ),
 
     // Silence periods
     getSilencePeriods: async () => {
@@ -496,8 +505,8 @@ export function monitoringMethods(core: ApiClientCore) {
       return mapSilencePeriod(response)
     },
 
-    deleteSilencePeriod: (id: number) =>
-      core.request<void>(`${base}/monitor/silence-periods/${id}`, {
+    deleteSilencePeriod: (id: string) =>
+      core.request<void>(`${base}/monitor/silence-periods/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
   }

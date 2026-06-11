@@ -48,6 +48,7 @@ object DetectionSchemaTestSupport {
                 """
                 CREATE TABLE security_signals (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     organization_id INT NOT NULL,
                     source VARCHAR(32) NOT NULL,
                     rule_id VARCHAR(255) NOT NULL,
@@ -77,6 +78,7 @@ object DetectionSchemaTestSupport {
                 """
                 CREATE TABLE security_signal_evidence (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     signal_id INT NOT NULL,
                     evidence_type VARCHAR(32) NOT NULL,
                     reference TEXT NOT NULL,
@@ -95,6 +97,7 @@ object DetectionSchemaTestSupport {
                 """
                 CREATE TABLE detection_rules (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     organization_id INT NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
@@ -122,6 +125,7 @@ object DetectionSchemaTestSupport {
                 """
                 CREATE TABLE detection_baseline_values (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     rule_id INT NOT NULL,
                     organization_id INT NOT NULL,
                     group_key TEXT NOT NULL,

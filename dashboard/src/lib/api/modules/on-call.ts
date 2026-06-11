@@ -75,8 +75,8 @@ export function onCallMethods(core: ApiClientCore) {
     getOnCallSchedules: () =>
       core.request<OnCallSchedule[]>(`${base}/on-call/schedules`),
 
-    getOnCallSchedule: (id: number) =>
-      core.request<OnCallSchedule>(`${base}/on-call/schedules/${id}`),
+    getOnCallSchedule: (id: string) =>
+      core.request<OnCallSchedule>(`${base}/on-call/schedules/${encodeURIComponent(id)}`),
 
     createOnCallSchedule: (request: CreateOnCallScheduleRequest) =>
       core.request<OnCallSchedule>(`${base}/on-call/schedules`, {
@@ -85,46 +85,46 @@ export function onCallMethods(core: ApiClientCore) {
       }),
 
     updateOnCallSchedule: (
-      id: number,
+      id: string,
       request: UpdateOnCallScheduleRequest
     ) =>
-      core.request<OnCallSchedule>(`${base}/on-call/schedules/${id}`, {
+      core.request<OnCallSchedule>(`${base}/on-call/schedules/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteOnCallSchedule: (id: number) =>
-      core.request<void>(`${base}/on-call/schedules/${id}`, {
+    deleteOnCallSchedule: (id: string) =>
+      core.request<void>(`${base}/on-call/schedules/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
 
-    getCurrentOnCall: (scheduleId: number) =>
-      core.request<{ userId: number; userName: string }>(
-        `${base}/on-call/schedules/${scheduleId}/current`
+    getCurrentOnCall: (scheduleId: string) =>
+      core.request<{ userId: string; userName: string }>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/current`
       ),
 
     createOverride: (
-      scheduleId: number,
+      scheduleId: string,
       request: CreateOverrideRequest
     ) =>
       core.request<OnCallOverride>(
-        `${base}/on-call/schedules/${scheduleId}/overrides`,
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/overrides`,
         {
           method: 'POST',
           body: JSON.stringify(request),
         }
       ),
 
-    deleteOverride: (overrideId: number) =>
-      core.request<void>(`${base}/on-call/overrides/${overrideId}`, {
+    deleteOverride: (overrideId: string) =>
+      core.request<void>(`${base}/on-call/overrides/${encodeURIComponent(overrideId)}`, {
         method: 'DELETE',
       }),
 
     getEscalationPolicies: () =>
       core.request<EscalationPolicy[]>(`${base}/escalation-policies`),
 
-    getEscalationPolicy: (id: number) =>
-      core.request<EscalationPolicy>(`${base}/escalation-policies/${id}`),
+    getEscalationPolicy: (id: string) =>
+      core.request<EscalationPolicy>(`${base}/escalation-policies/${encodeURIComponent(id)}`),
 
     createEscalationPolicy: (
       request: CreateEscalationPolicyRequest
@@ -135,16 +135,16 @@ export function onCallMethods(core: ApiClientCore) {
       }),
 
     updateEscalationPolicy: (
-      id: number,
+      id: string,
       request: UpdateEscalationPolicyRequest
     ) =>
-      core.request<EscalationPolicy>(`${base}/escalation-policies/${id}`, {
+      core.request<EscalationPolicy>(`${base}/escalation-policies/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteEscalationPolicy: (id: number) =>
-      core.request<void>(`${base}/escalation-policies/${id}`, {
+    deleteEscalationPolicy: (id: string) =>
+      core.request<void>(`${base}/escalation-policies/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
 
@@ -160,41 +160,43 @@ export function onCallMethods(core: ApiClientCore) {
       )
     },
 
-    getIncident: (id: number) =>
-      core.request<IncidentDetail>(`${base}/on-call/alerts/${id}`),
+    getIncident: (id: string) =>
+      core.request<IncidentDetail>(`${base}/on-call/alerts/${encodeURIComponent(id)}`),
 
-    getIncidentTimeline: (id: number) =>
-      core.request<IncidentTimeline[]>(`${base}/on-call/alerts/${id}/timeline`),
+    getIncidentTimeline: (id: string) =>
+      core.request<IncidentTimeline[]>(
+        `${base}/on-call/alerts/${encodeURIComponent(id)}/timeline`
+      ),
 
-    acknowledgeIncident: (id: number) =>
-      core.request<Incident>(`${base}/on-call/alerts/${id}/acknowledge`, {
+    acknowledgeIncident: (id: string) =>
+      core.request<Incident>(`${base}/on-call/alerts/${encodeURIComponent(id)}/acknowledge`, {
         method: 'POST',
       }),
 
-    resolveIncident: (id: number) =>
-      core.request<Incident>(`${base}/on-call/alerts/${id}/resolve`, {
+    resolveIncident: (id: string) =>
+      core.request<Incident>(`${base}/on-call/alerts/${encodeURIComponent(id)}/resolve`, {
         method: 'POST',
       }),
 
-    reassignIncident: (id: number, toUserId: number) =>
-      core.request<Incident>(`${base}/on-call/alerts/${id}/reassign`, {
+    reassignIncident: (id: string, toUserId: string) =>
+      core.request<Incident>(`${base}/on-call/alerts/${encodeURIComponent(id)}/reassign`, {
         method: 'POST',
         body: JSON.stringify({ toUserId }),
       }),
 
-    addIncidentNote: (id: number, note: string) =>
-      core.request<IncidentTimeline>(`${base}/on-call/alerts/${id}/notes`, {
+    addIncidentNote: (id: string, note: string) =>
+      core.request<IncidentTimeline>(`${base}/on-call/alerts/${encodeURIComponent(id)}/notes`, {
         method: 'POST',
         body: JSON.stringify({ note }),
       }),
 
-    viewIncident: (id: number) =>
-      core.request<void>(`${base}/on-call/alerts/${id}/view`, {
+    viewIncident: (id: string) =>
+      core.request<void>(`${base}/on-call/alerts/${encodeURIComponent(id)}/view`, {
         method: 'POST',
       }),
 
-    markUnavailable: (id: number) =>
-      core.request<void>(`${base}/on-call/alerts/${id}/unavailable`, {
+    markUnavailable: (id: string) =>
+      core.request<void>(`${base}/on-call/alerts/${encodeURIComponent(id)}/unavailable`, {
         method: 'POST',
       }),
 
@@ -210,13 +212,16 @@ export function onCallMethods(core: ApiClientCore) {
       }),
 
     declareIncident: (
-      alertId: number,
+      alertId: string,
       data: { title: string; description: string; severity: string }
     ) =>
-      core.request<{ id: number }>(`${base}/on-call/alerts/${alertId}/declare-incident`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
+      core.request<{ id: string }>(
+        `${base}/on-call/alerts/${encodeURIComponent(alertId)}/declare-incident`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }
+      ),
 
     getOnCallIncidents: (
       filters: { status?: string; severity?: string } = {}
@@ -229,23 +234,23 @@ export function onCallMethods(core: ApiClientCore) {
       )
     },
 
-    getOnCallIncident: (id: number) =>
-      core.request<OnCallIncidentDetail>(`${base}/on-call/incidents/${id}`),
+    getOnCallIncident: (id: string) =>
+      core.request<OnCallIncidentDetail>(`${base}/on-call/incidents/${encodeURIComponent(id)}`),
 
-    resolveOnCallIncident: (id: number, note?: string) =>
-      core.request<OnCallIncident>(`${base}/on-call/incidents/${id}/resolve`, {
+    resolveOnCallIncident: (id: string, note?: string) =>
+      core.request<OnCallIncident>(`${base}/on-call/incidents/${encodeURIComponent(id)}/resolve`, {
         method: 'POST',
         body: JSON.stringify({ note }),
       }),
 
-    getOnCallIncidentTimeline: (id: number) =>
+    getOnCallIncidentTimeline: (id: string) =>
       core.request<IncidentTimeline[]>(
-        `${base}/on-call/incidents/${id}/timeline`
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline`
       ),
 
-    addOnCallIncidentNote: (id: number, note: string) =>
+    addOnCallIncidentNote: (id: string, note: string) =>
       core.request<{ message: string }>(
-        `${base}/on-call/incidents/${id}/notes`,
+        `${base}/on-call/incidents/${encodeURIComponent(id)}/notes`,
         {
           method: 'POST',
           body: JSON.stringify({ note }),

@@ -20,6 +20,10 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const MEMBER_ID = '11111111-1111-4111-8111-111111111111'
+const INVITATION_ID_MEMBER = '22222222-2222-4222-8222-222222222222'
+const INVITATION_ID_ADMIN = '33333333-3333-4333-8333-333333333333'
+const INVITATION_ID_ACTION = '44444444-4444-4444-8444-444444444444'
 
 describe('Org Members API', () => {
   beforeEach(() => {
@@ -32,7 +36,7 @@ describe('Org Members API', () => {
 
   it('fetches org members', async () => {
     const mockResponse = {
-      members: [{ id: 1, email: 'user@example.com', role: 'admin' }],
+      members: [{ id: MEMBER_ID, email: 'user@example.com', role: 'admin' }],
       invitations: [],
     }
 
@@ -49,7 +53,7 @@ describe('Org Members API', () => {
   // ──── inviteMember ────
 
   it('invites a member with default role', async () => {
-    const mockInvitation = { id: 1, email: 'new@example.com', role: 'member' }
+    const mockInvitation = { id: INVITATION_ID_MEMBER, email: 'new@example.com', role: 'member' }
 
     server.use(
       http.post(`${API_BASE}/v1/org/invitations`, async ({ request }) => {
@@ -65,7 +69,7 @@ describe('Org Members API', () => {
   })
 
   it('invites a member with explicit role', async () => {
-    const mockInvitation = { id: 2, email: 'admin@example.com', role: 'admin' }
+    const mockInvitation = { id: INVITATION_ID_ADMIN, email: 'admin@example.com', role: 'admin' }
 
     server.use(
       http.post(`${API_BASE}/v1/org/invitations`, async ({ request }) => {
@@ -102,14 +106,14 @@ describe('Org Members API', () => {
 
   it('updates a member role', async () => {
     server.use(
-      http.put(`${API_BASE}/v1/org/members/42/role`, async ({ request }) => {
+      http.put(`${API_BASE}/v1/org/members/${MEMBER_ID}/role`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.role).toBe('admin')
         return HttpResponse.json({ success: true })
       })
     )
 
-    const result = await api.updateMemberRole(42, 'admin')
+    const result = await api.updateMemberRole(MEMBER_ID, 'admin')
     expect(result.success).toBe(true)
   })
 
@@ -117,12 +121,12 @@ describe('Org Members API', () => {
 
   it('removes a member', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/org/members/42`, () => {
+      http.delete(`${API_BASE}/v1/org/members/${MEMBER_ID}`, () => {
         return HttpResponse.json({ success: true })
       })
     )
 
-    const result = await api.removeMember(42)
+    const result = await api.removeMember(MEMBER_ID)
     expect(result.success).toBe(true)
   })
 
@@ -130,12 +134,12 @@ describe('Org Members API', () => {
 
   it('revokes an invitation', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/org/invitations/10`, () => {
+      http.delete(`${API_BASE}/v1/org/invitations/${INVITATION_ID_ACTION}`, () => {
         return HttpResponse.json({ success: true })
       })
     )
 
-    const result = await api.revokeInvitation(10)
+    const result = await api.revokeInvitation(INVITATION_ID_ACTION)
     expect(result.success).toBe(true)
   })
 
@@ -143,12 +147,12 @@ describe('Org Members API', () => {
 
   it('resends an invitation', async () => {
     server.use(
-      http.post(`${API_BASE}/v1/org/invitations/10/resend`, () => {
+      http.post(`${API_BASE}/v1/org/invitations/${INVITATION_ID_ACTION}/resend`, () => {
         return HttpResponse.json({ success: true })
       })
     )
 
-    const result = await api.resendInvitation(10)
+    const result = await api.resendInvitation(INVITATION_ID_ACTION)
     expect(result.success).toBe(true)
   })
 

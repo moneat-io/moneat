@@ -1222,7 +1222,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
   })
 
   const verifyDomainMutation = useMutation({
-    mutationFn: (domainId: number) => api.verifyCustomDomain(pageId, domainId),
+    mutationFn: (domainId: string) => api.verifyCustomDomain(pageId, domainId),
     onSuccess: (domain) => {
       queryClient.invalidateQueries({queryKey: ['status-page', pageId]})
       toast({
@@ -1234,7 +1234,7 @@ function DomainsTab({pageId, statusPage}: {pageId: string; statusPage: StatusPag
   })
 
   const removeDomainMutation = useMutation({
-    mutationFn: (domainId: number) => api.removeCustomDomain(pageId, domainId),
+    mutationFn: (domainId: string) => api.removeCustomDomain(pageId, domainId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['status-page', pageId]})
       toast({title: 'Domain removed'})

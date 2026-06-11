@@ -6,8 +6,10 @@ package com.moneat.enterprise.oncall.services
 
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.oncall.alertResourceId
 import com.moneat.enterprise.oncall.models.UserDeviceToken
 import com.moneat.enterprise.oncall.models.UserDeviceTokens
+import com.moneat.enterprise.oncall.userResourceId
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -89,10 +91,11 @@ class PushNotificationService {
         val tokens = getUserDeviceTokens(userId)
 
         if (tokens.isEmpty()) {
-            logger.info("No device tokens found for user $userId — push notification skipped for alert $alertId")
+            logger.info("No device tokens found for user $userId - push notification skipped for alert $alertId")
             return
         }
 
+        val alertResourceId = transaction { alertResourceId(alertId) }
         val isCritical = AlertPriority.fromString(priority) in setOf(AlertPriority.P0, AlertPriority.P1)
         val channelId = if (isCritical) "critical" else "default"
         val interruptionLevel = if (isCritical) "critical" else null
@@ -106,7 +109,7 @@ class PushNotificationService {
                     data =
                         mapOf(
                             "type" to payloadType,
-                            idKey to alertId.toString(),
+                            idKey to alertResourceId,
                             "priority" to priority,
                         ),
                     channelId = channelId,
@@ -347,20 +350,28 @@ class PushNotificationService {
 
     fun getUserDevices(userId: Int): List<UserDeviceToken> =
         transaction {
-            UserDeviceTokens
+            val rows = UserDeviceTokens
                 .selectAll()
                 .where { UserDeviceTokens.userId eq userId }
                 .orderBy(UserDeviceTokens.lastUsedAt to SortOrder.DESC)
-                .map { row ->
+                .toList()
+            if (rows.isEmpty()) {
+                emptyList()
+            } else {
+                val userResourceId = userResourceId(userId)
+                rows.map { row ->
                     UserDeviceToken(
-                        id = row[UserDeviceTokens.id].value,
-                        userId = row[UserDeviceTokens.userId],
+                        id = row[UserDeviceTokens.resourceId].toString(),
+                        userResourceId = userResourceId,
                         deviceToken = row[UserDeviceTokens.deviceToken],
                         platform = row[UserDeviceTokens.platform],
                         deviceName = row[UserDeviceTokens.deviceName],
                         createdAt = row[UserDeviceTokens.createdAt].toString(),
                         lastUsedAt = row[UserDeviceTokens.lastUsedAt].toString(),
+                        internalId = row[UserDeviceTokens.id].value,
+                        userId = row[UserDeviceTokens.userId],
                     )
                 }
+            }
         }
 }

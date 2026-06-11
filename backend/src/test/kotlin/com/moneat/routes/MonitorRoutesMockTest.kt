@@ -70,6 +70,9 @@ import kotlin.time.Clock
 class MonitorRoutesMockTest {
     companion object {
         private var dbInitialized = false
+
+        private fun resourceId(id: Int): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
     }
 
     private val mockMonitorService = mockk<MonitorService>(relaxed = true)
@@ -158,6 +161,12 @@ class MonitorRoutesMockTest {
         )
     }
 
+    private fun hostPath(system: HostData): String =
+        system.resourceId.toString()
+
+    private fun alertPath(id: Int): String =
+        resourceId(id)
+
     // ──── GET /systems ────
 
     @Test
@@ -199,7 +208,7 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             coEvery { mockMonitorService.getLatestMetrics(system.id) } returns null
 
             application {
@@ -213,7 +222,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.get("/v1/monitor/hosts/${system.id}") {
+            val response = client.get("/v1/monitor/hosts/${hostPath(system)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -226,9 +235,9 @@ class MonitorRoutesMockTest {
             val userId = seedUser()
             val orgId = seedOrg()
             seedMembership(userId, orgId)
-            val systemId = 999_999
+            val systemId = resourceId(999_999)
 
-            every { mockMonitorService.getHostById(systemId) } returns null
+            every { mockMonitorService.getHostByResourceId(any(), any()) } returns null
 
             application {
                 installAuth()
@@ -257,7 +266,7 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             coEvery { mockMonitorService.deleteHost(system.id, orgId) } returns true
 
             application {
@@ -271,7 +280,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.delete("/v1/monitor/hosts/${system.id}") {
+            val response = client.delete("/v1/monitor/hosts/${hostPath(system)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
@@ -294,7 +303,7 @@ class MonitorRoutesMockTest {
                 dataPoints = emptyList()
             )
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             coEvery { mockMonitorService.getHistoricalMetrics(system.id, 1000L, 2000L, null) } returns metricsResponse
 
             application {
@@ -308,7 +317,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.get("/v1/monitor/hosts/${system.id}/metrics?from=1000&to=2000") {
+            val response = client.get("/v1/monitor/hosts/${hostPath(system)}/metrics?from=1000&to=2000") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -336,7 +345,7 @@ class MonitorRoutesMockTest {
                 memPercent = 0.2f
             )
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             coEvery { mockMonitorService.getLatestContainers(system.id) } returns listOf(container)
 
             application {
@@ -350,7 +359,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.get("/v1/monitor/hosts/${system.id}/containers") {
+            val response = client.get("/v1/monitor/hosts/${hostPath(system)}/containers") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -368,7 +377,7 @@ class MonitorRoutesMockTest {
             val system = makeHostData(orgId)
             val logResponse = LogQueryResponse(logs = emptyList(), hasMore = false, totalCount = 0L)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             coEvery { mockLogService.queryLogs(orgId.toLong(), any()) } returns logResponse
 
             application {
@@ -382,7 +391,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.get("/v1/monitor/hosts/${system.id}/logs") {
+            val response = client.get("/v1/monitor/hosts/${hostPath(system)}/logs") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -398,7 +407,7 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
             val alert = AlertResponse(
-                id = 1,
+                id = resourceId(1),
                 systemId = system.id.toString(),
                 scope = "host",
                 metric = "cpu_percent",
@@ -410,7 +419,7 @@ class MonitorRoutesMockTest {
                 createdAt = System.currentTimeMillis()
             )
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             every { mockMonitorService.listAlerts(system.id, orgId) } returns listOf(alert)
 
             application {
@@ -424,7 +433,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.get("/v1/monitor/hosts/${system.id}/alerts") {
+            val response = client.get("/v1/monitor/hosts/${hostPath(system)}/alerts") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -447,7 +456,7 @@ class MonitorRoutesMockTest {
                 effectiveAlerts = emptyList()
             )
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             every { mockMonitorService.getAlertConfig(system.id, orgId) } returns config
 
             application {
@@ -461,7 +470,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.get("/v1/monitor/hosts/${system.id}/alerts/config") {
+            val response = client.get("/v1/monitor/hosts/${hostPath(system)}/alerts/config") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -504,7 +513,7 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             every { mockMonitorService.updateAlertScope(system.id, orgId, "host") } returns true
 
             application {
@@ -518,7 +527,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.put("/v1/monitor/hosts/${system.id}/alerts/scope") {
+            val response = client.put("/v1/monitor/hosts/${hostPath(system)}/alerts/scope") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"scope":"host"}""")
@@ -534,7 +543,7 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
 
             application {
                 installAuth()
@@ -547,7 +556,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.put("/v1/monitor/hosts/${system.id}/alerts/scope") {
+            val response = client.put("/v1/monitor/hosts/${hostPath(system)}/alerts/scope") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"scope":"invalid"}""")
@@ -565,7 +574,7 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
             val alert = AlertResponse(
-                id = 1,
+                id = resourceId(1),
                 systemId = system.id.toString(),
                 scope = "host",
                 metric = "mem_percent",
@@ -577,7 +586,7 @@ class MonitorRoutesMockTest {
                 createdAt = System.currentTimeMillis()
             )
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             every { mockMonitorService.createAlert(system.id, orgId, any(), "host") } returns alert
 
             application {
@@ -591,7 +600,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.post("/v1/monitor/hosts/${system.id}/alerts") {
+            val response = client.post("/v1/monitor/hosts/${hostPath(system)}/alerts") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"metric":"mem_percent","condition":"gt","threshold":80.0,"duration_seconds":60}""")
@@ -610,7 +619,8 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+            every { mockMonitorService.resolveAlertId(any(), system.id, orgId, "host") } returns 1
             every { mockMonitorService.updateAlert(1, system.id, orgId, any(), "host") } returns true
 
             application {
@@ -624,7 +634,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.put("/v1/monitor/hosts/${system.id}/alerts/1") {
+            val response = client.put("/v1/monitor/hosts/${hostPath(system)}/alerts/${alertPath(1)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"enabled":false}""")
@@ -640,7 +650,8 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+            every { mockMonitorService.resolveAlertId(any(), system.id, orgId, "host") } returns 99
             every { mockMonitorService.updateAlert(99, system.id, orgId, any(), "host") } returns false
 
             application {
@@ -654,7 +665,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.put("/v1/monitor/hosts/${system.id}/alerts/99") {
+            val response = client.put("/v1/monitor/hosts/${hostPath(system)}/alerts/${alertPath(99)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"enabled":false}""")
@@ -672,7 +683,8 @@ class MonitorRoutesMockTest {
             seedMembership(userId, orgId)
             val system = makeHostData(orgId)
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
+            every { mockMonitorService.resolveAlertId(any(), system.id, orgId, "host") } returns 1
             every { mockMonitorService.deleteAlert(1, system.id, orgId, "host") } returns true
 
             application {
@@ -686,7 +698,7 @@ class MonitorRoutesMockTest {
                 }
             }
 
-            val response = client.delete("/v1/monitor/hosts/${system.id}/alerts/1") {
+            val response = client.delete("/v1/monitor/hosts/${hostPath(system)}/alerts/${alertPath(1)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }
             assertEquals(HttpStatusCode.NoContent, response.status)
@@ -709,7 +721,7 @@ class MonitorRoutesMockTest {
                 dataPoints = emptyList()
             )
 
-            every { mockMonitorService.getHostById(system.id) } returns system
+            every { mockMonitorService.getHostByResourceId(system.resourceId, any()) } returns system
             coEvery {
                 mockMonitorService.getContainerHistoricalMetrics(system.id, "my-container", 1000L, 2000L, null)
             } returns containerMetrics
@@ -726,7 +738,7 @@ class MonitorRoutesMockTest {
             }
 
             val response = client.get(
-                "/v1/monitor/hosts/${system.id}/containers/my-container/metrics?from=1000&to=2000"
+                "/v1/monitor/hosts/${hostPath(system)}/containers/my-container/metrics?from=1000&to=2000"
             ) {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
             }

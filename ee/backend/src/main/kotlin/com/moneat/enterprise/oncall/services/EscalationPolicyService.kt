@@ -4,6 +4,10 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.enterprise.oncall.organizationResourceId
+import com.moneat.enterprise.oncall.requireValue
+import com.moneat.enterprise.oncall.scheduleResourceIds
+import com.moneat.enterprise.oncall.userResourceIds
 import com.moneat.enterprise.oncall.models.EscalationPolicy
 import com.moneat.enterprise.oncall.models.EscalationStep
 import com.moneat.enterprise.oncall.models.EscalationStepTarget
@@ -12,6 +16,8 @@ import com.moneat.enterprise.oncall.models.EscalationSteps
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.resolveScopedIntResourceId
+import com.moneat.shared.services.toUuidOrNull
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
@@ -22,8 +28,26 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
+
+private const val TARGET_TYPE_USER = "USER"
+private const val TARGET_TYPE_ON_CALL_SCHEDULE = "ON_CALL_SCHEDULE"
 
 class EscalationPolicyService {
+    fun resolveEscalationPolicyId(
+        organizationId: Int,
+        policyResourceId: String
+    ): Int? =
+        parseResourceId(policyResourceId)?.let { resourceId ->
+            resolveScopedIntResourceId(
+                table = EscalationPolicies,
+                resourceIdColumn = EscalationPolicies.resourceId,
+                scopeColumn = EscalationPolicies.organizationId,
+                scopeId = organizationId,
+                resourceId = resourceId,
+            )
+        }
+
     fun getPolicy(policyId: Int): EscalationPolicy? =
         transaction {
             val policyRow =
@@ -42,66 +66,98 @@ class EscalationPolicyService {
                         val targets = getStepTargets(stepId)
 
                         EscalationStep(
-                            id = stepId,
+                            id = stepRow[EscalationSteps.resourceId].toString(),
                             stepOrder = stepRow[EscalationSteps.stepOrder],
                             timeoutMinutes = stepRow[EscalationSteps.timeoutMinutes],
                             smsFallbackDelayMinutes = stepRow[EscalationSteps.smsFallbackDelayMinutes],
                             targets = targets,
                             createdAt = stepRow[EscalationSteps.createdAt].toString(),
+                            internalId = stepId,
                         )
                     }
 
             EscalationPolicy(
-                id = policyRow[EscalationPolicies.id].value,
-                organizationId = policyRow[EscalationPolicies.organizationId],
+                id = policyRow[EscalationPolicies.resourceId].toString(),
+                organizationResourceId = organizationResourceId(policyRow[EscalationPolicies.organizationId]),
                 name = policyRow[EscalationPolicies.name],
                 description = policyRow[EscalationPolicies.description],
                 repeatCount = policyRow[EscalationPolicies.repeatCount],
                 steps = steps,
                 createdAt = policyRow[EscalationPolicies.createdAt].toString(),
                 updatedAt = policyRow[EscalationPolicies.updatedAt].toString(),
+                internalId = policyRow[EscalationPolicies.id].value,
+                organizationId = policyRow[EscalationPolicies.organizationId],
             )
         }
 
+    private fun parseResourceId(resourceId: String): Uuid? =
+        resourceId.toUuidOrNull()
+
     private fun getStepTargets(stepId: Int): List<EscalationStepTarget> =
         transaction {
-            EscalationStepTargets
+            val rows = EscalationStepTargets
                 .selectAll()
                 .where { EscalationStepTargets.escalationStepId eq stepId }
-                .map { row ->
-                    val targetType = row[EscalationStepTargets.targetType]
-                    val targetId = row[EscalationStepTargets.targetId]
+                .toList()
 
-                    val targetName =
-                        when (targetType) {
-                            "USER" -> {
-                                Users
-                                    .selectAll()
-                                    .where { Users.id eq targetId }
-                                    .singleOrNull()
-                                    ?.get(Users.name)
-                            }
+            val userIds = rows
+                .filter { it[EscalationStepTargets.targetType] == TARGET_TYPE_USER }
+                .map { it[EscalationStepTargets.targetId] }
+                .distinct()
+            val scheduleIds = rows
+                .filter { it[EscalationStepTargets.targetType] == TARGET_TYPE_ON_CALL_SCHEDULE }
+                .map { it[EscalationStepTargets.targetId] }
+                .distinct()
+            val userTargetResourceIds = userResourceIds(userIds)
+            val scheduleTargetResourceIds = scheduleResourceIds(scheduleIds)
+            val userNames =
+                if (userIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    Users
+                        .selectAll()
+                        .where { Users.id inList userIds }
+                        .associate { it[Users.id] to it[Users.name] }
+                }
+            val scheduleNames =
+                if (scheduleIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    OnCallSchedules
+                        .selectAll()
+                        .where { OnCallSchedules.id inList scheduleIds }
+                        .associate { it[OnCallSchedules.id].value to it[OnCallSchedules.name] }
+                }
 
-                            "ON_CALL_SCHEDULE" -> {
-                                OnCallSchedules
-                                    .selectAll()
-                                    .where { OnCallSchedules.id eq targetId }
-                                    .singleOrNull()
-                                    ?.get(OnCallSchedules.name)
-                            }
+            rows.map { row ->
+                val targetType = row[EscalationStepTargets.targetType]
+                val targetId = row[EscalationStepTargets.targetId]
 
-                            else -> {
-                                null
-                            }
+                val targetName =
+                    when (targetType) {
+                        TARGET_TYPE_USER -> userNames[targetId]
+                        TARGET_TYPE_ON_CALL_SCHEDULE -> scheduleNames[targetId]
+                        else -> null
+                    }
+                val targetResourceId =
+                    when (targetType) {
+                        TARGET_TYPE_USER -> userTargetResourceIds.requireValue(targetId, "user")
+                        TARGET_TYPE_ON_CALL_SCHEDULE -> {
+                            scheduleTargetResourceIds.requireValue(targetId, "on-call schedule")
                         }
 
-                    EscalationStepTarget(
-                        id = row[EscalationStepTargets.id].value,
-                        targetType = targetType,
-                        targetId = targetId,
-                        targetName = targetName,
-                    )
-                }
+                        else -> error("Unsupported escalation target type $targetType for internal id $targetId")
+                    }
+
+                EscalationStepTarget(
+                    id = row[EscalationStepTargets.resourceId].toString(),
+                    targetType = targetType,
+                    targetResourceId = targetResourceId,
+                    targetName = targetName,
+                    internalId = row[EscalationStepTargets.id].value,
+                    targetId = targetId,
+                )
+            }
         }
 
     fun listPolicies(organizationId: Int): List<EscalationPolicy> =
@@ -142,15 +198,19 @@ class EscalationPolicyService {
             // Get all unique user and schedule IDs from targets
             val userIds =
                 allTargets
-                    .filter { it[EscalationStepTargets.targetType] == "USER" }
+                    .filter { it[EscalationStepTargets.targetType] == TARGET_TYPE_USER }
                     .map { it[EscalationStepTargets.targetId] }
                     .distinct()
 
             val scheduleIds =
                 allTargets
-                    .filter { it[EscalationStepTargets.targetType] == "ON_CALL_SCHEDULE" }
+                    .filter { it[EscalationStepTargets.targetType] == TARGET_TYPE_ON_CALL_SCHEDULE }
                     .map { it[EscalationStepTargets.targetId] }
                     .distinct()
+
+            val orgResourceId = organizationResourceId(organizationId)
+            val userTargetResourceIds = userResourceIds(userIds)
+            val scheduleTargetResourceIds = scheduleResourceIds(scheduleIds)
 
             // Fetch all users and schedules in bulk
             val users: Map<Int, String?> =
@@ -191,37 +251,53 @@ class EscalationPolicyService {
                                 val targetId = targetRow[EscalationStepTargets.targetId]
                                 val targetName =
                                     when (targetType) {
-                                        "USER" -> users[targetId]
-                                        "ON_CALL_SCHEDULE" -> schedules[targetId]
+                                        TARGET_TYPE_USER -> users[targetId]
+                                        TARGET_TYPE_ON_CALL_SCHEDULE -> schedules[targetId]
                                         else -> null
                                     }
+                                val targetResourceId =
+                                    when (targetType) {
+                                        TARGET_TYPE_USER -> userTargetResourceIds.requireValue(targetId, "user")
+                                        TARGET_TYPE_ON_CALL_SCHEDULE -> {
+                                            scheduleTargetResourceIds.requireValue(targetId, "on-call schedule")
+                                        }
+
+                                        else -> error(
+                                            "Unsupported escalation target type $targetType for internal id $targetId"
+                                        )
+                                    }
                                 EscalationStepTarget(
-                                    id = targetRow[EscalationStepTargets.id].value,
+                                    id = targetRow[EscalationStepTargets.resourceId].toString(),
                                     targetType = targetType,
-                                    targetId = targetId,
+                                    targetResourceId = targetResourceId,
                                     targetName = targetName,
+                                    internalId = targetRow[EscalationStepTargets.id].value,
+                                    targetId = targetId,
                                 )
                             } ?: emptyList()
 
                         EscalationStep(
-                            id = stepId,
+                            id = stepRow[EscalationSteps.resourceId].toString(),
                             stepOrder = stepRow[EscalationSteps.stepOrder],
                             timeoutMinutes = stepRow[EscalationSteps.timeoutMinutes],
                             smsFallbackDelayMinutes = stepRow[EscalationSteps.smsFallbackDelayMinutes],
                             targets = targets,
                             createdAt = stepRow[EscalationSteps.createdAt].toString(),
+                            internalId = stepId,
                         )
                     } ?: emptyList()
 
                 EscalationPolicy(
-                    id = policyId,
-                    organizationId = policyRow[EscalationPolicies.organizationId],
+                    id = policyRow[EscalationPolicies.resourceId].toString(),
+                    organizationResourceId = orgResourceId,
                     name = policyRow[EscalationPolicies.name],
                     description = policyRow[EscalationPolicies.description],
                     repeatCount = policyRow[EscalationPolicies.repeatCount],
                     steps = steps,
                     createdAt = policyRow[EscalationPolicies.createdAt].toString(),
                     updatedAt = policyRow[EscalationPolicies.updatedAt].toString(),
+                    internalId = policyId,
+                    organizationId = policyRow[EscalationPolicies.organizationId],
                 )
             }
         }

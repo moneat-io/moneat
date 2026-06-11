@@ -8,6 +8,8 @@ import com.moneat.enterprise.workflows.crypto.ConnectionCredentialCipher
 import com.moneat.enterprise.workflows.models.ConnectionSelectionRule
 import com.moneat.enterprise.workflows.models.WorkflowConnectionGroups
 import com.moneat.enterprise.workflows.models.WorkflowConnections
+import com.moneat.shared.services.resolveScopedIntResourceId
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.workflows.WorkflowConnectionGroupSummary
 import com.moneat.workflows.WorkflowConnectionReference
 import com.moneat.workflows.WorkflowConnectionSummary
@@ -27,6 +29,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val UNIQUE_VIOLATION_SQL_STATE = "23505"
 private const val LAST_FOUR_LENGTH = 4
@@ -56,6 +59,20 @@ class ConnectionVaultService(
 
     override suspend fun getConnection(organizationId: Int, connectionId: Int): WorkflowConnectionSummary? =
         transaction { findConnectionRow(organizationId, connectionId)?.toConnectionSummary() }
+
+    override suspend fun resolveConnectionId(
+        organizationId: Int,
+        connectionResourceId: String
+    ): Int? =
+        parseResourceId(connectionResourceId)?.let { resourceId ->
+            resolveScopedIntResourceId(
+                table = WorkflowConnections,
+                resourceIdColumn = WorkflowConnections.resourceId,
+                scopeColumn = WorkflowConnections.organizationId,
+                scopeId = organizationId,
+                resourceId = resourceId,
+            )
+        }
 
     override suspend fun createConnection(
         organizationId: Int,
@@ -132,6 +149,20 @@ class ConnectionVaultService(
                 .selectAll()
                 .where { WorkflowConnectionGroups.organizationId eq organizationId }
                 .map { it.toGroupSummary() }
+        }
+
+    override suspend fun resolveGroupId(
+        organizationId: Int,
+        groupResourceId: String
+    ): Int? =
+        parseResourceId(groupResourceId)?.let { resourceId ->
+            resolveScopedIntResourceId(
+                table = WorkflowConnectionGroups,
+                resourceIdColumn = WorkflowConnectionGroups.resourceId,
+                scopeColumn = WorkflowConnectionGroups.organizationId,
+                scopeId = organizationId,
+                resourceId = resourceId,
+            )
         }
 
     override suspend fun createGroup(
@@ -213,6 +244,7 @@ class ConnectionVaultService(
             findConnectionRow(organizationId, connectionId)?.let { row ->
                 WorkflowResolvedConnection(
                     connectionId = row[WorkflowConnections.id].value,
+                    resourceId = row[WorkflowConnections.resourceId].toString(),
                     type = row[WorkflowConnections.type],
                     secret = cipher.decrypt(row[WorkflowConnections.encryptedCredentials], organizationId)
                 )
@@ -264,6 +296,7 @@ class ConnectionVaultService(
     private fun ResultRow.toConnectionSummary(): WorkflowConnectionSummary =
         WorkflowConnectionSummary(
             id = this[WorkflowConnections.id].value,
+            resourceId = this[WorkflowConnections.resourceId].toString(),
             organizationId = this[WorkflowConnections.organizationId],
             type = this[WorkflowConnections.type],
             name = this[WorkflowConnections.name],
@@ -276,6 +309,7 @@ class ConnectionVaultService(
     private fun ResultRow.toGroupSummary(): WorkflowConnectionGroupSummary =
         WorkflowConnectionGroupSummary(
             id = this[WorkflowConnectionGroups.id].value,
+            resourceId = this[WorkflowConnectionGroups.resourceId].toString(),
             organizationId = this[WorkflowConnectionGroups.organizationId],
             name = this[WorkflowConnectionGroups.name],
             connectionType = this[WorkflowConnectionGroups.connectionType],
@@ -318,4 +352,7 @@ class ConnectionVaultService(
         }
         return normalizedSelectionStrategy
     }
+
+    private fun parseResourceId(resourceId: String): Uuid? =
+        resourceId.toUuidOrNull()
 }

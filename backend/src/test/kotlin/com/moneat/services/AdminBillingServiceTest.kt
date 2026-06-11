@@ -59,6 +59,15 @@ class AdminBillingServiceTest {
             } get Users.id
         }
 
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
     private fun seedSubscription(
         orgId: Int,
         status: String = "active"
@@ -80,7 +89,7 @@ class AdminBillingServiceTest {
         seedSubscription(orgId)
 
         val result = service.grantPromotionalCredit(orgId, userId, bonusGb = 5.0, reason = "test")
-        assertEquals(orgId, result.organizationId)
+        assertEquals(organizationResourceId(orgId), result.organizationId)
         assertTrue(result.bonusGbBytes > 0)
         assertEquals(5.0, result.bonusGb, 0.01)
     }

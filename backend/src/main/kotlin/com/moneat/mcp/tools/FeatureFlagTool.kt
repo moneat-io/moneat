@@ -431,7 +431,7 @@ class RevokeFeatureFlagSdkKeyTool(
     override val description = "Revoke an active feature flag SDK key"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf("sdk_key_id" to schemaInteger("Feature flag SDK key ID"))),
+        properties = JsonObject(mapOf("sdk_key_id" to schemaString("Feature flag SDK key resource ID"))),
         required = listOf("sdk_key_id")
     )
 
@@ -439,11 +439,13 @@ class RevokeFeatureFlagSdkKeyTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val keyId = when (val result = args.requiredIntegerArg("sdk_key_id")) {
+        val keyId = when (val result = args.requiredStringArg("sdk_key_id")) {
             is ParseResult.Failure -> return errorResult(result.message)
             is ParseResult.Success -> result.value
         }
-        val revoked = service.revokeSdkKey(context.organizationId, context.userId, keyId)
+        val keyResourceId = parseResourceId(keyId)
+            ?: return errorResult("sdk_key_id must be a UUID")
+        val revoked = service.revokeSdkKey(context.organizationId, context.userId, keyResourceId)
         return if (revoked) {
             textResult("Feature flag SDK key revoked: $keyId")
         } else {
@@ -750,6 +752,14 @@ private fun JsonObject.requiredIntegerArg(name: String): ParseResult<Int> {
     return when (val result = optionalIntegerArg(name)) {
         is ParseResult.Failure -> result
         is ParseResult.Success -> result.value?.let { ParseResult.Success(it) }
+            ?: ParseResult.Failure("$name is required")
+    }
+}
+
+private fun JsonObject.requiredStringArg(name: String): ParseResult<String> {
+    return when (val result = optionalStringArg(name)) {
+        is ParseResult.Failure -> result
+        is ParseResult.Success -> result.value?.takeIf { it.isNotBlank() }?.let { ParseResult.Success(it) }
             ?: ParseResult.Failure("$name is required")
     }
 }

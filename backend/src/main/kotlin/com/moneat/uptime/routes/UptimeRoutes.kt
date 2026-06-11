@@ -18,6 +18,7 @@ package com.moneat.uptime.routes
 
 import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.alerts.models.AlertPriority
+import com.moneat.shared.services.parseJavaUuidOrNull
 import com.moneat.uptime.models.CheckResult
 import com.moneat.uptime.models.CreateUptimeMonitorRequest
 import com.moneat.uptime.models.UpdateUptimeMonitorRequest
@@ -90,12 +91,12 @@ private suspend fun ApplicationCall.requireUptimeRouteContext(): UptimeRouteCont
 }
 
 private suspend fun ApplicationCall.requireMonitorId(): UUID? {
-    return try {
-        UUID.fromString(parameters["id"])
-    } catch (_: IllegalArgumentException) {
+    val monitorId = parseJavaUuidOrNull(parameters["id"])
+    if (monitorId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_MONITOR_ID_MESSAGE))
-        null
+        return null
     }
+    return monitorId
 }
 
 /**

@@ -21,6 +21,7 @@ package com.moneat.shared.repositories.models
  */
 data class OrganizationRow(
     val id: Int,
+    val resourceId: String,
     val name: String,
     val slug: String
 )

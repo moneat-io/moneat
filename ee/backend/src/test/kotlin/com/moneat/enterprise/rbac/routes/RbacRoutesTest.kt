@@ -114,15 +114,16 @@ class RbacRoutesTest {
         application { installAuthJsonAndRoutes() }
         val (orgId, userId) = seedMember(role = "admin")
         val role = service.createRole(orgId, "runner", listOf("workflows:run"), userId)
+        val assignedUser = seedUserInOrganization(orgId, role = "member", email = "assigned-rbac@example.test")
 
         val response = client.post("/v1/rbac/roles/${role.id}/assignments") {
             bearerAuth(bearerForUser(userId, orgId))
             header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody("""{"user_id":4242}""")
+            setBody("""{"user_id":"${assignedUser.resourceId}"}""")
         }
 
         assertEquals(HttpStatusCode.Created, response.status)
-        assertEquals(setOf("workflows:run"), service.resolvePermissions(orgId, 4242))
+        assertEquals(setOf("workflows:run"), service.resolvePermissions(orgId, assignedUser.id))
     }
 
     @Test
@@ -134,7 +135,7 @@ class RbacRoutesTest {
         val response = client.post("/v1/rbac/roles/${role.id}/assignments") {
             bearerAuth(bearerForUser(userId, orgId))
             header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody("""{"user_id":4242}""")
+            setBody("""{"user_id":"11111111-1111-1111-1111-111111111111"}""")
         }
 
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -144,11 +145,12 @@ class RbacRoutesTest {
     fun `assigning to an unknown role returns not found`() = testApplication {
         application { installAuthJsonAndRoutes() }
         val (orgId, userId) = seedMember(role = "admin")
+        val assignedUser = seedUserInOrganization(orgId, role = "member", email = "unknown-role-target@example.test")
 
-        val response = client.post("/v1/rbac/roles/9999/assignments") {
+        val response = client.post("/v1/rbac/roles/11111111-1111-1111-1111-111111111111/assignments") {
             bearerAuth(bearerForUser(userId, orgId))
             header(HttpHeaders.ContentType, ContentType.Application.Json)
-            setBody("""{"user_id":4242}""")
+            setBody("""{"user_id":"${assignedUser.resourceId}"}""")
         }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -211,6 +213,27 @@ class RbacRoutesTest {
         return orgId to userId
     }
 
+    private fun seedUserInOrganization(orgId: Int, role: String, email: String): UserSeed {
+        val user =
+            transaction {
+                val row =
+                    Users.insert {
+                        it[Users.email] = email
+                        it[password_hash] = "x"
+                    }
+                Memberships.insert {
+                    it[user_id] = row[Users.id]
+                    it[organization_id] = orgId
+                    it[Memberships.role] = role
+                }
+                UserSeed(
+                    id = row[Users.id],
+                    resourceId = row[Users.resource_id].toString()
+                )
+            }
+        return user
+    }
+
     private fun bearerForUser(userId: Int, orgId: Int): String =
         JWT
             .create()
@@ -219,4 +242,9 @@ class RbacRoutesTest {
             .withClaim("userId", userId)
             .withClaim("orgId", orgId)
             .sign(Algorithm.HMAC256(JWT_SECRET))
+
+    private data class UserSeed(
+        val id: Int,
+        val resourceId: String
+    )
 }

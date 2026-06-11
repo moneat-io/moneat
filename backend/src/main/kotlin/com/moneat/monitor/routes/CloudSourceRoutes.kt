@@ -20,6 +20,7 @@ import com.moneat.monitor.models.CloudSourceCreateRequest
 import com.moneat.monitor.services.CloudSourceConnectorUnavailableException
 import com.moneat.monitor.services.CloudSourceService
 import com.moneat.monitor.services.InvalidCloudSourceException
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.OrganizationContextMissingException
 import io.ktor.http.HttpStatusCode
@@ -36,6 +37,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 private data class CloudSourceScope(val userId: Int, val organizationId: Int)
 
@@ -76,7 +78,7 @@ fun Route.cloudSourceRoutes(
 
             post("/{id}/sync") {
                 val scope = call.resolveCloudSourceScope()
-                val sourceId = call.parameters["id"]?.toIntOrNull()
+                val sourceId = call.parameters["id"]?.let(::parseCloudSourceResourceId)
                     ?: throw BadRequestException("Invalid cloud source id")
                 val response = call.cloudSourceResultOrNull {
                     cloudSourceService.syncSource(scope.organizationId, sourceId)
@@ -86,7 +88,7 @@ fun Route.cloudSourceRoutes(
 
             delete("/{id}") {
                 val scope = call.resolveCloudSourceScope()
-                val sourceId = call.parameters["id"]?.toIntOrNull()
+                val sourceId = call.parameters["id"]?.let(::parseCloudSourceResourceId)
                     ?: throw BadRequestException("Invalid cloud source id")
                 val deleted = cloudSourceService.deleteSource(scope.organizationId, sourceId)
                 if (deleted) {
@@ -98,6 +100,9 @@ fun Route.cloudSourceRoutes(
         }
     }
 }
+
+private fun parseCloudSourceResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private fun ApplicationCall.resolveCloudSourceScope(): CloudSourceScope {
     val payload = principal<JWTPrincipal>()?.payload

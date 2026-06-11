@@ -20,6 +20,7 @@ import com.moneat.monitor.models.AlertRow
 import com.moneat.monitor.models.AlertSettingRow
 import com.moneat.monitor.models.CreateAlertData
 import com.moneat.monitor.models.UpdateAlertData
+import kotlin.uuid.Uuid
 
 /**
  * Repository for host alert data access.
@@ -30,9 +31,10 @@ interface HostAlertRepository {
     fun getAlertConfig(hostId: Int, organizationId: Int, metricName: String): AlertRow?
     fun getAlertSettings(hostId: Int): List<AlertSettingRow>
     fun upsertAlertSettings(hostId: Int, organizationId: Int, scope: String)
-    fun createAlert(alert: CreateAlertData): Long
+    fun createAlert(alert: CreateAlertData): Uuid
     fun updateAlert(alertId: Long, hostId: Int, organizationId: Int, data: UpdateAlertData, scope: String): Boolean
     fun deleteAlert(alertId: Long, hostId: Int, organizationId: Int, scope: String): Boolean
     fun listGlobalAlertsForHost(organizationId: Int, hostId: Int): List<AlertRow>
     fun findAlertById(alertId: Long): AlertRow?
+    fun resolveAlertId(resourceId: Uuid, hostId: Int, organizationId: Int, scope: String): Int?
 }

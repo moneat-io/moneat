@@ -23,16 +23,16 @@ import kotlinx.serialization.Serializable
 data class CreateOtlpServiceMappingRequest(
     @SerialName("service_namespace") val serviceNamespace: String? = null,
     @SerialName("service_name") val serviceName: String,
-    @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("project_id") val projectId: String? = null,
     @SerialName("project_resource_id") val projectResourceId: String? = null,
 )
 
 @Serializable
 data class OtlpServiceMappingResponse(
-    val id: Int,
+    val id: String,
     @SerialName("service_namespace") val serviceNamespace: String,
     @SerialName("service_name") val serviceName: String,
-    @SerialName("project_id") val projectId: Long,
+    @SerialName("project_id") val projectId: String,
     @SerialName("project_resource_id") val projectResourceId: String,
     @SerialName("project_name") val projectName: String,
     @SerialName("updated_at") val updatedAt: String,
@@ -40,11 +40,11 @@ data class OtlpServiceMappingResponse(
 
 @Serializable
 data class OtlpObservedServiceResponse(
-    val id: Int,
-    @SerialName("mapping_id") val mappingId: Int? = null,
+    val id: String,
+    @SerialName("mapping_id") val mappingId: String? = null,
     @SerialName("service_namespace") val serviceNamespace: String,
     @SerialName("service_name") val serviceName: String,
-    @SerialName("project_id") val projectId: Long? = null,
+    @SerialName("project_id") val projectId: String? = null,
     @SerialName("project_resource_id") val projectResourceId: String? = null,
     @SerialName("project_name") val projectName: String? = null,
     @SerialName("seen_logs") val seenLogs: Boolean,

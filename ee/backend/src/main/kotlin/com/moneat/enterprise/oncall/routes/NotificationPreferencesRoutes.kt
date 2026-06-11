@@ -153,8 +153,7 @@ fun Route.notificationPreferencesRoutes(
                             )
                             return@post
                         }
-                        // Send a minimal test SMS (reuses existing sendSms which validates consent again)
-                        twilioService.sendSms(phone, 0, "Test Notification", "TEST", userId)
+                        twilioService.sendTestSms(phone)
                         call.respond(MessageResponse("Test SMS sent"))
                     }
 
@@ -170,7 +169,7 @@ fun Route.notificationPreferencesRoutes(
                             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Slack account not linked"))
                             return@post
                         }
-                        slackService.sendOnCallAlert(userId, 0, "Test Notification", "TEST")
+                        slackService.sendOnCallAlert(userId, null, "Test Notification", "TEST")
                         call.respond(MessageResponse("Test Slack DM sent"))
                     }
 

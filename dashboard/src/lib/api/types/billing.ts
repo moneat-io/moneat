@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface BillingTierConfig {
-  id: number
+  id: string
   tierName: string
   version: number
   monthlyUnitLimit: number
@@ -90,7 +90,7 @@ export interface BillingPlansResponse {
 }
 
 export interface BillingUsage {
-  organizationId: number
+  organizationId: string
   periodStart: string
   periodEnd: string
   retentionDays: number
@@ -175,7 +175,7 @@ export interface ApmSpanUsageDebugGroup {
   kind: string
   scopeName: string
   scopeVersion: string
-  projectId?: number | null
+  projectId?: string | null
   projectName?: string | null
   projectSlug?: string | null
   spanCount: number
@@ -189,7 +189,7 @@ export interface ApmSpanUsageDebugGroup {
 }
 
 export interface ApmSpanUsageDebugResponse {
-  organizationId: number
+  organizationId: string
   periodStart: string
   periodEnd: string
   totalSpans: number
@@ -197,7 +197,7 @@ export interface ApmSpanUsageDebugResponse {
 }
 
 export interface BillingUsageInsightsResponse {
-  organizationId: number
+  organizationId: string
   periodStart: string
   periodEnd: string
   generatedAt: string
@@ -240,7 +240,7 @@ export interface BillingContributor {
   label: string
   kind: string
   eventType?: string | null
-  projectId?: number | null
+  projectId?: string | null
   projectName?: string | null
   projectSlug?: string | null
   units: number

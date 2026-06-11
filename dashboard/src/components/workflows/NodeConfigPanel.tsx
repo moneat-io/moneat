@@ -249,10 +249,10 @@ function ConnectionParamField({
 }: {
   value: unknown
   actionName?: string
-  onChange: (connectionId: number | '') => void
+  onChange: (connectionId: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const selectedConnectionId = numberParamValue(value)
+  const selectedConnectionId = stringParamValue(value)
   const connectionType = connectionTypeForAction(actionName)
   const {data: connections = [], isLoading} = useQuery({
     queryKey: ['workflow-connections'],
@@ -356,10 +356,10 @@ function ConnectionGroupParamField({
 }: {
   value: unknown
   actionName?: string
-  onChange: (groupId: number | '') => void
+  onChange: (groupId: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const selectedGroupId = numberParamValue(value)
+  const selectedGroupId = stringParamValue(value)
   const connectionType = connectionTypeForAction(actionName)
   const {data: groups = [], isLoading} = useQuery({
     queryKey: ['workflow-connection-groups'],
@@ -463,10 +463,10 @@ function EscalationPolicyParamField({
   onChange,
 }: {
   value: unknown
-  onChange: (policyId: number) => void
+  onChange: (policyId: string) => void
 }) {
   const [open, setOpen] = useState(false)
-  const selectedPolicyId = numberParamValue(value)
+  const selectedPolicyId = stringParamValue(value)
   const {data: policies = [], isLoading} = useQuery({
     queryKey: ['escalation-policies'],
     queryFn: () => api.getEscalationPolicies(),
@@ -920,24 +920,23 @@ function updateParamValue(
   onChange({...node, params: {...node.params, [name]: value}})
 }
 
-function numberParamValue(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
+function stringParamValue(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   if (trimmed === '') return null
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : null
+  return trimmed
 }
 
-function selectedPolicyFallbackLabel(policyId: number | null): string {
+function selectedPolicyFallbackLabel(policyId: string | null): string {
   return policyId === null ? 'Select escalation policy...' : `Policy #${policyId}`
 }
 
-function selectedConnectionFallbackLabel(connectionId: number | null): string {
+function selectedConnectionFallbackLabel(connectionId: string | null): string {
   return connectionId === null ? 'Select connection...' : `Unknown connection (id: ${connectionId})`
 }
 
-function selectedGroupFallbackLabel(groupId: number | null): string {
+function selectedGroupFallbackLabel(groupId: string | null): string {
   return groupId === null ? 'Select connection group...' : `Unknown connection group (id: ${groupId})`
 }
 

@@ -10,6 +10,7 @@ import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.postgresql.util.PGobject
+import kotlin.uuid.Uuid
 
 // ── Custom JSONB column type for raw JSON strings ───────────────────────
 
@@ -35,6 +36,7 @@ private fun Table.stringJsonb(name: String): Column<String> =
 
 object AiContextSnapshots : Table("ai_context_snapshots") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val conversation_id = integer("conversation_id")
     val org_id = integer("org_id")
     val user_id = integer("user_id")
@@ -60,7 +62,7 @@ data class SseSearchProgress(
 @Serializable
 data class SseContextReady(
     val phase: String = "context_ready",
-    val snapshotId: Int,
+    val snapshotId: String,
     val totalTokens: Int,
     val sources: Map<String, Int>,
 )
@@ -82,7 +84,7 @@ data class SseError(
 
 @Serializable
 data class AiChatStreamRequest(
-    val conversationId: Int? = null,
+    val conversationId: String? = null,
     val message: String,
     val currentPage: String? = null,
     val timeRange: String? = null, // e.g. "1h", "6h", "24h", "7d"
@@ -90,7 +92,7 @@ data class AiChatStreamRequest(
 
 @Serializable
 data class AiConfirmRequest(
-    val snapshotId: Int,
+    val snapshotId: String,
 )
 
 // ── Aggregated Context Types ────────────────────────────────────────────

@@ -75,7 +75,7 @@ describe('RuleForm', () => {
   })
 
   it('saves then previews and renders the would-be count', async () => {
-    const saved = makeRule({id: 99})
+    const saved = makeRule({id: 'rule-99'})
     const onSubmit = vi.fn().mockResolvedValue(saved)
     const onPreview = vi.fn().mockResolvedValue({
       match_count: 4,
@@ -84,7 +84,7 @@ describe('RuleForm', () => {
     })
     render(<RuleForm rule={makeRule()} onSubmit={onSubmit} onPreview={onPreview} onCancel={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', {name: 'Preview'}))
-    await waitFor(() => expect(onPreview).toHaveBeenCalledWith(99))
+    await waitFor(() => expect(onPreview).toHaveBeenCalledWith('rule-99'))
     expect(onSubmit).toHaveBeenCalledTimes(1)
     expect(await screen.findByText(/Would produce 4 signals over the last 5m/)).toBeInTheDocument()
   })
@@ -98,7 +98,7 @@ describe('RuleForm', () => {
   })
 
   it('saves an unsaved rule as a disabled draft when previewing', async () => {
-    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 42}))
+    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 'rule-42'}))
     const onPreview = noopPreview()
     render(<RuleForm onSubmit={onSubmit} onPreview={onPreview} onCancel={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('Name'), {target: {value: 'Failed logins'}})
@@ -112,7 +112,7 @@ describe('RuleForm', () => {
         undefined
       )
     )
-    await waitFor(() => expect(onPreview).toHaveBeenCalledWith(42))
+    await waitFor(() => expect(onPreview).toHaveBeenCalledWith('rule-42'))
     expect(await screen.findByText(/Draft saved/)).toBeInTheDocument()
     // Once saved, the button reverts to a plain Preview and the Enabled toggle is forced off.
     expect(screen.getByRole('button', {name: 'Preview'})).toBeInTheDocument()
@@ -120,7 +120,7 @@ describe('RuleForm', () => {
   })
 
   it('reuses the draft id on save after a preview, so it updates instead of creating a duplicate', async () => {
-    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 42}))
+    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 'rule-42'}))
     render(<RuleForm onSubmit={onSubmit} onPreview={noopPreview()} onCancel={vi.fn()} />)
     fireEvent.change(screen.getByLabelText('Name'), {target: {value: 'Failed logins'}})
     fireEvent.change(screen.getByPlaceholderText(/status:/), {target: {value: 'status:failed'}})
@@ -131,11 +131,11 @@ describe('RuleForm', () => {
     // Saving now must target the persisted draft id (42), not create a second rule.
     fireEvent.click(screen.getByRole('button', {name: 'Save changes'}))
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2))
-    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({name: 'Failed logins'}), 42)
+    expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({name: 'Failed logins'}), 'rule-42')
   })
 
   it('surfaces a preview failure', async () => {
-    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 12}))
+    const onSubmit = vi.fn().mockResolvedValue(makeRule({id: 'rule-12'}))
     const onPreview = vi.fn().mockRejectedValue(new Error('Invalid filter expression'))
     render(<RuleForm rule={makeRule()} onSubmit={onSubmit} onPreview={onPreview} onCancel={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', {name: 'Preview'}))

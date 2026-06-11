@@ -472,7 +472,7 @@ function FeatureFlagsPage() {
   })
 
   const revokeSdkKeyMutation = useMutation({
-    mutationFn: (id: number) => api.revokeFeatureFlagSdkKey(id),
+    mutationFn: (id: string) => api.revokeFeatureFlagSdkKey(id),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['feature-flag-sdk-keys']}),
   })
 
@@ -824,7 +824,7 @@ function FlagDetail(props: {
   sdkKeyDraft: {name: string; keyType: FeatureFlagSdkKeyType}
   setSdkKeyDraft: (value: {name: string; keyType: FeatureFlagSdkKeyType}) => void
   onCreateSdkKey: () => void
-  onRevokeSdkKey: (id: number) => void
+  onRevokeSdkKey: (id: string) => void
   createdKey: CreatedFeatureFlagSdkKey | null
   kotlinExample: string
 }) {

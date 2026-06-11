@@ -51,7 +51,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.longOrNull
 import kotlin.time.Clock
 
 private val dashboardWidgetRepo = DashboardWidgetRepositoryImpl()
@@ -121,14 +120,6 @@ private fun schemaArray(description: String): JsonObject = JsonObject(
         "items" to schemaObject("Array item")
     )
 )
-
-private fun JsonObject.longArg(name: String): Long? {
-    val value = this[name] as? JsonPrimitive ?: return null
-    return value.longOrNull ?: value.content.toLongOrNull()
-}
-
-private fun JsonObject.requiredLongArg(name: String): Long =
-    longArg(name) ?: throw IllegalArgumentException("$name is required")
 
 private fun JsonObject.requiredStringArg(name: String): String =
     optionalStringArg(name)?.takeIf { it.isNotBlank() }

@@ -36,14 +36,17 @@ export function workflowConnectionsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    rotateWorkflowConnection: (id: number, request: RotateWorkflowConnectionRequest) =>
-      core.request<WorkflowConnection>(`${base}/workflows/connections/${id}/rotate`, {
+    rotateWorkflowConnection: (id: string, request: RotateWorkflowConnectionRequest) =>
+      core.request<WorkflowConnection>(
+        `${base}/workflows/connections/${encodeURIComponent(id)}/rotate`,
+        {
         method: 'PUT',
         body: JSON.stringify(request),
-      }),
+        }
+      ),
 
-    deleteWorkflowConnection: (id: number) =>
-      core.request<void>(`${base}/workflows/connections/${id}`, {
+    deleteWorkflowConnection: (id: string) =>
+      core.request<void>(`${base}/workflows/connections/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
 
@@ -56,8 +59,8 @@ export function workflowConnectionsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    deleteWorkflowConnectionGroup: (id: number) =>
-      core.request<void>(`${base}/workflows/connection-groups/${id}`, {
+    deleteWorkflowConnectionGroup: (id: string) =>
+      core.request<void>(`${base}/workflows/connection-groups/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
   }

@@ -128,6 +128,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class DatadogRoutesExtendedTest {
 
@@ -139,10 +140,13 @@ class DatadogRoutesExtendedTest {
 
     companion object {
         private const val TEST_ORG_ID = 1
+        private const val TEST_ORG_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
         private const val TEST_API_KEY = "TEST_API_KEY_PLACEHOLDER"
         private const val DD_API_KEY_HEADER = "DD-API-KEY"
         private const val DD_METADATA_PATH = "/dd/api/v1/metadata"
         private const val TEST_HOST = "test-host"
+        private const val HOST_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+        private const val MISSING_HOST_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
         private const val DD_LOGS_PATH = "/dd/api/v2/logs"
         private const val EMPTY_ROWS_JSON = """{"rows":[]}"""
         private const val AGENT_API_KEYS_PATH = "/v1/agent-api-keys"
@@ -278,7 +282,7 @@ class DatadogRoutesExtendedTest {
 
     private fun quotaUsage(): BillingUsageResponse {
         return BillingUsageResponse(
-            organizationId = TEST_ORG_ID,
+            organizationId = TEST_ORG_RESOURCE_ID,
             periodStart = "2026-05-01",
             periodEnd = "2026-05-31",
             retentionDays = 30,
@@ -596,12 +600,12 @@ class DatadogRoutesExtendedTest {
     @Test
     fun `GET v1 hosts hostId returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
-        every { DatadogHostService.getHost(orgId, 42) } returns sampleHost(orgId)
+        every { DatadogHostService.getHost(orgId, Uuid.parse(HOST_RESOURCE_ID)) } returns sampleHost(orgId)
         application {
             installAuth()
             routing { datadogHostQueryRoutes() }
         }
-        val response = client.get("/v1/hosts/42") {
+        val response = client.get("/v1/hosts/$HOST_RESOURCE_ID") {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -611,12 +615,12 @@ class DatadogRoutesExtendedTest {
     @Test
     fun `GET v1 hosts hostId returns 404 when missing`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
-        every { DatadogHostService.getHost(orgId, 999) } returns null
+        every { DatadogHostService.getHost(orgId, Uuid.parse(MISSING_HOST_RESOURCE_ID)) } returns null
         application {
             installAuth()
             routing { datadogHostQueryRoutes() }
         }
-        val response = client.get("/v1/hosts/999") {
+        val response = client.get("/v1/hosts/$MISSING_HOST_RESOURCE_ID") {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -638,12 +642,12 @@ class DatadogRoutesExtendedTest {
     @Test
     fun `DELETE v1 hosts hostId returns 204`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
-        every { DatadogHostService.deleteHost(orgId, 42) } returns true
+        every { DatadogHostService.deleteHost(orgId, Uuid.parse(HOST_RESOURCE_ID)) } returns true
         application {
             installAuth()
             routing { datadogHostQueryRoutes() }
         }
-        val response = client.delete("/v1/hosts/42") {
+        val response = client.delete("/v1/hosts/$HOST_RESOURCE_ID") {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
@@ -652,12 +656,12 @@ class DatadogRoutesExtendedTest {
     @Test
     fun `DELETE v1 hosts hostId returns 404 when missing`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
-        every { DatadogHostService.deleteHost(orgId, 99) } returns false
+        every { DatadogHostService.deleteHost(orgId, Uuid.parse(MISSING_HOST_RESOURCE_ID)) } returns false
         application {
             installAuth()
             routing { datadogHostQueryRoutes() }
         }
-        val response = client.delete("/v1/hosts/99") {
+        val response = client.delete("/v1/hosts/$MISSING_HOST_RESOURCE_ID") {
             withAuth(jwtToken(userId, orgId))
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -2174,7 +2178,7 @@ class DatadogRoutesExtendedTest {
         val (userId, orgId) = seedUserAndOrg()
         every { DatadogService.createApiKey(orgId, "test key", userId, null) } returns
             com.moneat.datadog.models.CreateDdApiKeyResponse(
-                id = 1,
+                id = "11111111-1111-1111-1111-111111111111",
                 name = "test key",
                 key = "TEST_API_KEY_RESPONSE_PLACEHOLDER",
                 keyPrefix = "TEST_API_KEY",
@@ -2194,7 +2198,21 @@ class DatadogRoutesExtendedTest {
     @Test
     fun `DELETE v1 agent-api-keys id returns 204`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
-        every { DatadogService.deleteApiKey(42, orgId) } returns true
+        val keyId = Uuid.parse("11111111-1111-1111-1111-111111111111")
+        every { DatadogService.deleteApiKey(keyId, orgId) } returns true
+        application {
+            installAuth()
+            datadogRoutes()
+        }
+        val response = client.delete("$AGENT_API_KEYS_PATH/$keyId") {
+            withAuth(jwtToken(userId, orgId))
+        }
+        assertEquals(HttpStatusCode.NoContent, response.status)
+    }
+
+    @Test
+    fun `DELETE v1 agent-api-keys rejects numeric ids`() = testApplication {
+        val (userId, orgId) = seedUserAndOrg()
         application {
             installAuth()
             datadogRoutes()
@@ -2202,19 +2220,20 @@ class DatadogRoutesExtendedTest {
         val response = client.delete("$AGENT_API_KEYS_PATH/42") {
             withAuth(jwtToken(userId, orgId))
         }
-        assertEquals(HttpStatusCode.NoContent, response.status)
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     @Test
     fun `DELETE v1 agent-api-keys returns 404 for missing key`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            every { DatadogService.deleteApiKey(999, orgId) } returns false
+            val keyId = Uuid.parse("99999999-9999-9999-9999-999999999999")
+            every { DatadogService.deleteApiKey(keyId, orgId) } returns false
             application {
                 installAuth()
                 datadogRoutes()
             }
-            val response = client.delete("$AGENT_API_KEYS_PATH/999") {
+            val response = client.delete("$AGENT_API_KEYS_PATH/$keyId") {
                 withAuth(jwtToken(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -2621,7 +2640,8 @@ class DatadogRoutesExtendedTest {
         }
 
     private fun sampleHost(orgId: Int = TEST_ORG_ID) = DdHostInfo(
-        id = 42,
+        id = HOST_RESOURCE_ID,
+        internalId = 42,
         organizationId = orgId,
         hostname = TEST_HOST,
         os = "linux",

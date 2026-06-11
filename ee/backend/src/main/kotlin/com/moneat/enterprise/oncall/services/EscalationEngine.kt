@@ -4,6 +4,11 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.enterprise.oncall.escalationPolicyResourceIdOrNull
+import com.moneat.enterprise.oncall.alertResourceId
+import com.moneat.enterprise.oncall.incidentResourceIdOrNull
+import com.moneat.enterprise.oncall.organizationResourceId
+import com.moneat.enterprise.oncall.userResourceIdOrNull
 import com.moneat.shared.services.TaskLock
 import com.moneat.config.RedisClient
 import com.moneat.enterprise.oncall.models.EscalationStepTarget
@@ -380,7 +385,8 @@ class EscalationEngine(
             // Slack: respect user preference
             if (prefs.isChannelEnabled("slack")) {
                 try {
-                    slackService.sendOnCallAlert(userId, incidentId, title, priority)
+                    val publicAlertId = transaction { alertResourceId(incidentId) }
+                    slackService.sendOnCallAlert(userId, publicAlertId, title, priority)
                 } catch (e: Exception) {
                     logger.error("Failed to send Slack DM for incident $incidentId, user $userId", e)
                 }
@@ -857,10 +863,10 @@ class EscalationEngine(
                     .singleOrNull() ?: return@transaction null
 
             OnCallAlert(
-                id = row[OnCallAlerts.id].value,
-                organizationId = row[OnCallAlerts.organizationId],
-                declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
-                escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
+                id = row[OnCallAlerts.resourceId].toString(),
+                organizationResourceId = organizationResourceId(row[OnCallAlerts.organizationId]),
+                declaredIncidentResourceId = incidentResourceIdOrNull(row[OnCallAlerts.declaredIncidentId]),
+                escalationPolicyResourceId = escalationPolicyResourceIdOrNull(row[OnCallAlerts.escalationPolicyId]),
                 escalationPolicyName = row.getOrNull(EscalationPolicies.name),
                 title = row[OnCallAlerts.title],
                 description = row[OnCallAlerts.description],
@@ -872,12 +878,18 @@ class EscalationEngine(
                 repeatIteration = row[OnCallAlerts.repeatIteration],
                 triggeredAt = row[OnCallAlerts.triggeredAt].toString(),
                 acknowledgedAt = row[OnCallAlerts.acknowledgedAt]?.toString(),
-                acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
+                acknowledgedByResourceId = userResourceIdOrNull(row[OnCallAlerts.acknowledgedBy]),
                 resolvedAt = row[OnCallAlerts.resolvedAt]?.toString(),
-                resolvedBy = row[OnCallAlerts.resolvedBy],
+                resolvedByResourceId = userResourceIdOrNull(row[OnCallAlerts.resolvedBy]),
                 metadata = row[OnCallAlerts.metadata],
                 createdAt = row[OnCallAlerts.createdAt].toString(),
                 updatedAt = row[OnCallAlerts.updatedAt].toString(),
+                internalId = row[OnCallAlerts.id].value,
+                organizationId = row[OnCallAlerts.organizationId],
+                declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
+                escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
+                acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
+                resolvedBy = row[OnCallAlerts.resolvedBy],
             )
         }
 }

@@ -76,12 +76,23 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class WorkflowRoutesTest {
     companion object {
         private var db: Database? = null
         private const val ORGANIZATION_NAME = "Workflow Routes"
         private const val WORKFLOW_ID = 42
+        private const val MISSING_WORKFLOW_ID = 43
+        private const val DEFAULT_WORKFLOW_ID = 44
+        private const val RUN_ID = 7
+        private const val MISSING_RUN_ID = 8
+        private const val WORKFLOW_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+        private const val MISSING_WORKFLOW_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+        private const val DEFAULT_WORKFLOW_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+        private const val RUN_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+        private const val MISSING_RUN_RESOURCE_ID = "55555555-5555-5555-5555-555555555555"
+        private const val VERSION_RESOURCE_ID = "66666666-6666-6666-6666-666666666666"
     }
 
     private val json = Json { encodeDefaults = true }
@@ -108,6 +119,7 @@ class WorkflowRoutesTest {
 
         stopTestKoin()
         workflowService = mockk()
+        stubWorkflowResourceResolution()
         startKoin {
             modules(
                 module {
@@ -223,12 +235,12 @@ class WorkflowRoutesTest {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(createRequest("Route workflow")))
             }
-            val update = client.put("/v1/workflows/$WORKFLOW_ID") {
+            val update = client.put("/v1/workflows/$WORKFLOW_RESOURCE_ID") {
                 withAuth(memberToken)
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(UpdateWorkflowRequest(name = "Nope")))
             }
-            val delete = client.delete("/v1/workflows/$WORKFLOW_ID") {
+            val delete = client.delete("/v1/workflows/$WORKFLOW_RESOURCE_ID") {
                 withAuth(memberToken)
             }
 
@@ -236,8 +248,10 @@ class WorkflowRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, update.status)
             assertEquals(HttpStatusCode.Forbidden, delete.status)
             verify(exactly = 0) { workflowService.createWorkflow(any(), any()) }
-            verify(exactly = 0) { workflowService.updateWorkflow(any(), any(), any()) }
-            verify(exactly = 0) { workflowService.deleteWorkflow(any(), any()) }
+            verify(exactly = 0) {
+                workflowService.updateWorkflow(any<Int>(), any<Int>(), any<UpdateWorkflowRequest>())
+            }
+            verify(exactly = 0) { workflowService.deleteWorkflow(any<Int>(), any<Int>()) }
         }
 
     @Test
@@ -317,15 +331,15 @@ class WorkflowRoutesTest {
         testApplication {
             setupApp()
             every { workflowService.getWorkflow(organizationId, WORKFLOW_ID) } returns workflowResponse()
-            every { workflowService.getWorkflow(organizationId, WORKFLOW_ID + 1) } returns null
+            every { workflowService.getWorkflow(organizationId, MISSING_WORKFLOW_ID) } returns null
 
-            val invalid = client.get("/v1/workflows/not-a-number") {
+            val invalid = client.get("/v1/workflows/not-a-uuid") {
                 withAuth(token())
             }
-            val missing = client.get("/v1/workflows/${WORKFLOW_ID + 1}") {
+            val missing = client.get("/v1/workflows/$MISSING_WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
             }
-            val found = client.get("/v1/workflows/$WORKFLOW_ID") {
+            val found = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
             }
 
@@ -348,10 +362,10 @@ class WorkflowRoutesTest {
                 workflowService.updateWorkflow(organizationId, WORKFLOW_ID, renameRequest)
             } returns workflowResponse(name = "Renamed workflow")
             every {
-                workflowService.updateWorkflow(organizationId, WORKFLOW_ID + 1, renameRequest)
+                workflowService.updateWorkflow(organizationId, MISSING_WORKFLOW_ID, renameRequest)
             } returns null
             every {
-                workflowService.updateWorkflow(organizationId, WORKFLOW_ID + 2, invalidConfigRequest)
+                workflowService.updateWorkflow(organizationId, DEFAULT_WORKFLOW_ID, invalidConfigRequest)
             } throws IllegalArgumentException("Unknown workflow condition reference")
 
             val invalidId = client.put("/v1/workflows/nope") {
@@ -359,17 +373,17 @@ class WorkflowRoutesTest {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(renameRequest))
             }
-            val missing = client.put("/v1/workflows/${WORKFLOW_ID + 1}") {
+            val missing = client.put("/v1/workflows/$MISSING_WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(renameRequest))
             }
-            val invalidConfig = client.put("/v1/workflows/${WORKFLOW_ID + 2}") {
+            val invalidConfig = client.put("/v1/workflows/$DEFAULT_WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(invalidConfigRequest))
             }
-            val updated = client.put("/v1/workflows/$WORKFLOW_ID") {
+            val updated = client.put("/v1/workflows/$WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(renameRequest))
@@ -388,21 +402,21 @@ class WorkflowRoutesTest {
         testApplication {
             setupApp()
             every { workflowService.deleteWorkflow(organizationId, WORKFLOW_ID) } returns true
-            every { workflowService.deleteWorkflow(organizationId, WORKFLOW_ID + 1) } returns false
+            every { workflowService.deleteWorkflow(organizationId, MISSING_WORKFLOW_ID) } returns false
             every {
-                workflowService.deleteWorkflow(organizationId, WORKFLOW_ID + 2)
+                workflowService.deleteWorkflow(organizationId, DEFAULT_WORKFLOW_ID)
             } throws IllegalArgumentException("Default workflows cannot be modified")
 
             val invalidId = client.delete("/v1/workflows/nope") {
                 withAuth(token())
             }
-            val missing = client.delete("/v1/workflows/${WORKFLOW_ID + 1}") {
+            val missing = client.delete("/v1/workflows/$MISSING_WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
             }
-            val deleted = client.delete("/v1/workflows/$WORKFLOW_ID") {
+            val deleted = client.delete("/v1/workflows/$WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
             }
-            val defaultWorkflow = client.delete("/v1/workflows/${WORKFLOW_ID + 2}") {
+            val defaultWorkflow = client.delete("/v1/workflows/$DEFAULT_WORKFLOW_RESOURCE_ID") {
                 withAuth(token())
             }
 
@@ -426,13 +440,13 @@ class WorkflowRoutesTest {
             val invalidId = client.get("/v1/workflows/nope/runs") {
                 withAuth(token())
             }
-            val lowerBound = client.get("/v1/workflows/$WORKFLOW_ID/runs?limit=0") {
+            val lowerBound = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/runs?limit=0") {
                 withAuth(token())
             }
-            val defaultLimit = client.get("/v1/workflows/$WORKFLOW_ID/runs?limit=not-a-number") {
+            val defaultLimit = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/runs?limit=not-a-number") {
                 withAuth(token())
             }
-            val upperBound = client.get("/v1/workflows/$WORKFLOW_ID/runs?limit=1000") {
+            val upperBound = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/runs?limit=1000") {
                 withAuth(token())
             }
 
@@ -451,26 +465,26 @@ class WorkflowRoutesTest {
             setupApp()
             val request = WorkflowRunInstanceRequest()
             every { workflowService.listRuns(organizationId, WORKFLOW_ID, 50) } returns listOf(runResponse())
-            every { workflowService.getRun(organizationId, WORKFLOW_ID, 7) } returns runResponse()
+            every { workflowService.getRun(organizationId, WORKFLOW_ID, RUN_ID) } returns runResponse()
             coEvery {
                 workflowService.createWorkflowInstance(organizationId, WORKFLOW_ID, request, userId)
             } returns runResponse(status = "pending")
             coEvery {
-                workflowService.cancelRun(organizationId, WORKFLOW_ID, 7)
-            } returns WorkflowRunCancelResponse(7, "canceled")
+                workflowService.cancelRun(organizationId, WORKFLOW_ID, RUN_ID)
+            } returns WorkflowRunCancelResponse(RUN_RESOURCE_ID, "canceled")
 
-            val list = client.get("/v1/workflows/$WORKFLOW_ID/instances") {
+            val list = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/instances") {
                 withAuth(token())
             }
-            val detail = client.get("/v1/workflows/$WORKFLOW_ID/instances/7") {
+            val detail = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/instances/$RUN_RESOURCE_ID") {
                 withAuth(token())
             }
-            val created = client.post("/v1/workflows/$WORKFLOW_ID/instances") {
+            val created = client.post("/v1/workflows/$WORKFLOW_RESOURCE_ID/instances") {
                 withAuth(token())
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(request))
             }
-            val canceled = client.put("/v1/workflows/$WORKFLOW_ID/instances/7/cancel") {
+            val canceled = client.put("/v1/workflows/$WORKFLOW_RESOURCE_ID/instances/$RUN_RESOURCE_ID/cancel") {
                 withAuth(token())
             }
 
@@ -488,19 +502,23 @@ class WorkflowRoutesTest {
     fun `instance routes validate identifiers and map missing runs`() =
         testApplication {
             setupApp()
-            every { workflowService.getRun(organizationId, WORKFLOW_ID, 8) } returns null
-            coEvery { workflowService.cancelRun(organizationId, WORKFLOW_ID, 8) } returns null
+            every { workflowService.getRun(organizationId, WORKFLOW_ID, MISSING_RUN_ID) } returns null
+            coEvery { workflowService.cancelRun(organizationId, WORKFLOW_ID, MISSING_RUN_ID) } returns null
 
-            val invalidWorkflow = client.get("/v1/workflows/nope/instances/7") {
+            val invalidWorkflow = client.get("/v1/workflows/nope/instances/$RUN_RESOURCE_ID") {
                 withAuth(token())
             }
-            val invalidInstance = client.get("/v1/workflows/$WORKFLOW_ID/instances/nope") {
+            val invalidInstance = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/instances/nope") {
                 withAuth(token())
             }
-            val missingDetail = client.get("/v1/workflows/$WORKFLOW_ID/instances/8") {
+            val missingDetail = client.get(
+                "/v1/workflows/$WORKFLOW_RESOURCE_ID/instances/$MISSING_RUN_RESOURCE_ID"
+            ) {
                 withAuth(token())
             }
-            val missingCancel = client.put("/v1/workflows/$WORKFLOW_ID/instances/8/cancel") {
+            val missingCancel = client.put(
+                "/v1/workflows/$WORKFLOW_RESOURCE_ID/instances/$MISSING_RUN_RESOURCE_ID/cancel"
+            ) {
                 withAuth(token())
             }
 
@@ -518,17 +536,17 @@ class WorkflowRoutesTest {
             every {
                 workflowService.webhookSigningInfo(organizationId, WORKFLOW_ID)
             } returns WorkflowWebhookSigningResponse(
-                workflowId = WORKFLOW_ID,
-                webhookUrl = "https://api.moneat.io/v1/workflows/$WORKFLOW_ID/webhook",
+                workflowId = WORKFLOW_RESOURCE_ID,
+                webhookUrl = "https://api.moneat.io/v1/workflows/$WORKFLOW_RESOURCE_ID/webhook",
                 signingSecret = "secret",
                 signatureHeader = "X-Moneat-Workflow-Signature",
                 signatureFormat = "sha256=<hex HMAC-SHA256 of raw body>"
             )
 
-            val forbidden = client.get("/v1/workflows/$WORKFLOW_ID/webhook-signing") {
+            val forbidden = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/webhook-signing") {
                 withAuth(memberToken)
             }
-            val response = client.get("/v1/workflows/$WORKFLOW_ID/webhook-signing") {
+            val response = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/webhook-signing") {
                 withAuth(token())
             }
 
@@ -549,11 +567,11 @@ class WorkflowRoutesTest {
                 workflowService.createWebhookRun(WORKFLOW_ID, "{}", "event-1")
             } returns runResponse(status = "pending")
 
-            val unsigned = client.post("/v1/workflows/$WORKFLOW_ID/webhook") {
+            val unsigned = client.post("/v1/workflows/$WORKFLOW_RESOURCE_ID/webhook") {
                 contentType(ContentType.Application.Json)
                 setBody("{}")
             }
-            val signed = client.post("/v1/workflows/$WORKFLOW_ID/webhook") {
+            val signed = client.post("/v1/workflows/$WORKFLOW_RESOURCE_ID/webhook") {
                 header("X-Moneat-Workflow-Signature", "sha256=valid")
                 header("X-Moneat-Webhook-Event", "event-1")
                 contentType(ContentType.Application.Json)
@@ -575,6 +593,20 @@ class WorkflowRoutesTest {
 
     private fun token(): String =
         RouteTestSupport.createToken(userId = userId, orgId = organizationId)
+
+    private fun stubWorkflowResourceResolution() {
+        every { workflowService.resolveWorkflowId(organizationId, Uuid.parse(WORKFLOW_RESOURCE_ID)) } returns
+            WORKFLOW_ID
+        every { workflowService.resolveWorkflowId(organizationId, Uuid.parse(MISSING_WORKFLOW_RESOURCE_ID)) } returns
+            MISSING_WORKFLOW_ID
+        every { workflowService.resolveWorkflowId(organizationId, Uuid.parse(DEFAULT_WORKFLOW_RESOURCE_ID)) } returns
+            DEFAULT_WORKFLOW_ID
+        every { workflowService.resolveWorkflowId(Uuid.parse(WORKFLOW_RESOURCE_ID)) } returns WORKFLOW_ID
+        every { workflowService.resolveRunId(organizationId, WORKFLOW_ID, Uuid.parse(RUN_RESOURCE_ID)) } returns RUN_ID
+        every {
+            workflowService.resolveRunId(organizationId, WORKFLOW_ID, Uuid.parse(MISSING_RUN_RESOURCE_ID))
+        } returns MISSING_RUN_ID
+    }
 
     private fun seedUser(email: String): Int =
         transaction {
@@ -617,7 +649,7 @@ class WorkflowRoutesTest {
 
     private fun workflowResponse(name: String = "Route workflow"): WorkflowResponse =
         WorkflowResponse(
-            id = WORKFLOW_ID,
+            id = WORKFLOW_RESOURCE_ID,
             name = name,
             triggerName = "alert.triggered",
             enabled = true,
@@ -637,9 +669,9 @@ class WorkflowRoutesTest {
 
     private fun runResponse(status: String = "complete"): WorkflowRunResponse =
         WorkflowRunResponse(
-            id = 7,
-            workflowId = WORKFLOW_ID,
-            workflowVersionId = 1,
+            id = RUN_RESOURCE_ID,
+            workflowId = WORKFLOW_RESOURCE_ID,
+            workflowVersionId = VERSION_RESOURCE_ID,
             triggerName = "alert.triggered",
             onceFor = "alert.deduplication_key=host-1",
             status = status,

@@ -124,9 +124,13 @@ class AuthServiceLegalConsentTest {
 
         val acceptances =
             transaction {
+                val userId = Users
+                    .selectAll()
+                    .where { Users.resource_id eq kotlin.uuid.Uuid.parse(response.user.id) }
+                    .single()[Users.id]
                 UserLegalAcceptances
                     .selectAll()
-                    .where { UserLegalAcceptances.user_id eq response.user.id }
+                    .where { UserLegalAcceptances.user_id eq userId }
                     .toList()
             }
 

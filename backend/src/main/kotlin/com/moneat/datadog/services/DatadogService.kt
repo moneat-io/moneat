@@ -19,6 +19,8 @@ package com.moneat.datadog.services
 import com.moneat.datadog.models.CreateDdApiKeyResponse
 import com.moneat.datadog.models.DdApiKeyResponse
 import com.moneat.datadog.models.DdApiKeys
+import com.moneat.shared.models.Projects
+import com.moneat.shared.services.toUuidOrNull
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
@@ -29,6 +31,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
+import kotlin.uuid.Uuid
 
 object DatadogService {
     private const val KEY_PREFIX = "magt_"
@@ -43,50 +46,129 @@ object DatadogService {
                 .map { it.toDdApiKeyResponse() }
         }
 
-    fun createApiKey(organizationId: Int, name: String, userId: Int, projectId: Int? = null): CreateDdApiKeyResponse =
+    fun createApiKey(
+        organizationId: Int,
+        name: String,
+        userId: Int,
+        projectId: String? = null,
+    ): CreateDdApiKeyResponse {
+        val internalProjectId = projectId
+            ?.takeIf { it.isNotBlank() }
+            ?.let {
+                resolveProjectId(organizationId, it)
+                    ?: throw IllegalArgumentException("Project not found")
+            }
+        return createApiKeyForProject(
+            organizationId = organizationId,
+            name = name,
+            userId = userId,
+            projectId = internalProjectId,
+        )
+    }
+
+    fun createApiKeyForProjectId(
+        organizationId: Int,
+        name: String,
+        userId: Int,
+        projectId: Int? = null,
+    ): CreateDdApiKeyResponse =
+        createApiKeyForProject(
+            organizationId = organizationId,
+            name = name,
+            userId = userId,
+            projectId = projectId,
+        )
+
+    private fun createApiKeyForProject(
+        organizationId: Int,
+        name: String,
+        userId: Int,
+        projectId: Int? = null,
+    ): CreateDdApiKeyResponse =
         transaction {
+            if (projectId != null && !projectBelongsToOrg(projectId, organizationId)) {
+                throw IllegalArgumentException("Project not found")
+            }
             val key = generateApiKey()
             val keyHash = hashKey(key)
             val keyPrefix = key.take(PREFIX_LENGTH)
             val now = Instant.now()
 
-            val keyId =
-                DdApiKeys.insert {
-                    it[DdApiKeys.organizationId] = organizationId
-                    it[DdApiKeys.projectId] = projectId
-                    it[DdApiKeys.name] = name
-                    it[DdApiKeys.keyHash] = keyHash
-                    it[DdApiKeys.keyPrefix] = keyPrefix
-                    it[DdApiKeys.createdBy] = userId
-                    it[DdApiKeys.createdAt] = now
-                    it[DdApiKeys.isActive] = true
-                }[DdApiKeys.id]
+            val row = DdApiKeys.insert {
+                it[DdApiKeys.organizationId] = organizationId
+                it[DdApiKeys.projectId] = projectId
+                it[DdApiKeys.name] = name
+                it[DdApiKeys.keyHash] = keyHash
+                it[DdApiKeys.keyPrefix] = keyPrefix
+                it[DdApiKeys.createdBy] = userId
+                it[DdApiKeys.createdAt] = now
+                it[DdApiKeys.isActive] = true
+            }
 
             CreateDdApiKeyResponse(
-                id = keyId,
+                id = row[DdApiKeys.resourceId].toString(),
                 name = name,
                 key = key,
                 keyPrefix = keyPrefix,
             )
         }
 
+    private fun resolveProjectId(organizationId: Int, projectResourceId: String): Int? {
+        val resourceId = projectResourceId.toUuidOrNull() ?: return null
+        return transaction {
+            Projects
+                .selectAll()
+                .where {
+                    (Projects.resource_id eq resourceId) and
+                        (Projects.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Projects.id)
+                ?.toInt()
+        }
+    }
+
+    private fun projectBelongsToOrg(projectId: Int, organizationId: Int): Boolean =
+        Projects
+            .selectAll()
+            .where {
+                (Projects.id eq projectId.toLong()) and
+                    (Projects.organization_id eq organizationId)
+            }
+            .limit(1)
+            .count() > 0
+
     fun revokeApiKey(
-        keyId: Int,
+        keyId: Uuid,
         organizationId: Int,
     ): Boolean =
         transaction {
-            DdApiKeys.update({ (DdApiKeys.id eq keyId) and (DdApiKeys.organizationId eq organizationId) }) {
+            DdApiKeys.update({
+                (DdApiKeys.resourceId eq keyId) and (DdApiKeys.organizationId eq organizationId)
+            }) {
                 it[isActive] = false
             } > 0
         }
 
+    fun revokeApiKey(
+        keyId: String,
+        organizationId: Int,
+    ): Boolean =
+        parseResourceId(keyId)?.let { parsedId -> revokeApiKey(parsedId, organizationId) } ?: false
+
     fun deleteApiKey(
-        keyId: Int,
+        keyId: Uuid,
         organizationId: Int,
     ): Boolean =
         transaction {
-            DdApiKeys.deleteWhere { (id eq keyId) and (DdApiKeys.organizationId eq organizationId) } > 0
+            DdApiKeys.deleteWhere { (resourceId eq keyId) and (DdApiKeys.organizationId eq organizationId) } > 0
         }
+
+    fun deleteApiKey(
+        keyId: String,
+        organizationId: Int,
+    ): Boolean =
+        parseResourceId(keyId)?.let { parsedId -> deleteApiKey(parsedId, organizationId) } ?: false
 
     data class ApiKeyValidation(
         val organizationId: Int,
@@ -129,11 +211,12 @@ object DatadogService {
         return hash.joinToString("") { "%02x".format(it) }
     }
 
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
+
     private fun org.jetbrains.exposed.v1.core.ResultRow.toDdApiKeyResponse() =
         DdApiKeyResponse(
-            id = this[DdApiKeys.id],
-            organizationId = this[DdApiKeys.organizationId],
-            projectId = this[DdApiKeys.projectId],
+            id = this[DdApiKeys.resourceId].toString(),
             name = this[DdApiKeys.name],
             keyPrefix = this[DdApiKeys.keyPrefix],
             createdAt = this[DdApiKeys.createdAt].toString(),

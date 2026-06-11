@@ -4,6 +4,12 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.enterprise.oncall.organizationResourceId
+import com.moneat.enterprise.oncall.overrideResourceId
+import com.moneat.enterprise.oncall.requireValue
+import com.moneat.enterprise.oncall.scheduleResourceId
+import com.moneat.enterprise.oncall.userResourceId
+import com.moneat.enterprise.oncall.userResourceIds
 import com.moneat.enterprise.oncall.models.OnCallOverride
 import com.moneat.enterprise.oncall.models.OnCallOverrides
 import com.moneat.enterprise.oncall.models.OnCallParticipant
@@ -14,6 +20,7 @@ import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -62,66 +69,93 @@ class OnCallScheduleService {
                     .where { OnCallSchedules.id eq scheduleId }
                     .singleOrNull() ?: return@transaction null
 
-            val participants =
-                OnCallParticipants
-                    .innerJoin(Users)
-                    .selectAll()
-                    .where { OnCallParticipants.scheduleId eq scheduleId }
-                    .orderBy(OnCallParticipants.position to SortOrder.ASC)
-                    .map { row ->
-                        OnCallParticipant(
-                            id = row[OnCallParticipants.id].value,
-                            userId = row[OnCallParticipants.userId],
-                            userName = row[Users.name] ?: row[Users.email],
-                            userEmail = row[Users.email],
-                            position = row[OnCallParticipants.position],
-                        )
-                    }
-
-            val overrides =
-                OnCallOverrides
-                    .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
-                    .selectAll()
-                    .where { OnCallOverrides.scheduleId eq scheduleId }
-                    .orderBy(OnCallOverrides.startAt to SortOrder.ASC)
-                    .map { row ->
-                        OnCallOverride(
-                            id = row[OnCallOverrides.id].value,
-                            scheduleId = row[OnCallOverrides.scheduleId],
-                            userId = row[OnCallOverrides.userId],
-                            userName = row[Users.name] ?: row[Users.email],
-                            startAt = row[OnCallOverrides.startAt].toString(),
-                            endAt = row[OnCallOverrides.endAt].toString(),
-                            createdBy = row[OnCallOverrides.createdBy],
-                            createdAt = row[OnCallOverrides.createdAt].toString(),
-                        )
-                    }
-
-            val currentOnCall = getCurrentOnCall(scheduleId)
-
-            // Fetch Slack usergroup mapping if it exists
-            val usergroupMapping =
-                OnCallScheduleUsergroups
-                    .selectAll()
-                    .where { OnCallScheduleUsergroups.scheduleId eq scheduleId }
-                    .singleOrNull()
-
-            OnCallSchedule(
-                id = scheduleRow[OnCallSchedules.id].value,
-                organizationId = scheduleRow[OnCallSchedules.organizationId],
-                name = scheduleRow[OnCallSchedules.name],
-                rotationType = scheduleRow[OnCallSchedules.rotationType],
-                handoffTime = scheduleRow[OnCallSchedules.handoffTime],
-                timezone = scheduleRow[OnCallSchedules.timezone],
-                participants = participants,
-                overrides = overrides,
-                currentOnCall = currentOnCall,
-                slackUsergroupId = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupId),
-                slackUsergroupHandle = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupHandle),
-                createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
-                updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
-            )
+            scheduleResponse(scheduleRow)
         }
+
+    private fun scheduleResponse(
+        scheduleRow: ResultRow,
+        orgResourceId: String = organizationResourceId(scheduleRow[OnCallSchedules.organizationId]),
+    ): OnCallSchedule {
+        val scheduleId = scheduleRow[OnCallSchedules.id].value
+        val scheduleResourceId = scheduleRow[OnCallSchedules.resourceId].toString()
+
+        val participants =
+            OnCallParticipants
+                .innerJoin(Users)
+                .selectAll()
+                .where { OnCallParticipants.scheduleId eq scheduleId }
+                .orderBy(OnCallParticipants.position to SortOrder.ASC)
+                .toList()
+        val participantResponses =
+            participants.map { row ->
+                OnCallParticipant(
+                    id = row[OnCallParticipants.resourceId].toString(),
+                    userResourceId = row[Users.resource_id].toString(),
+                    userName = row[Users.name] ?: row[Users.email],
+                    userEmail = row[Users.email],
+                    position = row[OnCallParticipants.position],
+                    internalId = row[OnCallParticipants.id].value,
+                    userId = row[OnCallParticipants.userId],
+                )
+            }
+
+        val overrideRows =
+            OnCallOverrides
+                .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
+                .selectAll()
+                .where { OnCallOverrides.scheduleId eq scheduleId }
+                .orderBy(OnCallOverrides.startAt to SortOrder.ASC)
+                .toList()
+        val createdByResourceIds = userResourceIds(overrideRows.map { row -> row[OnCallOverrides.createdBy] })
+        val overrides =
+            overrideRows
+                .map { row ->
+                    OnCallOverride(
+                        id = row[OnCallOverrides.resourceId].toString(),
+                        scheduleResourceId = scheduleResourceId,
+                        userResourceId = row[Users.resource_id].toString(),
+                        userName = row[Users.name] ?: row[Users.email],
+                        startAt = row[OnCallOverrides.startAt].toString(),
+                        endAt = row[OnCallOverrides.endAt].toString(),
+                        createdByResourceId = createdByResourceIds.requireValue(
+                            row[OnCallOverrides.createdBy],
+                            "user",
+                        ),
+                        createdAt = row[OnCallOverrides.createdAt].toString(),
+                        internalId = row[OnCallOverrides.id].value,
+                        scheduleId = row[OnCallOverrides.scheduleId],
+                        userId = row[OnCallOverrides.userId],
+                        createdBy = row[OnCallOverrides.createdBy],
+                    )
+                }
+
+        val currentOnCall = computeOnCallAt(scheduleId, Clock.System.now())
+
+        // Fetch Slack usergroup mapping if it exists
+        val usergroupMapping =
+            OnCallScheduleUsergroups
+                .selectAll()
+                .where { OnCallScheduleUsergroups.scheduleId eq scheduleId }
+                .singleOrNull()
+
+        return OnCallSchedule(
+            id = scheduleResourceId,
+            organizationResourceId = orgResourceId,
+            name = scheduleRow[OnCallSchedules.name],
+            rotationType = scheduleRow[OnCallSchedules.rotationType],
+            handoffTime = scheduleRow[OnCallSchedules.handoffTime],
+            timezone = scheduleRow[OnCallSchedules.timezone],
+            participants = participantResponses,
+            overrides = overrides,
+            currentOnCall = currentOnCall,
+            slackUsergroupId = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupId),
+            slackUsergroupHandle = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupHandle),
+            createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
+            updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
+            internalId = scheduleRow[OnCallSchedules.id].value,
+            organizationId = scheduleRow[OnCallSchedules.organizationId],
+        )
+    }
 
     fun getOnCallAt(scheduleId: Int, at: Instant): OnCallParticipant? = transaction { computeOnCallAt(scheduleId, at) }
 
@@ -155,12 +189,17 @@ class OnCallScheduleService {
                                 (OnCallParticipants.userId eq override[OnCallOverrides.userId])
                         }.singleOrNull()
 
+                val userId = override[OnCallOverrides.userId]
+                val participantId = participant?.get(OnCallParticipants.id)?.value
                 return OnCallParticipant(
-                    id = participant?.get(OnCallParticipants.id)?.value ?: -1,
-                    userId = override[OnCallOverrides.userId],
+                    id = participant?.get(OnCallParticipants.resourceId)?.toString()
+                        ?: override[Users.resource_id].toString(),
+                    userResourceId = override[Users.resource_id].toString(),
                     userName = override[Users.name] ?: override[Users.email],
                     userEmail = override[Users.email],
                     position = participant?.get(OnCallParticipants.position) ?: -1,
+                    internalId = participantId ?: -1,
+                    userId = userId,
                 )
             }
 
@@ -215,23 +254,24 @@ class OnCallScheduleService {
             val currentParticipant = participants[rotationCycle]
 
             return OnCallParticipant(
-                id = currentParticipant[OnCallParticipants.id].value,
-                userId = currentParticipant[OnCallParticipants.userId],
+                id = currentParticipant[OnCallParticipants.resourceId].toString(),
+                userResourceId = currentParticipant[Users.resource_id].toString(),
                 userName = currentParticipant[Users.name] ?: currentParticipant[Users.email],
                 userEmail = currentParticipant[Users.email],
                 position = currentParticipant[OnCallParticipants.position],
+                internalId = currentParticipant[OnCallParticipants.id].value,
+                userId = currentParticipant[OnCallParticipants.userId],
             )
         }
 
     fun listSchedules(organizationId: Int): List<OnCallSchedule> =
         transaction {
+            val orgResourceId = organizationResourceId(organizationId)
             OnCallSchedules
                 .selectAll()
                 .where { OnCallSchedules.organizationId eq organizationId }
                 .orderBy(OnCallSchedules.name to SortOrder.ASC)
-                .mapNotNull { row ->
-                    getSchedule(row[OnCallSchedules.id].value)
-                }
+                .map { row -> scheduleResponse(row, orgResourceId) }
         }
 
     fun createSchedule(
@@ -347,14 +387,18 @@ class OnCallScheduleService {
                     .single()
 
             OnCallOverride(
-                id = row[OnCallOverrides.id].value,
-                scheduleId = row[OnCallOverrides.scheduleId],
-                userId = row[OnCallOverrides.userId],
+                id = overrideResourceId(row[OnCallOverrides.id].value),
+                scheduleResourceId = scheduleResourceId(row[OnCallOverrides.scheduleId]),
+                userResourceId = row[Users.resource_id].toString(),
                 userName = row[Users.name] ?: row[Users.email],
                 startAt = row[OnCallOverrides.startAt].toString(),
                 endAt = row[OnCallOverrides.endAt].toString(),
-                createdBy = row[OnCallOverrides.createdBy],
+                createdByResourceId = userResourceId(row[OnCallOverrides.createdBy]),
                 createdAt = row[OnCallOverrides.createdAt].toString(),
+                internalId = row[OnCallOverrides.id].value,
+                scheduleId = row[OnCallOverrides.scheduleId],
+                userId = row[OnCallOverrides.userId],
+                createdBy = row[OnCallOverrides.createdBy],
             )
         }
 

@@ -57,6 +57,9 @@ class BillingUsageInsightsServiceTest {
         private const val BYTES_PER_GB = 1_073_741_824L
         private const val APM_SPAN_LIMIT = 2_000_000L
         private var db: Database? = null
+
+        private fun resourceId(id: Int): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
     }
 
     // ──── Setup ────
@@ -274,7 +277,7 @@ class BillingUsageInsightsServiceTest {
                 limit = any()
             )
         } returns ApmSpanUsageDebugResponse(
-            organizationId = orgId,
+            organizationId = resourceId(orgId),
             periodStart = periodStart.toString(),
             periodEnd = periodEnd.toString(),
             totalSpans = 42,
@@ -291,7 +294,7 @@ class BillingUsageInsightsServiceTest {
         usedCustomMetrics: Long = 420_000,
         usedAnalyticsPageviews: Long = 175_000
     ) = BillingUsageResponse(
-        organizationId = orgId,
+        organizationId = resourceId(orgId),
         periodStart = periodStart.toString(),
         periodEnd = periodEnd.toString(),
         retentionDays = 30,

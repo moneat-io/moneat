@@ -23,6 +23,7 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 /**
  * Detection rules — declarative, never code. The author supplies a `LogQueryParser` [filter]
@@ -34,6 +35,7 @@ import org.jetbrains.exposed.v1.datetime.timestamp
  * malicious author could use to read another tenant's logs.
  */
 object DetectionRules : IntIdTable("detection_rules") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 255)
     val description = text("description").default("")
@@ -90,7 +92,7 @@ enum class DetectionRuleType(val wire: String) {
 
 @Serializable
 data class DetectionRuleResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val description: String,
     val source: String,
@@ -139,7 +141,7 @@ data class MitreTechniqueCoverageResponse(
 
 @Serializable
 data class MitreCoveredRuleResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val enabled: Boolean,
 )
@@ -206,7 +208,7 @@ data class SigmaImportRequest(
 data class SigmaImportItemResult(
     val index: Int,
     val title: String? = null,
-    @SerialName("rule_id") val ruleId: Int? = null,
+    @SerialName("rule_id") val ruleId: String? = null,
     val error: String? = null,
 )
 

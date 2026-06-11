@@ -22,6 +22,7 @@ import com.moneat.monitor.models.InfrastructureMapSavedViewsResponse
 import com.moneat.monitor.models.SaveInfrastructureMapViewRequest
 import com.moneat.monitor.services.InfrastructureMapSavedViewService
 import com.moneat.monitor.services.InvalidInfrastructureMapSavedViewException
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -40,6 +41,7 @@ import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -191,7 +193,7 @@ private suspend fun ApplicationCall.deleteSavedView(
     infrastructureMapSavedViewService: InfrastructureMapSavedViewService
 ) {
     val scope = resolveSavedViewScope() ?: return
-    val viewId = parameters["id"]?.toIntOrNull()
+    val viewId = parameters["id"]?.let(::parseSavedViewResourceId)
     if (viewId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid saved view ID"))
         return
@@ -200,7 +202,7 @@ private suspend fun ApplicationCall.deleteSavedView(
     val deleted = infrastructureMapSavedViewService.deleteView(
         organizationId = scope.organizationId,
         userId = scope.userId,
-        viewId = viewId
+        viewResourceId = viewId
     )
     if (!deleted) {
         respond(HttpStatusCode.NotFound, ErrorResponse("Saved view not found"))
@@ -208,6 +210,9 @@ private suspend fun ApplicationCall.deleteSavedView(
     }
     respond(HttpStatusCode.NoContent)
 }
+
+private fun parseSavedViewResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private fun Route.registerClickHouseListRoutes() {
     clickHouseListRoutes.forEach { config ->

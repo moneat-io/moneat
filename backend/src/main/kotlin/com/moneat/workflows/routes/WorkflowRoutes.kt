@@ -17,6 +17,7 @@
 package com.moneat.workflows.routes
 
 import com.moneat.auth.currentOrgIdOrNull
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import com.moneat.enterprise.FeatureRegistry
@@ -45,6 +46,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 private const val MIN_WORKFLOW_RUN_LIMIT = 1
 private const val MAX_WORKFLOW_RUN_LIMIT = 100
@@ -75,17 +77,14 @@ fun Route.workflowRoutes() {
             workflowRunQueryRoutes(workflowService)
             workflowLifecycleRoutes(workflowService, membershipService)
             workflowRunTriggerRoutes(workflowService, membershipService)
-            workflowGovernanceRoutes(governanceService, membershipService)
+            workflowGovernanceRoutes(governanceService, membershipService, workflowService)
         }
     }
 }
 
 private fun Route.webhookIngressRoute(workflowService: WorkflowService) {
     post("$WORKFLOW_ID_ROUTE/webhook") {
-        val workflowId = workflowIdFromPath() ?: return@post call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromWebhookPath(workflowService) ?: return@post
         val payload = call.receiveText()
         val signature = call.request.headers[WEBHOOK_SIGNATURE_HEADER]
         if (!workflowService.verifyWebhookSignature(workflowId, payload, signature)) {
@@ -151,10 +150,7 @@ private fun Route.workflowCrudRoutes(
 
     get(WORKFLOW_ID_ROUTE) {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
         val workflow = workflowService.getWorkflow(organizationId, workflowId)
             ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
         call.respond(workflow)
@@ -163,10 +159,7 @@ private fun Route.workflowCrudRoutes(
     put(WORKFLOW_ID_ROUTE) {
         val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId) ?: return@put
-        val workflowId = workflowIdFromPath() ?: return@put call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@put
         val request = call.receive<UpdateWorkflowRequest>()
         suspendRunCatching {
             workflowService.updateWorkflow(organizationId, workflowId, request)
@@ -185,10 +178,7 @@ private fun Route.workflowCrudRoutes(
     delete(WORKFLOW_ID_ROUTE) {
         val organizationId = currentOrganizationId() ?: return@delete call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId) ?: return@delete
-        val workflowId = workflowIdFromPath() ?: return@delete call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@delete
         suspendRunCatching {
             workflowService.deleteWorkflow(organizationId, workflowId)
         }.fold(
@@ -207,32 +197,20 @@ private fun Route.workflowCrudRoutes(
 private fun Route.workflowRunQueryRoutes(workflowService: WorkflowService) {
     get("$WORKFLOW_ID_ROUTE/runs") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
         call.respond(workflowService.listRuns(organizationId, workflowId, runLimit()))
     }
 
     get("$WORKFLOW_ID_ROUTE/instances") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
         call.respond(workflowService.listRuns(organizationId, workflowId, runLimit()))
     }
 
     get("$WORKFLOW_ID_ROUTE/instances/$INSTANCE_ID_ROUTE") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
-        val instanceId = instanceIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_INSTANCE_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
+        val instanceId = instanceIdFromPath(workflowService, organizationId, workflowId) ?: return@get
         val run = workflowService.getRun(organizationId, workflowId, instanceId)
             ?: return@get call.respond(
                 HttpStatusCode.NotFound,
@@ -249,10 +227,7 @@ private fun Route.workflowLifecycleRoutes(
     post("$WORKFLOW_ID_ROUTE/publish") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId) ?: return@post
-        val workflowId = workflowIdFromPath() ?: return@post call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@post
         val workflow = workflowService.publishWorkflow(organizationId, workflowId)
             ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
         call.respond(workflow)
@@ -261,10 +236,7 @@ private fun Route.workflowLifecycleRoutes(
     post("$WORKFLOW_ID_ROUTE/unpublish") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId) ?: return@post
-        val workflowId = workflowIdFromPath() ?: return@post call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@post
         val workflow = workflowService.unpublishWorkflow(organizationId, workflowId)
             ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
         call.respond(workflow)
@@ -273,10 +245,7 @@ private fun Route.workflowLifecycleRoutes(
     get("$WORKFLOW_ID_ROUTE/webhook-signing") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId) ?: return@get
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
         val signing = workflowService.webhookSigningInfo(organizationId, workflowId)
             ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
         call.respond(signing)
@@ -290,14 +259,8 @@ private fun Route.workflowRunTriggerRoutes(
     put("$WORKFLOW_ID_ROUTE/instances/$INSTANCE_ID_ROUTE/cancel") {
         val organizationId = currentOrganizationId() ?: return@put call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId, WorkflowPermissions.RUN) ?: return@put
-        val workflowId = workflowIdFromPath() ?: return@put call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
-        val instanceId = instanceIdFromPath() ?: return@put call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_INSTANCE_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@put
+        val instanceId = instanceIdFromPath(workflowService, organizationId, workflowId) ?: return@put
         val canceled = workflowService.cancelRun(organizationId, workflowId, instanceId)
             ?: return@put call.respond(
                 HttpStatusCode.NotFound,
@@ -309,10 +272,7 @@ private fun Route.workflowRunTriggerRoutes(
     post("$WORKFLOW_ID_ROUTE/run") {
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId, WorkflowPermissions.RUN) ?: return@post
-        val workflowId = workflowIdFromPath() ?: return@post call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@post
         val request = call.receive<ManualWorkflowRunRequest>()
         val run = workflowService.runWorkflow(organizationId, workflowId, request, currentUserId())
             ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
@@ -323,10 +283,7 @@ private fun Route.workflowRunTriggerRoutes(
         val organizationId = currentOrganizationId() ?: return@post call.respond(HttpStatusCode.Forbidden)
         ensureWorkflowAccess(membershipService, organizationId, WorkflowPermissions.RUN) ?: return@post
         val userId = currentUserId() ?: return@post call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@post call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@post
         val request = call.receive<WorkflowRunInstanceRequest>()
         suspendRunCatching {
             workflowService.createWorkflowInstance(organizationId, workflowId, request, userId)
@@ -391,11 +348,57 @@ internal fun resolveWorkflowAccess(
     coarseAllowed: () -> Boolean
 ): Boolean = granular ?: coarseAllowed()
 
-internal fun RoutingContext.workflowIdFromPath(): Int? =
-    call.parameters["workflowId"]?.toIntOrNull()
+internal suspend fun RoutingContext.workflowIdFromPath(
+    workflowService: WorkflowService,
+    organizationId: Int
+): Int? {
+    val workflowResourceId = call.parameters["workflowId"]?.let(::parseWorkflowResourceId)
+    if (workflowResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE))
+        return null
+    }
+    val workflowId = workflowService.resolveWorkflowId(organizationId, workflowResourceId)
+    if (workflowId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
+        return null
+    }
+    return workflowId
+}
 
-private fun RoutingContext.instanceIdFromPath(): Int? =
-    call.parameters["instanceId"]?.toIntOrNull()
+private suspend fun RoutingContext.workflowIdFromWebhookPath(workflowService: WorkflowService): Int? {
+    val workflowResourceId = call.parameters["workflowId"]?.let(::parseWorkflowResourceId)
+    if (workflowResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_WORKFLOW_ID_MESSAGE))
+        return null
+    }
+    val workflowId = workflowService.resolveWorkflowId(workflowResourceId)
+    if (workflowId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_NOT_FOUND_MESSAGE))
+        return null
+    }
+    return workflowId
+}
+
+private suspend fun RoutingContext.instanceIdFromPath(
+    workflowService: WorkflowService,
+    organizationId: Int,
+    workflowId: Int
+): Int? {
+    val runResourceId = call.parameters["instanceId"]?.let(::parseWorkflowResourceId)
+    if (runResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_INSTANCE_ID_MESSAGE))
+        return null
+    }
+    val runId = workflowService.resolveRunId(organizationId, workflowId, runResourceId)
+    if (runId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_INSTANCE_NOT_FOUND_MESSAGE))
+        return null
+    }
+    return runId
+}
+
+private fun parseWorkflowResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 internal fun RoutingContext.currentOrganizationId(): Int? {
     val principal = call.principal<JWTPrincipal>() ?: return null

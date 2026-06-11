@@ -136,17 +136,17 @@ export function statusPagesMethods(core: ApiClientCore) {
         }
       ),
 
-    verifyCustomDomain: (pageId: string, domainId: number) =>
+    verifyCustomDomain: (pageId: string, domainId: string) =>
       core.request<CustomDomain>(
-        `${base}/status-pages/${encodeURIComponent(pageId)}/domains/${domainId}/verify`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/domains/${encodeURIComponent(domainId)}/verify`,
         {
           method: 'POST',
         }
       ),
 
-    removeCustomDomain: (pageId: string, domainId: number) =>
+    removeCustomDomain: (pageId: string, domainId: string) =>
       core.request<void>(
-        `${base}/status-pages/${encodeURIComponent(pageId)}/domains/${domainId}`,
+        `${base}/status-pages/${encodeURIComponent(pageId)}/domains/${encodeURIComponent(domainId)}`,
         {
           method: 'DELETE',
         }

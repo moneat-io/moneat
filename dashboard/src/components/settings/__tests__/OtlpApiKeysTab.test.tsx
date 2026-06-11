@@ -23,14 +23,20 @@ import {clearAuthStorage, renderWithQueryClient} from '@/test/utils'
 import {OtlpApiKeysTab} from '../OtlpApiKeysTab'
 
 const API_BASE = 'http://localhost:8080'
+const USER_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174029'
+const API_KEY_RESOURCE_ID = '123e4567-e89b-12d3-a456-42661417402a'
 const WEB_APP_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174030'
 const WORKER_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174031'
+const CHECKOUT_SERVICE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174032'
+const WORKER_SERVICE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174033'
+const CHECKOUT_MAPPING_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174034'
+const WORKER_MAPPING_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174035'
 
 function mockBaseResponses() {
   server.use(
     http.get(`${API_BASE}/v1/user`, () => {
       return HttpResponse.json({
-        id: 1,
+        id: USER_RESOURCE_ID,
         email: 'user@example.com',
         emailVerified: true,
         onboardingCompleted: true,
@@ -41,7 +47,7 @@ function mockBaseResponses() {
       return HttpResponse.json({
         keys: [
           {
-            id: 1,
+            id: API_KEY_RESOURCE_ID,
             name: 'production-key',
             key_prefix: 'motlp_prod',
             created_at: '2026-01-01T00:00:00Z',
@@ -74,11 +80,11 @@ function mockBaseResponses() {
       return HttpResponse.json({
         services: [
           {
-            id: 10,
-            mapping_id: 20,
+            id: CHECKOUT_SERVICE_RESOURCE_ID,
+            mapping_id: CHECKOUT_MAPPING_RESOURCE_ID,
             service_namespace: 'checkout',
             service_name: 'api',
-            project_id: 30,
+            project_id: WEB_APP_RESOURCE_ID,
             project_resource_id: WEB_APP_RESOURCE_ID,
             project_name: 'Web App',
             seen_logs: true,
@@ -90,7 +96,7 @@ function mockBaseResponses() {
             last_seen_at: '2026-01-01T01:00:00Z',
           },
           {
-            id: 11,
+            id: WORKER_SERVICE_RESOURCE_ID,
             mapping_id: null,
             service_namespace: '',
             service_name: 'worker',
@@ -170,7 +176,7 @@ describe('OtlpApiKeysTab', () => {
     fireEvent.click(await screen.findByRole('button', {name: 'Remove mapping for checkout/api'}))
 
     await waitFor(() => {
-      expect(deletedMappingId).toBe('20')
+      expect(deletedMappingId).toBe(CHECKOUT_MAPPING_RESOURCE_ID)
     })
   })
 
@@ -181,10 +187,10 @@ describe('OtlpApiKeysTab', () => {
       http.post(`${API_BASE}/v1/otlp/service-mappings`, async ({request}) => {
         capturedBody = (await request.json()) as Record<string, unknown>
         return HttpResponse.json({
-          id: 21,
+          id: WORKER_MAPPING_RESOURCE_ID,
           service_namespace: '',
           service_name: 'worker',
-          project_id: 31,
+          project_id: WORKER_RESOURCE_ID,
           project_name: 'Worker',
           updated_at: '2026-01-01T02:00:00Z',
         })
@@ -245,7 +251,7 @@ describe('OtlpApiKeysTab', () => {
     await user.click(screen.getByRole('button', {name: 'Revoke'}))
 
     await waitFor(() => {
-      expect(revokedKeyId).toBe('1')
+      expect(revokedKeyId).toBe(API_KEY_RESOURCE_ID)
     })
   })
 })

@@ -175,7 +175,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
 
     override fun listByOrganizationId(orgId: Int): List<UptimeMonitorData> =
         transaction {
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { UptimeMonitors.organizationId eq orgId }
                 .map { rowToMonitorData(it) }
@@ -183,7 +183,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
 
     override fun getByIdAndOrg(monitorId: UUID, orgId: Int): UptimeMonitorData? =
         transaction {
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq orgId) }
                 .firstOrNull()
@@ -214,7 +214,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
     override fun getMonitorsDueForCheck(): List<UptimeMonitorData> =
         transaction {
             val now = Clock.System.now()
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { UptimeMonitors.active eq true }
                 .filter { row ->
@@ -266,7 +266,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
 
     override fun getByPushToken(token: String): UptimeMonitorData? =
         transaction {
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { UptimeMonitors.pushToken eq token }
                 .firstOrNull()
@@ -304,6 +304,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
         UptimeMonitorData(
             id = row[UptimeMonitors.id],
             organizationId = row[UptimeMonitors.organizationId],
+            organizationResourceId = row[Organizations.resource_id].toString(),
             name = row[UptimeMonitors.name],
             type = row[UptimeMonitors.type],
             active = row[UptimeMonitors.active],

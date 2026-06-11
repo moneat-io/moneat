@@ -88,7 +88,7 @@ class EntitlementServiceTest {
 
     private fun tier(slackEnabled: Boolean): PricingTierConfigResponse {
         return PricingTierConfigResponse(
-            id = 1,
+            id = "00000000-0000-0000-0000-000000000001",
             tierName = "TEST",
             version = 1,
             monthlyUnitLimit = 1_000,

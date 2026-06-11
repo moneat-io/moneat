@@ -45,6 +45,7 @@ import com.moneat.dashboards.repositories.DashboardWidgetRepository
 import com.moneat.dashboards.repositories.DashboardWithFavoriteFlag
 import com.moneat.events.repositories.ProjectRepository
 import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.and
@@ -76,7 +77,7 @@ class CustomDashboardService(
     }
 
     private fun parseUuid(value: String): Uuid? =
-        runCatching { Uuid.parse(value) }.getOrNull()
+        value.toUuidOrNull()
 
     fun isValidResourceId(value: String?): Boolean =
         value?.let(::parseUuid) != null
@@ -114,8 +115,8 @@ class CustomDashboardService(
             }
         }
 
-    private fun resolveProjectId(resourceId: String): Long =
-        requireNotNull(projectIdResolver.resolve(resourceId)) {
+    private fun resolveProjectId(resourceId: String, orgId: Long): Long =
+        requireNotNull(projectIdResolver.resolve(resourceId, orgId)) {
             "Invalid project ID"
         }
 
@@ -129,7 +130,7 @@ class CustomDashboardService(
     private fun mapToResponse(d: DashboardWithFavoriteFlag, widgets: List<WidgetResponse>): DashboardResponse =
         DashboardResponse(
             id = d.resourceId,
-            orgId = d.orgId,
+            orgId = d.orgResourceId,
             projectId = d.projectResourceId,
             folderId = d.folderResourceId,
             title = d.title,
@@ -138,7 +139,7 @@ class CustomDashboardService(
             isDefault = d.isDefault,
             isFavorited = d.isFavorited,
             variables = parseVariables(d.variables),
-            createdBy = d.createdBy,
+            createdBy = d.createdByResourceId,
             createdAt = d.createdAt,
             updatedAt = d.updatedAt,
             widgets = widgets
@@ -183,7 +184,7 @@ class CustomDashboardService(
     }
 
     fun createDashboard(orgId: Long, userId: Long, request: CreateDashboardRequest): DashboardResponse {
-        val projectId = request.projectId?.let(::resolveProjectId)
+        val projectId = request.projectId?.let { resolveProjectId(it, orgId) }
         val folderId = resolveOptionalFolderId(request.folderId, orgId)
         val data = dashboardRepository.create(orgId, userId, request, projectId, folderId)
         val now = Clock.System.now()
@@ -250,7 +251,7 @@ class CustomDashboardService(
         folderRepository.listByOrgId(orgId).map { row ->
             FolderResponse(
                 id = row.resourceId,
-                orgId = row.orgId,
+                orgId = row.orgResourceId,
                 name = row.name,
                 color = row.color,
                 sortOrder = row.sortOrder,
@@ -266,7 +267,7 @@ class CustomDashboardService(
         }
         return FolderResponse(
             id = row.resourceId,
-            orgId = orgId,
+            orgId = row.orgResourceId,
             name = request.name,
             color = request.color,
             sortOrder = request.sortOrder,
@@ -280,7 +281,7 @@ class CustomDashboardService(
         folderRepository.update(id, orgId, request.name, request.color, request.sortOrder)
         return FolderResponse(
             id = row.resourceId,
-            orgId = row.orgId,
+            orgId = row.orgResourceId,
             name = request.name ?: row.name,
             color = request.color ?: row.color,
             sortOrder = request.sortOrder ?: row.sortOrder,

@@ -79,7 +79,7 @@ class AiChatService {
         return unavailable(operation = "getConversations", userId = userId, orgId = orgId)
     }
 
-    fun getConversation(conversationId: Int, userId: Int, orgId: Int): ConversationDetail? {
+    fun getConversation(conversationId: String, userId: Int, orgId: Int): ConversationDetail? {
         return unavailable(
             operation = "getConversation",
             userId = userId,
@@ -88,7 +88,7 @@ class AiChatService {
         )
     }
 
-    fun deleteConversation(conversationId: Int, userId: Int, orgId: Int): Boolean {
+    fun deleteConversation(conversationId: String, userId: Int, orgId: Int): Boolean {
         return unavailable(
             operation = "deleteConversation",
             userId = userId,

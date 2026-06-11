@@ -26,7 +26,7 @@ data class InfrastructureMapSavedViewsResponse(
 
 @Serializable
 data class InfrastructureMapSavedViewResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("resource_kind") val resourceKind: String,
     @SerialName("group_by") val groupBy: String,

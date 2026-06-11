@@ -119,7 +119,7 @@ function OtlpServiceRoutingPanel() {
   })
 
   const deleteMapping = useMutation({
-    mutationFn: (id: number) => api.deleteOtlpServiceMapping(id),
+    mutationFn: (id: string) => api.deleteOtlpServiceMapping(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['otlpObservedServices']})
       toast({title: 'Mapping removed', description: 'Future telemetry for this service will be unmapped.'})

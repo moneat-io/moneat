@@ -26,7 +26,7 @@ data class CreateOtlpApiKeyRequest(
 
 @Serializable
 data class CreateOtlpApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("key_prefix") val keyPrefix: String,
     @SerialName("key") val key: String,
@@ -35,7 +35,7 @@ data class CreateOtlpApiKeyResponse(
 
 @Serializable
 data class OtlpApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("key_prefix") val keyPrefix: String,
     @SerialName("created_at") val createdAt: String,

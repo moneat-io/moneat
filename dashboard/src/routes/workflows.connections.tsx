@@ -79,7 +79,7 @@ function ConnectionManager() {
   const invalidate = () => queryClient.invalidateQueries({queryKey: ['workflow-connections']})
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteWorkflowConnection(id),
+    mutationFn: (id: string) => api.deleteWorkflowConnection(id),
     onSuccess: () => {
       invalidate()
       toast({title: 'Connection deleted'})
@@ -400,7 +400,7 @@ function RotateConnectionDialog({
   const [secret, setSecret] = useState('')
 
   const rotateMutation = useMutation({
-    mutationFn: (id: number) => api.rotateWorkflowConnection(id, {secret}),
+    mutationFn: (id: string) => api.rotateWorkflowConnection(id, {secret}),
     onSuccess: () => {
       onRotated()
       onOpenChange(false)

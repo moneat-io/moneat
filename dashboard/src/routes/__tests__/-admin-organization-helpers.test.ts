@@ -14,7 +14,7 @@ import {adminOrganizationHelperTestHooks as helpers} from '../admin.organization
 
 function billingUsage(overrides: Partial<BillingUsage> = {}): BillingUsage {
   return {
-    organizationId: 1,
+    organizationId: 'org-1',
     periodStart: '2026-06-01',
     periodEnd: '2026-06-30',
     retentionDays: 30,

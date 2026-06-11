@@ -26,7 +26,10 @@ import com.moneat.statuspage.models.StatusPageResponse
 import com.moneat.statuspage.models.UpdateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.services.StatusPageService
+import com.moneat.shared.services.toJavaUuidOrNull
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -40,10 +43,8 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
-import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
-import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_GET_STATUS_PAGE = "Failed to get status page"
@@ -59,18 +60,6 @@ private suspend fun runStatusPageRoute(
     }.onFailure { e ->
         logger.error(e) { "$logMessage: ${e.message}" }
         call.respond(HttpStatusCode.InternalServerError, ErrorResponse(userMessage))
-    }
-}
-
-/**
- * Helper to safely parse UUID from path parameter.
- * Returns null if invalid, allowing caller to return 400 Bad Request.
- */
-private fun String.toUUIDOrNull(): UUID? {
-    return try {
-        UUID.fromString(this)
-    } catch (e: IllegalArgumentException) {
-        null
     }
 }
 
@@ -180,7 +169,7 @@ fun Route.statusPageRoutes(
                 runStatusPageRoute(call, FAILED_TO_GET_STATUS_PAGE, FAILED_TO_GET_STATUS_PAGE) {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -216,7 +205,7 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -268,7 +257,7 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -307,7 +296,7 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null || pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
@@ -346,8 +335,8 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-                    val monitorId = call.parameters["monitorId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
+                    val monitorId = call.parameters["monitorId"]?.toJavaUuidOrNull()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -386,7 +375,7 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null || pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
@@ -424,7 +413,7 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null || pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
@@ -463,8 +452,8 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-                    val incidentId = call.parameters["incidentId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
+                    val incidentId = call.parameters["incidentId"]?.toJavaUuidOrNull()
 
                     if (userId == null) {
                         call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -513,8 +502,8 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-                    val incidentId = call.parameters["incidentId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
+                    val incidentId = call.parameters["incidentId"]?.toJavaUuidOrNull()
 
                     if (userId == null || pageId == null || incidentId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
@@ -561,7 +550,7 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
 
                     if (userId == null || pageId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
@@ -613,8 +602,8 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-                    val domainId = call.parameters["domainId"]?.toIntOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
+                    val domainId = call.parameters["domainId"]?.toUuidOrNull()
 
                     if (userId == null || pageId == null || domainId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))
@@ -648,8 +637,8 @@ fun Route.statusPageRoutes(
                 suspendRunCatching {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asInt()
-                    val pageId = call.parameters["pageId"]?.toUUIDOrNull()
-                    val domainId = call.parameters["domainId"]?.toIntOrNull()
+                    val pageId = call.parameters["pageId"]?.toJavaUuidOrNull()
+                    val domainId = call.parameters["domainId"]?.toUuidOrNull()
 
                     if (userId == null || pageId == null || domainId == null) {
                         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid parameters"))

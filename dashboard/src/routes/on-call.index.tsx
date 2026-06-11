@@ -73,8 +73,15 @@ const avatarColors = [
   'bg-chart-5', 'bg-chart-6', 'bg-chart-7', 'bg-chart-8',
 ]
 
+function colorIndexForId(id: string | null | undefined): number {
+  if (!id) return 0
+  let hash = 0
+  for (const char of id) hash = (hash + char.charCodeAt(0)) % avatarColors.length
+  return hash
+}
+
 type OnCallScheduleSummary = {
-  currentOnCall?: {userId?: number | null} | null
+  currentOnCall?: {userId?: string | null} | null
 }
 
 type OnCallAlertSummary = {
@@ -104,7 +111,7 @@ function isLowPriorityAlert(alert: OnCallAlertSummary): boolean {
   return alert.priority.startsWith('P3') || alert.priority.startsWith('P4') || alert.priority.startsWith('P5')
 }
 
-function userOnCallSchedules<T extends OnCallScheduleSummary>(schedules: T[] | undefined, userId: number | undefined) {
+function userOnCallSchedules<T extends OnCallScheduleSummary>(schedules: T[] | undefined, userId: string | undefined) {
   return schedules?.filter(s => s.currentOnCall?.userId === userId) || []
 }
 
@@ -389,7 +396,7 @@ function CurrentOnCallAssignee({schedule}: Readonly<{ schedule: OnCallSchedule }
       <Avatar className="h-7 w-7">
         <AvatarFallback className={cn(
           'text-xs text-white',
-          avatarColors[(schedule.currentOnCall.userId || 0) % avatarColors.length],
+          avatarColors[colorIndexForId(schedule.currentOnCall.userId)],
         )}>
           {getInitials(schedule.currentOnCall.userName)}
         </AvatarFallback>

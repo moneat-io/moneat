@@ -20,11 +20,13 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 // ── Exposed Tables ──────────────────────────────────────────────────────
 
 object AiConversations : Table("ai_conversations") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id")
     val user_id = integer("user_id")
     val title = varchar("title", 255).nullable()
@@ -35,6 +37,7 @@ object AiConversations : Table("ai_conversations") {
 
 object AiMessages : Table("ai_messages") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val conversation_id = integer("conversation_id").references(AiConversations.id)
     val role = varchar("role", 20)
     val content = text("content")
@@ -53,21 +56,21 @@ object AiMessages : Table("ai_messages") {
 
 @Serializable
 data class ChatRequest(
-    val conversationId: Int? = null,
+    val conversationId: String? = null,
     val message: String,
     val currentPage: String? = null
 )
 
 @Serializable
 data class ExecuteActionRequest(
-    val conversationId: Int,
+    val conversationId: String,
     val actionId: String,
     val params: Map<String, String> = emptyMap()
 )
 
 @Serializable
 data class ConversationSummary(
-    val id: Int,
+    val id: String,
     val title: String?,
     val createdAt: String,
     val updatedAt: String
@@ -75,7 +78,7 @@ data class ConversationSummary(
 
 @Serializable
 data class ConversationDetail(
-    val id: Int,
+    val id: String,
     val title: String?,
     val messages: List<MessageDto>,
     val createdAt: String,
@@ -84,7 +87,7 @@ data class ConversationDetail(
 
 @Serializable
 data class MessageDto(
-    val id: Int,
+    val id: String,
     val role: String,
     val content: String,
     val pageContext: String? = null,
@@ -148,7 +151,7 @@ data class AiLink(
 
 @Serializable
 data class ChatApiResponse(
-    val conversationId: Int,
+    val conversationId: String,
     val response: AiResponse,
     val model: String? = null,
     val tokensUsed: Int? = null

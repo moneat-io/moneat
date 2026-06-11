@@ -30,9 +30,12 @@ import com.moneat.otlp.models.OtlpObservedServiceResponse
 import com.moneat.otlp.models.OtlpServiceMappingResponse
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpServiceRoutingService
+import com.moneat.shared.models.LogIndexes
+import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.delete
@@ -50,11 +53,23 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
+
+private const val LOG_INDEX_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+private const val MISSING_LOG_INDEX_RESOURCE_ID = "99999999-9999-9999-9999-999999999999"
+private const val OTLP_KEY_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+private const val OTLP_OBSERVED_SERVICE_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+private const val OTLP_MAPPING_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+private const val PROJECT_RESOURCE_ID = "55555555-5555-5555-5555-555555555555"
 
 class LogRoutesExtendedTest {
 
@@ -67,6 +82,12 @@ class LogRoutesExtendedTest {
     @BeforeTest
     fun setup() {
         startTestKoin()
+        Database.connect(
+            "jdbc:h2:mem:log_routes_extended;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+            driver = "org.h2.Driver"
+        )
+        TestDatabaseHelper.resetSchema(Organizations, LogIndexes)
+        seedLogIndexResolverRow()
     }
 
     @AfterTest
@@ -411,7 +432,7 @@ class LogRoutesExtendedTest {
     fun `POST logs api-keys creates key`() =
         testApplication {
             every { mockOtlpApiKeyService.createKey(1, "main key", 1) } returns CreateOtlpApiKeyResponse(
-                id = 10,
+                id = OTLP_KEY_RESOURCE_ID,
                 name = "main key",
                 keyPrefix = "motlp_abc123",
                 key = "motlp_abc123secret",
@@ -457,7 +478,7 @@ class LogRoutesExtendedTest {
         testApplication {
             every { mockOtlpApiKeyService.listKeys(1) } returns listOf(
                 OtlpApiKeyResponse(
-                    id = 10,
+                    id = OTLP_KEY_RESOURCE_ID,
                     name = "main key",
                     keyPrefix = "motlp_abc123",
                     createdAt = "2026-01-01T00:00:00Z",
@@ -481,14 +502,14 @@ class LogRoutesExtendedTest {
     @Test
     fun `DELETE logs api-keys returns no content when deleted`() =
         testApplication {
-            every { mockOtlpApiKeyService.deleteKey(1, 10) } returns true
+            every { mockOtlpApiKeyService.deleteKey(1, Uuid.parse(OTLP_KEY_RESOURCE_ID)) } returns true
             application {
                 installJwtAuth()
                 routing { logRoutes(mockLogService, mockOtlpApiKeyService, mockLogIndexService) }
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.delete("/v1/logs/api-keys/10") {
+            val response = client.delete("/v1/logs/api-keys/$OTLP_KEY_RESOURCE_ID") {
                 withAuth(token)
             }
 
@@ -498,14 +519,14 @@ class LogRoutesExtendedTest {
     @Test
     fun `DELETE logs api-keys returns 404 when missing`() =
         testApplication {
-            every { mockOtlpApiKeyService.deleteKey(1, 10) } returns false
+            every { mockOtlpApiKeyService.deleteKey(1, Uuid.parse(OTLP_KEY_RESOURCE_ID)) } returns false
             application {
                 installJwtAuth()
                 routing { logRoutes(mockLogService, mockOtlpApiKeyService, mockLogIndexService) }
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.delete("/v1/logs/api-keys/10") {
+            val response = client.delete("/v1/logs/api-keys/$OTLP_KEY_RESOURCE_ID") {
                 withAuth(token)
             }
 
@@ -582,7 +603,7 @@ class LogRoutesExtendedTest {
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.put("/v1/logs/indexes/10") {
+            val response = client.put("/v1/logs/indexes/$LOG_INDEX_RESOURCE_ID") {
                 withAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"warnings"}""")
@@ -602,7 +623,7 @@ class LogRoutesExtendedTest {
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.put("/v1/logs/indexes/10") {
+            val response = client.put("/v1/logs/indexes/$MISSING_LOG_INDEX_RESOURCE_ID") {
                 withAuth(token)
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"warnings"}""")
@@ -622,7 +643,7 @@ class LogRoutesExtendedTest {
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.delete("/v1/logs/indexes/10") {
+            val response = client.delete("/v1/logs/indexes/$LOG_INDEX_RESOURCE_ID") {
                 withAuth(token)
             }
 
@@ -639,7 +660,7 @@ class LogRoutesExtendedTest {
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.delete("/v1/logs/indexes/10") {
+            val response = client.delete("/v1/logs/indexes/$MISSING_LOG_INDEX_RESOURCE_ID") {
                 withAuth(token)
             }
 
@@ -714,12 +735,12 @@ class LogRoutesExtendedTest {
         testApplication {
             every { mockOtlpServiceRoutingService.listObservedServices(1) } returns listOf(
                 OtlpObservedServiceResponse(
-                    id = 10,
-                    mappingId = 20,
+                    id = OTLP_OBSERVED_SERVICE_RESOURCE_ID,
+                    mappingId = OTLP_MAPPING_RESOURCE_ID,
                     serviceNamespace = "checkout",
                     serviceName = "api",
-                    projectId = 30,
-                    projectResourceId = "11111111-1111-1111-1111-111111111111",
+                    projectId = PROJECT_RESOURCE_ID,
+                    projectResourceId = PROJECT_RESOURCE_ID,
                     projectName = "Backend",
                     seenLogs = true,
                     seenTraces = false,
@@ -751,7 +772,7 @@ class LogRoutesExtendedTest {
             assertTrue(responseBody.contains("checkout"))
             assertTrue(responseBody.contains("Backend"))
             assertTrue(
-                responseBody.contains(""""project_resource_id":"11111111-1111-1111-1111-111111111111"""")
+                responseBody.contains(""""project_resource_id":"$PROJECT_RESOURCE_ID"""")
             )
         }
 
@@ -759,11 +780,11 @@ class LogRoutesExtendedTest {
     fun `POST otlp service mapping returns mapping response`() =
         testApplication {
             every { mockOtlpServiceRoutingService.upsertMapping(1, any()) } returns OtlpServiceMappingResponse(
-                id = 20,
+                id = OTLP_MAPPING_RESOURCE_ID,
                 serviceNamespace = "checkout",
                 serviceName = "api",
-                projectId = 30,
-                projectResourceId = "11111111-1111-1111-1111-111111111111",
+                projectId = PROJECT_RESOURCE_ID,
+                projectResourceId = PROJECT_RESOURCE_ID,
                 projectName = "Backend",
                 updatedAt = "2026-01-01T00:00:00Z"
             )
@@ -783,14 +804,14 @@ class LogRoutesExtendedTest {
             val response = client.post("/v1/otlp/service-mappings") {
                 withAuth(token)
                 contentType(ContentType.Application.Json)
-                setBody("""{"service_name":"api","service_namespace":"checkout","project_id":30}""")
+                setBody("""{"service_name":"api","service_namespace":"checkout","project_id":"$PROJECT_RESOURCE_ID"}""")
             }
 
             assertEquals(HttpStatusCode.OK, response.status)
             val responseBody = response.bodyAsText()
             assertTrue(responseBody.contains("Backend"))
             assertTrue(
-                responseBody.contains(""""project_resource_id":"11111111-1111-1111-1111-111111111111"""")
+                responseBody.contains(""""project_resource_id":"$PROJECT_RESOURCE_ID"""")
             )
         }
 
@@ -824,7 +845,7 @@ class LogRoutesExtendedTest {
     @Test
     fun `DELETE otlp service mapping returns no content when deleted`() =
         testApplication {
-            every { mockOtlpServiceRoutingService.deleteMapping(1, 20) } returns true
+            every { mockOtlpServiceRoutingService.deleteMapping(1, Uuid.parse(OTLP_MAPPING_RESOURCE_ID)) } returns true
             application {
                 installJwtAuth()
                 routing {
@@ -838,7 +859,7 @@ class LogRoutesExtendedTest {
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.delete("/v1/otlp/service-mappings/20") {
+            val response = client.delete("/v1/otlp/service-mappings/$OTLP_MAPPING_RESOURCE_ID") {
                 withAuth(token)
             }
 
@@ -848,7 +869,7 @@ class LogRoutesExtendedTest {
     @Test
     fun `DELETE otlp service mapping returns 404 when missing`() =
         testApplication {
-            every { mockOtlpServiceRoutingService.deleteMapping(1, 20) } returns false
+            every { mockOtlpServiceRoutingService.deleteMapping(1, Uuid.parse(OTLP_MAPPING_RESOURCE_ID)) } returns false
             application {
                 installJwtAuth()
                 routing {
@@ -862,7 +883,7 @@ class LogRoutesExtendedTest {
             }
 
             val token = RouteTestSupport.createToken(userId = 1, orgId = 1)
-            val response = client.delete("/v1/otlp/service-mappings/20") {
+            val response = client.delete("/v1/otlp/service-mappings/$OTLP_MAPPING_RESOURCE_ID") {
                 withAuth(token)
             }
 
@@ -896,7 +917,7 @@ class LogRoutesExtendedTest {
 
     private fun logIndexResponse(name: String = "errors"): LogIndexResponse =
         LogIndexResponse(
-            id = 10,
+            id = LOG_INDEX_RESOURCE_ID,
             name = name,
             filterQuery = "level:error",
             retentionDays = 30,
@@ -906,4 +927,23 @@ class LogRoutesExtendedTest {
             createdAt = "2026-01-01T00:00:00Z",
             updatedAt = "2026-01-01T00:00:00Z"
         )
+
+    private fun seedLogIndexResolverRow() {
+        val now = Clock.System.now()
+        transaction {
+            Organizations.insert {
+                it[Organizations.id] = 1
+                it[Organizations.name] = "Logs Org"
+                it[Organizations.slug] = "logs-org"
+            }
+            LogIndexes.insert {
+                it[LogIndexes.id] = 10
+                it[LogIndexes.resource_id] = Uuid.parse(LOG_INDEX_RESOURCE_ID)
+                it[LogIndexes.organizationId] = 1
+                it[LogIndexes.name] = "errors"
+                it[LogIndexes.createdAt] = now
+                it[LogIndexes.updatedAt] = now
+            }
+        }
+    }
 }

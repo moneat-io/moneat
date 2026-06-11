@@ -20,6 +20,7 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const ORGANIZATION_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174401'
 
 describe('Billing API', () => {
   beforeEach(() => {
@@ -51,7 +52,7 @@ describe('Billing API', () => {
 
   it('fetches billing usage', async () => {
     const mockUsage = {
-      organizationId: 1,
+      organizationId: ORGANIZATION_RESOURCE_ID,
       plan: 'PRO',
       status: 'active',
       usedUnits: 1000,
@@ -71,13 +72,13 @@ describe('Billing API', () => {
 
   it('fetches billing usage insights', async () => {
     const mockInsights = {
-      organizationId: 1,
+      organizationId: ORGANIZATION_RESOURCE_ID,
       periodStart: '2026-01-01',
       periodEnd: '2026-01-31',
       generatedAt: '2026-01-15T12:00:00Z',
       billingMode: 'cloud',
       usage: {
-        organizationId: 1,
+        organizationId: ORGANIZATION_RESOURCE_ID,
         plan: 'PRO',
         status: 'active',
         usedUnits: 1000,
@@ -126,7 +127,7 @@ describe('Billing API', () => {
 
   it('fetches APM span usage debug groups', async () => {
     const mockDebug = {
-      organizationId: 1,
+      organizationId: ORGANIZATION_RESOURCE_ID,
       periodStart: '2026-01-01',
       periodEnd: '2026-01-31',
       totalSpans: 42,
@@ -171,7 +172,7 @@ describe('Billing API', () => {
   it('normalizes APM span usage debug limits', async () => {
     const seenLimits: string[] = []
     const mockDebug = {
-      organizationId: 1,
+      organizationId: ORGANIZATION_RESOURCE_ID,
       periodStart: '2026-01-01',
       periodEnd: '2026-01-31',
       totalSpans: 0,

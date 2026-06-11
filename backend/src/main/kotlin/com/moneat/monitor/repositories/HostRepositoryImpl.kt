@@ -30,9 +30,11 @@ import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private val hostTagsJson = Json { ignoreUnknownKeys = true }
@@ -61,6 +63,23 @@ class HostRepositoryImpl : HostRepository {
                 .firstOrNull()
                 ?.let { rowToHostData(it) }
         }
+
+    override fun getByResourceId(
+        resourceId: Uuid,
+        organizationIds: List<Int>
+    ): HostData? {
+        if (organizationIds.isEmpty()) return null
+        return transaction {
+            Hosts
+                .selectAll()
+                .where {
+                    (Hosts.resource_id eq resourceId) and
+                        (Hosts.organization_id inList organizationIds)
+                }
+                .firstOrNull()
+                ?.let { rowToHostData(it) }
+        }
+    }
 
     override fun delete(hostId: Int, organizationId: Int): Boolean =
         transaction {
@@ -93,6 +112,7 @@ class HostRepositoryImpl : HostRepository {
     private fun rowToHostData(row: ResultRow): HostData =
         HostData(
             id = row[Hosts.id],
+            resourceId = row[Hosts.resource_id],
             organizationId = row[Hosts.organization_id],
             hostname = row[Hosts.hostname],
             displayName = row[Hosts.display_name],

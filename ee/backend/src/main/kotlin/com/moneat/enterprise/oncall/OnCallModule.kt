@@ -58,6 +58,7 @@ class OnCallModule :
     private var shiftChangeNotifier: ShiftChangeNotifier? = null
     private val priorityService = PriorityService()
     private val businessHoursService = BusinessHoursService()
+    private val escalationPolicyService = EscalationPolicyService()
     private val onCallIncidentService = OnCallIncidentService()
 
     override val name: String = "On-Call"
@@ -155,6 +156,16 @@ class OnCallModule :
         priority: String,
     ): Boolean = businessHoursService.shouldEscalate(organizationId, priority)
 
+    override fun resolveEscalationPolicyId(
+        organizationId: Int,
+        escalationPolicyResourceId: String,
+    ): Int? = escalationPolicyService.resolveEscalationPolicyId(organizationId, escalationPolicyResourceId)
+
+    override fun resolveAlertId(
+        organizationId: Int,
+        alertResourceId: String,
+    ): Int? = alertIdForResource(organizationId, alertResourceId)
+
     override suspend fun triggerEscalation(
         organizationId: Int,
         escalationPolicyId: Int,
@@ -164,7 +175,7 @@ class OnCallModule :
         alertSource: String,
         deduplicationKey: String?,
         metadata: String?,
-    ): Int? {
+    ): String? {
         val metadataMap: Map<String, JsonElement>? =
             metadata?.let {
                 try {
@@ -194,7 +205,7 @@ class OnCallModule :
         title: String,
         description: String?,
         severity: String,
-    ): Int =
+    ): String =
         onCallIncidentService
             .declareIncident(
                 organizationId = organizationId,
@@ -211,7 +222,7 @@ class OnCallModule :
     ): IncidentInfo? {
         val incident = onCallIncidentService.getIncident(incidentId) ?: return null
         return IncidentInfo(
-            id = incident.id,
+            id = incident.internalId,
             organizationId = incident.organizationId,
             title = incident.title,
             status = incident.status,
@@ -225,7 +236,7 @@ class OnCallModule :
         val incident = onCallIncidentService.getIncident(incidentId) ?: return false
         return incident.alerts.fold(false) { acknowledged, alert ->
             if (alert.status == "TRIGGERED") {
-                onCallAlertService.acknowledge(alert.id, userId) || acknowledged
+                onCallAlertService.acknowledge(alert.internalId, userId) || acknowledged
             } else {
                 acknowledged
             }
@@ -238,7 +249,7 @@ class OnCallModule :
     ): IncidentInfo? {
         val alert = onCallAlertService.getAlert(alertId, userId) ?: return null
         return IncidentInfo(
-            id = alert.id,
+            id = alert.internalId,
             organizationId = alert.organizationId,
             title = alert.title,
             status = alert.status,

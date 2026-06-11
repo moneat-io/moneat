@@ -29,6 +29,7 @@ import com.moneat.security.signals.SignalOutcome
 import com.moneat.security.signals.SignalSeverity
 import com.moneat.security.signals.SignalSource
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OnCallIncidents
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
@@ -93,6 +94,7 @@ class WorkflowServiceTest {
     private lateinit var workflowEngine: FakeWorkflowExecutionEngine
     private lateinit var service: WorkflowService
     private var orgId: Int = 0
+    private var verifiedUserId: Int = 0
 
     @BeforeTest
     fun setup() {
@@ -126,16 +128,18 @@ class WorkflowServiceTest {
             WorkflowRunSteps,
             WorkflowAuditEvents,
             WorkflowUsageEvents,
-            AlertEpisodes
+            AlertEpisodes,
+            OnCallIncidents
         )
         transaction {
-            SchemaUtils.create(Users, Organizations, Memberships, Workflows, AlertEpisodes)
+            SchemaUtils.create(Users, Organizations, Memberships, Workflows, AlertEpisodes, OnCallIncidents)
             exec("DROP TABLE IF EXISTS workflow_runs")
             exec("DROP TABLE IF EXISTS workflow_versions")
             exec(
                 """
                 CREATE TABLE workflow_versions (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     workflow_id INT NOT NULL,
                     version INT NOT NULL,
                     conditions TEXT NOT NULL DEFAULT '[]',
@@ -158,6 +162,7 @@ class WorkflowServiceTest {
                 """
                 CREATE TABLE workflow_runs (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     workflow_id INT NOT NULL,
                     workflow_version_id INT NOT NULL,
                     organization_id INT NOT NULL,
@@ -199,6 +204,7 @@ class WorkflowServiceTest {
                 """
                 CREATE TABLE workflow_run_steps (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     run_id INT NOT NULL,
                     node_id VARCHAR(120) NOT NULL,
                     type VARCHAR(64) NOT NULL,
@@ -224,6 +230,7 @@ class WorkflowServiceTest {
                 """
                 CREATE TABLE workflow_audit_events (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     organization_id INT NOT NULL,
                     workflow_id INT,
                     run_id INT,
@@ -738,7 +745,7 @@ class WorkflowServiceTest {
             val startRequest = workflowEngine.requests.single()
             val temporalIds = persistedTemporalIds(queuedRun.id)
             assertEquals(startRequest.temporalWorkflowId, temporalIds.workflowId)
-            assertEquals("temporal-run-${queuedRun.id}", temporalIds.runId)
+            assertEquals("temporal-run-${startRequest.runId}", temporalIds.runId)
 
             service.executeRun(queuedRun.id)
             service.executeRun(queuedRun.id)
@@ -970,14 +977,15 @@ class WorkflowServiceTest {
                     request = WorkflowRunInstanceRequest(
                         scope = mapOf("workflow.input.reason" to JsonPrimitive("operator"))
                     ),
-                    callerUserId = 99
+                    callerUserId = verifiedUserId
                 )
 
             assertNotNull(run)
             assertEquals("api", run.triggerName)
             assertEquals("pending", run.status)
-            assertEquals(workflowEngine.requests.single().temporalWorkflowId, run.temporalWorkflowId)
-            assertEquals("temporal-run-${run.id}", run.temporalRunId)
+            val startRequest = workflowEngine.requests.single()
+            assertEquals(startRequest.temporalWorkflowId, run.temporalWorkflowId)
+            assertEquals("temporal-run-${startRequest.runId}", run.temporalRunId)
             assertNotNull(service.getRun(orgId, workflow.id, run.id))
 
             val canceled = service.cancelRun(orgId, workflow.id, run.id)
@@ -1008,7 +1016,7 @@ class WorkflowServiceTest {
                     organizationId = orgId,
                     workflowId = matching.id,
                     request = request,
-                    callerUserId = 7
+                    callerUserId = verifiedUserId
                 )
 
             assertNotNull(matched)
@@ -1030,7 +1038,7 @@ class WorkflowServiceTest {
                     organizationId = orgId,
                     workflowId = mismatch.id,
                     request = request,
-                    callerUserId = 7
+                    callerUserId = verifiedUserId
                 )
 
             assertNull(skipped)
@@ -1297,16 +1305,16 @@ class WorkflowServiceTest {
 
             service.publishIncidentCreated(alertEvent())
             service.publishIncidentCreated(alertEvent())
-            val episodeId =
+            val episodeResourceId =
                 transaction {
                     AlertEpisodes
                         .selectAll()
                         .where { AlertEpisodes.deduplicationKey eq "host-1" }
-                        .single()[AlertEpisodes.id]
-                        .value
+                        .single()[AlertEpisodes.resourceId]
+                        .toString()
                 }
 
-            assertEquals(listOf("incident.id=$episodeId"), runIdentities(createdWorkflow.id))
+            assertEquals(listOf("incident.id=$episodeResourceId"), runIdentities(createdWorkflow.id))
             assertEquals(emptyList(), runIdentities(resolvedWorkflow.id))
 
             service.publishAlertTriggered(alertEvent())
@@ -1318,7 +1326,7 @@ class WorkflowServiceTest {
             )
 
             assertEquals(
-                listOf("incident.id=$episodeId|incident.status=resolved"),
+                listOf("incident.id=$episodeResourceId|incident.status=resolved"),
                 runIdentities(resolvedWorkflow.id)
             )
         }
@@ -1346,6 +1354,14 @@ class WorkflowServiceTest {
                 )
             publish(createdWorkflow.id)
             publish(resolvedWorkflow.id)
+            val incidentResourceId = "11111111-2222-4333-8444-555555555555"
+            transaction {
+                OnCallIncidents.insert {
+                    it[id] = 42
+                    it[resourceId] = kotlin.uuid.Uuid.parse(incidentResourceId)
+                    it[organizationId] = orgId
+                }
+            }
 
             service.publishDeclaredIncidentCreated(
                 organizationId = orgId,
@@ -1360,7 +1376,7 @@ class WorkflowServiceTest {
                 severity = IncidentSeverity.SEV1
             )
 
-            assertEquals(listOf("incident.id=42"), runIdentities(createdWorkflow.id))
+            assertEquals(listOf("incident.id=$incidentResourceId"), runIdentities(createdWorkflow.id))
             assertEquals(emptyList(), runIdentities(resolvedWorkflow.id))
 
             service.publishDeclaredIncidentResolved(
@@ -1371,7 +1387,7 @@ class WorkflowServiceTest {
             )
 
             assertEquals(
-                listOf("incident.id=42|incident.status=resolved"),
+                listOf("incident.id=$incidentResourceId|incident.status=resolved"),
                 runIdentities(resolvedWorkflow.id)
             )
         }
@@ -1450,7 +1466,7 @@ class WorkflowServiceTest {
 
     private fun seedOrganizationWithMembers(): Int {
         val organizationId = seedOrganization("Workflow Org")
-        val verifiedUserId = seedUser("verified@moneat.io", verified = true)
+        verifiedUserId = seedUser("verified@moneat.io", verified = true)
         val unverifiedUserId = seedUser("unverified@moneat.io", verified = false)
         transaction {
             Memberships.insert {
@@ -1505,11 +1521,11 @@ class WorkflowServiceTest {
             onceForTemplate = onceForTemplate
         )
 
-    private fun publish(workflowId: Int) {
+    private fun publish(workflowId: String) {
         assertNotNull(service.publishWorkflow(orgId, workflowId))
     }
 
-    private fun runIdentities(workflowId: Int): List<String> =
+    private fun runIdentities(workflowId: String): List<String> =
         service.listRuns(orgId, workflowId).map { it.onceFor }.sorted()
 
     private fun emailStep(): WorkflowStepConfig =
@@ -1599,6 +1615,11 @@ class WorkflowServiceTest {
             dedupKey = "$ruleId|host|proc",
             entities = mapOf("resource" to resource)
         )
+
+    private fun persistedTemporalIds(runId: String): PersistedTemporalIds {
+        val internalRunId = service.resolveRunId(runId) ?: error("Run not found")
+        return persistedTemporalIds(internalRunId)
+    }
 
     private fun persistedTemporalIds(runId: Int): PersistedTemporalIds =
         transaction {

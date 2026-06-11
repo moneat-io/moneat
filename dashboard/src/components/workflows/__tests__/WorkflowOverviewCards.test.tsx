@@ -27,8 +27,8 @@ const overview: WorkflowOverviewResponse = {
   success_rate: 0.95,
   failed_last_30d: 6,
   top_workflows: [
-    {workflow_id: 1, name: 'Pager', run_count: 40},
-    {workflow_id: 2, name: 'Slack notify', run_count: 12},
+    {workflow_id: '11111111-1111-4111-8111-111111111111', name: 'Pager', run_count: 40},
+    {workflow_id: '22222222-2222-4222-8222-222222222222', name: 'Slack notify', run_count: 12},
   ],
 }
 

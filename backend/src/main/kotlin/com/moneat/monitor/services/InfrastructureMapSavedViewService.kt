@@ -36,6 +36,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.util.Locale
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val SAVED_VIEW_NAME_MAX_LENGTH = 48
 private const val SAVED_VIEW_SEARCH_QUERY_MAX_LENGTH = 200
@@ -106,11 +107,11 @@ class InfrastructureMapSavedViewService {
     fun deleteView(
         organizationId: Int,
         userId: Int,
-        viewId: Int,
+        viewResourceId: Uuid,
     ): Boolean =
         transaction {
             InfrastructureMapSavedViews.deleteWhere {
-                (InfrastructureMapSavedViews.id eq viewId) and
+                (InfrastructureMapSavedViews.resource_id eq viewResourceId) and
                     (InfrastructureMapSavedViews.organization_id eq organizationId) and
                     (InfrastructureMapSavedViews.user_id eq userId)
             } > 0
@@ -121,7 +122,7 @@ class InfrastructureMapSavedViewService {
             row[InfrastructureMapSavedViews.view_state]
         )
         return InfrastructureMapSavedViewResponse(
-            id = row[InfrastructureMapSavedViews.id],
+            id = row[InfrastructureMapSavedViews.resource_id].toString(),
             name = row[InfrastructureMapSavedViews.name],
             resourceKind = viewState.resourceKind,
             groupBy = viewState.groupBy,

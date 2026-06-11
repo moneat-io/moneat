@@ -19,6 +19,7 @@ package com.moneat.auth.routes
 import com.moneat.auth.services.AccountDeletionService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -37,6 +38,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import com.moneat.utils.suspendRunCatching
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -51,7 +53,7 @@ data class DeleteOrganizationRequest(
 )
 
 @Serializable
-data class OrgDetailsResponse(val id: Int, val name: String, val role: String)
+data class OrgDetailsResponse(val id: String, val name: String, val role: String)
 
 @Serializable
 data class UserDeletionValidationResponse(
@@ -85,8 +87,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletio
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
 
-    val orgId = call.parameters["orgId"]?.toIntOrNull()
-    if (orgId == null) {
+    val orgResourceId = call.parameters["orgId"]?.let(::parseOrganizationResourceId)
+    if (orgResourceId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
         return
     }
@@ -98,7 +100,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletio
                 .selectAll()
                 .where {
                     (Memberships.user_id eq userId) and
-                        (Memberships.organization_id eq orgId) and
+                        (Organizations.resource_id eq orgResourceId) and
                         (Organizations.deletedAt.isNull())
                 }.singleOrNull()
         }
@@ -110,7 +112,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletio
 
     call.respond(
         OrgDetailsResponse(
-            id = orgId,
+            id = orgWithRole[Organizations.resource_id].toString(),
             name = orgWithRole[Organizations.name],
             role = orgWithRole[Memberships.role]
         )
@@ -177,11 +179,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
 
-    val orgId = call.parameters["orgId"]?.toIntOrNull()
-    if (orgId == null) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
-        return
-    }
+    val orgId = resolveOrganizationIdFromPath(userId) ?: return
 
     val request =
         suspendRunCatching {
@@ -245,11 +243,35 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrgDeletionValid
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = call.parameters["orgId"]?.toIntOrNull()
-    if (orgId == null) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
-        return
-    }
+    val orgId = resolveOrganizationIdFromPath(userId) ?: return
     val validation = deletionService.validateOrganizationDeletion(orgId, userId)
     call.respond(OrgDeletionValidationResponse(canDelete = validation.canDelete, error = validation.errorMessage))
 }
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveOrganizationIdFromPath(userId: Int): Int? {
+    val orgResourceId = call.parameters["orgId"]?.let(::parseOrganizationResourceId)
+    if (orgResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
+        return null
+    }
+
+    val orgId = transaction {
+        Memberships
+            .innerJoin(Organizations)
+            .selectAll()
+            .where {
+                (Memberships.user_id eq userId) and
+                    (Organizations.resource_id eq orgResourceId) and
+                    (Organizations.deletedAt.isNull())
+            }
+            .singleOrNull()
+            ?.get(Organizations.id)
+    }
+    if (orgId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+    }
+    return orgId
+}
+
+private fun parseOrganizationResourceId(value: String): Uuid? =
+    value.toUuidOrNull()

@@ -24,8 +24,10 @@ import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 object Workflows : IntIdTable("workflows") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 255)
     val triggerName = varchar("trigger_name", 120)
@@ -33,9 +35,14 @@ object Workflows : IntIdTable("workflows") {
     val systemKey = varchar("system_key", 120).nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(resourceId)
+    }
 }
 
 object WorkflowVersions : IntIdTable("workflow_versions") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val workflowId = integer("workflow_id").references(Workflows.id, onDelete = ReferenceOption.CASCADE)
     val version = integer("version")
     val conditions = jsonb("conditions").default("[]")
@@ -51,6 +58,7 @@ object WorkflowVersions : IntIdTable("workflow_versions") {
 }
 
 object WorkflowRuns : IntIdTable("workflow_runs") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val workflowId = integer("workflow_id").references(Workflows.id, onDelete = ReferenceOption.CASCADE)
     val workflowVersionId = integer("workflow_version_id").references(WorkflowVersions.id)
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
@@ -65,9 +73,14 @@ object WorkflowRuns : IntIdTable("workflow_runs") {
     val createdAt = timestamp("created_at")
     val completedAt = timestamp("completed_at").nullable()
     val failedAt = timestamp("failed_at").nullable()
+
+    init {
+        uniqueIndex(resourceId)
+    }
 }
 
 object WorkflowRunSteps : IntIdTable("workflow_run_steps") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val runId = integer("run_id").references(WorkflowRuns.id, onDelete = ReferenceOption.CASCADE)
     val nodeId = varchar("node_id", 120)
     val type = varchar("type", 64)
@@ -240,13 +253,13 @@ data class WorkflowRunInstanceRequest(
 
 @Serializable
 data class WorkflowRunCancelResponse(
-    val id: Int,
+    val id: String,
     val status: String
 )
 
 @Serializable
 data class WorkflowWebhookSigningResponse(
-    @SerialName("workflow_id") val workflowId: Int,
+    @SerialName("workflow_id") val workflowId: String,
     @SerialName("webhook_url") val webhookUrl: String,
     @SerialName("signing_secret") val signingSecret: String,
     @SerialName("signature_header") val signatureHeader: String,
@@ -255,7 +268,7 @@ data class WorkflowWebhookSigningResponse(
 
 @Serializable
 data class WorkflowResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("trigger_name") val triggerName: String,
     val enabled: Boolean,
@@ -274,8 +287,8 @@ data class WorkflowResponse(
 
 @Serializable
 data class WorkflowRunStepResponse(
-    val id: Int,
-    @SerialName("run_id") val runId: Int,
+    val id: String,
+    @SerialName("run_id") val runId: String,
     @SerialName("node_id") val nodeId: String,
     val type: String,
     val status: String,
@@ -289,9 +302,9 @@ data class WorkflowRunStepResponse(
 
 @Serializable
 data class WorkflowRunResponse(
-    val id: Int,
-    @SerialName("workflow_id") val workflowId: Int,
-    @SerialName("workflow_version_id") val workflowVersionId: Int,
+    val id: String,
+    @SerialName("workflow_id") val workflowId: String,
+    @SerialName("workflow_version_id") val workflowVersionId: String,
     @SerialName("trigger_name") val triggerName: String,
     @SerialName("once_for") val onceFor: String,
     val status: String,

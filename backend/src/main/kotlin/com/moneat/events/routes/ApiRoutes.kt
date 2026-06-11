@@ -17,6 +17,7 @@
 package com.moneat.events.routes
 
 import com.moneat.alerts.models.SuppressAlertEpisodeRequest
+import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.auth.requireCurrentOrg
@@ -58,6 +59,7 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.SdkVersionService
 import com.moneat.shared.services.SidebarPreferenceService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.DetailedErrorResponse
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
@@ -88,6 +90,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val DEFAULT_PAGE = 1
 private const val DEFAULT_PAGE_LIMIT = 25
@@ -181,11 +184,19 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                                     .firstOrNull()
                                     ?.get(Organizations.slug)
                             }
+                            val orgResourceId = orgId.let { id ->
+                                Organizations
+                                    .selectAll()
+                                    .where { Organizations.id eq id }
+                                    .firstOrNull()
+                                    ?.get(Organizations.resource_id)
+                                    ?.toString()
+                            }
                             val orgRole = membership?.get(Memberships.role)
                             val hiddenItems = membership?.get(Memberships.sidebar_hidden_items) ?: emptyList()
 
                             UserResponse(
-                                id = userRow[Users.id],
+                                id = userRow[Users.resource_id].toString(),
                                 email = userRow[Users.email],
                                 name = userRow[Users.name],
                                 emailVerified = userRow[Users.email_verified],
@@ -197,7 +208,7 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                                 sidebarHiddenItems = hiddenItems,
                                 phoneNumber = userRow[Users.phone_number],
                                 timezone = userRow[Users.timezone],
-                                orgId = orgId
+                                orgId = orgResourceId,
                             )
                         }
 
@@ -582,7 +593,7 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
                         } else {
                             call.resolveSubscriptionOrganizationId(userId) ?: return@get
                         }
-                    val serviceIds = call.resolveServiceIdsQuery(projectIdResolver)
+                    val serviceIds = call.resolveServiceIdsQuery(projectIdResolver, organizationId)
                     if (serviceIds == null) {
                         call.respond(HttpStatusCode.BadRequest, ERROR_INVALID_SERVICE_IDS)
                         return@get
@@ -1614,7 +1625,7 @@ private fun Route.alertLifecycleRoutes(alertEpisodeService: AlertEpisodeService)
     post("/alerts/lifecycles/{episodeId}/ignore") {
         val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
         val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
-        val episodeId = call.alertEpisodeId() ?: return@post
+        val episodeId = call.alertEpisodeId(orgId) ?: return@post
         val request = call.receive<SuppressAlertEpisodeRequest>()
         val episode = alertEpisodeService.suppressEpisode(orgId, episodeId, userId, request.reason)
             ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
@@ -1624,20 +1635,38 @@ private fun Route.alertLifecycleRoutes(alertEpisodeService: AlertEpisodeService)
     post("/alerts/lifecycles/{episodeId}/unignore") {
         val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
         val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
-        val episodeId = call.alertEpisodeId() ?: return@post
+        val episodeId = call.alertEpisodeId(orgId) ?: return@post
         val episode = alertEpisodeService.unsuppressEpisode(orgId, episodeId)
             ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
         call.respond(episode)
     }
 }
 
-private suspend fun ApplicationCall.alertEpisodeId(): Int? {
-    val episodeId = parameters["episodeId"]?.toIntOrNull()
-    if (episodeId == null) {
+private suspend fun ApplicationCall.alertEpisodeId(orgId: Int): Int? {
+    val resourceId = parameters["episodeId"]?.let(::parseAlertEpisodeResourceId)
+    if (resourceId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert episode ID"))
+        return null
+    }
+    val episodeId = transaction {
+        AlertEpisodes
+            .selectAll()
+            .where {
+                (AlertEpisodes.resourceId eq resourceId) and
+                    (AlertEpisodes.organizationId eq orgId)
+            }
+            .firstOrNull()
+            ?.get(AlertEpisodes.id)
+            ?.value
+    }
+    if (episodeId == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
     }
     return episodeId
 }
+
+private fun parseAlertEpisodeResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private fun ApplicationCall.resolveProjectPathId(projectIdResolver: ProjectIdResolver): Long? =
     parameters["projectId"]?.let(projectIdResolver::resolve)
@@ -1658,7 +1687,7 @@ private suspend fun ApplicationCall.resolveServiceReadContext(
             resolveSubscriptionOrganizationId(userId) ?: return null
         }
 
-    val serviceIds = resolveServiceIdsQuery(projectIdResolver)
+    val serviceIds = resolveServiceIdsQuery(projectIdResolver, organizationId)
     if (serviceIds == null) {
         respond(HttpStatusCode.BadRequest, ERROR_INVALID_SERVICE_IDS)
         return null
@@ -1699,11 +1728,14 @@ private fun normalizeRequestedServiceIds(serviceIds: List<Long>): List<Long> =
 private fun ApplicationCall.serviceNamesQuery(): List<String> =
     queryCsvValues("services") + queryCsvValues("service")
 
-private fun ApplicationCall.resolveServiceIdsQuery(projectIdResolver: ProjectIdResolver): List<Long>? {
+private fun ApplicationCall.resolveServiceIdsQuery(
+    projectIdResolver: ProjectIdResolver,
+    organizationId: Int,
+): List<Long>? {
     val rawServiceIds = queryCsvValues("serviceIds") + queryCsvValues("serviceId")
     if (rawServiceIds.isEmpty()) return emptyList()
     return rawServiceIds.map { rawServiceId ->
-        projectIdResolver.resolve(rawServiceId) ?: return null
+        projectIdResolver.resolve(rawServiceId, organizationId) ?: return null
     }.distinct()
 }
 

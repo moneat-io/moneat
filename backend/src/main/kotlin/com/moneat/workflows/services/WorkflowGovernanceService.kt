@@ -29,6 +29,7 @@ import com.moneat.workflows.models.WorkflowRuns
 import com.moneat.workflows.models.WorkflowUsageResponse
 import com.moneat.workflows.models.Workflows
 import com.moneat.workflows.models.workflowJson
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.encodeToString
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -38,6 +39,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * Read/operate facade for workflow governance: blueprint instantiation, the
@@ -73,7 +75,7 @@ class WorkflowGovernanceService(
         WorkflowAudit.record(
             organizationId = organizationId,
             action = WorkflowAudit.ACTION_INSTANTIATED_BLUEPRINT,
-            workflowId = workflow.id,
+            workflowId = numericWorkflowId(organizationId, workflow),
             actorUserId = actorUserId,
             detail = mapOf("blueprint" to key)
         )
@@ -115,6 +117,19 @@ class WorkflowGovernanceService(
     ): List<WorkflowAuditEventResponse> =
         WorkflowAudit.list(organizationId, workflowId, limit)
 
+    fun listAudit(
+        organizationId: Int,
+        workflowId: String,
+        limit: Int
+    ): List<WorkflowAuditEventResponse> {
+        val numericWorkflowId = resolveWorkflowResourceId(organizationId, workflowId)
+        return if (numericWorkflowId != null) {
+            WorkflowAudit.list(organizationId, numericWorkflowId, limit)
+        } else {
+            emptyList()
+        }
+    }
+
     fun export(
         organizationId: Int,
         workflowId: Int,
@@ -128,6 +143,15 @@ class WorkflowGovernanceService(
             actorUserId = actorUserId
         )
         return WorkflowExport.toExport(workflow)
+    }
+
+    fun export(
+        organizationId: Int,
+        workflowId: String,
+        actorUserId: Int?
+    ): WorkflowExportResponse? {
+        val numericWorkflowId = resolveWorkflowResourceId(organizationId, workflowId) ?: return null
+        return export(organizationId, numericWorkflowId, actorUserId)
     }
 
     fun import(
@@ -168,7 +192,13 @@ class WorkflowGovernanceService(
                     onceForTemplate = request.onceForTemplate
                 )
             )
-        recordImport(organizationId, created.id, actorUserId, created = true, changed = true)
+        recordImport(
+            organizationId = organizationId,
+            workflowId = numericWorkflowId(organizationId, created),
+            actorUserId = actorUserId,
+            created = true,
+            changed = true,
+        )
         return created
     }
 
@@ -183,22 +213,40 @@ class WorkflowGovernanceService(
                 existing.enabled == request.enabled &&
                 existing.onceForTemplate == request.onceForTemplate
         if (unchanged) {
-            recordImport(organizationId, existing.id, actorUserId, created = false, changed = false)
+            recordImport(
+                organizationId,
+                numericWorkflowId(organizationId, existing),
+                actorUserId,
+                created = false,
+                changed = false
+            )
             return existing
         }
+        val workflowId = numericWorkflowId(organizationId, existing)
         val updated =
             workflowService.updateWorkflow(
                 organizationId,
-                existing.id,
+                workflowId,
                 UpdateWorkflowRequest(
                     enabled = request.enabled,
                     graph = request.graph,
                     onceForTemplate = request.onceForTemplate
                 )
             ) ?: existing
-        recordImport(organizationId, existing.id, actorUserId, created = false, changed = true)
+        recordImport(organizationId, workflowId, actorUserId, created = false, changed = true)
         return updated
     }
+
+    private fun numericWorkflowId(
+        organizationId: Int,
+        workflow: WorkflowResponse
+    ): Int =
+        workflowService.resolveWorkflowId(organizationId, Uuid.parse(workflow.id))
+            ?: error("Workflow ${workflow.id} no longer exists")
+
+    private fun resolveWorkflowResourceId(organizationId: Int, workflowId: String): Int? =
+        workflowId.toUuidOrNull()
+            ?.let { workflowService.resolveWorkflowId(organizationId, it) }
 
     private fun recordImport(
         organizationId: Int,
@@ -240,13 +288,23 @@ class WorkflowGovernanceService(
         windowStart: Instant
     ): List<RunStatusRow> =
         transaction {
-            WorkflowRuns
+            val rows = WorkflowRuns
                 .selectAll()
                 .where {
                     (WorkflowRuns.organizationId eq organizationId) and
                         (WorkflowRuns.createdAt greaterEq windowStart)
                 }
-                .map { row -> RunStatusRow(row[WorkflowRuns.workflowId], row[WorkflowRuns.status]) }
+                .toList()
+            val workflowResourceIds = workflowResourceIds(rows.map { row -> row[WorkflowRuns.workflowId] })
+            rows.map { row ->
+                RunStatusRow(
+                    workflowId = workflowResourceIds.requireWorkflowResourceId(
+                        row[WorkflowRuns.workflowId],
+                        "workflow"
+                    ),
+                    status = row[WorkflowRuns.status]
+                )
+            }
         }
 
     // Ranks workflows by their run volume within the same 30-day window the rest of the
@@ -283,6 +341,6 @@ class WorkflowGovernanceService(
 }
 
 private data class RunStatusRow(
-    val workflowId: Int,
+    val workflowId: String,
     val status: String
 )

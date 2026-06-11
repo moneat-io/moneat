@@ -152,7 +152,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetApiInfo() {
                 ?.let { row ->
                     SentryAuthUser(
                         email = row[Users.email],
-                        id = row[Users.id].toString()
+                        id = row[Users.resource_id].toString()
                     )
                 }
         }

@@ -60,7 +60,7 @@ export interface InfrastructureMapResource {
   subtitle: string
   statusLabel: string
   isHealthy: boolean
-  hostId?: number
+  hostId?: string
   tags: Record<string, string>
   dimensions: Partial<Record<InfrastructureGroupBy, string>>
   metrics: Record<InfrastructureMetricKey, number>
@@ -74,7 +74,7 @@ export interface InfrastructureMapNode {
   label: string
   subtitle: string
   statusLabel: string
-  hostId?: number
+  hostId?: string
   fillTone: InfrastructureMapTone
   metricLabel: string
   sizeLabel: string

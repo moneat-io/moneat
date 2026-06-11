@@ -8,6 +8,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
 import com.moneat.enterprise.workflows.models.ApprovalResponse
+import com.moneat.enterprise.workflows.models.WorkflowApprovals
 import com.moneat.enterprise.workflows.services.WorkflowApprovalService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -34,8 +35,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
@@ -53,8 +56,12 @@ class ApprovalRoutesTest {
         private const val AUDIENCE = "moneat-users"
         private const val LIST_APPROVAL_ID = 12
         private const val RESPOND_APPROVAL_ID = 18
-        private const val RESPONSE_WORKFLOW_ID = 1
-        private const val RESPONSE_RUN_ID = 1
+        private const val LIST_APPROVAL_RESOURCE_ID = "11111111-1111-1111-1111-111111111112"
+        private const val RESPOND_APPROVAL_RESOURCE_ID = "11111111-1111-1111-1111-111111111118"
+        private const val RESPONSE_WORKFLOW_ID = "22222222-2222-2222-2222-222222222222"
+        private const val RESPONSE_RUN_ID = "33333333-3333-3333-3333-333333333333"
+        private const val RESPONSE_WORKFLOW_NUMERIC_ID = 1
+        private const val RESPONSE_RUN_NUMERIC_ID = 1
     }
 
     private lateinit var approvalService: WorkflowApprovalService
@@ -72,7 +79,8 @@ class ApprovalRoutesTest {
         EnterpriseTestDatabaseHelper.resetSchema(
             Users,
             Organizations,
-            Memberships
+            Memberships,
+            WorkflowApprovals
         )
         approvalService = mockk()
     }
@@ -97,7 +105,7 @@ class ApprovalRoutesTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
-        assertTrue(body.contains("\"id\":$LIST_APPROVAL_ID"))
+        assertTrue(body.contains("\"id\":\"$LIST_APPROVAL_RESOURCE_ID\""))
         assertTrue(body.contains("Escalate checkout deployment"))
         verify { approvalService.listPending(member.orgId) }
     }
@@ -106,6 +114,7 @@ class ApprovalRoutesTest {
     fun `respond accepts the standard orgId JWT claim`() = testApplication {
         application { installAuthJsonAndRoutes() }
         val admin = seedMember(role = "admin", email = "admin@approval-routes.test")
+        seedApproval(admin.orgId, RESPOND_APPROVAL_ID, RESPOND_APPROVAL_RESOURCE_ID)
         every {
             approvalService.respond(
                 organizationId = admin.orgId,
@@ -118,12 +127,12 @@ class ApprovalRoutesTest {
             RESPOND_APPROVAL_ID,
             message = "Approve rollout",
             status = "approved",
-            respondedBy = admin.userId,
+            respondedBy = userResourceId(admin.userId),
             comment = "approved from route test"
         )
 
         val response =
-            client.post("/v1/workflows/approvals/$RESPOND_APPROVAL_ID/respond") {
+            client.post("/v1/workflows/approvals/$RESPOND_APPROVAL_RESOURCE_ID/respond") {
                 bearerAuth(bearerForUser(admin.userId, admin.orgId))
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody("""{"approved":true,"comment":"approved from route test"}""")
@@ -132,7 +141,7 @@ class ApprovalRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
         val body = response.bodyAsText()
         assertTrue(body.contains("\"status\":\"approved\""))
-        assertTrue(body.contains("\"responded_by\":${admin.userId}"))
+        assertTrue(body.contains("\"responded_by\":\"${userResourceId(admin.userId)}\""))
         assertTrue(body.contains("approved from route test"))
         verify {
             approvalService.respond(
@@ -200,11 +209,11 @@ class ApprovalRoutesTest {
         id: Int,
         message: String,
         status: String = "pending",
-        respondedBy: Int? = null,
+        respondedBy: String? = null,
         comment: String? = null
     ): ApprovalResponse =
         ApprovalResponse(
-            id = id,
+            id = approvalResourceId(id),
             workflowId = RESPONSE_WORKFLOW_ID,
             runId = RESPONSE_RUN_ID,
             nodeId = "approval-$id",
@@ -216,6 +225,39 @@ class ApprovalRoutesTest {
             respondedBy = respondedBy,
             comment = comment
         )
+
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
+        }
+
+    private fun seedApproval(orgId: Int, id: Int, resourceId: String) {
+        transaction {
+            WorkflowApprovals.insert {
+                it[WorkflowApprovals.id] = id
+                it[WorkflowApprovals.resourceId] = kotlin.uuid.Uuid.parse(resourceId)
+                it[organizationId] = orgId
+                it[workflowId] = RESPONSE_WORKFLOW_NUMERIC_ID
+                it[runId] = RESPONSE_RUN_NUMERIC_ID
+                it[nodeId] = "approval-$id"
+                it[message] = "Approve rollout"
+                it[approverRole] = "admin"
+                it[status] = "pending"
+                it[requestedAt] = kotlin.time.Clock.System.now()
+            }
+        }
+    }
+
+    private fun approvalResourceId(id: Int): String =
+        when (id) {
+            LIST_APPROVAL_ID -> LIST_APPROVAL_RESOURCE_ID
+            RESPOND_APPROVAL_ID -> RESPOND_APPROVAL_RESOURCE_ID
+            else -> "11111111-1111-1111-1111-${id.toString().padStart(12, '0')}"
+        }
 
     private data class TestMember(
         val userId: Int,

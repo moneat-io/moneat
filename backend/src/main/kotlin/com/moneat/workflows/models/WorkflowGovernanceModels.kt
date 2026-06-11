@@ -23,8 +23,10 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 object WorkflowAuditEvents : IntIdTable("workflow_audit_events") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val workflowId = integer("workflow_id").references(Workflows.id, onDelete = ReferenceOption.CASCADE).nullable()
     val runId = integer("run_id").nullable()
@@ -49,11 +51,11 @@ object WorkflowUsageEvents : IntIdTable("workflow_usage_events") {
 
 @Serializable
 data class WorkflowAuditEventResponse(
-    val id: Int,
-    @SerialName("workflow_id") val workflowId: Int? = null,
-    @SerialName("run_id") val runId: Int? = null,
+    val id: String,
+    @SerialName("workflow_id") val workflowId: String? = null,
+    @SerialName("run_id") val runId: String? = null,
     val action: String,
-    @SerialName("actor_user_id") val actorUserId: Int? = null,
+    @SerialName("actor_user_id") val actorUserId: String? = null,
     val detail: Map<String, String> = emptyMap(),
     @SerialName("created_at") val createdAt: String
 )
@@ -89,7 +91,7 @@ data class InstantiateBlueprintRequest(
 
 @Serializable
 data class WorkflowOverviewTopWorkflow(
-    @SerialName("workflow_id") val workflowId: Int,
+    @SerialName("workflow_id") val workflowId: String,
     val name: String,
     @SerialName("run_count") val runCount: Long
 )

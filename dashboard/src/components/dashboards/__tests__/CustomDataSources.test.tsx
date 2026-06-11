@@ -40,6 +40,9 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 describe('Custom Data Sources', () => {
+  const ORG_ID = '11111111-1111-4111-8111-111111111111'
+  const USER_ID = '22222222-2222-4222-8222-222222222222'
+
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -49,7 +52,7 @@ describe('Custom Data Sources', () => {
       vi.mocked(api.listCustomDataSources).mockResolvedValue([
         {
           id: DATA_SOURCE_ID,
-          org_id: 1,
+          org_id: ORG_ID,
           name: 'My PostgreSQL',
           source_type: 'postgresql',
           host: 'db.example.com',
@@ -57,7 +60,7 @@ describe('Custom Data Sources', () => {
           database_name: 'analytics',
           extra_config: {},
           enabled: true,
-          created_by: 1,
+          created_by: USER_ID,
           created_at: '2024-01-01T00:00:00Z',
           updated_at: '2024-01-01T00:00:00Z',
           has_credentials: true,
@@ -73,14 +76,14 @@ describe('Custom Data Sources', () => {
     it('createCustomDataSource sends correct payload', async () => {
       vi.mocked(api.createCustomDataSource).mockResolvedValue({
         id: SECOND_DATA_SOURCE_ID,
-        org_id: 1,
+        org_id: ORG_ID,
         name: 'Prometheus',
         source_type: 'prometheus',
         host: 'prom.example.com',
         port: 9090,
         extra_config: {},
         enabled: true,
-        created_by: 1,
+        created_by: USER_ID,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-01T00:00:00Z',
         has_credentials: false,
@@ -141,14 +144,14 @@ describe('Custom Data Sources', () => {
     it('updateCustomDataSource can update credentials', async () => {
       vi.mocked(api.updateCustomDataSource).mockResolvedValue({
         id: DATA_SOURCE_ID,
-        org_id: 1,
+        org_id: ORG_ID,
         name: 'My PostgreSQL',
         source_type: 'postgresql',
         host: 'db.example.com',
         port: 5432,
         extra_config: {},
         enabled: true,
-        created_by: 1,
+        created_by: USER_ID,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-02T00:00:00Z',
         has_credentials: true,
@@ -166,14 +169,14 @@ describe('Custom Data Sources', () => {
     it('updateCustomDataSource can toggle enabled', async () => {
       vi.mocked(api.updateCustomDataSource).mockResolvedValue({
         id: DATA_SOURCE_ID,
-        org_id: 1,
+        org_id: ORG_ID,
         name: 'My PostgreSQL',
         source_type: 'postgresql',
         host: 'db.example.com',
         port: 5432,
         extra_config: {},
         enabled: false,
-        created_by: 1,
+        created_by: USER_ID,
         created_at: '2024-01-01T00:00:00Z',
         updated_at: '2024-01-02T00:00:00Z',
         has_credentials: true,
@@ -195,14 +198,14 @@ describe('Custom Data Sources', () => {
       vi.mocked(api.listCustomDataSources).mockResolvedValue([
         {
           id: DATA_SOURCE_ID,
-          org_id: 1,
+          org_id: ORG_ID,
           name: 'Test DB',
           source_type: 'postgresql',
           host: 'localhost',
           port: 5432,
           extra_config: {},
           enabled: true,
-          created_by: 1,
+          created_by: USER_ID,
           created_at: '',
           updated_at: '',
           has_credentials: true,

@@ -25,6 +25,7 @@ import com.moneat.mcp.services.InfrastructureSummaryResponse
 import com.moneat.mcp.services.OvernightSummaryResponse
 import com.moneat.mcp.services.SummaryService
 import com.moneat.mcp.services.WeeklyReportResponse
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -135,7 +136,7 @@ class GetIncidentContextTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "incident_id" to schemaNumber("Incident ID")
+                "incident_id" to schemaString("Incident UUID")
             )
         ),
         required = listOf("incident_id")
@@ -146,7 +147,8 @@ class GetIncidentContextTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val incidentId = args["incident_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+            ?.content
+            ?.toUuidOrNull()
             ?: return errorResult("incident_id is required")
         val result = summaryService.getIncidentContext(
             context.organizationId,

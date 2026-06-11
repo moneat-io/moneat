@@ -20,10 +20,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.javatime.timestamp
+import kotlin.uuid.Uuid
 
 // Database table for Datadog API keys
 object DdApiKeys : Table("agent_api_keys") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val projectId = integer("project_id").nullable()
     val name = varchar("name", 255)
@@ -40,14 +42,12 @@ object DdApiKeys : Table("agent_api_keys") {
 @Serializable
 data class CreateDdApiKeyRequest(
     val name: String,
-    val projectId: Int? = null,
+    val projectId: String? = null,
 )
 
 @Serializable
 data class DdApiKeyResponse(
-    val id: Int,
-    val organizationId: Int,
-    val projectId: Int?,
+    val id: String,
     val name: String,
     val keyPrefix: String,
     val createdAt: String,
@@ -57,7 +57,7 @@ data class DdApiKeyResponse(
 
 @Serializable
 data class CreateDdApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val key: String, // Full key, only returned once
     val keyPrefix: String,

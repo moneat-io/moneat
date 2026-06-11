@@ -24,6 +24,7 @@ import com.moneat.events.models.UserResponse
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.organizationResourceId
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -114,6 +115,7 @@ class OAuthService(
     private val jwtAudience = config.property("jwt.audience").getString()
     private val backendUrl = EnvConfig.get("BACKEND_URL") ?: "https://api.moneat.io"
     private val frontendUrl = EnvConfig.get("FRONTEND_URL")!!
+
     companion object {
         private const val ORG_SLUG_SUFFIX_LENGTH = 8
         private const val ONE_HOUR_MILLIS = 3_600_000L
@@ -372,12 +374,14 @@ class OAuthService(
                     token = token,
                     user =
                     UserResponse(
-                        userId,
-                        existingOAuthUser[Users.email],
-                        existingOAuthUser[Users.name],
-                        existingOAuthUser[Users.email_verified],
-                        existingOAuthUser[Users.onboarding_completed],
-                        existingOAuthUser[Users.is_admin]
+                        id = existingOAuthUser[Users.resource_id].toString(),
+                        email = existingOAuthUser[Users.email],
+                        name = existingOAuthUser[Users.name],
+                        emailVerified = existingOAuthUser[Users.email_verified],
+                        onboardingCompleted = existingOAuthUser[Users.onboarding_completed],
+                        isAdmin = existingOAuthUser[Users.is_admin],
+                        orgRole = orgRole,
+                        orgId = organizationResourceId(orgId),
                     )
                 )
             }
@@ -420,12 +424,14 @@ class OAuthService(
                         token = token,
                         user =
                         UserResponse(
-                            userId,
-                            existingEmailUser[Users.email],
-                            existingEmailUser[Users.name],
-                            existingEmailUser[Users.email_verified],
-                            existingEmailUser[Users.onboarding_completed],
-                            existingEmailUser[Users.is_admin]
+                            id = existingEmailUser[Users.resource_id].toString(),
+                            email = existingEmailUser[Users.email],
+                            name = existingEmailUser[Users.name],
+                            emailVerified = existingEmailUser[Users.email_verified],
+                            onboardingCompleted = existingEmailUser[Users.onboarding_completed],
+                            isAdmin = existingEmailUser[Users.is_admin],
+                            orgRole = orgRole,
+                            orgId = organizationResourceId(orgId),
                         )
                     )
                 } else if (existingProvider != userData.provider) {
@@ -453,12 +459,14 @@ class OAuthService(
                         token = token,
                         user =
                         UserResponse(
-                            userId,
-                            existingEmailUser[Users.email],
-                            existingEmailUser[Users.name],
-                            existingEmailUser[Users.email_verified],
-                            existingEmailUser[Users.onboarding_completed],
-                            existingEmailUser[Users.is_admin]
+                            id = existingEmailUser[Users.resource_id].toString(),
+                            email = existingEmailUser[Users.email],
+                            name = existingEmailUser[Users.name],
+                            emailVerified = existingEmailUser[Users.email_verified],
+                            onboardingCompleted = existingEmailUser[Users.onboarding_completed],
+                            isAdmin = existingEmailUser[Users.is_admin],
+                            orgRole = orgRole,
+                            orgId = organizationResourceId(orgId),
                         )
                     )
                 }
@@ -497,12 +505,17 @@ class OAuthService(
                 token = token,
                 user =
                 UserResponse(
-                    userId,
-                    userData.email,
-                    userData.name,
-                    userData.emailVerified,
-                    true,
-                    false
+                    id = Users.selectAll()
+                        .where { Users.id eq userId }
+                        .first()[Users.resource_id]
+                        .toString(),
+                    email = userData.email,
+                    name = userData.name,
+                    emailVerified = userData.emailVerified,
+                    onboardingCompleted = true,
+                    isAdmin = false,
+                    orgRole = "owner",
+                    orgId = organizationResourceId(orgId),
                 )
             )
         }

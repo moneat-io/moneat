@@ -19,7 +19,7 @@ const BYTES_PER_GB = 1024 * 1024 * 1024
 
 function billingTier(overrides: Partial<BillingTierConfig> = {}): BillingTierConfig {
   return {
-    id: 1,
+    id: 'tier-config-1',
     tierName: 'PRO',
     version: 2,
     monthlyUnitLimit: 500_000,
@@ -67,6 +67,26 @@ function billingTier(overrides: Partial<BillingTierConfig> = {}): BillingTierCon
     monthlyAnalyticsPageviewLimit: 100_000,
     analyticsPageviewOverageRateCentsPer100k: 1000,
     isCurrent: true,
+    ...overrides,
+  }
+}
+
+function billingSubscription(
+  overrides: Partial<AdminBillingSubscription> = {}
+): AdminBillingSubscription {
+  return {
+    subscriptionId: 'sub-1',
+    organizationId: 'org-1',
+    organizationName: 'Acme',
+    plan: 'PRO',
+    status: 'active',
+    pricingTierConfigId: null,
+    paygBudgetCents: 0,
+    paygUsedUnits: 0,
+    paygUsedMicros: 0,
+    pendingMeterUnits: 0,
+    currentPeriodStart: null,
+    currentPeriodEnd: null,
     ...overrides,
   }
 }
@@ -122,8 +142,14 @@ describe('admin billing helper coverage', () => {
 
   it('filters subscriptions and builds sorted tier choices', () => {
     const subscriptions: AdminBillingSubscription[] = [
-      {organizationId: 1, organizationName: 'Acme', plan: 'PRO', status: 'active'} as AdminBillingSubscription,
-      {organizationId: 2, organizationName: 'Beta', plan: 'ENTERPRISE', status: 'past_due'} as AdminBillingSubscription,
+      billingSubscription(),
+      billingSubscription({
+        subscriptionId: 'sub-2',
+        organizationId: 'org-2',
+        organizationName: 'Beta',
+        plan: 'ENTERPRISE',
+        status: 'past_due',
+      }),
     ]
     const plans: BillingPlan[] = [
       {tier: billingTier({tierName: 'ENTERPRISE'}), trialDays: 0},
