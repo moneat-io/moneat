@@ -63,10 +63,10 @@ class OverviewServiceTest {
 
         assertEquals("Action needed", overview.systemStatus.state)
         assertEquals("bad", overview.systemStatus.severity)
-        assertEquals(1, overview.systemStatus.counts.incidents)
+        assertEquals(0, overview.systemStatus.counts.incidents)
         assertEquals(1, overview.systemStatus.counts.alerts)
         assertEquals(1, overview.systemStatus.counts.hostsOffline)
-        assertTrue(overview.systemStatus.ai.summary.contains("need attention"))
+        assertTrue(overview.systemStatus.ai.summary.contains("Offline hosts need attention"))
 
         assertEquals("1/2 up", overview.infra.upLabel)
         assertEquals("db-node-1", overview.infra.offlineNode)
@@ -86,9 +86,9 @@ class OverviewServiceTest {
         assertEquals("v1.2.3", overview.telemetry.deployLabel)
         assertEquals(100, overview.telemetry.deployAtPct)
 
-        assertEquals("Checkout unavailable", overview.triage.incidents.single().title)
+        assertTrue(overview.triage.incidents.isEmpty())
         assertEquals("error", overview.triage.alerts.single().level)
-        assertEquals("cpu > 90.0", overview.triage.alerts.single().title)
+        assertEquals("Checkout 5xx budget", overview.triage.alerts.single().title)
         assertTrue(overview.triage.issues.isEmpty())
         assertTrue(overview.triage.security.isEmpty())
 
@@ -97,8 +97,7 @@ class OverviewServiceTest {
         assertEquals("bad", uptimeKpi.status)
         assertEquals(6, overview.kpis.size)
 
-        assertEquals(listOf("incident", "deploy"), overview.activity.map { item -> item.kind })
-        assertTrue(overview.activity.first().text.contains("Checkout unavailable"))
+        assertEquals(listOf("deploy"), overview.activity.map { item -> item.kind })
         assertTrue(overview.serviceHealth.isEmpty())
     }
 
@@ -130,6 +129,25 @@ class OverviewServiceTest {
             assertEquals("checkout synthetic", overview.uptime.syntheticFailing)
             assertTrue(overview.telemetry.latency.any { value -> value > 0 })
             assertTrue(overview.telemetry.throughput.any { value -> value > 0 })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `overview resolves legacy error alert episode title from issue analytics`() = runBlocking {
+        val orgId = seedOverviewData()
+        seedLegacyErrorAlertEpisode()
+        stubOverviewClickHouse()
+
+        try {
+            val overview = OverviewService().getOverview(orgId, demoEpochMs = DEMO_EPOCH_MS)
+
+            val alert = assertNotNull(
+                overview.triage.alerts.find { item -> item.title == "Payment capture failed" },
+            )
+            assertEquals("error", alert.level)
+            assertEquals("12 events", alert.detail)
         } finally {
             unmockkObject(ClickHouseClient)
         }
@@ -186,6 +204,11 @@ class OverviewServiceTest {
         private const val DEMO_EPOCH_MS = 1_709_312_400_000L
         private const val ORGANIZATION_ID = 101
         private const val EMPTY_ORGANIZATION_ID = 202
+        private const val DASHBOARD_ID = 301L
+        private const val DASHBOARD_WIDGET_ID = 302L
+        private const val DASHBOARD_ALERT_ID = 303L
+        private const val DASHBOARD_ALERT_THRESHOLD = 2.0
+        private const val ERROR_ALERT_ISSUE_ID = "issue-legacy-1"
         private const val HOUR_MILLIS = 3_600_000L
         private const val TRACE_CURRENT_ROW =
             """{"currentTraces":2880,"currentErrors":40,"p95Ms":800,"satisfied":1000,"tolerated":2000}"""
@@ -196,6 +219,8 @@ class OverviewServiceTest {
         private const val LOG_COUNT_ROW = """{"currentErrors":200,"previousErrors":100}"""
         private const val CONTAINER_COUNT_ROW = """{"containers":5,"pods":2}"""
         private const val SYNTHETIC_FAILING_ROW = """{"name":"checkout synthetic"}"""
+        private const val ERROR_ALERT_ISSUE_ROW =
+            """{"title":"Payment capture failed","level":"error","eventCount":12}"""
         private val SERVICE_ROWS = listOf(
             """{"service":"checkout-api","env":"","traces":1440,"errors":40,"p95Ms":800,""" +
                 """"satisfied":200,"tolerated":400}""",
@@ -270,10 +295,11 @@ class OverviewServiceTest {
                 it[version] = "v1.2.3"
                 it[created_at] = Clock.System.now().toEpochMilliseconds() - HOUR_MILLIS
             }
+            seedDashboardAlertTablesForFallbackTest()
             AlertEpisodes.insert {
                 it[organizationId] = ORGANIZATION_ID
-                it[sourceName] = "Checkout unavailable"
-                it[deduplicationKey] = "checkout-unavailable"
+                it[sourceName] = "DASHBOARD_ALERT"
+                it[deduplicationKey] = "moneat-dashboard-alert-$DASHBOARD_ALERT_ID"
                 it[episodeSeq] = 1
                 it[episodeKey] = "checkout-unavailable-1"
                 it[status] = "FIRING"
@@ -293,6 +319,86 @@ class OverviewServiceTest {
             seedMonitor("Website", "up")
         }
         return ORGANIZATION_ID
+    }
+
+    private fun seedDashboardAlertTablesForFallbackTest() {
+        val statements = listOf(
+            """
+            CREATE TABLE dashboards (
+                id BIGINT PRIMARY KEY,
+                org_id BIGINT NOT NULL,
+                title VARCHAR(255) NOT NULL
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE dashboard_widgets (
+                id BIGINT PRIMARY KEY,
+                dashboard_id BIGINT NOT NULL,
+                title VARCHAR(255)
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE dashboard_widget_alerts (
+                id BIGINT PRIMARY KEY,
+                widget_id BIGINT NOT NULL,
+                dashboard_id BIGINT NOT NULL,
+                org_id BIGINT NOT NULL,
+                name VARCHAR(255) NOT NULL,
+                condition VARCHAR(5) NOT NULL,
+                threshold DOUBLE PRECISION NOT NULL,
+                alert_priority VARCHAR(20)
+            )
+            """.trimIndent(),
+            """
+            INSERT INTO dashboards (id, org_id, title)
+            VALUES ($DASHBOARD_ID, $ORGANIZATION_ID, 'Checkout Overview')
+            """.trimIndent(),
+            """
+            INSERT INTO dashboard_widgets (id, dashboard_id, title)
+            VALUES ($DASHBOARD_WIDGET_ID, $DASHBOARD_ID, 'Checkout health')
+            """.trimIndent(),
+            """
+            INSERT INTO dashboard_widget_alerts (
+                id,
+                widget_id,
+                dashboard_id,
+                org_id,
+                name,
+                condition,
+                threshold,
+                alert_priority
+            )
+            VALUES (
+                $DASHBOARD_ALERT_ID,
+                $DASHBOARD_WIDGET_ID,
+                $DASHBOARD_ID,
+                $ORGANIZATION_ID,
+                'Checkout 5xx budget',
+                '>',
+                $DASHBOARD_ALERT_THRESHOLD,
+                'P1'
+            )
+            """.trimIndent(),
+        )
+        statements.forEach { statement -> TransactionManager.current().exec(statement) }
+    }
+
+    private fun seedLegacyErrorAlertEpisode() {
+        val now = Clock.System.now()
+        transaction {
+            AlertEpisodes.insert {
+                it[organizationId] = ORGANIZATION_ID
+                it[sourceName] = "ERROR_ALERT"
+                it[deduplicationKey] = "moneat-error-$ERROR_ALERT_ISSUE_ID"
+                it[episodeSeq] = 1
+                it[episodeKey] = "error-alert-legacy-1"
+                it[status] = "FIRING"
+                it[openedAt] = now
+                it[lastSeenAt] = now
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+        }
     }
 
     private fun seedEmptyOrganization(): Int {
@@ -384,6 +490,7 @@ class OverviewServiceTest {
             QueryStub(::isTraceThroughputSeriesQuery, seriesRows(1, 2)),
             QueryStub(::isEventCountQuery, EVENT_COUNT_ROW),
             QueryStub(::isIssueCountQuery, ISSUE_COUNT_ROW),
+            QueryStub(::isErrorAlertIssueLookupQuery, ERROR_ALERT_ISSUE_ROW),
             QueryStub(::isIssueRowsQuery, ISSUE_ROWS),
             QueryStub(::isEventSeriesQuery, seriesRows(4, 12)),
             QueryStub(::isIssueSeriesQuery, seriesRows(1, 2)),
@@ -408,6 +515,9 @@ class OverviewServiceTest {
 
     private fun isIssueRowsQuery(query: String): Boolean =
         query.contains("FROM issues FINAL") && query.contains("eventCount")
+
+    private fun isErrorAlertIssueLookupQuery(query: String): Boolean =
+        query.contains("FROM issues FINAL") && query.contains("issue_id = '$ERROR_ALERT_ISSUE_ID'")
 
     private fun isEventSeriesQuery(query: String): Boolean =
         query.contains("FROM events") && query.contains("GROUP BY bucket")

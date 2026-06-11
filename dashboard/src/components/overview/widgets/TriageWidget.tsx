@@ -39,6 +39,19 @@ type TriageRowProps = Readonly<{
   ageLabel: string
 }>
 
+type AttentionRouteInput = Readonly<{
+  incidents: readonly unknown[]
+  alerts: readonly unknown[]
+  issues: readonly unknown[]
+}>
+
+function attentionRouteFor(triage: AttentionRouteInput): string {
+  if (triage.incidents.length > 0) return '/on-call/incidents'
+  if (triage.alerts.length > 0) return '/on-call/alerts'
+  if (triage.issues.length > 0) return '/issues'
+  return '/security/signals'
+}
+
 function borderForLevel(level: TriageLevel): string {
   switch (level) {
     case 'fatal':
@@ -95,53 +108,58 @@ function TriageRow({
 export function TriageWidget() {
   const t = useTriage()
   const total = t.incidents.length + t.alerts.length + t.issues.length + t.security.length
+  const attentionRoute = attentionRouteFor(t)
   return (
     <OverviewPanel
       testId="widget-triage"
       title="Needs attention"
       icon={ListChecks}
       count={total}
-      actions={<PanelLink to="/on-call/incidents">View all</PanelLink>}
+      actions={total > 0 ? <PanelLink to={attentionRoute}>View all</PanelLink> : undefined}
       flush
     >
-      <TriageSection icon={Siren} label="Active incidents" count={t.incidents.length}>
-        {t.incidents.map((inc) => (
-          <div
-            key={inc.id}
-            className="flex items-start gap-1.5 rounded-md border border-danger-border bg-danger-bg px-2 py-1.5"
-          >
-            <StatusDot tone="danger" pulse className="mt-0.5" />
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-foreground">{inc.title}</div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                <Badge variant="dangerSolid" className="px-1 py-0 text-[9px]">
-                  {inc.priority}
-                </Badge>
-                <Badge variant="danger" className="px-1 py-0 text-[9px]">
-                  {inc.status}
-                </Badge>
-                <span className="font-mono text-[9px] text-muted-foreground/70">{inc.id}</span>
-                <span className="text-[10px] text-muted-foreground">{inc.owner}</span>
-                <span className="ml-auto font-mono text-[9px] text-muted-foreground/70">
-                  {inc.ageLabel}
-                </span>
+      {t.incidents.length > 0 && (
+        <TriageSection icon={Siren} label="Active incidents" count={t.incidents.length}>
+          {t.incidents.map((inc) => (
+            <div
+              key={inc.id}
+              className="flex items-start gap-1.5 rounded-md border border-danger-border bg-danger-bg px-2 py-1.5"
+            >
+              <StatusDot tone="danger" pulse className="mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-foreground">{inc.title}</div>
+                <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                  <Badge variant="dangerSolid" className="px-1 py-0 text-[9px]">
+                    {inc.priority}
+                  </Badge>
+                  <Badge variant="danger" className="px-1 py-0 text-[9px]">
+                    {inc.status}
+                  </Badge>
+                  <span className="font-mono text-[9px] text-muted-foreground/70">{inc.id}</span>
+                  <span className="text-[10px] text-muted-foreground">{inc.owner}</span>
+                  <span className="ml-auto font-mono text-[9px] text-muted-foreground/70">
+                    {inc.ageLabel}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </TriageSection>
+          ))}
+        </TriageSection>
+      )}
 
-      <TriageSection icon={Bell} label="Alerts firing" count={t.alerts.length}>
-        {t.alerts.map((a) => (
-          <TriageRow
-            key={`${a.level}:${a.title}:${a.detail}:${a.ageLabel}`}
-            level={a.level === 'error' ? 'error' : 'warn'}
-            title={<span className="font-semibold">{a.title}</span>}
-            detail={a.detail}
-            ageLabel={a.ageLabel}
-          />
-        ))}
-      </TriageSection>
+      {t.alerts.length > 0 && (
+        <TriageSection icon={Bell} label="Alerts firing" count={t.alerts.length}>
+          {t.alerts.map((a) => (
+            <TriageRow
+              key={`${a.level}:${a.title}:${a.detail}:${a.ageLabel}`}
+              level={a.level === 'error' ? 'error' : 'warn'}
+              title={<span className="font-semibold">{a.title}</span>}
+              detail={a.detail}
+              ageLabel={a.ageLabel}
+            />
+          ))}
+        </TriageSection>
+      )}
 
       <TriageSection icon={CircleAlert} label="New issues" count={t.issues.length}>
         {t.issues.map((iss) => (

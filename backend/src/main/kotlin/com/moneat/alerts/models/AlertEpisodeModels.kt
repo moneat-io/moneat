@@ -28,6 +28,9 @@ object AlertEpisodes : IntIdTable("alert_episodes") {
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val sourceName = varchar("source", 64)
     val deduplicationKey = text("deduplication_key")
+    val title = text("title").nullable()
+    val description = text("description").nullable()
+    val priority = varchar("priority", 20).nullable()
     val episodeSeq = integer("episode_seq")
     val episodeKey = text("episode_key")
     val status = varchar("status", 20)
@@ -51,6 +54,9 @@ data class AlertEpisodeResponse(
     @SerialName("organization_id") val organizationId: Int,
     val source: String,
     @SerialName("deduplication_key") val deduplicationKey: String,
+    val title: String? = null,
+    val description: String? = null,
+    val priority: String? = null,
     @SerialName("episode_seq") val episodeSeq: Int,
     @SerialName("episode_key") val episodeKey: String,
     val status: String,

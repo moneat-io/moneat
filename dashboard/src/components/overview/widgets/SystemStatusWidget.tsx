@@ -18,13 +18,41 @@ import {AlertTriangle, CheckCircle} from 'lucide-react'
 import {Link} from '@tanstack/react-router'
 import {cn} from '@/lib/utils'
 import {Button} from '@/components/ui/button'
+import type {OverviewCounts} from '@/lib/api/types'
 import {useSystemStatus} from '../overviewData'
 import {toneBgSolid, toneBorder, toneSoftBg, toneText} from '../overviewTone'
+
+type StatusAction = Readonly<{
+  to: string
+  label: string
+  ariaLabel: string
+}>
+
+function nounLabel(count: number, singular: string, plural = `${singular}s`) {
+  return count === 1 ? singular : plural
+}
+
+function statusAction(counts: OverviewCounts): StatusAction | null {
+  if (counts.incidents > 0) {
+    return {to: '/on-call/incidents', label: 'View incidents', ariaLabel: 'View active incidents'}
+  }
+  if (counts.alerts > 0) {
+    return {to: '/on-call/alerts', label: 'View alerts', ariaLabel: 'View firing alerts'}
+  }
+  if (counts.hostsOffline > 0) {
+    return {to: '/monitoring/hosts', label: 'View hosts', ariaLabel: 'View offline hosts'}
+  }
+  if (counts.degraded > 0) {
+    return {to: '/services', label: 'View services', ariaLabel: 'View degraded services'}
+  }
+  return null
+}
 
 /** Hero status bar — the triage line + AI summary at the top of the overview. */
 export function SystemStatusWidget() {
   const s = useSystemStatus()
   const sev = s.severity
+  const action = statusAction(s.counts)
   return (
     <div
       data-testid="widget-system_status"
@@ -47,28 +75,32 @@ export function SystemStatusWidget() {
             <span className="text-sm font-semibold text-foreground">{s.state}</span>
             <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <span>
-                <b className="tabular-nums text-foreground">{s.counts.incidents}</b> active incident
+                <b className="tabular-nums text-foreground">{s.counts.incidents}</b>{' '}
+                {nounLabel(s.counts.incidents, 'active incident')}
               </span>
               <span className="text-muted-foreground/60">·</span>
               <span>
-                <b className="tabular-nums text-foreground">{s.counts.alerts}</b> alerts firing
+                <b className="tabular-nums text-foreground">{s.counts.alerts}</b>{' '}
+                {nounLabel(s.counts.alerts, 'alert')} firing
               </span>
               <span className="text-muted-foreground/60">·</span>
               <span>
-                <b className="tabular-nums text-foreground">{s.counts.degraded}</b> services degraded
+                <b className="tabular-nums text-foreground">{s.counts.degraded}</b>{' '}
+                {nounLabel(s.counts.degraded, 'service')} degraded
               </span>
               <span className="text-muted-foreground/60">·</span>
               <span>
-                <b className="tabular-nums text-foreground">{s.counts.hostsOffline}</b> host offline
+                <b className="tabular-nums text-foreground">{s.counts.hostsOffline}</b>{' '}
+                {nounLabel(s.counts.hostsOffline, 'host')} offline
               </span>
             </span>
           </div>
         </div>
-        {sev !== 'good' && (
+        {action && (
           <div className="flex shrink-0 items-center gap-1.5">
             <Button asChild size="sm" className="h-6 px-2 text-[11px]">
-              <Link to="/on-call/incidents" aria-label="View active incidents">
-                View incident
+              <Link to={action.to} aria-label={action.ariaLabel}>
+                {action.label}
               </Link>
             </Button>
           </div>

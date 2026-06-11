@@ -40,15 +40,44 @@ private const val RESOLVED_NOTIFICATION_KIND = "resolved"
 private const val MAX_SUPPRESS_REASON_CHARS = 255
 private val ALERT_REMINDER_INTERVAL = 24.hours
 
+private data class AlertEpisodeIdentity(
+    val organizationId: Int,
+    val source: String,
+    val deduplicationKey: String,
+)
+
+private data class AlertEpisodeDisplayMetadata(
+    val title: String?,
+    val description: String?,
+    val priority: String?,
+) {
+    companion object {
+        val EMPTY = AlertEpisodeDisplayMetadata(title = null, description = null, priority = null)
+    }
+}
+
+private fun AlertLifecycleEvent.displayMetadata(): AlertEpisodeDisplayMetadata =
+    AlertEpisodeDisplayMetadata(
+        title = title,
+        description = description,
+        priority = priority.wire,
+    )
+
+private fun AlertLifecycleEvent.episodeIdentity(): AlertEpisodeIdentity =
+    AlertEpisodeIdentity(
+        organizationId = organizationId,
+        source = source.name,
+        deduplicationKey = deduplicationKey,
+    )
+
 class AlertEpisodeService {
     fun recordFiring(
         event: AlertLifecycleEvent,
         now: Instant = Clock.System.now()
     ): AlertEpisodeDecision? =
         recordFiring(
-            organizationId = event.organizationId,
-            source = event.source.name,
-            deduplicationKey = event.deduplicationKey,
+            identity = event.episodeIdentity(),
+            metadata = event.displayMetadata(),
             now = now,
             reservePublication = true
         )
@@ -58,9 +87,8 @@ class AlertEpisodeService {
         now: Instant = Clock.System.now()
     ): AlertEpisodeContext? {
         val decision = recordFiring(
-            organizationId = event.organizationId,
-            source = event.source.name,
-            deduplicationKey = event.deduplicationKey,
+            identity = event.episodeIdentity(),
+            metadata = event.displayMetadata(),
             now = now,
             reservePublication = false
         )
@@ -122,9 +150,8 @@ class AlertEpisodeService {
         now: Instant = Clock.System.now()
     ): AlertEpisodeContext? =
         recordFiring(
-            organizationId = organizationId,
-            source = source.name,
-            deduplicationKey = deduplicationKey,
+            identity = AlertEpisodeIdentity(organizationId, source.name, deduplicationKey),
+            metadata = AlertEpisodeDisplayMetadata.EMPTY,
             now = now,
             reservePublication = false
         )?.episode
@@ -213,20 +240,22 @@ class AlertEpisodeService {
         }
 
     private fun recordFiring(
-        organizationId: Int,
-        source: String,
-        deduplicationKey: String,
+        identity: AlertEpisodeIdentity,
+        metadata: AlertEpisodeDisplayMetadata,
         now: Instant,
         reservePublication: Boolean
     ): AlertEpisodeDecision? {
         repeat(OPEN_EPISODE_ATTEMPTS) {
             val decision =
                 transaction {
-                    val row = findOpenEpisodeForUpdate(organizationId, source, deduplicationKey)
-                        ?: createOpenEpisode(organizationId, source, deduplicationKey, now)
+                    val row = findOpenEpisodeForUpdate(
+                        identity.organizationId,
+                        identity.source,
+                        identity.deduplicationKey,
+                    ) ?: createOpenEpisode(identity, metadata, now)
                         ?: return@transaction null
-                    updateLastSeen(row[AlertEpisodes.id].value, now)
-                    val current = findEpisode(row[AlertEpisodes.id].value, organizationId)
+                    updateLastSeen(row[AlertEpisodes.id].value, metadata, now)
+                    val current = findEpisode(row[AlertEpisodes.id].value, identity.organizationId)
                         ?.toContext()
                         ?: return@transaction null
                     if (!reservePublication) {
@@ -305,18 +334,24 @@ class AlertEpisodeService {
     }
 
     private fun createOpenEpisode(
-        organizationId: Int,
-        source: String,
-        deduplicationKey: String,
+        identity: AlertEpisodeIdentity,
+        metadata: AlertEpisodeDisplayMetadata,
         now: Instant
     ): ResultRow? {
-        val nextSeq = nextEpisodeSequence(organizationId, source, deduplicationKey)
+        val nextSeq = nextEpisodeSequence(
+            identity.organizationId,
+            identity.source,
+            identity.deduplicationKey
+        )
         AlertEpisodes.insertIgnore {
-            it[AlertEpisodes.organizationId] = organizationId
-            it[AlertEpisodes.sourceName] = source
-            it[AlertEpisodes.deduplicationKey] = deduplicationKey
+            it[AlertEpisodes.organizationId] = identity.organizationId
+            it[AlertEpisodes.sourceName] = identity.source
+            it[AlertEpisodes.deduplicationKey] = identity.deduplicationKey
+            it[AlertEpisodes.title] = metadata.title
+            it[AlertEpisodes.description] = metadata.description
+            it[AlertEpisodes.priority] = metadata.priority
             it[AlertEpisodes.episodeSeq] = nextSeq
-            it[AlertEpisodes.episodeKey] = episodeKey(deduplicationKey, nextSeq)
+            it[AlertEpisodes.episodeKey] = episodeKey(identity.deduplicationKey, nextSeq)
             it[AlertEpisodes.status] = FIRING_STATUS
             it[AlertEpisodes.openedAt] = now
             it[AlertEpisodes.lastSeenAt] = now
@@ -324,7 +359,11 @@ class AlertEpisodeService {
             it[AlertEpisodes.createdAt] = now
             it[AlertEpisodes.updatedAt] = now
         }
-        return findOpenEpisodeForUpdate(organizationId, source, deduplicationKey)
+        return findOpenEpisodeForUpdate(
+            identity.organizationId,
+            identity.source,
+            identity.deduplicationKey
+        )
     }
 
     private fun nextEpisodeSequence(
@@ -355,9 +394,19 @@ class AlertEpisodeService {
 
     private fun updateLastSeen(
         episodeId: Int,
+        metadata: AlertEpisodeDisplayMetadata,
         now: Instant
     ) {
         AlertEpisodes.update({ AlertEpisodes.id eq episodeId }) {
+            if (metadata.title != null) {
+                it[AlertEpisodes.title] = metadata.title
+            }
+            if (metadata.description != null) {
+                it[AlertEpisodes.description] = metadata.description
+            }
+            if (metadata.priority != null) {
+                it[AlertEpisodes.priority] = metadata.priority
+            }
             it[lastSeenAt] = now
             it[updatedAt] = now
         }
@@ -424,6 +473,9 @@ class AlertEpisodeService {
             organizationId = this[AlertEpisodes.organizationId],
             source = this[AlertEpisodes.sourceName],
             deduplicationKey = this[AlertEpisodes.deduplicationKey],
+            title = this[AlertEpisodes.title],
+            description = this[AlertEpisodes.description],
+            priority = this[AlertEpisodes.priority],
             episodeSeq = this[AlertEpisodes.episodeSeq],
             episodeKey = this[AlertEpisodes.episodeKey],
             status = this[AlertEpisodes.status],
@@ -444,6 +496,9 @@ class AlertEpisodeService {
             organizationId = context.organizationId,
             source = context.source,
             deduplicationKey = context.deduplicationKey,
+            title = context.title,
+            description = context.description,
+            priority = context.priority,
             episodeSeq = context.episodeSeq,
             episodeKey = context.episodeKey,
             status = context.status,
@@ -473,6 +528,9 @@ data class AlertEpisodeContext(
     val organizationId: Int,
     val source: String,
     val deduplicationKey: String,
+    val title: String? = null,
+    val description: String? = null,
+    val priority: String? = null,
     val episodeSeq: Int,
     val episodeKey: String,
     val status: String,
