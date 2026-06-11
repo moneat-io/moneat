@@ -94,6 +94,31 @@ jobs:
             echo "| Frontend | ${frontend} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # PR-Required: Migration version numbering against the target branch
+  migration-versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Check migration versions
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${BASE_REF}" ]]; then
+            git fetch --no-tags origin "${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            python3 scripts/check-migration-versions.py --base-ref "origin/${BASE_REF}"
+          else
+            python3 scripts/check-migration-versions.py
+          fi
+
   # PR-Required: Backend unit and route tests
   backend-unit:
     needs: changes
