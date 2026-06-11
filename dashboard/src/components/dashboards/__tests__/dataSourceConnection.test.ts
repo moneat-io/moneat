@@ -156,6 +156,22 @@ describe('buildExtraConfig', () => {
     expect(buildExtraConfig(s)).toMatchObject({influx_version: '2', org: 'acme', bucket: 'metrics', scheme: 'https'})
   })
 
+  it('captures ClickHouse, Snowflake, and CloudWatch-specific options', () => {
+    expect(buildExtraConfig({...defaultFormState('clickhouse'), chProtocol: 'native'}))
+      .toEqual({ch_protocol: 'native'})
+    expect(buildExtraConfig({
+      ...defaultFormState('snowflake'),
+      warehouse: 'ANALYTICS_WH',
+      role: 'REPORTER',
+      schema: 'PUBLIC',
+    })).toEqual({
+      warehouse: 'ANALYTICS_WH',
+      role: 'REPORTER',
+      schema: 'PUBLIC',
+    })
+    expect(buildExtraConfig({...defaultFormState('cloudwatch'), useRole: false})).toEqual({})
+  })
+
   it('is empty in connection-string mode', () => {
     const s = {...defaultFormState('postgresql'), method: 'string' as const}
     expect(buildExtraConfig(s)).toEqual({})
@@ -198,6 +214,21 @@ describe('buildPayload', () => {
     const p = buildPayload(s)
     expect(p.api_key).toBe('tok')
     expect(p.extra_config?.auth_method).toBe('bearer')
+  })
+
+  it('routes basic credentials for http sources', () => {
+    const s = {
+      ...defaultFormState('graphite'),
+      host: 'graphite.example.com',
+      authMethod: 'basic' as const,
+      username: 'svc',
+      password: 'secret',
+    }
+    expect(buildPayload(s)).toMatchObject({
+      username: 'svc',
+      password: 'secret',
+      extra_config: {auth_method: 'basic'},
+    })
   })
 
   it('routes a custom header value to header_value', () => {
@@ -299,6 +330,30 @@ describe('buildPayload', () => {
       password: 'secret',
     })
   })
+
+  it('maps local files and ClickHouse native protocol without leaking unsupported fields', () => {
+    expect(buildPayload({...defaultFormState('sqlite'), host: '/var/lib/moneat/app.db'})).toMatchObject({
+      source_type: 'sqlite',
+      host: '/var/lib/moneat/app.db',
+    })
+
+    const clickhouse = buildPayload({
+      ...defaultFormState('clickhouse'),
+      host: 'ch.internal',
+      chProtocol: 'native',
+      port: '',
+      username: 'default',
+      password: 'secret',
+    })
+    expect(clickhouse).toMatchObject({
+      source_type: 'clickhouse',
+      host: 'ch.internal',
+      port: 9000,
+      username: 'default',
+      password: 'secret',
+      extra_config: {ch_protocol: 'native'},
+    })
+  })
 })
 
 describe('buildTestRequest', () => {
@@ -335,6 +390,8 @@ describe('isFormReady', () => {
     expect(isFormReady({...defaultFormState('cloudwatch'), useRole: true})).toBe(true)
     expect(isFormReady({...defaultFormState('cloudwatch'), accessKey: 'AKIA'})).toBe(false)
     expect(isFormReady({...defaultFormState('cloudwatch'), accessKey: 'AKIA', secretKey: 'secret'})).toBe(true)
+    expect(isFormReady({...defaultFormState('redis'), manual: true})).toBe(false)
+    expect(isFormReady({...defaultFormState('redis'), manual: true, host: 'redis.internal'})).toBe(true)
   })
 
   it('blocks on a bad port and on a missing connection string', () => {

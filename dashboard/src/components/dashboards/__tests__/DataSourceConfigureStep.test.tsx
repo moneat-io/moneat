@@ -87,6 +87,24 @@ describe('DataSourceConfigureStep', () => {
     expect(screen.getByLabelText(/Default schema/)).toBeInTheDocument()
   })
 
+  it('updates identity, host, and credential fields without stale split banners', () => {
+    renderConfigureStep('postgresql', {host: 'old.internal'})
+
+    fireEvent.change(screen.getByLabelText('Display name'), {target: {value: 'Warehouse DB'}})
+    fireEvent.change(screen.getByLabelText(/Description/), {target: {value: 'Read replica'}})
+    fireEvent.change(screen.getByLabelText('Host'), {target: {value: 'db.internal'}})
+    fireEvent.change(screen.getByLabelText('Host'), {target: {value: 'db.internal:notaport'}})
+    fireEvent.change(screen.getByLabelText(/Username/), {target: {value: 'svc'}})
+    fireEvent.change(screen.getByLabelText('Password'), {target: {value: 'secret'}})
+
+    expect(screen.getByLabelText('Display name')).toHaveValue('Warehouse DB')
+    expect(screen.getByLabelText(/Description/)).toHaveValue('Read replica')
+    expect(screen.getByLabelText('Host')).toHaveValue('db.internal:notaport')
+    expect(screen.getByLabelText(/Username/)).toHaveValue('svc')
+    expect(screen.getByLabelText('Password')).toHaveValue('secret')
+    expect(screen.queryByText(/Split your pasted value/)).not.toBeInTheDocument()
+  })
+
   it('switches SQL sources to connection-string mode and toggles password visibility', () => {
     renderConfigureStep('postgresql')
 
@@ -216,6 +234,25 @@ describe('DataSourceConfigureStep', () => {
         '{"type":"service_account","project_id":"demo"}',
       )
     })
+
+    fireEvent.change(screen.getByLabelText(/paste the JSON/), {
+      target: {value: '{"type":"service_account","project_id":"manual"}'},
+    })
+    expect(screen.getByLabelText(/paste the JSON/)).toHaveValue(
+      '{"type":"service_account","project_id":"manual"}',
+    )
+  })
+
+  it('updates CloudWatch region and static credentials', () => {
+    renderConfigureStep('cloudwatch')
+
+    fireEvent.change(screen.getByLabelText('AWS region'), {target: {value: 'eu-west-1'}})
+    fireEvent.change(screen.getByLabelText('Access key ID'), {target: {value: 'AKIA123'}})
+    fireEvent.change(screen.getByLabelText('Secret access key'), {target: {value: 'secret'}})
+
+    expect(screen.getByLabelText('AWS region')).toHaveValue('eu-west-1')
+    expect(screen.getByLabelText('Access key ID')).toHaveValue('AKIA123')
+    expect(screen.getByLabelText('Secret access key')).toHaveValue('secret')
   })
 })
 

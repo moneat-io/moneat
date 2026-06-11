@@ -89,8 +89,8 @@ const BLANK: DsFormState = {
   region: 'us-east-1', useRole: false, accessKey: '', secretKey: '',
 }
 
-const HOST_FIELD_ARCHES: readonly VendorDef['arch'][] = ['sql', 'clickhouse', 'http', 'influx', 'connstr']
-const PORT_FIELD_ARCHES: readonly VendorDef['arch'][] = ['sql', 'clickhouse', 'http', 'influx', 'connstr']
+const HOST_FIELD_ARCHES = new Set<VendorDef['arch']>(['sql', 'clickhouse', 'http', 'influx', 'connstr'])
+const PORT_FIELD_ARCHES = new Set<VendorDef['arch']>(['sql', 'clickhouse', 'http', 'influx', 'connstr'])
 
 export function defaultFormState(vendorKey: string): DsFormState {
   const v = getVendor(vendorKey)
@@ -137,7 +137,7 @@ export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
 }
 
 function sourceUsesHostField(vendor: VendorDef | undefined): boolean {
-  return vendor === undefined || HOST_FIELD_ARCHES.includes(vendor.arch)
+  return vendor === undefined || HOST_FIELD_ARCHES.has(vendor.arch)
 }
 
 // ----- smart host paste-splitting -------------------------------------------
@@ -581,7 +581,7 @@ function addPort(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) 
 }
 
 function shouldPersistPort(vendor: VendorDef): boolean {
-  return PORT_FIELD_ARCHES.includes(vendor.arch)
+  return PORT_FIELD_ARCHES.has(vendor.arch)
 }
 
 function addDatabase(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
