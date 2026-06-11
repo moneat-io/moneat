@@ -25,6 +25,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.synthetics.routes.CreateSyntheticTestRequest
+import com.moneat.synthetics.routes.ProbeResultSubmission
 import com.moneat.synthetics.routes.SyntheticAssertion
 import com.moneat.synthetics.routes.SyntheticCheckResult
 import com.moneat.synthetics.routes.SyntheticTestConfig
@@ -40,11 +41,9 @@ import com.moneat.workflows.services.WorkflowService
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
-import org.jetbrains.exposed.v1.core.eq
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -53,7 +52,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import java.util.UUID
 import kotlin.uuid.Uuid
 
 class SyntheticsServiceTest {
@@ -62,8 +60,6 @@ class SyntheticsServiceTest {
     companion object {
         private var db: Database? = null
         private const val TEST_ORG_ID = 1
-
-        private fun resourceId(value: String): Uuid = Uuid.parse(value)
     }
 
     @BeforeTest
@@ -94,18 +90,19 @@ class SyntheticsServiceTest {
         }
     }
 
-    private fun createRequest(
-        name: String = "API Health Check",
-        testType: String = "api",
-        url: String? = "https://example.com/health",
-        tags: List<String> = emptyList(),
-        retryCount: Int = 0,
-        retryIntervalMs: Int = 300,
-        alertOnFailure: Boolean = false,
-        assertions: List<SyntheticAssertion> = emptyList(),
-        config: SyntheticTestConfig? = null
-    ): CreateSyntheticTestRequest {
-        return CreateSyntheticTestRequest(
+    private class SyntheticRequestBuilder {
+        var name: String = "API Health Check"
+        var testType: String = "api"
+        var url: String? = "https://example.com/health"
+        var tags: List<String> = emptyList()
+        var retryCount: Int = 0
+        var retryIntervalMs: Int = 300
+        var alertOnFailure: Boolean = false
+        var assertions: List<SyntheticAssertion> = emptyList()
+        var config: SyntheticTestConfig? = null
+        var locations: List<String> = emptyList()
+
+        fun build(): CreateSyntheticTestRequest = CreateSyntheticTestRequest(
             name = name,
             testType = testType,
             intervalSeconds = 60,
@@ -116,9 +113,17 @@ class SyntheticsServiceTest {
             retryCount = retryCount,
             retryIntervalMs = retryIntervalMs,
             alertOnFailure = alertOnFailure,
-            config = config
+            config = config,
+            locations = locations
         )
     }
+
+    private fun variableResourceId(value: String): Uuid = Uuid.parse(value)
+
+    private fun createRequest(
+        configure: SyntheticRequestBuilder.() -> Unit = {}
+    ): CreateSyntheticTestRequest =
+        SyntheticRequestBuilder().apply(configure).build()
 
     private fun syntheticTestData(
         id: java.util.UUID = java.util.UUID.randomUUID(),
@@ -152,15 +157,6 @@ class SyntheticsServiceTest {
             override suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult = result
         }
 
-    private fun organizationResourceId(organizationId: Int): String =
-        transaction {
-            Organizations
-                .selectAll()
-                .where { Organizations.id eq organizationId }
-                .single()[Organizations.resource_id]
-                .toString()
-        }
-
     // ──── CRUD: Create ────
 
     @Test
@@ -170,7 +166,7 @@ class SyntheticsServiceTest {
         assertEquals("API Health Check", response.name)
         assertEquals("api", response.testType)
         assertTrue(response.active)
-        assertEquals(organizationResourceId(TEST_ORG_ID), response.organizationId)
+        assertEquals(TEST_ORG_ID, response.organizationId)
         assertEquals("pending", response.status)
     }
 
@@ -178,7 +174,9 @@ class SyntheticsServiceTest {
     fun `createTest stores tags`() {
         val response = service.createTest(
             TEST_ORG_ID,
-            createRequest(tags = listOf("production", "critical"))
+            createRequest {
+                tags = listOf("production", "critical")
+            }
         )
         assertEquals(listOf("production", "critical"), response.tags)
     }
@@ -187,7 +185,10 @@ class SyntheticsServiceTest {
     fun `createTest stores retry config`() {
         val response = service.createTest(
             TEST_ORG_ID,
-            createRequest(retryCount = 3, retryIntervalMs = 500)
+            createRequest {
+                retryCount = 3
+                retryIntervalMs = 500
+            }
         )
         assertEquals(3, response.retryCount)
         assertEquals(500, response.retryIntervalMs)
@@ -197,7 +198,9 @@ class SyntheticsServiceTest {
     fun `createTest stores alert config`() {
         val response = service.createTest(
             TEST_ORG_ID,
-            createRequest(alertOnFailure = true)
+            createRequest {
+                alertOnFailure = true
+            }
         )
         assertTrue(response.alertOnFailure)
     }
@@ -210,11 +213,11 @@ class SyntheticsServiceTest {
         )
         val response = service.createTest(
             TEST_ORG_ID,
-            createRequest(
-                name = "SSL Check",
-                testType = "ssl",
-                config = config
-            )
+            createRequest {
+                name = "SSL Check"
+                testType = "ssl"
+                this.config = config
+            }
         )
         assertEquals("ssl", response.testType)
         val responseConfig = response.config
@@ -231,11 +234,11 @@ class SyntheticsServiceTest {
         )
         val response = service.createTest(
             TEST_ORG_ID,
-            createRequest(
-                name = "Postgres Check",
-                testType = "tcp",
-                config = config
-            )
+            createRequest {
+                name = "Postgres Check"
+                testType = "tcp"
+                this.config = config
+            }
         )
         assertEquals("tcp", response.testType)
         val responseConfig = response.config
@@ -254,7 +257,9 @@ class SyntheticsServiceTest {
         )
         val response = service.createTest(
             TEST_ORG_ID,
-            createRequest(assertions = assertions)
+            createRequest {
+                this.assertions = assertions
+            }
         )
         assertEquals(1, response.assertions.size)
         assertEquals("status_code", response.assertions[0].type)
@@ -295,9 +300,9 @@ class SyntheticsServiceTest {
 
     @Test
     fun `listTests returns all tests for org`() {
-        service.createTest(TEST_ORG_ID, createRequest(name = "Test 1"))
-        service.createTest(TEST_ORG_ID, createRequest(name = "Test 2"))
-        service.createTest(TEST_ORG_ID, createRequest(name = "Test 3"))
+        service.createTest(TEST_ORG_ID, createRequest { name = "Test 1" })
+        service.createTest(TEST_ORG_ID, createRequest { name = "Test 2" })
+        service.createTest(TEST_ORG_ID, createRequest { name = "Test 3" })
 
         val tests = service.listTests(TEST_ORG_ID)
         assertEquals(3, tests.size)
@@ -551,6 +556,31 @@ class SyntheticsServiceTest {
             assertTrue(event.description.contains("passed after previous failures"))
         }
 
+    // ──── Probe Protocol ────
+
+    @Test
+    fun `recordProbeResult rejects test not assigned to probe location`() =
+        runBlocking {
+            val test = service.createTest(
+                TEST_ORG_ID,
+                createRequest {
+                    locations = listOf("private-us-east")
+                }
+            )
+
+            val accepted = service.recordProbeResult(
+                organizationId = TEST_ORG_ID,
+                locationCode = "private-eu-west",
+                submission = ProbeResultSubmission(
+                    testId = test.id,
+                    status = "passed",
+                    durationMs = 100L
+                )
+            )
+
+            assertFalse(accepted)
+        }
+
     // ──── Global Variables CRUD ────
 
     @Test
@@ -564,6 +594,7 @@ class SyntheticsServiceTest {
         assertNotNull(response)
         assertEquals("API_KEY", response.name)
         assertTrue(response.isSecret)
+        variableResourceId(response.id)
         // Secret values should be masked
         assertEquals("********", response.value)
     }
@@ -602,12 +633,12 @@ class SyntheticsServiceTest {
     }
 
     @Test
-    fun `getVariable returns variable by id`() {
+    fun `getVariable returns variable by resource id`() {
         val created = service.createVariable(
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "MY_VAR", value = "hello")
         )
-        val fetched = service.getVariable(resourceId(created.id), TEST_ORG_ID)
+        val fetched = service.getVariable(variableResourceId(created.id), TEST_ORG_ID)
         assertNotNull(fetched)
         assertEquals("MY_VAR", fetched.name)
     }
@@ -618,7 +649,7 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "VAR", value = "val")
         )
-        val fetched = service.getVariable(resourceId(created.id), 999)
+        val fetched = service.getVariable(variableResourceId(created.id), 999)
         assertNull(fetched)
     }
 
@@ -629,7 +660,7 @@ class SyntheticsServiceTest {
             SyntheticVariableRequest(name = "OLD", value = "oldval")
         )
         val updated = service.updateVariable(
-            resourceId(created.id),
+            variableResourceId(created.id),
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "NEW", value = "newval")
         )
@@ -645,7 +676,7 @@ class SyntheticsServiceTest {
             SyntheticVariableRequest(name = "VAR", value = "val")
         )
         val result = service.updateVariable(
-            resourceId(created.id),
+            variableResourceId(created.id),
             999,
             SyntheticVariableRequest(name = "X", value = "y")
         )
@@ -658,8 +689,9 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "DEL", value = "me")
         )
-        assertTrue(service.deleteVariable(resourceId(created.id), TEST_ORG_ID))
-        assertNull(service.getVariable(resourceId(created.id), TEST_ORG_ID))
+        val resourceId = variableResourceId(created.id)
+        assertTrue(service.deleteVariable(resourceId, TEST_ORG_ID))
+        assertNull(service.getVariable(resourceId, TEST_ORG_ID))
     }
 
     @Test
@@ -668,7 +700,7 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "VAR", value = "val")
         )
-        assertFalse(service.deleteVariable(resourceId(created.id), 999))
+        assertFalse(service.deleteVariable(variableResourceId(created.id), 999))
     }
 
     @Test
@@ -707,7 +739,7 @@ class SyntheticsServiceTest {
 
     @Test
     fun `getTestsDueForRun returns new active tests`() {
-        service.createTest(TEST_ORG_ID, createRequest(name = "Due Test"))
+        service.createTest(TEST_ORG_ID, createRequest { name = "Due Test" })
         val due = service.getTestsDueForRun()
         assertTrue(due.any { it.name == "Due Test" })
     }

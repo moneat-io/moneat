@@ -123,6 +123,10 @@ class OverviewServiceTest {
             assertEquals("Checkout failed", overview.triage.issues.first().title)
             assertEquals("warn", overview.triage.issues.first().level)
             assertEquals("fatal", overview.triage.issues.last().level)
+            assertEquals(
+                listOf("deploy", "incident", "incident"),
+                overview.activity.map { item -> item.kind },
+            )
 
             assertEquals(5, overview.infra.containers)
             assertEquals(2, overview.infra.pods)

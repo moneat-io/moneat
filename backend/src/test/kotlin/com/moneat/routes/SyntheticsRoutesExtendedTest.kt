@@ -16,10 +16,16 @@
 
 package com.moneat.routes
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
+import com.moneat.synthetics.routes.CreatePrivateLocationRequest
 import com.moneat.synthetics.routes.CreateSyntheticTestRequest
+import com.moneat.synthetics.routes.SyntheticLocationService
+import com.moneat.synthetics.routes.SyntheticLocations
+import com.moneat.synthetics.routes.SyntheticRunResponse
+import com.moneat.synthetics.routes.SyntheticsCheckExecutor
 import com.moneat.synthetics.routes.SyntheticTestResponse
 import com.moneat.synthetics.routes.SyntheticTestSummary
 import com.moneat.synthetics.routes.SyntheticVariableRequest
@@ -33,8 +39,10 @@ import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -47,8 +55,13 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.clearMocks
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.mockkStatic
+import io.mockk.unmockkObject
+import io.mockk.unmockkStatic
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -59,6 +72,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 
@@ -66,15 +80,14 @@ class SyntheticsRoutesExtendedTest {
     companion object {
         private var db: Database? = null
         private const val TEST_UUID = "11111111-1111-1111-1111-111111111111"
-        private const val VARIABLE_UUID = "22222222-2222-2222-2222-222222222222"
-        private const val MISSING_VARIABLE_UUID = "33333333-3333-3333-3333-333333333333"
+        private const val VARIABLE_UUID = "11111111-1111-4111-8111-111111111111"
+        private const val MISSING_VARIABLE_UUID = "99999999-9999-4999-8999-999999999999"
         private const val MY_API_TEST = "My API Test"
         private const val SYNTHETICS_TESTS_PATH = "/v1/synthetics/tests"
         private const val SYNTHETICS_VARIABLES_PATH = "/v1/synthetics/variables"
         private const val BODY_NAME_VAR_VALUE = """{"name":"VAR","value":"val"}"""
-        private const val SYNTHETICS_VARIABLES_1_PATH = "/v1/synthetics/variables/$VARIABLE_UUID"
-
-        private fun resourceId(value: String): Uuid = Uuid.parse(value)
+        private const val SYNTHETICS_VARIABLE_PATH = "/v1/synthetics/variables/$VARIABLE_UUID"
+        private const val MISSING_SYNTHETICS_VARIABLE_PATH = "/v1/synthetics/variables/$MISSING_VARIABLE_UUID"
     }
 
     private lateinit var mockService: SyntheticsService
@@ -82,6 +95,8 @@ class SyntheticsRoutesExtendedTest {
     @BeforeTest
     fun setup() {
         mockService = mockk(relaxed = true)
+        mockkObject(ClickHouseClient)
+        mockkStatic(HttpResponse::bodyAsText)
         startTestKoin()
         loadKoinModules(
             module { single<SyntheticsService> { mockService } }
@@ -97,13 +112,16 @@ class SyntheticsRoutesExtendedTest {
         TestDatabaseHelper.resetSchema(
             Users,
             Organizations,
-            Memberships
+            Memberships,
+            SyntheticLocations
         )
     }
 
     @AfterTest
     fun teardown() {
         clearMocks(mockService)
+        unmockkObject(ClickHouseClient)
+        unmockkStatic(HttpResponse::bodyAsText)
         stopTestKoin()
     }
 
@@ -149,7 +167,7 @@ class SyntheticsRoutesExtendedTest {
 
     private fun sampleTestResponse(orgId: Int) = SyntheticTestResponse(
         id = TEST_UUID,
-        organizationId = resourceId(orgId),
+        organizationId = orgId,
         name = MY_API_TEST,
         testType = "api",
         active = true,
@@ -178,7 +196,7 @@ class SyntheticsRoutesExtendedTest {
 
     private fun sampleVariableResponse(orgId: Int) = SyntheticVariableResponse(
         id = VARIABLE_UUID,
-        organizationId = resourceId(orgId),
+        organizationId = orgId,
         name = "API_KEY",
         value = "test-key-123",
         isSecret = false,
@@ -186,8 +204,49 @@ class SyntheticsRoutesExtendedTest {
         updatedAt = 1700000000000L
     )
 
-    private fun resourceId(id: Int): String =
-        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
+    private fun sampleRunResponse(locationCode: String) = SyntheticRunResponse(
+        resultId = "preview",
+        testId = "preview",
+        testName = MY_API_TEST,
+        testType = "api",
+        status = "passed",
+        locationCode = locationCode,
+        durationMs = 123L,
+        statusCode = 200,
+        attempt = 1,
+        assertionsTotal = 0,
+        assertionsFailed = 0,
+        errorMessage = "",
+        timestamp = "2026-06-11T00:00:00Z"
+    )
+
+    private fun resourceUuid(value: String): Uuid = Uuid.parse(value)
+
+    private fun stubSyntheticResultRows(body: String, totalCount: String = "1") {
+        val rowsResponse = mockk<HttpResponse>()
+        every { rowsResponse.status } returns HttpStatusCode.OK
+        coEvery { rowsResponse.bodyAsText(any()) } returns body
+
+        val countResponse = mockk<HttpResponse>()
+        every { countResponse.status } returns HttpStatusCode.OK
+        coEvery { countResponse.bodyAsText(any()) } returns totalCount
+
+        coEvery { ClickHouseClient.execute(any()) } coAnswers {
+            if (firstArg<String>().contains("count()")) countResponse else rowsResponse
+        }
+    }
+
+    private fun sampleSyntheticResultRow(orgId: Int): String =
+        """{"result_id":"22222222-2222-4222-8222-222222222222","organization_id":$orgId,""" +
+            """"test_id":"$TEST_UUID","test_name":"$MY_API_TEST","test_type":"api","status":"passed",""" +
+            """"probe_dc":"aws-us-east-1","duration_ms":123,"error_message":"","timings":{},""" +
+            """"timestamp":"2026-06-11 19:28:56.652","location_code":"aws-us-east-1","attempt":1,""" +
+            """"status_code":200,"assertions_total":0,"assertions_failed":0,"resolved_ip":""}"""
+
+    private fun assertNoPublicOrganizationId(body: String) {
+        assertFalse(body.contains("organizationId"))
+        assertFalse(body.contains("organization_id"))
+    }
 
     // ──── Auth ────
 
@@ -330,7 +389,7 @@ class SyntheticsRoutesExtendedTest {
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
-            val r = client.put(SYNTHETICS_VARIABLES_1_PATH) {
+            val r = client.put(SYNTHETICS_VARIABLE_PATH) {
                 withAuth(token(userId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
@@ -343,7 +402,7 @@ class SyntheticsRoutesExtendedTest {
         testApplication {
             val userId = seedUser()
             application { installTestApp() }
-            val r = client.delete(SYNTHETICS_VARIABLES_1_PATH) {
+            val r = client.delete(SYNTHETICS_VARIABLE_PATH) {
                 withAuth(token(userId))
             }
             assertEquals(HttpStatusCode.Forbidden, r.status)
@@ -456,8 +515,45 @@ class SyntheticsRoutesExtendedTest {
             val r = client.get(SYNTHETICS_TESTS_PATH) {
                 withAuth(token(userId, orgId))
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains(MY_API_TEST))
+            assertTrue(body.contains(MY_API_TEST))
+            assertNoPublicOrganizationId(body)
+        }
+
+    @Test
+    fun `GET results strips organization id from public response`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            stubSyntheticResultRows(sampleSyntheticResultRow(orgId))
+            application { installTestApp() }
+
+            val r = client.get("/v1/synthetics/results?limit=1") {
+                withAuth(token(userId, orgId))
+            }
+            val body = r.bodyAsText()
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(body.contains(""""resultId":"22222222-2222-4222-8222-222222222222""""))
+            assertNoPublicOrganizationId(body)
+        }
+
+    @Test
+    fun `GET test results strips organization id from public response`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            stubSyntheticResultRows(sampleSyntheticResultRow(orgId))
+            application { installTestApp() }
+
+            val r = client.get("/v1/synthetics/tests/$TEST_UUID/results?limit=1") {
+                withAuth(token(userId, orgId))
+            }
+            val body = r.bodyAsText()
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(body.contains(""""testId":"$TEST_UUID""""))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -472,8 +568,11 @@ class SyntheticsRoutesExtendedTest {
             val r = client.get("/v1/synthetics/tests/$TEST_UUID") {
                 withAuth(token(userId, orgId))
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains(MY_API_TEST))
+            assertTrue(body.contains(MY_API_TEST))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -506,8 +605,11 @@ class SyntheticsRoutesExtendedTest {
                         """"url":"https://example.com"}"""
                 )
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.Created, r.status)
-            assertTrue(r.bodyAsText().contains(MY_API_TEST))
+            assertTrue(body.contains(MY_API_TEST))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -544,8 +646,11 @@ class SyntheticsRoutesExtendedTest {
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Updated Test"}""")
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("Updated Test"))
+            assertTrue(body.contains("Updated Test"))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -596,6 +701,79 @@ class SyntheticsRoutesExtendedTest {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    // ──── Preview ────
+
+    @Test
+    fun `POST preview forwards location query parameter`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            coEvery {
+                mockService.previewTest(
+                    orgId,
+                    any<CreateSyntheticTestRequest>(),
+                    "aws-eu-central-1",
+                    any<SyntheticsCheckExecutor>()
+                )
+            } returns sampleRunResponse("aws-eu-central-1")
+            application { installTestApp() }
+
+            val r = client.post("/v1/synthetics/preview?location=aws-eu-central-1") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "name": "Preview API",
+                      "testType": "api",
+                      "intervalSeconds": 60,
+                      "timeoutSeconds": 10,
+                      "url": "https://example.com"
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains("aws-eu-central-1"))
+            coVerify(exactly = 1) {
+                mockService.previewTest(
+                    orgId,
+                    any<CreateSyntheticTestRequest>(),
+                    "aws-eu-central-1",
+                    any<SyntheticsCheckExecutor>()
+                )
+            }
+        }
+
+    // ──── Probe Work ────
+
+    @Test
+    fun `GET probe work authenticates using location query parameter`() =
+        testApplication {
+            val orgId = seedOrg()
+            val created = SyntheticLocationService().createPrivateLocation(
+                orgId,
+                CreatePrivateLocationRequest(
+                    code = "private-us-east",
+                    name = "Private US East"
+                )
+            )
+            coEvery {
+                mockService.getProbeWork(orgId, "private-us-east")
+            } returns emptyList()
+            application { installTestApp() }
+
+            val r = client.get("/v1/synthetics/probe/work?location=private-us-east") {
+                header("X-Probe-Key", created.key)
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains("private-us-east"))
+            coVerify(exactly = 1) {
+                mockService.getProbeWork(orgId, "private-us-east")
+            }
         }
 
     // ──── Run Test ────
@@ -683,8 +861,11 @@ class SyntheticsRoutesExtendedTest {
             val r = client.get(SYNTHETICS_VARIABLES_PATH) {
                 withAuth(token(userId, orgId))
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("API_KEY"))
+            assertTrue(body.contains("API_KEY"))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -705,8 +886,11 @@ class SyntheticsRoutesExtendedTest {
                     """{"name":"API_KEY","value":"test-key-123"}"""
                 )
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.Created, r.status)
-            assertTrue(r.bodyAsText().contains("API_KEY"))
+            assertTrue(body.contains("API_KEY"))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -715,21 +899,26 @@ class SyntheticsRoutesExtendedTest {
             val (userId, orgId) = seedUserAndOrg()
             every {
                 mockService.updateVariable(
-                    resourceId(VARIABLE_UUID), orgId, any<SyntheticVariableRequest>()
+                    resourceUuid(VARIABLE_UUID),
+                    orgId,
+                    any<SyntheticVariableRequest>()
                 )
             } returns sampleVariableResponse(orgId)
                 .copy(value = "updated-key")
             application { installTestApp() }
 
-            val r = client.put(SYNTHETICS_VARIABLES_1_PATH) {
+            val r = client.put(SYNTHETICS_VARIABLE_PATH) {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(
                     """{"name":"API_KEY","value":"updated-key"}"""
                 )
             }
+            val body = r.bodyAsText()
+
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("updated-key"))
+            assertTrue(body.contains("updated-key"))
+            assertNoPublicOrganizationId(body)
         }
 
     @Test
@@ -738,12 +927,14 @@ class SyntheticsRoutesExtendedTest {
             val (userId, orgId) = seedUserAndOrg()
             every {
                 mockService.updateVariable(
-                    resourceId(MISSING_VARIABLE_UUID), orgId, any<SyntheticVariableRequest>()
+                    resourceUuid(MISSING_VARIABLE_UUID),
+                    orgId,
+                    any<SyntheticVariableRequest>()
                 )
             } returns null
             application { installTestApp() }
 
-            val r = client.put("$SYNTHETICS_VARIABLES_PATH/$MISSING_VARIABLE_UUID") {
+            val r = client.put(MISSING_SYNTHETICS_VARIABLE_PATH) {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
@@ -756,11 +947,11 @@ class SyntheticsRoutesExtendedTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             every {
-                mockService.deleteVariable(resourceId(VARIABLE_UUID), orgId)
+                mockService.deleteVariable(resourceUuid(VARIABLE_UUID), orgId)
             } returns true
             application { installTestApp() }
 
-            val r = client.delete(SYNTHETICS_VARIABLES_1_PATH) {
+            val r = client.delete(SYNTHETICS_VARIABLE_PATH) {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -772,11 +963,11 @@ class SyntheticsRoutesExtendedTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             every {
-                mockService.deleteVariable(resourceId(MISSING_VARIABLE_UUID), orgId)
+                mockService.deleteVariable(resourceUuid(MISSING_VARIABLE_UUID), orgId)
             } returns false
             application { installTestApp() }
 
-            val r = client.delete("$SYNTHETICS_VARIABLES_PATH/$MISSING_VARIABLE_UUID") {
+            val r = client.delete(MISSING_SYNTHETICS_VARIABLE_PATH) {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)

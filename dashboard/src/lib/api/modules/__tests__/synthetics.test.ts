@@ -199,10 +199,120 @@ describe('Synthetics API', () => {
     expect(result).toEqual(mock)
   })
 
+  // ──── getSyntheticRunDetail ────
+
+  it('fetches synthetic run detail', async () => {
+    const mock = {
+      resultId: 'run-1',
+      testId: 'st-1',
+      testName: 'Homepage Check',
+      status: 'passed',
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/synthetics/tests/st-1/results/run-1`, () => {
+        return HttpResponse.json(mock)
+      })
+    )
+
+    const result = await api.getSyntheticRunDetail('st-1', 'run-1')
+    expect(result).toEqual(mock)
+  })
+
+  // ──── getSyntheticLocationSummaries ────
+
+  it('fetches synthetic location summaries', async () => {
+    const mock = [{ locationCode: 'aws-us-east-1', uptimePercent: 100 }]
+
+    server.use(
+      http.get(`${API_BASE}/v1/synthetics/tests/st-1/locations/summary`, () => {
+        return HttpResponse.json(mock)
+      })
+    )
+
+    const result = await api.getSyntheticLocationSummaries('st-1')
+    expect(result).toEqual(mock)
+  })
+
+  // ──── previewSyntheticTest ────
+
+  it('previews a synthetic test for a selected location', async () => {
+    const mock = { resultId: 'preview', locationCode: 'aws-eu-central-1' }
+
+    server.use(
+      http.post(`${API_BASE}/v1/synthetics/preview`, async ({ request }) => {
+        const url = new URL(request.url)
+        const body = (await request.json()) as Record<string, unknown>
+        expect(url.searchParams.get('location')).toBe('aws-eu-central-1')
+        expect(body.name).toBe('Preview API')
+        return HttpResponse.json(mock)
+      })
+    )
+
+    const result = await api.previewSyntheticTest(
+      { name: 'Preview API' } as never,
+      'aws-eu-central-1'
+    )
+    expect(result).toEqual(mock)
+  })
+
+  // ──── Location CRUD ────
+
+  it('lists synthetic locations', async () => {
+    const mock = [{ id: 'loc-1', code: 'aws-us-east-1', type: 'managed' }]
+
+    server.use(
+      http.get(`${API_BASE}/v1/synthetics/locations`, () => {
+        return HttpResponse.json(mock)
+      })
+    )
+
+    const result = await api.listSyntheticLocations()
+    expect(result).toEqual(mock)
+  })
+
+  it('creates a private synthetic location', async () => {
+    const mock = {
+      location: { id: 'loc-2', code: 'private-us-east', type: 'private' },
+      key: 'mloc_secret',
+    }
+
+    server.use(
+      http.post(`${API_BASE}/v1/synthetics/locations`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>
+        expect(body.code).toBe('private-us-east')
+        return HttpResponse.json(mock)
+      })
+    )
+
+    const result = await api.createSyntheticLocation({
+      code: 'private-us-east',
+      name: 'Private US East',
+    })
+    expect(result).toEqual(mock)
+  })
+
+  it('deletes a synthetic location', async () => {
+    server.use(
+      http.delete(`${API_BASE}/v1/synthetics/locations/loc-2`, () => {
+        return new HttpResponse(null, { status: 204 })
+      })
+    )
+
+    await api.deleteSyntheticLocation('loc-2')
+  })
+
+  it('returns a screenshot URL for a captured synthetic asset key', () => {
+    const url = api.syntheticScreenshotUrl('synthetics/1/run-1/step-1.png')
+    expect(url).toBe(
+      `${API_BASE}/v1/synthetics/screenshots/synthetics/1/run-1/step-1.png`
+    )
+  })
+
   // ──── listSyntheticVariables ────
 
   it('lists synthetic variables', async () => {
-    const mock = [{ id: SYNTHETIC_VARIABLE_ID, key: 'API_KEY', value: '***' }]
+    const mock = [{ id: SYNTHETIC_VARIABLE_ID, name: 'API_KEY', value: '***' }]
 
     server.use(
       http.get(`${API_BASE}/v1/synthetics/variables`, () => {
@@ -217,37 +327,40 @@ describe('Synthetics API', () => {
   // ──── createSyntheticVariable ────
 
   it('creates a synthetic variable', async () => {
-    const mock = { id: SYNTHETIC_VARIABLE_CREATED_ID, key: 'TOKEN', value: '***' }
+    const mock = { id: SYNTHETIC_VARIABLE_CREATED_ID, name: 'TOKEN', value: '***' }
 
     server.use(
       http.post(`${API_BASE}/v1/synthetics/variables`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
-        expect(body.key).toBe('TOKEN')
+        expect(body.name).toBe('TOKEN')
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.createSyntheticVariable({ key: 'TOKEN', value: 'secret' } as never)
+    const result = await api.createSyntheticVariable({ name: 'TOKEN', value: 'secret' })
     expect(result).toEqual(mock)
   })
 
   // ──── updateSyntheticVariable ────
 
   it('updates a synthetic variable', async () => {
-    const mock = { id: SYNTHETIC_VARIABLE_ID, key: 'API_KEY', value: '***' }
+    const mock = { id: SYNTHETIC_VARIABLE_ID, name: 'API_KEY', value: '***' }
 
     server.use(
-      http.put(`${API_BASE}/v1/synthetics/variables/${SYNTHETIC_VARIABLE_ID}`, async ({ request }) => {
-        const body = (await request.json()) as Record<string, unknown>
-        expect(body.key).toBe('API_KEY')
-        return HttpResponse.json(mock)
-      })
+      http.put(
+        `${API_BASE}/v1/synthetics/variables/${SYNTHETIC_VARIABLE_ID}`,
+        async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.name).toBe('API_KEY')
+          return HttpResponse.json(mock)
+        }
+      )
     )
 
-    const result = await api.updateSyntheticVariable(
-      SYNTHETIC_VARIABLE_ID,
-      { key: 'API_KEY', value: 'new' } as never
-    )
+    const result = await api.updateSyntheticVariable(SYNTHETIC_VARIABLE_ID, {
+      name: 'API_KEY',
+      value: 'new',
+    })
     expect(result).toEqual(mock)
   })
 

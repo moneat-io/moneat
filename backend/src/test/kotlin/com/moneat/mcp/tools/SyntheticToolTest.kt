@@ -41,7 +41,6 @@ import kotlin.test.assertTrue
 private const val SYNTHETIC_ORG_ID = 42
 private const val SYNTHETIC_USER_ID = 7
 private const val SYNTHETIC_TOKEN_ID = 3
-private const val SYNTHETIC_ORG_RESOURCE_ID = "00000000-0000-0000-0000-000000000042"
 private const val CREATED_AT = 1_780_000_000_000L
 private const val UPDATED_AT = 1_780_000_060_000L
 private const val DEFAULT_INTERVAL_SECONDS = 300
@@ -276,7 +275,7 @@ private fun syntheticTestResponse(
 ): SyntheticTestResponse =
     SyntheticTestResponse(
         id = SYNTHETIC_TEST_UUID.toString(),
-        organizationId = SYNTHETIC_ORG_RESOURCE_ID,
+        organizationId = SYNTHETIC_ORG_ID,
         name = name,
         testType = testType,
         active = active,
