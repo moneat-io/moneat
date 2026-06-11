@@ -58,7 +58,7 @@ export type FolderFilter = SystemFolderFilter | FolderIdFilter
 type SortKey = 'updated' | 'name' | 'widgets' | 'created'
 type ViewMode = 'list' | 'grid'
 
-const SYSTEM_FOLDER_FILTERS: readonly SystemFolderFilter[] = ['all', 'favorites', 'uncategorized']
+const SYSTEM_FOLDER_FILTERS = new Set<SystemFolderFilter>(['all', 'favorites', 'uncategorized'])
 const SORT_LABELS: Record<SortKey, string> = {
   updated: 'Recently updated',
   name: 'Name (A–Z)',
@@ -1002,7 +1002,7 @@ function folderIdFilter(id: string): FolderIdFilter {
 }
 
 function isConcreteFolderFilter(selectedFolder: FolderFilter): selectedFolder is FolderIdFilter {
-  return !SYSTEM_FOLDER_FILTERS.includes(selectedFolder as SystemFolderFilter)
+  return !SYSTEM_FOLDER_FILTERS.has(selectedFolder as SystemFolderFilter)
 }
 
 function folderIndex(folders: readonly DashboardFolder[], folderId: string): number {

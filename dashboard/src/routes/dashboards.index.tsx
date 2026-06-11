@@ -57,11 +57,11 @@ const SEARCH_PLACEHOLDER: Record<TabKey, string> = {
   templates: 'Search templates…',
   sources: 'Search data sources…',
 }
-const SYSTEM_FOLDER_FILTERS: readonly Exclude<FolderFilter, ConcreteFolderFilter>[] = [
+const SYSTEM_FOLDER_FILTERS = new Set<Exclude<FolderFilter, ConcreteFolderFilter>>([
   'all',
   'favorites',
   'uncategorized',
-]
+])
 
 function DashboardsHubPage() {
   const navigate = useNavigate()
@@ -323,7 +323,7 @@ function activeFolderId(selectedFolder: FolderFilter): string | undefined {
 }
 
 function isConcreteFolder(selectedFolder: FolderFilter): selectedFolder is ConcreteFolderFilter {
-  return !SYSTEM_FOLDER_FILTERS.includes(selectedFolder as Exclude<FolderFilter, ConcreteFolderFilter>)
+  return !SYSTEM_FOLDER_FILTERS.has(selectedFolder as Exclude<FolderFilter, ConcreteFolderFilter>)
 }
 
 function HubSearch({

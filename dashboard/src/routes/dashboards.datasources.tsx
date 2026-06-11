@@ -100,11 +100,12 @@ function DataSourcesPage() {
   const editSource =
     dialog.mode === 'edit' ? dataSources?.find((d) => d.id === dialog.editId) : undefined
   const dialogReady = dialog.open && (dialog.mode === 'create' || editSource != null)
+  const sourceRows = dataSources ?? []
 
   let sourcesContent: ReactNode
   if (isLoading) {
     sourcesContent = <div className="text-muted-foreground py-12 text-center">Loading data sources...</div>
-  } else if (!dataSources?.length) {
+  } else if (sourceRows.length === 0) {
     sourcesContent = (
       <EmptyState
         icon={Database}
@@ -121,7 +122,7 @@ function DataSourcesPage() {
   } else {
     sourcesContent = (
       <div className="space-y-3">
-        {dataSources.map((ds) => (
+        {sourceRows.map((ds) => (
           <div
             key={ds.id}
             className="flex items-center justify-between rounded-lg border p-4 hover:bg-accent/40 transition-colors"

@@ -114,7 +114,7 @@ export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
     name: ds.name,
     description: ds.description ?? '',
     host,
-    port: ds.port != null ? String(ds.port) : base.port,
+    port: ds.port === undefined ? base.port : String(ds.port),
     database: ds.database_name ?? '',
     scheme: x.scheme === 'http' ? 'http' : 'https',
     basePath: x.base_path ?? '',
@@ -137,7 +137,7 @@ export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
 }
 
 function sourceUsesHostField(vendor: VendorDef | undefined): boolean {
-  return vendor === undefined || HOST_FIELD_ARCHES.some((arch) => arch === vendor.arch)
+  return vendor === undefined || HOST_FIELD_ARCHES.includes(vendor.arch)
 }
 
 // ----- smart host paste-splitting -------------------------------------------
@@ -234,7 +234,7 @@ export interface EndpointPreview {
 
 function resolvedPort(state: DsFormState, fallback?: number): string {
   if (state.port && /^\d+$/.test(state.port)) return state.port
-  return fallback != null ? String(fallback) : ''
+  return fallback === undefined ? '' : String(fallback)
 }
 
 function maskUri(uri: string): PreviewSeg[] {
@@ -581,7 +581,7 @@ function addPort(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) 
 }
 
 function shouldPersistPort(vendor: VendorDef): boolean {
-  return PORT_FIELD_ARCHES.some((arch) => arch === vendor.arch)
+  return PORT_FIELD_ARCHES.includes(vendor.arch)
 }
 
 function addDatabase(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {

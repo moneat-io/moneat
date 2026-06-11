@@ -117,6 +117,26 @@ describe('buildEndpointPreview', () => {
     const httpProto = {...defaultFormState('clickhouse'), host: 'ch'}
     expect(previewText(httpProto)).toContain('http://ch')
   })
+
+  it('builds previews for non-SQL source archetypes', () => {
+    expect(buildEndpointPreview({...defaultFormState('influxdb'), influxVersion: '1', database: 'telegraf'}).sub)
+      .toContain('v1 InfluxQL')
+    expect(previewText({...defaultFormState('sqlite'), host: '/srv/moneat.db'})).toBe('file:/srv/moneat.db')
+    expect(previewText({
+      ...defaultFormState('mongodb'),
+      manual: true,
+      host: 'mongo.internal',
+      database: 'app',
+      username: 'svc',
+      password: 'secret',
+    })).toBe('mongodb://svc:••••@mongo.internal:27017/app')
+    expect(previewText({...defaultFormState('bigquery'), projectId: 'analytics-prod', database: 'events'}))
+      .toBe('bigquery://analytics-prod/events')
+    expect(buildEndpointPreview({...defaultFormState('snowflake'), account: 'xy123', warehouse: 'WH'}).sub)
+      .toContain('warehouse WH')
+    expect(buildEndpointPreview({...defaultFormState('cloudwatch'), region: 'eu-west-1', useRole: true}).sub)
+      .toBe('Instance role / default credential chain')
+  })
 })
 
 describe('buildExtraConfig', () => {
@@ -196,6 +216,53 @@ describe('buildPayload', () => {
     expect(p.extra_config?.use_role).toBe('true')
   })
 
+  it('maps static CloudWatch credentials', () => {
+    const s = {...defaultFormState('cloudwatch'), region: 'eu-west-1', accessKey: 'AKIA', secretKey: 'secret'}
+    const p = buildPayload(s)
+    expect(p.host).toBe('eu-west-1')
+    expect(p.region).toBe('eu-west-1')
+    expect(p.access_key_id).toBe('AKIA')
+    expect(p.secret_access_key).toBe('secret')
+  })
+
+  it('maps BigQuery service-account settings', () => {
+    const s = {
+      ...defaultFormState('bigquery'),
+      projectId: 'analytics-prod',
+      database: 'events',
+      serviceAccount: '{"type":"service_account"}',
+    }
+    const p = buildPayload(s)
+    expect(p.host).toBe('analytics-prod')
+    expect(p.project_id).toBe('analytics-prod')
+    expect(p.database_name).toBe('events')
+    expect(p.service_account_json).toBe('{"type":"service_account"}')
+  })
+
+  it('maps InfluxDB v2 and v1 credential shapes', () => {
+    const v2 = {...defaultFormState('influxdb'), host: 'influx', org: 'acme', bucket: 'metrics', token: 'tok'}
+    expect(buildPayload(v2)).toMatchObject({
+      host: 'influx',
+      api_key: 'tok',
+      extra_config: {influx_version: '2', org: 'acme', bucket: 'metrics', scheme: 'https'},
+    })
+
+    const v1 = {
+      ...defaultFormState('influxdb'),
+      host: 'influx',
+      influxVersion: '1' as const,
+      database: 'telegraf',
+      username: 'admin',
+      password: 'secret',
+    }
+    expect(buildPayload(v1)).toMatchObject({
+      database_name: 'telegraf',
+      username: 'admin',
+      password: 'secret',
+      extra_config: {influx_version: '1', scheme: 'https'},
+    })
+  })
+
   it('sends a connection string and derives the host for mongodb', () => {
     const s = {...defaultFormState('mongodb'), connStr: 'mongodb+srv://u:p@cluster0.mongodb.net/app'}
     const p = buildPayload(s)
@@ -210,6 +277,27 @@ describe('buildPayload', () => {
     expect(p.host).toBe('xy12345.us-east-1')
     expect(p.port).toBeUndefined()
     expect(p.extra_config?.warehouse).toBe('WH')
+  })
+
+  it('maps manual connection-string sources without persisting a URI', () => {
+    const s = {
+      ...defaultFormState('redis'),
+      manual: true,
+      host: 'redis.internal',
+      port: '6380',
+      database: '2',
+      username: 'default',
+      password: 'secret',
+    }
+    const p = buildPayload(s)
+    expect(p.connection_string).toBeUndefined()
+    expect(p).toMatchObject({
+      host: 'redis.internal',
+      port: 6380,
+      database_name: '2',
+      username: 'default',
+      password: 'secret',
+    })
   })
 })
 
