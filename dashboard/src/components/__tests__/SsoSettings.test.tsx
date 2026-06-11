@@ -123,7 +123,7 @@ describe('SsoSettings', () => {
 
     await waitFor(() =>
       expect(mockApi.configureSso).toHaveBeenCalledWith(
-        7,
+        'org-7',
         expect.objectContaining({
           providerType: 'oidc',
           oidcIssuerUrl: 'https://idp.example.com',

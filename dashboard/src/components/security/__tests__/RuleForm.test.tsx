@@ -169,7 +169,7 @@ describe('RuleForm', () => {
           enabled: true,
         }),
         // Editing an existing rule threads its id so saves update rather than create.
-        1
+        'rule-1'
       )
     )
   })
