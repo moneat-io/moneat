@@ -34,9 +34,11 @@ import {
 import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/lib/mcp-chat'
 
 const EXPIRY_MS = 60 * 60 * 1000 // 1 hour
+let snapshotFallbackSequence = 0
 
 function createSnapshotId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  snapshotFallbackSequence += 1
+  return globalThis.crypto?.randomUUID?.() ?? `chat-${Date.now()}-${snapshotFallbackSequence}`
 }
 
 function loadInitialActiveChat() {
