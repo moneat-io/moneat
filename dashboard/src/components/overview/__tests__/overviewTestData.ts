@@ -20,10 +20,10 @@ export const overviewTestData: OverviewResponse = {
   systemStatus: {
     state: 'Action needed',
     severity: 'bad',
-    counts: {incidents: 1, alerts: 3, degraded: 2, hostsOffline: 1},
+    counts: {incidents: 0, alerts: 3, degraded: 2, hostsOffline: 1},
     ai: {
       summary: 'checkout-api is degraded after deploy v2.4.1.',
-      incidentId: 'INC-204',
+      incidentId: null,
     },
   },
   kpis: [
@@ -77,17 +77,10 @@ export const overviewTestData: OverviewResponse = {
     deployLabel: 'v2.4.1',
   },
   triage: {
-    incidents: [{
-      id: 'INC-204',
-      title: 'Elevated 5xx on checkout-api',
-      priority: 'P1',
-      status: 'TRIGGERED',
-      owner: 'Payments',
-      ageLabel: '9m',
-    }],
+    incidents: [],
     alerts: [{
-      title: '5xx > 2%',
-      detail: 'checkout-api',
+      title: 'Elevated 5xx on checkout-api',
+      detail: 'checkout-api reported 1.2k server errors',
       level: 'error',
       ageLabel: '6m',
     }],
@@ -128,8 +121,8 @@ export const overviewTestData: OverviewResponse = {
     ageLabel: '14m',
   }],
   activity: [{
-    kind: 'incident',
-    text: 'Alert 5xx>2% triggered INC-204',
-    meta: '9m ago',
+    kind: 'deploy',
+    text: 'v2.4.1 released to checkout-api',
+    meta: '14m ago',
   }],
 }

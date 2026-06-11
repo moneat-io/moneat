@@ -86,6 +86,18 @@ class AlertEpisodeServiceTest {
     }
 
     @Test
+    fun `firing episode persists alert display metadata`() {
+        val now = Instant.parse("2026-06-02T12:00:00Z")
+
+        service.recordFiring(alertEvent(), now)
+
+        val episode = service.listEpisodes(orgId).single()
+        assertEquals("CPU saturation", episode.title)
+        assertEquals("CPU has crossed the threshold", episode.description)
+        assertEquals("P0", episode.priority)
+    }
+
+    @Test
     fun `firing reminder is due after 24 hours while episode remains open`() {
         val now = Instant.parse("2026-06-02T12:00:00Z")
 

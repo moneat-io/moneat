@@ -19,6 +19,9 @@ package com.moneat.overview.services
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.config.ClickHouseClient
+import com.moneat.dashboards.models.DashboardWidgetAlerts
+import com.moneat.dashboards.models.DashboardWidgets
+import com.moneat.dashboards.models.Dashboards
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
@@ -44,8 +47,6 @@ import com.moneat.overview.models.OverviewTelemetryData
 import com.moneat.overview.models.OverviewTriageData
 import com.moneat.overview.models.OverviewUptimeData
 import com.moneat.overview.models.OverviewUptimeMonitor
-import com.moneat.shared.models.HostAlerts
-import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Releases
 import com.moneat.statuspage.models.StatusPages
@@ -53,6 +54,7 @@ import com.moneat.uptime.models.UptimeMonitorResponse
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.suspendRunCatching
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -67,7 +69,8 @@ import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.innerJoin
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.Locale
@@ -112,6 +115,25 @@ private const val UPTIME_SLO_LABEL = "SLO 99.9"
 private const val DEFAULT_DEPLOY_LABEL = "No deploys"
 private const val LIVE_TRACE_WINDOW_HOURS = 2
 private const val DATETIME64_MILLIS_PRECISION = 3
+private const val DASHBOARD_ALERT_SOURCE = "DASHBOARD_ALERT"
+private const val DASHBOARD_ALERT_DEDUP_PREFIX = "moneat-dashboard-alert-"
+private const val ERROR_ALERT_SOURCE = "ERROR_ALERT"
+private const val ERROR_ALERT_DEDUP_PREFIX = "moneat-error-"
+
+private data class AlertDisplayFallback(
+    val title: String,
+    val detail: String,
+    val priority: String?,
+)
+
+private data class AlertEpisodeOverviewRow(
+    val source: String,
+    val deduplicationKey: String,
+    val title: String?,
+    val description: String?,
+    val priority: String?,
+    val ageLabel: String,
+)
 
 class OverviewService(
     private val monitorService: MonitorService = MonitorService(
@@ -142,9 +164,7 @@ class OverviewService(
         val containersDeferred = async { loadContainerCounts(organizationId, demoEpochMs) }
         val deploysDeferred = async { loadDeploys(organizationId) }
         val alertsDeferred = async { loadAlertItems(organizationId) }
-        val incidentsDeferred = async { loadIncidentItems(organizationId) }
         val alertCountDeferred = async { loadAlertCount(organizationId) }
-        val incidentCountDeferred = async { loadIncidentCount(organizationId) }
         val statusPageCountDeferred = async { loadStatusPageCount(organizationId) }
         val syntheticFailingDeferred = async { loadSyntheticFailing(organizationId, demoEpochMs) }
 
@@ -157,11 +177,11 @@ class OverviewService(
         val issueItems = issueItemsDeferred.await()
         val deploys = deploysDeferred.await()
         val alertItems = alertsDeferred.await()
-        val incidents = incidentsDeferred.await()
+        val incidents = emptyList<OverviewIncidentItem>()
         val serviceRows = serviceRowsDeferred.await()
 
         val counts = overviewCounts(
-            incidents = incidentCountDeferred.await(),
+            incidents = incidents.size,
             alerts = alertCountDeferred.await(),
             serviceRows = serviceRows,
             hosts = hosts,
@@ -209,9 +229,11 @@ class OverviewService(
             "warn" -> "Degraded"
             else -> "Healthy"
         }
-        val summary = when (severity) {
-            "bad" -> "Active incidents or offline hosts need attention."
-            "warn" -> "Some services or alerts are degraded in the current workspace."
+        val summary = when {
+            counts.incidents > 0 -> "Active incidents need attention."
+            counts.hostsOffline > 0 -> "Offline hosts need attention."
+            counts.alerts > 0 -> "Firing alerts need attention."
+            counts.degraded > 0 -> "Some services are degraded in the current workspace."
             else -> "No active incidents, firing alerts, degraded services, or offline hosts."
         }
         return OverviewSystemStatus(
@@ -440,8 +462,8 @@ class OverviewService(
                 .toInt()
         }
 
-    private fun loadIncidentItems(organizationId: Int): List<OverviewIncidentItem> =
-        transaction {
+    private suspend fun loadAlertItems(organizationId: Int): List<OverviewAlertItem> {
+        val episodes = transaction {
             AlertEpisodes
                 .selectAll()
                 .where {
@@ -451,60 +473,118 @@ class OverviewService(
                 .orderBy(AlertEpisodes.openedAt to SortOrder.DESC)
                 .limit(MAX_ATTENTION_ROWS)
                 .map { row ->
-                    OverviewIncidentItem(
-                        id = "INC-${row[AlertEpisodes.id].value}",
-                        title = row[AlertEpisodes.sourceName],
-                        priority = "P2",
-                        status = row[AlertEpisodes.status],
-                        owner = "On-call",
+                    AlertEpisodeOverviewRow(
+                        source = row[AlertEpisodes.sourceName],
+                        deduplicationKey = row[AlertEpisodes.deduplicationKey],
+                        title = row[AlertEpisodes.title],
+                        description = row[AlertEpisodes.description],
+                        priority = row[AlertEpisodes.priority],
                         ageLabel = ageLabel(row[AlertEpisodes.openedAt].toEpochMilliseconds()),
                     )
                 }
         }
+        return episodes.map { episode ->
+            val source = humanizeAlertSource(episode.source)
+            val fallback = alertDisplayFallback(
+                source = episode.source,
+                deduplicationKey = episode.deduplicationKey,
+                organizationId = organizationId,
+            ) ?: errorAlertDisplayFallback(
+                source = episode.source,
+                deduplicationKey = episode.deduplicationKey,
+                organizationId = organizationId,
+            )
+            OverviewAlertItem(
+                title = episode.title ?: fallback?.title ?: source,
+                detail = episode.description ?: fallback?.detail ?: source,
+                level = alertLevel(episode.priority ?: fallback?.priority),
+                ageLabel = episode.ageLabel,
+            )
+        }
+    }
 
-    private fun loadIncidentCount(organizationId: Int): Int =
+    private fun alertDisplayFallback(
+        source: String,
+        deduplicationKey: String,
+        organizationId: Int,
+    ): AlertDisplayFallback? {
+        if (source != DASHBOARD_ALERT_SOURCE) return null
+        val alertId = deduplicationKey.removePrefix(DASHBOARD_ALERT_DEDUP_PREFIX)
+            .takeIf { suffix -> suffix.length != deduplicationKey.length }
+            ?.toLongOrNull()
+            ?: return null
+
+        return transaction {
+            DashboardWidgetAlerts
+                .innerJoin(DashboardWidgets, { widgetId }, { DashboardWidgets.id })
+                .innerJoin(Dashboards, { DashboardWidgetAlerts.dashboardId }, { Dashboards.id })
+                .select(
+                    DashboardWidgetAlerts.name,
+                    DashboardWidgetAlerts.condition,
+                    DashboardWidgetAlerts.threshold,
+                    DashboardWidgetAlerts.alertPriority,
+                    DashboardWidgets.title,
+                    Dashboards.title,
+                )
+                .where {
+                    (DashboardWidgetAlerts.id eq alertId) and
+                        (DashboardWidgetAlerts.orgId eq organizationId.toLong())
+                }
+                .firstOrNull()
+                ?.let { row ->
+                    val widgetTitle = row[DashboardWidgets.title] ?: "Widget"
+                    val dashboardTitle = row[Dashboards.title]
+                    val condition = row[DashboardWidgetAlerts.condition]
+                    val threshold = row[DashboardWidgetAlerts.threshold]
+                    AlertDisplayFallback(
+                        title = row[DashboardWidgetAlerts.name],
+                        detail = "$widgetTitle on $dashboardTitle: $condition $threshold",
+                        priority = row[DashboardWidgetAlerts.alertPriority],
+                    )
+                }
+        }
+    }
+
+    private suspend fun errorAlertDisplayFallback(
+        source: String,
+        deduplicationKey: String,
+        organizationId: Int,
+    ): AlertDisplayFallback? {
+        if (source != ERROR_ALERT_SOURCE) return null
+        val issueId = deduplicationKey.removePrefix(ERROR_ALERT_DEDUP_PREFIX)
+            .takeIf { suffix -> suffix.length != deduplicationKey.length }
+            ?: return null
+        val escapedIssueId = escapeSql(issueId)
+        val orgClause = ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+        val row = firstRow(
+            """
+            SELECT
+                title,
+                toString(level) AS level,
+                event_count AS eventCount
+            FROM issues FINAL
+            WHERE $orgClause
+              AND issue_id = '$escapedIssueId'
+            LIMIT 1
+            """.trimIndent(),
+        )
+        val title = row.string("title").ifBlank { return null }
+        val eventCount = row.long("eventCount")
+        val detail = if (eventCount > 0) "$eventCount events" else "Issue $issueId"
+        return AlertDisplayFallback(
+            title = title,
+            detail = detail,
+            priority = priorityForIssueLevel(row.string("level")),
+        )
+    }
+
+    private fun loadAlertCount(organizationId: Int): Int =
         transaction {
             AlertEpisodes
                 .selectAll()
                 .where {
                     (AlertEpisodes.organizationId eq organizationId) and
                         (AlertEpisodes.status eq "FIRING")
-                }
-                .count()
-                .toInt()
-        }
-
-    private fun loadAlertItems(organizationId: Int): List<OverviewAlertItem> =
-        transaction {
-            HostAlerts
-                .innerJoin(Hosts)
-                .selectAll()
-                .where {
-                    (HostAlerts.organization_id eq organizationId) and
-                        (HostAlerts.enabled eq true) and
-                        HostAlerts.last_triggered_at.isNotNull()
-                }
-                .orderBy(HostAlerts.last_triggered_at to SortOrder.DESC)
-                .limit(MAX_ATTENTION_ROWS)
-                .map { row ->
-                    val host = row[Hosts.display_name] ?: row[Hosts.hostname]
-                    OverviewAlertItem(
-                        title = "${row[HostAlerts.metric]} ${row[HostAlerts.condition]} ${row[HostAlerts.threshold]}",
-                        detail = host,
-                        level = alertLevel(row[HostAlerts.alert_priority]),
-                        ageLabel = row[HostAlerts.last_triggered_at]?.let { ageLabel(it.toEpochMilliseconds()) } ?: "",
-                    )
-                }
-        }
-
-    private fun loadAlertCount(organizationId: Int): Int =
-        transaction {
-            HostAlerts
-                .selectAll()
-                .where {
-                    (HostAlerts.organization_id eq organizationId) and
-                        (HostAlerts.enabled eq true) and
-                        HostAlerts.last_triggered_at.isNotNull()
                 }
                 .count()
                 .toInt()
@@ -958,10 +1038,25 @@ class OverviewService(
         }
 
     private fun alertLevel(priority: String?): String =
-        when (priority?.lowercase(Locale.US)) {
-            "p1", "critical" -> "error"
+        when (priority?.uppercase(Locale.US)) {
+            "P0", "P1", "P2", "CRITICAL", "HIGH", "MEDIUM" -> "error"
             else -> "warn"
         }
+
+    private fun priorityForIssueLevel(level: String): String? =
+        when (level.lowercase(Locale.US)) {
+            "fatal", "error" -> "P1"
+            "warning" -> "P2"
+            else -> null
+        }
+
+    private fun humanizeAlertSource(source: String): String =
+        source
+            .lowercase(Locale.US)
+            .split('_')
+            .filter { part -> part.isNotBlank() }
+            .joinToString(" ") { part -> part.replaceFirstChar { char -> char.uppercase(Locale.US) } }
+            .ifBlank { "Alert" }
 
     private fun normalizeIssueLevel(level: String): String =
         when (level.lowercase(Locale.US)) {

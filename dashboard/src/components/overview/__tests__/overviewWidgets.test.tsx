@@ -48,7 +48,8 @@ describe('SystemStatusWidget', () => {
     renderWithOverview(<SystemStatusWidget />)
     expect(screen.getByTestId('widget-system_status')).toBeInTheDocument()
     expect(screen.getByText('Action needed')).toBeInTheDocument()
-    expect(screen.getByText('View incident')).toBeInTheDocument()
+    const action = screen.getByRole('link', {name: 'View alerts'})
+    expect(action).toHaveAttribute('href', '/on-call/alerts')
   })
 })
 
@@ -90,7 +91,11 @@ describe('TriageWidget', () => {
     renderWithOverview(<TriageWidget />)
     expect(screen.getByTestId('widget-triage')).toBeInTheDocument()
     expect(screen.getByText('Needs attention')).toBeInTheDocument()
+    expect(screen.queryByText('Active incidents')).not.toBeInTheDocument()
+    expect(screen.getByText('Alerts firing')).toBeInTheDocument()
     expect(screen.getByText('Elevated 5xx on checkout-api')).toBeInTheDocument()
+    const action = screen.getByRole('link', {name: 'View all'})
+    expect(action).toHaveAttribute('href', '/on-call/alerts')
   })
 })
 
@@ -125,6 +130,6 @@ describe('ActivityWidget', () => {
   it('renders the activity feed', () => {
     renderWithOverview(<ActivityWidget />)
     expect(screen.getByTestId('widget-activity')).toBeInTheDocument()
-    expect(screen.getByText('Alert 5xx>2% triggered INC-204')).toBeInTheDocument()
+    expect(screen.getByText('v2.4.1 released to checkout-api')).toBeInTheDocument()
   })
 })
