@@ -122,6 +122,7 @@ data class CustomDataSourceResponse(
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("has_credentials") val hasCredentials: Boolean = true,
+    @SerialName("used_by_dashboard_count") val usedByDashboardCount: Int = 0,
     @Transient val numericId: Long = 0,
     // Credentials are NEVER returned
 )
@@ -137,6 +138,7 @@ data class CreateCustomDataSourceRequest(
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("header_value") val headerValue: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
     @SerialName("access_key_id") val accessKeyId: String? = null,
     @SerialName("secret_access_key") val secretAccessKey: String? = null,
@@ -157,6 +159,7 @@ data class UpdateCustomDataSourceRequest(
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("header_value") val headerValue: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String>? = null,
     val enabled: Boolean? = null,
     @SerialName("access_key_id") val accessKeyId: String? = null,
@@ -177,6 +180,7 @@ data class TestConnectionRequest(
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("header_value") val headerValue: String? = null,
     @SerialName("access_key_id") val accessKeyId: String? = null,
     @SerialName("secret_access_key") val secretAccessKey: String? = null,
     @SerialName("service_account_json") val serviceAccountJson: String? = null,
@@ -184,6 +188,7 @@ data class TestConnectionRequest(
     @SerialName("connection_string") val connectionString: String? = null,
     @SerialName("project_id") val projectId: String? = null,
     val region: String? = null,
+    @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
 )
 
 @Serializable

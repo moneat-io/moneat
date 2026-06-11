@@ -27,6 +27,7 @@ import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.NotificationChannels
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateDashboardAlertRequest
+import com.moneat.dashboards.services.handlers.withConnectionOptions
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
@@ -614,7 +615,7 @@ class DashboardAlertService(
             host = dataSource.host,
             port = dataSource.port,
             databaseName = dataSource.databaseName,
-            credentials = credentials,
+            credentials = credentials.withConnectionOptions(dataSource.extraConfig),
             query = rawQuery,
             limit = queryDsl.limit,
             timeRange = queryDsl.timeRange,

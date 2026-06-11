@@ -26,14 +26,17 @@ class SnowflakeHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDa
     driverClass = "net.snowflake.client.jdbc.SnowflakeDriver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String {
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
         val account = host.removePrefix("https://").removePrefix("http://")
             .replace(".snowflakecomputing.com", "").trim()
-        val params = buildString {
-            if (database.isNotBlank()) append("db=$database")
+        val params = buildList {
+            if (database.isNotBlank()) add("db=$database")
+            options.warehouse?.let { add("warehouse=$it") }
+            options.role?.let { add("role=$it") }
+            options.schema?.let { add("schema=$it") }
         }
         return if (params.isNotEmpty()) {
-            "jdbc:snowflake://$account.snowflakecomputing.com/?$params"
+            "jdbc:snowflake://$account.snowflakecomputing.com/?" + params.joinToString("&")
         } else {
             "jdbc:snowflake://$account.snowflakecomputing.com/"
         }

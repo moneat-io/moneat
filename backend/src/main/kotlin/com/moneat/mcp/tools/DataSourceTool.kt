@@ -20,6 +20,7 @@ import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.handlers.withConnectionOptions
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
@@ -171,9 +172,9 @@ class ExecuteDataSourceQueryTool : McpTool {
                 host = source.host,
                 port = source.port,
                 databaseName = source.databaseName,
-                credentials = creds,
+                credentials = creds.withConnectionOptions(source.extraConfig),
                 query = query,
-                limit = limit
+                limit = limit,
             )
             jsonResult(results)
         } catch (e: IllegalArgumentException) {

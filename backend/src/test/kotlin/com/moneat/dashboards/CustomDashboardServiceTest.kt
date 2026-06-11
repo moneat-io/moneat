@@ -115,6 +115,7 @@ class CustomDashboardServiceTest {
         val createdBy: Long = USER_ID_LONG,
         val createdAt: String = DEFAULT_TIMESTAMP,
         val updatedAt: String = DEFAULT_TIMESTAMP,
+        val ownerName: String? = null,
     )
 
     private fun buildDashboardFlag(p: DashboardFlagParams = DashboardFlagParams()): DashboardWithFavoriteFlag =
@@ -135,6 +136,7 @@ class CustomDashboardServiceTest {
             createdBy = p.createdBy,
             createdAt = p.createdAt,
             updatedAt = p.updatedAt,
+            ownerName = p.ownerName,
         )
 
     private fun buildWidgetData(
@@ -159,26 +161,34 @@ class CustomDashboardServiceTest {
         sortOrder = 0,
     )
 
+    private data class CreatedDashboardParams(
+        val id: Long = 1L,
+        val title: String = "New Dashboard",
+        val description: String? = null,
+        val projectId: Long? = null,
+        val folderId: Long? = null,
+        val ownerName: String? = null,
+    )
+
     private fun buildCreatedDashboardData(
-        id: Long = 1L,
-        title: String = "New Dashboard",
-        description: String? = null,
+        params: CreatedDashboardParams = CreatedDashboardParams(),
     ): CreatedDashboardData = CreatedDashboardData(
-        id = id,
-        resourceId = resourceId(id),
+        id = params.id,
+        resourceId = resourceId(params.id),
         orgId = ORG_ID,
-        projectId = null,
-        projectResourceId = null,
-        folderId = null,
-        folderResourceId = null,
-        title = title,
-        description = description,
+        projectId = params.projectId,
+        projectResourceId = params.projectId?.let(::resourceId),
+        folderId = params.folderId,
+        folderResourceId = params.folderId?.let(::resourceId),
+        title = params.title,
+        description = params.description,
         layoutType = "grid",
         isDefault = false,
         variables = "[]",
         createdBy = USER_ID_LONG,
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
+        ownerName = params.ownerName,
     )
 
     private fun buildFolderRow(
@@ -213,6 +223,19 @@ class CustomDashboardServiceTest {
         assertEquals("Test Dashboard", result[0].title)
         assertEquals(1, result[0].widgets.size)
         assertEquals("Widget", result[0].widgets[0].title)
+    }
+
+    @Test
+    fun `listDashboards maps ownerName`() = runBlocking {
+        val flag = buildDashboardFlag(
+            DashboardFlagParams(id = 1L, ownerName = "Sam Lee")
+        )
+        every { dashboardRepository.list(ORG_ID, null, null) } returns listOf(flag)
+        every { widgetRepository.listByDashboardId(1L) } returns emptyList()
+
+        val result = service.listDashboards(ORG_ID)
+
+        assertEquals("Sam Lee", result.single().ownerName)
     }
 
     @Test
@@ -267,6 +290,20 @@ class CustomDashboardServiceTest {
     }
 
     @Test
+    fun `getDashboard maps ownerName`() = runBlocking {
+        val flag = buildDashboardFlag(
+            DashboardFlagParams(id = 5L, ownerName = "Sam Lee")
+        )
+        every { dashboardRepository.getById(5L, ORG_ID, null) } returns flag
+        every { widgetRepository.listByDashboardId(5L) } returns emptyList()
+
+        val result = service.getDashboard(5L, ORG_ID)
+
+        assertNotNull(result)
+        assertEquals("Sam Lee", result.ownerName)
+    }
+
+    @Test
     fun `getDashboard returns null when dashboard not found`() = runBlocking {
         every { dashboardRepository.getById(999L, ORG_ID, null) } returns null
 
@@ -299,13 +336,21 @@ class CustomDashboardServiceTest {
             widgets = emptyList(),
         )
         val data = buildCreatedDashboardData(
-            id = 7L,
-            title = MY_DASHBOARD,
-            description = "desc",
+            CreatedDashboardParams(
+                id = 7L,
+                title = MY_DASHBOARD,
+                description = "desc",
+                ownerName = "Sam Lee",
+            )
         )
         every { dashboardRepository.create(ORG_ID, USER_ID_LONG, request) } returns data
         every { dashboardRepository.getById(7L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
-            DashboardFlagParams(id = 7L, title = MY_DASHBOARD, description = "desc")
+            DashboardFlagParams(
+                id = 7L,
+                title = MY_DASHBOARD,
+                description = "desc",
+                ownerName = "Sam Lee",
+            )
         )
         every { widgetRepository.listByDashboardId(7L) } returns emptyList()
 
@@ -314,6 +359,7 @@ class CustomDashboardServiceTest {
         assertEquals(resourceId(7), result.id)
         assertEquals(MY_DASHBOARD, result.title)
         assertEquals("desc", result.description)
+        assertEquals("Sam Lee", result.ownerName)
         assertTrue(result.widgets.isEmpty())
     }
 
@@ -338,7 +384,7 @@ class CustomDashboardServiceTest {
             title = "Dashboard",
             widgets = listOf(widgetReq),
         )
-        val data = buildCreatedDashboardData(id = 10L, title = "Dashboard")
+        val data = buildCreatedDashboardData(CreatedDashboardParams(id = 10L, title = "Dashboard"))
         every { dashboardRepository.create(ORG_ID, USER_ID_LONG, request) } returns data
         every { widgetRepository.insert(10L, widgetReq, any(), any()) } returns 50L
         every { dashboardRepository.getById(10L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
@@ -374,7 +420,7 @@ class CustomDashboardServiceTest {
                 title = "D",
                 widgets = listOf(widget0, widget1),
             )
-            val data = buildCreatedDashboardData(id = 1L)
+            val data = buildCreatedDashboardData(CreatedDashboardParams(id = 1L))
             every {
                 dashboardRepository.create(ORG_ID, USER_ID_LONG, request)
             } returns data
@@ -398,7 +444,7 @@ class CustomDashboardServiceTest {
             title = "D",
             widgets = listOf(widget),
         )
-        val data = buildCreatedDashboardData(id = 1L)
+        val data = buildCreatedDashboardData(CreatedDashboardParams(id = 1L))
         every {
             dashboardRepository.create(ORG_ID, USER_ID_LONG, request, null, null)
         } returns data
@@ -426,7 +472,7 @@ class CustomDashboardServiceTest {
             variables = vars,
             widgets = emptyList(),
         )
-        val data = buildCreatedDashboardData(id = 1L).copy(
+        val data = buildCreatedDashboardData(CreatedDashboardParams(id = 1L)).copy(
             variables = """[{"name":"env","label":"Environment"}]""",
         )
         every {
@@ -553,7 +599,9 @@ class CustomDashboardServiceTest {
         val request = slot<CreateDashboardRequest>()
         every {
             dashboardRepository.create(ORG_ID, USER_ID_LONG, capture(request), PROJECT_ID, null)
-        } returns buildCreatedDashboardData(id = 99L, title = "Test Dashboard (Copy)")
+        } returns buildCreatedDashboardData(
+            CreatedDashboardParams(id = 99L, title = "Test Dashboard (Copy)")
+        )
         every { dashboardRepository.getById(99L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
             DashboardFlagParams(id = 99L, title = "Test Dashboard (Copy)")
         )

@@ -142,6 +142,7 @@ data class DashboardResponse(
     @SerialName("created_by") val createdBy: Long,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
+    @SerialName("owner_name") val ownerName: String? = null,
     val widgets: List<WidgetResponse> = emptyList()
 )
 

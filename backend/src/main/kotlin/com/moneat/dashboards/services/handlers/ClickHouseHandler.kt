@@ -22,7 +22,7 @@ class ClickHouseHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariD
     driverClass = "com.clickhouse.jdbc.ClickHouseDriver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String =
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String =
         if (database.isBlank()) {
             "jdbc:clickhouse://$host:$port"
         } else {

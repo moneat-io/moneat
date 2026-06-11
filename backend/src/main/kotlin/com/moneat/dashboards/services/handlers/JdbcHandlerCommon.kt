@@ -33,4 +33,35 @@ internal object JdbcHandlerCommon {
         wb("EXECUTE") to "EXECUTE",
         wb("COPY") to "COPY",
     )
+
+    /**
+     * PostgreSQL / CockroachDB JDBC URL suffix. sslmode values map 1:1 to the
+     * dialog's tls_mode (disable/require/verify-ca/verify-full); a blank mode emits
+     * nothing so a local plaintext server keeps the driver default.
+     */
+    fun postgresQuerySuffix(options: ConnectionOptions): String {
+        val params = buildList {
+            options.tlsMode?.let { add("sslmode=$it") }
+            options.schema?.let { add("currentSchema=$it") }
+        }
+        return if (params.isEmpty()) "" else "?" + params.joinToString("&")
+    }
+
+    /** MySQL Connector/J sslMode enum for a tls_mode, or null to leave the driver default. */
+    fun mysqlSslMode(tlsMode: String?): String? = when (tlsMode) {
+        "disable" -> "DISABLED"
+        "require" -> "REQUIRED"
+        "verify-ca" -> "VERIFY_CA"
+        "verify-full" -> "VERIFY_IDENTITY"
+        else -> null
+    }
+
+    /** MariaDB sslMode value for a tls_mode, or null to leave the driver default. */
+    fun mariadbSslMode(tlsMode: String?): String? = when (tlsMode) {
+        "disable" -> "disable"
+        "require" -> "trust"
+        "verify-ca" -> "verify-ca"
+        "verify-full" -> "verify-full"
+        else -> null
+    }
 }

@@ -22,9 +22,15 @@ class MSSQLHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataSo
     driverClass = "com.microsoft.sqlserver.jdbc.SQLServerDriver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String {
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
         val db = if (database.isBlank()) "master" else database
-        return "jdbc:sqlserver://$host:$port;databaseName=$db"
+        val tls = when (options.tlsMode) {
+            "disable" -> ";encrypt=false"
+            "require" -> ";encrypt=true;trustServerCertificate=true"
+            "verify-ca", "verify-full" -> ";encrypt=true;trustServerCertificate=false"
+            else -> ""
+        }
+        return "jdbc:sqlserver://$host:$port;databaseName=$db$tls"
     }
 
     override fun defaultPort(): Int = 1433

@@ -1,0 +1,565 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+// Pure connection logic for the Add-data-source dialog: form state, the smart
+// host paste-splitter, port validation, the live endpoint preview, and the
+// mapping from form state to the API payload (structured config rides in
+// extra_config; secrets ride in the dedicated credential fields).
+
+import type {
+  CreateCustomDataSourceRequest,
+  CustomDataSourceResponse,
+  TestConnectionRequest,
+} from '@/lib/api'
+import {
+  type AuthMethod,
+  type ConnectionMethod,
+  type VendorDef,
+  getVendor,
+} from './dataSourceCatalog'
+
+export interface DsFormState {
+  vendor: string
+  method: ConnectionMethod
+  name: string
+  description: string
+  // shared host/port
+  host: string
+  port: string
+  database: string
+  username: string
+  password: string
+  // http
+  scheme: 'http' | 'https'
+  basePath: string
+  authMethod: AuthMethod
+  token: string
+  headerName: string
+  headerValue: string
+  // influx
+  influxVersion: '1' | '2'
+  org: string
+  bucket: string
+  // clickhouse
+  chProtocol: 'http' | 'native'
+  // connection string
+  connStr: string
+  manual: boolean
+  // sql advanced
+  tlsMode: string
+  timeout: string
+  schema: string
+  // bigquery
+  projectId: string
+  serviceAccount: string
+  // snowflake
+  account: string
+  warehouse: string
+  role: string
+  // cloudwatch
+  region: string
+  useRole: boolean
+  accessKey: string
+  secretKey: string
+}
+
+const BLANK: DsFormState = {
+  vendor: '', method: 'guided', name: '', description: '',
+  host: '', port: '', database: '', username: '', password: '',
+  scheme: 'https', basePath: '', authMethod: 'none', token: '', headerName: '', headerValue: '',
+  influxVersion: '2', org: '', bucket: '',
+  chProtocol: 'http',
+  connStr: '', manual: false,
+  tlsMode: 'require', timeout: '', schema: '',
+  projectId: '', serviceAccount: '',
+  account: '', warehouse: '', role: '',
+  region: 'us-east-1', useRole: false, accessKey: '', secretKey: '',
+}
+
+export function defaultFormState(vendorKey: string): DsFormState {
+  const v = getVendor(vendorKey)
+  return {
+    ...BLANK,
+    vendor: vendorKey,
+    scheme: v?.arch === 'clickhouse' ? 'http' : 'https',
+    port: v?.port ? String(v.port) : '',
+    tlsMode: v?.arch === 'sql' ? 'require' : '',
+  }
+}
+
+/** Re-hydrate the form when editing an existing source (secrets stay blank). */
+export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
+  const x = ds.extra_config ?? {}
+  const base = defaultFormState(ds.source_type)
+  const v = getVendor(ds.source_type)
+  return {
+    ...base,
+    name: ds.name,
+    description: ds.description ?? '',
+    host: v?.arch === 'file' || v?.arch === 'snowflake' || v?.arch === 'bigquery' || v?.arch === 'cloudwatch' ? '' : ds.host,
+    port: ds.port != null ? String(ds.port) : base.port,
+    database: ds.database_name ?? '',
+    scheme: x.scheme === 'http' ? 'http' : 'https',
+    basePath: x.base_path ?? '',
+    authMethod: (x.auth_method as AuthMethod) ?? 'none',
+    headerName: x.header_name ?? '',
+    influxVersion: x.influx_version === '1' ? '1' : '2',
+    org: x.org ?? '',
+    bucket: x.bucket ?? '',
+    chProtocol: x.ch_protocol === 'native' ? 'native' : 'http',
+    tlsMode: x.tls_mode ?? base.tlsMode,
+    timeout: x.timeout ?? '',
+    schema: x.schema ?? '',
+    warehouse: x.warehouse ?? '',
+    role: x.role ?? '',
+    projectId: ds.host && v?.arch === 'bigquery' ? ds.host : '',
+    account: ds.host && v?.arch === 'snowflake' ? ds.host : '',
+    region: v?.arch === 'cloudwatch' ? ds.host || x.region || 'us-east-1' : 'us-east-1',
+    useRole: x.use_role === 'true',
+  }
+}
+
+// ----- smart host paste-splitting -------------------------------------------
+
+export interface HostSplit {
+  scheme?: 'http' | 'https'
+  host: string
+  port?: string
+  path?: string
+  didSplit: boolean
+}
+
+/**
+ * Pulls a scheme, port, path or user:pass@ out of a value pasted into the Host
+ * field so the host field only ever holds a bare hostname. Fixes the classic
+ * "I pasted https://host:9090/path and it errored" trap.
+ */
+export function smartSplitHost(raw: string): HostSplit {
+  let host = (raw ?? '').trim()
+  let scheme: 'http' | 'https' | undefined
+  let port: string | undefined
+  let path: string | undefined
+  let didSplit = false
+
+  const schemeMatch = host.match(/^([a-z][a-z0-9+.-]*):\/\//i)
+  if (schemeMatch) {
+    const s = schemeMatch[1].toLowerCase()
+    if (s === 'http' || s === 'https') scheme = s
+    host = host.slice(schemeMatch[0].length)
+    didSplit = true
+  }
+  const at = host.lastIndexOf('@')
+  if (at >= 0) {
+    host = host.slice(at + 1)
+    didSplit = true
+  }
+  const slash = host.indexOf('/')
+  if (slash >= 0) {
+    path = host.slice(slash)
+    host = host.slice(0, slash)
+    didSplit = true
+  }
+  const colon = host.lastIndexOf(':')
+  if (colon >= 0) {
+    const p = host.slice(colon + 1)
+    if (/^\d+$/.test(p)) {
+      port = p
+      host = host.slice(0, colon)
+      didSplit = true
+    }
+  }
+  return {scheme, host, port, path, didSplit}
+}
+
+export interface PortValidity {
+  ok: boolean
+  message?: string
+}
+
+export function validatePort(value: string): PortValidity {
+  const v = (value ?? '').trim()
+  if (v === '') return {ok: true}
+  if (!/^\d+$/.test(v) || Number(v) < 1 || Number(v) > 65535) {
+    return {ok: false, message: 'Port must be a number between 1 and 65535.'}
+  }
+  return {ok: true}
+}
+
+// ----- live endpoint preview ------------------------------------------------
+
+export type PreviewTone =
+  | 'scheme' | 'user' | 'pw' | 'host' | 'port' | 'path' | 'db' | 'muted'
+export interface PreviewSeg {
+  tone: PreviewTone
+  text: string
+}
+export interface EndpointPreview {
+  segments: PreviewSeg[]
+  sub: string
+  portOk: boolean
+}
+
+function resolvedPort(state: DsFormState, fallback?: number): string {
+  if (state.port && /^\d+$/.test(state.port)) return state.port
+  return fallback != null ? String(fallback) : ''
+}
+
+function maskUri(uri: string): PreviewSeg[] {
+  // Mask a password embedded in a connection string for display only.
+  return [{tone: 'host', text: uri.replace(/:([^:@/]+)@/, ':••••@')}]
+}
+
+interface ParsedConnectionUri {
+  readonly host?: string
+  readonly port?: number
+  readonly database?: string
+  readonly username?: string
+  readonly password?: string
+}
+
+function decodeUriPart(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+function parseConnectionUri(raw: string): ParsedConnectionUri {
+  const value = raw.trim()
+  if (!value) return {}
+  try {
+    const parsed = new URL(value)
+    const database = decodeUriPart(parsed.pathname.replace(/^\/+/, ''))
+    return {
+      host: parsed.hostname || undefined,
+      port: parsed.port ? Number(parsed.port) : undefined,
+      database: database || undefined,
+      username: parsed.username ? decodeUriPart(parsed.username) : undefined,
+      password: parsed.password ? decodeUriPart(parsed.password) : undefined,
+    }
+  } catch {
+    const split = smartSplitHost(value.replace(/^[a-z+]+:\/\//i, ''))
+    const database = split.path?.replace(/^\/+/, '')
+    return {
+      host: split.host || undefined,
+      port: split.port ? Number(split.port) : undefined,
+      database: database || undefined,
+    }
+  }
+}
+
+export function buildEndpointPreview(state: DsFormState): EndpointPreview {
+  const v = getVendor(state.vendor)
+  const portOk = validatePort(state.port).ok
+  if (!v) return {segments: [{tone: 'muted', text: '—'}], sub: '', portOk}
+
+  const host = state.host || '⟨host⟩'
+  const port = resolvedPort(state, v.port)
+  let segments: PreviewSeg[] = []
+  let sub = ''
+
+  if (state.method === 'string') {
+    segments = state.connStr
+      ? maskUri(state.connStr)
+      : [{tone: 'pw', text: 'paste a connection string above'}]
+    sub = 'Parsed on save · credentials read from the URI'
+  } else if (v.arch === 'sql') {
+    segments = [
+      {tone: 'scheme', text: `${v.scheme}://`},
+      ...(state.username ? [{tone: 'user' as const, text: state.username}, {tone: 'pw' as const, text: state.password ? ':••••' : ''}, {tone: 'user' as const, text: '@'}] : []),
+      {tone: 'host', text: host},
+      {tone: 'port', text: `:${port}`},
+      {tone: 'path', text: '/'},
+      {tone: 'db', text: state.database || 'database'},
+    ]
+    sub = `${v.scheme === 'postgresql' ? 'PostgreSQL' : v.scheme} wire protocol · TLS: ${state.tlsMode || 'off'}${v.note ? ` · ${v.note}` : ''}`
+  } else if (v.arch === 'clickhouse') {
+    const native = state.chProtocol === 'native'
+    segments = [
+      {tone: 'scheme', text: native ? 'clickhouse://' : `${state.scheme}://`},
+      ...(state.username ? [{tone: 'user' as const, text: `${state.username}@`}] : []),
+      {tone: 'host', text: host},
+      {tone: 'port', text: `:${resolvedPort(state, native ? 9000 : 8123)}`},
+      {tone: 'path', text: '/'},
+      {tone: 'db', text: state.database || 'default'},
+    ]
+    sub = native ? 'Native TCP protocol' : 'HTTP interface'
+  } else if (v.arch === 'http') {
+    const base = state.basePath && state.basePath !== '/' ? state.basePath.replace(/\/$/, '') : ''
+    segments = [
+      {tone: 'scheme', text: `${state.scheme}://`},
+      {tone: 'host', text: host},
+      {tone: 'port', text: `:${port}`},
+      ...(base ? [{tone: 'path' as const, text: base}] : []),
+    ]
+    sub = `Moneat calls ${base}${v.apiPath} · auth: ${authLabel(state)}`
+  } else if (v.arch === 'influx') {
+    segments = [
+      {tone: 'scheme', text: `${state.scheme}://`},
+      {tone: 'host', text: host},
+      {tone: 'port', text: `:${resolvedPort(state, 8086)}`},
+    ]
+    sub =
+      state.influxVersion === '2'
+        ? `v2 Flux · org ${state.org || '⟨org⟩'} · bucket ${state.bucket || '⟨bucket⟩'} · token auth`
+        : `v1 InfluxQL · db ${state.database || '⟨db⟩'}`
+  } else if (v.arch === 'file') {
+    segments = [{tone: 'scheme', text: 'file:'}, {tone: 'path', text: state.host || '/path/to/database.db'}]
+    sub = 'Local file on the Moneat server'
+  } else if (v.arch === 'connstr') {
+    if (state.manual) {
+      segments = [
+        {tone: 'scheme', text: `${v.scheme}://`},
+        ...(state.username ? [{tone: 'user' as const, text: `${state.username}${state.password ? ':••••' : ''}@`}] : []),
+        {tone: 'host', text: host},
+        {tone: 'port', text: `:${resolvedPort(state, v.port)}`},
+        ...(state.database ? [{tone: 'db' as const, text: `/${state.database}`}] : []),
+      ]
+      sub = 'Built from host & port'
+    } else {
+      segments = state.connStr ? maskUri(state.connStr) : [{tone: 'pw', text: v.stringPlaceholder ?? ''}]
+      sub = 'Parsed on save · credentials read from the URI'
+    }
+  } else if (v.arch === 'bigquery') {
+    segments = [
+      {tone: 'scheme', text: 'bigquery://'},
+      {tone: 'host', text: state.projectId || '⟨project⟩'},
+      ...(state.database ? [{tone: 'db' as const, text: `/${state.database}`}] : []),
+    ]
+    sub = 'Authenticated with a service-account key'
+  } else if (v.arch === 'snowflake') {
+    segments = [
+      {tone: 'scheme', text: 'https://'},
+      {tone: 'host', text: state.account || '⟨account⟩'},
+      {tone: 'path', text: '.snowflakecomputing.com'},
+    ]
+    sub = `warehouse ${state.warehouse || '⟨wh⟩'} · db ${state.database || '⟨db⟩'}`
+  } else if (v.arch === 'cloudwatch') {
+    segments = [{tone: 'scheme', text: 'cloudwatch://'}, {tone: 'host', text: state.region || 'us-east-1'}]
+    sub = state.useRole ? 'Instance role / default credential chain' : 'Static access keys'
+  }
+
+  return {segments, sub, portOk}
+}
+
+export function authLabel(state: DsFormState): string {
+  switch (state.authMethod) {
+    case 'basic': return 'basic'
+    case 'bearer': return 'bearer token'
+    case 'header': return state.headerName || 'custom header'
+    default: return 'none'
+  }
+}
+
+// ----- payload mapping ------------------------------------------------------
+
+function put(target: Record<string, string>, key: string, value: string | undefined) {
+  if (value && value.trim() !== '') target[key] = value.trim()
+}
+
+/** Non-secret structured connection config, persisted in extra_config. */
+export function buildExtraConfig(state: DsFormState): Record<string, string> {
+  const v = getVendor(state.vendor)
+  const x: Record<string, string> = {}
+  if (!v || state.method === 'string') return x
+  switch (v.arch) {
+    case 'sql':
+      put(x, 'tls_mode', state.tlsMode)
+      put(x, 'timeout', state.timeout)
+      put(x, 'schema', state.schema)
+      break
+    case 'clickhouse':
+      put(x, 'ch_protocol', state.chProtocol)
+      break
+    case 'http':
+      put(x, 'scheme', state.scheme)
+      put(x, 'base_path', state.basePath)
+      put(x, 'auth_method', state.authMethod === 'none' ? '' : state.authMethod)
+      put(x, 'header_name', state.authMethod === 'header' ? state.headerName : '')
+      put(x, 'timeout', state.timeout)
+      break
+    case 'influx':
+      put(x, 'scheme', state.scheme)
+      put(x, 'influx_version', state.influxVersion)
+      put(x, 'org', state.org)
+      put(x, 'bucket', state.bucket)
+      break
+    case 'snowflake':
+      put(x, 'warehouse', state.warehouse)
+      put(x, 'role', state.role)
+      put(x, 'schema', state.schema)
+      break
+    case 'cloudwatch':
+      if (state.useRole) x.use_role = 'true'
+      break
+    default:
+      break
+  }
+  return x
+}
+
+/** The display name to persist (falls back to an auto-generated one). */
+export function effectiveName(state: DsFormState): string {
+  if (state.name.trim()) return state.name.trim()
+  const v = getVendor(state.vendor)
+  const label = v?.label ?? state.vendor
+  const parsedConnection = state.method === 'string' ? parseConnectionUri(state.connStr) : {}
+  const hostLike =
+    state.host || parsedConnection.host || state.projectId || state.account || state.region || ''
+  return hostLike ? `${label} · ${hostLike}` : label
+}
+
+function payloadHost(state: DsFormState, v: VendorDef): string {
+  switch (v.arch) {
+    case 'file': return state.host
+    case 'bigquery': return state.projectId
+    case 'snowflake': return state.account
+    case 'cloudwatch': return state.region || 'us-east-1'
+    case 'connstr':
+      if (state.manual) return state.host
+      return smartSplitHost(state.connStr.replace(/^[a-z+]+:\/\//i, '')).host || state.host || 'remote'
+    default:
+      if (state.method === 'string') {
+        return parseConnectionUri(state.connStr).host || 'remote'
+      }
+      return state.host
+  }
+}
+
+function payloadPort(state: DsFormState, v: VendorDef): number | undefined {
+  if (v.arch === 'clickhouse') {
+    return state.chProtocol === 'native' ? Number(resolvedPort(state, 9000)) : Number(resolvedPort(state, 8123))
+  }
+  if (state.method === 'string' && v.arch === 'sql') {
+    return parseConnectionUri(state.connStr).port ?? v.port
+  }
+  if (state.port && /^\d+$/.test(state.port)) return Number(state.port)
+  return v.port
+}
+
+/** Map the form to the create/update API request. */
+export function buildPayload(state: DsFormState): CreateCustomDataSourceRequest & {header_value?: string} {
+  const v = getVendor(state.vendor)
+  if (!v) throw new Error(`Unknown source type: ${state.vendor}`)
+
+  const isString = state.method === 'string'
+  const useManual = v.arch === 'connstr' ? state.manual : !isString
+  const parsedConnection = isString && v.arch === 'sql' ? parseConnectionUri(state.connStr) : {}
+
+  const req: CreateCustomDataSourceRequest & {header_value?: string} = {
+    name: effectiveName(state),
+    source_type: state.vendor,
+    host: payloadHost(state, v),
+  }
+  if (state.description.trim()) req.description = state.description.trim()
+
+  const port = payloadPort(state, v)
+  if (port != null && v.arch !== 'file' && v.arch !== 'bigquery' && v.arch !== 'cloudwatch' && v.arch !== 'snowflake') {
+    req.port = port
+  }
+
+  // database / index
+  if (parsedConnection.database) req.database_name = parsedConnection.database
+  else if (v.arch === 'influx' && state.influxVersion === '1') req.database_name = state.database || undefined
+  else if (state.database && v.arch !== 'file') req.database_name = state.database
+
+  // connection string
+  if (isString || (v.arch === 'connstr' && !state.manual)) {
+    if (state.connStr) req.connection_string = state.connStr
+  }
+
+  // credentials by archetype
+  if (v.arch === 'bigquery') {
+    if (state.projectId) req.project_id = state.projectId
+    if (state.serviceAccount) req.service_account_json = state.serviceAccount
+  } else if (v.arch === 'cloudwatch') {
+    req.region = state.region || 'us-east-1'
+    if (!state.useRole) {
+      if (state.accessKey) req.access_key_id = state.accessKey
+      if (state.secretKey) req.secret_access_key = state.secretKey
+    }
+  } else if (v.arch === 'snowflake') {
+    if (state.account) req.account_identifier = state.account
+    if (state.username) req.username = state.username
+    if (state.password) req.password = state.password
+  } else if (v.arch === 'influx') {
+    if (state.influxVersion === '2') {
+      if (state.token) req.api_key = state.token
+    } else {
+      if (state.username) req.username = state.username
+      if (state.password) req.password = state.password
+    }
+  } else if (v.arch === 'http') {
+    if (state.authMethod === 'basic') {
+      if (state.username) req.username = state.username
+      if (state.password) req.password = state.password
+    } else if (state.authMethod === 'bearer') {
+      if (state.token) req.api_key = state.token
+    } else if (state.authMethod === 'header') {
+      if (state.headerValue) req.header_value = state.headerValue
+    }
+  } else if (v.arch === 'sql' && isString) {
+    if (parsedConnection.username) req.username = parsedConnection.username
+    if (parsedConnection.password) req.password = parsedConnection.password
+  } else if (useManual && (v.arch === 'sql' || v.arch === 'clickhouse' || v.arch === 'connstr')) {
+    if (state.username) req.username = state.username
+    if (state.password) req.password = state.password
+  }
+
+  const extra = buildExtraConfig(state)
+  if (Object.keys(extra).length > 0) req.extra_config = extra
+  return req
+}
+
+/** The test-connection request mirrors the payload's connection-relevant bits. */
+export function buildTestRequest(state: DsFormState): TestConnectionRequest & {extra_config?: Record<string, string>} {
+  const p = buildPayload(state)
+  return {
+    source_type: p.source_type,
+    host: p.host,
+    port: p.port,
+    database_name: p.database_name,
+    username: p.username,
+    password: p.password,
+    api_key: p.api_key,
+    header_value: p.header_value,
+    access_key_id: p.access_key_id,
+    secret_access_key: p.secret_access_key,
+    service_account_json: p.service_account_json,
+    account_identifier: p.account_identifier,
+    connection_string: p.connection_string,
+    project_id: p.project_id,
+    region: p.region,
+    extra_config: p.extra_config,
+  }
+}
+
+/** Whether the minimum fields for this archetype are present. */
+export function isFormReady(state: DsFormState): boolean {
+  const v = getVendor(state.vendor)
+  if (!v) return false
+  if (!validatePort(state.port).ok) return false
+  if (state.method === 'string') return state.connStr.trim() !== ''
+  switch (v.arch) {
+    case 'file': return state.host.trim() !== ''
+    case 'bigquery': return state.projectId.trim() !== ''
+    case 'cloudwatch': return state.useRole || state.accessKey.trim() !== ''
+    case 'snowflake': return state.account.trim() !== '' && state.warehouse.trim() !== ''
+    case 'connstr': return state.manual ? state.host.trim() !== '' : state.connStr.trim() !== ''
+    default: return state.host.trim() !== ''
+  }
+}

@@ -43,6 +43,7 @@ import com.moneat.dashboards.models.UpdateFolderRequest
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.handlers.withConnectionOptions
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.services.DashboardTemplateCatalogService
@@ -534,7 +535,8 @@ private suspend fun executeCustomDashboardQuery(
         )
     return dependencies.dataSourceExecutor.executeQuery(
         sourceId, sourceType, source.host, source.port,
-        source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
+        source.databaseName, creds.withConnectionOptions(source.extraConfig),
+        rawQuery, effectiveQuery.limit, effectiveQuery.timeRange,
     )
 }
 
@@ -578,7 +580,8 @@ private suspend fun executeSingleQuery(
     val rawQuery = effectiveQuery.rawQuery ?: return null
     return dependencies.dataSourceExecutor.executeQuery(
         sourceId, sourceType, source.host, source.port,
-        source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
+        source.databaseName, creds.withConnectionOptions(source.extraConfig),
+        rawQuery, effectiveQuery.limit, effectiveQuery.timeRange,
     )
 }
 
@@ -669,8 +672,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
             sourceType,
             source.host,
             source.port,
-            creds,
-            substituted
+            creds.withConnectionOptions(source.extraConfig),
+            substituted,
         )
         if (options.isNotEmpty()) {
             resolved[v.name] = options
@@ -1028,7 +1031,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDataSourceSch
         source.host,
         source.port,
         source.databaseName,
-        creds
+        creds.withConnectionOptions(source.extraConfig),
     )
     call.respond(schema)
 }
@@ -1054,7 +1057,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
     try {
         val results = dataSourceExecutor.executeQuery(
             id, sourceType, source.host, source.port,
-            source.databaseName, creds, request.query, request.limit, request.timeRange
+            source.databaseName, creds.withConnectionOptions(source.extraConfig),
+            request.query, request.limit, request.timeRange,
         )
         call.respond(results)
     } catch (e: IllegalArgumentException) {

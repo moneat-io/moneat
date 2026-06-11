@@ -22,14 +22,11 @@ import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
-import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonElement
@@ -55,11 +52,13 @@ class ElasticsearchHandler : HttpApiHandler() {
         private const val ELASTICSEARCH_SCHEMA_LIMIT = 100
     }
 
+    override val httpAuthDefault = HttpAuthDefault.ELASTICSEARCH
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: ELASTICSEARCH_DEFAULT_PORT)
             val response = httpClient.get("$baseUrl/_cluster/health") {
-                applyAuth(request.apiKey, request.username, request.password)
+                applyHttpAuth(request.toCredentials())
             }
             if (response.status.isSuccess()) {
                 TestConnectionResult(true, "Connected successfully")
@@ -110,7 +109,7 @@ class ElasticsearchHandler : HttpApiHandler() {
             val response = httpClient.post("$baseUrl$path") {
                 contentType(ContentType.Application.Json)
                 setBody(json.encodeToString(JsonObject(bodyObj)))
-                applyAuth(credentials.apiKey, credentials.username, credentials.password)
+                applyHttpAuth(credentials)
             }
             if (!response.status.isSuccess()) {
                 logger.error { "Elasticsearch query failed: ${response.status}" }
@@ -132,7 +131,7 @@ class ElasticsearchHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port ?: ELASTICSEARCH_DEFAULT_PORT)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/_cat/indices?v&format=json") {
-                applyAuth(credentials.apiKey, credentials.username, credentials.password)
+                applyHttpAuth(credentials)
             }
             if (response.status.isSuccess()) {
                 val arr = json.parseToJsonElement(response.bodyAsText()).jsonArray
@@ -147,19 +146,6 @@ class ElasticsearchHandler : HttpApiHandler() {
         }.getOrElse { e ->
             logger.error(e) { "Elasticsearch schema fetch failed" }
             emptyList()
-        }
-    }
-
-    private fun HttpRequestBuilder.applyAuth(
-        apiKey: String?,
-        username: String?,
-        password: String?,
-    ) {
-        if (!apiKey.isNullOrBlank()) {
-            header(HttpHeaders.Authorization, "ApiKey $apiKey")
-        } else if (!username.isNullOrBlank() && !password.isNullOrBlank()) {
-            val encoded = java.util.Base64.getEncoder().encodeToString("$username:$password".toByteArray())
-            header(HttpHeaders.Authorization, "Basic $encoded")
         }
     }
 
