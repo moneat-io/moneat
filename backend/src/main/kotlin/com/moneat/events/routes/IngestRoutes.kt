@@ -53,6 +53,8 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val SHA256_HEX_PREFIX_CHARS = 16
 private const val PROJECT_ID_DSN_SEGMENT_PATTERN =
     "([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]+)"
+private const val SENTRY_AUTH_HEADER = "X-Sentry-Auth"
+private const val PROJECT_ORGANIZATION_NOT_FOUND = "Project organization not found"
 
 class IngestRouteDependencies {
     var eventService: EventService = GlobalContext.get().get()
@@ -103,7 +105,8 @@ private suspend fun RoutingContext.handleEnvelopeIngest(dependencies: IngestRout
         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
         return
     }
-    val publicKey = extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
+    val publicKey =
+        extractPublicKey(call.request.header(SENTRY_AUTH_HEADER), call.request.queryParameters["sentry_key"])
     if (publicKey == null) {
         call.respond(HttpStatusCode.Unauthorized, "Missing or invalid authentication")
         return
@@ -146,7 +149,7 @@ private suspend fun RoutingContext.reserveEnvelopeQuota(
     if (!dependencies.isQuotaEnforcementEnabled()) return true
     val orgId = dependencies.eventService.getOrganizationIdForProject(projectId)
     if (orgId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_ORGANIZATION_NOT_FOUND))
         return false
     }
     val groupedReservations =
@@ -177,7 +180,7 @@ private suspend fun RoutingContext.handleLogIngest(dependencies: IngestRouteDepe
         return
     }
     val publicKey =
-        extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
+        extractPublicKey(call.request.header(SENTRY_AUTH_HEADER), call.request.queryParameters["sentry_key"])
             ?: extractPublicKeyFromDsn(call.request.header(HttpHeaders.Authorization))
             ?: extractPublicKeyFromDsn(call.request.header("x-moneat-dsn"))
     if (publicKey == null) {
@@ -191,7 +194,7 @@ private suspend fun RoutingContext.handleLogIngest(dependencies: IngestRouteDepe
     }
     val organizationId = dependencies.eventService.getOrganizationIdForProject(projectId)
     if (organizationId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_ORGANIZATION_NOT_FOUND))
         return
     }
 
@@ -247,7 +250,8 @@ private suspend fun RoutingContext.handleStoreIngest(dependencies: IngestRouteDe
         call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
         return
     }
-    val publicKey = extractPublicKey(call.request.header("X-Sentry-Auth"), call.request.queryParameters["sentry_key"])
+    val publicKey =
+        extractPublicKey(call.request.header(SENTRY_AUTH_HEADER), call.request.queryParameters["sentry_key"])
     if (publicKey == null) {
         call.respond(HttpStatusCode.Unauthorized, "Invalid DSN")
         return
@@ -278,7 +282,7 @@ private suspend fun RoutingContext.reserveStoreQuota(
     if (!dependencies.isQuotaEnforcementEnabled()) return true
     val orgId = dependencies.eventService.getOrganizationIdForProject(projectId)
     if (orgId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_ORGANIZATION_NOT_FOUND))
         return false
     }
     val bodyBytes = body.toByteArray(Charsets.UTF_8).size.toLong()
