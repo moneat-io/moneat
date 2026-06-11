@@ -38,6 +38,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import kotlin.time.Clock
 
 class McpApiKeyServiceTest {
@@ -93,7 +94,7 @@ class McpApiKeyServiceTest {
         val row = transaction {
             McpApiKeys
                 .selectAll()
-                .where { McpApiKeys.id eq created.id }
+                .where { McpApiKeys.resource_id eq Uuid.parse(created.id) }
                 .single()
         }
         assertNotEquals(created.key, row[McpApiKeys.key_hash])
@@ -134,7 +135,7 @@ class McpApiKeyServiceTest {
         val result = service.validateKey(created.key)
 
         assertNotNull(result)
-        assertEquals(created.id, result.keyId)
+        assertEquals(internalKeyId(created.id), result.keyId)
         assertEquals(organizationId, result.organizationId)
         assertEquals(userId, result.userId)
         assertEquals(setOf("get_issue", "search_logs"), result.enabledTools)
@@ -148,7 +149,7 @@ class McpApiKeyServiceTest {
         val expired = service.createKey(organizationId, userId, "expired", listOf("get_issue"), emptyList())
         service.revokeKey(organizationId, revoked.id)
         transaction {
-            McpApiKeys.update({ McpApiKeys.id eq expired.id }) {
+            McpApiKeys.update({ McpApiKeys.resource_id eq Uuid.parse(expired.id) }) {
                 it[expires_at] = Clock.System.now().minus(86_400, DateTimeUnit.SECOND)
             }
         }
@@ -166,10 +167,12 @@ class McpApiKeyServiceTest {
         val updated = service.updateKey(
             organizationId = organizationId,
             keyId = created.id,
-            name = "  renamed  ",
-            enabledTools = listOf("get_issue", "search_logs", "get_issue"),
-            enabledResources = listOf("moneat://org", "moneat://org"),
-            expiresInDays = 30,
+            update = McpApiKeyUpdate(
+                name = "  renamed  ",
+                enabledTools = listOf("get_issue", "search_logs", "get_issue"),
+                enabledResources = listOf("moneat://org", "moneat://org"),
+                expiresInDays = 30,
+            ),
         )
 
         assertTrue(updated)
@@ -183,30 +186,34 @@ class McpApiKeyServiceTest {
             service.updateKey(
                 organizationId = organizationId + 1,
                 keyId = created.id,
-                name = "wrong org",
-                enabledTools = null,
-                enabledResources = null,
+                update = McpApiKeyUpdate(
+                    name = "wrong org",
+                    enabledTools = null,
+                    enabledResources = null,
+                ),
             ),
         )
         assertFalse(
             service.updateKey(
                 organizationId = organizationId,
-                keyId = 999_999,
-                name = "missing",
-                enabledTools = null,
-                enabledResources = null,
+                keyId = "99999999-9999-9999-9999-999999999999",
+                update = McpApiKeyUpdate(
+                    name = "missing",
+                    enabledTools = null,
+                    enabledResources = null,
+                ),
             ),
         )
         assertFailsWith<IllegalArgumentException> {
-            service.updateKey(organizationId, created.id, "   ", null, null)
+            service.updateKey(organizationId, created.id, McpApiKeyUpdate("   ", null, null))
         }
         assertFailsWith<IllegalArgumentException> {
-            service.updateKey(organizationId, created.id, "a".repeat(256), null, null)
+            service.updateKey(organizationId, created.id, McpApiKeyUpdate("a".repeat(256), null, null))
         }.also {
             assertEquals("Name must be at most 255 characters", it.message)
         }
         assertFailsWith<IllegalArgumentException> {
-            service.updateKey(organizationId, created.id, null, null, null, expiresInDays = 0)
+            service.updateKey(organizationId, created.id, McpApiKeyUpdate(null, null, null, expiresInDays = 0))
         }
         assertFailsWith<IllegalArgumentException> {
             service.createKey(organizationId, userId, "   ", listOf("search_logs"), emptyList())
@@ -215,4 +222,12 @@ class McpApiKeyServiceTest {
             service.createKey(organizationId, userId, "a".repeat(256), listOf("search_logs"), emptyList())
         }
     }
+
+    private fun internalKeyId(resourceId: String): Int =
+        transaction {
+            McpApiKeys
+                .selectAll()
+                .where { McpApiKeys.resource_id eq Uuid.parse(resourceId) }
+                .single()[McpApiKeys.id]
+        }
 }

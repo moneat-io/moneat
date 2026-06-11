@@ -77,6 +77,7 @@ class McpApiKeyRoutesTest {
     companion object {
         private var db: Database? = null
         private val jsonParser = Json { ignoreUnknownKeys = true }
+        private const val MISSING_KEY_ID = "11111111-1111-4111-8111-111111111111"
     }
 
     private lateinit var service: McpApiKeyService
@@ -267,7 +268,7 @@ class McpApiKeyRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, invalidId.status)
         assertTrue(invalidId.bodyAsText().contains("Invalid key ID"))
 
-        val missing = client.put("/v1/mcp/api-keys/999999") {
+        val missing = client.put("/v1/mcp/api-keys/$MISSING_KEY_ID") {
             jsonBody()
             setBody("""{"name":"missing","enabledTools":["search_logs"]}""")
         }
@@ -306,7 +307,7 @@ class McpApiKeyRoutesTest {
         assertEquals(HttpStatusCode.BadRequest, invalidId.status)
         assertTrue(invalidId.bodyAsText().contains("Invalid key ID"))
 
-        val missing = client.delete("/v1/mcp/api-keys/999999") {
+        val missing = client.delete("/v1/mcp/api-keys/$MISSING_KEY_ID") {
             authHeader()
         }
         assertEquals(HttpStatusCode.NotFound, missing.status)

@@ -23,12 +23,17 @@ import com.moneat.dashboards.models.DashboardVariable
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.organizationResourceIds
+import com.moneat.shared.services.userResourceId
+import com.moneat.shared.services.userResourceIds
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.like
 import org.jetbrains.exposed.v1.core.lowerCase
@@ -50,15 +55,38 @@ class DashboardRepositoryImpl : DashboardRepository {
         private const val RECENTLY_VIEWED_LIMIT = 10
     }
 
-    private fun ResultRow.toDashboardWithFavoriteFlag(isFavorited: Boolean): DashboardWithFavoriteFlag =
+    private data class DashboardResourceIds(
+        val organizations: Map<Long, String>,
+        val users: Map<Long, String>,
+        val projects: Map<Long, String>,
+        val folders: Map<Long, String>,
+    ) {
+        fun organization(id: Long): String =
+            organizations[id] ?: error("Missing resource_id for organization $id")
+
+        fun user(id: Long): String =
+            users[id] ?: error("Missing resource_id for user $id")
+
+        fun project(id: Long?): String? =
+            id?.let(projects::get)
+
+        fun folder(id: Long?): String? =
+            id?.let(folders::get)
+    }
+
+    private fun ResultRow.toDashboardWithFavoriteFlag(
+        isFavorited: Boolean,
+        resourceIds: DashboardResourceIds,
+    ): DashboardWithFavoriteFlag =
         DashboardWithFavoriteFlag(
             id = this[Dashboards.id],
             resourceId = this[Dashboards.resourceId].toString(),
             orgId = this[Dashboards.orgId],
+            orgResourceId = resourceIds.organization(this[Dashboards.orgId]),
             projectId = this[Dashboards.projectId],
-            projectResourceId = projectResourceId(this[Dashboards.projectId]),
+            projectResourceId = resourceIds.project(this[Dashboards.projectId]),
             folderId = this[Dashboards.folderId],
-            folderResourceId = folderResourceId(this[Dashboards.folderId]),
+            folderResourceId = resourceIds.folder(this[Dashboards.folderId]),
             title = this[Dashboards.title],
             description = this[Dashboards.description],
             layoutType = this[Dashboards.layoutType],
@@ -66,27 +94,39 @@ class DashboardRepositoryImpl : DashboardRepository {
             isFavorited = isFavorited,
             variables = this[Dashboards.variables],
             createdBy = this[Dashboards.createdBy],
+            createdByResourceId = resourceIds.user(this[Dashboards.createdBy]),
             createdAt = this[Dashboards.createdAt].toString(),
             updatedAt = this[Dashboards.updatedAt].toString()
         )
 
-    private fun projectResourceId(projectId: Long?): String? =
-        projectId?.let { id ->
-            Projects.selectAll()
-                .where { Projects.id eq id }
-                .firstOrNull()
-                ?.get(Projects.resource_id)
-                ?.toString()
-        }
+    private fun resourceIdsForRows(rows: List<ResultRow>): DashboardResourceIds {
+        val projectIds = rows.mapNotNull { row -> row[Dashboards.projectId] }.distinct()
+        val folderIds = rows.mapNotNull { row -> row[Dashboards.folderId] }.distinct()
+        return DashboardResourceIds(
+            organizations = organizationResourceIds(rows.map { row -> row[Dashboards.orgId].toInt() })
+                .mapKeys { (id, _) -> id.toLong() },
+            users = userResourceIds(rows.map { row -> row[Dashboards.createdBy].toInt() })
+                .mapKeys { (id, _) -> id.toLong() },
+            projects = projectResourceIds(projectIds),
+            folders = folderResourceIds(folderIds),
+        )
+    }
 
-    private fun folderResourceId(folderId: Long?): String? =
-        folderId?.let { id ->
-            DashboardFolders.selectAll()
-                .where { DashboardFolders.id eq id }
-                .firstOrNull()
-                ?.get(DashboardFolders.resourceId)
-                ?.toString()
-        }
+    private fun projectResourceIds(projectIds: List<Long>): Map<Long, String> {
+        if (projectIds.isEmpty()) return emptyMap()
+        return Projects
+            .selectAll()
+            .where { Projects.id inList projectIds }
+            .associate { row -> row[Projects.id] to row[Projects.resource_id].toString() }
+    }
+
+    private fun folderResourceIds(folderIds: List<Long>): Map<Long, String> {
+        if (folderIds.isEmpty()) return emptyMap()
+        return DashboardFolders
+            .selectAll()
+            .where { DashboardFolders.id inList folderIds }
+            .associate { row -> row[DashboardFolders.id] to row[DashboardFolders.resourceId].toString() }
+    }
 
     override fun list(orgId: Long, projectId: Long?, userId: Int?): List<DashboardWithFavoriteFlag> =
         transaction {
@@ -105,7 +145,9 @@ class DashboardRepositoryImpl : DashboardRepository {
                     .toSet()
             } ?: emptySet()
 
-            query.map { row -> row.toDashboardWithFavoriteFlag(row[Dashboards.id] in favoritedIds) }
+            val rows = query.toList()
+            val resourceIds = resourceIdsForRows(rows)
+            rows.map { row -> row.toDashboardWithFavoriteFlag(row[Dashboards.id] in favoritedIds, resourceIds) }
         }
 
     override fun getById(id: Long, orgId: Long, userId: Int?): DashboardWithFavoriteFlag? =
@@ -122,7 +164,7 @@ class DashboardRepositoryImpl : DashboardRepository {
                     .any()
             } ?: false
 
-            row.toDashboardWithFavoriteFlag(isFavorited)
+            row.toDashboardWithFavoriteFlag(isFavorited, resourceIdsForRows(listOf(row)))
         }
 
     override fun create(
@@ -156,16 +198,18 @@ class DashboardRepositoryImpl : DashboardRepository {
                 id = dashboardId,
                 resourceId = dashboard[Dashboards.resourceId].toString(),
                 orgId = orgId,
+                orgResourceId = organizationResourceId(orgId),
                 projectId = projectId,
-                projectResourceId = projectResourceId(projectId),
+                projectResourceId = projectResourceIds(listOfNotNull(projectId))[projectId],
                 folderId = folderId,
-                folderResourceId = folderResourceId(folderId),
+                folderResourceId = folderResourceIds(listOfNotNull(folderId))[folderId],
                 title = request.title,
                 description = request.description,
                 layoutType = request.layoutType,
                 isDefault = request.isDefault,
                 variables = json.encodeToString<List<DashboardVariable>>(request.variables),
                 createdBy = userId,
+                createdByResourceId = userResourceId(userId),
                 createdAt = now.toString(),
                 updatedAt = now.toString()
             )
@@ -258,7 +302,7 @@ class DashboardRepositoryImpl : DashboardRepository {
 
     override fun search(orgId: Long, userId: Int?, pattern: String): List<DashboardWithFavoriteFlag> =
         transaction {
-            Dashboards.selectAll()
+            val rows = Dashboards.selectAll()
                 .where {
                     (Dashboards.orgId eq orgId) and (
                         (Dashboards.title.lowerCase() like pattern) or
@@ -270,17 +314,23 @@ class DashboardRepositoryImpl : DashboardRepository {
                 }
                 .orderBy(Dashboards.updatedAt, SortOrder.DESC)
                 .limit(RECENTLY_VIEWED_LIMIT)
-                .map { row ->
-                    val did = row[Dashboards.id]
-                    val isFav = userId?.let { uid ->
-                        DashboardFavorites.selectAll()
-                            .where {
-                                (DashboardFavorites.userId eq uid) and
-                                    (DashboardFavorites.dashboardId eq did)
-                            }
-                            .any()
-                    } ?: false
-                    row.toDashboardWithFavoriteFlag(isFav)
+                .toList()
+            val dashboardIds = rows.map { row -> row[Dashboards.id] }
+            val favoritedIds = userId?.let { uid ->
+                if (dashboardIds.isEmpty()) {
+                    emptySet()
+                } else {
+                    DashboardFavorites
+                        .selectAll()
+                        .where {
+                            (DashboardFavorites.userId eq uid) and
+                                (DashboardFavorites.dashboardId inList dashboardIds)
+                        }
+                        .map { row -> row[DashboardFavorites.dashboardId] }
+                        .toSet()
                 }
+            } ?: emptySet()
+            val resourceIds = resourceIdsForRows(rows)
+            rows.map { row -> row.toDashboardWithFavoriteFlag(row[Dashboards.id] in favoritedIds, resourceIds) }
         }
 }

@@ -54,6 +54,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
+private const val SIGNAL_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+private const val DETECTION_RULE_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+private const val ASSIGNEE_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+private const val VULNERABILITY_SIGNAL_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+
 // ──── Tests ────
 
 class SecurityToolTest {
@@ -93,14 +98,25 @@ class SecurityToolTest {
     }
 
     @Test
+    fun `list security signals uses default pagination`() = runBlocking {
+        val gateway = RecordingSecurityGateway()
+        val result = ListSecuritySignalsTool(gateway).execute(JsonObject(emptyMap()), context)
+
+        assertFalse(result.isError)
+        assertEquals(50, gateway.signalLimit)
+        assertEquals(0, gateway.signalOffset)
+        assertEquals(SignalFilters(), gateway.filters)
+    }
+
+    @Test
     fun `triage security signal sends actor and triage request`() = runBlocking {
         val gateway = RecordingSecurityGateway()
         val result = TriageSecuritySignalTool(gateway).execute(
             JsonObject(
                 mapOf(
-                    "security_signal_id" to JsonPrimitive(12),
+                    "security_signal_id" to JsonPrimitive(SIGNAL_RESOURCE_ID),
                     "status" to JsonPrimitive("under_review"),
-                    "assignee_user_id" to JsonPrimitive(9),
+                    "assignee_user_id" to JsonPrimitive(ASSIGNEE_RESOURCE_ID),
                     "note" to JsonPrimitive("checking host"),
                 )
             ),
@@ -112,9 +128,26 @@ class SecurityToolTest {
         assertEquals(12, gateway.triageSignalId)
         assertEquals(7, gateway.triageActorUserId)
         assertEquals("under_review", gateway.triageRequest?.status)
-        assertEquals(9, gateway.triageRequest?.assigneeUserId)
+        assertEquals(ASSIGNEE_RESOURCE_ID, gateway.triageRequest?.assigneeUserId)
         val body = toolJson.decodeFromString<SignalResponse>(result.content.single().text!!)
         assertEquals("under_review", body.status)
+    }
+
+    @Test
+    fun `triage security signal reports missing unresolved and not found resource IDs`() = runBlocking {
+        val missing = TriageSecuritySignalTool(RecordingSecurityGateway()).execute(JsonObject(emptyMap()), context)
+        val unresolved = TriageSecuritySignalTool(RecordingSecurityGateway()).execute(
+            JsonObject(mapOf("security_signal_id" to JsonPrimitive("missing-signal"))),
+            context,
+        )
+        val notFound = TriageSecuritySignalTool(NotFoundSecurityGateway()).execute(
+            JsonObject(mapOf("security_signal_id" to JsonPrimitive(SIGNAL_RESOURCE_ID))),
+            context,
+        )
+
+        listOf(missing, unresolved, notFound).forEach { result ->
+            assertTrue(result.isError, result.content.single().text)
+        }
     }
 
     @Test
@@ -149,13 +182,13 @@ class SecurityToolTest {
 
         val list = ListDetectionRulesTool(gateway).execute(JsonObject(emptyMap()), context)
         val get = GetDetectionRuleTool(gateway).execute(
-            JsonObject(mapOf("detection_rule_id" to JsonPrimitive(77))),
+            JsonObject(mapOf("detection_rule_id" to JsonPrimitive(DETECTION_RULE_RESOURCE_ID))),
             context,
         )
         val update = UpdateDetectionRuleTool(gateway).execute(
             JsonObject(
                 mapOf(
-                    "detection_rule_id" to JsonPrimitive(77),
+                    "detection_rule_id" to JsonPrimitive(DETECTION_RULE_RESOURCE_ID),
                     "name" to JsonPrimitive("Updated rule"),
                     "enabled" to JsonPrimitive(true),
                 )
@@ -163,11 +196,11 @@ class SecurityToolTest {
             context,
         )
         val preview = PreviewDetectionRuleTool(gateway).execute(
-            JsonObject(mapOf("detection_rule_id" to JsonPrimitive(77))),
+            JsonObject(mapOf("detection_rule_id" to JsonPrimitive(DETECTION_RULE_RESOURCE_ID))),
             context,
         )
         val delete = DeleteDetectionRuleTool(gateway).execute(
-            JsonObject(mapOf("detection_rule_id" to JsonPrimitive(77))),
+            JsonObject(mapOf("detection_rule_id" to JsonPrimitive(DETECTION_RULE_RESOURCE_ID))),
             context,
         )
 
@@ -179,6 +212,50 @@ class SecurityToolTest {
         assertEquals(77, gateway.lastRuleId)
         assertEquals("Updated rule", gateway.updatedRule?.name)
         assertTrue(delete.content.single().text!!.contains("deleted"))
+    }
+
+    @Test
+    fun `security tools report missing and unresolved resource ids`() = runBlocking {
+        val gateway = MissingSecurityGateway()
+        val emptyArgs = JsonObject(emptyMap())
+        val signalArgs = JsonObject(mapOf("security_signal_id" to JsonPrimitive(SIGNAL_RESOURCE_ID)))
+        val ruleArgs = JsonObject(mapOf("detection_rule_id" to JsonPrimitive(DETECTION_RULE_RESOURCE_ID)))
+
+        val missingSignal = GetSecuritySignalTool(gateway).execute(emptyArgs, context)
+        val unresolvedSignal = GetSecuritySignalTool(gateway).execute(
+            JsonObject(mapOf("security_signal_id" to JsonPrimitive("missing-signal"))),
+            context,
+        )
+        val signalNotFound = GetSecuritySignalTool(gateway).execute(signalArgs, context)
+        val triageInvalid = TriageSecuritySignalTool(gateway).execute(signalArgs, context)
+        val missingRule = GetDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val missingUpdate = UpdateDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val missingDelete = DeleteDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val missingPreview = PreviewDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val unresolvedRule = GetDetectionRuleTool(gateway).execute(
+            JsonObject(mapOf("detection_rule_id" to JsonPrimitive("missing-rule"))),
+            context,
+        )
+        val ruleNotFound = GetDetectionRuleTool(gateway).execute(ruleArgs, context)
+        val updateNotFound = UpdateDetectionRuleTool(gateway).execute(ruleArgs, context)
+        val deleteNotFound = DeleteDetectionRuleTool(gateway).execute(ruleArgs, context)
+        val previewNotFound = PreviewDetectionRuleTool(gateway).execute(ruleArgs, context)
+
+        listOf(
+            missingSignal,
+            unresolvedSignal,
+            signalNotFound,
+            triageInvalid,
+            missingRule,
+            missingUpdate,
+            missingDelete,
+            missingPreview,
+            unresolvedRule,
+            ruleNotFound,
+            updateNotFound,
+            deleteNotFound,
+            previewNotFound,
+        ).forEach { result -> assertTrue(result.isError, result.content.single().text) }
     }
 
     @Test
@@ -418,7 +495,7 @@ private class RecordingSecurityGateway : TestSecurityGateway() {
                     techniqueId = "T1110",
                     tactics = listOf("credential-access"),
                     ruleCount = 1,
-                    rules = listOf(MitreCoveredRuleResponse(77, "Failed auth", true)),
+                    rules = listOf(MitreCoveredRuleResponse(DETECTION_RULE_RESOURCE_ID, "Failed auth", true)),
                 )
             ),
         )
@@ -502,6 +579,38 @@ private class RecordingSecurityGateway : TestSecurityGateway() {
     }
 }
 
+private class MissingSecurityGateway : TestSecurityGateway() {
+    override suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? = null
+
+    override suspend fun triageSignal(
+        organizationId: Int,
+        signalId: Int,
+        actorUserId: Int,
+        request: TriageRequest,
+    ): TriageResult = TriageResult.Invalid("invalid triage")
+
+    override suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? = null
+
+    override suspend fun updateDetectionRule(
+        organizationId: Int,
+        ruleId: Int,
+        request: UpdateDetectionRuleRequest,
+    ): DetectionRuleResponse? = null
+
+    override suspend fun deleteDetectionRule(organizationId: Int, ruleId: Int): Boolean = false
+
+    override suspend fun previewDetectionRule(organizationId: Int, ruleId: Int): DetectionPreviewResponse? = null
+}
+
+private class NotFoundSecurityGateway : TestSecurityGateway() {
+    override suspend fun triageSignal(
+        organizationId: Int,
+        signalId: Int,
+        actorUserId: Int,
+        request: TriageRequest,
+    ): TriageResult = TriageResult.NotFound
+}
+
 private abstract class TestSecurityGateway : SecurityMcpGateway {
     override suspend fun listSignals(
         organizationId: Int,
@@ -509,6 +618,9 @@ private abstract class TestSecurityGateway : SecurityMcpGateway {
         limit: Int,
         offset: Int,
     ): SignalListResponse = unsupported()
+
+    override fun resolveSignalId(organizationId: Int, signalResourceId: String): Int? =
+        if (signalResourceId == SIGNAL_RESOURCE_ID) 12 else null
 
     override suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? = unsupported()
 
@@ -520,6 +632,9 @@ private abstract class TestSecurityGateway : SecurityMcpGateway {
     ): TriageResult = unsupported()
 
     override suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse = unsupported()
+
+    override fun resolveDetectionRuleId(organizationId: Int, ruleResourceId: String): Int? =
+        if (ruleResourceId == DETECTION_RULE_RESOURCE_ID) 77 else null
 
     override suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? = unsupported()
 
@@ -586,10 +701,10 @@ private abstract class TestSecurityGateway : SecurityMcpGateway {
 
 private fun signal(
     status: String = "open",
-    assigneeUserId: Int? = null,
+    assigneeUserId: String? = null,
 ): SignalResponse =
     SignalResponse(
-        id = 12,
+        id = SIGNAL_RESOURCE_ID,
         source = "detection",
         ruleId = "detection-12",
         ruleName = "Suspicious exec",
@@ -609,7 +724,7 @@ private fun signal(
 
 private fun detectionRule(request: CreateDetectionRuleRequest): DetectionRuleResponse =
     DetectionRuleResponse(
-        id = 77,
+        id = DETECTION_RULE_RESOURCE_ID,
         name = request.name,
         description = request.description,
         source = request.source,
@@ -646,7 +761,7 @@ private fun vulnerabilityInventory(): VulnerabilityInventoryItem =
 
 private fun vulnerabilityFinding(): VulnerabilityFindingResponse =
     VulnerabilityFindingResponse(
-        signalId = 22,
+        signalId = VULNERABILITY_SIGNAL_RESOURCE_ID,
         advisoryId = "GHSA-1",
         cveId = "CVE-2026-0001",
         packageName = "openssl",

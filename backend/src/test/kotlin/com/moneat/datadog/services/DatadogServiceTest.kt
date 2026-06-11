@@ -17,9 +17,11 @@
 package com.moneat.datadog.services
 
 import com.moneat.datadog.models.DdApiKeys
+import com.moneat.shared.models.Projects
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
@@ -28,6 +30,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class DatadogServiceTest {
 
@@ -39,7 +42,7 @@ class DatadogServiceTest {
         )
         transaction {
             exec("DROP ALL OBJECTS")
-            SchemaUtils.create(DdApiKeys)
+            SchemaUtils.create(Projects, DdApiKeys)
         }
     }
 
@@ -67,7 +70,7 @@ class DatadogServiceTest {
 
         val stored = transaction {
             DdApiKeys.selectAll()
-                .where { DdApiKeys.id eq result.id }
+                .where { DdApiKeys.resourceId eq Uuid.parse(result.id) }
                 .firstOrNull()
         }
 
@@ -92,18 +95,19 @@ class DatadogServiceTest {
 
     @Test
     fun `validateApiKeyContext returns org and project for valid key`() {
-        val created = DatadogService.createApiKey(
+        val projectId = seedProject(42)
+        val created = DatadogService.createApiKeyForProjectId(
             organizationId = 42,
             name = "Project Key",
             userId = 1,
-            projectId = 7,
+            projectId = projectId,
         )
 
         val context = DatadogService.validateApiKeyContext(created.key)
 
         assertNotNull(context)
         assertEquals(42, context.organizationId)
-        assertEquals(7, context.projectId)
+        assertEquals(projectId, context.projectId)
     }
 
     @Test
@@ -128,7 +132,7 @@ class DatadogServiceTest {
 
         val beforeValidation = transaction {
             DdApiKeys.selectAll()
-                .where { DdApiKeys.id eq created.id }
+                .where { DdApiKeys.resourceId eq Uuid.parse(created.id) }
                 .first()[DdApiKeys.lastUsedAt]
         }
         assertNull(beforeValidation)
@@ -137,7 +141,7 @@ class DatadogServiceTest {
 
         val afterValidation = transaction {
             DdApiKeys.selectAll()
-                .where { DdApiKeys.id eq created.id }
+                .where { DdApiKeys.resourceId eq Uuid.parse(created.id) }
                 .first()[DdApiKeys.lastUsedAt]
         }
         assertNotNull(afterValidation)
@@ -193,19 +197,45 @@ class DatadogServiceTest {
 
     @Test
     fun `createApiKey with projectId stores it`() {
-        val result = DatadogService.createApiKey(
+        val projectId = seedProject(1)
+        val result = DatadogService.createApiKeyForProjectId(
             organizationId = 1,
             name = "Project Key",
             userId = 1,
-            projectId = 10
+            projectId = projectId
         )
 
         val stored = transaction {
             DdApiKeys.selectAll()
-                .where { DdApiKeys.id eq result.id }
+                .where { DdApiKeys.resourceId eq Uuid.parse(result.id) }
                 .first()
         }
-        assertEquals(10, stored[DdApiKeys.projectId])
+        assertEquals(projectId, stored[DdApiKeys.projectId])
+    }
+
+    @Test
+    fun `createApiKey rejects project from another organization`() {
+        val projectResourceId = seedProject(1).let { projectId ->
+            transaction {
+                Projects
+                    .selectAll()
+                    .where { Projects.id eq projectId.toLong() }
+                    .first()[Projects.resource_id]
+                    .toString()
+            }
+        }
+
+        val error = kotlin.runCatching {
+            DatadogService.createApiKey(
+                organizationId = 2,
+                name = "Cross Org Key",
+                userId = 1,
+                projectId = projectResourceId
+            )
+        }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertEquals("Project not found", error.message)
     }
 
     @Test
@@ -218,4 +248,13 @@ class DatadogServiceTest {
 
         assertTrue(result.key.startsWith(result.keyPrefix))
     }
+
+    private fun seedProject(organizationId: Int): Int =
+        transaction {
+            Projects.insert {
+                it[Projects.organization_id] = organizationId
+                it[name] = "Project $organizationId"
+                it[slug] = "project-$organizationId-${Uuid.random()}"
+            }[Projects.id].toInt()
+        }
 }

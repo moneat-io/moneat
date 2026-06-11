@@ -30,7 +30,13 @@ import com.moneat.security.signals.SignalOutcome
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
+import com.moneat.shared.models.OnCallIncidents
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.resolveGlobalIntResourceId
+import com.moneat.shared.services.resolveScopedIntResourceId
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.shared.services.userResourceId
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.engine.WorkflowCatalog
 import com.moneat.workflows.engine.WorkflowConditionEvaluator
@@ -99,6 +105,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private const val UNIQUE_VIOLATION_SQL_STATE = "23505"
@@ -276,6 +283,75 @@ class WorkflowService(
                 }
         }
 
+    fun resolveWorkflowId(organizationId: Int, workflowResourceId: Uuid): Int? =
+        resolveScopedIntResourceId(
+            table = Workflows,
+            resourceIdColumn = Workflows.resourceId,
+            scopeColumn = Workflows.organizationId,
+            scopeId = organizationId,
+            resourceId = workflowResourceId,
+        )
+
+    fun resolveWorkflowId(organizationId: Int, workflowResourceId: String): Int? =
+        parseResourceId(workflowResourceId)?.let { resolveWorkflowId(organizationId, it) }
+
+    fun resolveWorkflowId(workflowResourceId: Uuid): Int? =
+        resolveGlobalIntResourceId(
+            table = Workflows,
+            resourceIdColumn = Workflows.resourceId,
+            resourceId = workflowResourceId,
+        )
+
+    fun resolveWorkflowId(workflowResourceId: String): Int? =
+        parseResourceId(workflowResourceId)?.let(::resolveWorkflowId)
+
+    fun resolveRunId(
+        organizationId: Int,
+        workflowId: Int,
+        runResourceId: Uuid
+    ): Int? =
+        transaction {
+            WorkflowRuns
+                .selectAll()
+                .where {
+                    (WorkflowRuns.resourceId eq runResourceId) and
+                        (WorkflowRuns.workflowId eq workflowId) and
+                        (WorkflowRuns.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(WorkflowRuns.id)
+                ?.value
+        }
+
+    fun resolveRunId(
+        organizationId: Int,
+        workflowId: Int,
+        runResourceId: String
+    ): Int? =
+        parseResourceId(runResourceId)?.let { resolveRunId(organizationId, workflowId, it) }
+
+    fun resolveRunId(runResourceId: String): Int? =
+        parseResourceId(runResourceId)?.let { parsedId ->
+            transaction {
+                WorkflowRuns
+                    .selectAll()
+                    .where { WorkflowRuns.resourceId eq parsedId }
+                    .firstOrNull()
+                    ?.get(WorkflowRuns.id)
+                    ?.value
+            }
+        }
+
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
+
+    fun getWorkflow(
+        organizationId: Int,
+        workflowId: String
+    ): WorkflowResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> getWorkflow(organizationId, resolvedWorkflowId) }
+
     fun getWorkflow(
         organizationId: Int,
         workflowId: Int
@@ -331,6 +407,14 @@ class WorkflowService(
             }
         return checkNotNull(getWorkflow(organizationId, workflowId))
     }
+
+    fun updateWorkflow(
+        organizationId: Int,
+        workflowId: String,
+        request: UpdateWorkflowRequest
+    ): WorkflowResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> updateWorkflow(organizationId, resolvedWorkflowId, request) }
 
     fun updateWorkflow(
         organizationId: Int,
@@ -400,19 +484,25 @@ class WorkflowService(
 
     fun deleteWorkflow(
         organizationId: Int,
+        workflowId: String
+    ): Boolean =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> deleteWorkflow(organizationId, resolvedWorkflowId) } ?: false
+
+    fun deleteWorkflow(
+        organizationId: Int,
         workflowId: Int
     ): Boolean {
-        val shouldDelete =
+        val workflowResourceId =
             transaction {
                 val workflowRow =
                     Workflows
                         .selectAll()
                         .where { (Workflows.id eq workflowId) and (Workflows.organizationId eq organizationId) }
-                        .firstOrNull() ?: return@transaction false
+                        .firstOrNull() ?: return@transaction null
                 require(workflowRow[Workflows.systemKey] == null) { DEFAULT_WORKFLOW_READ_ONLY_MESSAGE }
-                true
-            }
-        if (!shouldDelete) return false
+                workflowRow[Workflows.resourceId].toString()
+            } ?: return false
         return transaction {
             val deleted =
                 Workflows.deleteWhere {
@@ -425,12 +515,19 @@ class WorkflowService(
                     organizationId = organizationId,
                     action = WorkflowAudit.ACTION_DELETED,
                     workflowId = null,
-                    detail = mapOf("workflow_id" to workflowId.toString())
+                    detail = mapOf("workflow_id" to workflowResourceId)
                 )
             }
             deleted
         }
     }
+
+    fun publishWorkflow(
+        organizationId: Int,
+        workflowId: String
+    ): WorkflowResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> publishWorkflow(organizationId, resolvedWorkflowId) }
 
     fun publishWorkflow(
         organizationId: Int,
@@ -442,11 +539,27 @@ class WorkflowService(
 
     fun unpublishWorkflow(
         organizationId: Int,
+        workflowId: String
+    ): WorkflowResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> unpublishWorkflow(organizationId, resolvedWorkflowId) }
+
+    fun unpublishWorkflow(
+        organizationId: Int,
         workflowId: Int
     ): WorkflowResponse? {
         setWorkflowPublished(organizationId, workflowId, false)
         return getWorkflow(organizationId, workflowId)
     }
+
+    suspend fun runWorkflow(
+        organizationId: Int,
+        workflowId: String,
+        request: ManualWorkflowRunRequest = ManualWorkflowRunRequest(),
+        actorUserId: Int? = null
+    ): WorkflowRunResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> runWorkflow(organizationId, resolvedWorkflowId, request, actorUserId) }
 
     suspend fun runWorkflow(
         organizationId: Int,
@@ -457,8 +570,8 @@ class WorkflowService(
         val manualScope =
             mapOf(
                 WORKFLOW_INPUT_REFERENCE to json.encodeToString(request.scope),
-                WORKFLOW_ACTOR_ID_REFERENCE to actorUserId?.toString().orEmpty(),
-                ORGANIZATION_ID_REFERENCE to organizationId.toString()
+                WORKFLOW_ACTOR_ID_REFERENCE to actorUserId?.let(::userResourceId).orEmpty(),
+                ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId)
             ).typedWorkflowScope()
         val run = createRunForWorkflow(
             organizationId = organizationId,
@@ -473,6 +586,17 @@ class WorkflowService(
 
     suspend fun createWorkflowInstance(
         organizationId: Int,
+        workflowId: String,
+        request: WorkflowRunInstanceRequest,
+        callerUserId: Int
+    ): WorkflowRunResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId ->
+                createWorkflowInstance(organizationId, resolvedWorkflowId, request, callerUserId)
+            }
+
+    suspend fun createWorkflowInstance(
+        organizationId: Int,
         workflowId: Int,
         request: WorkflowRunInstanceRequest,
         callerUserId: Int
@@ -480,8 +604,8 @@ class WorkflowService(
         val apiScope =
             mapOf(
                 WORKFLOW_INPUT_REFERENCE to json.encodeToString(request.scope),
-                WORKFLOW_CALLER_REFERENCE to callerUserId.toString(),
-                ORGANIZATION_ID_REFERENCE to organizationId.toString()
+                WORKFLOW_CALLER_REFERENCE to userResourceId(callerUserId),
+                ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId)
             ).typedWorkflowScope()
         val run = createRunForWorkflow(
             organizationId = organizationId,
@@ -496,6 +620,14 @@ class WorkflowService(
     }
 
     suspend fun createWebhookRun(
+        workflowId: String,
+        payload: String,
+        eventId: String?
+    ): WorkflowRunResponse? =
+        resolveWorkflowId(workflowId)
+            ?.let { resolvedWorkflowId -> createWebhookRun(resolvedWorkflowId, payload, eventId) }
+
+    suspend fun createWebhookRun(
         workflowId: Int,
         payload: String,
         eventId: String?
@@ -506,7 +638,7 @@ class WorkflowService(
             mapOf(
                 WEBHOOK_PAYLOAD_REFERENCE to sanitizedPayload,
                 WEBHOOK_EVENT_ID_REFERENCE to (eventId ?: webhookOnceFor()),
-                ORGANIZATION_ID_REFERENCE to workflowRef.organizationId.toString()
+                ORGANIZATION_ID_REFERENCE to organizationResourceId(workflowRef.organizationId)
             ).typedWorkflowScope()
         val run = createRunForWorkflow(
             organizationId = workflowRef.organizationId,
@@ -522,6 +654,16 @@ class WorkflowService(
         ) ?: return null
         startTemporalExecution(run)
         return getRun(workflowRef.organizationId, workflowId, run.runId)
+    }
+
+    fun getRun(
+        organizationId: Int,
+        workflowId: String,
+        runId: String
+    ): WorkflowRunResponse? {
+        val resolvedWorkflowId = resolveWorkflowId(organizationId, workflowId) ?: return null
+        val resolvedRunId = resolveRunId(organizationId, resolvedWorkflowId, runId) ?: return null
+        return getRun(organizationId, resolvedWorkflowId, resolvedRunId)
     }
 
     fun getRun(
@@ -542,6 +684,16 @@ class WorkflowService(
 
     suspend fun cancelRun(
         organizationId: Int,
+        workflowId: String,
+        runId: String
+    ): WorkflowRunCancelResponse? {
+        val resolvedWorkflowId = resolveWorkflowId(organizationId, workflowId) ?: return null
+        val resolvedRunId = resolveRunId(organizationId, resolvedWorkflowId, runId) ?: return null
+        return cancelRun(organizationId, resolvedWorkflowId, resolvedRunId)
+    }
+
+    suspend fun cancelRun(
+        organizationId: Int,
         workflowId: Int,
         runId: Int
     ): WorkflowRunCancelResponse? {
@@ -555,10 +707,14 @@ class WorkflowService(
                                 (WorkflowRuns.workflowId eq workflowId) and
                                 (WorkflowRuns.organizationId eq organizationId)
                         }.firstOrNull() ?: return@transaction null
-                WorkflowRunCancelCandidate(row[WorkflowRuns.status], row[WorkflowRuns.temporalWorkflowId].orEmpty())
+                WorkflowRunCancelCandidate(
+                    status = row[WorkflowRuns.status],
+                    temporalWorkflowId = row[WorkflowRuns.temporalWorkflowId].orEmpty(),
+                    resourceId = row[WorkflowRuns.resourceId]
+                )
             } ?: return null
         if (candidate.status in TERMINAL_RUN_STATUSES) {
-            return WorkflowRunCancelResponse(runId, candidate.status)
+            return WorkflowRunCancelResponse(candidate.resourceId.toString(), candidate.status)
         }
         val temporalWorkflowId = candidate.temporalWorkflowId
         if (temporalWorkflowId.isNotBlank()) {
@@ -581,7 +737,7 @@ class WorkflowService(
                 }
             }
         if (updated > 0) {
-            return WorkflowRunCancelResponse(runId, STATUS_CANCELED)
+            return WorkflowRunCancelResponse(candidate.resourceId.toString(), STATUS_CANCELED)
         }
         // The run reached a terminal state between the initial read and this write; report its real status.
         val currentStatus =
@@ -592,8 +748,16 @@ class WorkflowService(
                     .firstOrNull()
                     ?.get(WorkflowRuns.status)
             }
-        return WorkflowRunCancelResponse(runId, currentStatus ?: STATUS_CANCELED)
+        return WorkflowRunCancelResponse(candidate.resourceId.toString(), currentStatus ?: STATUS_CANCELED)
     }
+
+    fun listRuns(
+        organizationId: Int,
+        workflowId: String,
+        limit: Int = 50
+    ): List<WorkflowRunResponse> =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> listRuns(organizationId, resolvedWorkflowId, limit) } ?: emptyList()
 
     fun listRuns(
         organizationId: Int,
@@ -608,14 +772,24 @@ class WorkflowService(
                     .count() > 0
             if (!hasWorkflow) return@transaction emptyList()
 
-            WorkflowRuns
+            val rows = WorkflowRuns
                 .selectAll()
                 .where {
                     (WorkflowRuns.workflowId eq workflowId) and (WorkflowRuns.organizationId eq organizationId)
                 }.orderBy(WorkflowRuns.createdAt to SortOrder.DESC)
                 .limit(limit)
-                .map { runResponse(it) }
+                .toList()
+            val workflowResourceIds = workflowResourceIds(rows.map { row -> row[WorkflowRuns.workflowId] })
+            val versionResourceIds = workflowVersionResourceIds(rows.map { row -> row[WorkflowRuns.workflowVersionId] })
+            rows.map { row -> runResponse(row, workflowResourceIds, versionResourceIds) }
         }
+
+    fun webhookSigningInfo(
+        organizationId: Int,
+        workflowId: String
+    ): WorkflowWebhookSigningResponse? =
+        resolveWorkflowId(organizationId, workflowId)
+            ?.let { resolvedWorkflowId -> webhookSigningInfo(organizationId, resolvedWorkflowId) }
 
     fun webhookSigningInfo(
         organizationId: Int,
@@ -625,9 +799,10 @@ class WorkflowService(
             ?.takeIf { it.organizationId == organizationId && it.triggerName == WEBHOOK_TRIGGER }
             ?: return null
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io").trimEnd('/')
+        val workflowResourceId = workflowReference(workflowId)?.resourceId?.toString() ?: return null
         return WorkflowWebhookSigningResponse(
-            workflowId = workflowId,
-            webhookUrl = "$backendUrl/v1/workflows/$workflowId/webhook",
+            workflowId = workflowResourceId,
+            webhookUrl = "$backendUrl/v1/workflows/$workflowResourceId/webhook",
             signingSecret = webhookSecret(workflowId),
             signatureHeader = WORKFLOW_WEBHOOK_SIGNATURE_HEADER,
             signatureFormat = "$WEBHOOK_SIGNATURE_PREFIX<hex HMAC-SHA256 of raw body>"
@@ -646,6 +821,15 @@ class WorkflowService(
         val expected = hmacSha256(webhookSecret(workflowId), payload)
         return MessageDigest.isEqual(provided.encodeToByteArray(), expected.encodeToByteArray())
     }
+
+    fun verifyWebhookSignature(
+        workflowId: String,
+        payload: String,
+        signatureHeader: String?
+    ): Boolean =
+        resolveWorkflowId(workflowId)
+            ?.let { resolvedWorkflowId -> verifyWebhookSignature(resolvedWorkflowId, payload, signatureHeader) }
+            ?: false
 
     suspend fun publishAlertTriggered(event: AlertLifecycleEvent) {
         if (event.status == AlertStatus.RESOLVED) {
@@ -708,6 +892,22 @@ class WorkflowService(
             )
         )
     }
+
+    private fun declaredIncidentResourceId(
+        organizationId: Int,
+        incidentId: Int
+    ): String =
+        transaction {
+            OnCallIncidents
+                .selectAll()
+                .where {
+                    (OnCallIncidents.id eq incidentId) and
+                        (OnCallIncidents.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(OnCallIncidents.resourceId)
+                ?.toString()
+        } ?: error("Missing resource_id for on-call incident $incidentId in organization $organizationId")
 
     suspend fun publishIncidentCreated(
         event: AlertLifecycleEvent,
@@ -857,6 +1057,11 @@ class WorkflowService(
 
     suspend fun executeRun(runId: Int) {
         directRunExecutor.executeRun(runId)
+    }
+
+    suspend fun executeRun(runId: String) {
+        val resolvedRunId = resolveRunId(runId) ?: return
+        executeRun(resolvedRunId)
     }
 
     private fun createRunForWorkflow(
@@ -1063,6 +1268,7 @@ class WorkflowService(
                 ?.let { row ->
                     WorkflowReference(
                         id = row[Workflows.id].value,
+                        resourceId = row[Workflows.resourceId],
                         organizationId = row[Workflows.organizationId],
                         triggerName = row[Workflows.triggerName]
                     )
@@ -1142,7 +1348,7 @@ class WorkflowService(
         val workflowId = row[Workflows.id].value
         val stats = runStats(workflowId)
         return WorkflowResponse(
-            id = workflowId,
+            id = row[Workflows.resourceId].toString(),
             name = row[Workflows.name],
             triggerName = row[Workflows.triggerName],
             enabled = row[Workflows.enabled],
@@ -1172,16 +1378,23 @@ class WorkflowService(
         )
     }
 
-    private fun runResponse(row: ResultRow): WorkflowRunResponse =
+    private fun runResponse(
+        row: ResultRow,
+        workflowIdsByPk: Map<Int, String> = workflowResourceIds(listOf(row[WorkflowRuns.workflowId])),
+        versionIdsByPk: Map<Int, String> = workflowVersionResourceIds(listOf(row[WorkflowRuns.workflowVersionId])),
+    ): WorkflowRunResponse =
         WorkflowRunResponse(
-            id = row[WorkflowRuns.id].value,
-            workflowId = row[WorkflowRuns.workflowId],
-            workflowVersionId = row[WorkflowRuns.workflowVersionId],
+            id = row[WorkflowRuns.resourceId].toString(),
+            workflowId = workflowIdsByPk.requireWorkflowResourceId(row[WorkflowRuns.workflowId], "workflow"),
+            workflowVersionId = versionIdsByPk.requireWorkflowResourceId(
+                row[WorkflowRuns.workflowVersionId],
+                "workflow version"
+            ),
             triggerName = row[WorkflowRuns.triggerName],
             onceFor = row[WorkflowRuns.onceFor],
             status = row[WorkflowRuns.status],
             progress = decodeProgress(row[WorkflowRuns.progress]),
-            steps = runSteps(row[WorkflowRuns.id].value),
+            steps = runSteps(row[WorkflowRuns.id].value, row[WorkflowRuns.resourceId].toString()),
             errorMessage = row[WorkflowRuns.errorMessage],
             temporalWorkflowId = row[WorkflowRuns.temporalWorkflowId],
             temporalRunId = row[WorkflowRuns.temporalRunId],
@@ -1190,15 +1403,15 @@ class WorkflowService(
             failedAt = row[WorkflowRuns.failedAt]?.toString()
         )
 
-    private fun runSteps(runId: Int): List<WorkflowRunStepResponse> =
+    private fun runSteps(runId: Int, runResourceId: String): List<WorkflowRunStepResponse> =
         WorkflowRunSteps
             .selectAll()
             .where { WorkflowRunSteps.runId eq runId }
             .orderBy(WorkflowRunSteps.id to SortOrder.ASC)
             .map { row ->
                 WorkflowRunStepResponse(
-                    id = row[WorkflowRunSteps.id].value,
-                    runId = row[WorkflowRunSteps.runId],
+                    id = row[WorkflowRunSteps.resourceId].toString(),
+                    runId = runResourceId,
                     nodeId = row[WorkflowRunSteps.nodeId],
                     type = row[WorkflowRunSteps.type],
                     status = row[WorkflowRunSteps.status],
@@ -1214,6 +1427,7 @@ class WorkflowService(
     private fun versionRecord(row: ResultRow): WorkflowVersionRecord =
         WorkflowVersionRecord(
             id = row[WorkflowVersions.id].value,
+            resourceId = row[WorkflowVersions.resourceId],
             version = row[WorkflowVersions.version],
             conditions = decodeConditions(row[WorkflowVersions.conditions]),
             steps = decodeSteps(row[WorkflowVersions.steps]),
@@ -1272,14 +1486,14 @@ class WorkflowService(
                 ALERT_SOURCE_REFERENCE to event.source.name,
                 ALERT_DEDUPLICATION_KEY_REFERENCE to event.deduplicationKey,
                 ALERT_URL_REFERENCE to event.moneatUrl,
-                ORGANIZATION_ID_REFERENCE to event.organizationId.toString()
+                ORGANIZATION_ID_REFERENCE to organizationResourceId(event.organizationId)
             ).typedWorkflowScope()
         return baseScope + episodeScopeFromDecision(episode) + alertMetadataScope(event.metadata)
     }
 
     private fun episodeScopeFromDecision(episode: AlertEpisodeDecision): Map<String, JsonElement> =
         mapOf(
-            ALERT_EPISODE_ID_REFERENCE to episode.episode.id.toString(),
+            ALERT_EPISODE_ID_REFERENCE to episode.episode.resourceId.toString(),
             ALERT_EPISODE_KEY_REFERENCE to episode.episode.episodeKey,
             ALERT_EPISODE_SEQ_REFERENCE to episode.episode.episodeSeq.toString(),
             ALERT_NOTIFICATION_SEQUENCE_REFERENCE to episode.notificationSequence.toString(),
@@ -1293,7 +1507,7 @@ class WorkflowService(
         notificationKind: String
     ): Map<String, JsonElement> =
         mapOf(
-            ALERT_EPISODE_ID_REFERENCE to episode.id.toString(),
+            ALERT_EPISODE_ID_REFERENCE to episode.resourceId.toString(),
             ALERT_EPISODE_KEY_REFERENCE to episode.episodeKey,
             ALERT_EPISODE_SEQ_REFERENCE to episode.episodeSeq.toString(),
             ALERT_NOTIFICATION_SEQUENCE_REFERENCE to episode.notificationCount.toString(),
@@ -1317,13 +1531,14 @@ class WorkflowService(
         deduplicationKey: String,
         episode: AlertEpisodeContext
     ): Map<String, JsonElement> {
+        val episodeResourceId = episode.resourceId.toString()
         val baseScope = mapOf(
-            INCIDENT_ID_REFERENCE to episode.id.toString(),
+            INCIDENT_ID_REFERENCE to episodeResourceId,
             INCIDENT_TITLE_REFERENCE to title,
             INCIDENT_STATUS_REFERENCE to status,
             INCIDENT_SEVERITY_REFERENCE to severity,
             ALERT_DEDUPLICATION_KEY_REFERENCE to deduplicationKey,
-            ORGANIZATION_ID_REFERENCE to organizationId.toString()
+            ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId)
         ).typedWorkflowScope()
         return baseScope + episodeScopeFromContext(episode, status)
     }
@@ -1335,19 +1550,20 @@ class WorkflowService(
         title: String,
         severity: IncidentSeverity
     ): Map<String, JsonElement> {
-        val workflowIncidentKey = "incident-$incidentId"
+        val incidentResourceId = declaredIncidentResourceId(organizationId, incidentId)
+        val workflowIncidentKey = "incident-$incidentResourceId"
         return mapOf(
-            INCIDENT_ID_REFERENCE to incidentId.toString(),
+            INCIDENT_ID_REFERENCE to incidentResourceId,
             INCIDENT_TITLE_REFERENCE to title,
             INCIDENT_STATUS_REFERENCE to status,
             INCIDENT_SEVERITY_REFERENCE to severity.wire,
             ALERT_DEDUPLICATION_KEY_REFERENCE to workflowIncidentKey,
-            ALERT_EPISODE_ID_REFERENCE to incidentId.toString(),
+            ALERT_EPISODE_ID_REFERENCE to incidentResourceId,
             ALERT_EPISODE_KEY_REFERENCE to workflowIncidentKey,
             ALERT_EPISODE_SEQ_REFERENCE to "1",
             ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
             ALERT_NOTIFICATION_KIND_REFERENCE to status,
-            ORGANIZATION_ID_REFERENCE to organizationId.toString()
+            ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId)
         ).typedWorkflowScope()
     }
 
@@ -1360,7 +1576,7 @@ class WorkflowService(
             SECURITY_RULE_NAME_REFERENCE to signal.ruleName,
             SECURITY_SEVERITY_REFERENCE to signal.severity.wire,
             SECURITY_RESOURCE_REFERENCE to signalResource(signal),
-            ORGANIZATION_ID_REFERENCE to organizationId.toString()
+            ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId)
         ).typedWorkflowScope()
 
     private fun signalResource(signal: SignalOutcome): String =
@@ -1538,6 +1754,7 @@ private data class DefaultWorkflowDefinition(
 
 private data class WorkflowVersionRecord(
     val id: Int,
+    val resourceId: Uuid,
     val version: Int,
     val conditions: List<WorkflowConditionConfig>,
     val steps: List<WorkflowStepConfig>,
@@ -1560,13 +1777,15 @@ private data class TriggerGate(
 
 private data class WorkflowReference(
     val id: Int,
+    val resourceId: Uuid,
     val organizationId: Int,
     val triggerName: String
 )
 
 private data class WorkflowRunCancelCandidate(
     val status: String,
-    val temporalWorkflowId: String
+    val temporalWorkflowId: String,
+    val resourceId: Uuid
 )
 
 private data class WorkflowRunStats(

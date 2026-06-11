@@ -4,20 +4,24 @@
 
 package com.moneat.enterprise.oncall.mcp
 
+import com.moneat.enterprise.oncall.alertIdForResource
+import com.moneat.enterprise.oncall.services.EscalationEngineHolder
+import com.moneat.enterprise.oncall.services.OnCallAlertService
+import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.ToolCallResult
-import com.moneat.enterprise.oncall.services.EscalationEngineHolder
-import com.moneat.enterprise.oncall.services.OnCallAlertService
-import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.mcp.tools.errorResult
 import com.moneat.mcp.tools.jsonResult
 import com.moneat.mcp.tools.schemaEnum
 import com.moneat.mcp.tools.schemaNumber
+import com.moneat.mcp.tools.schemaResourceId
+import com.moneat.mcp.tools.stringContent
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val scheduleService = OnCallScheduleService()
 
@@ -80,7 +84,7 @@ class GetIncidentTool : McpTool {
         "Get on-call incident details and timeline"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("incident_id" to schemaNumber("Incident ID"))
+            mapOf("incident_id" to schemaResourceId("Incident resource ID"))
         ),
         required = listOf("incident_id")
     )
@@ -91,12 +95,15 @@ class GetIncidentTool : McpTool {
     ): ToolCallResult {
         val svc = getIncidentService()
             ?: return errorResult("On-call module not initialized")
-        val incidentId = args["incident_id"]?.jsonPrimitive?.intOrNull
+        val incidentResourceId = args.stringContent("incident_id")
             ?: return errorResult("incident_id is required")
+        val incidentId = transaction {
+            alertIdForResource(context.organizationId, incidentResourceId)
+        } ?: return errorResult("Incident not found: $incidentResourceId")
         val incident = svc.getAlert(
             incidentId,
             context.userId
-        ) ?: return errorResult("Incident not found: $incidentId")
+        ) ?: return errorResult("Incident not found: $incidentResourceId")
         return jsonResult(incident)
     }
 }

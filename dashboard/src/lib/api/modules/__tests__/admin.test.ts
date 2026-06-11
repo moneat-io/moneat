@@ -20,9 +20,14 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const ORG_ID = '11111111-1111-4111-8111-111111111111'
+const USER_ID = '22222222-2222-4222-8222-222222222222'
+const USER_ID_SECOND = '33333333-3333-4333-8333-333333333333'
+const USER_ID_THIRD = '44444444-4444-4444-8444-444444444444'
+const PROJECT_ID = '55555555-5555-4555-8555-555555555555'
 
 const createQuotaResetResponse = () => ({
-  organizationId: 1,
+  organizationId: ORG_ID,
   quotaType: 'apm_spans',
   periodStart: '2026-01-01',
   periodEnd: '2026-01-31',
@@ -31,7 +36,7 @@ const createQuotaResetResponse = () => ({
   limit: 1000,
   targetPercent: 80,
   usage: {
-    organizationId: 1,
+    organizationId: ORG_ID,
     periodStart: '2026-01-01',
     periodEnd: '2026-01-31',
     retentionDays: 30,
@@ -93,7 +98,7 @@ describe('adminMethods', () => {
     it('fetches organizations with default pagination', async () => {
       const orgs = [
         {
-          id: 1,
+          id: ORG_ID,
           name: 'Org A',
           slug: 'org-a',
           plan: 'pro',
@@ -134,7 +139,7 @@ describe('adminMethods', () => {
   describe('getAdminOrgDetail', () => {
     it('fetches organization detail by id', async () => {
       const detail = {
-        id: 42,
+        id: ORG_ID,
         name: 'Acme',
         slug: 'acme',
         companySize: '10-50',
@@ -145,16 +150,16 @@ describe('adminMethods', () => {
         eventCountThisMonth: 2500,
         bytesIngestedThisMonth: 120000,
         quotaUsedPercent: 65,
-        members: [{ userId: 1, email: 'a@b.com', name: 'Alice', role: 'owner' }],
-        projects: [{ id: 1, name: 'Web', slug: 'web', platform: 'javascript' }],
+        members: [{ userId: USER_ID, email: 'a@b.com', name: 'Alice', role: 'owner' }],
+        projects: [{ id: PROJECT_ID, name: 'Web', slug: 'web', platform: 'javascript' }],
       }
       server.use(
-        http.get(`${API_BASE}/v1/admin/organizations/42`, () =>
+        http.get(`${API_BASE}/v1/admin/organizations/${ORG_ID}`, () =>
           HttpResponse.json(detail)
         )
       )
 
-      const result = await api.getAdminOrgDetail(42)
+      const result = await api.getAdminOrgDetail(ORG_ID)
       expect(result).toEqual(detail)
     })
   })
@@ -165,34 +170,34 @@ describe('adminMethods', () => {
         { date: '2026-01-01', eventType: 'error', eventCount: 100, bytesIngested: 5000 },
       ]
       server.use(
-        http.get(`${API_BASE}/v1/admin/organizations/1/usage`, ({ request }) => {
+        http.get(`${API_BASE}/v1/admin/organizations/${ORG_ID}/usage`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           return HttpResponse.json(usage)
         })
       )
 
-      const result = await api.getAdminOrgUsage(1)
+      const result = await api.getAdminOrgUsage(ORG_ID)
       expect(result).toEqual(usage)
     })
 
     it('passes custom period', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/admin/organizations/1/usage`, ({ request }) => {
+        http.get(`${API_BASE}/v1/admin/organizations/${ORG_ID}/usage`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('30d')
           return HttpResponse.json([])
         })
       )
 
-      await api.getAdminOrgUsage(1, '30d')
+      await api.getAdminOrgUsage(ORG_ID, '30d')
     })
   })
 
   describe('getAdminOrgQuotaUsage', () => {
     it('fetches quota usage for an organization', async () => {
       const quotaUsage = {
-        organizationId: 1,
+        organizationId: 'org-1',
         periodStart: '2026-01-01',
         periodEnd: '2026-01-31',
         retentionDays: 30,
@@ -218,12 +223,12 @@ describe('adminMethods', () => {
         withinQuota: true,
       }
       server.use(
-        http.get(`${API_BASE}/v1/admin/organizations/1/quota-usage`, () =>
+        http.get(`${API_BASE}/v1/admin/organizations/${ORG_ID}/quota-usage`, () =>
           HttpResponse.json(quotaUsage)
         )
       )
 
-      const result = await api.getAdminOrgQuotaUsage(1)
+      const result = await api.getAdminOrgQuotaUsage(ORG_ID)
       expect(result).toEqual(quotaUsage)
     })
   })
@@ -232,7 +237,7 @@ describe('adminMethods', () => {
     it('posts quota reset payload', async () => {
       const response = createQuotaResetResponse()
       server.use(
-        http.post(`${API_BASE}/v1/admin/organizations/1/quota-usage/reset`, async ({ request }) => {
+        http.post(`${API_BASE}/v1/admin/organizations/${ORG_ID}/quota-usage/reset`, async ({ request }) => {
           await expect(request.json()).resolves.toEqual({
             quotaType: 'apm_spans',
             targetPercent: 80,
@@ -241,7 +246,7 @@ describe('adminMethods', () => {
         })
       )
 
-      const result = await api.resetAdminOrgQuotaUsage(1, {
+      const result = await api.resetAdminOrgQuotaUsage(ORG_ID, {
         quotaType: 'apm_spans',
         targetPercent: 80,
       })
@@ -251,7 +256,7 @@ describe('adminMethods', () => {
     it('posts quota reset payload with target value', async () => {
       const response = createQuotaResetResponse()
       server.use(
-        http.post(`${API_BASE}/v1/admin/organizations/1/quota-usage/reset`, async ({ request }) => {
+        http.post(`${API_BASE}/v1/admin/organizations/${ORG_ID}/quota-usage/reset`, async ({ request }) => {
           await expect(request.json()).resolves.toEqual({
             quotaType: 'apm_spans',
             targetValue: 800,
@@ -260,7 +265,7 @@ describe('adminMethods', () => {
         })
       )
 
-      const result = await api.resetAdminOrgQuotaUsage(1, {
+      const result = await api.resetAdminOrgQuotaUsage(ORG_ID, {
         quotaType: 'apm_spans',
         targetValue: 800,
       })
@@ -347,7 +352,7 @@ describe('adminMethods', () => {
   describe('getAdminTopConsumers', () => {
     it('fetches top consumers with default limit', async () => {
       const consumers = [
-        { orgId: 1, orgName: 'BigCo', orgSlug: 'bigco', plan: 'pro', eventCount: 9999, bytesIngested: 500000 },
+        { orgId: ORG_ID, orgName: 'BigCo', orgSlug: 'bigco', plan: 'pro', eventCount: 9999, bytesIngested: 500000 },
       ]
       server.use(
         http.get(`${API_BASE}/v1/admin/top-consumers`, ({ request }) => {
@@ -423,7 +428,7 @@ describe('adminMethods', () => {
       const data = {
         users: [
           {
-            id: 1,
+            id: USER_ID,
             email: 'user@test.com',
             name: 'Test',
             emailVerified: true,
@@ -468,14 +473,14 @@ describe('adminMethods', () => {
   describe('updateAdminUser', () => {
     it('sends PATCH with user updates', async () => {
       server.use(
-        http.patch(`${API_BASE}/v1/admin/users/7`, async ({ request }) => {
+        http.patch(`${API_BASE}/v1/admin/users/${USER_ID}`, async ({ request }) => {
           const body = await request.json()
           expect(body).toEqual({ isAdmin: true })
           return HttpResponse.json({ success: true })
         })
       )
 
-      const result = await api.updateAdminUser(7, { isAdmin: true })
+      const result = await api.updateAdminUser(USER_ID, { isAdmin: true })
       expect(result).toEqual({ success: true })
     })
   })
@@ -485,12 +490,12 @@ describe('adminMethods', () => {
       server.use(
         http.delete(`${API_BASE}/v1/admin/users`, async ({ request }) => {
           const body = await request.json()
-          expect(body).toEqual({ userIds: [1, 2, 3] })
+          expect(body).toEqual({ userIds: [USER_ID, USER_ID_SECOND, USER_ID_THIRD] })
           return HttpResponse.json({ success: true, deletedCount: 3, errors: [] })
         })
       )
 
-      const result = await api.deleteAdminUsers([1, 2, 3])
+      const result = await api.deleteAdminUsers([USER_ID, USER_ID_SECOND, USER_ID_THIRD])
       expect(result).toEqual({ success: true, deletedCount: 3, errors: [] })
     })
   })

@@ -23,6 +23,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 // ==================== Exposed Tables ====================
 
@@ -52,6 +53,7 @@ object StatusPages : Table("status_pages") {
 
 object StatusPageMonitors : Table("status_page_monitors") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val statusPageId = javaUUID("status_page_id").references(StatusPages.id)
     val monitorId = javaUUID("monitor_id").references(UptimeMonitors.id)
     val displayName = varchar("display_name", 255).nullable()
@@ -89,6 +91,7 @@ object StatusPageIncidentUpdates : Table("status_page_incident_updates") {
 
 object StatusPageCustomDomains : Table("status_page_custom_domains") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val statusPageId = javaUUID("status_page_id").references(StatusPages.id)
     val domain = varchar("domain", 255).uniqueIndex()
     val verificationToken = varchar("verification_token", 64)
@@ -215,7 +218,7 @@ data class StatusPageDetailResponse(
 
 @Serializable
 data class StatusPageMonitorResponse(
-    val id: Int,
+    val id: String,
     val monitorId: String,
     val monitorName: String,
     val displayName: String? = null,
@@ -249,7 +252,7 @@ data class IncidentUpdateResponse(
 
 @Serializable
 data class CustomDomainResponse(
-    val id: Int,
+    val id: String,
     val domain: String,
     val verificationToken: String,
     val verified: Boolean,

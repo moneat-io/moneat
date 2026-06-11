@@ -26,6 +26,8 @@ import com.moneat.featureflags.models.FeatureFlagSnapshotFlag
 import com.moneat.featureflags.models.FeatureFlagValueType
 import com.moneat.featureflags.models.FeatureFlagVariantSnapshot
 import com.moneat.featureflags.services.FeatureFlagEvaluator
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -252,6 +254,28 @@ class FeatureFlagEvaluatorTest {
     }
 
     @Test
+    fun `rollout bucketing survives snapshot serialization`() {
+        val rules = rulesWithCondition(
+            condition("country", "eq", stringValue("US")),
+            serve = rolloutServe(
+                RolloutAllocationFixture("on", 50),
+                RolloutAllocationFixture("off", 50),
+            ),
+        )
+        val snapshot = snapshot(config = enabledConfig(rules))
+        val restored = Json.decodeFromString<FeatureFlagEnvironmentConfigSnapshot>(
+            Json.encodeToString(snapshot)
+        )
+        val context = context("user-serialize", "country" to stringValue("US"))
+
+        val original = evaluator.evaluate(snapshot, FLAG_KEY, context, null, FLAG_KEY_TYPE_SERVER)
+        val decoded = evaluator.evaluate(restored, FLAG_KEY, context, null, FLAG_KEY_TYPE_SERVER)
+
+        assertEquals(original.variant, decoded.variant)
+        assertEquals(original.reason, decoded.reason)
+    }
+
+    @Test
     fun `attribute targeting supports comparison operators`() {
         val matchingCases = listOf(
             condition("country", "exists") to context("user-1", "country" to stringValue("US")),
@@ -372,12 +396,18 @@ class FeatureFlagEvaluatorTest {
         onValue: JsonElement = JsonPrimitive(true),
     ): FeatureFlagEnvironmentConfigSnapshot {
         return FeatureFlagEnvironmentConfigSnapshot(
-            organizationId = ORGANIZATION_ID,
-            environment = FeatureFlagEnvironmentSnapshot(1, ENVIRONMENT_KEY, "Production", 1),
+            organizationResourceId = "11111111-1111-1111-1111-111111111111",
+            environment = FeatureFlagEnvironmentSnapshot(
+                id = "22222222-2222-2222-2222-222222222222",
+                key = ENVIRONMENT_KEY,
+                name = "Production",
+                version = 1,
+                internalId = 1,
+            ),
             etag = "\"test\"",
             flags = listOf(
                 FeatureFlagSnapshotFlag(
-                    id = 1,
+                    id = "33333333-3333-3333-3333-333333333333",
                     key = FLAG_KEY,
                     valueType = FeatureFlagValueType.BOOLEAN,
                     clientVisible = clientVisible,
@@ -386,9 +416,11 @@ class FeatureFlagEvaluatorTest {
                         FeatureFlagVariantSnapshot("on", "On", onValue, 1),
                     ),
                     config = config,
+                    internalId = 1,
                 )
             ),
             segments = segments,
+            organizationId = ORGANIZATION_ID,
         )
     }
 
@@ -432,6 +464,24 @@ class FeatureFlagEvaluatorTest {
                 )
             )
             fallthrough?.let { put("fallthrough", it) }
+        }
+
+    private data class RolloutAllocationFixture(val variant: String, val weight: Int)
+
+    private fun rolloutServe(vararg allocations: RolloutAllocationFixture): JsonObject =
+        buildJsonObject {
+            put("type", stringValue("rollout"))
+            put(
+                "allocations",
+                JsonArray(
+                    allocations.map { allocation ->
+                        buildJsonObject {
+                            put("variant", stringValue(allocation.variant))
+                            put("weight", JsonPrimitive(allocation.weight))
+                        }
+                    }
+                )
+            )
         }
 
     private fun condition(

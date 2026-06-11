@@ -67,11 +67,19 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 private const val ROUTE_TEST_ORG_ID = 10
 private const val ROUTE_TEST_USER_ID = 20
 private const val SDK_TOKEN = "mffpk_route_test_token"
 private const val FLAG_PATH = "/v1/feature-flags/checkout.enabled"
+private const val FLAG_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+private const val ENVIRONMENT_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+private const val VARIANT_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+private const val SEGMENT_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+private const val SDK_KEY_RESOURCE_ID = "55555555-5555-5555-5555-555555555555"
+private const val MISSING_SDK_KEY_RESOURCE_ID = "66666666-6666-6666-6666-666666666666"
+private const val AUDIT_RESOURCE_ID = "77777777-7777-7777-7777-777777777777"
 
 class FeatureFlagRoutesTest {
     @Test
@@ -108,7 +116,10 @@ class FeatureFlagRoutesTest {
                 setBody("""{"environmentKey":"production","name":"Browser","keyType":"client"}""")
             }.status
         )
-        assertEquals(HttpStatusCode.NoContent, client.delete("/v1/feature-flags/sdk-keys/1") { withAuth(token) }.status)
+        assertEquals(
+            HttpStatusCode.NoContent,
+            client.delete("/v1/feature-flags/sdk-keys/$SDK_KEY_RESOURCE_ID") { withAuth(token) }.status
+        )
         assertEquals(HttpStatusCode.OK, client.get("/v1/feature-flags/audit?limit=5") { withAuth(token) }.status)
         assertEquals(
             HttpStatusCode.OK,
@@ -147,7 +158,9 @@ class FeatureFlagRoutesTest {
     fun `management routes return validation and not found responses`() = testApplication {
         val service = mockManagementService()
         every { service.deleteSegment(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, "missing") } returns false
-        every { service.revokeSdkKey(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, 2) } returns false
+        every {
+            service.revokeSdkKey(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, Uuid.parse(MISSING_SDK_KEY_RESOURCE_ID))
+        } returns false
         every { service.getFlag(ROUTE_TEST_ORG_ID, "missing", null) } returns null
         every { service.updateFlag(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, "missing", any()) } returns null
         every { service.archiveFlag(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, "missing") } returns false
@@ -170,7 +183,7 @@ class FeatureFlagRoutesTest {
         )
         assertEquals(
             HttpStatusCode.NotFound,
-            client.delete("/v1/feature-flags/sdk-keys/2") { withAuth(token) }.status
+            client.delete("/v1/feature-flags/sdk-keys/$MISSING_SDK_KEY_RESOURCE_ID") { withAuth(token) }.status
         )
         assertEquals(HttpStatusCode.NotFound, client.get("/v1/feature-flags/missing") { withAuth(token) }.status)
         assertEquals(
@@ -327,7 +340,9 @@ class FeatureFlagRoutesTest {
         every { service.deleteSegment(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, "beta") } returns true
         every { service.listSdkKeys(ROUTE_TEST_ORG_ID) } returns listOf(sdkKey())
         every { service.createSdkKey(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, any()) } returns createdSdkKey()
-        every { service.revokeSdkKey(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, 1) } returns true
+        every {
+            service.revokeSdkKey(ROUTE_TEST_ORG_ID, ROUTE_TEST_USER_ID, Uuid.parse(SDK_KEY_RESOURCE_ID))
+        } returns true
         every { service.listAuditEvents(ROUTE_TEST_ORG_ID, 5) } returns listOf(auditEvent())
         coEvery { service.analytics(ROUTE_TEST_ORG_ID, "production", 12) } returns analytics()
         every { service.listFlags(ROUTE_TEST_ORG_ID, "production") } returns flagList()
@@ -369,7 +384,7 @@ class FeatureFlagRoutesTest {
 
     private fun flag(): FeatureFlagResponse =
         FeatureFlagResponse(
-            id = 1,
+            id = FLAG_RESOURCE_ID,
             key = "checkout.enabled",
             name = "Checkout Enabled",
             valueType = FeatureFlagValueType.BOOLEAN,
@@ -383,7 +398,7 @@ class FeatureFlagRoutesTest {
 
     private fun environment(key: String = "production", name: String = "Production"): FeatureFlagEnvironmentResponse =
         FeatureFlagEnvironmentResponse(
-            id = 1,
+            id = ENVIRONMENT_RESOURCE_ID,
             key = key,
             name = name,
             version = 1,
@@ -392,7 +407,13 @@ class FeatureFlagRoutesTest {
         )
 
     private fun variant(): FeatureFlagVariantResponse =
-        FeatureFlagVariantResponse(id = 1, key = "on", name = "On", value = JsonPrimitive(true), sortOrder = 0)
+        FeatureFlagVariantResponse(
+            id = VARIANT_RESOURCE_ID,
+            key = "on",
+            name = "On",
+            value = JsonPrimitive(true),
+            sortOrder = 0
+        )
 
     private fun config(): FeatureFlagConfigResponse =
         FeatureFlagConfigResponse(
@@ -408,7 +429,7 @@ class FeatureFlagRoutesTest {
 
     private fun segment(): FeatureFlagSegmentResponse =
         FeatureFlagSegmentResponse(
-            id = 1,
+            id = SEGMENT_RESOURCE_ID,
             key = "beta",
             name = "Beta",
             conditions = emptyRules(),
@@ -418,7 +439,7 @@ class FeatureFlagRoutesTest {
 
     private fun sdkKey(): FeatureFlagSdkKeyResponse =
         FeatureFlagSdkKeyResponse(
-            id = 1,
+            id = SDK_KEY_RESOURCE_ID,
             environmentKey = "production",
             name = "Browser",
             keyType = "client",
@@ -428,7 +449,7 @@ class FeatureFlagRoutesTest {
 
     private fun createdSdkKey(): CreateFeatureFlagSdkKeyResponse =
         CreateFeatureFlagSdkKeyResponse(
-            id = 1,
+            id = SDK_KEY_RESOURCE_ID,
             environmentKey = "production",
             name = "Browser",
             keyType = "client",
@@ -438,7 +459,11 @@ class FeatureFlagRoutesTest {
         )
 
     private fun auditEvent(): FeatureFlagAuditEventResponse =
-        FeatureFlagAuditEventResponse(id = 1, eventType = "flag.created", createdAt = "2026-01-01T00:00:00Z")
+        FeatureFlagAuditEventResponse(
+            id = AUDIT_RESOURCE_ID,
+            eventType = "flag.created",
+            createdAt = "2026-01-01T00:00:00Z"
+        )
 
     private fun analytics(): FeatureFlagAnalyticsResponse =
         FeatureFlagAnalyticsResponse(
@@ -450,12 +475,18 @@ class FeatureFlagRoutesTest {
 
     private fun snapshot(): FeatureFlagEnvironmentConfigSnapshot =
         FeatureFlagEnvironmentConfigSnapshot(
-            organizationId = ROUTE_TEST_ORG_ID,
-            environment = FeatureFlagEnvironmentSnapshot(1, "production", "Production", 1),
+            organizationResourceId = "11111111-1111-1111-1111-111111111111",
+            environment = FeatureFlagEnvironmentSnapshot(
+                id = "22222222-2222-2222-2222-222222222222",
+                key = "production",
+                name = "Production",
+                version = 1,
+                internalId = 1,
+            ),
             etag = "\"ff-route-test\"",
             flags = listOf(
                 com.moneat.featureflags.models.FeatureFlagSnapshotFlag(
-                    id = 1,
+                    id = "33333333-3333-3333-3333-333333333333",
                     key = "checkout.enabled",
                     valueType = FeatureFlagValueType.BOOLEAN,
                     clientVisible = true,
@@ -467,9 +498,11 @@ class FeatureFlagRoutesTest {
                         rules = emptyRules(),
                         version = 1,
                     ),
+                    internalId = 1,
                 )
             ),
             segments = emptyList(),
+            organizationId = ROUTE_TEST_ORG_ID,
         )
 
     private fun sdkPrincipal(): FeatureFlagSdkKeyPrincipal =

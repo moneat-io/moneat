@@ -20,6 +20,11 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.config.ClickHouseClient
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.McpTool
+import com.moneat.shared.models.Hosts
+import com.moneat.shared.models.HostAlertSettings
+import com.moneat.shared.models.HostAlertTemplateStates
+import com.moneat.shared.models.HostAlerts
+import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
@@ -31,6 +36,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -38,6 +44,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -48,6 +55,7 @@ class McpToolValidationTest {
         private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
         private const val EVENT_ID = "01234567-89ab-cdef-0123-456789abcdef"
         private const val TRACE_ID = "trace-1"
+        private const val VALID_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
         private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private var db: Database? = null
     }
@@ -70,6 +78,11 @@ class McpToolValidationTest {
         TestDatabaseHelper.resetSchema(
             Organizations,
             Projects,
+            Hosts,
+            HostAlerts,
+            HostAlertSettings,
+            HostAlertTemplateStates,
+            OrganizationAlertTemplates,
             Subscriptions,
             PricingTierConfigs,
         )
@@ -85,6 +98,14 @@ class McpToolValidationTest {
                 it[resource_id] = Uuid.parse(PROJECT_RESOURCE_ID)
                 it[name] = "Test Project"
                 it[slug] = "test-project"
+            }
+            Hosts.insert {
+                it[id] = 1
+                it[resource_id] = Uuid.parse(VALID_RESOURCE_ID)
+                it[organization_id] = 1
+                it[hostname] = "validation-host"
+                it[first_seen_at] = Clock.System.now()
+                it[last_seen_at] = Clock.System.now()
             }
         }
     }
@@ -173,6 +194,50 @@ class McpToolValidationTest {
     }
 
     @Test
+    fun `alert crud tools use host and alert resource ids`() = runBlocking {
+        val createResult = CreateAlertTool().execute(
+            obj(
+                "host_id" to VALID_RESOURCE_ID,
+                "metric" to "cpu",
+                "condition" to "gt",
+                "threshold" to 90,
+                "duration_seconds" to 30,
+                "enabled" to true,
+            ),
+            context,
+        )
+
+        assertFalse(createResult.isError)
+        val createdAlert = toolJson
+            .parseToJsonElement(createResult.content.first().text.orEmpty())
+            .jsonObject
+        val alertResourceId = createdAlert["id"]?.jsonPrimitive?.content.orEmpty()
+        assertTrue(alertResourceId.contains("-"))
+        assertEquals(VALID_RESOURCE_ID, createdAlert["host_id"]?.jsonPrimitive?.content)
+
+        val updateResult = UpdateAlertTool().execute(
+            obj(
+                "host_id" to VALID_RESOURCE_ID,
+                "alert_id" to alertResourceId,
+                "threshold" to 95,
+                "enabled" to false,
+            ),
+            context,
+        )
+
+        assertFalse(updateResult.isError)
+        assertTrue(updateResult.content.first().text.orEmpty().contains("updated"))
+
+        val deleteResult = DeleteAlertTool().execute(
+            obj("host_id" to VALID_RESOURCE_ID, "alert_id" to alertResourceId),
+            context,
+        )
+
+        assertFalse(deleteResult.isError)
+        assertTrue(deleteResult.content.first().text.orEmpty().contains("deleted"))
+    }
+
+    @Test
     fun `getIssueTransactions tool returns correlated transaction rows`() = runBlocking {
         MockHttpServer { exchange ->
             val query = exchange.requestBodyText()
@@ -205,7 +270,7 @@ class McpToolValidationTest {
     }
 
     private fun validationCases(): List<ValidationCase> {
-        val uuid = "11111111-1111-1111-1111-111111111111"
+        val uuid = VALID_RESOURCE_ID
         return listOf(
             case("create_status_page_name", CreateStatusPageTool(), obj(), "name is required"),
             case("create_status_page_slug", CreateStatusPageTool(), obj("name" to "Status"), "slug is required"),
@@ -369,15 +434,60 @@ class McpToolValidationTest {
             ),
             case("create_alert_host", CreateAlertTool(), obj(), "host_id is required"),
             case("create_alert_host_format", CreateAlertTool(), obj("host_id" to "bad"), "Invalid host_id format"),
-            case("create_alert_metric", CreateAlertTool(), obj("host_id" to 1), "metric is required"),
+            case("create_alert_metric", CreateAlertTool(), obj("host_id" to uuid), "metric is required"),
+            case(
+                "create_alert_condition",
+                CreateAlertTool(),
+                obj("host_id" to uuid, "metric" to "cpu", "threshold" to 90),
+                "condition is required",
+            ),
             case(
                 "create_alert_threshold",
                 CreateAlertTool(),
-                obj("host_id" to 1, "metric" to "cpu", "condition" to "gt", "threshold" to "bad"),
+                obj("host_id" to uuid, "metric" to "cpu", "condition" to "gt", "threshold" to "bad"),
                 "threshold must be a number",
             ),
-            case("update_alert_alert_id", UpdateAlertTool(), obj("host_id" to 1), "alert_id is required"),
-            case("delete_alert_alert_id", DeleteAlertTool(), obj("host_id" to 1), "alert_id is required"),
+            case(
+                "update_alert_host_format",
+                UpdateAlertTool(),
+                obj("host_id" to "bad", "alert_id" to uuid),
+                "Invalid host_id format",
+            ),
+            case("update_alert_alert_id", UpdateAlertTool(), obj("host_id" to uuid), "Invalid alert_id format"),
+            case(
+                "update_alert_not_found",
+                UpdateAlertTool(),
+                obj("host_id" to uuid, "alert_id" to uuid),
+                "Alert not found",
+            ),
+            case(
+                "delete_alert_host_format",
+                DeleteAlertTool(),
+                obj("host_id" to "bad", "alert_id" to uuid),
+                "Invalid host_id format",
+            ),
+            case("delete_alert_alert_id", DeleteAlertTool(), obj("host_id" to uuid), "Invalid alert_id format"),
+            case(
+                "delete_alert_not_found",
+                DeleteAlertTool(),
+                obj("host_id" to uuid, "alert_id" to uuid),
+                "Alert not found",
+            ),
+            case("get_host_status_host", GetHostStatusTool(), obj(), "host_id is required"),
+            case("get_host_status_format", GetHostStatusTool(), obj("host_id" to "bad"), "Invalid host_id format"),
+            case("list_alerts_host", ListAlertsTool(), obj(), "host_id is required"),
+            case("list_alerts_format", ListAlertsTool(), obj("host_id" to "bad"), "Invalid host_id format"),
+            case("get_host_metrics_host", GetHostMetricsTool(), obj(), "host_id is required"),
+            case("get_host_metrics_format", GetHostMetricsTool(), obj("host_id" to "bad"), "Invalid host_id format"),
+            case("get_container_metrics_host", GetContainerMetricsTool(), obj(), "host_id is required"),
+            case(
+                "get_container_metrics_format",
+                GetContainerMetricsTool(),
+                obj("host_id" to "bad"),
+                "Invalid host_id format",
+            ),
+            case("get_alert_config_host", GetAlertConfigTool(), obj(), "host_id is required"),
+            case("get_alert_config_format", GetAlertConfigTool(), obj("host_id" to "bad"), "Invalid host_id format"),
             case("create_silence_start", CreateSilencePeriodTool(), obj(), "starts_at is required"),
             case(
                 "create_silence_order",
@@ -385,7 +495,7 @@ class McpToolValidationTest {
                 obj("starts_at" to 10, "ends_at" to 5),
                 "starts_at must be before",
             ),
-            case("delete_silence_id", DeleteSilencePeriodTool(), obj(), "id is required"),
+            case("delete_silence_id", DeleteSilencePeriodTool(), obj(), "Invalid id format"),
             case("delete_host_id", DeleteHostTool(), obj(), "host_id is required"),
             case("update_uptime_id", UpdateUptimeMonitorTool(), obj(), "monitor_id is required"),
             case(
@@ -575,7 +685,7 @@ class McpToolValidationTest {
                 "cancel_workflow_run_id",
                 CancelWorkflowRunTool(),
                 obj("workflow_id" to 1),
-                "run_id is required",
+                "workflow_id is required",
             ),
             case("list_workflow_runs_id", ListWorkflowRunsTool(), obj(), "workflow_id is required"),
             case("get_workflow_blueprint_key", GetWorkflowBlueprintTool(), obj(), "key is required"),

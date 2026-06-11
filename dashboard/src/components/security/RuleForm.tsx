@@ -35,9 +35,9 @@ interface RuleFormProps {
   rule?: DetectionRuleResponse
   // Creates when ruleId is undefined, otherwise updates that rule. After a preview persists a draft
   // we hold its id and pass it here so later saves update the draft instead of creating duplicates.
-  onSubmit: (request: CreateDetectionRuleRequest, ruleId?: number) => Promise<DetectionRuleResponse>
+  onSubmit: (request: CreateDetectionRuleRequest, ruleId?: string) => Promise<DetectionRuleResponse>
   // Runs a preview against a saved rule id (preview evaluates the persisted rule).
-  onPreview: (ruleId: number) => Promise<DetectionPreviewResponse>
+  onPreview: (ruleId: string) => Promise<DetectionPreviewResponse>
   onCancel: () => void
   isSubmitting?: boolean
 }
@@ -50,7 +50,7 @@ const TYPE_OPTIONS: {value: RuleFormState['type']; label: string}[] = [
 
 export function RuleForm({rule, onSubmit, onPreview, onCancel, isSubmitting}: RuleFormProps) {
   const [form, setForm] = useState<RuleFormState>(() => (rule ? ruleToForm(rule) : emptyRuleForm()))
-  const [savedRuleId, setSavedRuleId] = useState<number | undefined>(rule?.id)
+  const [savedRuleId, setSavedRuleId] = useState<string | undefined>(rule?.id)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<DetectionPreviewResponse | null>(null)
   const [previewing, setPreviewing] = useState(false)

@@ -17,7 +17,9 @@
 package com.moneat.security.signals
 
 import com.moneat.config.ClickHouseClient
+import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -41,13 +43,14 @@ import kotlin.test.assertTrue
 class SignalServiceTest {
     companion object {
         private var db: Database? = null
-        private const val ACTOR = 7
         private const val TEXT_PLAIN = "text/plain"
     }
 
     private val service = SignalService()
     private var orgId: Int = 0
     private var otherOrgId: Int = 0
+    private var actorUserId: Int = 0
+    private var assigneeUserId: Int = 0
 
     @BeforeTest
     fun setup() {
@@ -61,6 +64,10 @@ class SignalServiceTest {
         SignalSchemaTestSupport.reset()
         orgId = seedOrg("acme")
         otherOrgId = seedOrg("globex")
+        actorUserId = seedUser("actor@acme.test")
+        assigneeUserId = seedUser("assignee@acme.test")
+        seedMembership(actorUserId, orgId)
+        seedMembership(assigneeUserId, orgId)
     }
 
     @AfterTest
@@ -87,7 +94,7 @@ class SignalServiceTest {
     fun `triage advances status and records an audit row with the actor`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
 
-        val result = service.triage(orgId, created.signalId, ACTOR, TriageRequest(status = "under_review"))
+        val result = service.triage(orgId, created.signalId, actorUserId, TriageRequest(status = "under_review"))
 
         val ok = assertIs<TriageResult.Ok>(result)
         assertEquals("under_review", ok.signal.status)
@@ -95,18 +102,18 @@ class SignalServiceTest {
         assertEquals(SignalAuditAction.STATUS_CHANGE.wire, audit.action)
         assertEquals(SignalStatus.OPEN.wire, audit.fromStatus)
         assertEquals(SignalStatus.UNDER_REVIEW.wire, audit.toStatus)
-        assertEquals(ACTOR, audit.actorUserId)
+        assertEquals(userResourceId(actorUserId), audit.actorUserId)
     }
 
     @Test
     fun `archiving persists the reason and audits it`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
-        service.triage(orgId, created.signalId, ACTOR, TriageRequest(status = "under_review"))
+        service.triage(orgId, created.signalId, actorUserId, TriageRequest(status = "under_review"))
 
         val result = service.triage(
             orgId,
             created.signalId,
-            ACTOR,
+            actorUserId,
             TriageRequest(status = "archived", reason = "false_positive")
         )
 
@@ -122,7 +129,7 @@ class SignalServiceTest {
     fun `an invalid transition is rejected and leaves status unchanged`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
 
-        val result = service.triage(orgId, created.signalId, ACTOR, TriageRequest(status = "archived"))
+        val result = service.triage(orgId, created.signalId, actorUserId, TriageRequest(status = "archived"))
 
         assertIs<TriageResult.Invalid>(result)
         transaction {
@@ -141,12 +148,12 @@ class SignalServiceTest {
         val result = service.triage(
             orgId,
             created.signalId,
-            ACTOR,
-            TriageRequest(assigneeUserId = 42, note = "mine")
+            actorUserId,
+            TriageRequest(assigneeUserId = userResourceId(assigneeUserId), note = "mine")
         )
 
         val ok = assertIs<TriageResult.Ok>(result)
-        assertEquals(42, ok.signal.assigneeUserId)
+        assertEquals(userResourceId(assigneeUserId), ok.signal.assigneeUserId)
         assertEquals("open", ok.signal.status)
         val actions = allAuditActions(created.signalId)
         assertTrue(actions.contains(SignalAuditAction.ASSIGN.wire))
@@ -158,7 +165,7 @@ class SignalServiceTest {
     fun `no-op status and blank note do not create audit rows`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
 
-        val result = service.triage(orgId, created.signalId, ACTOR, TriageRequest(status = "open", note = " "))
+        val result = service.triage(orgId, created.signalId, actorUserId, TriageRequest(status = "open", note = " "))
 
         val ok = assertIs<TriageResult.Ok>(result)
         assertEquals("open", ok.signal.status)
@@ -168,9 +175,14 @@ class SignalServiceTest {
     @Test
     fun `clear_assignee removes the assignee`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
-        service.triage(orgId, created.signalId, ACTOR, TriageRequest(assigneeUserId = 42))
+        service.triage(
+            orgId,
+            created.signalId,
+            actorUserId,
+            TriageRequest(assigneeUserId = userResourceId(assigneeUserId))
+        )
 
-        val result = service.triage(orgId, created.signalId, ACTOR, TriageRequest(clearAssignee = true))
+        val result = service.triage(orgId, created.signalId, actorUserId, TriageRequest(clearAssignee = true))
 
         assertNull(assertIs<TriageResult.Ok>(result).signal.assigneeUserId)
     }
@@ -179,7 +191,7 @@ class SignalServiceTest {
     fun `a caller cannot triage another org's signal`() {
         val created = SignalWriter.upsert(orgId, spec(ruleId = "a", severity = SignalSeverity.HIGH))
 
-        val result = service.triage(otherOrgId, created.signalId, ACTOR, TriageRequest(status = "under_review"))
+        val result = service.triage(otherOrgId, created.signalId, actorUserId, TriageRequest(status = "under_review"))
 
         assertIs<TriageResult.NotFound>(result)
         // The original org's signal is untouched.
@@ -233,8 +245,8 @@ class SignalServiceTest {
                 .first()
                 .let {
                     SignalAuditResponse(
-                        id = it[SecuritySignalAudit.id].value,
-                        actorUserId = it[SecuritySignalAudit.actorUserId],
+                        id = it[SecuritySignalAudit.resourceId].toString(),
+                        actorUserId = it[SecuritySignalAudit.actorUserId]?.let(::userResourceId),
                         action = it[SecuritySignalAudit.action],
                         fromStatus = it[SecuritySignalAudit.fromStatus],
                         toStatus = it[SecuritySignalAudit.toStatus],
@@ -287,5 +299,34 @@ class SignalServiceTest {
                 it[Organizations.name] = name
                 it[slug] = name
             } get Organizations.id
+        }
+
+    private fun seedUser(email: String): Int =
+        transaction {
+            Users.insert {
+                it[Users.email] = email
+                it[name] = email.substringBefore('@')
+                it[password_hash] = "hash"
+                it[email_verified] = true
+            } get Users.id
+        }
+
+    private fun seedMembership(userId: Int, organizationId: Int) {
+        transaction {
+            Memberships.insert {
+                it[Memberships.user_id] = userId
+                it[Memberships.organization_id] = organizationId
+                it[role] = "member"
+            }
+        }
+    }
+
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
         }
 }

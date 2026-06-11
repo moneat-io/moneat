@@ -19,6 +19,12 @@ export function urlWithQuery(path: string, qs: string): string {
   return qs ? path + '?' + qs : path
 }
 
+const UUID_RESOURCE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function isUuidResourceId(value: string | null | undefined): value is string {
+  return Boolean(value && UUID_RESOURCE_ID_PATTERN.exec(value.trim()))
+}
+
 export function formatErrorForLogging(error: unknown): string {
   if (error instanceof Error) {
     if (error.message === 'NETWORK_ERROR') {

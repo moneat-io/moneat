@@ -39,12 +39,12 @@ export function WorkflowActivityDrawer({workflow, open, onOpenChange}: WorkflowA
 
   const exportQuery = useQuery({
     queryKey: ['workflow-export', workflowId],
-    queryFn: () => api.exportWorkflow(workflowId ?? 0),
+    queryFn: () => api.exportWorkflow(workflowId ?? ''),
     enabled,
   })
   const auditQuery = useQuery({
     queryKey: ['workflow-audit', workflowId, ACTIVITY_AUDIT_LIMIT],
-    queryFn: () => api.getWorkflowAuditForWorkflow(workflowId ?? 0, ACTIVITY_AUDIT_LIMIT),
+    queryFn: () => api.getWorkflowAuditForWorkflow(workflowId ?? '', ACTIVITY_AUDIT_LIMIT),
     enabled,
   })
 

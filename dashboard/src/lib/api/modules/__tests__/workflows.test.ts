@@ -21,6 +21,9 @@ import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
 
+const WORKFLOW_ID = '11111111-1111-4111-8111-111111111111'
+const WORKFLOW_COPY_ID = '22222222-2222-4222-8222-222222222222'
+const WORKFLOW_IMPORTED_ID = '33333333-3333-4333-8333-333333333333'
 const emptyGraph = { nodes: [], edges: [] }
 
 describe('workflows phase 4 API', () => {
@@ -82,7 +85,7 @@ describe('workflows phase 4 API', () => {
 
   describe('instantiateBlueprint', () => {
     it('posts an empty body by default', async () => {
-      const workflowResponse = { id: 7, name: 'Error spike alert' }
+      const workflowResponse = { id: WORKFLOW_ID, name: 'Error spike alert' }
       server.use(
         http.post(
           `${API_BASE}/v1/workflows/blueprints/error-spike/instantiate`,
@@ -103,13 +106,13 @@ describe('workflows phase 4 API', () => {
           `${API_BASE}/v1/workflows/blueprints/error-spike/instantiate`,
           async ({ request }) => {
             await expect(request.json()).resolves.toEqual({ name: 'My copy' })
-            return HttpResponse.json({ id: 8, name: 'My copy' }, { status: 201 })
+            return HttpResponse.json({ id: WORKFLOW_COPY_ID, name: 'My copy' }, { status: 201 })
           }
         )
       )
 
       const result = await api.instantiateBlueprint('error-spike', { name: 'My copy' })
-      expect(result).toEqual({ id: 8, name: 'My copy' })
+      expect(result).toEqual({ id: WORKFLOW_COPY_ID, name: 'My copy' })
     })
   })
 
@@ -124,7 +127,7 @@ describe('workflows phase 4 API', () => {
         runs_last_30d: 120,
         success_rate: 0.95,
         failed_last_30d: 6,
-        top_workflows: [{ workflow_id: 1, name: 'Pager', run_count: 40 }],
+        top_workflows: [{ workflow_id: '11111111-1111-4111-8111-111111111111', name: 'Pager', run_count: 40 }],
       }
       server.use(
         http.get(`${API_BASE}/v1/workflows/overview`, () =>
@@ -195,27 +198,27 @@ describe('workflows phase 4 API', () => {
   describe('getWorkflowAuditForWorkflow', () => {
     it('fetches per-workflow audit with no limit by default', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/workflows/9/audit`, ({ request }) => {
+        http.get(`${API_BASE}/v1/workflows/${WORKFLOW_ID}/audit`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.has('limit')).toBe(false)
           return HttpResponse.json([])
         })
       )
 
-      const result = await api.getWorkflowAuditForWorkflow(9)
+      const result = await api.getWorkflowAuditForWorkflow(WORKFLOW_ID)
       expect(result).toEqual([])
     })
 
     it('passes a custom limit for a workflow', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/workflows/9/audit`, ({ request }) => {
+        http.get(`${API_BASE}/v1/workflows/${WORKFLOW_ID}/audit`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('limit')).toBe('5')
           return HttpResponse.json([])
         })
       )
 
-      await api.getWorkflowAuditForWorkflow(9, 5)
+      await api.getWorkflowAuditForWorkflow(WORKFLOW_ID, 5)
     })
   })
 
@@ -235,12 +238,12 @@ describe('workflows phase 4 API', () => {
         terraform: 'resource "moneat_workflow" "pager" {}',
       }
       server.use(
-        http.get(`${API_BASE}/v1/workflows/3/export`, () =>
+        http.get(`${API_BASE}/v1/workflows/${WORKFLOW_ID}/export`, () =>
           HttpResponse.json(exportResponse)
         )
       )
 
-      const result = await api.exportWorkflow(3)
+      const result = await api.exportWorkflow(WORKFLOW_ID)
       expect(result).toEqual(exportResponse)
     })
   })
@@ -257,12 +260,33 @@ describe('workflows phase 4 API', () => {
       server.use(
         http.post(`${API_BASE}/v1/workflows/import`, async ({ request }) => {
           await expect(request.json()).resolves.toEqual(body)
-          return HttpResponse.json({ id: 11, name: 'Imported' })
+          return HttpResponse.json({ id: WORKFLOW_IMPORTED_ID, name: 'Imported' })
         })
       )
 
       const result = await api.importWorkflow(body)
-      expect(result).toEqual({ id: 11, name: 'Imported' })
+      expect(result).toEqual({ id: WORKFLOW_IMPORTED_ID, name: 'Imported' })
+    })
+  })
+
+  // ──── Connections ────
+
+  describe('workflow connections', () => {
+    it('rotates and deletes connections with encoded ids', async () => {
+      const connectionId = 'connection/id'
+      const rotated = {id: WORKFLOW_ID, name: 'PagerDuty', type: 'pagerduty'}
+      server.use(
+        http.put(`${API_BASE}/v1/workflows/connections/connection%2Fid/rotate`, async ({request}) => {
+          await expect(request.json()).resolves.toEqual({secret: 'new-secret'})
+          return HttpResponse.json(rotated)
+        }),
+        http.delete(`${API_BASE}/v1/workflows/connections/connection%2Fid`, () =>
+          new HttpResponse(null, {status: 204})
+        )
+      )
+
+      await expect(api.rotateWorkflowConnection(connectionId, {secret: 'new-secret'})).resolves.toEqual(rotated)
+      await expect(api.deleteWorkflowConnection(connectionId)).resolves.toBeUndefined()
     })
   })
 })

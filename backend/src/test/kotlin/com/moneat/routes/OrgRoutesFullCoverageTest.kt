@@ -78,11 +78,14 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.datetime.LocalDate
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
+import kotlin.uuid.Uuid
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -139,6 +142,7 @@ class OrgRoutesFullCoverageTest {
             OrganizationIntegrations,
             SlackUserMappings
         )
+        seedFixedOrg(42)
     }
 
     @AfterTest
@@ -164,6 +168,20 @@ class OrgRoutesFullCoverageTest {
         .withClaim("email", "user$userId@test.com")
         .sign(Algorithm.HMAC256(JWT_SECRET))
 
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
+
+    private fun seedFixedOrg(id: Int) {
+        transaction {
+            Organizations.insert {
+                it[Organizations.id] = id
+                it[Organizations.resource_id] = Uuid.parse(resourceId(id))
+                it[Organizations.name] = "Admin Org $id"
+                it[Organizations.slug] = "admin-org-$id"
+            }
+        }
+    }
+
     private fun seedOrg(name: String): Int = transaction {
         Organizations.insert {
             it[Organizations.name] = name
@@ -181,6 +199,15 @@ class OrgRoutesFullCoverageTest {
         } get Users.id
     }
 
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
+        }
+
     private fun seedMembership(orgId: Int, userId: Int, role: String) = transaction {
         Memberships.insert {
             it[Memberships.organization_id] = orgId
@@ -191,7 +218,7 @@ class OrgRoutesFullCoverageTest {
 
     private fun adminOrgDetail(id: Int = 42): AdminOrgDetail =
         AdminOrgDetail(
-            id = id,
+            id = resourceId(id),
             name = "Acme",
             slug = "acme",
             companySize = null,
@@ -208,7 +235,7 @@ class OrgRoutesFullCoverageTest {
 
     private fun billingUsageResponse(organizationId: Int = 42): BillingUsageResponse =
         BillingUsageResponse(
-            organizationId = organizationId,
+            organizationId = resourceId(organizationId),
             periodStart = "2026-01-01",
             periodEnd = "2026-01-31",
             retentionDays = 30,
@@ -239,7 +266,7 @@ class OrgRoutesFullCoverageTest {
 
     private fun quotaResetResponse(organizationId: Int = 42): AdminQuotaUsageResetResponse =
         AdminQuotaUsageResetResponse(
-            organizationId = organizationId,
+            organizationId = resourceId(organizationId),
             quotaType = "apm_spans",
             periodStart = "2026-01-01",
             periodEnd = "2026-01-31",
@@ -355,7 +382,7 @@ class OrgRoutesFullCoverageTest {
     @Test fun `admin org detail`() {
         val id = seedUser("a@t.com", admin = true)
         every { mockAdminService.getOrgDetail(42) } returns AdminOrgDetail(
-            id = 42, name = "Acme", slug = "acme", companySize = null, plan = "free",
+            id = resourceId(42), name = "Acme", slug = "acme", companySize = null, plan = "free",
             subscriptionStatus = null, memberCount = 1, projectCount = 0,
             eventCountThisMonth = 100, bytesIngestedThisMonth = 5000,
             quotaUsedPercent = null, members = emptyList(), projects = emptyList()
@@ -365,9 +392,9 @@ class OrgRoutesFullCoverageTest {
                 installTestApp()
                 routing { adminRoutes() }
             }
-            val r = client.get(
-                "/v1/admin/organizations/42"
-            ) { header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}") }
+            val r = client.get("/v1/admin/organizations/${resourceId(42)}") {
+                header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
+            }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("Acme"))
         }
@@ -383,7 +410,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.NotFound,
-                client.get("/v1/admin/organizations/999") {
+                client.get("/v1/admin/organizations/${resourceId(999)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -420,7 +447,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.OK,
-                client.get("/v1/admin/organizations/42/usage") {
+                client.get("/v1/admin/organizations/${resourceId(42)}/usage") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -453,7 +480,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.OK,
-                client.get("/v1/admin/organizations/42/usage?period=30d") {
+                client.get("/v1/admin/organizations/${resourceId(42)}/usage?period=30d") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -472,11 +499,11 @@ class OrgRoutesFullCoverageTest {
                 routing { adminRoutes() }
             }
             val response =
-                client.get("/v1/admin/organizations/42/quota-usage") {
+                client.get("/v1/admin/organizations/${resourceId(42)}/quota-usage") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("\"organizationId\":42"))
+            assertTrue(response.bodyAsText().contains(resourceId(42)))
         }
     }
 
@@ -490,7 +517,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.NotFound,
-                client.get("/v1/admin/organizations/404/quota-usage") {
+                client.get("/v1/admin/organizations/${resourceId(404)}/quota-usage") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -525,7 +552,7 @@ class OrgRoutesFullCoverageTest {
                 routing { adminRoutes() }
             }
             val response =
-                client.post("/v1/admin/organizations/42/quota-usage/reset") {
+                client.post("/v1/admin/organizations/${resourceId(42)}/quota-usage/reset") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"quotaType":"apm_spans","targetPercent":80.0}""")
@@ -547,7 +574,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.BadRequest,
-                client.post("/v1/admin/organizations/42/quota-usage/reset") {
+                client.post("/v1/admin/organizations/${resourceId(42)}/quota-usage/reset") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"quotaType":"errors"}""")
@@ -568,7 +595,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.NotFound,
-                client.post("/v1/admin/organizations/404/quota-usage/reset") {
+                client.post("/v1/admin/organizations/${resourceId(404)}/quota-usage/reset") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"quotaType":"errors","targetValue":1}""")
@@ -720,7 +747,7 @@ class OrgRoutesFullCoverageTest {
                 routing { adminRoutes() }
             }
             val r = client.post(
-                "/v1/admin/impersonate/$tgt"
+                "/v1/admin/impersonate/${userResourceId(tgt)}"
             ) { header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}") }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains("imp"))
@@ -736,7 +763,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.NotFound,
-                client.post("/v1/admin/impersonate/99999") {
+                client.post("/v1/admin/impersonate/${resourceId(99999)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -806,7 +833,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.OK,
-                client.patch("/v1/admin/users/42") {
+                client.patch("/v1/admin/users/${resourceId(42)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"isAdmin":true}""")
@@ -825,7 +852,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.NotFound,
-                client.patch("/v1/admin/users/999") {
+                client.patch("/v1/admin/users/${resourceId(999)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"isAdmin":false}""")
@@ -862,7 +889,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.BadRequest,
-                client.patch("/v1/admin/users/42") {
+                client.patch("/v1/admin/users/${resourceId(42)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"isAdmin":true}""")
@@ -875,7 +902,7 @@ class OrgRoutesFullCoverageTest {
 
     @Test fun `admin delete users`() {
         val id = seedUser("a@t.com", admin = true)
-        every { mockAdminService.deleteUsers(listOf(10, 20)) } returns
+        every { mockAdminService.deleteUsers(listOf(resourceId(10), resourceId(20))) } returns
             DeleteUsersResponse(success = true, deletedCount = 2)
         testApplication {
             application {
@@ -887,7 +914,7 @@ class OrgRoutesFullCoverageTest {
                 client.delete("/v1/admin/users") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                     contentType(ContentType.Application.Json)
-                    setBody("""{"userIds":[10,20]}""")
+                    setBody("""{"userIds":["${resourceId(10)}","${resourceId(20)}"]}""")
                 }.status
             )
         }
@@ -977,7 +1004,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.OK,
-                client.get("/v1/admin/billing/organizations/42/promotional-credits") {
+                client.get("/v1/admin/billing/organizations/${resourceId(42)}/promotional-credits") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -1027,7 +1054,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.OK,
-                client.delete("/v1/admin/billing/organizations/42/promotional-credits") {
+                client.delete("/v1/admin/billing/organizations/${resourceId(42)}/promotional-credits") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )
@@ -1044,7 +1071,7 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(
                 HttpStatusCode.NotFound,
-                client.delete("/v1/admin/billing/organizations/999/promotional-credits") {
+                client.delete("/v1/admin/billing/organizations/${resourceId(999)}/promotional-credits") {
                     header(HttpHeaders.Authorization, "Bearer ${token(id, 1)}")
                 }.status
             )

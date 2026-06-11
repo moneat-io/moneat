@@ -6,12 +6,17 @@ package com.moneat.enterprise.workflows.services
 
 import com.moneat.enterprise.workflows.models.ApprovalResponse
 import com.moneat.enterprise.workflows.models.WorkflowApprovals
+import com.moneat.shared.services.requireResourceId
+import com.moneat.shared.services.userResourceIds
 import com.moneat.workflows.WorkflowApprovalBridge
 import com.moneat.workflows.engine.temporal.TemporalClientProvider
 import com.moneat.workflows.engine.temporal.WorkflowApprovalRequestInput
 import com.moneat.workflows.engine.temporal.WorkflowApprovalRequestResult
 import com.moneat.workflows.engine.temporal.WorkflowApprovalSignal
 import com.moneat.workflows.models.WorkflowRuns
+import com.moneat.workflows.services.requireWorkflowResourceId
+import com.moneat.workflows.services.workflowResourceIds
+import com.moneat.workflows.services.workflowRunResourceIds
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -50,14 +55,17 @@ class WorkflowApprovalService(
 
     fun listPending(organizationId: Int): List<ApprovalResponse> =
         transaction {
-            WorkflowApprovals
+            val rows = WorkflowApprovals
                 .selectAll()
                 .where {
                     (WorkflowApprovals.organizationId eq organizationId) and
                         (WorkflowApprovals.status eq STATUS_PENDING)
                 }
                 .orderBy(WorkflowApprovals.requestedAt to SortOrder.DESC)
-                .map { it.toResponse() }
+                .toList()
+            val workflowResourceIds = workflowResourceIds(rows.map { row -> row[WorkflowApprovals.workflowId] })
+            val runResourceIds = workflowRunResourceIds(rows.map { row -> row[WorkflowApprovals.runId] })
+            rows.map { row -> row.toResponse(workflowResourceIds, runResourceIds) }
         }
 
     fun respond(
@@ -157,18 +165,24 @@ class WorkflowApprovalService(
         )
     }
 
-    private fun ResultRow.toResponse(): ApprovalResponse =
+    private fun ResultRow.toResponse(
+        workflowResourceIds: Map<Int, String> = workflowResourceIds(listOf(this[WorkflowApprovals.workflowId])),
+        runResourceIds: Map<Int, String> = workflowRunResourceIds(listOf(this[WorkflowApprovals.runId])),
+        responderResourceIds: Map<Int, String> = userResourceIds(listOfNotNull(this[WorkflowApprovals.respondedBy])),
+    ): ApprovalResponse =
         ApprovalResponse(
-            id = this[WorkflowApprovals.id].value,
-            workflowId = this[WorkflowApprovals.workflowId],
-            runId = this[WorkflowApprovals.runId],
+            id = this[WorkflowApprovals.resourceId].toString(),
+            workflowId = workflowResourceIds.requireWorkflowResourceId(this[WorkflowApprovals.workflowId], "workflow"),
+            runId = runResourceIds.requireWorkflowResourceId(this[WorkflowApprovals.runId], "workflow run"),
             nodeId = this[WorkflowApprovals.nodeId],
             message = this[WorkflowApprovals.message],
             approverRole = this[WorkflowApprovals.approverRole],
             status = this[WorkflowApprovals.status],
             requestedAt = this[WorkflowApprovals.requestedAt].toString(),
             respondedAt = this[WorkflowApprovals.respondedAt]?.toString(),
-            respondedBy = this[WorkflowApprovals.respondedBy],
+            respondedBy = this[WorkflowApprovals.respondedBy]?.let {
+                responderResourceIds.requireResourceId(it, "user")
+            },
             comment = this[WorkflowApprovals.comment]
         )
 

@@ -34,16 +34,16 @@ export function authTokensMethods(core: ApiClientCore) {
       }),
 
     updateAuthToken: (
-      tokenId: number,
+      tokenId: string,
       updates: { name?: string; scopes?: string[] }
     ) =>
-      core.request<void>(`${base}/auth-tokens/${tokenId}`, {
+      core.request<void>(`${base}/auth-tokens/${encodeURIComponent(tokenId)}`, {
         method: 'PUT',
         body: JSON.stringify(updates),
       }),
 
-    deleteAuthToken: (tokenId: number) =>
-      core.request<void>(`${base}/auth-tokens/${tokenId}`, {
+    deleteAuthToken: (tokenId: string) =>
+      core.request<void>(`${base}/auth-tokens/${encodeURIComponent(tokenId)}`, {
         method: 'DELETE',
       }),
   }

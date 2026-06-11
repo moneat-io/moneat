@@ -71,6 +71,12 @@ class WorkflowsEnterpriseModule :
     override suspend fun getConnection(organizationId: Int, connectionId: Int): WorkflowConnectionSummary? =
         vault.getConnection(organizationId, connectionId)
 
+    override suspend fun resolveConnectionId(
+        organizationId: Int,
+        connectionResourceId: String
+    ): Int? =
+        vault.resolveConnectionId(organizationId, connectionResourceId)
+
     override suspend fun createConnection(
         organizationId: Int,
         type: String,
@@ -93,6 +99,12 @@ class WorkflowsEnterpriseModule :
 
     override suspend fun listGroups(organizationId: Int): List<WorkflowConnectionGroupSummary> =
         vault.listGroups(organizationId)
+
+    override suspend fun resolveGroupId(
+        organizationId: Int,
+        groupResourceId: String
+    ): Int? =
+        vault.resolveGroupId(organizationId, groupResourceId)
 
     override suspend fun createGroup(
         organizationId: Int,

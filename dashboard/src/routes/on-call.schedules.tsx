@@ -77,7 +77,7 @@ function OnCallSchedules() {
   const {toast} = useToast()
   const [showEditor, setShowEditor] = useState(false)
   const [editingSchedule, setEditingSchedule] = useState<OnCallSchedule | null>(null)
-  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const {data: schedules, isLoading} = useQuery({
     queryKey: ['on-call-schedules'],
@@ -120,7 +120,7 @@ function OnCallSchedules() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({id, data}: {id: number; data: OnCallScheduleData}) => api.updateOnCallSchedule(id, {
+    mutationFn: ({id, data}: {id: string; data: OnCallScheduleData}) => api.updateOnCallSchedule(id, {
       name: data.name,
       rotationType: data.rotationType,
       handoffTime: data.handoffTime,
@@ -137,7 +137,7 @@ function OnCallSchedules() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteOnCallSchedule(id),
+    mutationFn: (id: string) => api.deleteOnCallSchedule(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
       toast({title: 'Schedule Deleted', description: 'On-call schedule has been removed.'})
@@ -146,7 +146,11 @@ function OnCallSchedules() {
   })
 
   const setUsergroupMutation = useMutation({
-    mutationFn: ({scheduleId, usergroupId, usergroupHandle}: {scheduleId: number; usergroupId: string; usergroupHandle: string}) =>
+    mutationFn: ({scheduleId, usergroupId, usergroupHandle}: {
+      scheduleId: string
+      usergroupId: string
+      usergroupHandle: string
+    }) =>
       api.setScheduleSlackUsergroup(scheduleId, usergroupId, usergroupHandle),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
@@ -156,7 +160,7 @@ function OnCallSchedules() {
   })
 
   const removeUsergroupMutation = useMutation({
-    mutationFn: (scheduleId: number) => api.removeScheduleSlackUsergroup(scheduleId),
+    mutationFn: (scheduleId: string) => api.removeScheduleSlackUsergroup(scheduleId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['on-call-schedules']})
       toast({title: 'Slack User Group Removed', description: 'Schedule will no longer sync.'})
@@ -177,7 +181,7 @@ function OnCallSchedules() {
     setShowEditor(true)
   }
 
-  const handleDelete = (id: number) => {
+  const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this schedule?')) {
       deleteMutation.mutate(id)
     }
@@ -447,7 +451,7 @@ function OnCallSchedules() {
               timezone: editingSchedule.timezone,
               participantIds: editingSchedule.participants
                 .sort((a: {position: number}, b: {position: number}) => a.position - b.position)
-                .map((p: {userId: number}) => p.userId),
+                .map((p: {userId: string}) => p.userId),
             } : undefined}
             users={users}
             onSave={handleSave}

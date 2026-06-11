@@ -633,7 +633,7 @@ class OtlpIngestRoutesTest {
 
     private fun billingUsage(): BillingUsageResponse =
         BillingUsageResponse(
-            organizationId = ORG_ID,
+            organizationId = resourceId(ORG_ID),
             periodStart = "2026-06-01T00:00:00Z",
             periodEnd = "2026-07-01T00:00:00Z",
             retentionDays = 30,
@@ -662,4 +662,7 @@ class OtlpIngestRoutesTest {
             status = "active",
             withinQuota = true
         )
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 }

@@ -19,6 +19,7 @@ import {
   urlWithQuery,
   formatErrorForLogging,
   filenameFromContentDisposition,
+  isUuidResourceId,
 } from '../utils'
 
 // ──── urlWithQuery ────
@@ -30,6 +31,19 @@ describe('urlWithQuery', () => {
 
   it('returns path alone when query string is empty', () => {
     expect(urlWithQuery('/api/test', '')).toBe('/api/test')
+  })
+})
+
+// ──── isUuidResourceId ────
+
+describe('isUuidResourceId', () => {
+  it('accepts UUID-shaped resource IDs', () => {
+    expect(isUuidResourceId('123e4567-e89b-12d3-a456-426614174000')).toBe(true)
+  })
+
+  it('rejects numeric and blank resource IDs', () => {
+    expect(isUuidResourceId('101')).toBe(false)
+    expect(isUuidResourceId('')).toBe(false)
   })
 })
 

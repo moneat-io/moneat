@@ -23,6 +23,18 @@ import {LogManagementSheet} from '@/components/logs/LogManagementSheet'
 import type {LogSavedViewState} from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const MAIN_INDEX_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174101'
+const CATCH_ALL_INDEX_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174102'
+const KB_INDEX_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174103'
+const CREATED_INDEX_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174104'
+const PIPELINE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174110'
+const CREATED_PIPELINE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174111'
+const SAVED_VIEW_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174120'
+const CREATED_SAVED_VIEW_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174121'
+const METRIC_RULE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174130'
+const CREATED_METRIC_RULE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174131'
+const MONITOR_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174140'
+const CREATED_MONITOR_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174141'
 
 const currentViewState: LogSavedViewState = {
   query: 'service:api',
@@ -100,7 +112,7 @@ function baseHandlers() {
     http.get(`${API_BASE}/v1/logs/indexes`, () => HttpResponse.json({
       indexes: [
         {
-          id: 1,
+          id: MAIN_INDEX_RESOURCE_ID,
           name: 'main',
           filter_query: 'service:api',
           retention_days: 30,
@@ -110,7 +122,7 @@ function baseHandlers() {
           daily_quota_gb: 5,
         },
         {
-          id: 2,
+          id: CATCH_ALL_INDEX_RESOURCE_ID,
           name: 'catch-all',
           filter_query: '',
           retention_days: 7,
@@ -120,7 +132,7 @@ function baseHandlers() {
           daily_quota_gb: null,
         },
         {
-          id: 3,
+          id: KB_INDEX_RESOURCE_ID,
           name: 'kb-index',
           filter_query: 'level:info',
           retention_days: 14,
@@ -141,7 +153,7 @@ function baseHandlers() {
     http.get(`${API_BASE}/v1/logs/pipelines`, () => HttpResponse.json({
       pipelines: [
         {
-          id: 10,
+          id: PIPELINE_RESOURCE_ID,
           name: 'Redact tokens',
           description: '',
           steps: [{type: 'redact', enabled: true}],
@@ -155,7 +167,7 @@ function baseHandlers() {
     http.get(`${API_BASE}/v1/logs/saved-views`, () => HttpResponse.json({
       views: [
         {
-          id: 20,
+          id: SAVED_VIEW_RESOURCE_ID,
           name: 'Production errors',
           state: savedViewState,
           is_shared: true,
@@ -167,7 +179,7 @@ function baseHandlers() {
     http.get(`${API_BASE}/v1/logs/metrics/rules`, () => HttpResponse.json({
       rules: [
         {
-          id: 30,
+          id: METRIC_RULE_RESOURCE_ID,
           name: 'error_logs',
           query: 'service:api',
           levels: ['error'],
@@ -182,7 +194,7 @@ function baseHandlers() {
     http.get(`${API_BASE}/v1/logs/monitors`, () => HttpResponse.json({
       monitors: [
         {
-          id: 40,
+          id: MONITOR_RESOURCE_ID,
           name: 'error_volume',
           query: 'service:api',
           levels: ['error'],
@@ -226,11 +238,11 @@ describe('LogManagementSheet', () => {
     server.use(
       http.post(`${API_BASE}/v1/logs/indexes`, async ({request}) => {
         createdIndex = await request.json() as Record<string, unknown>
-        return HttpResponse.json({id: 4, ...createdIndex})
+        return HttpResponse.json({id: CREATED_INDEX_RESOURCE_ID, ...createdIndex})
       }),
-      http.put(`${API_BASE}/v1/logs/indexes/1`, async ({request}) => {
+      http.put(`${API_BASE}/v1/logs/indexes/${MAIN_INDEX_RESOURCE_ID}`, async ({request}) => {
         updatedIndex = await request.json() as Record<string, unknown>
-        return HttpResponse.json({id: 1, name: 'main', is_active: false})
+        return HttpResponse.json({id: MAIN_INDEX_RESOURCE_ID, name: 'main', is_active: false})
       }),
       http.post(`${API_BASE}/v1/logs/indexes/retention/run`, () => {
         retentionRan = true
@@ -283,7 +295,7 @@ describe('LogManagementSheet', () => {
     server.use(
       http.post(`${API_BASE}/v1/logs/indexes`, () => {
         createRequests += 1
-        return HttpResponse.json({id: 4, name: 'api-errors'})
+        return HttpResponse.json({id: CREATED_INDEX_RESOURCE_ID, name: 'api-errors'})
       })
     )
 
@@ -314,7 +326,13 @@ describe('LogManagementSheet', () => {
     server.use(
       http.post(`${API_BASE}/v1/logs/pipelines`, async ({request}) => {
         capturedBodies.push(await request.json() as Record<string, unknown>)
-        return HttpResponse.json({id: 11, name: 'Mask tokens', description: '', steps: [], priority: 0})
+        return HttpResponse.json({
+          id: CREATED_PIPELINE_RESOURCE_ID,
+          name: 'Mask tokens',
+          description: '',
+          steps: [],
+          priority: 0,
+        })
       }),
       http.post(`${API_BASE}/v1/logs/pipelines/preview`, async ({request}) => {
         capturedBodies.push(await request.json() as Record<string, unknown>)
@@ -327,7 +345,7 @@ describe('LogManagementSheet', () => {
       http.post(`${API_BASE}/v1/logs/saved-views`, async ({request}) => {
         capturedBodies.push(await request.json() as Record<string, unknown>)
         return HttpResponse.json({
-          id: 21,
+          id: CREATED_SAVED_VIEW_RESOURCE_ID,
           name: 'Current errors',
           state: currentViewState,
           is_shared: true,
@@ -338,7 +356,7 @@ describe('LogManagementSheet', () => {
       http.post(`${API_BASE}/v1/logs/metrics/rules`, async ({request}) => {
         capturedBodies.push(await request.json() as Record<string, unknown>)
         return HttpResponse.json({
-          id: 31,
+          id: CREATED_METRIC_RULE_RESOURCE_ID,
           name: 'checkout_errors',
           query: 'service:api',
           levels: ['error'],
@@ -355,13 +373,13 @@ describe('LogManagementSheet', () => {
           interval: '5m',
         })
       }),
-      http.post(`${API_BASE}/v1/logs/metrics/rules/30/rollup`, () => {
+      http.post(`${API_BASE}/v1/logs/metrics/rules/${METRIC_RULE_RESOURCE_ID}/rollup`, () => {
         return HttpResponse.json({points_inserted: 5})
       }),
       http.post(`${API_BASE}/v1/logs/monitors`, async ({request}) => {
         capturedBodies.push(await request.json() as Record<string, unknown>)
         return HttpResponse.json({
-          id: 41,
+          id: CREATED_MONITOR_RESOURCE_ID,
           name: 'High errors',
           query: 'service:api',
           levels: ['error'],

@@ -50,14 +50,17 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class OrgRoutesExtendedTest {
 
@@ -67,6 +70,8 @@ class OrgRoutesExtendedTest {
         private const val EMAIL_A_EXT = "a@ext.test"
         private const val EMAIL_B_EXT = "b@ext.test"
         private const val EMAIL_OK_EXT = "ok@ext.test"
+        private const val INVITATION_RESOURCE_ID = "00000000-0000-0000-0000-000000000042"
+        private const val RESEND_INVITATION_RESOURCE_ID = "00000000-0000-0000-0000-000000000007"
     }
 
     private val mockMembershipService = mockk<OrgMembershipService>(relaxed = true)
@@ -105,6 +110,15 @@ class OrgRoutesExtendedTest {
         } get Users.id
     }
 
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
+        }
+
     private fun seedMembership(orgId: Int, userId: Int, role: String) = transaction {
         Memberships.insert {
             it[Memberships.organization_id] = orgId
@@ -124,13 +138,16 @@ class OrgRoutesExtendedTest {
         seedMembership(orgId, memberId, "member")
 
         every { mockMembershipService.removeMember(orgId, memberId, ownerId) } returns true
+        every {
+            mockMembershipService.resolveMemberUserId(orgId, Uuid.parse(userResourceId(memberId)))
+        } returns memberId
 
         testApplication {
             application {
                 installAuth()
                 routing { orgManagementRoutes(mockMembershipService, mockInvitationService) }
             }
-            val response = client.delete("/v1/org/members/$memberId") {
+            val response = client.delete("/v1/org/members/${userResourceId(memberId)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -171,13 +188,16 @@ class OrgRoutesExtendedTest {
         every {
             mockMembershipService.updateMemberRole(orgId, memberId, "admin", ownerId)
         } returns true
+        every {
+            mockMembershipService.resolveMemberUserId(orgId, Uuid.parse(userResourceId(memberId)))
+        } returns memberId
 
         testApplication {
             application {
                 installAuth()
                 routing { orgManagementRoutes(mockMembershipService, mockInvitationService) }
             }
-            val response = client.put("/v1/org/members/$memberId/role") {
+            val response = client.put("/v1/org/members/${userResourceId(memberId)}/role") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
                 contentType(ContentType.Application.Json)
                 setBody("""{"role":"admin"}""")
@@ -266,7 +286,7 @@ class OrgRoutesExtendedTest {
         every { mockMembershipService.requireRole(orgId, ownerId, OrgRole.ADMIN) } just runs
         every { mockInvitationService.getPendingInvitations(orgId) } returns listOf(
             InvitationResponse(
-                id = 1,
+                id = "00000000-0000-0000-0000-000000000001",
                 email = "pending@ext.test",
                 role = "member",
                 status = "pending",
@@ -299,19 +319,19 @@ class OrgRoutesExtendedTest {
         val ownerId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, ownerId, "owner")
 
-        every { mockInvitationService.revokeInvitation(42, ownerId) } returns true
+        every { mockInvitationService.revokeInvitation(Uuid.parse(INVITATION_RESOURCE_ID), ownerId) } returns true
 
         testApplication {
             application {
                 installAuth()
                 routing { orgManagementRoutes(mockMembershipService, mockInvitationService) }
             }
-            val response = client.delete("/v1/org/invitations/42") {
+            val response = client.delete("/v1/org/invitations/$INVITATION_RESOURCE_ID") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("true"))
-            verify { mockInvitationService.revokeInvitation(42, ownerId) }
+            verify { mockInvitationService.revokeInvitation(Uuid.parse(INVITATION_RESOURCE_ID), ownerId) }
         }
     }
 
@@ -323,19 +343,21 @@ class OrgRoutesExtendedTest {
         val ownerId = seedUser(OWNER_EMAIL)
         seedMembership(orgId, ownerId, "owner")
 
-        every { mockInvitationService.resendInvitation(7, ownerId) } returns true
+        every {
+            mockInvitationService.resendInvitation(Uuid.parse(RESEND_INVITATION_RESOURCE_ID), ownerId)
+        } returns true
 
         testApplication {
             application {
                 installAuth()
                 routing { orgManagementRoutes(mockMembershipService, mockInvitationService) }
             }
-            val response = client.post("/v1/org/invitations/7/resend") {
+            val response = client.post("/v1/org/invitations/$RESEND_INVITATION_RESOURCE_ID/resend") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             assertTrue(response.bodyAsText().contains("true"))
-            verify { mockInvitationService.resendInvitation(7, ownerId) }
+            verify { mockInvitationService.resendInvitation(Uuid.parse(RESEND_INVITATION_RESOURCE_ID), ownerId) }
         }
     }
 
@@ -462,10 +484,15 @@ class OrgRoutesExtendedTest {
     fun `DELETE member propagates service exception as 500`() {
         val orgId = seedOrg("Acme")
         val ownerId = seedUser(OWNER_EMAIL)
+        val memberId = seedUser(MEMBER_EMAIL)
         seedMembership(orgId, ownerId, "owner")
+        seedMembership(orgId, memberId, "member")
 
         every {
-            mockMembershipService.removeMember(orgId, 999, ownerId)
+            mockMembershipService.resolveMemberUserId(orgId, Uuid.parse(userResourceId(memberId)))
+        } returns memberId
+        every {
+            mockMembershipService.removeMember(orgId, memberId, ownerId)
         } throws IllegalStateException("Member not found")
 
         testApplication {
@@ -473,7 +500,7 @@ class OrgRoutesExtendedTest {
                 installAuth()
                 routing { orgManagementRoutes(mockMembershipService, mockInvitationService) }
             }
-            val response = client.delete("/v1/org/members/999") {
+            val response = client.delete("/v1/org/members/${userResourceId(memberId)}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(ownerId, orgId)}")
             }
             assertEquals(HttpStatusCode.InternalServerError, response.status)

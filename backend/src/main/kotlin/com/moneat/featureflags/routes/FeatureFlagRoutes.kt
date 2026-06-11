@@ -32,6 +32,7 @@ import com.moneat.featureflags.services.FeatureFlagEventService
 import com.moneat.featureflags.services.FeatureFlagService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -53,6 +54,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.koin.core.context.GlobalContext
 import kotlin.time.TimeSource
+import kotlin.uuid.Uuid
 
 private const val ERROR_FLAG_NOT_FOUND = "FLAG_NOT_FOUND"
 private const val ERROR_TARGETING_KEY_MISSING = "TARGETING_KEY_MISSING"
@@ -164,7 +166,7 @@ private fun Route.sdkKeyManagementRoutes(
 
     delete("/sdk-keys/{id}") {
         val context = call.requireFeatureFlagAdmin(membershipService) ?: return@delete
-        val id = call.parameters["id"]?.toIntOrNull()
+        val id = call.parameters["id"]?.let(::parseFeatureFlagResourceId)
         if (id == null) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid SDK key ID"))
             return@delete
@@ -370,6 +372,9 @@ private suspend fun ApplicationCall.authenticateSdkKey(
 private fun ApplicationCall.ifNoneMatch(): String? {
     return request.headers[HttpHeaders.IfNoneMatch]?.trim()
 }
+
+private fun parseFeatureFlagResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private fun OfrepFlagEvaluationResponse.httpStatus(): HttpStatusCode {
     return when (errorCode) {

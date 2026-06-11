@@ -61,6 +61,9 @@ import kotlin.test.assertTrue
 class UptimeRoutesMockTest {
     companion object {
         private var dbInitialized = false
+
+        private fun resourceId(id: Int): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
     }
 
     private val mockUptimeService = mockk<UptimeService>(relaxed = true)
@@ -129,7 +132,7 @@ class UptimeRoutesMockTest {
         val now = System.currentTimeMillis()
         return UptimeMonitorResponse(
             id = UUID.randomUUID().toString(),
-            organizationId = orgId,
+            organizationId = resourceId(orgId),
             name = "test-monitor",
             type = "http",
             active = true,

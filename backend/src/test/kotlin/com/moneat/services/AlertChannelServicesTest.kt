@@ -18,6 +18,7 @@ package com.moneat.services
 
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.HostAlertNotification
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.OrganizationIntegrations
@@ -37,6 +38,7 @@ import kotlin.test.assertFalse
 class AlertChannelServicesTest {
     companion object {
         private var db: Database? = null
+        private const val HOST_RESOURCE_ID = "00000000-0000-4000-8000-000000000042"
     }
 
     @BeforeTest
@@ -91,13 +93,15 @@ class AlertChannelServicesTest {
             val sent =
                 slackService.sendHostAlert(
                     organizationId = orgId,
-                    hostName = "api-prod",
-                    metric = "CPU Usage",
-                    condition = ">",
-                    threshold = "80%",
-                    currentValue = "95%",
-                    hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    alert = HostAlertNotification(
+                        hostName = "api-prod",
+                        metric = "CPU Usage",
+                        condition = ">",
+                        threshold = "80%",
+                        currentValue = "95%",
+                        hostResourceId = HOST_RESOURCE_ID,
+                        baseUrl = "https://app.moneat.io",
+                    ),
                 )
 
             assertFalse(sent)
@@ -112,13 +116,15 @@ class AlertChannelServicesTest {
             val sent =
                 discordService.sendHostAlert(
                     organizationId = orgId,
-                    hostName = "api-prod",
-                    metric = "CPU Usage",
-                    condition = ">",
-                    threshold = "80%",
-                    currentValue = "95%",
-                    hostId = 1,
-                    baseUrl = "https://app.moneat.io"
+                    alert = HostAlertNotification(
+                        hostName = "api-prod",
+                        metric = "CPU Usage",
+                        condition = ">",
+                        threshold = "80%",
+                        currentValue = "95%",
+                        hostResourceId = HOST_RESOURCE_ID,
+                        baseUrl = "https://app.moneat.io",
+                    ),
                 )
 
             assertFalse(sent)

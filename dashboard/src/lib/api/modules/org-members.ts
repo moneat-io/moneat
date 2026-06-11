@@ -44,25 +44,25 @@ export function orgMembersMethods(core: ApiClientCore) {
         body: JSON.stringify({ emails, role }),
       }),
 
-    updateMemberRole: (userId: number, role: string) =>
+    updateMemberRole: (userId: string, role: string) =>
       core.request<{ success: boolean }>(
         `${base}/org/members/${userId}/role`,
         { method: 'PUT', body: JSON.stringify({ role }) }
       ),
 
-    removeMember: (userId: number) =>
+    removeMember: (userId: string) =>
       core.request<{ success: boolean }>(
         `${base}/org/members/${userId}`,
         { method: 'DELETE' }
       ),
 
-    revokeInvitation: (invitationId: number) =>
+    revokeInvitation: (invitationId: string) =>
       core.request<{ success: boolean }>(
         `${base}/org/invitations/${invitationId}`,
         { method: 'DELETE' }
       ),
 
-    resendInvitation: (invitationId: number) =>
+    resendInvitation: (invitationId: string) =>
       core.request<{ success: boolean }>(
         `${base}/org/invitations/${invitationId}/resend`,
         { method: 'POST' }

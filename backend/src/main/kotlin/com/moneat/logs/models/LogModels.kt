@@ -18,6 +18,7 @@ package com.moneat.logs.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 typealias TagsMap = HashMap<String, String>
 typealias AttributesMap = HashMap<String, String>
@@ -126,7 +127,7 @@ data class LogEntryResponse(
     val tags: Map<String, String> = emptyMap(),
     @SerialName("resource_attributes") val resourceAttributes: Map<String, String> = emptyMap(),
     @SerialName("system_id") val systemId: String? = null,
-    @SerialName("host_id") val hostId: Int? = null
+    @SerialName("host_id") val hostId: String? = null
 )
 
 @Serializable
@@ -274,7 +275,7 @@ data class LogFilterOptionsWithCountsResponse(
 
 @Serializable
 data class LogIndexResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("filter_query") val filterQuery: String,
     @SerialName("retention_days") val retentionDays: Int,
@@ -337,7 +338,7 @@ data class LogPipelineStep(
 
 @Serializable
 data class LogPipelineResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val description: String = "",
     val steps: List<LogPipelineStep> = emptyList(),
@@ -405,7 +406,7 @@ data class LogSavedViewState(
 
 @Serializable
 data class LogSavedViewResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val state: LogSavedViewState,
     @SerialName("is_shared") val isShared: Boolean,
@@ -429,7 +430,7 @@ data class UpdateLogSavedViewRequest(
 
 @Serializable
 data class LogMetricRuleResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val query: String = "",
     val levels: List<String> = emptyList(),
@@ -437,7 +438,8 @@ data class LogMetricRuleResponse(
     val interval: String = "5m",
     @SerialName("is_active") val isActive: Boolean,
     @SerialName("created_at") val createdAt: String,
-    @SerialName("updated_at") val updatedAt: String
+    @SerialName("updated_at") val updatedAt: String,
+    @Transient val numericId: Int = 0
 )
 
 @Serializable
@@ -462,7 +464,7 @@ data class UpdateLogMetricRuleRequest(
 
 @Serializable
 data class LogMonitorResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val query: String = "",
     val levels: List<String> = emptyList(),

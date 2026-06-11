@@ -394,7 +394,7 @@ describe('ApiClient - Extended Methods', () => {
         })
       )
 
-      await api.deleteAuthToken(1)
+      await api.deleteAuthToken('1')
     })
   })
 

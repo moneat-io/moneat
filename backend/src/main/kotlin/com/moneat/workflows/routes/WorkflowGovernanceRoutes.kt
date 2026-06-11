@@ -23,6 +23,7 @@ import com.moneat.workflows.models.InstantiateBlueprintRequest
 import com.moneat.workflows.models.WorkflowImportRequest
 import com.moneat.workflows.services.WorkflowBlueprintCatalog
 import com.moneat.workflows.services.WorkflowGovernanceService
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -37,12 +38,13 @@ private const val MAX_AUDIT_LIMIT = 500
 
 internal fun Route.workflowGovernanceRoutes(
     governanceService: WorkflowGovernanceService,
-    membershipService: OrgMembershipService
+    membershipService: OrgMembershipService,
+    workflowService: WorkflowService
 ) {
     blueprintRoutes(governanceService, membershipService)
     overviewAndUsageRoutes(governanceService)
-    auditRoutes(governanceService)
-    exportImportRoutes(governanceService, membershipService)
+    auditRoutes(governanceService, workflowService)
+    exportImportRoutes(governanceService, membershipService, workflowService)
 }
 
 private fun Route.blueprintRoutes(
@@ -88,7 +90,10 @@ private fun Route.overviewAndUsageRoutes(governanceService: WorkflowGovernanceSe
     }
 }
 
-private fun Route.auditRoutes(governanceService: WorkflowGovernanceService) {
+private fun Route.auditRoutes(
+    governanceService: WorkflowGovernanceService,
+    workflowService: WorkflowService
+) {
     get("/audit") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
         call.respond(governanceService.listAudit(organizationId, workflowId = null, limit = auditLimit()))
@@ -96,24 +101,19 @@ private fun Route.auditRoutes(governanceService: WorkflowGovernanceService) {
 
     get("$WORKFLOW_GOVERNANCE_ID_ROUTE/audit") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(WORKFLOW_GOVERNANCE_INVALID_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
         call.respond(governanceService.listAudit(organizationId, workflowId, auditLimit()))
     }
 }
 
 private fun Route.exportImportRoutes(
     governanceService: WorkflowGovernanceService,
-    membershipService: OrgMembershipService
+    membershipService: OrgMembershipService,
+    workflowService: WorkflowService
 ) {
     get("$WORKFLOW_GOVERNANCE_ID_ROUTE/export") {
         val organizationId = currentOrganizationId() ?: return@get call.respond(HttpStatusCode.Forbidden)
-        val workflowId = workflowIdFromPath() ?: return@get call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(WORKFLOW_GOVERNANCE_INVALID_ID_MESSAGE)
-        )
+        val workflowId = workflowIdFromPath(workflowService, organizationId) ?: return@get
         val export = governanceService.export(organizationId, workflowId, currentUserId())
             ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse(WORKFLOW_GOVERNANCE_NOT_FOUND_MESSAGE))
         call.respond(export)

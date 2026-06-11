@@ -62,13 +62,13 @@ export function logManagementMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateLogPipeline: (id: number, request: UpdateLogPipelineRequest) =>
+    updateLogPipeline: (id: string, request: UpdateLogPipelineRequest) =>
       core.request<LogPipeline>(`${base}/logs/pipelines/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteLogPipeline: (id: number) =>
+    deleteLogPipeline: (id: string) =>
       core.request<void>(`${base}/logs/pipelines/${id}`, {
         method: 'DELETE',
       }),
@@ -88,13 +88,13 @@ export function logManagementMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateLogSavedView: (id: number, request: UpdateLogSavedViewRequest) =>
+    updateLogSavedView: (id: string, request: UpdateLogSavedViewRequest) =>
       core.request<LogSavedView>(`${base}/logs/saved-views/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteLogSavedView: (id: number) =>
+    deleteLogSavedView: (id: string) =>
       core.request<void>(`${base}/logs/saved-views/${id}`, {
         method: 'DELETE',
       }),
@@ -108,13 +108,13 @@ export function logManagementMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateLogMetricRule: (id: number, request: UpdateLogMetricRuleRequest) =>
+    updateLogMetricRule: (id: string, request: UpdateLogMetricRuleRequest) =>
       core.request<LogMetricRule>(`${base}/logs/metrics/rules/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteLogMetricRule: (id: number) =>
+    deleteLogMetricRule: (id: string) =>
       core.request<void>(`${base}/logs/metrics/rules/${id}`, {
         method: 'DELETE',
       }),
@@ -125,7 +125,7 @@ export function logManagementMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    rollupLogMetricRule: (id: number) =>
+    rollupLogMetricRule: (id: string) =>
       core.request<{points_inserted: number}>(`${base}/logs/metrics/rules/${id}/rollup`, {
         method: 'POST',
       }),
@@ -145,13 +145,13 @@ export function logManagementMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateLogMonitor: (id: number, request: UpdateLogMonitorRequest) =>
+    updateLogMonitor: (id: string, request: UpdateLogMonitorRequest) =>
       core.request<LogMonitor>(`${base}/logs/monitors/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteLogMonitor: (id: number) =>
+    deleteLogMonitor: (id: string) =>
       core.request<void>(`${base}/logs/monitors/${id}`, {
         method: 'DELETE',
       }),

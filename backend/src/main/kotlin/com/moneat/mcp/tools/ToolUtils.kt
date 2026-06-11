@@ -19,13 +19,16 @@ package com.moneat.mcp.tools
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.ToolCallResult
 import com.moneat.mcp.protocol.ToolContent
+import com.moneat.monitor.services.MonitorService
 import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.uuid.Uuid
 
 val toolJson = Json {
     encodeDefaults = true
@@ -76,3 +79,28 @@ fun projectIdInputSchema(description: String = "Project resource ID"): InputSche
         ),
         required = listOf("project_id")
     )
+
+fun schemaResourceId(description: String): JsonObject = schemaString(description)
+
+fun JsonObject.stringContent(name: String): String? =
+    this[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+fun parseResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
+fun resolveHostIdArg(
+    args: JsonObject,
+    contextOrganizationId: Int,
+    monitorService: MonitorService,
+    name: String = "host_id"
+): Result<Int> {
+    val raw = args.stringContent(name) ?: return Result.failure(IllegalArgumentException("$name is required"))
+    val resourceId = parseResourceId(raw)
+        ?: return Result.failure(IllegalArgumentException("Invalid $name format; expected host resource ID"))
+    val host = monitorService.getHostByResourceId(resourceId, listOf(contextOrganizationId))
+        ?: return Result.failure(IllegalArgumentException("Host not found: $raw"))
+    if (host.organizationId != contextOrganizationId) {
+        return Result.failure(IllegalArgumentException("Host not found: $raw"))
+    }
+    return Result.success(host.id)
+}

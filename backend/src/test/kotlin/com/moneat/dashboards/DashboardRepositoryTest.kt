@@ -27,6 +27,7 @@ import com.moneat.dashboards.models.UpdateWidgetRequest
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
+import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
@@ -47,9 +48,45 @@ import kotlin.time.Clock
 private const val CREATE_USERS_DDL = """
 CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
     email VARCHAR(255) NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL
+    name VARCHAR(255) NULL,
+    email_verified BOOLEAN DEFAULT FALSE NOT NULL,
+    is_admin BOOLEAN DEFAULT FALSE NOT NULL,
+    email_verification_token VARCHAR(255) NULL,
+    email_verification_expires_at BIGINT NULL,
+    password_reset_token VARCHAR(255) NULL,
+    password_reset_expires_at BIGINT NULL,
+    onboarding_completed BOOLEAN DEFAULT FALSE NOT NULL,
+    oauth_provider VARCHAR(20) NULL,
+    oauth_provider_id VARCHAR(512) NULL,
+    phone_number VARCHAR(20) NULL,
+    oncall_phone_opt_in BOOLEAN DEFAULT FALSE NOT NULL,
+    oncall_phone_consented_at TIMESTAMP NULL,
+    oncall_phone_consent_version VARCHAR(50) NULL,
+    oncall_phone_consent_ip VARCHAR(45) NULL,
+    oncall_phone_consent_user_agent TEXT NULL,
+    oncall_phone_opted_out_at TIMESTAMP NULL,
+    timezone VARCHAR(64) NULL,
+    deleted_at TIMESTAMP NULL
+)"""
+
+private const val CREATE_ORGANIZATIONS_DDL = """
+CREATE TABLE IF NOT EXISTS organizations (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    company_size VARCHAR(50) NULL,
+    referral_source VARCHAR(100) NULL,
+    utm_source VARCHAR(255) NULL,
+    utm_medium VARCHAR(255) NULL,
+    utm_campaign VARCHAR(255) NULL,
+    utm_content VARCHAR(255) NULL,
+    utm_term VARCHAR(255) NULL,
+    deleted_at TIMESTAMP NULL,
+    deleted_by INT NULL
 )"""
 
 private const val CREATE_FOLDERS_DDL = """
@@ -122,6 +159,7 @@ class DashboardRepositoryTest {
 
     companion object {
         private const val ORG_ID = 1L
+        private const val OTHER_ORG_ID = 999L
         private const val USER_ID = 1
     }
 
@@ -137,6 +175,7 @@ class DashboardRepositoryTest {
         transaction {
             exec("DROP ALL OBJECTS")
             exec(CREATE_USERS_DDL)
+            exec(CREATE_ORGANIZATIONS_DDL)
             exec(CREATE_FOLDERS_DDL)
             exec(CREATE_DASHBOARDS_DDL)
             exec(CREATE_FAVORITES_DDL)
@@ -149,6 +188,16 @@ class DashboardRepositoryTest {
                 it[email] = "test@moneat.io"
                 it[password_hash] = "hashed"
                 it[name] = "Test User"
+            }
+            Organizations.insert {
+                it[id] = ORG_ID.toInt()
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            }
+            Organizations.insert {
+                it[id] = OTHER_ORG_ID.toInt()
+                it[name] = "Other Org"
+                it[slug] = "other-org"
             }
         }
         repository = DashboardRepositoryImpl()
@@ -173,6 +222,7 @@ class DashboardRepositoryTest {
         )
         val allTables = arrayOf(
             Users,
+            Organizations,
             DashboardFolders,
             Dashboards,
             DashboardFavorites,

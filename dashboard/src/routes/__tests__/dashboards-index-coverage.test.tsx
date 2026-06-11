@@ -93,11 +93,13 @@ const QUEUE_DASHBOARD_ID = 'dashboard-12'
 const CREATED_DASHBOARD_ID = 'dashboard-21'
 const TEMPLATE_DASHBOARD_ID = 'dashboard-22'
 const REQUESTS_WIDGET_ID = 'widget-1'
+const ORG_ID = '11111111-1111-4111-8111-111111111111'
+const USER_ID = '22222222-2222-4222-8222-222222222222'
 
 const FOLDERS: readonly DashboardFolder[] = [
   {
     id: OPS_FOLDER_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     name: 'Ops',
     color: '#2563eb',
     sort_order: 0,
@@ -106,7 +108,7 @@ const FOLDERS: readonly DashboardFolder[] = [
   },
   {
     id: EMPTY_FOLDER_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     name: 'Empty',
     color: null,
     sort_order: 1,
@@ -118,7 +120,7 @@ const FOLDERS: readonly DashboardFolder[] = [
 const DASHBOARDS: readonly CustomDashboard[] = [
   {
     id: API_DASHBOARD_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     project_id: null,
     folder_id: OPS_FOLDER_ID,
     title: 'API Health',
@@ -127,7 +129,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
     is_default: false,
     is_favorited: true,
     variables: [],
-    created_by: 1,
+    created_by: USER_ID,
     created_at: NOW_ISO,
     updated_at: NOW_ISO,
     widgets: [{
@@ -146,7 +148,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
   },
   {
     id: QUEUE_DASHBOARD_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     project_id: null,
     folder_id: null,
     title: 'Queue Depth',
@@ -155,7 +157,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
     is_default: false,
     is_favorited: false,
     variables: [],
-    created_by: 1,
+    created_by: USER_ID,
     created_at: NOW_ISO,
     updated_at: OLD_ISO,
     widgets: [],

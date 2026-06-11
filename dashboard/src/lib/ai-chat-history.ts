@@ -29,6 +29,19 @@ export interface ChatSnapshot {
   timestamp: number
 }
 
+function isChatSnapshot(value: unknown): value is ChatSnapshot {
+  if (typeof value !== 'object' || value === null) return false
+  const snapshot = value as Record<string, unknown>
+  const conversationId = snapshot.conversationId
+  return (
+    typeof snapshot.id === 'string' &&
+    typeof snapshot.timestamp === 'number' &&
+    (conversationId === null || typeof conversationId === 'string') &&
+    Array.isArray(snapshot.messages) &&
+    Array.isArray(snapshot.toolInvocations)
+  )
+}
+
 export function saveActiveChat(snapshot: ChatSnapshot): void {
   try {
     localStorage.setItem(ACTIVE_CHAT_KEY, JSON.stringify(snapshot))
@@ -42,21 +55,16 @@ export function loadActiveChat(): ChatSnapshot | null {
     const raw = localStorage.getItem(ACTIVE_CHAT_KEY)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
-    if (
-      typeof parsed !== 'object' || parsed === null ||
-      typeof (parsed as Record<string, unknown>).timestamp !== 'number' ||
-      !Array.isArray((parsed as Record<string, unknown>).messages)
-    ) {
+    if (!isChatSnapshot(parsed)) {
       localStorage.removeItem(ACTIVE_CHAT_KEY)
       return null
     }
-    const snapshot = parsed as ChatSnapshot
-    if (Date.now() - snapshot.timestamp > EXPIRY_MS) {
-      archiveChat(snapshot)
+    if (Date.now() - parsed.timestamp > EXPIRY_MS) {
+      archiveChat(parsed)
       clearActiveChat()
       return null
     }
-    return snapshot
+    return parsed
   } catch {
     return null
   }
@@ -90,12 +98,7 @@ export function getHistory(): ChatSnapshot[] {
     if (!raw) return []
     const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(
-      (item): item is ChatSnapshot =>
-        typeof item === 'object' && item !== null &&
-        typeof (item as Record<string, unknown>).timestamp === 'number' &&
-        Array.isArray((item as Record<string, unknown>).messages),
-    )
+    return parsed.filter(isChatSnapshot)
   } catch {
     return []
   }

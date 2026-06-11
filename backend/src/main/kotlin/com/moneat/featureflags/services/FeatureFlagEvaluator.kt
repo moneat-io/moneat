@@ -142,8 +142,23 @@ class FeatureFlagEvaluator {
         flagKey: String,
         ruleId: String,
         targetingKey: String,
+    ): Int =
+        bucket(
+            organizationKey = organizationId.toString(),
+            environmentKey = environmentKey,
+            flagKey = flagKey,
+            ruleId = ruleId,
+            targetingKey = targetingKey
+        )
+
+    fun bucket(
+        organizationKey: String,
+        environmentKey: String,
+        flagKey: String,
+        ruleId: String,
+        targetingKey: String,
     ): Int {
-        val input = "$organizationId:$environmentKey:$flagKey:$ruleId:$targetingKey"
+        val input = "$organizationKey:$environmentKey:$flagKey:$ruleId:$targetingKey"
         val bytes = MessageDigest.getInstance(SHA_256).digest(input.toByteArray())
         return BigInteger(1, bytes).mod(BigInteger.valueOf(BUCKET_COUNT.toLong())).toInt()
     }
@@ -218,7 +233,7 @@ class FeatureFlagEvaluator {
             REASON_DEFAULT
         )
         val normalizedWeights = normalizeAllocations(allocations)
-        val bucket = bucket(snapshot.organizationId, snapshot.environment.key, flag.key, ruleId, targetingKey)
+        val bucket = bucket(snapshot.organizationResourceId, snapshot.environment.key, flag.key, ruleId, targetingKey)
         var cursor = 0
 
         normalizedWeights.forEach { allocation ->

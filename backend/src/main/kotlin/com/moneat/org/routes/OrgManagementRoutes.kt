@@ -25,6 +25,7 @@ import com.moneat.events.models.UpdateMemberRoleRequest
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
@@ -40,8 +41,12 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 private const val INVALID_TOKEN_ERROR = "Invalid token"
+
+private fun parseOrgResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 fun Route.orgManagementRoutes(
     membershipService: OrgMembershipService = GlobalContext.get().get(),
@@ -74,9 +79,12 @@ fun Route.orgManagementRoutes(
                     HttpStatusCode.Unauthorized,
                     ErrorResponse(INVALID_TOKEN_ERROR)
                 )
-                val targetUserId =
-                    call.parameters["userId"]?.toIntOrNull()
+                val targetUserResourceId =
+                    call.parameters["userId"]?.let(::parseOrgResourceId)
                         ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
+                val targetUserId =
+                    membershipService.resolveMemberUserId(orgId, targetUserResourceId)
+                        ?: return@put call.respond(HttpStatusCode.NotFound, ErrorResponse("Member not found"))
 
                 val request = call.receive<UpdateMemberRoleRequest>()
 
@@ -92,9 +100,12 @@ fun Route.orgManagementRoutes(
                     HttpStatusCode.Unauthorized,
                     ErrorResponse(INVALID_TOKEN_ERROR)
                 )
-                val targetUserId =
-                    call.parameters["userId"]?.toIntOrNull()
+                val targetUserResourceId =
+                    call.parameters["userId"]?.let(::parseOrgResourceId)
                         ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
+                val targetUserId =
+                    membershipService.resolveMemberUserId(orgId, targetUserResourceId)
+                        ?: return@delete call.respond(HttpStatusCode.NotFound, ErrorResponse("Member not found"))
 
                 membershipService.removeMember(orgId, targetUserId, requestingUserId)
                 call.respond(HttpStatusCode.OK, BooleanResponse(true))
@@ -151,7 +162,7 @@ fun Route.orgManagementRoutes(
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
                 val invitationId =
-                    call.parameters["invitationId"]?.toIntOrNull()
+                    call.parameters["invitationId"]?.let(::parseOrgResourceId)
                         ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
 
                 invitationService.revokeInvitation(invitationId, userId)
@@ -163,7 +174,7 @@ fun Route.orgManagementRoutes(
                 val principal = call.principal<JWTPrincipal>()!!
                 val userId = principal.payload.getClaim("userId").asInt()
                 val invitationId =
-                    call.parameters["invitationId"]?.toIntOrNull()
+                    call.parameters["invitationId"]?.let(::parseOrgResourceId)
                         ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid invitation ID"))
 
                 invitationService.resendInvitation(invitationId, userId)

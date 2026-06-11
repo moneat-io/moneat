@@ -121,7 +121,7 @@ function WorkflowsLayout() {
 function WorkflowsPage() {
   const {toast} = useToast()
   const queryClient = useQueryClient()
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<number | null>(null)
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
   const [draft, setDraft] = useState<WorkflowDraft>(() => emptyWorkflowDraft())
   const [debugRun, setDebugRun] = useState<WorkflowRunResponse | null>(null)
@@ -138,7 +138,7 @@ function WorkflowsPage() {
   const selectedWorkflow = workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? workflows[0] ?? null
   const {data: runs = [], isLoading: runsLoading} = useQuery({
     queryKey: ['workflow-runs', selectedWorkflow?.id],
-    queryFn: () => api.getWorkflowRuns(selectedWorkflow?.id ?? 0),
+    queryFn: () => api.getWorkflowRuns(selectedWorkflow?.id ?? ''),
     enabled: selectedWorkflow !== null,
     refetchInterval: 15000,
   })
@@ -156,7 +156,7 @@ function WorkflowsPage() {
     },
   })
   const updateMutation = useMutation({
-    mutationFn: ({id, request}: {id: number; request: ReturnType<typeof draftToRequest>}) =>
+    mutationFn: ({id, request}: {id: string; request: ReturnType<typeof draftToRequest>}) =>
       api.updateWorkflow(id, request),
     onSuccess: (workflow) => {
       queryClient.invalidateQueries({queryKey: ['workflows']})
@@ -170,7 +170,7 @@ function WorkflowsPage() {
     },
   })
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteWorkflow(id),
+    mutationFn: (id: string) => api.deleteWorkflow(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['workflows']})
       setSelectedWorkflowId(null)
@@ -178,7 +178,7 @@ function WorkflowsPage() {
     },
   })
   const publishMutation = useMutation({
-    mutationFn: ({id, published}: {id: number; published: boolean}) =>
+    mutationFn: ({id, published}: {id: string; published: boolean}) =>
       published ? api.unpublishWorkflow(id) : api.publishWorkflow(id),
     onSuccess: (workflow) => {
       queryClient.invalidateQueries({queryKey: ['workflows']})
@@ -190,7 +190,7 @@ function WorkflowsPage() {
     },
   })
   const runMutation = useMutation({
-    mutationFn: (id: number) => api.runWorkflow(id),
+    mutationFn: (id: string) => api.runWorkflow(id),
     onSuccess: (run) => {
       queryClient.invalidateQueries({queryKey: ['workflow-runs', run.workflow_id]})
       setDebugRun(run)
@@ -322,13 +322,13 @@ function WorkflowList({
   selectedWorkflowId,
   loading,
   onSelect,
-}: {
+}: Readonly<{
   workflows: WorkflowResponse[]
   catalog?: WorkflowCatalogResponse
-  selectedWorkflowId: number | null
+  selectedWorkflowId: string | null
   loading: boolean
-  onSelect: (workflowId: number) => void
-}) {
+  onSelect: (workflowId: string) => void
+}>) {
   if (loading) {
     return <div className="flex h-40 items-center justify-center rounded-md border"><Loader2 className="h-5 w-5 animate-spin" /></div>
   }

@@ -16,6 +16,8 @@
 
 package com.moneat.workflows.services
 
+import com.moneat.shared.services.requireResourceId
+import com.moneat.shared.services.userResourceIds
 import com.moneat.workflows.models.WorkflowAuditEventResponse
 import com.moneat.workflows.models.WorkflowAuditEvents
 import com.moneat.workflows.models.workflowJson
@@ -87,7 +89,7 @@ object WorkflowAudit {
         limit: Int = DEFAULT_AUDIT_LIMIT
     ): List<WorkflowAuditEventResponse> =
         transaction {
-            WorkflowAuditEvents
+            val rows = WorkflowAuditEvents
                 .selectAll()
                 .where {
                     if (workflowId == null) {
@@ -99,17 +101,24 @@ object WorkflowAudit {
                 }
                 .orderBy(WorkflowAuditEvents.createdAt to SortOrder.DESC)
                 .limit(limit)
-                .map { row ->
-                    WorkflowAuditEventResponse(
-                        id = row[WorkflowAuditEvents.id].value,
-                        workflowId = row[WorkflowAuditEvents.workflowId],
-                        runId = row[WorkflowAuditEvents.runId],
-                        action = row[WorkflowAuditEvents.action],
-                        actorUserId = row[WorkflowAuditEvents.actorUserId],
-                        detail = decodeDetail(row[WorkflowAuditEvents.detail]),
-                        createdAt = row[WorkflowAuditEvents.createdAt].toString()
-                    )
-                }
+                .toList()
+            val workflowResourceIds = workflowResourceIds(rows.mapNotNull { it[WorkflowAuditEvents.workflowId] })
+            val runResourceIds = workflowRunResourceIds(rows.mapNotNull { it[WorkflowAuditEvents.runId] })
+            val userResourceIds = userResourceIds(rows.mapNotNull { it[WorkflowAuditEvents.actorUserId] })
+            rows.map { row ->
+                val rowWorkflowId = row[WorkflowAuditEvents.workflowId]
+                val rowRunId = row[WorkflowAuditEvents.runId]
+                val actorUserId = row[WorkflowAuditEvents.actorUserId]
+                WorkflowAuditEventResponse(
+                    id = row[WorkflowAuditEvents.resourceId].toString(),
+                    workflowId = rowWorkflowId?.let { workflowResourceIds.requireResourceId(it, "workflow") },
+                    runId = rowRunId?.let { runResourceIds.requireResourceId(it, "workflow run") },
+                    action = row[WorkflowAuditEvents.action],
+                    actorUserId = actorUserId?.let { userResourceIds.requireResourceId(it, "user") },
+                    detail = decodeDetail(row[WorkflowAuditEvents.detail]),
+                    createdAt = row[WorkflowAuditEvents.createdAt].toString()
+                )
+            }
         }
 
     private fun insertEvent(

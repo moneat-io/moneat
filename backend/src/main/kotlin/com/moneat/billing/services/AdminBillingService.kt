@@ -23,6 +23,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.PromotionalCreditGrants
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.organizationResourceId
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import mu.KotlinLogging
@@ -120,7 +121,7 @@ class AdminBillingService(
             }
 
             GrantPromotionalCreditResponse(
-                organizationId = organizationId,
+                organizationId = organizationResourceId(organizationId),
                 bonusGbBytes = updatedBonusGbBytes,
                 bonusUnits = updatedBonusUnits,
                 bonusGb = updatedBonusGbBytes / BYTES_PER_GB.toDouble(),
@@ -138,9 +139,12 @@ class AdminBillingService(
             (PromotionalCreditGrants innerJoin Organizations innerJoin Users)
                 .select(
                     PromotionalCreditGrants.id,
+                    PromotionalCreditGrants.resource_id,
                     PromotionalCreditGrants.organization_id,
+                    Organizations.resource_id,
                     Organizations.name,
                     PromotionalCreditGrants.granted_by,
+                    Users.resource_id,
                     Users.email,
                     PromotionalCreditGrants.bonus_gb_bytes,
                     PromotionalCreditGrants.bonus_units,
@@ -152,10 +156,10 @@ class AdminBillingService(
                 }.orderBy(PromotionalCreditGrants.granted_at to SortOrder.DESC)
                 .map { row ->
                     PromotionalCreditHistoryItem(
-                        id = row[PromotionalCreditGrants.id],
-                        organizationId = row[PromotionalCreditGrants.organization_id],
+                        id = row[PromotionalCreditGrants.resource_id].toString(),
+                        organizationId = row[Organizations.resource_id].toString(),
                         organizationName = row[Organizations.name],
-                        grantedBy = row[PromotionalCreditGrants.granted_by],
+                        grantedBy = row[Users.resource_id].toString(),
                         grantedByEmail = row[Users.email],
                         bonusGb = row[PromotionalCreditGrants.bonus_gb_bytes] / BYTES_PER_GB.toDouble(),
                         bonusUnits = row[PromotionalCreditGrants.bonus_units],
@@ -177,9 +181,12 @@ class AdminBillingService(
             (PromotionalCreditGrants innerJoin Organizations innerJoin Users)
                 .select(
                     PromotionalCreditGrants.id,
+                    PromotionalCreditGrants.resource_id,
                     PromotionalCreditGrants.organization_id,
+                    Organizations.resource_id,
                     Organizations.name,
                     PromotionalCreditGrants.granted_by,
+                    Users.resource_id,
                     Users.email,
                     PromotionalCreditGrants.bonus_gb_bytes,
                     PromotionalCreditGrants.bonus_units,
@@ -190,10 +197,10 @@ class AdminBillingService(
                 .limit(limit)
                 .map { row ->
                     PromotionalCreditHistoryItem(
-                        id = row[PromotionalCreditGrants.id],
-                        organizationId = row[PromotionalCreditGrants.organization_id],
+                        id = row[PromotionalCreditGrants.resource_id].toString(),
+                        organizationId = row[Organizations.resource_id].toString(),
                         organizationName = row[Organizations.name],
-                        grantedBy = row[PromotionalCreditGrants.granted_by],
+                        grantedBy = row[Users.resource_id].toString(),
                         grantedByEmail = row[Users.email],
                         bonusGb = row[PromotionalCreditGrants.bonus_gb_bytes] / BYTES_PER_GB.toDouble(),
                         bonusUnits = row[PromotionalCreditGrants.bonus_units],

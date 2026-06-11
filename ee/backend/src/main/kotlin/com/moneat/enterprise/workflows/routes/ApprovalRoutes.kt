@@ -6,9 +6,11 @@ package com.moneat.enterprise.workflows.routes
 
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.workflows.models.RespondApprovalRequest
+import com.moneat.enterprise.workflows.models.WorkflowApprovals
 import com.moneat.enterprise.workflows.services.WorkflowApprovalService
 import com.moneat.org.services.OrgRole
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -42,11 +44,7 @@ fun Route.approvalRoutes(approvalService: WorkflowApprovalService) {
             post("/{approvalId}/respond") {
                 val member = requireApprovalMember() ?: return@post
                 requireApprovalAdmin(member) ?: return@post
-                val approvalId = call.parameters["approvalId"]?.toIntOrNull()
-                    ?: return@post call.respond(
-                        HttpStatusCode.BadRequest,
-                        ErrorResponse(INVALID_APPROVAL_ID_MESSAGE)
-                    )
+                val approvalId = approvalIdParam(member.organizationId) ?: return@post
                 val request = call.receive<RespondApprovalRequest>()
                 val response =
                     approvalService.respond(
@@ -98,6 +96,30 @@ private suspend fun RoutingContext.requireApprovalAdmin(member: WorkflowApproval
         return null
     }
     return member.userId
+}
+
+private suspend fun RoutingContext.approvalIdParam(organizationId: Int): Int? {
+    val resourceId = call.parameters["approvalId"]?.toUuidOrNull()
+    if (resourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_APPROVAL_ID_MESSAGE))
+        return null
+    }
+    val approvalId =
+        transaction {
+            WorkflowApprovals
+                .selectAll()
+                .where {
+                    (WorkflowApprovals.organizationId eq organizationId) and
+                        (WorkflowApprovals.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(WorkflowApprovals.id)
+                ?.value
+        }
+    if (approvalId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(APPROVAL_NOT_FOUND_MESSAGE))
+    }
+    return approvalId
 }
 
 private fun RoutingContext.currentOrganizationId(): Int? =

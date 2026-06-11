@@ -28,7 +28,7 @@ data class ProjectRow(
     val framework: String?,
     val keys: List<ProjectKeyResponse>,
     val dsn: String,
-    val resourceId: String = projectId.toString(),
+    val resourceId: String,
     val serviceId: Long = projectId,
     val serviceName: String = slug.trim().ifBlank { name.trim().ifBlank { projectId.toString() } },
 )

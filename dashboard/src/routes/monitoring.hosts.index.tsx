@@ -194,7 +194,7 @@ interface SortIndicatorProps {
 
 interface HostCardProps {
   readonly host: DdHostResponse
-  readonly onDelete: (id: number, name: string) => void
+  readonly onDelete: (id: string, name: string) => void
 }
 
 interface HostsContentProps {
@@ -206,9 +206,9 @@ interface HostsContentProps {
   readonly sortField: SortField
   readonly sortDir: SortDir
   readonly onSort: (field: SortField) => void
-  readonly onDelete: (id: number, name: string) => void
+  readonly onDelete: (id: string, name: string) => void
   readonly onAddHost: () => void
-  readonly onOpenHost: (id: number) => void
+  readonly onOpenHost: (id: string) => void
 }
 
 function defaultHostAgentCapabilities(): AgentCapabilities {
@@ -904,8 +904,8 @@ function HostTableRow({
 }: Readonly<{
   host: DdHostResponse
   maxMemory: number
-  onDelete: (id: number, name: string) => void
-  onOpenHost: (id: number) => void
+  onDelete: (id: string, name: string) => void
+  onOpenHost: (id: string) => void
 }>) {
   const online = host.isOnline
   const memPct = maxMemory > 0 ? (host.memoryTotalKb / maxMemory) * 100 : 0
@@ -1111,7 +1111,7 @@ function MonitoringHostsPage() {
   }
 
   const deleteMutation = useMutation({
-    mutationFn: (hostId: number) => api.deleteHost(hostId),
+    mutationFn: (hostId: string) => api.deleteHost(hostId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['hosts']})
       toast({
@@ -1128,7 +1128,7 @@ function MonitoringHostsPage() {
     },
   })
 
-  const handleDelete = (hostId: number, hostName: string) => {
+  const handleDelete = (hostId: string, hostName: string) => {
     if (confirm(`Are you sure you want to delete "${hostName}"? This cannot be undone.`)) {
       deleteMutation.mutate(hostId)
     }

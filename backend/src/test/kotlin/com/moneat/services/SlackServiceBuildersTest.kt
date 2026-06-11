@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.notifications.services.SlackService
+import com.moneat.notifications.services.HostAlertNotification
 import com.moneat.notifications.services.encodeSlackIssueIdPathSegment
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
@@ -40,6 +41,7 @@ class SlackServiceBuildersTest {
         private var db: Database? = null
         private const val BASE_URL = "https://app.moneat.io"
         private const val XOXB_FAKE_TOKEN = "xoxb-fake-token"
+        private const val HOST_RESOURCE_ID = "00000000-0000-4000-8000-000000000042"
     }
 
     private lateinit var slackService: SlackService
@@ -111,13 +113,15 @@ class SlackServiceBuildersTest {
             assertFalse(
                 slackService.sendHostAlert(
                     organizationId = orgId,
-                    hostName = "api-1",
-                    metric = "CPU",
-                    condition = ">",
-                    threshold = "90%",
-                    currentValue = "95%",
-                    hostId = 1,
-                    baseUrl = BASE_URL
+                    alert = HostAlertNotification(
+                        hostName = "api-1",
+                        metric = "CPU",
+                        condition = ">",
+                        threshold = "90%",
+                        currentValue = "95%",
+                        hostResourceId = HOST_RESOURCE_ID,
+                        baseUrl = BASE_URL,
+                    ),
                 )
             )
         }
@@ -131,7 +135,7 @@ class SlackServiceBuildersTest {
                     organizationId = orgId,
                     hostName = "db-primary",
                     lastSeen = "2024-01-01T00:00:00Z",
-                    hostId = 2,
+                    hostResourceId = HOST_RESOURCE_ID,
                     baseUrl = BASE_URL
                 )
             )
@@ -163,7 +167,7 @@ class SlackServiceBuildersTest {
                 slackService.sendHostUp(
                     organizationId = orgId,
                     hostName = "api-1",
-                    hostId = 1,
+                    hostResourceId = HOST_RESOURCE_ID,
                     baseUrl = BASE_URL
                 )
             )
@@ -250,13 +254,15 @@ class SlackServiceBuildersTest {
             seedSlackIntegration(orgId)
             val result = slackService.sendHostAlert(
                 organizationId = orgId,
-                hostName = "api-prod-1",
-                metric = "Memory Usage",
-                condition = ">",
-                threshold = "85%",
-                currentValue = "92%",
-                hostId = 42,
-                baseUrl = BASE_URL
+                alert = HostAlertNotification(
+                    hostName = "api-prod-1",
+                    metric = "Memory Usage",
+                    condition = ">",
+                    threshold = "85%",
+                    currentValue = "92%",
+                    hostResourceId = HOST_RESOURCE_ID,
+                    baseUrl = BASE_URL,
+                ),
             )
             assertFalse(result)
         }
@@ -270,7 +276,7 @@ class SlackServiceBuildersTest {
                 organizationId = orgId,
                 hostName = "db-primary",
                 lastSeen = "2024-06-15T10:30:00Z",
-                hostId = 7,
+                hostResourceId = HOST_RESOURCE_ID,
                 baseUrl = BASE_URL
             )
             assertFalse(result)
@@ -284,7 +290,7 @@ class SlackServiceBuildersTest {
             val result = slackService.sendHostUp(
                 organizationId = orgId,
                 hostName = "cache-node-3",
-                hostId = 15,
+                hostResourceId = HOST_RESOURCE_ID,
                 baseUrl = BASE_URL
             )
             assertFalse(result)
@@ -546,13 +552,15 @@ class SlackServiceBuildersTest {
             assertFalse(
                 slackService.sendHostAlert(
                     organizationId = orgId,
-                    hostName = "api-1",
-                    metric = "CPU",
-                    condition = ">",
-                    threshold = "90%",
-                    currentValue = "95%",
-                    hostId = 1,
-                    baseUrl = BASE_URL
+                    alert = HostAlertNotification(
+                        hostName = "api-1",
+                        metric = "CPU",
+                        condition = ">",
+                        threshold = "90%",
+                        currentValue = "95%",
+                        hostResourceId = HOST_RESOURCE_ID,
+                        baseUrl = BASE_URL,
+                    ),
                 )
             )
         }

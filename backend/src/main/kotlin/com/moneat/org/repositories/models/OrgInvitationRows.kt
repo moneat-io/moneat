@@ -17,10 +17,12 @@
 package com.moneat.org.repositories.models
 
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /** Raw invitation record as stored in the DB. */
 data class OrgInvitationRow(
     val id: Int,
+    val resourceId: Uuid,
     val orgId: Int,
     val email: String,
     val role: String,
@@ -34,6 +36,7 @@ data class OrgInvitationRow(
 /** Invitation joined with the inviter's display name for listing. */
 data class InvitationWithInviterRow(
     val id: Int,
+    val resourceId: Uuid,
     val email: String,
     val role: String,
     val status: String,

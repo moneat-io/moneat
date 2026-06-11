@@ -73,7 +73,6 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
@@ -217,6 +216,14 @@ class EventRoutesExtendedTest {
             .selectAll()
             .where { Projects.id eq projectId }
             .first()[Projects.resource_id]
+            .toString()
+    }
+
+    private fun organizationResourceId(orgId: Int): String = transaction {
+        Organizations
+            .selectAll()
+            .where { Organizations.id eq orgId }
+            .first()[Organizations.resource_id]
             .toString()
     }
 
@@ -995,14 +1002,13 @@ class EventRoutesExtendedTest {
     @Test
     fun `GET org release stats filters service ids to organization services`() = testApplication {
         val seed = seedUserProject()
-        val other = seedUserProject()
         every { mockDashboardService.getServiceIdsForOrganization(seed.orgId) } returns listOf(seed.projectId)
         coEvery {
             mockDashboardService.getReleaseStatsForServices(seed.orgId, listOf(seed.projectId), "1.0.0")
         } returns sampleReleaseStats()
 
         application { installTestApp() }
-        val serviceIds = serviceIdsQuery(seed.projectId, other.projectId)
+        val serviceIds = serviceIdsQuery(seed.projectId)
         val response = client.get("/v1/releases/1.0.0/stats?serviceIds=$serviceIds") {
             withAuth(token(seed.userId, seed.orgId))
         }
@@ -1011,6 +1017,22 @@ class EventRoutesExtendedTest {
         assertTrue(response.bodyAsText().contains("1.0.0"))
         coVerify {
             mockDashboardService.getReleaseStatsForServices(seed.orgId, listOf(seed.projectId), "1.0.0")
+        }
+    }
+
+    @Test
+    fun `GET org release stats rejects service ids outside organization`() = testApplication {
+        val seed = seedUserProject()
+        val other = seedUserProject()
+
+        application { installTestApp() }
+        val response = client.get("/v1/releases/1.0.0/stats?serviceIds=${projectResourceId(other.projectId)}") {
+            withAuth(token(seed.userId, seed.orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getReleaseStatsForServices(seed.orgId, any(), "1.0.0")
         }
     }
 
@@ -1069,7 +1091,11 @@ class EventRoutesExtendedTest {
         val body = response.bodyAsText()
         assertTrue(body.contains("email"))
         val userJson = Json.parseToJsonElement(body).jsonObject
-        assertEquals(seeded.orgId, userJson["orgId"]?.jsonPrimitive?.int, "Response should include orgId: $body")
+        assertEquals(
+            organizationResourceId(seeded.orgId),
+            userJson["orgId"]?.jsonPrimitive?.content,
+            "Response should include orgId: $body"
+        )
     }
 
     @Test

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface RbacRole {
-  id: number
+  id: string
   name: string
   permissions: string[]
   created_at: string
@@ -33,8 +33,8 @@ export interface UpdateRbacRoleRequest {
 }
 
 export interface RbacRoleAssignment {
-  id: number
-  role_id: number
-  user_id: number
+  id: string
+  role_id: string
+  user_id: string
   created_at: string
 }

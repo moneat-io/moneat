@@ -42,7 +42,13 @@ class ResolveConnectionActivityTest {
     @Test
     fun `delegates resolution to the licensed vault`() {
         runBlocking {
-            val expected = WorkflowResolvedConnection(connectionId = 42, type = "webhook", secret = "resolved-secret")
+            val expected =
+                WorkflowResolvedConnection(
+                    connectionId = 42,
+                    resourceId = "2fbdf82a-fd86-4f91-91f4-880c3757a103",
+                    type = "webhook",
+                    secret = "resolved-secret"
+                )
             val vault = RecordingWorkflowConnectionVault(expected)
             val subject = ResolveConnectionActivity { vault }
             val reference = WorkflowConnectionReference.Group(groupId = 5)
@@ -69,6 +75,11 @@ private class RecordingWorkflowConnectionVault(
         connectionId: Int
     ): WorkflowConnectionSummary? = null
 
+    override suspend fun resolveConnectionId(
+        organizationId: Int,
+        connectionResourceId: String
+    ): Int? = null
+
     override suspend fun createConnection(
         organizationId: Int,
         type: String,
@@ -90,6 +101,11 @@ private class RecordingWorkflowConnectionVault(
 
     override suspend fun listGroups(organizationId: Int): List<WorkflowConnectionGroupSummary> =
         emptyList()
+
+    override suspend fun resolveGroupId(
+        organizationId: Int,
+        groupResourceId: String
+    ): Int? = null
 
     override suspend fun createGroup(
         organizationId: Int,

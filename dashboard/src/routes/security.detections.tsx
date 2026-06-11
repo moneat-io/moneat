@@ -73,7 +73,7 @@ function DetectionsTab() {
   }
 
   const save = useMutation({
-    mutationFn: (vars: {ruleId?: number; request: CreateDetectionRuleRequest}) =>
+    mutationFn: (vars: {ruleId?: string; request: CreateDetectionRuleRequest}) =>
       vars.ruleId
         ? api.updateDetectionRule(vars.ruleId, vars.request)
         : api.createDetectionRule(vars.request),
@@ -96,7 +96,7 @@ function DetectionsTab() {
   })
 
   const remove = useMutation({
-    mutationFn: (ruleId: number) => api.deleteDetectionRule(ruleId),
+    mutationFn: (ruleId: string) => api.deleteDetectionRule(ruleId),
     onSuccess: () => {
       void invalidate()
       toast({title: 'Rule deleted'})

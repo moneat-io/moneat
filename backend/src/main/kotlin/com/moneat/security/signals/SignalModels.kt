@@ -25,6 +25,7 @@ import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 /**
  * Security signals — the deduplicated, scored, triageable finding model that is the single
@@ -33,6 +34,7 @@ import org.jetbrains.exposed.v1.datetime.timestamp
  * never copied row-for-row.
  */
 object SecuritySignals : IntIdTable("security_signals") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val signalSource = varchar("source", 32)
     val ruleId = varchar("rule_id", 255)
@@ -53,6 +55,7 @@ object SecuritySignals : IntIdTable("security_signals") {
 
 /** ClickHouse evidence references for a signal — a descriptor that can re-query the source table. */
 object SecuritySignalEvidence : IntIdTable("security_signal_evidence") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val signalId = integer("signal_id").references(SecuritySignals.id, onDelete = ReferenceOption.CASCADE)
     val evidenceType = varchar("evidence_type", 32)
     val reference = text("reference")
@@ -61,6 +64,7 @@ object SecuritySignalEvidence : IntIdTable("security_signal_evidence") {
 
 /** Audit trail for triage transitions — every status change / assignment / note is attributable. */
 object SecuritySignalAudit : IntIdTable("security_signal_audit") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val signalId = integer("signal_id").references(SecuritySignals.id, onDelete = ReferenceOption.CASCADE)
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val actorUserId = integer("actor_user_id").nullable()
@@ -198,7 +202,7 @@ sealed interface SignalOutcome {
 
 @Serializable
 data class SignalEvidenceResponse(
-    val id: Int,
+    val id: String,
     @SerialName("evidence_type") val evidenceType: String,
     val reference: String,
     @SerialName("created_at") val createdAt: String,
@@ -206,8 +210,8 @@ data class SignalEvidenceResponse(
 
 @Serializable
 data class SignalAuditResponse(
-    val id: Int,
-    @SerialName("actor_user_id") val actorUserId: Int? = null,
+    val id: String,
+    @SerialName("actor_user_id") val actorUserId: String? = null,
     val action: String,
     @SerialName("from_status") val fromStatus: String? = null,
     @SerialName("to_status") val toStatus: String? = null,
@@ -218,7 +222,7 @@ data class SignalAuditResponse(
 
 @Serializable
 data class SignalResponse(
-    val id: Int,
+    val id: String,
     val source: String,
     @SerialName("rule_id") val ruleId: String,
     @SerialName("rule_name") val ruleName: String,
@@ -228,7 +232,7 @@ data class SignalResponse(
     @SerialName("dedup_key") val dedupKey: String,
     val entities: Map<String, String> = emptyMap(),
     @SerialName("sample_count") val sampleCount: Int,
-    @SerialName("assignee_user_id") val assigneeUserId: Int? = null,
+    @SerialName("assignee_user_id") val assigneeUserId: String? = null,
     val tags: List<String> = emptyList(),
     @SerialName("first_seen") val firstSeen: String,
     @SerialName("last_seen") val lastSeen: String,
@@ -255,7 +259,7 @@ data class SignalDetailResponse(
 data class TriageRequest(
     val status: String? = null,
     val reason: String? = null,
-    @SerialName("assignee_user_id") val assigneeUserId: Int? = null,
+    @SerialName("assignee_user_id") val assigneeUserId: String? = null,
     @SerialName("clear_assignee") val clearAssignee: Boolean = false,
     val note: String? = null,
 )

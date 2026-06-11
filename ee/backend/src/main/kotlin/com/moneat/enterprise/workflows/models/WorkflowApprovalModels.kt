@@ -8,8 +8,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 object WorkflowApprovals : IntIdTable("workflow_approvals") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val workflowId = integer("workflow_id")
     val runId = integer("run_id")
@@ -29,16 +31,16 @@ object WorkflowApprovals : IntIdTable("workflow_approvals") {
 
 @Serializable
 data class ApprovalResponse(
-    val id: Int,
-    @SerialName("workflow_id") val workflowId: Int,
-    @SerialName("run_id") val runId: Int,
+    val id: String,
+    @SerialName("workflow_id") val workflowId: String,
+    @SerialName("run_id") val runId: String,
     @SerialName("node_id") val nodeId: String,
     val message: String,
     @SerialName("approver_role") val approverRole: String?,
     val status: String,
     @SerialName("requested_at") val requestedAt: String,
     @SerialName("responded_at") val respondedAt: String?,
-    @SerialName("responded_by") val respondedBy: Int?,
+    @SerialName("responded_by") val respondedBy: String?,
     val comment: String?
 )
 

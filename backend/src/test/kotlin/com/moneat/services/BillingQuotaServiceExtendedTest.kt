@@ -178,6 +178,24 @@ class BillingQuotaServiceExtendedTest {
         }
     }
 
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
+    private fun projectResourceId(projectId: Long): String =
+        transaction {
+            Projects
+                .selectAll()
+                .where { Projects.id eq projectId }
+                .single()[Projects.resource_id]
+                .toString()
+        }
+
     private fun jsonRow(vararg fields: String): String = fields.joinToString(
         separator = ",",
         prefix = "{",
@@ -303,7 +321,7 @@ class BillingQuotaServiceExtendedTest {
                 limit = 500
             )
 
-            assertEquals(testOrgId, result.organizationId)
+            assertEquals(organizationResourceId(testOrgId), result.organizationId)
             assertEquals("2026-04-01", result.periodStart)
             assertEquals("2026-04-30", result.periodEnd)
             assertEquals(25, result.totalSpans)
@@ -315,7 +333,7 @@ class BillingQuotaServiceExtendedTest {
             assertEquals("otlp", checkout.source)
             assertEquals("checkout", checkout.service)
             assertEquals("GET /orders", checkout.operation)
-            assertEquals(projectId, checkout.projectId)
+            assertEquals(projectResourceId(projectId), checkout.projectId)
             assertEquals("Checkout API", checkout.projectName)
             assertEquals("checkout-api", checkout.projectSlug)
             assertEquals(10, checkout.spanCount)
@@ -471,7 +489,7 @@ class BillingQuotaServiceExtendedTest {
                 limit = 20
             )
 
-            assertEquals(testOrgId, result.organizationId)
+            assertEquals(organizationResourceId(testOrgId), result.organizationId)
             assertEquals(0, result.totalSpans)
             assertTrue(result.groups.isEmpty())
         } finally {

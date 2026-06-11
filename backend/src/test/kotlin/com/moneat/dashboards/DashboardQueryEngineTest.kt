@@ -39,6 +39,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DashboardQueryEngineTest {
+    private companion object {
+        const val ORG_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+        const val USER_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+    }
 
     private val engine = DashboardQueryEngine()
 
@@ -517,7 +521,7 @@ class DashboardQueryEngineTest {
             dataSourceService,
         )
 
-        assertEquals("custom:42", resolved.dataSource)
+        assertEquals("custom:11111111-1111-1111-1111-000000000042", resolved.dataSource)
     }
 
     @Test
@@ -665,15 +669,15 @@ class DashboardQueryEngineTest {
         enabled: Boolean,
     ): CustomDataSourceResponse =
         CustomDataSourceResponse(
-            id = id.toString(),
-            orgId = 1,
+            id = "11111111-1111-1111-1111-${id.toString().padStart(12, '0')}",
+            orgId = ORG_RESOURCE_ID,
             name = sourceType,
             sourceType = sourceType,
             host = "localhost",
             numericId = id,
             port = 9090,
             enabled = enabled,
-            createdBy = 1,
+            createdBy = USER_RESOURCE_ID,
             createdAt = "2026-01-01T00:00:00Z",
             updatedAt = "2026-01-01T00:00:00Z",
         )

@@ -12,6 +12,7 @@ import com.moneat.enterprise.ai.models.AssistantErrorEvent
 import com.moneat.enterprise.ai.services.AiAssistantService
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -33,9 +34,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
-            ignoreUnknownKeys = true
-            encodeDefaults = true
-        }
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+}
 
 fun Route.aiAssistantRoutes(service: AiAssistantService) {
     authenticate("auth-jwt") {
@@ -60,7 +61,12 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Message cannot be empty"))
                     return@post
                 }
-                val projectId = resolveAssistantProjectId(orgId, request.projectId)
+                val projectResolution = resolveAssistantProjectId(orgId, request.projectId)
+                if (projectResolution.errorStatus != null) {
+                    call.respond(projectResolution.errorStatus, mapOf("error" to projectResolution.errorMessage))
+                    return@post
+                }
+                val projectId = projectResolution.projectId
 
                 call.response.headers.append(HttpHeaders.CacheControl, "no-cache")
                 call.response.headers.append(HttpHeaders.Connection, "keep-alive")
@@ -139,22 +145,48 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
     }
 }
 
-private fun resolveAssistantProjectId(orgId: Int, requestedProjectId: Long?): Long? {
-    return transaction {
-        val requestedValid = requestedProjectId?.let { projectId ->
+private fun resolveAssistantProjectId(orgId: Int, requestedProjectId: String?): AssistantProjectResolution {
+    val normalized = requestedProjectId?.trim()?.takeIf { it.isNotBlank() }
+    if (normalized != null) {
+        val resourceId =
+            normalized.toUuidOrNull()
+                ?: return AssistantProjectResolution.badRequest("projectId must be a UUID")
+
+        val projectId = transaction {
             Projects
                 .selectAll()
-                .where { (Projects.id eq projectId) and (Projects.organization_id eq orgId) }
+                .where { (Projects.resource_id eq resourceId) and (Projects.organization_id eq orgId) }
                 .firstOrNull()
                 ?.get(Projects.id)
         }
 
-        requestedValid ?: Projects
-            .selectAll()
-            .where { Projects.organization_id eq orgId }
-            .orderBy(Projects.id to SortOrder.ASC)
-            .firstOrNull()
-            ?.get(Projects.id)
+        return projectId?.let { AssistantProjectResolution(projectId = it) }
+            ?: AssistantProjectResolution.notFound("Project not found")
+    }
+
+    return AssistantProjectResolution(
+        projectId = transaction {
+            Projects
+                .selectAll()
+                .where { Projects.organization_id eq orgId }
+                .orderBy(Projects.id to SortOrder.ASC)
+                .firstOrNull()
+                ?.get(Projects.id)
+        }
+    )
+}
+
+private data class AssistantProjectResolution(
+    val projectId: Long? = null,
+    val errorStatus: HttpStatusCode? = null,
+    val errorMessage: String = ""
+) {
+    companion object {
+        fun badRequest(message: String): AssistantProjectResolution =
+            AssistantProjectResolution(errorStatus = HttpStatusCode.BadRequest, errorMessage = message)
+
+        fun notFound(message: String): AssistantProjectResolution =
+            AssistantProjectResolution(errorStatus = HttpStatusCode.NotFound, errorMessage = message)
     }
 }
 

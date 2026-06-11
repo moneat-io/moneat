@@ -18,7 +18,7 @@
 // they are entered once on create/rotate and never returned by the API.
 
 export interface WorkflowConnection {
-  id: number
+  id: string
   type: string
   name: string
   identifier_tags: Record<string, string>
@@ -39,10 +39,10 @@ export interface RotateWorkflowConnectionRequest {
 }
 
 export interface WorkflowConnectionGroup {
-  id: number
+  id: string
   name: string
   connection_type: string
-  member_connection_ids: number[]
+  member_connection_ids: string[]
   selection_strategy: string
   created_at: string
   updated_at: string
@@ -51,6 +51,6 @@ export interface WorkflowConnectionGroup {
 export interface CreateWorkflowConnectionGroupRequest {
   name: string
   connection_type: string
-  member_connection_ids?: number[]
+  member_connection_ids?: string[]
   selection_strategy?: string
 }

@@ -70,6 +70,7 @@ class DashboardServiceProjectTest {
         private const val SINGLE_KEY_SLUG = "single-key-app"
         private const val SPECIAL_CHARS_NAME = "My App v2.0!"
         private const val SPECIAL_CHARS_SLUG = "my-app-v2-0"
+        private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private var db: Database? = null
 
         fun seedUser(email: String = "user@test.com"): Int = transaction {
@@ -182,7 +183,8 @@ class DashboardServiceProjectTest {
         every { mockProjectRepo.getProjectById(42L) } returns ProjectRow(
             projectId = 42L, name = PROJECT_NAME, slug = PROJECT_SLUG, framework = "kotlin",
             keys = listOf(ProjectKeyResponse(null, "http://testkey@test/42")),
-            dsn = "http://testkey@test/42"
+            dsn = "http://testkey@test/42",
+            resourceId = PROJECT_RESOURCE_ID
         )
         coEvery { mockProjectRepo.getIssueCountForProject(42L, any(), null) } returns 0L
 
@@ -206,7 +208,7 @@ class DashboardServiceProjectTest {
 
         every { mockProjectRepo.getProjectCountForOrganization(any()) } returns 0
         every { mockProjectRepo.findProjectByNameOrSlug(any(), "Duplicate", "duplicate") } returns
-            ProjectRow(1L, "Duplicate", "duplicate", null, emptyList(), "")
+            ProjectRow(1L, "Duplicate", "duplicate", null, emptyList(), "", PROJECT_RESOURCE_ID)
 
         val ex = assertFailsWith<IllegalStateException> {
             makeDashboardService().createProject(orgId, CreateProjectRequest(name = "Duplicate"))
@@ -231,7 +233,8 @@ class DashboardServiceProjectTest {
                 ProjectKeyResponse("android", "http://k1@test/100"),
                 ProjectKeyResponse("ios", "http://k2@test/100"),
             ),
-            dsn = "http://k1@test/100"
+            dsn = "http://k1@test/100",
+            resourceId = PROJECT_RESOURCE_ID
         )
         coEvery { mockProjectRepo.getIssueCountForProject(100L, any(), null) } returns 0L
 
@@ -260,7 +263,8 @@ class DashboardServiceProjectTest {
         every { mockProjectRepo.getProjectById(200L) } returns ProjectRow(
             projectId = 200L, name = SINGLE_KEY_NAME, slug = SINGLE_KEY_SLUG, framework = null,
             keys = listOf(ProjectKeyResponse(null, "http://k@test/200")),
-            dsn = "http://k@test/200"
+            dsn = "http://k@test/200",
+            resourceId = PROJECT_RESOURCE_ID
         )
         coEvery { mockProjectRepo.getIssueCountForProject(200L, any(), null) } returns 0L
 
@@ -287,7 +291,8 @@ class DashboardServiceProjectTest {
         every { mockProjectRepo.getProjectById(300L) } returns ProjectRow(
             projectId = 300L, name = SPECIAL_CHARS_NAME, slug = SPECIAL_CHARS_SLUG, framework = null,
             keys = listOf(ProjectKeyResponse(null, "http://k@test/300")),
-            dsn = "http://k@test/300"
+            dsn = "http://k@test/300",
+            resourceId = PROJECT_RESOURCE_ID
         )
         coEvery { mockProjectRepo.getIssueCountForProject(300L, any(), null) } returns 0L
 
@@ -368,7 +373,7 @@ class DashboardServiceProjectTest {
     @Test
     fun `getProjects returns projects with issue counts`() = runBlocking {
         every { mockProjectRepo.getProjectsForOrganizations(listOf(10)) } returns listOf(
-            ProjectRow(1L, PROJECT_NAME, PROJECT_SLUG, null, emptyList(), "http://k@host/1")
+            ProjectRow(1L, PROJECT_NAME, PROJECT_SLUG, null, emptyList(), "http://k@host/1", PROJECT_RESOURCE_ID)
         )
         coEvery { mockProjectRepo.getIssueCountForProject(1L, any(), null) } returns 42L
 
@@ -388,7 +393,7 @@ class DashboardServiceProjectTest {
     @Test
     fun `getProjects returns only projects for current org`() = runBlocking {
         every { mockProjectRepo.getProjectsForOrganizations(listOf(10)) } returns listOf(
-            ProjectRow(1L, "Org1 Project", "org1-project", null, emptyList(), "")
+            ProjectRow(1L, "Org1 Project", "org1-project", null, emptyList(), "", PROJECT_RESOURCE_ID)
         )
         coEvery { mockProjectRepo.getIssueCountForProject(any(), any(), null) } returns 0L
 
@@ -404,7 +409,7 @@ class DashboardServiceProjectTest {
     fun `getProject returns project detail with issue count`() = runBlocking {
         val key = ProjectKeyResponse(null, "http://testpubkey123@host/1")
         every { mockProjectRepo.getProjectById(1L) } returns
-            ProjectRow(1L, "Detail App", "detail-app", "react", listOf(key), key.dsn)
+            ProjectRow(1L, "Detail App", "detail-app", "react", listOf(key), key.dsn, PROJECT_RESOURCE_ID)
         coEvery { mockProjectRepo.getIssueCountForProject(1L, any(), null) } returns 7L
 
         val project = makeDashboardService().getProject(1L)

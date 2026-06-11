@@ -33,6 +33,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val SCOPE_HOST = "host"
 private const val SCOPE_GLOBAL = "global"
@@ -48,6 +49,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                 .map { row ->
                     AlertRow(
                         id = row[HostAlerts.id],
+                        resourceId = row[HostAlerts.resource_id],
                         hostId = row[HostAlerts.host_id],
                         organizationId = row[HostAlerts.organization_id],
                         metric = row[HostAlerts.metric],
@@ -76,6 +78,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                 ?.let { row ->
                     AlertRow(
                         id = row[HostAlerts.id],
+                        resourceId = row[HostAlerts.resource_id],
                         hostId = row[HostAlerts.host_id],
                         organizationId = row[HostAlerts.organization_id],
                         metric = row[HostAlerts.metric],
@@ -132,7 +135,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
         }
     }
 
-    override fun createAlert(alert: CreateAlertData): Long {
+    override fun createAlert(alert: CreateAlertData): Uuid {
         val now = Clock.System.now()
         return transaction {
             if (alert.scope == SCOPE_GLOBAL) {
@@ -146,7 +149,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                     it[OrganizationAlertTemplates.alert_priority] = alert.alertPriority
                     it[OrganizationAlertTemplates.created_at] = now
                     it[OrganizationAlertTemplates.updated_at] = now
-                } get OrganizationAlertTemplates.id
+                } get OrganizationAlertTemplates.resource_id
             } else {
                 HostAlerts.insert {
                     it[HostAlerts.host_id] = alert.hostId
@@ -159,9 +162,9 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                     it[HostAlerts.alert_priority] = alert.alertPriority
                     it[HostAlerts.last_triggered_at] = null
                     it[HostAlerts.created_at] = now
-                } get HostAlerts.id
+                } get HostAlerts.resource_id
             }
-        }.toLong()
+        }
     }
 
     override fun updateAlert(
@@ -240,6 +243,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                 .map { row ->
                     AlertRow(
                         id = row[OrganizationAlertTemplates.id],
+                        resourceId = row[OrganizationAlertTemplates.resource_id],
                         hostId = hostId,
                         organizationId = organizationId,
                         metric = row[OrganizationAlertTemplates.metric],
@@ -264,6 +268,7 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                 ?.let { row ->
                     AlertRow(
                         id = row[HostAlerts.id],
+                        resourceId = row[HostAlerts.resource_id],
                         hostId = row[HostAlerts.host_id],
                         organizationId = row[HostAlerts.organization_id],
                         metric = row[HostAlerts.metric],
@@ -277,5 +282,34 @@ class HostAlertRepositoryImpl : HostAlertRepository {
                         scope = SCOPE_HOST
                     )
                 }
+        }
+
+    override fun resolveAlertId(
+        resourceId: Uuid,
+        hostId: Int,
+        organizationId: Int,
+        scope: String
+    ): Int? =
+        transaction {
+            if (scope == SCOPE_GLOBAL) {
+                OrganizationAlertTemplates
+                    .selectAll()
+                    .where {
+                        (OrganizationAlertTemplates.resource_id eq resourceId) and
+                            (OrganizationAlertTemplates.organization_id eq organizationId)
+                    }
+                    .firstOrNull()
+                    ?.get(OrganizationAlertTemplates.id)
+            } else {
+                HostAlerts
+                    .selectAll()
+                    .where {
+                        (HostAlerts.resource_id eq resourceId) and
+                            (HostAlerts.host_id eq hostId) and
+                            (HostAlerts.organization_id eq organizationId)
+                    }
+                    .firstOrNull()
+                    ?.get(HostAlerts.id)
+            }
         }
 }

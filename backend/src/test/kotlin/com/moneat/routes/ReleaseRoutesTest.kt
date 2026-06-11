@@ -80,6 +80,9 @@ class ReleaseRoutesTest {
         private var testUserId = -1
         private const val TEST_ORG_ID = 7
         private const val TEST_PROJECT_ID = 42L
+
+        private fun resourceId(id: Long): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
     }
 
     @BeforeTest
@@ -224,7 +227,7 @@ class ReleaseRoutesTest {
             val releaseService = sourceMapReleaseService()
             every {
                 releaseService.uploadSourceMap(TEST_PROJECT_ID, "1.0.0", "~/app.js.map", any())
-            } returns SourceMapFileResponse(10, "~/app.js.map", "2026-05-23T00:00:00Z")
+            } returns SourceMapFileResponse(resourceId(10), "~/app.js.map", "2026-05-23T00:00:00Z")
 
             val quotaService = allowingQuotaService()
             val eventService = projectOrgEventService()
@@ -419,7 +422,7 @@ class ReleaseRoutesTest {
 
     private fun quotaUsage(): BillingUsageResponse {
         return BillingUsageResponse(
-            organizationId = TEST_ORG_ID,
+            organizationId = resourceId(TEST_ORG_ID.toLong()),
             periodStart = "2026-05-01",
             periodEnd = "2026-05-31",
             retentionDays = 30,

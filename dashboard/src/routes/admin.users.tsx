@@ -62,10 +62,10 @@ function AdminUsersPage() {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [searchInput, setSearchInput] = useState('')
-  const [selectedUsers, setSelectedUsers] = useState<Set<number>>(new Set())
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editUser, setEditUser] = useState<{
-    id: number
+    id: string
     email: string
     isAdmin: boolean
     emailVerified: boolean
@@ -81,7 +81,7 @@ function AdminUsersPage() {
   const queryClient = useQueryClient()
 
   const updateMutation = useMutation({
-    mutationFn: ({userId, updates}: {userId: number; updates: {isAdmin?: boolean; emailVerified?: boolean}}) =>
+    mutationFn: ({userId, updates}: {userId: string; updates: {isAdmin?: boolean; emailVerified?: boolean}}) =>
       api.updateAdminUser(userId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['admin-users']})
@@ -90,7 +90,7 @@ function AdminUsersPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (userIds: number[]) => api.deleteAdminUsers(userIds),
+    mutationFn: (userIds: string[]) => api.deleteAdminUsers(userIds),
     onSuccess: (result) => {
       queryClient.invalidateQueries({queryKey: ['admin-users']})
       setSelectedUsers(new Set())
@@ -128,7 +128,7 @@ function AdminUsersPage() {
     deleteMutation.mutate(Array.from(selectedUsers))
   }
 
-  const handleToggleUser = (userId: number) => {
+  const handleToggleUser = (userId: string) => {
     const newSelection = new Set(selectedUsers)
     if (newSelection.has(userId)) {
       newSelection.delete(userId)

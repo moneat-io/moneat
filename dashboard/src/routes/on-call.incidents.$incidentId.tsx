@@ -51,9 +51,10 @@ import {
 } from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
+import {isUuidResourceId} from '@/lib/api/utils'
 
 interface DeclaredIncidentDetail {
-  id: number
+  id: string
   title: string
   description?: string
   severity: string
@@ -61,9 +62,9 @@ interface DeclaredIncidentDetail {
   declaredAt: string
   declaredByName: string
   resolvedAt?: string
-  resolvedBy?: number
+  resolvedBy?: string
   resolvedByName?: string
-  alerts?: Array<{id: number; title: string; status: string; priority?: string}>
+  alerts?: Array<{id: string; title: string; status: string; priority?: string}>
   [key: string]: unknown
 }
 
@@ -170,31 +171,35 @@ function DeclaredIncidentDetailComponent() {
   const [resolveOpen, setResolveOpen] = useState(false)
   const [resolutionNote, setResolutionNote] = useState('')
   const [note, setNote] = useState('')
+  const normalizedIncidentId = incidentId.trim()
+  const hasValidIncidentId = isUuidResourceId(normalizedIncidentId)
 
   const {data: incident, isLoading} = useQuery({
-    queryKey: ['declared-incident', incidentId],
+    queryKey: ['declared-incident', normalizedIncidentId],
     queryFn: async () => {
-      const result = await api.getOnCallIncident(Number(incidentId))
+      const result = await api.getOnCallIncident(normalizedIncidentId)
       return result as unknown as DeclaredIncidentDetail
     },
+    enabled: hasValidIncidentId,
   })
 
   const {data: timeline} = useQuery({
-    queryKey: ['declared-incident-timeline', incidentId],
-    queryFn: () => api.getOnCallIncidentTimeline(Number(incidentId)) as Promise<DeclaredIncidentTimelineEvent[]>,
+    queryKey: ['declared-incident-timeline', normalizedIncidentId],
+    queryFn: () => api.getOnCallIncidentTimeline(normalizedIncidentId) as Promise<DeclaredIncidentTimelineEvent[]>,
+    enabled: hasValidIncidentId,
   })
 
   const resolveMutation = useMutation({
     mutationFn: () =>
       api.resolveOnCallIncident(
-        Number(incidentId),
+        normalizedIncidentId,
         resolutionNote.trim() ? resolutionNote.trim() : undefined,
       ),
     onSuccess: () => {
       setResolveOpen(false)
       setResolutionNote('')
-      queryClient.invalidateQueries({queryKey: ['declared-incident', incidentId]})
-      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['declared-incident', normalizedIncidentId]})
+      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', normalizedIncidentId]})
       queryClient.invalidateQueries({queryKey: ['on-call-incidents']})
       toast({
         title: 'Incident Resolved',
@@ -207,10 +212,10 @@ function DeclaredIncidentDetailComponent() {
   })
 
   const addNoteMutation = useMutation({
-    mutationFn: (note: string) => api.addOnCallIncidentNote(Number(incidentId), note),
+    mutationFn: (note: string) => api.addOnCallIncidentNote(normalizedIncidentId, note),
     onSuccess: () => {
       setNote('')
-      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', incidentId]})
+      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', normalizedIncidentId]})
       toast({
         title: 'Note Added',
         description: 'Your note has been added to the incident timeline.',
@@ -226,6 +231,16 @@ function DeclaredIncidentDetailComponent() {
       <div className="flex items-center justify-center py-16">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
       </div>
+    )
+  }
+
+  if (!hasValidIncidentId) {
+    return (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Invalid incident ID"
+        description="The incident identifier in the URL is invalid."
+      />
     )
   }
 
@@ -338,7 +353,7 @@ function DeclaredIncidentDetailComponent() {
               count={incident.alerts.length}
               bodyClassName="space-y-2"
             >
-              {incident.alerts.map((alert: {id: number; title: string; status: string}) => (
+              {incident.alerts.map((alert: {id: string; title: string; status: string}) => (
                 <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/40 transition-colors">
                   <div className="flex-1">
                     <p className="text-sm font-medium">{alert.title}</p>

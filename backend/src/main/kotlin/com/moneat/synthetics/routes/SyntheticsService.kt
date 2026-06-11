@@ -25,6 +25,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.services.organizationResourceId
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
@@ -52,6 +53,7 @@ import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 /** Manages synthetic HTTP checks, variables, execution, and ClickHouse result storage. */
 class SyntheticsService(
@@ -123,10 +125,17 @@ class SyntheticsService(
 
     fun listTests(organizationId: Int): List<SyntheticTestResponse> {
         return transaction {
-            SyntheticTests
+            val rows = SyntheticTests
                 .selectAll()
                 .where { SyntheticTests.organizationId eq organizationId }
-                .map { rowToResponse(it) }
+                .toList()
+            if (rows.isEmpty()) {
+                emptyList()
+            } else {
+                val organizationResourceId = organizationResourceId(organizationId)
+                rows
+                    .map { rowToResponse(it, organizationResourceId) }
+            }
         }
     }
 
@@ -136,7 +145,7 @@ class SyntheticsService(
                 .selectAll()
                 .where { (SyntheticTests.id eq testId) and (SyntheticTests.organizationId eq organizationId) }
                 .firstOrNull()
-                ?.let { rowToResponse(it) }
+                ?.let { rowToResponse(it, organizationResourceId(organizationId)) }
         }
     }
 
@@ -571,7 +580,7 @@ class SyntheticsService(
         )
     }
 
-    private fun rowToResponse(row: ResultRow): SyntheticTestResponse {
+    private fun rowToResponse(row: ResultRow, organizationResourceId: String): SyntheticTestResponse {
         val assertionsList: List<SyntheticAssertion> = suspendRunCatching {
             Json.decodeFromString<List<SyntheticAssertion>>(row[SyntheticTests.assertions])
         }.getOrElse { _ ->
@@ -611,7 +620,7 @@ class SyntheticsService(
 
         return SyntheticTestResponse(
             id = row[SyntheticTests.id].toString(),
-            organizationId = row[SyntheticTests.organizationId],
+            organizationId = organizationResourceId,
             name = row[SyntheticTests.name],
             testType = row[SyntheticTests.testType],
             active = row[SyntheticTests.active],
@@ -694,12 +703,19 @@ class SyntheticsService(
 
     fun listVariables(organizationId: Int): List<SyntheticVariableResponse> {
         return transaction {
-            SyntheticVariables
+            val rows = SyntheticVariables
                 .selectAll()
                 .where {
                     SyntheticVariables.organizationId eq organizationId
                 }
-                .map { variableRowToResponse(it) }
+                .toList()
+            if (rows.isEmpty()) {
+                emptyList()
+            } else {
+                val organizationResourceId = organizationResourceId(organizationId)
+                rows
+                    .map { variableRowToResponse(it, organizationResourceId) }
+            }
         }
     }
 
@@ -707,7 +723,7 @@ class SyntheticsService(
         organizationId: Int,
         request: SyntheticVariableRequest
     ): SyntheticVariableResponse {
-        val id = transaction {
+        val row = transaction {
             SyntheticVariables.insert {
                 it[SyntheticVariables.organizationId] = organizationId
                 it[name] = request.name
@@ -715,36 +731,36 @@ class SyntheticsService(
                 it[isSecret] = request.isSecret
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
-            } get SyntheticVariables.id
+            }
         }
-        return getVariable(id, organizationId)!!
+        return getVariable(row[SyntheticVariables.resourceId], organizationId)!!
     }
 
     fun getVariable(
-        variableId: Int,
+        variableResourceId: Uuid,
         organizationId: Int
     ): SyntheticVariableResponse? {
         return transaction {
             SyntheticVariables
                 .selectAll()
                 .where {
-                    (SyntheticVariables.id eq variableId) and
+                    (SyntheticVariables.resourceId eq variableResourceId) and
                         (SyntheticVariables.organizationId eq organizationId)
                 }
                 .firstOrNull()
-                ?.let { variableRowToResponse(it) }
+                ?.let { variableRowToResponse(it, organizationResourceId(organizationId)) }
         }
     }
 
     fun updateVariable(
-        variableId: Int,
+        variableResourceId: Uuid,
         organizationId: Int,
         request: SyntheticVariableRequest
     ): SyntheticVariableResponse? {
         val updated = transaction {
             SyntheticVariables.update(
                 {
-                    (SyntheticVariables.id eq variableId) and
+                    (SyntheticVariables.resourceId eq variableResourceId) and
                         (SyntheticVariables.organizationId eq organizationId)
                 }
             ) {
@@ -755,19 +771,19 @@ class SyntheticsService(
             } > 0
         }
         return if (updated) {
-            getVariable(variableId, organizationId)
+            getVariable(variableResourceId, organizationId)
         } else {
             null
         }
     }
 
     fun deleteVariable(
-        variableId: Int,
+        variableResourceId: Uuid,
         organizationId: Int
     ): Boolean {
         return transaction {
             SyntheticVariables.deleteWhere {
-                (id eq variableId) and
+                (resourceId eq variableResourceId) and
                     (SyntheticVariables.organizationId eq organizationId)
             } > 0
         }
@@ -788,7 +804,8 @@ class SyntheticsService(
     }
 
     private fun variableRowToResponse(
-        row: ResultRow
+        row: ResultRow,
+        organizationResourceId: String
     ): SyntheticVariableResponse {
         val maskedValue = if (row[SyntheticVariables.isSecret]) {
             "********"
@@ -796,8 +813,8 @@ class SyntheticsService(
             row[SyntheticVariables.value]
         }
         return SyntheticVariableResponse(
-            id = row[SyntheticVariables.id],
-            organizationId = row[SyntheticVariables.organizationId],
+            id = row[SyntheticVariables.resourceId].toString(),
+            organizationId = organizationResourceId,
             name = row[SyntheticVariables.name],
             value = maskedValue,
             isSecret = row[SyntheticVariables.isSecret],

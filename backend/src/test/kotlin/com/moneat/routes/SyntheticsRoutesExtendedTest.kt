@@ -60,16 +60,21 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class SyntheticsRoutesExtendedTest {
     companion object {
         private var db: Database? = null
         private const val TEST_UUID = "11111111-1111-1111-1111-111111111111"
+        private const val VARIABLE_UUID = "22222222-2222-2222-2222-222222222222"
+        private const val MISSING_VARIABLE_UUID = "33333333-3333-3333-3333-333333333333"
         private const val MY_API_TEST = "My API Test"
         private const val SYNTHETICS_TESTS_PATH = "/v1/synthetics/tests"
         private const val SYNTHETICS_VARIABLES_PATH = "/v1/synthetics/variables"
         private const val BODY_NAME_VAR_VALUE = """{"name":"VAR","value":"val"}"""
-        private const val SYNTHETICS_VARIABLES_1_PATH = "/v1/synthetics/variables/1"
+        private const val SYNTHETICS_VARIABLES_1_PATH = "/v1/synthetics/variables/$VARIABLE_UUID"
+
+        private fun resourceId(value: String): Uuid = Uuid.parse(value)
     }
 
     private lateinit var mockService: SyntheticsService
@@ -144,7 +149,7 @@ class SyntheticsRoutesExtendedTest {
 
     private fun sampleTestResponse(orgId: Int) = SyntheticTestResponse(
         id = TEST_UUID,
-        organizationId = orgId,
+        organizationId = resourceId(orgId),
         name = MY_API_TEST,
         testType = "api",
         active = true,
@@ -172,14 +177,17 @@ class SyntheticsRoutesExtendedTest {
     )
 
     private fun sampleVariableResponse(orgId: Int) = SyntheticVariableResponse(
-        id = 1,
-        organizationId = orgId,
+        id = VARIABLE_UUID,
+        organizationId = resourceId(orgId),
         name = "API_KEY",
         value = "test-key-123",
         isSecret = false,
         createdAt = 1700000000000L,
         updatedAt = 1700000000000L
     )
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     // ──── Auth ────
 
@@ -707,7 +715,7 @@ class SyntheticsRoutesExtendedTest {
             val (userId, orgId) = seedUserAndOrg()
             every {
                 mockService.updateVariable(
-                    1, orgId, any<SyntheticVariableRequest>()
+                    resourceId(VARIABLE_UUID), orgId, any<SyntheticVariableRequest>()
                 )
             } returns sampleVariableResponse(orgId)
                 .copy(value = "updated-key")
@@ -730,12 +738,12 @@ class SyntheticsRoutesExtendedTest {
             val (userId, orgId) = seedUserAndOrg()
             every {
                 mockService.updateVariable(
-                    99, orgId, any<SyntheticVariableRequest>()
+                    resourceId(MISSING_VARIABLE_UUID), orgId, any<SyntheticVariableRequest>()
                 )
             } returns null
             application { installTestApp() }
 
-            val r = client.put("$SYNTHETICS_VARIABLES_PATH/99") {
+            val r = client.put("$SYNTHETICS_VARIABLES_PATH/$MISSING_VARIABLE_UUID") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_VAR_VALUE)
@@ -748,7 +756,7 @@ class SyntheticsRoutesExtendedTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             every {
-                mockService.deleteVariable(1, orgId)
+                mockService.deleteVariable(resourceId(VARIABLE_UUID), orgId)
             } returns true
             application { installTestApp() }
 
@@ -764,11 +772,11 @@ class SyntheticsRoutesExtendedTest {
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             every {
-                mockService.deleteVariable(99, orgId)
+                mockService.deleteVariable(resourceId(MISSING_VARIABLE_UUID), orgId)
             } returns false
             application { installTestApp() }
 
-            val r = client.delete("$SYNTHETICS_VARIABLES_PATH/99") {
+            val r = client.delete("$SYNTHETICS_VARIABLES_PATH/$MISSING_VARIABLE_UUID") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)

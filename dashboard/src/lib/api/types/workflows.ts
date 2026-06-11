@@ -137,7 +137,7 @@ export interface WorkflowRequest {
 export type WorkflowUpdateRequest = Partial<Omit<WorkflowRequest, 'trigger_name'>>
 
 export interface WorkflowResponse {
-  id: number
+  id: string
   name: string
   trigger_name: string
   enabled: boolean
@@ -165,8 +165,8 @@ export interface WorkflowRunStepProgress {
 }
 
 export interface WorkflowRunStepResponse {
-  id: number
-  run_id: number
+  id: string
+  run_id: string
   node_id: string
   type: string
   status: string
@@ -179,9 +179,9 @@ export interface WorkflowRunStepResponse {
 }
 
 export interface WorkflowRunResponse {
-  id: number
-  workflow_id: number
-  workflow_version_id: number
+  id: string
+  workflow_id: string
+  workflow_version_id: string
   trigger_name: string
   once_for: string
   status: string
@@ -200,12 +200,12 @@ export interface WorkflowRunInstanceRequest {
 }
 
 export interface WorkflowRunCancelResponse {
-  id: number
+  id: string
   status: string
 }
 
 export interface WorkflowWebhookSigningResponse {
-  workflow_id: number
+  workflow_id: string
   webhook_url: string
   signing_secret: string
   signature_header: string
@@ -299,7 +299,7 @@ export interface InstantiateBlueprintRequest {
 }
 
 export interface WorkflowOverviewTopEntry {
-  workflow_id: number
+  workflow_id: string
   name: string
   run_count: number
 }
@@ -324,10 +324,10 @@ export interface WorkflowUsageResponse {
 
 export interface WorkflowAuditEntry {
   id: string
-  workflow_id?: number | null
-  run_id?: number | null
+  workflow_id?: string | null
+  run_id?: string | null
   action: string
-  actor_user_id?: number | null
+  actor_user_id?: string | null
   detail: Record<string, string>
   created_at: string
 }

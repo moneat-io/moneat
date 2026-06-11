@@ -23,7 +23,11 @@ import {
   resolveInfraFacetValue,
 } from '../infrastructureFacets'
 
-function makeHost({id, ...overrides}: Partial<DdHostResponse> & {id: number}): DdHostResponse {
+const HOST_ID_WEB = '11111111-1111-4111-8111-111111111111'
+const HOST_ID_DB = '22222222-2222-4222-8222-222222222222'
+const HOST_ID_ORDERS = '33333333-3333-4333-8333-333333333333'
+
+function makeHost({id, ...overrides}: Omit<Partial<DdHostResponse>, 'id'> & {id: string}): DdHostResponse {
   return {
     id,
     hostname: `host-${id}`,
@@ -47,9 +51,9 @@ function hostResources(hosts: DdHostResponse[]) {
 
 describe('infrastructureFacets', () => {
   const hosts = [
-    makeHost({id: 1, platform: 'ubuntu', isOnline: true, tags: {service: 'web', region: 'us-east-1a'}}),
-    makeHost({id: 2, platform: 'ubuntu', isOnline: false, tags: {service: 'web', region: 'us-east-1b'}}),
-    makeHost({id: 3, platform: 'amazon-linux', isOnline: true, tags: {service: 'orders'}}),
+    makeHost({id: HOST_ID_WEB, platform: 'ubuntu', isOnline: true, tags: {service: 'web', region: 'us-east-1a'}}),
+    makeHost({id: HOST_ID_DB, platform: 'ubuntu', isOnline: false, tags: {service: 'web', region: 'us-east-1b'}}),
+    makeHost({id: HOST_ID_ORDERS, platform: 'amazon-linux', isOnline: true, tags: {service: 'orders'}}),
   ]
 
   it('builds sections with counts and drops empty facets', () => {
@@ -90,7 +94,7 @@ describe('infrastructureFacets', () => {
   it('includes only matching values (OR within a key)', () => {
     const resources = hostResources(hosts)
     const filtered = applyInfrastructureFacetFilters(resources, [{key: 'tag:service', value: 'web'}])
-    expect(filtered.map((r) => r.hostId)).toEqual([1, 2])
+    expect(filtered.map((r) => r.hostId)).toEqual([HOST_ID_WEB, HOST_ID_DB])
   })
 
   it('excludes values and ANDs across keys', () => {
@@ -99,8 +103,7 @@ describe('infrastructureFacets', () => {
       {key: 'tag:service', value: 'web'},
       {key: 'status', value: 'down', exclude: true},
     ])
-    // web hosts (1,2) minus the down one (2) -> just host 1.
-    expect(filtered.map((r) => r.hostId)).toEqual([1])
+    expect(filtered.map((r) => r.hostId)).toEqual([HOST_ID_WEB])
   })
 
   it('returns the input unchanged when there are no filters', () => {

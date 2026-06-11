@@ -50,6 +50,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import kotlin.time.Clock
 
 class MonitorServiceExtendedTest {
@@ -409,7 +410,7 @@ class MonitorServiceExtendedTest {
 
         val result = service.getHistoricalMetrics(999, 1000, 2000, null)
         assertTrue(result.dataPoints.isEmpty())
-        assertEquals(999, result.hostId)
+        assertNull(result.hostId)
     }
 
     @Test
@@ -615,7 +616,7 @@ class MonitorServiceExtendedTest {
     @Test
     fun `ensureOrganizationAlertTemplates creates default templates`() {
         every { alertRepo.listGlobalAlertsForHost(10, -1) } returns emptyList()
-        every { alertRepo.createAlert(any()) } returns 1L
+        every { alertRepo.createAlert(any()) } returns Uuid.parse("00000000-0000-0000-0000-000000000001")
 
         service.ensureOrganizationAlertTemplates(10)
         // Verify 7 default templates were created
@@ -652,7 +653,7 @@ class MonitorServiceExtendedTest {
                 scope = "global"
             )
         )
-        every { alertRepo.createAlert(any()) } returns 1L
+        every { alertRepo.createAlert(any()) } returns Uuid.parse("00000000-0000-0000-0000-000000000001")
 
         service.ensureHostAlertsSeeded(1, 10)
         io.mockk.verify(exactly = 1) { alertRepo.createAlert(any()) }
@@ -662,7 +663,7 @@ class MonitorServiceExtendedTest {
     fun `ensureHostAlertsSeeded seeds defaults when no templates`() {
         every { alertRepo.listByHostAndOrg(1, 10) } returns emptyList()
         every { alertRepo.listGlobalAlertsForHost(10, 1) } returns emptyList()
-        every { alertRepo.createAlert(any()) } returns 1L
+        every { alertRepo.createAlert(any()) } returns Uuid.parse("00000000-0000-0000-0000-000000000001")
 
         service.ensureHostAlertsSeeded(1, 10)
         // 7 default alert templates
@@ -715,7 +716,7 @@ class MonitorServiceExtendedTest {
         val result = agentApiKeyService.createKey(orgId, "test-key", userId)
         assertTrue(result.key.startsWith("magt_"))
         assertEquals("test-key", result.name)
-        assertTrue(result.id > 0)
+        assertEquals(result.id, Uuid.parse(result.id).toString())
         assertEquals(result.key.take(12), result.keyPrefix)
     }
 
@@ -811,7 +812,7 @@ class MonitorServiceExtendedTest {
     fun `AgentApiKeyService deleteKey returns false for non-existent key`() {
         ensureDb()
         val orgId = seedOrg()
-        assertFalse(agentApiKeyService.deleteKey(orgId, 99999))
+        assertFalse(agentApiKeyService.deleteKey(orgId, "99999999-9999-9999-9999-999999999999"))
     }
 
     @Test

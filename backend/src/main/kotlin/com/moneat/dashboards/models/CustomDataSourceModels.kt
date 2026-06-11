@@ -109,7 +109,7 @@ enum class CustomDataSourceType {
 @Serializable
 data class CustomDataSourceResponse(
     val id: String,
-    @SerialName("org_id") val orgId: Long,
+    @SerialName("org_id") val orgId: String,
     val name: String,
     val description: String? = null,
     @SerialName("source_type") val sourceType: String,
@@ -118,7 +118,7 @@ data class CustomDataSourceResponse(
     @SerialName("database_name") val databaseName: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
     val enabled: Boolean = true,
-    @SerialName("created_by") val createdBy: Long,
+    @SerialName("created_by") val createdBy: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("has_credentials") val hasCredentials: Boolean = true,

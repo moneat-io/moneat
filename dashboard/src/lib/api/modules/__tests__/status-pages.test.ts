@@ -20,6 +20,13 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const STATUS_PAGE_ID = '11111111-1111-4111-8111-111111111111'
+const STATUS_PAGE_CREATED_ID = '22222222-2222-4222-8222-222222222222'
+const STATUS_PAGE_MONITOR_ID = '33333333-3333-4333-8333-333333333333'
+const UPTIME_MONITOR_ID = '44444444-4444-4444-8444-444444444444'
+const INCIDENT_ID = '55555555-5555-4555-8555-555555555555'
+const INCIDENT_CREATED_ID = '66666666-6666-4666-8666-666666666666'
+const CUSTOM_DOMAIN_ID = '77777777-7777-4777-8777-777777777777'
 
 describe('Status Pages API', () => {
   beforeEach(() => {
@@ -31,7 +38,7 @@ describe('Status Pages API', () => {
   // ──── getStatusPages ────
 
   it('fetches status pages list', async () => {
-    const mock = [{ id: 'sp-1', name: 'Main', slug: 'main' }]
+    const mock = [{ id: STATUS_PAGE_ID, name: 'Main', slug: 'main' }]
 
     server.use(
       http.get(`${API_BASE}/v1/status-pages`, () => {
@@ -46,22 +53,22 @@ describe('Status Pages API', () => {
   // ──── getStatusPage ────
 
   it('fetches a single status page', async () => {
-    const mock = { id: 'sp-1', name: 'Main', slug: 'main', monitors: [] }
+    const mock = { id: STATUS_PAGE_ID, name: 'Main', slug: 'main', monitors: [] }
 
     server.use(
-      http.get(`${API_BASE}/v1/status-pages/sp-1`, () => {
+      http.get(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}`, () => {
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.getStatusPage('sp-1')
+    const result = await api.getStatusPage(STATUS_PAGE_ID)
     expect(result).toEqual(mock)
   })
 
   // ──── createStatusPage ────
 
   it('creates a status page', async () => {
-    const mock = { id: 'sp-2', name: 'New Page', slug: 'new-page' }
+    const mock = { id: STATUS_PAGE_CREATED_ID, name: 'New Page', slug: 'new-page' }
 
     server.use(
       http.post(`${API_BASE}/v1/status-pages`, async ({ request }) => {
@@ -78,17 +85,17 @@ describe('Status Pages API', () => {
   // ──── updateStatusPage ────
 
   it('updates a status page', async () => {
-    const mock = { id: 'sp-1', name: 'Updated', slug: 'main' }
+    const mock = { id: STATUS_PAGE_ID, name: 'Updated', slug: 'main' }
 
     server.use(
-      http.put(`${API_BASE}/v1/status-pages/sp-1`, async ({ request }) => {
+      http.put(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.name).toBe('Updated')
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.updateStatusPage('sp-1', { name: 'Updated' } as never)
+    const result = await api.updateStatusPage(STATUS_PAGE_ID, { name: 'Updated' } as never)
     expect(result).toEqual(mock)
   })
 
@@ -96,29 +103,29 @@ describe('Status Pages API', () => {
 
   it('deletes a status page', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/status-pages/sp-1`, () => {
+      http.delete(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}`, () => {
         return new HttpResponse(null, { status: 204 })
       })
     )
 
-    await api.deleteStatusPage('sp-1')
+    await api.deleteStatusPage(STATUS_PAGE_ID)
   })
 
   // ──── addMonitorsToStatusPage ────
 
   it('adds monitors to a status page', async () => {
-    const monitors = [{ monitorId: 'm-1', displayName: 'API' }]
-    const mock = [{ id: 'sm-1', monitorId: 'm-1', displayName: 'API' }]
+    const monitors = [{ monitorId: UPTIME_MONITOR_ID, displayName: 'API' }]
+    const mock = [{ id: STATUS_PAGE_MONITOR_ID, monitorId: UPTIME_MONITOR_ID, displayName: 'API' }]
 
     server.use(
-      http.post(`${API_BASE}/v1/status-pages/sp-1/monitors`, async ({ request }) => {
+      http.post(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/monitors`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.monitors).toEqual(monitors)
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.addMonitorsToStatusPage('sp-1', monitors as never)
+    const result = await api.addMonitorsToStatusPage(STATUS_PAGE_ID, monitors as never)
     expect(result).toEqual(mock)
   })
 
@@ -126,53 +133,53 @@ describe('Status Pages API', () => {
 
   it('removes a monitor from a status page', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/status-pages/sp-1/monitors/m-1`, () => {
+      http.delete(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/monitors/${UPTIME_MONITOR_ID}`, () => {
         return new HttpResponse(null, { status: 204 })
       })
     )
 
-    await api.removeMonitorFromStatusPage('sp-1', 'm-1')
+    await api.removeMonitorFromStatusPage(STATUS_PAGE_ID, UPTIME_MONITOR_ID)
   })
 
   // ──── getStatusPageIncidents ────
 
   it('fetches status page incidents', async () => {
-    const mock = [{ id: 'inc-1', title: 'Outage', status: 'investigating' }]
+    const mock = [{ id: INCIDENT_ID, title: 'Outage', status: 'investigating' }]
 
     server.use(
-      http.get(`${API_BASE}/v1/status-pages/sp-1/incidents`, () => {
+      http.get(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/incidents`, () => {
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.getStatusPageIncidents('sp-1')
+    const result = await api.getStatusPageIncidents(STATUS_PAGE_ID)
     expect(result).toEqual(mock)
   })
 
   // ──── createIncident ────
 
   it('creates an incident', async () => {
-    const mock = { id: 'inc-2', title: 'New Incident', status: 'investigating' }
+    const mock = { id: INCIDENT_CREATED_ID, title: 'New Incident', status: 'investigating' }
 
     server.use(
-      http.post(`${API_BASE}/v1/status-pages/sp-1/incidents`, async ({ request }) => {
+      http.post(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/incidents`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.title).toBe('New Incident')
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.createIncident('sp-1', { title: 'New Incident' } as never)
+    const result = await api.createIncident(STATUS_PAGE_ID, { title: 'New Incident' } as never)
     expect(result).toEqual(mock)
   })
 
   // ──── updateIncident ────
 
   it('updates an incident', async () => {
-    const mock = { id: 'inc-1', title: 'Updated', status: 'resolved' }
+    const mock = { id: INCIDENT_ID, title: 'Updated', status: 'resolved' }
 
     server.use(
-      http.put(`${API_BASE}/v1/status-pages/sp-1/incidents/inc-1`, async ({ request }) => {
+      http.put(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/incidents/${INCIDENT_ID}`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.status).toBe('resolved')
         return HttpResponse.json(mock)
@@ -180,8 +187,8 @@ describe('Status Pages API', () => {
     )
 
     const result = await api.updateIncident(
-      'sp-1',
-      'inc-1',
+      STATUS_PAGE_ID,
+      INCIDENT_ID,
       { status: 'resolved' } as never
     )
     expect(result).toEqual(mock)
@@ -190,11 +197,11 @@ describe('Status Pages API', () => {
   // ──── createIncidentUpdate ────
 
   it('creates an incident update', async () => {
-    const mock = { id: 'inc-1', title: 'Outage', status: 'monitoring' }
+    const mock = { id: INCIDENT_ID, title: 'Outage', status: 'monitoring' }
 
     server.use(
       http.post(
-        `${API_BASE}/v1/status-pages/sp-1/incidents/inc-1/updates`,
+        `${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/incidents/${INCIDENT_ID}/updates`,
         async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.message).toBe('Monitoring')
@@ -204,8 +211,8 @@ describe('Status Pages API', () => {
     )
 
     const result = await api.createIncidentUpdate(
-      'sp-1',
-      'inc-1',
+      STATUS_PAGE_ID,
+      INCIDENT_ID,
       { message: 'Monitoring' } as never
     )
     expect(result).toEqual(mock)
@@ -214,32 +221,32 @@ describe('Status Pages API', () => {
   // ──── addCustomDomain ────
 
   it('adds a custom domain', async () => {
-    const mock = { id: 1, domain: 'status.example.com', verified: false }
+    const mock = { id: CUSTOM_DOMAIN_ID, domain: 'status.example.com', verified: false }
 
     server.use(
-      http.post(`${API_BASE}/v1/status-pages/sp-1/domains`, async ({ request }) => {
+      http.post(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/domains`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.domain).toBe('status.example.com')
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.addCustomDomain('sp-1', 'status.example.com')
+    const result = await api.addCustomDomain(STATUS_PAGE_ID, 'status.example.com')
     expect(result).toEqual(mock)
   })
 
   // ──── verifyCustomDomain ────
 
   it('verifies a custom domain', async () => {
-    const mock = { id: 1, domain: 'status.example.com', verified: true }
+    const mock = { id: CUSTOM_DOMAIN_ID, domain: 'status.example.com', verified: true }
 
     server.use(
-      http.post(`${API_BASE}/v1/status-pages/sp-1/domains/1/verify`, () => {
+      http.post(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/domains/${CUSTOM_DOMAIN_ID}/verify`, () => {
         return HttpResponse.json(mock)
       })
     )
 
-    const result = await api.verifyCustomDomain('sp-1', 1)
+    const result = await api.verifyCustomDomain(STATUS_PAGE_ID, CUSTOM_DOMAIN_ID)
     expect(result).toEqual(mock)
   })
 
@@ -247,12 +254,12 @@ describe('Status Pages API', () => {
 
   it('removes a custom domain', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/status-pages/sp-1/domains/1`, () => {
+      http.delete(`${API_BASE}/v1/status-pages/${STATUS_PAGE_ID}/domains/${CUSTOM_DOMAIN_ID}`, () => {
         return new HttpResponse(null, { status: 204 })
       })
     )
 
-    await api.removeCustomDomain('sp-1', 1)
+    await api.removeCustomDomain(STATUS_PAGE_ID, CUSTOM_DOMAIN_ID)
   })
 
   // ──── getPublicStatusPage ────

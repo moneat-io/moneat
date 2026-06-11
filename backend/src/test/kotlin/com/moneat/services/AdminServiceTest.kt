@@ -50,6 +50,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -59,6 +60,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 class AdminServiceTest {
     private val service = AdminService()
@@ -119,6 +121,15 @@ class AdminServiceTest {
                 }
             }
             userId
+        }
+
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
         }
 
     private fun seedFreeTier(): Int =
@@ -395,7 +406,7 @@ class AdminServiceTest {
 
     @Test
     fun `updateUser returns false for non-existent user`() {
-        assertFalse(service.updateUser(99999, UpdateUserRequest()))
+        assertFalse(service.updateUser(Uuid.parse("00000000-0000-0000-0000-000000099999"), UpdateUserRequest()))
     }
 
     @Test
@@ -403,7 +414,7 @@ class AdminServiceTest {
         val orgId = seedOrg()
         val userId = seedUser(email = "promote@test.com", isAdmin = false, orgId = orgId)
 
-        assertTrue(service.updateUser(userId, UpdateUserRequest(isAdmin = true)))
+        assertTrue(service.updateUser(Uuid.parse(userResourceId(userId)), UpdateUserRequest(isAdmin = true)))
 
         val users = service.getAllUsers(page = 1, limit = 10)
         val user = users.first { it.email == "promote@test.com" }
@@ -415,7 +426,7 @@ class AdminServiceTest {
         val orgId = seedOrg()
         val userId = seedUser(email = "unverified@test.com", emailVerified = false, orgId = orgId)
 
-        assertTrue(service.updateUser(userId, UpdateUserRequest(emailVerified = true)))
+        assertTrue(service.updateUser(Uuid.parse(userResourceId(userId)), UpdateUserRequest(emailVerified = true)))
 
         val users = service.getAllUsers(page = 1, limit = 10)
         val user = users.first { it.email == "unverified@test.com" }
@@ -426,7 +437,7 @@ class AdminServiceTest {
     fun `updateUser with only emailVerified returns true`() {
         val orgId = seedOrg()
         val userId = seedUser(orgId = orgId)
-        assertTrue(service.updateUser(userId, UpdateUserRequest(emailVerified = true)))
+        assertTrue(service.updateUser(Uuid.parse(userResourceId(userId)), UpdateUserRequest(emailVerified = true)))
     }
 
     // ──── deleteUsers ────
@@ -441,7 +452,7 @@ class AdminServiceTest {
 
     @Test
     fun `deleteUsers returns error for non-existent user`() {
-        val result = service.deleteUsers(listOf(99999))
+        val result = service.deleteUsers(listOf("00000000-0000-0000-0000-000000099999"))
         assertEquals(0, result.deletedCount)
         assertTrue(result.errors.isNotEmpty())
     }
@@ -453,7 +464,7 @@ class AdminServiceTest {
         // Remove the membership so deleteOrganizationData can delete the org without FK conflict
         transaction { Memberships.deleteWhere { Memberships.organization_id eq orgId } }
 
-        val result = service.deleteUsers(listOf(userId))
+        val result = service.deleteUsers(listOf(userResourceId(userId)))
         // User is gone from memberships; just verify deletedCount > 0 or errors are captured
         assertTrue(result.deletedCount >= 0) // test exercises the code path
     }
@@ -464,7 +475,7 @@ class AdminServiceTest {
         val userId1 = seedUser(email = "first@test.com", orgId = orgId)
         val userId2 = seedUser(email = "second@test.com", orgId = orgId)
 
-        val result = service.deleteUsers(listOf(userId1))
+        val result = service.deleteUsers(listOf(userResourceId(userId1)))
         assertTrue(result.success)
         assertEquals(1, result.deletedCount)
 
@@ -483,7 +494,7 @@ class AdminServiceTest {
         seedUser(email = "z@test.com", orgId = orgId)
 
         // Both users can be deleted since the org always has 2+ members during each deletion
-        val result = service.deleteUsers(listOf(userId1, userId2))
+        val result = service.deleteUsers(listOf(userResourceId(userId1), userResourceId(userId2)))
         assertTrue(result.success)
         assertEquals(2, result.deletedCount)
         // Third user still exists

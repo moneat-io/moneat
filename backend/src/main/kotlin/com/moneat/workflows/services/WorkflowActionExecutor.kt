@@ -21,6 +21,7 @@ import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.WorkflowTestMessageResult
 import com.moneat.workflows.models.workflowStringView
@@ -68,7 +69,7 @@ class WorkflowActionExecutor(
                     organizationId = organizationId,
                     stepName = step.name,
                     params = step.params.mapValues { (_, value) -> interpolate(value, stringScope) },
-                    actorUserId = callerUserIdFromScope(stringScope)
+                    actorUserId = callerUserIdFromScope(organizationId, stringScope)
                 )
             } else {
                 throw IllegalArgumentException("Unknown workflow step ${step.name}")
@@ -76,8 +77,37 @@ class WorkflowActionExecutor(
         }
     }
 
-    private fun callerUserIdFromScope(scope: Map<String, String>): Int? =
-        scope[WORKFLOW_ACTOR_ID_SCOPE]?.toIntOrNull() ?: scope[WORKFLOW_CALLER_SCOPE]?.toIntOrNull()
+    private fun callerUserIdFromScope(
+        organizationId: Int,
+        scope: Map<String, String>
+    ): Int? =
+        sequenceOf(WORKFLOW_ACTOR_ID_SCOPE, WORKFLOW_CALLER_SCOPE)
+            .firstNotNullOfOrNull { key -> scope[key]?.let { resolveScopedUserId(organizationId, it) } }
+
+    private fun resolveScopedUserId(
+        organizationId: Int,
+        rawUserId: String
+    ): Int? {
+        val normalized = rawUserId.trim()
+        if (normalized.isEmpty()) return null
+
+        val resourceId = normalized.toUuidOrNull()
+        if (resourceId == null) {
+            return normalized.toIntOrNull()
+        }
+
+        return transaction {
+            Memberships
+                .innerJoin(Users)
+                .selectAll()
+                .where {
+                    (Memberships.organization_id eq organizationId) and
+                        (Users.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(Users.id)
+        }
+    }
 
     suspend fun sendTestMessageStep(
         organizationId: Int,

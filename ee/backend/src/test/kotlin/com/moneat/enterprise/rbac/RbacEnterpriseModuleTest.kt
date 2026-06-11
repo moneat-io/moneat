@@ -8,8 +8,13 @@ import com.moneat.enterprise.rbac.models.RbacRoleAssignments
 import com.moneat.enterprise.rbac.models.RbacRoles
 import com.moneat.enterprise.rbac.services.RbacService
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
+import com.moneat.shared.models.Users
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -35,7 +40,8 @@ class RbacEnterpriseModuleTest {
             )
         }
         TransactionManager.defaultDatabase = db
-        EnterpriseTestDatabaseHelper.resetSchema(RbacRoles, RbacRoleAssignments)
+        EnterpriseTestDatabaseHelper.resetSchema(Users, RbacRoles, RbacRoleAssignments)
+        seedUser(2)
     }
 
     @AfterEach
@@ -59,7 +65,7 @@ class RbacEnterpriseModuleTest {
     @Test
     fun `resolves granular permissions for an assigned user`() {
         val role = seed.createRole(1, "runner", listOf("workflows:run"), null)
-        seed.assignRole(1, role.id, 2)
+        seed.assignRole(1, internalRoleId(role.id), 2)
         assertEquals(setOf("workflows:run"), module.resolvePermissions(1, 2))
         assertEquals(true, module.hasPermission(1, 2, "workflows:run"))
         assertEquals(false, module.hasPermission(1, 2, "incidents:write"))
@@ -71,4 +77,23 @@ class RbacEnterpriseModuleTest {
         assertTrue(module.licenseFeature.isNotBlank())
         module.stopBackgroundJobs()
     }
+
+    private fun seedUser(id: Int) {
+        transaction {
+            Users.insert {
+                it[Users.id] = id
+                it[email] = "user-$id@rbac-module.test"
+                it[password_hash] = "x"
+            }
+        }
+    }
+
+    private fun internalRoleId(resourceId: String): Int =
+        transaction {
+            RbacRoles
+                .selectAll()
+                .where { RbacRoles.resourceId eq kotlin.uuid.Uuid.parse(resourceId) }
+                .single()[RbacRoles.id]
+                .value
+        }
 }

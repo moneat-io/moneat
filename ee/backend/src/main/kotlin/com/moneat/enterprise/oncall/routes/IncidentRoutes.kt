@@ -6,8 +6,13 @@ package com.moneat.enterprise.oncall.routes
 
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.enterprise.oncall.models.OnCallAlerts
+import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
@@ -24,6 +29,11 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 
 private const val DEFAULT_INCIDENT_LIMIT = 50
 private const val MIN_INCIDENT_LIMIT = 1
@@ -56,12 +66,12 @@ data class DeclareIncidentRequest(
 
 @Serializable
 data class AddAlertToIncidentRequest(
-    val alertId: Int,
+    val alertId: String,
 )
 
 @Serializable
 data class ReassignIncidentRequest(
-    val toUserId: Int,
+    val toUserId: String,
 )
 
 @Serializable
@@ -135,21 +145,97 @@ private suspend fun ApplicationCall.requireUserContext(): OnCallUserContext? {
     return OnCallUserContext(organizationId, userId)
 }
 
-private suspend fun ApplicationCall.requireAlertId(parameterName: String = "id"): Int? =
-    requireIntPathParameter(parameterName, INVALID_ALERT_ID_MESSAGE)
+private suspend fun ApplicationCall.requireAlertId(
+    organizationId: Int,
+    parameterName: String = "id",
+): Int? =
+    requireAlertIdValue(parameters[parameterName], organizationId)
 
-private suspend fun ApplicationCall.requireIncidentId(): Int? =
-    requireIntPathParameter("id", INVALID_INCIDENT_ID_MESSAGE)
+private suspend fun ApplicationCall.requireIncidentId(organizationId: Int): Int? =
+    requireIncidentIdValue(parameters["id"], organizationId)
 
-private suspend fun ApplicationCall.requireIntPathParameter(
-    parameterName: String,
-    errorMessage: String,
+private suspend fun ApplicationCall.requireAlertIdValue(
+    raw: String?,
+    organizationId: Int,
 ): Int? {
-    val id = parameters[parameterName]?.toIntOrNull()
+    val resourceId = parseOnCallResourceId(raw)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ALERT_ID_MESSAGE))
+        return null
+    }
+    val id =
+        transaction {
+            OnCallAlerts
+                .selectAll()
+                .where {
+                    (OnCallAlerts.resourceId eq resourceId) and
+                        (OnCallAlerts.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(OnCallAlerts.id)
+                ?.value
+        }
     if (id == null) {
-        respond(HttpStatusCode.BadRequest, ErrorResponse(errorMessage))
+        respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
     }
     return id
+}
+
+private suspend fun ApplicationCall.requireIncidentIdValue(
+    raw: String?,
+    organizationId: Int,
+): Int? {
+    val resourceId = parseOnCallResourceId(raw)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_INCIDENT_ID_MESSAGE))
+        return null
+    }
+    val id =
+        transaction {
+            OnCallIncidents
+                .selectAll()
+                .where {
+                    (OnCallIncidents.resourceId eq resourceId) and
+                        (OnCallIncidents.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(OnCallIncidents.id)
+                ?.value
+        }
+    if (id == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(INCIDENT_NOT_FOUND_MESSAGE))
+    }
+    return id
+}
+
+private fun parseOnCallResourceId(raw: String?): Uuid? =
+    raw?.toUuidOrNull()
+
+private suspend fun ApplicationCall.requireReassignmentUserId(
+    organizationId: Int,
+    raw: String,
+): Int? {
+    val resourceId = parseOnCallResourceId(raw)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid user ID"))
+        return null
+    }
+    val userId =
+        transaction {
+            Users
+                .innerJoin(Memberships)
+                .selectAll()
+                .where {
+                    (Users.resource_id eq resourceId) and
+                        (Memberships.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Users.id)
+        }
+    if (userId == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+    }
+    return userId
 }
 
 private suspend fun ApplicationCall.ensureAlertInOrganization(
@@ -208,7 +294,7 @@ private fun parseLimit(rawLimit: Int?): Int =
 private fun Route.registerGetAlertRoute(alertServiceProvider: () -> OnCallAlertService) {
     get("/{id}") {
         val context = call.requireUserContext() ?: return@get
-        val alertId = call.requireAlertId() ?: return@get
+        val alertId = call.requireAlertId(context.organizationId) ?: return@get
         val alert = alertServiceProvider().getAlert(alertId, context.userId)
         if (alert != null && alert.organizationId == context.organizationId) {
             call.respond(alert)
@@ -221,7 +307,7 @@ private fun Route.registerGetAlertRoute(alertServiceProvider: () -> OnCallAlertS
 private fun Route.registerAlertTimelineRoute(alertServiceProvider: () -> OnCallAlertService) {
     get("/{id}/timeline") {
         val organizationId = call.requireOrganizationId() ?: return@get
-        val alertId = call.requireAlertId() ?: return@get
+        val alertId = call.requireAlertId(organizationId) ?: return@get
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, organizationId)) return@get
         call.respond(alertService.getTimeline(alertId))
@@ -231,7 +317,7 @@ private fun Route.registerAlertTimelineRoute(alertServiceProvider: () -> OnCallA
 private fun Route.registerAcknowledgeAlertRoute(alertServiceProvider: () -> OnCallAlertService) {
     post("/{id}/acknowledge") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId() ?: return@post
+        val alertId = call.requireAlertId(context.organizationId) ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val acknowledged = alertService.acknowledge(alertId, context.userId)
@@ -246,7 +332,7 @@ private fun Route.registerAcknowledgeAlertRoute(alertServiceProvider: () -> OnCa
 private fun Route.registerResolveAlertRoute(alertServiceProvider: () -> OnCallAlertService) {
     post("/{id}/resolve") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId() ?: return@post
+        val alertId = call.requireAlertId(context.organizationId) ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val resolved = alertService.resolve(alertId, context.userId)
@@ -261,11 +347,12 @@ private fun Route.registerResolveAlertRoute(alertServiceProvider: () -> OnCallAl
 private fun Route.registerReassignAlertRoute(alertServiceProvider: () -> OnCallAlertService) {
     post("/{id}/reassign") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId() ?: return@post
+        val alertId = call.requireAlertId(context.organizationId) ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val request = call.receive<ReassignIncidentRequest>()
-        val reassigned = alertService.reassign(alertId, request.toUserId, context.userId)
+        val toUserId = call.requireReassignmentUserId(context.organizationId, request.toUserId) ?: return@post
+        val reassigned = alertService.reassign(alertId, toUserId, context.userId)
         if (reassigned) {
             call.respond(HttpStatusCode.OK, MessageResponse("Alert reassigned"))
         } else {
@@ -277,7 +364,7 @@ private fun Route.registerReassignAlertRoute(alertServiceProvider: () -> OnCallA
 private fun Route.registerAddAlertNoteRoute(alertServiceProvider: () -> OnCallAlertService) {
     post("/{id}/notes") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId() ?: return@post
+        val alertId = call.requireAlertId(context.organizationId) ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val request = call.receive<AddNoteRequest>()
@@ -289,7 +376,7 @@ private fun Route.registerAddAlertNoteRoute(alertServiceProvider: () -> OnCallAl
 private fun Route.registerViewAlertRoute(alertServiceProvider: () -> OnCallAlertService) {
     post("/{id}/view") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId() ?: return@post
+        val alertId = call.requireAlertId(context.organizationId) ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         alertService.viewAlert(alertId, context.userId)
@@ -300,7 +387,7 @@ private fun Route.registerViewAlertRoute(alertServiceProvider: () -> OnCallAlert
 private fun Route.registerUnavailableAlertRoute(alertServiceProvider: () -> OnCallAlertService) {
     post("/{id}/unavailable") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId() ?: return@post
+        val alertId = call.requireAlertId(context.organizationId) ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val result = alertService.markUnavailable(alertId, context.userId)
@@ -318,7 +405,7 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
 ) {
     post("/{alertId}/declare-incident") {
         val context = call.requireUserContext() ?: return@post
-        val alertId = call.requireAlertId("alertId") ?: return@post
+        val alertId = call.requireAlertId(context.organizationId, "alertId") ?: return@post
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val request = call.receive<DeclareIncidentRequest>()
@@ -371,7 +458,7 @@ private fun Route.registerListDeclaredIncidentsRoute(onCallIncidentService: OnCa
 private fun Route.registerGetDeclaredIncidentRoute(onCallIncidentService: OnCallIncidentService) {
     get("/{id}") {
         val organizationId = call.requireOrganizationId() ?: return@get
-        val incidentId = call.requireIncidentId() ?: return@get
+        val incidentId = call.requireIncidentId(organizationId) ?: return@get
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, organizationId)) return@get
         val incident = onCallIncidentService.getIncident(incidentId)
         if (incident != null) {
@@ -385,7 +472,7 @@ private fun Route.registerGetDeclaredIncidentRoute(onCallIncidentService: OnCall
 private fun Route.registerResolveDeclaredIncidentRoute(onCallIncidentService: OnCallIncidentService) {
     post("/{id}/resolve") {
         val context = call.requireUserContext() ?: return@post
-        val incidentId = call.requireIncidentId() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, context.organizationId)) return@post
         val request = call.receiveNullable<ResolveIncidentRequest>() ?: ResolveIncidentRequest()
         val incident = onCallIncidentService.resolveIncident(incidentId, context.userId, request.note)
@@ -403,17 +490,18 @@ private fun Route.registerAddAlertToIncidentRoute(
 ) {
     post("/{id}/add-alert") {
         val organizationId = call.requireOrganizationId() ?: return@post
-        val incidentId = call.requireIncidentId() ?: return@post
+        val incidentId = call.requireIncidentId(organizationId) ?: return@post
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, organizationId)) return@post
         val request = call.receive<AddAlertToIncidentRequest>()
-        val alert = alertServiceProvider().getAlert(request.alertId)
+        val alertId = call.requireAlertIdValue(request.alertId, organizationId) ?: return@post
+        val alert = alertServiceProvider().getAlert(alertId)
         if (alert == null || alert.organizationId != organizationId) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Alert not found or not in organization"))
             return@post
         }
 
         try {
-            onCallIncidentService.addAlertToIncident(incidentId, request.alertId)
+            onCallIncidentService.addAlertToIncident(incidentId, alertId)
             call.respond(HttpStatusCode.OK, MessageResponse("Alert added to incident"))
         } catch (e: Exception) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -424,7 +512,7 @@ private fun Route.registerAddAlertToIncidentRoute(
 private fun Route.registerIncidentTimelineRoute(onCallIncidentService: OnCallIncidentService) {
     get("/{id}/timeline") {
         val organizationId = call.requireOrganizationId() ?: return@get
-        val incidentId = call.requireIncidentId() ?: return@get
+        val incidentId = call.requireIncidentId(organizationId) ?: return@get
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, organizationId)) return@get
         val timeline = onCallIncidentService.getIncidentTimeline(incidentId)
         call.respond(timeline)
@@ -434,7 +522,7 @@ private fun Route.registerIncidentTimelineRoute(onCallIncidentService: OnCallInc
 private fun Route.registerAddIncidentNoteRoute(onCallIncidentService: OnCallIncidentService) {
     post("/{id}/notes") {
         val context = call.requireUserContext() ?: return@post
-        val incidentId = call.requireIncidentId() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, context.organizationId)) return@post
         val request = call.receive<AddNoteRequest>()
         onCallIncidentService.addNote(incidentId, context.userId, request.note)

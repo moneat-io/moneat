@@ -541,7 +541,7 @@ function apmGroupKey(group: {
   service: string
   operation: string
   resource: string
-  projectId?: number | null
+  projectId?: string | null
 }): string {
   return [group.source, group.service, group.operation, group.resource, group.projectId ?? 'org'].join('|')
 }

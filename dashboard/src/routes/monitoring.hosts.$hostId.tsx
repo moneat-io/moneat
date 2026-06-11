@@ -278,7 +278,6 @@ function HostMonitoringLimitBanner({state}: {state: HostMonitoringLimitState}) {
 
 function HostDetailPage() {
   const {hostId} = Route.useParams()
-  const hostIdNum = Number(hostId)
   const [timeRange, setTimeRange] = useState<TimeRange>('24h')
   const [containerViewMode, setContainerViewMode] = useState<ContainerViewMode>(getInitialContainerViewMode())
   const [activeTab, setActiveTab] = useState('overview')
@@ -306,8 +305,8 @@ function HostDetailPage() {
   }, [containerViewMode])
 
   const {data: host, isLoading: hostLoading} = useQuery({
-    queryKey: ['host', hostIdNum],
-    queryFn: () => api.getHost(hostIdNum),
+    queryKey: ['host', hostId],
+    queryFn: () => api.getHost(hostId),
     refetchInterval: 30000,
   })
 
@@ -321,14 +320,14 @@ function HostDetailPage() {
   const to = Math.floor(now.getTime() / 1000).toString()
 
   const {data: metrics, isLoading: metricsLoading} = useQuery({
-    queryKey: ['host-metrics', hostIdNum, effectiveTimeRange],
-    queryFn: () => api.getHostMetrics(hostIdNum, from, to),
+    queryKey: ['host-metrics', hostId, effectiveTimeRange],
+    queryFn: () => api.getHostMetrics(hostId, from, to),
     refetchInterval: 30000,
   })
 
   const {data: containerData} = useQuery({
-    queryKey: ['host-containers', hostIdNum],
-    queryFn: () => api.getHostContainers(hostIdNum),
+    queryKey: ['host-containers', hostId],
+    queryFn: () => api.getHostContainers(hostId),
     refetchInterval: 30000,
   })
 
@@ -1082,7 +1081,7 @@ function HostDetailPage() {
           </TabsContent>
 
           <TabsContent value="alerts" className="space-y-4">
-            <AlertsTab hostId={hostIdNum} />
+            <AlertsTab hostId={hostId} />
           </TabsContent>
         </Tabs>
       </div>

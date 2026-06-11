@@ -23,13 +23,13 @@ import type {
 } from '../types'
 
 type CurrentUserResponse = {
-  id: number
+  id: string
   email: string
   name?: string
   emailVerified: boolean
   onboardingCompleted: boolean
   isAdmin?: boolean
-  orgId?: number
+  orgId?: string
   organizationSlug?: string
   orgRole?: string
   demoEpochMs?: number | null
@@ -63,11 +63,11 @@ export function userMethods(core: ApiClientCore) {
       }),
 
     getOrganizations: () =>
-      core.request<Array<{ id: number; name: string; slug: string }>>(
+      core.request<Array<{ id: string; name: string; slug: string }>>(
         `${base}/organizations`
       ),
 
-    getOrganizationAccountSettings: (organizationId: number) =>
+    getOrganizationAccountSettings: (organizationId: string) =>
       core.request<OrganizationAccountSettings>(
         `${base}/organizations/${organizationId}`
       ),
@@ -77,7 +77,7 @@ export function userMethods(core: ApiClientCore) {
         `${base}/account/deletion-validation`
       ),
 
-    getOrganizationDeletionValidation: (organizationId: number) =>
+    getOrganizationDeletionValidation: (organizationId: string) =>
       core.request<OrganizationDeletionValidation>(
         `${base}/organizations/${organizationId}/deletion-validation`
       ),
@@ -89,7 +89,7 @@ export function userMethods(core: ApiClientCore) {
       }),
 
     deleteOrganization: (
-      organizationId: number,
+      organizationId: string,
       confirmation: string
     ) =>
       core.request<{ message: string }>(

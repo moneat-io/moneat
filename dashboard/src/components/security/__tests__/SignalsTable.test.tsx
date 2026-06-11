@@ -40,7 +40,7 @@ describe('SignalsTable', () => {
 
   it('calls onSelect with the clicked signal', () => {
     const onSelect = vi.fn()
-    const signal = makeSignal({id: 42})
+    const signal = makeSignal({id: 'signal-42'})
     render(<SignalsTable signals={[signal]} onSelect={onSelect} />)
     fireEvent.click(screen.getByText('Repeated failed logins'))
     expect(onSelect).toHaveBeenCalledWith(signal)
@@ -48,7 +48,7 @@ describe('SignalsTable', () => {
 
   it('activates focused rows with the keyboard', () => {
     const onSelect = vi.fn()
-    const signal = makeSignal({id: 42})
+    const signal = makeSignal({id: 'signal-42'})
     render(<SignalsTable signals={[signal]} onSelect={onSelect} />)
     const row = screen.getByRole('button', {name: 'Open signal Repeated failed logins'})
 

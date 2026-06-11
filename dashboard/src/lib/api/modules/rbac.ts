@@ -35,29 +35,34 @@ export function rbacMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateRbacRole: (roleId: number, request: UpdateRbacRoleRequest) =>
-      core.request<RbacRole>(`${base}/rbac/roles/${roleId}`, {
+    updateRbacRole: (roleId: string, request: UpdateRbacRoleRequest) =>
+      core.request<RbacRole>(`${base}/rbac/roles/${encodeURIComponent(roleId)}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteRbacRole: (roleId: number) =>
-      core.request<void>(`${base}/rbac/roles/${roleId}`, {
+    deleteRbacRole: (roleId: string) =>
+      core.request<void>(`${base}/rbac/roles/${encodeURIComponent(roleId)}`, {
         method: 'DELETE',
       }),
 
-    getRbacRoleAssignments: (roleId: number) =>
-      core.request<RbacRoleAssignment[]>(`${base}/rbac/roles/${roleId}/assignments`),
+    getRbacRoleAssignments: (roleId: string) =>
+      core.request<RbacRoleAssignment[]>(
+        `${base}/rbac/roles/${encodeURIComponent(roleId)}/assignments`
+      ),
 
-    assignRbacRole: (roleId: number, userId: number) =>
-      core.request<RbacRoleAssignment>(`${base}/rbac/roles/${roleId}/assignments`, {
+    assignRbacRole: (roleId: string, userId: string) =>
+      core.request<RbacRoleAssignment>(`${base}/rbac/roles/${encodeURIComponent(roleId)}/assignments`, {
         method: 'POST',
         body: JSON.stringify({user_id: userId}),
       }),
 
-    unassignRbacRole: (roleId: number, userId: number) =>
-      core.request<void>(`${base}/rbac/roles/${roleId}/assignments/${userId}`, {
+    unassignRbacRole: (roleId: string, userId: string) =>
+      core.request<void>(
+        `${base}/rbac/roles/${encodeURIComponent(roleId)}/assignments/${encodeURIComponent(userId)}`,
+        {
         method: 'DELETE',
-      }),
+        }
+      ),
   }
 }

@@ -20,6 +20,7 @@ import com.moneat.auth.requireCurrentOrg
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.events.models.CreateAuthTokenRequest
 import com.moneat.events.models.UpdateAuthTokenRequest
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -32,6 +33,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 fun Route.authTokenRoutes(
     authTokenService: AuthTokenService = GlobalContext.get().get(),
@@ -78,7 +80,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleRevokeAuthToken(
     authTokenService: AuthTokenService,
 ) {
     val context = call.requireCurrentOrg() ?: return
-    val tokenId = call.parameters["tokenId"]?.toIntOrNull()
+    val tokenId = call.parameters["tokenId"]?.let(::parseAuthTokenResourceId)
     if (tokenId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
         return
@@ -95,7 +97,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAuthToken(
     authTokenService: AuthTokenService,
 ) {
     val context = call.requireCurrentOrg() ?: return
-    val tokenId = call.parameters["tokenId"]?.toIntOrNull()
+    val tokenId = call.parameters["tokenId"]?.let(::parseAuthTokenResourceId)
     if (tokenId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid token ID"))
         return
@@ -105,7 +107,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAuthToken(
         val success =
             authTokenService.updateToken(
                 userId = context.userId,
-                tokenId = tokenId,
+                tokenResourceId = tokenId,
                 name = request.name,
                 scopes = request.scopes
             )
@@ -118,3 +120,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAuthToken(
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
     }
 }
+
+private fun parseAuthTokenResourceId(value: String): Uuid? =
+    value.toUuidOrNull()

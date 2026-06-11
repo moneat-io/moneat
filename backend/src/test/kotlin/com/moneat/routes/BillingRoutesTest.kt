@@ -86,6 +86,9 @@ class BillingRoutesTest {
         private const val BILLING_PAYG_BUDGET = "/v1/billing/payg-budget"
         private const val BILLING_ONCALL_SEATS = "/v1/billing/oncall-seats"
         private var db: Database? = null
+
+        private fun resourceId(id: Int): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
     }
 
     private lateinit var mockPricingTierService: PricingTierService
@@ -195,7 +198,7 @@ class BillingRoutesTest {
     }
 
     private fun makeUsageResponse(orgId: Int) = BillingUsageResponse(
-        organizationId = orgId,
+        organizationId = resourceId(orgId),
         periodStart = "2024-01-01",
         periodEnd = "2024-01-31",
         retentionDays = 30,
@@ -227,7 +230,7 @@ class BillingRoutesTest {
         usage: BillingUsageResponse,
         totalSpans: Long = 0
     ) = ApmSpanUsageDebugResponse(
-        organizationId = orgId,
+        organizationId = resourceId(orgId),
         periodStart = usage.periodStart,
         periodEnd = usage.periodEnd,
         totalSpans = totalSpans,
@@ -255,7 +258,7 @@ class BillingRoutesTest {
         orgId: Int,
         usage: BillingUsageResponse = makeUsageResponse(orgId)
     ) = BillingUsageInsightsResponse(
-        organizationId = orgId,
+        organizationId = resourceId(orgId),
         periodStart = usage.periodStart,
         periodEnd = usage.periodEnd,
         generatedAt = "2026-01-15T12:00:00Z",
@@ -455,7 +458,7 @@ class BillingRoutesTest {
                     limit = 20
                 )
             } returns ApmSpanUsageDebugResponse(
-                organizationId = orgId,
+                organizationId = resourceId(orgId),
                 periodStart = usage.periodStart,
                 periodEnd = usage.periodEnd,
                 totalSpans = 42,

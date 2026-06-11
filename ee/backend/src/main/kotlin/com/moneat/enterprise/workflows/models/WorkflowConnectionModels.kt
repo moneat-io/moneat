@@ -9,6 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 // Foreign keys (organization_id, created_by) are declared in the Flyway migration
 // (V115__workflow_connections.sql), which is the authoritative schema in production.
@@ -21,6 +22,7 @@ import org.jetbrains.exposed.v1.datetime.timestamp
  * `last_four` is retained in the clear for display.
  */
 object WorkflowConnections : IntIdTable("workflow_connections") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val type = varchar("type", 64)
     val name = varchar("name", 255)
@@ -47,6 +49,7 @@ object WorkflowConnections : IntIdTable("workflow_connections") {
  * run scope (see `selection_rule`).
  */
 object WorkflowConnectionGroups : IntIdTable("workflow_connection_groups") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val name = varchar("name", 255)
     val connectionType = varchar("connection_type", 64)
@@ -87,7 +90,7 @@ data class RotateConnectionRequest(
 
 @Serializable
 data class ConnectionResponse(
-    val id: Int,
+    val id: String,
     val type: String,
     val name: String,
     @SerialName("identifier_tags") val identifierTags: Map<String, String>,
@@ -100,16 +103,16 @@ data class ConnectionResponse(
 data class CreateConnectionGroupRequest(
     val name: String,
     @SerialName("connection_type") val connectionType: String,
-    @SerialName("member_connection_ids") val memberConnectionIds: List<Int> = emptyList(),
+    @SerialName("member_connection_ids") val memberConnectionIds: List<String> = emptyList(),
     @SerialName("selection_strategy") val selectionStrategy: String = "first_match"
 )
 
 @Serializable
 data class ConnectionGroupResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("connection_type") val connectionType: String,
-    @SerialName("member_connection_ids") val memberConnectionIds: List<Int>,
+    @SerialName("member_connection_ids") val memberConnectionIds: List<String>,
     @SerialName("selection_strategy") val selectionStrategy: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String

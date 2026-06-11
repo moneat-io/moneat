@@ -34,7 +34,7 @@ describe('SignalDetailContent', () => {
       signal: makeSignal({status: 'archived', archive_reason: 'benign'}),
       audit: [
         {
-          id: 1,
+          id: 'audit-1',
           action: 'status_change',
           from_status: 'open',
           to_status: 'archived',

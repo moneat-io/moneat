@@ -21,6 +21,11 @@ import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.models.CustomDataSources
 import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.requireResourceId
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.shared.services.userResourceIds
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -33,14 +38,21 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 class CustomDataSourceService {
+    private data class ResponseResourceIds(
+        val orgResourceId: String,
+        val users: Map<Int, String>,
+    ) {
+        fun createdBy(userId: Long): String =
+            users.requireResourceId(userId.toInt(), "user")
+    }
+
     private fun parseUuid(value: String): Uuid? =
-        runCatching { Uuid.parse(value) }.getOrNull()
+        value.toUuidOrNull()
 
     fun isValidResourceId(value: String?): Boolean =
         value?.let(::parseUuid) != null
@@ -56,17 +68,22 @@ class CustomDataSourceService {
         }
 
     fun listDataSources(orgId: Long): List<CustomDataSourceResponse> = transaction {
-        CustomDataSources.selectAll()
+        val rows = CustomDataSources.selectAll()
             .where { CustomDataSources.orgId eq orgId }
             .orderBy(CustomDataSources.name)
-            .map { it.toResponse() }
+            .toList()
+        if (rows.isEmpty()) return@transaction emptyList()
+
+        val resourceIds = responseResourceIds(orgId, rows)
+        rows.map { row -> row.toResponse(resourceIds) }
     }
 
     fun getDataSource(id: Long, orgId: Long): CustomDataSourceResponse? = transaction {
-        CustomDataSources.selectAll()
+        val row = CustomDataSources.selectAll()
             .where { (CustomDataSources.id eq id) and (CustomDataSources.orgId eq orgId) }
-            .firstOrNull()
-            ?.toResponse()
+            .firstOrNull() ?: return@transaction null
+
+        row.toResponse(responseResourceIds(orgId, listOf(row)))
     }
 
     fun getDataSource(resourceId: String, orgId: Long): CustomDataSourceResponse? =
@@ -113,7 +130,7 @@ class CustomDataSourceService {
             CustomDataSources.selectAll()
                 .where { CustomDataSources.id eq id }
                 .first()
-                .toResponse()
+                .let { row -> row.toResponse(responseResourceIds(orgId, listOf(row))) }
         }
     }
 
@@ -174,7 +191,7 @@ class CustomDataSourceService {
             CustomDataSources.selectAll()
                 .where { CustomDataSources.id eq id }
                 .firstOrNull()
-                ?.toResponse()
+                ?.let { row -> row.toResponse(responseResourceIds(orgId, listOf(row))) }
         }
     }
 
@@ -207,9 +224,15 @@ class CustomDataSourceService {
         return CredentialEncryption.encrypt(credsJson)
     }
 
-    private fun ResultRow.toResponse() = CustomDataSourceResponse(
+    private fun responseResourceIds(orgId: Long, rows: List<ResultRow>) =
+        ResponseResourceIds(
+            orgResourceId = organizationResourceId(orgId),
+            users = userResourceIds(rows.map { row -> row[CustomDataSources.createdBy].toInt() }),
+        )
+
+    private fun ResultRow.toResponse(resourceIds: ResponseResourceIds) = CustomDataSourceResponse(
         id = this[CustomDataSources.resourceId].toString(),
-        orgId = this[CustomDataSources.orgId],
+        orgId = resourceIds.orgResourceId,
         name = this[CustomDataSources.name],
         description = this[CustomDataSources.description],
         sourceType = this[CustomDataSources.sourceType],
@@ -222,7 +245,7 @@ class CustomDataSourceService {
             emptyMap()
         },
         enabled = this[CustomDataSources.enabled],
-        createdBy = this[CustomDataSources.createdBy],
+        createdBy = resourceIds.createdBy(this[CustomDataSources.createdBy]),
         createdAt = this[CustomDataSources.createdAt].toString(),
         updatedAt = this[CustomDataSources.updatedAt].toString(),
         hasCredentials = this[CustomDataSources.encryptedCredentials].isNotBlank(),

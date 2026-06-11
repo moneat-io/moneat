@@ -11,7 +11,7 @@ import kotlinx.serialization.json.JsonObject
 data class AiAssistantStreamRequest(
     val message: String,
     val conversationId: String? = null,
-    val projectId: Long? = null,
+    val projectId: String? = null,
 )
 
 @Serializable

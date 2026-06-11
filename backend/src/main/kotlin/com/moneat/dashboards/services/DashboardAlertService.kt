@@ -34,6 +34,7 @@ import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TaskLock
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.ApplicationConfig
@@ -52,6 +53,7 @@ import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.innerJoin
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -129,7 +131,7 @@ class DashboardAlertService(
     }
 
     private fun parseUuid(value: String): Uuid? =
-        runCatching { Uuid.parse(value) }.getOrNull()
+        value.toUuidOrNull()
 
     fun isValidResourceId(value: String?): Boolean =
         value?.let(::parseUuid) != null
@@ -210,20 +212,23 @@ class DashboardAlertService(
                 it[DashboardWidgetAlerts.updatedAt] = now
             } get DashboardWidgetAlerts.id
 
-            toResponse(
+            val row =
                 DashboardWidgetAlerts.selectAll().where {
                     DashboardWidgetAlerts.id eq id
                 }.first()
-            )
+            toResponse(row, resourceIdsForRows(listOf(row)))
         }
     }
 
     fun listAlerts(dashboardId: Long, orgId: Long): List<DashboardAlertResponse> {
         return transaction {
-            DashboardWidgetAlerts.selectAll().where {
-                (DashboardWidgetAlerts.dashboardId eq dashboardId) and
-                    (DashboardWidgetAlerts.orgId eq orgId)
-            }.orderBy(DashboardWidgetAlerts.createdAt, SortOrder.DESC).map { toResponse(it) }
+            val rows =
+                DashboardWidgetAlerts.selectAll().where {
+                    (DashboardWidgetAlerts.dashboardId eq dashboardId) and
+                        (DashboardWidgetAlerts.orgId eq orgId)
+                }.orderBy(DashboardWidgetAlerts.createdAt, SortOrder.DESC).toList()
+            val resourceIds = resourceIdsForRows(rows)
+            rows.map { toResponse(it, resourceIds) }
         }
     }
 
@@ -271,11 +276,11 @@ class DashboardAlertService(
                 it[updatedAt] = now
             }
 
-            toResponse(
+            val row =
                 DashboardWidgetAlerts.selectAll().where {
                     DashboardWidgetAlerts.id eq alertId
                 }.first()
-            )
+            toResponse(row, resourceIdsForRows(listOf(row)))
         }
     }
 
@@ -847,7 +852,38 @@ class DashboardAlertService(
             ALERT_CURRENT_VALUE_REFERENCE to JsonPrimitive(formattedCurrentValue)
         )
 
-    private fun toResponse(row: ResultRow): DashboardAlertResponse {
+    private data class DashboardAlertResourceIds(
+        val widgets: Map<Long, String>,
+        val dashboards: Map<Long, String>
+    ) {
+        fun widget(widgetId: Long): String =
+            widgets[widgetId] ?: error("Missing resource_id for dashboard widget $widgetId")
+
+        fun dashboard(dashboardId: Long): String =
+            dashboards[dashboardId] ?: error("Missing resource_id for dashboard $dashboardId")
+    }
+
+    private fun resourceIdsForRows(rows: List<ResultRow>): DashboardAlertResourceIds {
+        if (rows.isEmpty()) return DashboardAlertResourceIds(emptyMap(), emptyMap())
+        val widgetIds = rows.map { row -> row[DashboardWidgetAlerts.widgetId] }.distinct()
+        val dashboardIds = rows.map { row -> row[DashboardWidgetAlerts.dashboardId] }.distinct()
+        val widgets =
+            DashboardWidgets
+                .selectAll()
+                .where { DashboardWidgets.id inList widgetIds }
+                .associate { row -> row[DashboardWidgets.id] to row[DashboardWidgets.resourceId].toString() }
+        val dashboards =
+            Dashboards
+                .selectAll()
+                .where { Dashboards.id inList dashboardIds }
+                .associate { row -> row[Dashboards.id] to row[Dashboards.resourceId].toString() }
+        return DashboardAlertResourceIds(widgets = widgets, dashboards = dashboards)
+    }
+
+    private fun toResponse(
+        row: ResultRow,
+        resourceIds: DashboardAlertResourceIds
+    ): DashboardAlertResponse {
         val channels: NotificationChannels = suspendRunCatching {
             json.decodeFromString<NotificationChannels>(row[DashboardWidgetAlerts.notificationChannels])
         }.getOrElse {
@@ -856,8 +892,8 @@ class DashboardAlertService(
 
         return DashboardAlertResponse(
             id = row[DashboardWidgetAlerts.resourceId].toString(),
-            widgetId = widgetResourceId(row[DashboardWidgetAlerts.widgetId]),
-            dashboardId = dashboardResourceId(row[DashboardWidgetAlerts.dashboardId]),
+            widgetId = resourceIds.widget(row[DashboardWidgetAlerts.widgetId]),
+            dashboardId = resourceIds.dashboard(row[DashboardWidgetAlerts.dashboardId]),
             name = row[DashboardWidgetAlerts.name],
             condition = row[DashboardWidgetAlerts.condition],
             threshold = row[DashboardWidgetAlerts.threshold],
@@ -876,16 +912,4 @@ class DashboardAlertService(
             updatedAt = row[DashboardWidgetAlerts.updatedAt].toString()
         )
     }
-
-    private fun widgetResourceId(widgetId: Long): String =
-        DashboardWidgets.selectAll()
-            .where { DashboardWidgets.id eq widgetId }
-            .first()[DashboardWidgets.resourceId]
-            .toString()
-
-    private fun dashboardResourceId(dashboardId: Long): String =
-        Dashboards.selectAll()
-            .where { Dashboards.id eq dashboardId }
-            .first()[Dashboards.resourceId]
-            .toString()
 }

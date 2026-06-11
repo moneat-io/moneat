@@ -22,6 +22,7 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.OnCallIncidents
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
 import com.moneat.uptime.services.UptimeService
 import io.ktor.client.statement.bodyAsText
@@ -31,11 +32,16 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -273,7 +279,7 @@ class SummaryService(
 
     suspend fun getIncidentContext(
         organizationId: Int,
-        incidentId: Long,
+        incidentId: Uuid,
         userId: Int,
     ): IncidentContextResponse {
         val systems = monitorService.listHosts(organizationId)
@@ -283,7 +289,7 @@ class SummaryService(
                 monitorService.getLatestMetrics(sys.id)
             }.getOrNull()
             HostMetricSnapshot(
-                systemId = sys.id.toString(),
+                systemId = sys.resourceId.toString(),
                 systemName = sys.displayName ?: sys.hostname,
                 cpuPercent = metrics?.cpuPercent,
                 memPercent = metrics?.memPercent,
@@ -298,10 +304,12 @@ class SummaryService(
         val recentLogErrors = queryRecentLogErrors(organizationId)
 
         val incident = runCatching {
-            FeatureRegistry.getOnCallBridge()?.getIncident(incidentId.toInt(), userId)
+            val numericIncidentId = resolveIncidentId(organizationId, incidentId)
+                ?: return@runCatching null
+            FeatureRegistry.getOnCallBridge()?.getIncident(numericIncidentId, userId)
                 ?.let { info ->
                     IncidentSummary(
-                        id = info.id.toLong(),
+                        id = incidentId.toString(),
                         title = info.title,
                         priorityLevel = "unknown",
                         status = info.status,
@@ -311,13 +319,26 @@ class SummaryService(
         }.getOrNull()
 
         return IncidentContextResponse(
-            incidentId = incidentId,
+            incidentId = incidentId.toString(),
             incident = incident,
             relatedAlerts = relatedAlerts,
             hostMetricsSummary = hostMetrics,
             recentLogErrors = recentLogErrors,
         )
     }
+
+    private fun resolveIncidentId(organizationId: Int, incidentId: Uuid): Int? =
+        transaction {
+            OnCallIncidents
+                .selectAll()
+                .where {
+                    (OnCallIncidents.resourceId eq incidentId) and
+                        (OnCallIncidents.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(OnCallIncidents.id)
+                ?.value
+        }
 
     private fun collectAlertsForSystem(sys: com.moneat.monitor.models.HostData): List<AlertSummary> =
         runCatching {

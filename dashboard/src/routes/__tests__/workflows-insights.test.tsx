@@ -59,7 +59,7 @@ const overview = {
   runs_last_30d: 80,
   success_rate: 0.9,
   failed_last_30d: 8,
-  top_workflows: [{workflow_id: 1, name: 'Pager', run_count: 12}],
+  top_workflows: [{workflow_id: '11111111-1111-4111-8111-111111111111', name: 'Pager', run_count: 12}],
 }
 
 const usage = {period: '2026-05', used: 80, limit: 1000, remaining: 920, unlimited: false}
@@ -78,6 +78,7 @@ const blueprints = [
 const audit = [
   {id: 'a1', action: 'workflow.created', detail: {}, created_at: '2026-05-01T00:00:00Z'},
 ]
+const WORKFLOW_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174307'
 
 function renderInsights() {
   const Component = InsightsRoute.component
@@ -99,7 +100,7 @@ describe('workflows insights route', () => {
     mockApi.getWorkflowUsage.mockResolvedValue(usage)
     mockApi.getWorkflowBlueprints.mockResolvedValue(blueprints)
     mockApi.getWorkflowAudit.mockResolvedValue(audit)
-    mockApi.instantiateBlueprint.mockResolvedValue({id: 9, name: 'Error spike alert'})
+    mockApi.instantiateBlueprint.mockResolvedValue({id: WORKFLOW_RESOURCE_ID, name: 'Error spike alert'})
   })
 
   it('guards the route via beforeLoad when unauthenticated', async () => {

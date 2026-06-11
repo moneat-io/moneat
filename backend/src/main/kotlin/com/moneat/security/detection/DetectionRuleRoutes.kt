@@ -19,6 +19,7 @@ package com.moneat.security.detection
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
@@ -35,6 +36,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 private const val RULE_ID_ROUTE = "/{ruleId}"
 private const val INVALID_RULE_ID_MESSAGE = "Invalid rule ID"
@@ -129,8 +131,7 @@ private suspend fun RoutingContext.handleList(service: DetectionRuleService) {
 private suspend fun RoutingContext.handleGet(service: DetectionRuleService) {
     val orgId = currentOrganizationId()
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
-    val ruleId = ruleIdFromPath()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_RULE_ID_MESSAGE))
+    val ruleId = ruleIdFromPath(service, orgId) ?: return
     val rule = service.get(orgId, ruleId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(RULE_NOT_FOUND_MESSAGE))
     call.respond(rule)
@@ -153,8 +154,7 @@ private suspend fun RoutingContext.handleUpdate(
     membershipService: OrgMembershipService,
 ) {
     val orgId = requireAdmin(membershipService) ?: return
-    val ruleId = ruleIdFromPath()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_RULE_ID_MESSAGE))
+    val ruleId = ruleIdFromPath(service, orgId) ?: return
     val request = call.receive<UpdateDetectionRuleRequest>()
     suspendRunCatching { service.update(orgId, ruleId, request) }.fold(
         onSuccess = { updated ->
@@ -173,8 +173,7 @@ private suspend fun RoutingContext.handleDelete(
     membershipService: OrgMembershipService,
 ) {
     val orgId = requireAdmin(membershipService) ?: return
-    val ruleId = ruleIdFromPath()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_RULE_ID_MESSAGE))
+    val ruleId = ruleIdFromPath(service, orgId) ?: return
     if (service.delete(orgId, ruleId)) {
         call.respond(HttpStatusCode.NoContent)
     } else {
@@ -187,8 +186,7 @@ private suspend fun RoutingContext.handlePreview(
     membershipService: OrgMembershipService,
 ) {
     val orgId = requireAdmin(membershipService) ?: return
-    val ruleId = ruleIdFromPath()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_RULE_ID_MESSAGE))
+    val ruleId = ruleIdFromPath(service, orgId) ?: return
     suspendRunCatching { service.preview(orgId, ruleId) }.fold(
         onSuccess = { preview ->
             if (preview == null) {
@@ -299,7 +297,24 @@ private suspend fun RoutingContext.respondRuleError(error: Throwable) {
     }
 }
 
-private fun RoutingContext.ruleIdFromPath(): Int? = call.parameters["ruleId"]?.toIntOrNull()
+private suspend fun RoutingContext.ruleIdFromPath(
+    service: DetectionRuleService,
+    organizationId: Int,
+): Int? {
+    val resourceId = call.parameters["ruleId"]?.let(::parseDetectionRuleResourceId)
+    if (resourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_RULE_ID_MESSAGE))
+        return null
+    }
+    val ruleId = service.resolveRuleId(organizationId, resourceId)
+    if (ruleId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(RULE_NOT_FOUND_MESSAGE))
+    }
+    return ruleId
+}
+
+private fun parseDetectionRuleResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private fun RoutingContext.currentOrganizationId(): Int? =
     call.principal<JWTPrincipal>()?.currentOrgIdOrNull()

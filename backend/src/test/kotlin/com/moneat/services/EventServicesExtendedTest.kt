@@ -632,6 +632,7 @@ class EventServicesExtendedTest {
         val now = Instant.parse("2026-06-02T12:00:00Z")
         return AlertEpisodeContext(
             id = 1,
+            resourceId = kotlin.uuid.Uuid.parse("11111111-1111-4111-8111-111111111111"),
             organizationId = ORGANIZATION_ID,
             source = AlertSource.ERROR_ALERT.name,
             deduplicationKey = errorAlertDedupKey(),

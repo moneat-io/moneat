@@ -48,7 +48,7 @@ data class AuthResponse(
 
 @Serializable
 data class UserResponse(
-    val id: Int,
+    val id: String,
     val email: String,
     val name: String?,
     val emailVerified: Boolean = false,
@@ -60,7 +60,7 @@ data class UserResponse(
     val sidebarHiddenItems: List<String> = emptyList(),
     val phoneNumber: String? = null,
     val timezone: String? = null,
-    val orgId: Int? = null
+    val orgId: String? = null
 )
 
 @Serializable
@@ -350,7 +350,7 @@ data class CreateAuthTokenRequest(
 
 @Serializable
 data class AuthTokenResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val token: String? = null, // Only returned on creation
     val scopes: List<String>,
@@ -388,7 +388,7 @@ data class UploadSourceMapRequest(
 
 @Serializable
 data class SourceMapFileResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val dateCreated: String
 )
@@ -704,7 +704,7 @@ data class BulkInviteFailure(
 
 @Serializable
 data class InvitationResponse(
-    val id: Int,
+    val id: String,
     val email: String,
     val role: String,
     val status: String,
@@ -716,7 +716,7 @@ data class InvitationResponse(
 
 @Serializable
 data class OrgMemberResponse(
-    val userId: Int,
+    val userId: String,
     val email: String,
     val name: String?,
     val role: String,

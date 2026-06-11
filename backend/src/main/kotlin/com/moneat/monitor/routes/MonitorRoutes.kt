@@ -30,6 +30,7 @@ import com.moneat.monitor.models.UpdateAlertRequest
 import com.moneat.monitor.models.UpdateAlertScopeRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -45,9 +46,11 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
-private const val DEFAULT_PROJECT_ID = 0L
 private const val DEFAULT_LIMIT = 100
+private const val NO_ORGANIZATION_ACCESS_MESSAGE = "No organization access"
+private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
 
 /**
  * Helper function to get organization IDs for a user from their memberships.
@@ -72,6 +75,74 @@ private suspend fun ensureHostAccessible(
     return host
 }
 
+private suspend fun resolveHostFromPath(
+    call: ApplicationCall,
+    monitorService: MonitorService,
+    principal: JWTPrincipal?,
+    parameterName: String = "id"
+): HostData? {
+    val userId = principal!!.payload.getClaim("userId").asInt()
+    val organizationIds = getOrganizationIdsForUser(userId, principal)
+    if (organizationIds.isEmpty()) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
+        return null
+    }
+
+    val hostResourceId = call.parameters[parameterName]?.let(::parseMonitorResourceId)
+    if (hostResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
+        return null
+    }
+
+    return ensureHostAccessible(
+        call,
+        monitorService.getHostByResourceId(hostResourceId, organizationIds),
+        organizationIds
+    )
+}
+
+private suspend fun resolveAlertIdFromPath(
+    call: ApplicationCall,
+    monitorService: MonitorService,
+    host: HostData,
+    scope: String
+): Int? {
+    val alertResourceId = call.parameters["alertId"]?.let(::parseMonitorResourceId)
+    if (alertResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
+        return null
+    }
+
+    val alertId = monitorService.resolveAlertId(alertResourceId, host.id, host.organizationId, scope)
+    if (alertId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
+        return null
+    }
+    return alertId
+}
+
+private fun hostResponse(host: HostData, latestMetrics: LatestMetrics?): HostResponse =
+    HostResponse(
+        id = host.resourceId.toString(),
+        name = host.displayName ?: host.hostname,
+        hostname = host.hostname,
+        status = host.status,
+        lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
+        firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
+        agentVersion = host.agentVersion,
+        os = host.os,
+        arch = host.arch,
+        platform = host.platform,
+        processor = host.processor,
+        cpuCores = host.cpuCores,
+        memoryTotalKb = host.memoryTotalKb,
+        createdAt = host.createdAt.toEpochMilliseconds(),
+        latestMetrics = latestMetrics
+    )
+
+private fun parseMonitorResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
 fun Route.monitorRoutes(
     monitorService: MonitorService = GlobalContext.get().get(),
     logService: LogService = GlobalContext.get().get(),
@@ -89,7 +160,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@get
                 }
 
@@ -113,24 +184,7 @@ fun Route.monitorRoutes(
 
                 val response =
                     allHosts.map { host ->
-                        HostResponse(
-                            id = host.id,
-                            projectId = DEFAULT_PROJECT_ID,
-                            name = host.displayName ?: host.hostname,
-                            hostname = host.hostname,
-                            status = host.status,
-                            lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
-                            firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                            agentVersion = host.agentVersion,
-                            os = host.os,
-                            arch = host.arch,
-                            platform = host.platform,
-                            processor = host.processor,
-                            cpuCores = host.cpuCores,
-                            memoryTotalKb = host.memoryTotalKb,
-                            createdAt = host.createdAt.toEpochMilliseconds(),
-                            latestMetrics = latestMetricsByHost[host.id]
-                        )
+                        hostResponse(host, latestMetricsByHost[host.id])
                     }
 
                 call.respond(HttpStatusCode.OK, response)
@@ -143,7 +197,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@get
                 }
 
@@ -154,71 +208,20 @@ fun Route.monitorRoutes(
             // Get host details
             get("/hosts/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
 
                 call.respond(
                     HttpStatusCode.OK,
-                    HostResponse(
-                        id = host.id,
-                        projectId = DEFAULT_PROJECT_ID,
-                        name = host.displayName ?: host.hostname,
-                        hostname = host.hostname,
-                        status = host.status,
-                        lastSeenAt = host.lastSeenAt?.toEpochMilliseconds(),
-                        firstSeenAt = host.firstSeenAt.toEpochMilliseconds(),
-                        agentVersion = host.agentVersion,
-                        os = host.os,
-                        arch = host.arch,
-                        platform = host.platform,
-                        processor = host.processor,
-                        cpuCores = host.cpuCores,
-                        memoryTotalKb = host.memoryTotalKb,
-                        createdAt = host.createdAt.toEpochMilliseconds(),
-                        latestMetrics = monitorService.getLatestMetrics(host.id)
-                    )
+                    hostResponse(host, monitorService.getLatestMetrics(host.id))
                 )
             }
 
             // Delete host
             delete("/hosts/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@delete
 
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@delete
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@delete
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@delete
-
-                val deleted = monitorService.deleteHost(hostId, host.organizationId)
+                val deleted = monitorService.deleteHost(host.id, host.organizationId)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Host not found"))
                     return@delete
@@ -230,24 +233,7 @@ fun Route.monitorRoutes(
             // Get historical metrics with downsampling
             get("/hosts/{id}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
 
                 val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                 val toParam = call.request.queryParameters["to"]?.toLongOrNull()
@@ -258,63 +244,29 @@ fun Route.monitorRoutes(
                     return@get
                 }
 
-                val response = monitorService.getHistoricalMetrics(hostId, fromParam, toParam, intervalParam)
+                val response = monitorService.getHistoricalMetrics(host.id, fromParam, toParam, intervalParam)
                 call.respond(HttpStatusCode.OK, response)
             }
 
             // Get latest container stats
             get("/hosts/{id}/containers") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
 
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
-
-                val containers = monitorService.getLatestContainers(hostId)
+                val containers = monitorService.getLatestContainers(host.id)
                 call.respond(HttpStatusCode.OK, ContainerStatsResponse(containers = containers))
             }
 
             // Get container historical metrics
             get("/hosts/{id}/containers/{name}/metrics") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
                 val containerName = call.parameters["name"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
 
                 if (containerName == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing container name"))
                     return@get
                 }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
 
                 val fromParam = call.request.queryParameters["from"]?.toLongOrNull()
                 val toParam = call.request.queryParameters["to"]?.toLongOrNull()
@@ -327,7 +279,7 @@ fun Route.monitorRoutes(
 
                 val response =
                     monitorService.getContainerHistoricalMetrics(
-                        hostId,
+                        host.id,
                         containerName,
                         fromParam,
                         toParam,
@@ -339,24 +291,7 @@ fun Route.monitorRoutes(
             // Get logs for a host (container logs)
             get("/hosts/{id}/logs") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
 
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_LIMIT
                 val cursor = call.request.queryParameters["cursor"]
@@ -378,7 +313,7 @@ fun Route.monitorRoutes(
                         environment = environment,
                         from = from,
                         to = to,
-                        hostId = hostId,
+                        hostId = host.id,
                         containerName = containerName
                     )
 
@@ -389,76 +324,25 @@ fun Route.monitorRoutes(
             // List alerts for a host
             get("/hosts/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
 
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
-
-                val alerts = monitorService.listAlerts(hostId, host.organizationId)
+                val alerts = monitorService.listAlerts(host.id, host.organizationId)
                 call.respond(HttpStatusCode.OK, alerts)
             }
 
             // List scoped alert config for a host
             get("/hosts/{id}/alerts/config") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@get
 
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@get
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@get
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@get
-
-                val config = monitorService.getAlertConfig(hostId, host.organizationId)
+                val config = monitorService.getAlertConfig(host.id, host.organizationId)
                 call.respond(HttpStatusCode.OK, config)
             }
 
             // Update active alert scope for a host (global vs host)
             put("/hosts/{id}/alerts/scope") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@put
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@put
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@put
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@put
 
                 val request = call.receive<UpdateAlertScopeRequest>()
                 val scope = request.scope.lowercase()
@@ -467,31 +351,14 @@ fun Route.monitorRoutes(
                     return@put
                 }
 
-                monitorService.updateAlertScope(hostId, host.organizationId, scope)
+                monitorService.updateAlertScope(host.id, host.organizationId, scope)
                 call.respond(HttpStatusCode.NoContent)
             }
 
             // Create an alert
             post("/hosts/{id}/alerts") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["id"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@post
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@post
-                    }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@post
+                val host = resolveHostFromPath(call, monitorService, principal) ?: return@post
 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
@@ -500,38 +367,14 @@ fun Route.monitorRoutes(
                 }
 
                 val request = call.receive<CreateAlertRequest>()
-                val alert = monitorService.createAlert(hostId, host.organizationId, request, scope)
+                val alert = monitorService.createAlert(host.id, host.organizationId, request, scope)
                 call.respond(HttpStatusCode.Created, alert)
             }
 
             // Update an alert
             put("/hosts/{hostId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["hostId"]
-                val alertIdStr = call.parameters["alertId"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@put
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@put
-                    }
-
-                val alertId = alertIdStr?.toIntOrNull()
-                if (alertId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
-                    return@put
-                }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@put
+                val host = resolveHostFromPath(call, monitorService, principal, "hostId") ?: return@put
 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
@@ -539,10 +382,11 @@ fun Route.monitorRoutes(
                     return@put
                 }
 
+                val alertId = resolveAlertIdFromPath(call, monitorService, host, scope) ?: return@put
                 val request = call.receive<UpdateAlertRequest>()
-                val updated = monitorService.updateAlert(alertId, hostId, host.organizationId, request, scope)
+                val updated = monitorService.updateAlert(alertId, host.id, host.organizationId, request, scope)
                 if (!updated) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -552,31 +396,7 @@ fun Route.monitorRoutes(
             // Delete an alert
             delete("/hosts/{hostId}/alerts/{alertId}") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-                val hostIdStr = call.parameters["hostId"]
-                val alertIdStr = call.parameters["alertId"]
-
-                val organizationIds = getOrganizationIdsForUser(userId, principal)
-                if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
-                    return@delete
-                }
-
-                val hostId = hostIdStr?.toIntOrNull()
-                    ?: run {
-                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid host ID"))
-                        return@delete
-                    }
-
-                val alertId = alertIdStr?.toIntOrNull()
-                if (alertId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
-                    return@delete
-                }
-
-                val host =
-                    ensureHostAccessible(call, monitorService.getHostById(hostId), organizationIds)
-                        ?: return@delete
+                val host = resolveHostFromPath(call, monitorService, principal, "hostId") ?: return@delete
 
                 val scope = (call.request.queryParameters["scope"] ?: MonitorService.ALERT_SCOPE_HOST).lowercase()
                 if (scope != MonitorService.ALERT_SCOPE_GLOBAL && scope != MonitorService.ALERT_SCOPE_HOST) {
@@ -584,9 +404,10 @@ fun Route.monitorRoutes(
                     return@delete
                 }
 
-                val deleted = monitorService.deleteAlert(alertId, hostId, host.organizationId, scope)
+                val alertId = resolveAlertIdFromPath(call, monitorService, host, scope) ?: return@delete
+                val deleted = monitorService.deleteAlert(alertId, host.id, host.organizationId, scope)
                 if (!deleted) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(ALERT_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -601,7 +422,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@get
                 }
 
@@ -615,7 +436,7 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@post
                 }
 
@@ -632,7 +453,7 @@ fun Route.monitorRoutes(
             delete("/silence-periods/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
-                val periodId = call.parameters["id"]?.toIntOrNull()
+                val periodId = call.parameters["id"]?.let(::parseMonitorResourceId)
 
                 if (periodId == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid silence period ID"))
@@ -641,11 +462,11 @@ fun Route.monitorRoutes(
 
                 val organizationIds = getOrganizationIdsForUser(userId, principal)
                 if (organizationIds.isEmpty()) {
-                    call.respond(HttpStatusCode.Forbidden, ErrorResponse("No organization access"))
+                    call.respond(HttpStatusCode.Forbidden, ErrorResponse(NO_ORGANIZATION_ACCESS_MESSAGE))
                     return@delete
                 }
 
-                val deleted = monitorAlertService.deleteSilencePeriod(periodId, organizationIds.first())
+                val deleted = monitorAlertService.deleteSilencePeriodByResourceId(periodId, organizationIds.first())
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Silence period not found"))
                     return@delete

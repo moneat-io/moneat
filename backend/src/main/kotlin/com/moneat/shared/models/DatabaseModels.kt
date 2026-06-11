@@ -105,6 +105,7 @@ class TextArrayColumnType : ColumnType<List<String>>() {
 
 object Users : Table("users") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val email = varchar("email", 255)
     val password_hash = varchar("password_hash", 255)
     val name = varchar("name", 255).nullable()
@@ -154,6 +155,7 @@ object UserLegalAcceptances : Table("user_legal_acceptances") {
 
 object Organizations : Table("organizations") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)
     val company_size = varchar("company_size", 50).nullable()
@@ -170,6 +172,7 @@ object Organizations : Table("organizations") {
 
 object Memberships : Table("memberships") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val user_id = integer("user_id").references(Users.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val role = varchar("role", 50)
@@ -194,6 +197,7 @@ object SidebarPreferenceEvents : Table("sidebar_preference_events") {
 
 object InfrastructureMapSavedViews : Table("infrastructure_map_saved_views") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val user_id = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 48)
@@ -230,6 +234,7 @@ object ProjectKeys : Table("project_keys") {
 
 object OtlpApiKeys : Table("otlp_api_keys") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val key_hash = varchar("key_hash", 255).uniqueIndex()
@@ -245,6 +250,7 @@ private const val OTEL_SERVICE_FIELD_MAX_LENGTH = 255
 
 object OtelServiceProjectMappings : Table("otel_service_project_mappings") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val service_namespace = varchar("service_namespace", OTEL_SERVICE_FIELD_MAX_LENGTH).default("")
     val service_name = varchar("service_name", OTEL_SERVICE_FIELD_MAX_LENGTH)
@@ -259,6 +265,7 @@ object OtelServiceProjectMappings : Table("otel_service_project_mappings") {
 
 object OtelObservedServices : Table("otel_observed_services") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val service_namespace = varchar("service_namespace", OTEL_SERVICE_FIELD_MAX_LENGTH).default("")
     val service_name = varchar("service_name", OTEL_SERVICE_FIELD_MAX_LENGTH)
@@ -277,6 +284,7 @@ object OtelObservedServices : Table("otel_observed_services") {
 
 object LogIndexes : Table("log_indexes") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val filterQuery = text("filter_query").default("")
@@ -292,6 +300,7 @@ object LogIndexes : Table("log_indexes") {
 
 object LogPipelines : Table("log_pipelines") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val description = text("description").default("")
@@ -306,6 +315,7 @@ object LogPipelines : Table("log_pipelines") {
 
 object LogSavedViews : Table("log_saved_views") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val viewStateJson = text("view_state_json")
@@ -318,6 +328,7 @@ object LogSavedViews : Table("log_saved_views") {
 
 object LogMetricRules : Table("log_metric_rules") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val query = text("query").default("")
@@ -333,6 +344,7 @@ object LogMetricRules : Table("log_metric_rules") {
 
 object LogMonitors : Table("log_monitors") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val query = text("query").default("")
@@ -351,6 +363,7 @@ object LogMonitors : Table("log_monitors") {
 
 object AgentApiKeys : Table("agent_api_keys") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val project_id = long("project_id").references(Projects.id).nullable()
     val name = varchar("name", 255)
@@ -365,6 +378,7 @@ object AgentApiKeys : Table("agent_api_keys") {
 
 object CloudSources : Table("cloud_sources") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id")
         .references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val provider = varchar("provider", 16)
@@ -396,6 +410,7 @@ object CloudSources : Table("cloud_sources") {
 
 object McpApiKeys : Table("mcp_api_keys") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id")
         .references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 255)
@@ -416,6 +431,7 @@ object McpApiKeys : Table("mcp_api_keys") {
 
 object AuthTokens : Table("auth_tokens") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val user_id = integer("user_id").references(Users.id)
     val token_hash = varchar("token_hash", 64)
     val name = varchar("name", 255)
@@ -452,6 +468,7 @@ object Releases : Table("releases") {
 
 object ReleaseFiles : Table("release_files") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val release_id = integer("release_id").references(Releases.id)
     val name = varchar("name", 500)
     val file_path = varchar("file_path", 1000).nullable()
@@ -496,6 +513,7 @@ object UsageRecords : Table("usage_records") {
 
 object Subscriptions : Table("subscriptions") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val stripe_subscription_id = varchar("stripe_subscription_id", 255).nullable()
     val stripe_customer_id = varchar("stripe_customer_id", 255).nullable()
@@ -575,6 +593,7 @@ object EmailsSent : Table("emails_sent") {
 
 object PromotionalCreditGrants : Table("promotional_credit_grants") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val subscription_id = integer("subscription_id").references(Subscriptions.id).nullable()
     val granted_by = integer("granted_by").references(Users.id)
@@ -587,6 +606,7 @@ object PromotionalCreditGrants : Table("promotional_credit_grants") {
 
 object Hosts : Table("hosts") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val hostname = varchar("hostname", 512)
     val display_name = varchar("display_name", 255).nullable()
@@ -608,6 +628,7 @@ object Hosts : Table("hosts") {
 
 object HostAlerts : Table("host_alerts") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val host_id = integer("host_id").references(Hosts.id)
     val organization_id = integer("organization_id").references(Organizations.id)
     val metric = varchar("metric", 50)
@@ -638,6 +659,7 @@ object HostAlertTemplateStates : Table("host_alert_template_states") {
 
 object OrganizationAlertTemplates : Table("organization_alert_templates") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val metric = varchar("metric", 50)
     val condition = varchar("condition", 20)
@@ -652,6 +674,7 @@ object OrganizationAlertTemplates : Table("organization_alert_templates") {
 
 object AlertSilencePeriods : Table("alert_silence_periods") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val reason = varchar("reason", 255).nullable()
     val starts_at = timestamp("starts_at")
@@ -663,6 +686,7 @@ object AlertSilencePeriods : Table("alert_silence_periods") {
 
 object OrganizationIntegrations : Table("organization_integrations") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val integration_type = varchar("integration_type", 50)
 
@@ -687,6 +711,7 @@ object OrganizationIntegrations : Table("organization_integrations") {
 
 object OrgInvitations : Table("org_invitations") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val organization_id = integer("organization_id").references(Organizations.id)
     val email = varchar("email", 255)
     val role = varchar("role", 50).default("member")

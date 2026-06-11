@@ -525,7 +525,7 @@ class StripeService(
         val subscriptionItems = resolveSubscriptionItems(subscription, resolvedTier)
         val periodEpochs = resolveSubscriptionPeriodEpochs(subscription, subscriptionItems.baseItemId)
         val planName = resolvePlanName(resolvedTier, fallbackTier)
-        val tierId = resolvedTier?.id?.takeIf { it > 0 }
+        val tierId = resolvedTier?.numericId?.takeIf { it > 0 }
 
         val stripeData = StripeSubscriptionData(
             plan = planName,
@@ -913,7 +913,7 @@ class StripeService(
                 it[Subscriptions.organization_id] = organizationId
                 it[plan] = "free"
                 it[status] = "active"
-                it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
+                it[pricing_tier_config_id] = freeTier?.numericId?.takeIf { id -> id > 0 }
                 it[current_period_start] = Clock.System.now()
                 it[current_period_end] = addDays(Clock.System.now(), FREE_TIER_PERIOD_DAYS)
                 it[payg_budget_cents] = 0
@@ -1216,7 +1216,7 @@ class StripeService(
                         it[status] = "active"
                         it[current_period_start] = now
                         it[current_period_end] = addDays(now, FREE_TIER_PERIOD_DAYS)
-                        it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
+                        it[pricing_tier_config_id] = freeTier?.numericId?.takeIf { id -> id > 0 }
                         it[payg_budget_cents] = 0
                         it[payg_used_units] = 0
                         it[payg_used_micros] = 0

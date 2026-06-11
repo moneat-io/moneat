@@ -18,9 +18,16 @@ package com.moneat.org.services
 
 import com.moneat.events.models.OrgMemberResponse
 import com.moneat.org.repositories.OrgMembershipRepository
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Users
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.NotFoundException
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
+import kotlin.uuid.Uuid
 
 enum class OrgRole(val level: Int) {
     MEMBER(0),
@@ -42,7 +49,7 @@ class OrgMembershipService(
     fun getMembers(orgId: Int): List<OrgMemberResponse> =
         membershipRepository.getMembers(orgId).map { row ->
             OrgMemberResponse(
-                userId = row.userId,
+                userId = row.userResourceId,
                 email = row.email,
                 name = row.name,
                 role = row.role,
@@ -55,6 +62,18 @@ class OrgMembershipService(
         userId: Int
     ): String? =
         membershipRepository.getMemberRole(orgId, userId)
+
+    fun resolveMemberUserId(orgId: Int, userResourceId: Uuid): Int? =
+        transaction {
+            (Memberships innerJoin Users)
+                .selectAll()
+                .where {
+                    (Memberships.organization_id eq orgId) and
+                        (Users.resource_id eq userResourceId)
+                }
+                .firstOrNull()
+                ?.get(Users.id)
+        }
 
     fun requireRole(
         orgId: Int,

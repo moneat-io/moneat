@@ -58,9 +58,11 @@ private const val ONCE_FOR_TEMPLATE_JSON_FIELD = "once_for_template_json"
 private const val SCOPE_FIELD = "scope"
 private const val SCOPE_JSON_FIELD = "scope_json"
 private const val LIMIT_FIELD = "limit"
-private const val WORKFLOW_ID_DESCRIPTION = "Workflow ID"
-private const val RUN_ID_DESCRIPTION = "Workflow run ID"
+private const val WORKFLOW_ID_DESCRIPTION = "Workflow resource ID"
+private const val RUN_ID_DESCRIPTION = "Workflow run resource ID"
 private const val INVALID_WORKFLOW_ARGUMENTS_MESSAGE = "Invalid workflow arguments"
+private const val WORKFLOW_NOT_FOUND_MESSAGE = "Workflow not found"
+private const val WORKFLOW_RUN_NOT_FOUND_MESSAGE = "Workflow run not found"
 private const val DEFAULT_WORKFLOW_AUDIT_LIMIT = 100
 private const val DEFAULT_WORKFLOW_RUN_LIMIT = 50
 private const val MAX_WORKFLOW_AUDIT_LIMIT = 500
@@ -89,7 +91,7 @@ class GetWorkflowTool(
     override val name = "get_workflow"
     override val description = "Get a workflow by ID"
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION))),
+        properties = JsonObject(mapOf(WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION))),
         required = listOf(WORKFLOW_ID_FIELD),
     )
 
@@ -97,9 +99,9 @@ class GetWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val workflow = service.getWorkflow(context.organizationId, workflowId)
-            ?: return errorResult("Workflow not found: $workflowId")
+            ?: return errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
         return jsonResult(workflow)
     }
 }
@@ -156,7 +158,7 @@ class UpdateWorkflowTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION),
+                WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION),
                 "name" to schemaString("Updated workflow name"),
                 "enabled" to schemaBoolean("Whether the workflow is enabled"),
                 CONDITIONS_FIELD to schemaJsonArray("Replacement legacy condition array"),
@@ -176,14 +178,14 @@ class UpdateWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val request = when (val result = parseUpdateWorkflowRequest(args)) {
             is WorkflowParseResult.Failure -> return errorResult(result.message)
             is WorkflowParseResult.Success -> result.value
         }
         return try {
             val workflow = service.updateWorkflow(context.organizationId, workflowId, request)
-                ?: return errorResult("Workflow not found: $workflowId")
+                ?: return errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
             jsonResult(workflow)
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: INVALID_WORKFLOW_ARGUMENTS_MESSAGE)
@@ -198,7 +200,7 @@ class DeleteWorkflowTool(
     override val description = "Delete a workflow"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION))),
+        properties = JsonObject(mapOf(WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION))),
         required = listOf(WORKFLOW_ID_FIELD),
     )
 
@@ -206,12 +208,12 @@ class DeleteWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         return try {
             if (service.deleteWorkflow(context.organizationId, workflowId)) {
-                textResult("Workflow $workflowId deleted")
+                textResult("Workflow deleted")
             } else {
-                errorResult("Workflow not found: $workflowId")
+                errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
             }
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: INVALID_WORKFLOW_ARGUMENTS_MESSAGE)
@@ -231,7 +233,7 @@ class PublishWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult =
-        publishStateResult(args, context, service::publishWorkflow, "published")
+        publishStateResult(args, context, service, service::publishWorkflow, "published")
 }
 
 class UnpublishWorkflowTool(
@@ -246,7 +248,7 @@ class UnpublishWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult =
-        publishStateResult(args, context, service::unpublishWorkflow, "unpublished")
+        publishStateResult(args, context, service, service::unpublishWorkflow, "unpublished")
 }
 
 class RunWorkflowTool(
@@ -262,7 +264,7 @@ class RunWorkflowTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val scope = when (val result = args.optionalScopeArg()) {
             is WorkflowParseResult.Failure -> return errorResult(result.message)
             is WorkflowParseResult.Success -> result.value
@@ -272,7 +274,7 @@ class RunWorkflowTool(
             workflowId = workflowId,
             request = ManualWorkflowRunRequest(scope),
             actorUserId = context.userId,
-        ) ?: return errorResult("Workflow not found or could not be run: $workflowId")
+        ) ?: return errorResult("Workflow not found or could not be run")
         return jsonResult(run)
     }
 }
@@ -290,7 +292,7 @@ class CreateWorkflowInstanceTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val scope = when (val result = args.optionalScopeArg()) {
             is WorkflowParseResult.Failure -> return errorResult(result.message)
             is WorkflowParseResult.Success -> result.value
@@ -300,7 +302,7 @@ class CreateWorkflowInstanceTool(
             workflowId = workflowId,
             request = WorkflowRunInstanceRequest(scope),
             callerUserId = context.userId,
-        ) ?: return errorResult("Workflow not found or is not API-triggered: $workflowId")
+        ) ?: return errorResult("Workflow not found or is not API-triggered")
         return jsonResult(run)
     }
 }
@@ -318,10 +320,10 @@ class CancelWorkflowRunTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
-        val runId = args.requiredIntArg(RUN_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
+        val runId = args.requiredRunId(context, service, workflowId) { message -> return errorResult(message) }
         val canceled = service.cancelRun(context.organizationId, workflowId, runId)
-            ?: return errorResult("Workflow run not found: $runId")
+            ?: return errorResult(WORKFLOW_RUN_NOT_FOUND_MESSAGE)
         return jsonResult(canceled)
     }
 }
@@ -334,7 +336,7 @@ class ListWorkflowRunsTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION),
+                WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION),
                 LIMIT_FIELD to schemaInteger("Maximum runs to return"),
             )
         ),
@@ -345,7 +347,7 @@ class ListWorkflowRunsTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val limit = args.optionalLimit(DEFAULT_WORKFLOW_RUN_LIMIT, MAX_WORKFLOW_RUN_LIMIT)
             ?: return errorResult("$LIMIT_FIELD must be a valid integer")
         return jsonResult(mapOf("runs" to service.listRuns(context.organizationId, workflowId, limit)))
@@ -363,10 +365,10 @@ class GetWorkflowRunTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
-        val runId = args.requiredIntArg(RUN_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
+        val runId = args.requiredRunId(context, service, workflowId) { message -> return errorResult(message) }
         val run = service.getRun(context.organizationId, workflowId, runId)
-            ?: return errorResult("Workflow run not found: $runId")
+            ?: return errorResult(WORKFLOW_RUN_NOT_FOUND_MESSAGE)
         return jsonResult(run)
     }
 }
@@ -418,13 +420,14 @@ class GetWorkflowBlueprintTool : McpTool {
 
 class ListWorkflowAuditTool(
     private val governanceService: WorkflowGovernanceService = workflowMcpGovernanceService,
+    private val workflowService: WorkflowService = workflowMcpService,
 ) : McpTool {
     override val name = "list_workflow_audit"
     override val description = "List workflow audit events, optionally for one workflow"
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                WORKFLOW_ID_FIELD to schemaInteger("Optional workflow ID"),
+                WORKFLOW_ID_FIELD to schemaResourceId("Optional workflow resource ID"),
                 LIMIT_FIELD to schemaInteger("Maximum audit events to return"),
             )
         )
@@ -435,8 +438,8 @@ class ListWorkflowAuditTool(
         context: McpContext,
     ): ToolCallResult {
         val workflowId = if (args.containsKey(WORKFLOW_ID_FIELD)) {
-            args.optionalIntArg(WORKFLOW_ID_FIELD)
-                ?: return errorResult("$WORKFLOW_ID_FIELD must be a valid integer")
+            args.optionalWorkflowId(context, workflowService)
+                ?: return errorResult("$WORKFLOW_ID_FIELD must be a valid workflow resource ID")
         } else {
             null
         }
@@ -461,7 +464,7 @@ class GetWorkflowWebhookSigningTool(
         args: JsonObject,
         context: McpContext,
     ): ToolCallResult {
-        val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+        val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         return try {
             val signing = service.webhookSigningInfo(context.organizationId, workflowId)
                 ?: return errorResult("Webhook signing is only available for webhook-triggered workflows")
@@ -475,12 +478,13 @@ class GetWorkflowWebhookSigningTool(
 private fun publishStateResult(
     args: JsonObject,
     context: McpContext,
+    service: WorkflowService,
     operation: (Int, Int) -> WorkflowResponse?,
     state: String,
 ): ToolCallResult {
-    val workflowId = args.requiredIntArg(WORKFLOW_ID_FIELD) { message -> return errorResult(message) }
+    val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
     val workflow = operation(context.organizationId, workflowId)
-        ?: return errorResult("Workflow not found: $workflowId")
+        ?: return errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
     return jsonResult(
         buildJsonObject {
             put("status", state)
@@ -491,7 +495,7 @@ private fun publishStateResult(
 
 private fun workflowIdInputSchema(): InputSchema =
     InputSchema(
-        properties = JsonObject(mapOf(WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION))),
+        properties = JsonObject(mapOf(WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION))),
         required = listOf(WORKFLOW_ID_FIELD),
     )
 
@@ -499,8 +503,8 @@ private fun workflowAndRunIdInputSchema(): InputSchema =
     InputSchema(
         properties = JsonObject(
             mapOf(
-                WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION),
-                RUN_ID_FIELD to schemaInteger(RUN_ID_DESCRIPTION),
+                WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION),
+                RUN_ID_FIELD to schemaResourceId(RUN_ID_DESCRIPTION),
             )
         ),
         required = listOf(WORKFLOW_ID_FIELD, RUN_ID_FIELD),
@@ -510,7 +514,7 @@ private fun workflowRunInputSchema(): InputSchema =
     InputSchema(
         properties = JsonObject(
             mapOf(
-                WORKFLOW_ID_FIELD to schemaInteger(WORKFLOW_ID_DESCRIPTION),
+                WORKFLOW_ID_FIELD to schemaResourceId(WORKFLOW_ID_DESCRIPTION),
                 SCOPE_FIELD to schemaObject("Optional workflow scope object"),
                 SCOPE_JSON_FIELD to schemaString("Optional JSON-encoded workflow scope object"),
             )
@@ -690,6 +694,41 @@ private fun JsonObject.optionalBooleanArg(name: String): WorkflowParseResult<Boo
 private fun JsonObject.optionalLimit(default: Int, max: Int): Int? {
     val value = optionalIntArg(LIMIT_FIELD) ?: return if (containsKey(LIMIT_FIELD)) null else default
     return value.coerceIn(1, max)
+}
+
+private inline fun JsonObject.requiredWorkflowId(
+    context: McpContext,
+    service: WorkflowService,
+    onFailure: (String) -> Nothing,
+): Int {
+    val raw = stringArg(WORKFLOW_ID_FIELD) ?: onFailure("$WORKFLOW_ID_FIELD is required")
+    val resourceId = parseResourceId(raw)
+        ?: onFailure("$WORKFLOW_ID_FIELD must be a valid workflow resource ID")
+    return service.resolveWorkflowId(context.organizationId, resourceId)
+        ?: onFailure(WORKFLOW_NOT_FOUND_MESSAGE)
+}
+
+private fun JsonObject.optionalWorkflowId(
+    context: McpContext,
+    service: WorkflowService,
+): Int? {
+    if (!containsKey(WORKFLOW_ID_FIELD)) return null
+    val raw = stringArg(WORKFLOW_ID_FIELD) ?: return null
+    val resourceId = parseResourceId(raw) ?: return null
+    return service.resolveWorkflowId(context.organizationId, resourceId)
+}
+
+private inline fun JsonObject.requiredRunId(
+    context: McpContext,
+    service: WorkflowService,
+    workflowId: Int,
+    onFailure: (String) -> Nothing,
+): Int {
+    val raw = stringArg(RUN_ID_FIELD) ?: onFailure("$RUN_ID_FIELD is required")
+    val resourceId = parseResourceId(raw)
+        ?: onFailure("$RUN_ID_FIELD must be a valid workflow run resource ID")
+    return service.resolveRunId(context.organizationId, workflowId, resourceId)
+        ?: onFailure(WORKFLOW_RUN_NOT_FOUND_MESSAGE)
 }
 
 private inline fun JsonObject.requiredIntArg(

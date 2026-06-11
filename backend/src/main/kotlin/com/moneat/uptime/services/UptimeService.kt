@@ -390,7 +390,7 @@ class UptimeService(
 
         return UptimeMonitorResponse(
             id = monitor.id.toString(),
-            organizationId = monitor.organizationId,
+            organizationId = monitor.organizationResourceId,
             name = monitor.name,
             type = monitor.type,
             active = monitor.active,

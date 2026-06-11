@@ -52,6 +52,7 @@ function mapLogRow(row: Record<string, unknown>): LogEntry {
     spanId: (row.spanId ?? row.span_id ?? '') as string,
     tags: (row.tags ?? {}) as Record<string, string>,
     resourceAttributes: (row.resourceAttributes ?? row.resource_attributes ?? {}) as Record<string, string>,
+    hostId: (row.hostId ?? row.host_id) as string | null | undefined,
   }
 }
 
@@ -69,8 +70,8 @@ function mapRawLogResponse(response: RawLogResponse): LogQueryResponse {
 function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedService {
   const projectResourceId = (service.projectResourceId ?? service.project_resource_id) as string | null | undefined
   return {
-    id: service.id as number,
-    mappingId: (service.mappingId ?? service.mapping_id) as number | null | undefined,
+    id: service.id as string,
+    mappingId: (service.mappingId ?? service.mapping_id) as string | null | undefined,
     serviceNamespace: (service.serviceNamespace ?? service.service_namespace ?? '') as string,
     serviceName: (service.serviceName ?? service.service_name ?? '') as string,
     projectId: projectResourceId ?? null,
@@ -88,7 +89,7 @@ function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedS
 function mapOtlpServiceMapping(mapping: Record<string, unknown>): OtlpServiceMapping {
   const projectResourceId = (mapping.projectResourceId ?? mapping.project_resource_id) as string
   return {
-    id: mapping.id as number,
+    id: mapping.id as string,
     serviceNamespace: (mapping.serviceNamespace ?? mapping.service_namespace ?? '') as string,
     serviceName: (mapping.serviceName ?? mapping.service_name ?? '') as string,
     projectId: projectResourceId,
@@ -241,7 +242,7 @@ export function logsMethods(core: ApiClientCore) {
     getOtlpApiKeys: async (): Promise<{ keys: OtlpApiKey[] }> => {
       const response = await core.request<{ keys: Record<string, unknown>[] }>(`${base}/logs/api-keys`)
       const keys = (response.keys ?? []).map((k) => ({
-        id: k.id as number,
+        id: k.id as string,
         name: k.name as string,
         keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
         createdAt: (k.createdAt ?? k.created_at) as string,
@@ -256,8 +257,8 @@ export function logsMethods(core: ApiClientCore) {
         body: JSON.stringify({ name }),
       }),
 
-    deleteOtlpApiKey: (id: number) =>
-      core.request<void>(`${base}/logs/api-keys/${id}`, { method: 'DELETE' }),
+    deleteOtlpApiKey: (id: string) =>
+      core.request<void>(`${base}/logs/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
     getOtlpObservedServices: async (): Promise<{ services: OtlpObservedService[] }> => {
       const response = await core.request<{ services: Record<string, unknown>[] }>(
@@ -284,8 +285,11 @@ export function logsMethods(core: ApiClientCore) {
       return mapOtlpServiceMapping(response)
     },
 
-    deleteOtlpServiceMapping: (id: number) =>
-      core.request<void>(`${base}/otlp/service-mappings/${id}`, { method: 'DELETE' }),
+    deleteOtlpServiceMapping: (id: string) =>
+      core.request<void>(
+        `${base}/otlp/service-mappings/${encodeURIComponent(id)}`,
+        { method: 'DELETE' }
+      ),
 
     // Backward-compat aliases
     get getLogApiKeys() { return this.getOtlpApiKeys },

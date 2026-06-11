@@ -111,8 +111,8 @@ export function featureFlagsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    revokeFeatureFlagSdkKey: (id: number) =>
-      core.request<void>(`${base}/feature-flags/sdk-keys/${id}`, {
+    revokeFeatureFlagSdkKey: (id: string) =>
+      core.request<void>(`${base}/feature-flags/sdk-keys/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
 

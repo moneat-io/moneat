@@ -60,6 +60,8 @@ class AuthTokenRoutesTest {
 
     companion object {
         private var dbInitialized = false
+        private const val MISSING_TOKEN_ID = "11111111-1111-4111-8111-111111111111"
+        private val TOKEN_ID_REGEX = Regex(""""id"\s*:\s*"([^"]+)"""")
     }
 
     @BeforeTest
@@ -283,7 +285,7 @@ class AuthTokenRoutesTest {
             }
 
             val response =
-                client.delete("/v1/auth-tokens/9999") {
+                client.delete("/v1/auth-tokens/$MISSING_TOKEN_ID") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
 
@@ -315,7 +317,7 @@ class AuthTokenRoutesTest {
                 client.get("/v1/auth-tokens") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
-            val tokenId = Regex(""""id"\s*:\s*(\d+)""").find(listResponse.bodyAsText())!!.groupValues[1]
+            val tokenId = TOKEN_ID_REGEX.find(listResponse.bodyAsText())!!.groupValues[1]
 
             // Delete it
             val deleteResponse =
@@ -368,7 +370,7 @@ class AuthTokenRoutesTest {
             }
 
             val response =
-                client.put("/v1/auth-tokens/9999") {
+                client.put("/v1/auth-tokens/$MISSING_TOKEN_ID") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"name":"new-name"}""")
@@ -400,7 +402,7 @@ class AuthTokenRoutesTest {
                 client.get("/v1/auth-tokens") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }.bodyAsText()
-            val tokenId = Regex(""""id"\s*:\s*(\d+)""").find(listBody)!!.groupValues[1]
+            val tokenId = TOKEN_ID_REGEX.find(listBody)!!.groupValues[1]
 
             val response =
                 client.put("/v1/auth-tokens/$tokenId") {
@@ -436,7 +438,7 @@ class AuthTokenRoutesTest {
                 client.get("/v1/auth-tokens") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }.bodyAsText()
-            val tokenId = Regex(""""id"\s*:\s*(\d+)""").find(listBody)!!.groupValues[1]
+            val tokenId = TOKEN_ID_REGEX.find(listBody)!!.groupValues[1]
 
             val response =
                 client.put("/v1/auth-tokens/$tokenId") {

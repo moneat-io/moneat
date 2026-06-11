@@ -152,6 +152,7 @@ const PERMISSION_ORDER: ReadonlyMap<string, number> = new Map<string, number>(
     .flatMap((group) => group.permissions.map((permission) => permission.key))
     .map((permission, index) => [permission, index])
 )
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function sortPermissions(first: string, second: string): number {
   const firstOrder = PERMISSION_ORDER.get(first) ?? Number.MAX_SAFE_INTEGER
@@ -201,7 +202,7 @@ function formatTimestamp(value: string): string {
   return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})
 }
 
-function memberDisplayName(member: OrgMember | undefined, userId: number): string {
+function memberDisplayName(member: OrgMember | undefined, userId: string): string {
   if (member?.name) return member.name
   if (member?.email) return member.email
   return `User ${userId}`
@@ -218,6 +219,10 @@ function orgRoleVariant(role: string): 'default' | 'secondary' | 'outline' {
   return 'outline'
 }
 
+function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value)
+}
+
 function RoleLoadingState() {
   return (
     <Card>
@@ -229,7 +234,7 @@ function RoleLoadingState() {
   )
 }
 
-function EmptyRolesState({onCreate}: {onCreate: () => void}) {
+function EmptyRolesState({onCreate}: Readonly<{onCreate: () => void}>) {
   return (
     <Card>
       <CardHeader>
@@ -252,11 +257,11 @@ function RoleList({
   roles,
   selectedRoleId,
   onSelectRole,
-}: {
+}: Readonly<{
   roles: RbacRole[]
-  selectedRoleId: number | null
-  onSelectRole: (roleId: number) => void
-}) {
+  selectedRoleId: string | null
+  onSelectRole: (roleId: string) => void
+}>) {
   return (
     <Card>
       <CardHeader>
@@ -629,7 +634,7 @@ function RoleAssignments({
   )
 
   const assignMutation = useMutation({
-    mutationFn: (userId: number) => api.assignRbacRole(role.id, userId),
+    mutationFn: (userId: string) => api.assignRbacRole(role.id, userId),
     onSuccess: () => {
       setAssignmentUserId('')
       queryClient.invalidateQueries({queryKey: ['rbac-role-assignments', role.id]})
@@ -641,7 +646,7 @@ function RoleAssignments({
   })
 
   const unassignMutation = useMutation({
-    mutationFn: (userId: number) => api.unassignRbacRole(role.id, userId),
+    mutationFn: (userId: string) => api.unassignRbacRole(role.id, userId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['rbac-role-assignments', role.id]})
       toast({title: 'Role assignment removed'})
@@ -652,9 +657,12 @@ function RoleAssignments({
   })
 
   const handleAssign = () => {
-    const userId = Number(assignmentUserId)
-    if (!Number.isInteger(userId)) return
-    assignMutation.mutate(userId)
+    if (!assignmentUserId) return
+    if (!isUuid(assignmentUserId)) {
+      toast({title: 'Invalid member ID', variant: 'destructive'})
+      return
+    }
+    assignMutation.mutate(assignmentUserId)
   }
 
   if (assignmentsQuery.isLoading) {
@@ -864,7 +872,7 @@ export function RbacSettings() {
   const [createOpen, setCreateOpen] = useState(false)
   const [roleToEdit, setRoleToEdit] = useState<RbacRole | null>(null)
   const [roleToDelete, setRoleToDelete] = useState<RbacRole | null>(null)
-  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null)
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
 
   const rolesQuery = useQuery({
     queryKey: ['rbac-roles'],
@@ -901,7 +909,7 @@ export function RbacSettings() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({roleId, values}: {roleId: number; values: RoleFormValues}) =>
+    mutationFn: ({roleId, values}: {roleId: string; values: RoleFormValues}) =>
       api.updateRbacRole(roleId, values),
     onSuccess: (role) => {
       setRoleToEdit(null)
@@ -918,7 +926,7 @@ export function RbacSettings() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (roleId: number) => api.deleteRbacRole(roleId),
+    mutationFn: (roleId: string) => api.deleteRbacRole(roleId),
     onSuccess: () => {
       const deletedRoleId = roleToDelete?.id
       setRoleToDelete(null)
