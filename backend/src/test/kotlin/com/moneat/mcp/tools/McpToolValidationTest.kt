@@ -29,10 +29,8 @@ import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -40,6 +38,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.uuid.Uuid
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -49,6 +48,7 @@ class McpToolValidationTest {
         private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
         private const val EVENT_ID = "01234567-89ab-cdef-0123-456789abcdef"
         private const val TRACE_ID = "trace-1"
+        private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
         private var db: Database? = null
     }
 
@@ -82,6 +82,7 @@ class McpToolValidationTest {
             Projects.insert {
                 it[id] = 1
                 it[organization_id] = 1
+                it[resource_id] = Uuid.parse(PROJECT_RESOURCE_ID)
                 it[name] = "Test Project"
                 it[slug] = "test-project"
             }
@@ -155,7 +156,7 @@ class McpToolValidationTest {
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
             val result = GetTraceTool().execute(
-                obj("trace_id" to TRACE_ID, "project_id" to 1),
+                obj("trace_id" to TRACE_ID, "project_id" to PROJECT_RESOURCE_ID),
                 context
             )
 
@@ -165,14 +166,10 @@ class McpToolValidationTest {
     }
 
     @Test
-    fun `project id schemas accept resource IDs and legacy numeric IDs`() {
+    fun `project id schemas accept resource IDs only`() {
         val projectIdSchema = projectIdInputSchema().properties["project_id"] as JsonObject
-        val typeValues = projectIdSchema["type"] as JsonArray
 
-        assertEquals(
-            listOf("string", "number"),
-            typeValues.jsonArray.map { it.jsonPrimitive.content }
-        )
+        assertEquals("string", projectIdSchema["type"]?.jsonPrimitive?.content)
     }
 
     @Test
@@ -271,62 +268,62 @@ class McpToolValidationTest {
                 "status is required",
             ),
             case("update_dashboard_id", UpdateDashboardTool(), obj(), "dashboard_id is required"),
-            case("update_dashboard_fields", UpdateDashboardTool(), obj("dashboard_id" to 1), "At least one"),
+            case("update_dashboard_fields", UpdateDashboardTool(), obj("dashboard_id" to uuid), "At least one"),
             case("delete_dashboard_id", DeleteDashboardTool(), obj(), "dashboard_id is required"),
             case(
                 "create_dashboard_widget_type",
                 CreateDashboardWidgetTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "widget_type is required",
             ),
             case(
                 "create_dashboard_widget_unknown_type",
                 CreateDashboardWidgetTool(),
-                obj("dashboard_id" to 1, "widget_type" to "bad"),
+                obj("dashboard_id" to uuid, "widget_type" to "bad"),
                 "Unknown widget_type",
             ),
             case(
                 "update_dashboard_widget_id",
                 UpdateDashboardWidgetTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "widget_id is required",
             ),
             case(
                 "update_dashboard_widget_fields",
                 UpdateDashboardWidgetTool(),
-                obj("dashboard_id" to 1, "widget_id" to 2),
+                obj("dashboard_id" to uuid, "widget_id" to uuid),
                 "At least one widget field",
             ),
             case(
                 "delete_dashboard_widget_id",
                 DeleteDashboardWidgetTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "widget_id is required",
             ),
             case(
                 "preview_dashboard_widget_query_config",
                 PreviewDashboardWidgetQueryTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "query_config must be an object",
             ),
             case(
                 "replace_dashboard_widgets_expected",
                 ReplaceDashboardWidgetsTool(),
-                obj("dashboard_id" to 1, "widgets" to emptyList<String>()),
+                obj("dashboard_id" to uuid, "widgets" to emptyList<String>()),
                 "expected_widget_count is required",
             ),
             case(
                 "create_dashboard_alert_widget",
                 CreateDashboardAlertTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "widget_id is required",
             ),
             case(
                 "create_dashboard_alert_threshold",
                 CreateDashboardAlertTool(),
                 obj(
-                    "dashboard_id" to 1,
-                    "widget_id" to 2,
+                    "dashboard_id" to uuid,
+                    "widget_id" to uuid,
                     "name" to "CPU",
                     "condition" to "gt",
                     "threshold" to "bad",
@@ -337,8 +334,8 @@ class McpToolValidationTest {
                 "create_dashboard_alert_duration",
                 CreateDashboardAlertTool(),
                 obj(
-                    "dashboard_id" to 1,
-                    "widget_id" to 2,
+                    "dashboard_id" to uuid,
+                    "widget_id" to uuid,
                     "name" to "CPU",
                     "condition" to "gt",
                     "threshold" to 90,
@@ -349,25 +346,25 @@ class McpToolValidationTest {
             case(
                 "update_dashboard_alert_id",
                 UpdateDashboardAlertTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "alert_id is required",
             ),
             case(
                 "update_dashboard_alert_enabled",
                 UpdateDashboardAlertTool(),
-                obj("dashboard_id" to 1, "alert_id" to 2, "enabled" to "yes"),
+                obj("dashboard_id" to uuid, "alert_id" to uuid, "enabled" to "yes"),
                 "enabled must be true or false",
             ),
             case(
                 "update_dashboard_alert_fields",
                 UpdateDashboardAlertTool(),
-                obj("dashboard_id" to 1, "alert_id" to 2),
+                obj("dashboard_id" to uuid, "alert_id" to uuid),
                 "At least one field",
             ),
             case(
                 "delete_dashboard_alert_id",
                 DeleteDashboardAlertTool(),
-                obj("dashboard_id" to 1),
+                obj("dashboard_id" to uuid),
                 "alert_id is required",
             ),
             case("create_alert_host", CreateAlertTool(), obj(), "host_id is required"),

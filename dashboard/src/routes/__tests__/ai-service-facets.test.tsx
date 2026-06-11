@@ -63,8 +63,7 @@ import {Route as AiTraceRoute} from '../ai.traces.$traceId'
 
 const mockProjects = [
   {
-    id: 1,
-    resourceId: 'svc-api',
+    id: 'svc-api',
     name: 'API Service',
     slug: 'api-service',
     platform: 'node',
@@ -72,8 +71,7 @@ const mockProjects = [
     dsn: 'https://public@example.com/api/1',
   },
   {
-    id: 2,
-    resourceId: 'svc-worker',
+    id: 'svc-worker',
     name: 'Worker Service',
     slug: 'worker-service',
     platform: 'node',

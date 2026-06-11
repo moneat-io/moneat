@@ -29,8 +29,8 @@ vi.mock('@tanstack/react-router', () => ({
 
 function overviewWidget(widgetType: string): DashboardWidget {
   return {
-    id: -1,
-    dashboard_id: 0,
+    id: 'overview-widget',
+    dashboard_id: 'overview-dashboard',
     title: widgetType,
     widget_type: widgetType,
     grid_x: 0,
@@ -56,7 +56,7 @@ describe('WidgetRenderer overview dispatch', () => {
     renderOverviewWidget(
       <WidgetRenderer
         widget={overviewWidget('service_health')}
-        dashboardId={0}
+        dashboardId="overview-dashboard"
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={false}
       />,
@@ -70,7 +70,7 @@ describe('WidgetRenderer overview dispatch', () => {
     renderOverviewWidget(
       <WidgetRenderer
         widget={widget}
-        dashboardId={0}
+        dashboardId="overview-dashboard"
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={false}
       />,

@@ -21,9 +21,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 object DashboardWidgetAlerts : Table("dashboard_widget_alerts") {
     val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val widgetId = long("widget_id").references(DashboardWidgets.id)
     val dashboardId = long("dashboard_id").references(Dashboards.id)
     val orgId = long("org_id")
@@ -55,9 +57,9 @@ data class NotificationChannels(
 
 @Serializable
 data class DashboardAlertResponse(
-    val id: Long,
-    @SerialName("widget_id") val widgetId: Long,
-    @SerialName("dashboard_id") val dashboardId: Long,
+    val id: String,
+    @SerialName("widget_id") val widgetId: String,
+    @SerialName("dashboard_id") val dashboardId: String,
     val name: String,
     val condition: String,
     val threshold: Double,
@@ -76,7 +78,7 @@ data class DashboardAlertResponse(
 
 @Serializable
 data class CreateDashboardAlertRequest(
-    @SerialName("widget_id") val widgetId: Long,
+    @SerialName("widget_id") val widgetId: String,
     val name: String,
     val condition: String,
     val threshold: Double,

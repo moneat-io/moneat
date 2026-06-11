@@ -62,8 +62,7 @@ import {Route as AnalyticsIndexRoute} from '../analytics.index'
 
 const mockProjects = [
   {
-    id: 1,
-    resourceId: 'svc-web',
+    id: 'svc-web',
     name: 'Web Service',
     slug: 'web-service',
     platform: 'javascript',
@@ -71,8 +70,7 @@ const mockProjects = [
     dsn: 'https://public@example.com/api/1',
   },
   {
-    id: 2,
-    resourceId: 'svc-worker',
+    id: 'svc-worker',
     name: 'Worker Service',
     slug: 'worker-service',
     platform: 'node',

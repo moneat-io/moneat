@@ -31,9 +31,9 @@ describe('telemetry-sources', () => {
   })
 
   it('stores source selections per service', () => {
-    storeTelemetrySourceIdsForService(42, ['sentry-sdk', 'opentelemetry'])
-    expect(loadTelemetrySourceIdsForService(42)).toEqual(['sentry-sdk', 'opentelemetry'])
-    expect(loadTelemetrySourceIdsForService(43)).toEqual([])
+    storeTelemetrySourceIdsForService('svc-42', ['sentry-sdk', 'opentelemetry'])
+    expect(loadTelemetrySourceIdsForService('svc-42')).toEqual(['sentry-sdk', 'opentelemetry'])
+    expect(loadTelemetrySourceIdsForService('svc-43')).toEqual([])
   })
 
   it('reports Sentry-compatible SDK progress from service events', () => {

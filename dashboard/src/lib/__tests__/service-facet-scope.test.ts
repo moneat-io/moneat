@@ -16,16 +16,14 @@ import {
 
 const services = [
   {
-    id: 1,
-    resourceId: 'svc-api',
+    id: 'svc-api',
     name: 'API Service',
     slug: 'api-service',
     keys: [],
     dsn: 'https://public@example.com/api/1',
   },
   {
-    id: 2,
-    resourceId: 'svc-worker',
+    id: 'svc-worker',
     name: 'Worker Service',
     slug: 'worker-service',
     keys: [],
@@ -108,6 +106,6 @@ describe('service facet scope', () => {
   })
 
   it('links organization issues back through their owning service', () => {
-    expect(issueDetailSearch({projectResourceId: 'svc-worker'})).toEqual({projectId: 'svc-worker'})
+    expect(issueDetailSearch({projectId: 'svc-worker'})).toEqual({projectId: 'svc-worker'})
   })
 })

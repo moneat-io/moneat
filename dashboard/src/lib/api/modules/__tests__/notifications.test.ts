@@ -70,7 +70,7 @@ describe('Notifications API', () => {
   it('updates project notification preferences', async () => {
     server.use(
       http.put(
-        `${API_BASE}/v1/notification-preferences/5`,
+        `${API_BASE}/v1/notification-preferences/proj-5`,
         async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.weeklySummary).toBe(true)
@@ -79,19 +79,19 @@ describe('Notifications API', () => {
       )
     )
 
-    await api.updateProjectNotificationPreferences(5, { weeklySummary: true })
+    await api.updateProjectNotificationPreferences('proj-5', { weeklySummary: true })
   })
 
   // ──── deleteProjectNotificationPreferences ────
 
   it('deletes project notification preferences', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/notification-preferences/5`, () => {
+      http.delete(`${API_BASE}/v1/notification-preferences/proj-5`, () => {
         return new HttpResponse(null, { status: 204 })
       })
     )
 
-    await api.deleteProjectNotificationPreferences(5)
+    await api.deleteProjectNotificationPreferences('proj-5')
   })
 
   // ──── getAlertNotificationPreferences ────

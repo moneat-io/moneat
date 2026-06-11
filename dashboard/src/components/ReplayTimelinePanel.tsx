@@ -46,8 +46,8 @@ export type TimelineItem = BaseTimelineItem & {
 export interface ReplayTimelinePanelProps {
   readonly items: TimelineItem[]
   readonly currentOffsetMs: number
-  /** Project resource ID for replay links; legacy numeric IDs are accepted during migration. */
-  readonly projectId?: string | number
+  /** Project resource ID for replay links. */
+  readonly projectId?: string
   readonly onSeek: (offsetMs: number) => void
 }
 
@@ -121,7 +121,7 @@ function normalizeLabel(s: string): string {
   return s.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
 }
 
-function issueSearch(projectId?: string | number): { projectId: string | undefined } {
+function issueSearch(projectId?: string): { projectId: string | undefined } {
   return { projectId: projectId === undefined ? undefined : String(projectId) }
 }
 
@@ -255,7 +255,7 @@ function BreadcrumbDetailPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: string | number
+  readonly projectId?: string
 }) {
   const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
@@ -353,7 +353,7 @@ function WaterfallPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: string | number
+  readonly projectId?: string
 }) {
   const colors = typeColorClasses(item.type)
 
@@ -457,7 +457,7 @@ function ExpandedItemPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: string | number
+  readonly projectId?: string
 }) {
   if (canFetchSpans(item)) {
     return <WaterfallPanel item={item} projectId={projectId} />
@@ -573,7 +573,7 @@ interface TimelineListProps {
   readonly items: TimelineItem[]
   readonly activeIndex: number
   readonly expandedId: string | null
-  readonly projectId?: string | number
+  readonly projectId?: string
   readonly onItemClick: (item: TimelineItem) => void
 }
 

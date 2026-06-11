@@ -39,8 +39,15 @@ const mockedApi = vi.mocked(api)
 
 const IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "widgets": [...]}'
 const DATADOG_IMPORT_PLACEHOLDER = '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}'
+const DASHBOARD_ID = 'dashboard-42'
+const EXPORT_DASHBOARD_ID = 'dashboard-5'
+const IMPORTED_DASHBOARD_ID = 'dashboard-10'
+const WARNING_DASHBOARD_ID = 'dashboard-99'
+const GRAFANA_EXPORT_DASHBOARD_ID = 'dashboard-3'
+const DATADOG_EXPORT_DASHBOARD_ID = 'dashboard-4'
+const DATA_SOURCE_ID = 'datasource-7'
 
-const makeDashboard = (id: number): CustomDashboard => ({
+const makeDashboard = (id: string): CustomDashboard => ({
   id,
   org_id: 1,
   title: 'Imported dashboard',
@@ -56,7 +63,7 @@ const makeDashboard = (id: number): CustomDashboard => ({
 const makeDataSource = (
   overrides: Partial<CustomDataSourceResponse> = {}
 ): CustomDataSourceResponse => ({
-  id: 7,
+  id: DATA_SOURCE_ID,
   org_id: 1,
   name: 'My Redis',
   source_type: 'redis',
@@ -84,7 +91,7 @@ function renderImportModal(props: {onOpenChange?: (open: boolean) => void} = {})
   )
 }
 
-function renderExportModal(props: {dashboardId?: number} = {}) {
+function renderExportModal(props: {dashboardId?: string} = {}) {
   return renderWithQueryClient(
     <ImportExportModal open={true} onOpenChange={vi.fn()} mode="export" dashboardId={props.dashboardId} />
   )
@@ -99,7 +106,7 @@ beforeEach(() => {
   clearAuthStorage()
   vi.clearAllMocks()
   mockedApi.importDashboard.mockResolvedValue({
-    dashboard: makeDashboard(42),
+    dashboard: makeDashboard(DASHBOARD_ID),
     warnings: [],
   })
   mockedApi.exportDashboard.mockResolvedValue({title: 'Test', widgets: []})
@@ -116,7 +123,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith({
           to: '/dashboards/$dashboardId',
-          params: {dashboardId: '42'},
+          params: {dashboardId: DASHBOARD_ID},
         })
       })
       expect(onOpenChange).toHaveBeenCalledWith(false)
@@ -127,7 +134,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   describe('import – warnings displayed', () => {
     it('shows warnings and View Dashboard button when import returns warnings', async () => {
       mockedApi.importDashboard.mockResolvedValue({
-        dashboard: makeDashboard(99),
+        dashboard: makeDashboard(WARNING_DASHBOARD_ID),
         warnings: ['Unsupported panel type: heatmap', 'Unknown variable: $region'],
       })
       renderImportModal()
@@ -145,7 +152,7 @@ describe('ImportExportModal – extended branch coverage', () => {
 
     it('navigates when clicking View Dashboard button after import with warnings', async () => {
       mockedApi.importDashboard.mockResolvedValue({
-        dashboard: makeDashboard(99),
+        dashboard: makeDashboard(WARNING_DASHBOARD_ID),
         warnings: ['Some warning'],
       })
       const onOpenChange = vi.fn()
@@ -158,7 +165,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       await userEvent.setup().click(screen.getByText('View Dashboard'))
       expect(mockNavigate).toHaveBeenCalledWith({
         to: '/dashboards/$dashboardId',
-        params: {dashboardId: '99'},
+        params: {dashboardId: WARNING_DASHBOARD_ID},
       })
       expect(onOpenChange).toHaveBeenCalledWith(false)
     })
@@ -168,7 +175,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   describe('import – post-success UI state', () => {
     it('hides Import button and shows Close after successful import', async () => {
       mockedApi.importDashboard.mockResolvedValue({
-        dashboard: makeDashboard(10),
+        dashboard: makeDashboard(IMPORTED_DASHBOARD_ID),
         warnings: ['warn'],
       })
       renderImportModal()
@@ -381,7 +388,7 @@ describe('ImportExportModal – extended branch coverage', () => {
   // ──── Export: triggers download and shows preview ────
   describe('export – download and preview', () => {
     it('calls exportDashboard and shows preview for moneat format', async () => {
-      mockedApi.exportDashboard.mockResolvedValue({title: 'Exported', widgets: [{id: 1}]})
+      mockedApi.exportDashboard.mockResolvedValue({title: 'Exported', widgets: [{id: 'widget-1'}]})
 
       // Mock URL.createObjectURL and revokeObjectURL
       const mockCreateObjectURL = vi.fn().mockReturnValue('blob:mock')
@@ -389,12 +396,12 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = mockCreateObjectURL
       globalThis.URL.revokeObjectURL = mockRevokeObjectURL
 
-      renderExportModal({dashboardId: 5})
+      renderExportModal({dashboardId: EXPORT_DASHBOARD_ID})
 
       await userEvent.setup().click(screen.getByText('Export as Moneat JSON'))
 
       await waitFor(() => {
-        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(5, 'moneat')
+        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(EXPORT_DASHBOARD_ID, 'moneat')
       })
       await waitFor(() => {
         expect(screen.getByText('Preview')).toBeInTheDocument()
@@ -407,12 +414,12 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock')
       globalThis.URL.revokeObjectURL = vi.fn()
 
-      renderExportModal({dashboardId: 3})
+      renderExportModal({dashboardId: GRAFANA_EXPORT_DASHBOARD_ID})
 
       await userEvent.setup().click(screen.getByText('Export as Grafana JSON'))
 
       await waitFor(() => {
-        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(3, 'grafana')
+        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(GRAFANA_EXPORT_DASHBOARD_ID, 'grafana')
       })
     })
 
@@ -422,12 +429,12 @@ describe('ImportExportModal – extended branch coverage', () => {
       globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock')
       globalThis.URL.revokeObjectURL = vi.fn()
 
-      renderExportModal({dashboardId: 4})
+      renderExportModal({dashboardId: DATADOG_EXPORT_DASHBOARD_ID})
 
       await userEvent.setup().click(screen.getByText('Export as Datadog JSON'))
 
       await waitFor(() => {
-        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(4, 'datadog')
+        expect(mockedApi.exportDashboard).toHaveBeenCalledWith(DATADOG_EXPORT_DASHBOARD_ID, 'datadog')
       })
     })
   })
@@ -450,7 +457,7 @@ describe('ImportExportModal – extended branch coverage', () => {
       mockedApi.exportDashboard.mockRejectedValue(new Error('Network error'))
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      renderExportModal({dashboardId: 1})
+      renderExportModal({dashboardId: EXPORT_DASHBOARD_ID})
 
       await userEvent.setup().click(screen.getByText('Export as Moneat JSON'))
 
@@ -469,7 +476,7 @@ describe('ImportExportModal – extended branch coverage', () => {
     })
 
     it('does not show Experimental badge in export mode', () => {
-      renderExportModal({dashboardId: 1})
+      renderExportModal({dashboardId: EXPORT_DASHBOARD_ID})
       expect(screen.queryByText('Experimental')).not.toBeInTheDocument()
     })
 
@@ -479,7 +486,7 @@ describe('ImportExportModal – extended branch coverage', () => {
     })
 
     it('shows correct description text for export mode', () => {
-      renderExportModal({dashboardId: 1})
+      renderExportModal({dashboardId: EXPORT_DASHBOARD_ID})
       expect(screen.getByText('Export this dashboard in various formats')).toBeInTheDocument()
     })
   })

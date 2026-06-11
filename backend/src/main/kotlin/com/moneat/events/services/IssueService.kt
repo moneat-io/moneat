@@ -100,8 +100,7 @@ class IssueService(
                 result.add(
                     IssueResponse(
                         id = row.issueId,
-                        projectId = row.projectId,
-                        projectResourceId = projectResourceId,
+                        projectId = projectResourceId,
                         title = row.title,
                         culprit = row.culprit,
                         level = row.level,
@@ -194,8 +193,7 @@ class IssueService(
 
         return IssueDetailResponse(
             id = obj.issueId,
-            projectId = obj.projectId,
-            projectResourceId = projectResourceId,
+            projectId = projectResourceId,
             projectName = projectName ?: "Unknown",
             title = obj.title,
             culprit = obj.culprit,
@@ -235,7 +233,7 @@ class IssueService(
     }
 
     private fun projectResourceId(projectId: Long): String =
-        projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+        projectIdResolver.resourceIdFor(projectId) ?: ""
 
     suspend fun getIssueTransactions(
         issueId: String,
@@ -317,8 +315,7 @@ class IssueService(
     private fun com.moneat.events.repositories.models.IssueRow.toIssueResponse(status: String): IssueResponse =
         IssueResponse(
             id = issueId,
-            projectId = projectId,
-            projectResourceId = projectResourceId(projectId),
+            projectId = projectResourceId(projectId),
             title = title,
             culprit = culprit,
             level = level,

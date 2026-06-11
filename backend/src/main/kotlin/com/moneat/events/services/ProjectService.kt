@@ -51,11 +51,10 @@ class ProjectService(
                 demoEpochMs
             )
             ProjectResponse(
-                id = row.projectId,
-                resourceId = row.resourceId,
+                id = row.resourceId,
                 name = row.name,
                 slug = row.slug,
-                serviceId = row.serviceId,
+                serviceId = row.resourceId,
                 serviceName = row.serviceName,
                 framework = row.framework,
                 keys = row.keys,
@@ -73,11 +72,10 @@ class ProjectService(
             null
         )
         return ProjectResponse(
-            id = row.projectId,
-            resourceId = row.resourceId,
+            id = row.resourceId,
             name = row.name,
             slug = row.slug,
-            serviceId = row.serviceId,
+            serviceId = row.resourceId,
             serviceName = row.serviceName,
             framework = row.framework,
             keys = row.keys,

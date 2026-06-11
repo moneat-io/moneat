@@ -75,16 +75,14 @@ import {Route as ReplaysRoute} from '../replays'
 
 const mockProjects = [
   {
-    id: 1,
-    resourceId: 'svc-api',
+    id: 'svc-api',
     name: 'API Service',
     slug: 'api-service',
     keys: [],
     dsn: 'https://public@example.com/api/1',
   },
   {
-    id: 2,
-    resourceId: 'svc-worker',
+    id: 'svc-worker',
     name: 'Worker Service',
     slug: 'worker-service',
     keys: [],
@@ -139,8 +137,7 @@ const releaseStats = {
 
 const replay = {
   replayId: 'replay-1',
-  projectId: 1,
-  projectResourceId: 'svc-api',
+  projectId: 'svc-api',
   startedAt: '2026-06-01T00:00:00.000Z',
   finishedAt: '2026-06-01T00:01:00.000Z',
   durationMs: 60000,

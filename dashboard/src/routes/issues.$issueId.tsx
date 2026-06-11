@@ -406,7 +406,7 @@ function IssueDetailPage() {
 
                 <SectionCard title="Logs context" icon={TerminalSquare} iconTone="info" flushBody>
                   <EmbeddedLogs
-                    projectId={issue.projectResourceId}
+                    projectId={issue.projectId}
                     centerTimestamp={latestEvent.timestamp}
                     contextMinutes={5}
                     environment={latestEvent.environment}

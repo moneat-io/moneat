@@ -20,6 +20,19 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const DASHBOARD_ID = 'dashboard-1'
+const SECOND_DASHBOARD_ID = 'dashboard-2'
+const NEW_DASHBOARD_ID = 'dashboard-3'
+const ALERT_DASHBOARD_ID = 'dashboard-5'
+const IMPORTED_DASHBOARD_ID = 'dashboard-10'
+const TEMPLATE_CREATED_DASHBOARD_ID = 'dashboard-20'
+const FOLDER_ID = 'folder-7'
+const FOLDER_ONE_ID = 'folder-1'
+const FOLDER_TWO_ID = 'folder-2'
+const ALERT_ID = 'alert-2'
+const DATA_SOURCE_ID = 'datasource-1'
+const DATA_SOURCE_TWO_ID = 'datasource-2'
+const DATA_SOURCE_THREE_ID = 'datasource-3'
 
 describe('dashboardsMethods', () => {
   beforeEach(() => {
@@ -32,7 +45,7 @@ describe('dashboardsMethods', () => {
 
   describe('getDashboards', () => {
     it('fetches all dashboards without projectId', async () => {
-      const mock = [{ id: 1, name: 'My Dashboard' }]
+      const mock = [{ id: DASHBOARD_ID, name: 'My Dashboard' }]
       server.use(
         http.get(`${API_BASE}/v1/dashboards`, () => {
           return HttpResponse.json(mock)
@@ -43,35 +56,35 @@ describe('dashboardsMethods', () => {
     })
 
     it('fetches dashboards filtered by projectId', async () => {
-      const mock = [{ id: 2, name: 'Project Dashboard' }]
+      const mock = [{ id: SECOND_DASHBOARD_ID, name: 'Project Dashboard' }]
       server.use(
         http.get(`${API_BASE}/v1/dashboards`, ({ request }) => {
           const url = new URL(request.url)
-          expect(url.searchParams.get('projectId')).toBe('5')
+          expect(url.searchParams.get('projectId')).toBe('proj-5')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getDashboards(5)
+      const result = await api.getDashboards('proj-5')
       expect(result).toEqual(mock)
     })
   })
 
   describe('getDashboard', () => {
     it('fetches a single dashboard by id', async () => {
-      const mock = { id: 1, name: 'Dashboard One' }
+      const mock = { id: DASHBOARD_ID, name: 'Dashboard One' }
       server.use(
-        http.get(`${API_BASE}/v1/dashboards/1`, () => {
+        http.get(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getDashboard(1)
+      const result = await api.getDashboard(DASHBOARD_ID)
       expect(result).toEqual(mock)
     })
   })
 
   describe('createDashboard', () => {
     it('creates a new dashboard', async () => {
-      const mock = { id: 3, name: 'New Dashboard' }
+      const mock = { id: NEW_DASHBOARD_ID, name: 'New Dashboard' }
       server.use(
         http.post(`${API_BASE}/v1/dashboards`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
@@ -90,15 +103,15 @@ describe('dashboardsMethods', () => {
 
   describe('updateDashboard', () => {
     it('updates an existing dashboard', async () => {
-      const mock = { id: 1, name: 'Updated' }
+      const mock = { id: DASHBOARD_ID, name: 'Updated' }
       server.use(
-        http.put(`${API_BASE}/v1/dashboards/1`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.name).toBe('Updated')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.updateDashboard(1, {
+      const result = await api.updateDashboard(DASHBOARD_ID, {
         name: 'Updated',
       } as Parameters<typeof api.updateDashboard>[1])
       expect(result).toEqual(mock)
@@ -108,11 +121,11 @@ describe('dashboardsMethods', () => {
   describe('deleteDashboard', () => {
     it('deletes a dashboard', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/dashboards/1`, () => {
+        http.delete(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.deleteDashboard(1)
+      await api.deleteDashboard(DASHBOARD_ID)
     })
   })
 
@@ -122,24 +135,24 @@ describe('dashboardsMethods', () => {
     it('toggles favorite status', async () => {
       const mock = { is_favorited: true }
       server.use(
-        http.post(`${API_BASE}/v1/dashboards/1/favorite`, () => {
+        http.post(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}/favorite`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.toggleDashboardFavorite(1)
+      const result = await api.toggleDashboardFavorite(DASHBOARD_ID)
       expect(result).toEqual(mock)
     })
   })
 
   describe('duplicateDashboard', () => {
     it('duplicates a dashboard', async () => {
-      const mock = { id: 2, title: 'Dashboard (Copy)' }
+      const mock = { id: SECOND_DASHBOARD_ID, title: 'Dashboard (Copy)' }
       server.use(
-        http.post(`${API_BASE}/v1/dashboards/1/duplicate`, () => {
+        http.post(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}/duplicate`, () => {
           return HttpResponse.json(mock, { status: 201 })
         })
       )
-      const result = await api.duplicateDashboard(1)
+      const result = await api.duplicateDashboard(DASHBOARD_ID)
       expect(result).toEqual(mock)
     })
   })
@@ -148,39 +161,39 @@ describe('dashboardsMethods', () => {
     it('marks a dashboard as default', async () => {
       const mock = { is_default: true }
       server.use(
-        http.post(`${API_BASE}/v1/dashboards/1/default`, () => {
+        http.post(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}/default`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.setDefaultDashboard(1)
+      const result = await api.setDefaultDashboard(DASHBOARD_ID)
       expect(result).toEqual(mock)
     })
   })
 
   describe('moveDashboardToFolder', () => {
     it('moves dashboard to a folder', async () => {
-      const mock = { folder_id: 7 }
+      const mock = { folder_id: FOLDER_ID }
       server.use(
-        http.put(`${API_BASE}/v1/dashboards/1/folder`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}/folder`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
-          expect(body.folder_id).toBe(7)
+          expect(body.folder_id).toBe(FOLDER_ID)
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.moveDashboardToFolder(1, 7)
+      const result = await api.moveDashboardToFolder(DASHBOARD_ID, FOLDER_ID)
       expect(result).toEqual(mock)
     })
 
     it('moves dashboard out of a folder with null', async () => {
       const mock = { folder_id: null }
       server.use(
-        http.put(`${API_BASE}/v1/dashboards/2/folder`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/dashboards/${SECOND_DASHBOARD_ID}/folder`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.folder_id).toBeNull()
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.moveDashboardToFolder(2, null)
+      const result = await api.moveDashboardToFolder(SECOND_DASHBOARD_ID, null)
       expect(result).toEqual(mock)
     })
   })
@@ -189,7 +202,7 @@ describe('dashboardsMethods', () => {
 
   describe('getDashboardFolders', () => {
     it('fetches all folders', async () => {
-      const mock = [{ id: 1, name: 'Folder A' }]
+      const mock = [{ id: FOLDER_ONE_ID, name: 'Folder A' }]
       server.use(
         http.get(`${API_BASE}/v1/dashboards/folders`, () => {
           return HttpResponse.json(mock)
@@ -202,7 +215,7 @@ describe('dashboardsMethods', () => {
 
   describe('createDashboardFolder', () => {
     it('creates a new folder', async () => {
-      const mock = { id: 2, name: 'New Folder' }
+      const mock = { id: FOLDER_TWO_ID, name: 'New Folder' }
       server.use(
         http.post(
           `${API_BASE}/v1/dashboards/folders`,
@@ -222,10 +235,10 @@ describe('dashboardsMethods', () => {
 
   describe('updateDashboardFolder', () => {
     it('updates a folder', async () => {
-      const mock = { id: 1, name: 'Renamed' }
+      const mock = { id: FOLDER_ONE_ID, name: 'Renamed' }
       server.use(
         http.put(
-          `${API_BASE}/v1/dashboards/folders/1`,
+          `${API_BASE}/v1/dashboards/folders/${FOLDER_ONE_ID}`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.name).toBe('Renamed')
@@ -233,7 +246,7 @@ describe('dashboardsMethods', () => {
           }
         )
       )
-      const result = await api.updateDashboardFolder(1, {
+      const result = await api.updateDashboardFolder(FOLDER_ONE_ID, {
         name: 'Renamed',
       } as Parameters<typeof api.updateDashboardFolder>[1])
       expect(result).toEqual(mock)
@@ -243,11 +256,11 @@ describe('dashboardsMethods', () => {
   describe('deleteDashboardFolder', () => {
     it('deletes a folder', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/dashboards/folders/1`, () => {
+        http.delete(`${API_BASE}/v1/dashboards/folders/${FOLDER_ONE_ID}`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.deleteDashboardFolder(1)
+      await api.deleteDashboardFolder(FOLDER_ONE_ID)
     })
   })
 
@@ -296,10 +309,10 @@ describe('dashboardsMethods', () => {
       } satisfies Parameters<typeof api.executeWidgetQuery>[1]
       server.use(
         http.post(
-          `${API_BASE}/v1/dashboards/1/query`,
+          `${API_BASE}/v1/dashboards/${DASHBOARD_ID}/query`,
           async ({ request }) => {
             const url = new URL(request.url)
-            expect(url.searchParams.get('projectId')).toBe('10')
+            expect(url.searchParams.get('projectId')).toBe('proj-10')
             const body = (await request.json()) as Record<string, unknown>
             expect(body.query_config).toEqual(queryConfig)
             return HttpResponse.json(mockRows)
@@ -307,9 +320,9 @@ describe('dashboardsMethods', () => {
         )
       )
       const result = await api.executeWidgetQuery(
-        1,
+        DASHBOARD_ID,
         queryConfig,
-        10
+        'proj-10'
       )
       expect(result).toEqual(mockRows)
     })
@@ -327,7 +340,7 @@ describe('dashboardsMethods', () => {
       const variables = { env: 'production' }
       server.use(
         http.post(
-          `${API_BASE}/v1/dashboards/1/query`,
+          `${API_BASE}/v1/dashboards/${DASHBOARD_ID}/query`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.time_range).toEqual(timeRange)
@@ -337,9 +350,9 @@ describe('dashboardsMethods', () => {
         )
       )
       await api.executeWidgetQuery(
-        1,
+        DASHBOARD_ID,
         queryConfig,
-        10,
+        'proj-10',
         timeRange,
         variables
       )
@@ -360,10 +373,10 @@ describe('dashboardsMethods', () => {
       }] satisfies Parameters<typeof api.executeBatchQuery>[1]
       server.use(
         http.post(
-          `${API_BASE}/v1/dashboards/2/query/batch`,
+          `${API_BASE}/v1/dashboards/${SECOND_DASHBOARD_ID}/query/batch`,
           async ({ request }) => {
             const url = new URL(request.url)
-            expect(url.searchParams.get('projectId')).toBe('3')
+            expect(url.searchParams.get('projectId')).toBe('proj-3')
             const body = (await request.json()) as Record<string, unknown>
             expect(body.queries).toEqual(queries)
             return HttpResponse.json(mockResult)
@@ -371,9 +384,9 @@ describe('dashboardsMethods', () => {
         )
       )
       const result = await api.executeBatchQuery(
-        2,
+        SECOND_DASHBOARD_ID,
         queries,
-        3
+        'proj-3'
       )
       expect(result).toEqual(mockResult)
     })
@@ -392,7 +405,7 @@ describe('dashboardsMethods', () => {
       const variables = { region: 'us-east' }
       server.use(
         http.post(
-          `${API_BASE}/v1/dashboards/2/query/batch`,
+          `${API_BASE}/v1/dashboards/${SECOND_DASHBOARD_ID}/query/batch`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.time_range).toEqual(timeRange)
@@ -402,9 +415,9 @@ describe('dashboardsMethods', () => {
         )
       )
       await api.executeBatchQuery(
-        2,
+        SECOND_DASHBOARD_ID,
         queries,
-        3,
+        'proj-3',
         timeRange,
         variables
       )
@@ -416,7 +429,7 @@ describe('dashboardsMethods', () => {
       const mockOptions = { env: ['prod', 'staging'], region: ['us', 'eu'] }
       server.use(
         http.post(
-          `${API_BASE}/v1/dashboards/1/variables/resolve`,
+          `${API_BASE}/v1/dashboards/${DASHBOARD_ID}/variables/resolve`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.env).toBe('prod')
@@ -424,7 +437,7 @@ describe('dashboardsMethods', () => {
           }
         )
       )
-      const result = await api.resolveVariableOptions(1, { env: 'prod' })
+      const result = await api.resolveVariableOptions(DASHBOARD_ID, { env: 'prod' })
       expect(result).toEqual(mockOptions)
     })
   })
@@ -433,7 +446,7 @@ describe('dashboardsMethods', () => {
 
   describe('importDashboard', () => {
     it('imports a dashboard from JSON', async () => {
-      const mock = { id: 10, name: 'Imported', warnings: [] }
+      const mock = { id: IMPORTED_DASHBOARD_ID, name: 'Imported', warnings: [] }
       server.use(
         http.post(`${API_BASE}/v1/dashboards/import`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
@@ -451,11 +464,11 @@ describe('dashboardsMethods', () => {
     it('exports a dashboard in the given format', async () => {
       const mock = { panels: [] }
       server.use(
-        http.get(`${API_BASE}/v1/dashboards/1/export/json`, () => {
+        http.get(`${API_BASE}/v1/dashboards/${DASHBOARD_ID}/export/json`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.exportDashboard(1, 'json')
+      const result = await api.exportDashboard(DASHBOARD_ID, 'json')
       expect(result).toEqual(mock)
     })
   })
@@ -527,20 +540,20 @@ describe('dashboardsMethods', () => {
 
   describe('createDashboardFromTemplate', () => {
     it('creates a dashboard from a template', async () => {
-      const mock = { id: 20, title: 'Node Exporter Full' }
+      const mock = { id: TEMPLATE_CREATED_DASHBOARD_ID, title: 'Node Exporter Full' }
       server.use(
         http.post(
           `${API_BASE}/v1/dashboards/templates/node-exporter-full`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
-            expect(body.folder_id).toBe(7)
+            expect(body.folder_id).toBe(FOLDER_ID)
             return HttpResponse.json(mock)
           }
         )
       )
       const result = await api.createDashboardFromTemplate(
         'node-exporter-full',
-        {folder_id: 7}
+        {folder_id: FOLDER_ID}
       )
       expect(result).toEqual(mock)
     })
@@ -550,23 +563,23 @@ describe('dashboardsMethods', () => {
 
   describe('listDashboardAlerts', () => {
     it('lists alerts for a dashboard', async () => {
-      const mock = [{ id: 1, name: 'High Error Rate' }]
+      const mock = [{ id: ALERT_ID, name: 'High Error Rate' }]
       server.use(
-        http.get(`${API_BASE}/v1/dashboards/5/alerts`, () => {
+        http.get(`${API_BASE}/v1/dashboards/${ALERT_DASHBOARD_ID}/alerts`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.listDashboardAlerts(5)
+      const result = await api.listDashboardAlerts(ALERT_DASHBOARD_ID)
       expect(result).toEqual(mock)
     })
   })
 
   describe('createDashboardAlert', () => {
     it('creates an alert on a dashboard', async () => {
-      const mock = { id: 2, name: 'Latency Spike' }
+      const mock = { id: ALERT_ID, name: 'Latency Spike' }
       server.use(
         http.post(
-          `${API_BASE}/v1/dashboards/5/alerts`,
+          `${API_BASE}/v1/dashboards/${ALERT_DASHBOARD_ID}/alerts`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.name).toBe('Latency Spike')
@@ -574,7 +587,7 @@ describe('dashboardsMethods', () => {
           }
         )
       )
-      const result = await api.createDashboardAlert(5, {
+      const result = await api.createDashboardAlert(ALERT_DASHBOARD_ID, {
         name: 'Latency Spike',
       } as Parameters<typeof api.createDashboardAlert>[1])
       expect(result).toEqual(mock)
@@ -583,10 +596,10 @@ describe('dashboardsMethods', () => {
 
   describe('updateDashboardAlert', () => {
     it('updates an alert', async () => {
-      const mock = { id: 2, name: 'Updated Alert' }
+      const mock = { id: ALERT_ID, name: 'Updated Alert' }
       server.use(
         http.put(
-          `${API_BASE}/v1/dashboards/5/alerts/2`,
+          `${API_BASE}/v1/dashboards/${ALERT_DASHBOARD_ID}/alerts/${ALERT_ID}`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.name).toBe('Updated Alert')
@@ -594,7 +607,7 @@ describe('dashboardsMethods', () => {
           }
         )
       )
-      const result = await api.updateDashboardAlert(5, 2, {
+      const result = await api.updateDashboardAlert(ALERT_DASHBOARD_ID, ALERT_ID, {
         name: 'Updated Alert',
       } as Parameters<typeof api.updateDashboardAlert>[2])
       expect(result).toEqual(mock)
@@ -604,11 +617,11 @@ describe('dashboardsMethods', () => {
   describe('deleteDashboardAlert', () => {
     it('deletes an alert', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/dashboards/5/alerts/2`, () => {
+        http.delete(`${API_BASE}/v1/dashboards/${ALERT_DASHBOARD_ID}/alerts/${ALERT_ID}`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.deleteDashboardAlert(5, 2)
+      await api.deleteDashboardAlert(ALERT_DASHBOARD_ID, ALERT_ID)
     })
   })
 
@@ -616,7 +629,7 @@ describe('dashboardsMethods', () => {
 
   describe('listCustomDataSources', () => {
     it('lists all custom data sources', async () => {
-      const mock = [{ id: 1, name: 'My Postgres' }]
+      const mock = [{ id: DATA_SOURCE_ID, name: 'My Postgres' }]
       server.use(
         http.get(`${API_BASE}/v1/datasources`, () => {
           return HttpResponse.json(mock)
@@ -629,20 +642,20 @@ describe('dashboardsMethods', () => {
 
   describe('getCustomDataSource', () => {
     it('fetches a single custom data source', async () => {
-      const mock = { id: 1, name: 'My Postgres' }
+      const mock = { id: DATA_SOURCE_ID, name: 'My Postgres' }
       server.use(
-        http.get(`${API_BASE}/v1/datasources/1`, () => {
+        http.get(`${API_BASE}/v1/datasources/${DATA_SOURCE_ID}`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getCustomDataSource(1)
+      const result = await api.getCustomDataSource(DATA_SOURCE_ID)
       expect(result).toEqual(mock)
     })
   })
 
   describe('createCustomDataSource', () => {
     it('creates a custom data source', async () => {
-      const mock = { id: 2, name: 'New DS' }
+      const mock = { id: DATA_SOURCE_TWO_ID, name: 'New DS' }
       server.use(
         http.post(`${API_BASE}/v1/datasources`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
@@ -659,15 +672,15 @@ describe('dashboardsMethods', () => {
 
   describe('updateCustomDataSource', () => {
     it('updates a custom data source', async () => {
-      const mock = { id: 1, name: 'Renamed DS' }
+      const mock = { id: DATA_SOURCE_ID, name: 'Renamed DS' }
       server.use(
-        http.put(`${API_BASE}/v1/datasources/1`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/datasources/${DATA_SOURCE_ID}`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.name).toBe('Renamed DS')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.updateCustomDataSource(1, {
+      const result = await api.updateCustomDataSource(DATA_SOURCE_ID, {
         name: 'Renamed DS',
       } as Parameters<typeof api.updateCustomDataSource>[1])
       expect(result).toEqual(mock)
@@ -677,11 +690,11 @@ describe('dashboardsMethods', () => {
   describe('deleteCustomDataSource', () => {
     it('deletes a custom data source', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/datasources/1`, () => {
+        http.delete(`${API_BASE}/v1/datasources/${DATA_SOURCE_ID}`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.deleteCustomDataSource(1)
+      await api.deleteCustomDataSource(DATA_SOURCE_ID)
     })
   })
 
@@ -709,11 +722,11 @@ describe('dashboardsMethods', () => {
         { name: 'name', type: 'string' },
       ]
       server.use(
-        http.get(`${API_BASE}/v1/datasources/1/schema`, () => {
+        http.get(`${API_BASE}/v1/datasources/${DATA_SOURCE_ID}/schema`, () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getDataSourceSchema(1)
+      const result = await api.getDataSourceSchema(DATA_SOURCE_ID)
       expect(result).toEqual(mock)
     })
   })
@@ -723,7 +736,7 @@ describe('dashboardsMethods', () => {
       const mockRows = [{ id: 1, value: 'hello' }]
       server.use(
         http.post(
-          `${API_BASE}/v1/datasources/3/query`,
+          `${API_BASE}/v1/datasources/${DATA_SOURCE_THREE_ID}/query`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body).not.toHaveProperty('data_source_id')
@@ -732,8 +745,8 @@ describe('dashboardsMethods', () => {
           }
         )
       )
-      const result = await api.queryCustomDataSource(3, {
-        data_source_id: 3,
+      const result = await api.queryCustomDataSource(DATA_SOURCE_THREE_ID, {
+        data_source_id: DATA_SOURCE_THREE_ID,
         query: 'SELECT 1',
       })
       expect(result).toEqual(mockRows)

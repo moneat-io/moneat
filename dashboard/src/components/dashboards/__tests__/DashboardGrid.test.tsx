@@ -21,7 +21,7 @@ import {DashboardGrid} from '../DashboardGrid'
 import type {DashboardWidget} from '@/lib/api'
 
 type DashboardAlert = {
-  widget_id: number
+  widget_id: string
   enabled: boolean
   last_triggered_at: string | null
   alert_priority: string | null
@@ -38,6 +38,10 @@ type MockLayoutItem = {
 const queryState = vi.hoisted(() => ({
   alerts: [] as DashboardAlert[],
 }))
+
+const DASHBOARD_ID = 'dashboard-1'
+const WIDGET_ID = 'widget-1'
+const SECTION_WIDGET_ID = 'widget-2'
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({data: queryState.alerts}),
@@ -60,8 +64,8 @@ vi.mock('react-grid-layout/legacy', () => ({
       <button
         type="button"
         onClick={() => onLayoutChange?.([
-          {i: '1', x: 1, y: 4, w: 5, h: 8},
-          {i: '2', x: 0, y: 0, w: 12, h: 1},
+          {i: 'widget-1', x: 1, y: 4, w: 5, h: 8},
+          {i: 'widget-2', x: 0, y: 0, w: 12, h: 1},
         ])}
       >
         move layout
@@ -76,8 +80,8 @@ vi.mock('../WidgetRenderer', () => ({
 }))
 
 const widget: DashboardWidget = {
-  id: 1,
-  dashboard_id: 1,
+  id: WIDGET_ID,
+  dashboard_id: DASHBOARD_ID,
   title: 'Dependency p95 check latency',
   widget_type: 'timeseries',
   grid_x: 0,
@@ -91,7 +95,7 @@ const widget: DashboardWidget = {
 
 const sectionWidget: DashboardWidget = {
   ...widget,
-  id: 2,
+  id: SECTION_WIDGET_ID,
   title: 'Ops Section',
   widget_type: 'section',
   grid_w: 12,
@@ -118,7 +122,7 @@ describe('DashboardGrid', () => {
       <DashboardGrid
         widgets={[widget]}
         isEditing={false}
-        dashboardId={1}
+        dashboardId={DASHBOARD_ID}
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={false}
         onLayoutChange={onLayoutChange}
@@ -139,7 +143,7 @@ describe('DashboardGrid', () => {
       <DashboardGrid
         widgets={[]}
         isEditing={false}
-        dashboardId={1}
+        dashboardId={DASHBOARD_ID}
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={false}
         onLayoutChange={vi.fn()}
@@ -154,7 +158,7 @@ describe('DashboardGrid', () => {
 
   it('handles editable widget actions, alerts, and variable titles', () => {
     queryState.alerts = [{
-      widget_id: 1,
+      widget_id: WIDGET_ID,
       enabled: true,
       last_triggered_at: '2026-05-24T18:00:00Z',
       alert_priority: 'P0',
@@ -166,7 +170,7 @@ describe('DashboardGrid', () => {
       <DashboardGrid
         widgets={[{...widget, title: 'Latency $service ${env}'}]}
         isEditing={true}
-        dashboardId={1}
+        dashboardId={DASHBOARD_ID}
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={true}
         variableValues={{service: '$__all', env: 'prod'}}
@@ -180,14 +184,14 @@ describe('DashboardGrid', () => {
     expect(screen.getByTitle('Alert firing')).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('widget-renderer').parentElement as HTMLElement)
-    expect(onWidgetClick).toHaveBeenCalledWith(expect.objectContaining({id: 1}))
+    expect(onWidgetClick).toHaveBeenCalledWith(expect.objectContaining({id: WIDGET_ID}))
 
     fireEvent.click(screen.getByText('Edit'))
     expect(onWidgetClick).toHaveBeenCalledTimes(2)
 
     const buttons = screen.getAllByRole('button')
     fireEvent.click(buttons[buttons.length - 1])
-    expect(onWidgetDelete).toHaveBeenCalledWith(1)
+    expect(onWidgetDelete).toHaveBeenCalledWith(WIDGET_ID)
   })
 
   it('toggles collapsed sections and keeps section deletes separate', () => {
@@ -199,7 +203,7 @@ describe('DashboardGrid', () => {
           {...widget, grid_y: 1, sort_order: 1},
         ]}
         isEditing={true}
-        dashboardId={1}
+        dashboardId={DASHBOARD_ID}
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={false}
         onLayoutChange={vi.fn()}
@@ -216,7 +220,7 @@ describe('DashboardGrid', () => {
 
     const buttons = screen.getAllByRole('button')
     fireEvent.click(buttons[2])
-    expect(onWidgetDelete).toHaveBeenCalledWith(2)
+    expect(onWidgetDelete).toHaveBeenCalledWith(SECTION_WIDGET_ID)
   })
 
   it('persists scaled layout changes from edit mode', () => {
@@ -228,7 +232,7 @@ describe('DashboardGrid', () => {
           {...widget, grid_y: 2, grid_h: 4, sort_order: 1},
         ]}
         isEditing={true}
-        dashboardId={1}
+        dashboardId={DASHBOARD_ID}
         timeRange={{from: 'now-24h', to: 'now'}}
         autoRefresh={false}
         onLayoutChange={onLayoutChange}
@@ -239,14 +243,14 @@ describe('DashboardGrid', () => {
 
     const renderedLayout = JSON.parse(screen.getByTestId('grid-layout').textContent ?? '[]') as MockLayoutItem[]
     expect(renderedLayout).toEqual(expect.arrayContaining([
-      expect.objectContaining({i: '2', h: 1}),
-      expect.objectContaining({i: '1', y: 4, h: 8}),
+      expect.objectContaining({i: SECTION_WIDGET_ID, h: 1}),
+      expect.objectContaining({i: WIDGET_ID, y: 4, h: 8}),
     ]))
 
     fireEvent.click(screen.getByRole('button', {name: 'move layout'}))
     expect(onLayoutChange).toHaveBeenCalledWith([
-      expect.objectContaining({id: 2, grid_y: 0, grid_h: 1}),
-      expect.objectContaining({id: 1, grid_x: 1, grid_y: 2, grid_w: 5, grid_h: 4}),
+      expect.objectContaining({id: SECTION_WIDGET_ID, grid_y: 0, grid_h: 1}),
+      expect.objectContaining({id: WIDGET_ID, grid_x: 1, grid_y: 2, grid_w: 5, grid_h: 4}),
     ])
   })
 })

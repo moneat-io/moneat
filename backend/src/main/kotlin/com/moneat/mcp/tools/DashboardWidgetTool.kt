@@ -18,6 +18,7 @@ package com.moneat.mcp.tools
 
 import com.moneat.dashboards.models.CreateWidgetRequest
 import com.moneat.dashboards.models.CustomDataSourceType
+import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.models.UpdateDashboardRequest
@@ -36,6 +37,7 @@ import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
 import com.moneat.mcp.protocol.ToolCallResult
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerializationException
@@ -63,6 +65,7 @@ private val dashboardWidgetQueryEngine = DashboardQueryEngine()
 private val dashboardWidgetDataSourceService = CustomDataSourceService()
 private val dashboardWidgetDataSourceExecutor = CustomDataSourceExecutor()
 private val dashboardWidgetRetentionPolicyService = RetentionPolicyService()
+private val dashboardWidgetProjectIdResolver = ProjectIdResolver()
 private val dashboardWidgetJson = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
@@ -126,6 +129,16 @@ private fun JsonObject.longArg(name: String): Long? {
 
 private fun JsonObject.requiredLongArg(name: String): Long =
     longArg(name) ?: throw IllegalArgumentException("$name is required")
+
+private fun JsonObject.requiredStringArg(name: String): String =
+    optionalStringArg(name)?.takeIf { it.isNotBlank() }
+        ?: throw IllegalArgumentException("$name is required")
+
+private fun JsonObject.requiredDashboardId(orgId: Long): Long {
+    val resourceId = requiredStringArg(DASHBOARD_ID_ARG)
+    return dashboardWidgetCrudService.resolveDashboardId(resourceId, orgId)
+        ?: throw IllegalArgumentException("Dashboard not found: $resourceId")
+}
 
 private fun JsonObject.optionalIntArg(name: String): Int? {
     if (!containsKey(name)) return null
@@ -273,10 +286,10 @@ private fun schemaProperties(vararg pairs: Pair<String, JsonObject>): JsonObject
     JsonObject(mapOf(*pairs))
 
 private fun dashboardIdProperty(): Pair<String, JsonObject> =
-    DASHBOARD_ID_ARG to schemaNumber(DASHBOARD_ID_LABEL)
+    DASHBOARD_ID_ARG to schemaString("Dashboard resource ID")
 
 private fun widgetIdProperty(): Pair<String, JsonObject> =
-    WIDGET_ID_ARG to schemaNumber(WIDGET_ID_LABEL)
+    WIDGET_ID_ARG to schemaString("Widget resource ID")
 
 private fun widgetMutationProperties(includeWidgetId: Boolean): JsonObject {
     val properties = mutableListOf(dashboardIdProperty())
@@ -316,7 +329,8 @@ class CreateDashboardWidgetTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
+        val orgId = context.organizationId.toLong()
+        val dashboardResourceId = args.requiredStringArg(DASHBOARD_ID_ARG)
         val widgetType = args.requiredWidgetType()
         val title = args.optionalStringArg("title")
         val gridX = args.optionalIntArg("grid_x")
@@ -325,7 +339,8 @@ class CreateDashboardWidgetTool : McpTool {
         val gridH = args.optionalIntArg("grid_h")
         val queryConfigs = args.optionalQueryConfigs()
         val displayConfig = args.optionalDisplayConfig()
-        val orgId = context.organizationId.toLong()
+        val dashboardId = dashboardWidgetCrudService.resolveDashboardId(dashboardResourceId, orgId)
+            ?: return errorResult("Dashboard not found: $dashboardResourceId")
         dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
             ?: return errorResult("Dashboard not found: $dashboardId")
 
@@ -364,12 +379,14 @@ class UpdateDashboardWidgetTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
-        val widgetId = args.requiredLongArg(WIDGET_ID_ARG)
+        val orgId = context.organizationId.toLong()
+        val dashboardResourceId = args.requiredStringArg(DASHBOARD_ID_ARG)
+        val widgetId = args.requiredStringArg(WIDGET_ID_ARG)
         if (!hasWidgetUpdateFields(args)) {
             return errorResult("At least one widget field must be provided to update")
         }
-        val orgId = context.organizationId.toLong()
+        val dashboardId = dashboardWidgetCrudService.resolveDashboardId(dashboardResourceId, orgId)
+            ?: return errorResult("Dashboard not found: $dashboardResourceId")
         val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
             ?: return errorResult("Dashboard not found: $dashboardId")
         if (dashboard.widgets.none { it.id == widgetId }) {
@@ -404,15 +421,19 @@ class DeleteDashboardWidgetTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
-        val widgetId = args.requiredLongArg(WIDGET_ID_ARG)
         val orgId = context.organizationId.toLong()
+        val dashboardResourceId = args.requiredStringArg(DASHBOARD_ID_ARG)
+        val widgetId = args.requiredStringArg(WIDGET_ID_ARG)
+        val dashboardId = dashboardWidgetCrudService.resolveDashboardId(dashboardResourceId, orgId)
+            ?: return errorResult("Dashboard not found: $dashboardResourceId")
         val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
             ?: return errorResult("Dashboard not found: $dashboardId")
         if (dashboard.widgets.none { it.id == widgetId }) {
             return errorResult("Widget not found on dashboard: $widgetId")
         }
-        if (!dashboardWidgetRepo.deleteById(dashboardId, widgetId)) {
+        val numericWidgetId = dashboardWidgetCrudService.resolveWidgetId(widgetId, dashboardId)
+            ?: return errorResult("Widget not found on dashboard: $widgetId")
+        if (!dashboardWidgetRepo.deleteById(dashboardId, numericWidgetId)) {
             return errorResult("Widget not found on dashboard: $widgetId")
         }
         val updated = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
@@ -430,7 +451,7 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         properties = schemaProperties(
             dashboardIdProperty(),
             "query_config" to schemaObject("QueryDsl config"),
-            "project_id" to schemaProjectId("Project resource ID or legacy numeric project ID"),
+            "project_id" to schemaProjectId("Project resource ID"),
             "variables" to schemaObject("Variable values"),
             "time_range" to schemaObject("Time range override")
         ),
@@ -441,26 +462,16 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
-        val queryConfig = args.requiredQueryConfig()
-        val timeRange = args.optionalTimeRange()
-        val variables = args.optionalVariables()
-        val requestedProjectId = args.projectIdArg("project_id")
         val orgId = context.organizationId.toLong()
-        val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
-            ?: return errorResult("Dashboard not found: $dashboardId")
-        if (dashboard.projectId != null && requestedProjectId != null && dashboard.projectId != requestedProjectId) {
-            return errorResult("Dashboard is scoped to project ${dashboard.projectId}")
-        }
-        val projectId = when {
-            dashboard.projectId != null -> dashboard.projectId
-            requestedProjectId != null -> requestedProjectId
-            else -> return errorResult("project_id is required when dashboard is not scoped to a project")
-        }
+        val previewArgs = args.previewQueryArgs()
+        val dashboard = resolvePreviewDashboard(previewArgs.dashboardId, orgId, context.userId)
+        val projectId = resolvePreviewProjectId(dashboard, previewArgs)
 
-        val withTimeRange = timeRange?.let { queryConfig.copy(timeRange = it) } ?: queryConfig
+        val withTimeRange = previewArgs.timeRange?.let {
+            previewArgs.queryConfig.copy(timeRange = it)
+        } ?: previewArgs.queryConfig
         val effectiveQuery = dashboardWidgetQueryEngine.resolvePrometheusDataSource(
-            dashboardWidgetQueryEngine.applyVariables(withTimeRange, variables),
+            dashboardWidgetQueryEngine.applyVariables(withTimeRange, previewArgs.variables),
             orgId,
             dashboardWidgetDataSourceService
         )
@@ -470,6 +481,59 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         throw e
     } catch (e: IllegalArgumentException) {
         errorResult(e.message ?: INVALID_QUERY_REQUEST_MESSAGE)
+    }
+
+    private data class PreviewQueryArgs(
+        val dashboardId: String,
+        val queryConfig: QueryDsl,
+        val timeRange: TimeRangeDef?,
+        val variables: Map<String, String>,
+        val projectId: Long?,
+        val projectResourceId: String?,
+    )
+
+    private fun JsonObject.previewQueryArgs(): PreviewQueryArgs =
+        PreviewQueryArgs(
+            dashboardId = requiredStringArg(DASHBOARD_ID_ARG),
+            queryConfig = requiredQueryConfig(),
+            timeRange = optionalTimeRange(),
+            variables = optionalVariables(),
+            projectId = projectIdArg("project_id"),
+            projectResourceId = optionalStringArg("project_id"),
+        )
+
+    private fun resolvePreviewDashboard(
+        dashboardResourceId: String,
+        orgId: Long,
+        userId: Int,
+    ): DashboardResponse {
+        val dashboardId = dashboardWidgetCrudService.resolveDashboardId(dashboardResourceId, orgId)
+            ?: throw IllegalArgumentException("Dashboard not found: $dashboardResourceId")
+        return dashboardWidgetCrudService.getDashboard(dashboardId, orgId, userId)
+            ?: throw IllegalArgumentException("Dashboard not found: $dashboardResourceId")
+    }
+
+    private fun resolvePreviewProjectId(
+        dashboard: DashboardResponse,
+        args: PreviewQueryArgs,
+    ): Long {
+        val dashboardProjectId = dashboard.projectId
+        if (dashboardProjectId != null) {
+            validateRequestedProject(args.projectResourceId, dashboardProjectId)
+            return dashboardWidgetProjectIdResolver.resolve(dashboardProjectId)
+                ?: throw IllegalArgumentException("Dashboard project could not be resolved")
+        }
+        return args.projectId
+            ?: throw IllegalArgumentException("project_id is required when dashboard is not scoped to a project")
+    }
+
+    private fun validateRequestedProject(
+        requestedProjectId: String?,
+        dashboardProjectId: String,
+    ) {
+        require(!(requestedProjectId != null && dashboardProjectId != requestedProjectId)) {
+            "Dashboard is scoped to project $dashboardProjectId"
+        }
     }
 
     private suspend fun executePreviewQuery(
@@ -491,8 +555,13 @@ class PreviewDashboardWidgetQueryTool : McpTool {
             )
         }
 
-        val sourceId = dashboardWidgetQueryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
+        val sourceResourceId = dashboardWidgetQueryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
             ?: throw IllegalArgumentException("Invalid custom data source ID")
+        require(dashboardWidgetDataSourceService.isValidResourceId(sourceResourceId)) {
+            "Invalid custom data source ID"
+        }
+        val sourceId = dashboardWidgetDataSourceService.resolveDataSourceId(sourceResourceId, orgId)
+            ?: throw IllegalArgumentException("Data source not found")
         val source = dashboardWidgetDataSourceService.getDataSource(sourceId, orgId)
             ?: throw IllegalArgumentException("Data source not found")
         val credentials = dashboardWidgetDataSourceService.getDecryptedCredentials(sourceId, orgId)
@@ -532,9 +601,9 @@ class ReplaceDashboardWidgetsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult = try {
-        val dashboardId = args.requiredLongArg(DASHBOARD_ID_ARG)
         val expectedWidgetCount = args.requiredIntArg("expected_widget_count")
         val orgId = context.organizationId.toLong()
+        val dashboardId = args.requiredDashboardId(orgId)
         val dashboard = dashboardWidgetCrudService.getDashboard(dashboardId, orgId, context.userId)
             ?: return errorResult("Dashboard not found: $dashboardId")
         val currentCount = dashboard.widgets.size

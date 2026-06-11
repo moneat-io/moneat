@@ -35,7 +35,7 @@ interface LogDetailPanelProps {
   open: boolean
   onClose: () => void
   onViewInContext?: (log: LogEntry) => void
-  projectId?: string | number
+  projectId?: string
 }
 
 // --- Shared helpers exported for use by tab components ---

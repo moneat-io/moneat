@@ -39,7 +39,7 @@ export function feedbackMethods(core: ApiClientCore) {
 
   return {
     getFeedback: (
-      projectId: string | number,
+      projectId: string,
       options: FeedbackListOptions = {}
     ) => {
       return core.request<Feedback[]>(

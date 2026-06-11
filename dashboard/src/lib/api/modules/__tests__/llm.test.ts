@@ -68,14 +68,14 @@ describe('LLM API', () => {
       http.get(`${API_BASE}/v1/llm/overview`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.getAll('services')).toEqual(['API', 'Worker'])
-        expect(url.searchParams.getAll('serviceIds')).toEqual(['1', 'svc-worker'])
+        expect(url.searchParams.getAll('serviceIds')).toEqual(['svc-api', 'svc-worker'])
         return HttpResponse.json(mockOverview)
       })
     )
 
     const result = await api.getLlmOverview({
       services: ['API', 'Worker'],
-      serviceIds: [1, 'svc-worker'],
+      serviceIds: ['svc-api', 'svc-worker'],
     })
     expect(result).toEqual(mockOverview)
   })

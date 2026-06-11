@@ -18,13 +18,16 @@ package com.moneat.dashboards.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 // Exposed table definition
 
 object CustomDataSources : Table("custom_data_sources") {
     val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val orgId = long("org_id")
     val name = varchar("name", 255)
     val description = text("description").nullable()
@@ -105,7 +108,7 @@ enum class CustomDataSourceType {
 
 @Serializable
 data class CustomDataSourceResponse(
-    val id: Long,
+    val id: String,
     @SerialName("org_id") val orgId: Long,
     val name: String,
     val description: String? = null,
@@ -119,6 +122,7 @@ data class CustomDataSourceResponse(
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("has_credentials") val hasCredentials: Boolean = true,
+    @Transient val numericId: Long = 0,
     // Credentials are NEVER returned
 )
 
@@ -194,7 +198,7 @@ data class TestConnectionResult(
 
 @Serializable
 data class CustomDataSourceQueryRequest(
-    @SerialName("data_source_id") val dataSourceId: Long,
+    @SerialName("data_source_id") val dataSourceId: String,
     val query: String,
     val limit: Int = 100,
     @SerialName("time_range") val timeRange: TimeRangeDef? = null,

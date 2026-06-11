@@ -130,7 +130,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     mutationFn: (data: ServiceSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
     onSuccess: (service, submission) => {
-      storeTelemetrySourceIdsForService(service.resourceId, submission.sourceIds)
+      storeTelemetrySourceIdsForService(service.id, submission.sourceIds)
       trackEvent('Service Create', {
         framework: service.framework || 'none',
         sources: serializeTelemetrySourceIds(submission.sourceIds),
@@ -139,7 +139,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       resetCreateForm()
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: service.resourceId },
+        params: { projectId: service.id },
         search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
       })
     },

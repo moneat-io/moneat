@@ -61,8 +61,6 @@ export const Route = createFileRoute('/dashboards/')({
   component: DashboardListPage,
 })
 
-type FolderFilter = 'all' | 'favorites' | 'uncategorized' | number
-
 type DashboardPageTitleProps = Readonly<{
   isFirstRun: boolean
 }>
@@ -89,22 +87,22 @@ type DashboardWorkspaceProps = Readonly<{
   filteredDashboards: readonly CustomDashboard[]
   favoritesCount: number
   uncategorizedCount: number
-  selectedFolder: FolderFilter
+  selectedFolder: string
   folderLabel: string
   isCreatingFolder: boolean
   newFolderName: string
   now: number
-  onSelectFolder: (folder: FolderFilter) => void
+  onSelectFolder: (folder: string) => void
   onStartCreatingFolder: () => void
   onCancelCreatingFolder: () => void
   onNewFolderNameChange: (name: string) => void
   onCreateFolder: (name: string) => void
-  onDeleteFolder: (folderId: number) => void
+  onDeleteFolder: (folderId: string) => void
   onCreateBlank: () => void
-  onDeleteDashboard: (dashboardId: number) => void
-  onDuplicateDashboard: (dashboardId: number) => void
-  onFavoriteToggle: (dashboardId: number) => void
-  onMoveToFolder: (dashboardId: number, folderId: number | null) => void
+  onDeleteDashboard: (dashboardId: string) => void
+  onDuplicateDashboard: (dashboardId: string) => void
+  onFavoriteToggle: (dashboardId: string) => void
+  onMoveToFolder: (dashboardId: string, folderId: string | null) => void
 }>
 
 type MobileFolderPillsProps = Readonly<{
@@ -112,8 +110,8 @@ type MobileFolderPillsProps = Readonly<{
   folders: readonly DashboardFolder[]
   favoritesCount: number
   uncategorizedCount: number
-  selectedFolder: FolderFilter
-  onSelectFolder: (folder: FolderFilter) => void
+  selectedFolder: string
+  onSelectFolder: (folder: string) => void
 }>
 
 type FolderSidebarProps = Readonly<{
@@ -121,11 +119,11 @@ type FolderSidebarProps = Readonly<{
   folders: readonly DashboardFolder[]
   favoritesCount: number
   uncategorizedCount: number
-  selectedFolder: FolderFilter
+  selectedFolder: string
   isCreatingFolder: boolean
   newFolderName: string
-  onSelectFolder: (folder: FolderFilter) => void
-  onDeleteFolder: (folderId: number) => void
+  onSelectFolder: (folder: string) => void
+  onDeleteFolder: (folderId: string) => void
   onStartCreatingFolder: () => void
   onCancelCreatingFolder: () => void
   onNewFolderNameChange: (name: string) => void
@@ -150,7 +148,7 @@ type SidebarButtonProps = Readonly<{
 }>
 
 type DashboardsEmptyStateProps = Readonly<{
-  selectedFolder: FolderFilter
+  selectedFolder: string
   folderLabel: string
   onCreateBlank: () => void
 }>
@@ -170,14 +168,14 @@ type DashboardCardProps = Readonly<{
   onDelete: () => void
   onDuplicate: () => void
   onFavoriteToggle: () => void
-  onMoveToFolder: (folderId: number | null) => void
+  onMoveToFolder: (folderId: string | null) => void
 }>
 
 function DashboardListPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showImport, setShowImport] = useState(false)
-  const [selectedFolder, setSelectedFolder] = useState<FolderFilter>('all')
+  const [selectedFolder, setSelectedFolder] = useState('all')
   const [newFolderName, setNewFolderName] = useState('')
   const [isCreatingFolder, setIsCreatingFolder] = useState(false)
   const [now] = useState(() => Date.now())
@@ -220,7 +218,7 @@ function DashboardListPage() {
   const createFromTemplateMutation = useMutation({
     mutationFn: (templateId: string) =>
       api.createDashboardFromTemplate(templateId, {
-        folder_id: typeof selectedFolder === 'number' ? selectedFolder : undefined,
+        folder_id: isConcreteFolder(selectedFolder) ? selectedFolder : undefined,
       }),
     onSuccess: (dashboard) => {
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
@@ -229,7 +227,7 @@ function DashboardListPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteDashboard(id),
+    mutationFn: (id: string) => api.deleteDashboard(id),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['custom-dashboards']}),
   })
 
@@ -243,11 +241,11 @@ function DashboardListPage() {
   })
 
   const deleteFolderMutation = useMutation({
-    mutationFn: (id: number) => api.deleteDashboardFolder(id),
+    mutationFn: (id: string) => api.deleteDashboardFolder(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['dashboard-folders']})
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
-      if (typeof selectedFolder === 'number') setSelectedFolder('all')
+      if (isConcreteFolder(selectedFolder)) setSelectedFolder('all')
     },
   })
 
@@ -255,7 +253,7 @@ function DashboardListPage() {
     createMutation.mutate({
       title: 'New Dashboard',
       widgets: [],
-      folder_id: typeof selectedFolder === 'number' ? selectedFolder : undefined,
+      folder_id: isConcreteFolder(selectedFolder) ? selectedFolder : undefined,
     })
   }
 
@@ -267,7 +265,7 @@ function DashboardListPage() {
     createFolderMutation.mutate({name})
   }
 
-  const handleDuplicateDashboard = (dashboardId: number) => {
+  const handleDuplicateDashboard = (dashboardId: string) => {
     api.getDashboard(dashboardId).then((full) => {
       createMutation.mutate({
         title: `${full.title} (Copy)`,
@@ -288,12 +286,12 @@ function DashboardListPage() {
     })
   }
 
-  const handleFavoriteToggle = async (dashboardId: number) => {
+  const handleFavoriteToggle = async (dashboardId: string) => {
     await api.toggleDashboardFavorite(dashboardId)
     queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
   }
 
-  const handleMoveToFolder = async (dashboardId: number, folderId: number | null) => {
+  const handleMoveToFolder = async (dashboardId: string, folderId: string | null) => {
     await api.moveDashboardToFolder(dashboardId, folderId)
     queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
   }
@@ -366,12 +364,16 @@ function DashboardListPage() {
 
 function filterDashboards(
   dashboards: readonly CustomDashboard[],
-  selectedFolder: FolderFilter,
+  selectedFolder: string,
 ): readonly CustomDashboard[] {
   if (selectedFolder === 'all') return dashboards
   if (selectedFolder === 'favorites') return dashboards.filter((dashboard) => dashboard.is_favorited)
   if (selectedFolder === 'uncategorized') return dashboards.filter((dashboard) => !dashboard.folder_id)
   return dashboards.filter((dashboard) => dashboard.folder_id === selectedFolder)
+}
+
+function isConcreteFolder(selectedFolder: string): boolean {
+  return !['all', 'favorites', 'uncategorized'].includes(selectedFolder)
 }
 
 function countFavorites(dashboards: readonly CustomDashboard[]) {
@@ -382,11 +384,11 @@ function countUncategorized(dashboards: readonly CustomDashboard[]) {
   return dashboards.filter((dashboard) => !dashboard.folder_id).length
 }
 
-function countDashboardsInFolder(dashboards: readonly CustomDashboard[], folderId: number) {
+function countDashboardsInFolder(dashboards: readonly CustomDashboard[], folderId: string) {
   return dashboards.filter((dashboard) => dashboard.folder_id === folderId).length
 }
 
-function getFolderLabel(selectedFolder: FolderFilter, folders: readonly DashboardFolder[]) {
+function getFolderLabel(selectedFolder: string, folders: readonly DashboardFolder[]) {
   if (selectedFolder === 'all') return 'All'
   if (selectedFolder === 'favorites') return 'Favorites'
   if (selectedFolder === 'uncategorized') return 'Uncategorized'
@@ -738,8 +740,20 @@ const CARD_ACCENT_COLORS = [
   'from-chart-6 to-chart-6/70',
 ]
 
-function getAccentColor(id: number) {
-  return CARD_ACCENT_COLORS[id % CARD_ACCENT_COLORS.length]
+function getAccentColor(id: string) {
+  const index = Math.abs(hashIdentifier(id)) % CARD_ACCENT_COLORS.length
+  return CARD_ACCENT_COLORS[index]
+}
+
+function hashIdentifier(value: string) {
+  let hash = 0
+  let index = 0
+  while (index < value.length) {
+    const codePoint = value.codePointAt(index) ?? 0
+    hash = Math.trunc((hash * 31 + codePoint) % Number.MAX_SAFE_INTEGER)
+    index += codePoint > 0xffff ? 2 : 1
+  }
+  return hash
 }
 
 function DashboardsEmptyState({
@@ -773,7 +787,7 @@ function DashboardsEmptyState({
     )
   }
 
-  if (typeof selectedFolder === 'number') {
+  if (isConcreteFolder(selectedFolder)) {
     return (
       <EmptyState
         icon={Folder}

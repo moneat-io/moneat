@@ -124,7 +124,7 @@ describe('OTLP API Keys', () => {
                 mapping_id: 20,
                 service_namespace: 'checkout',
                 service_name: 'api',
-                project_id: 30,
+                project_resource_id: 'proj-30',
                 project_name: 'Web App',
                 seen_logs: true,
                 seen_traces: true,
@@ -147,7 +147,7 @@ describe('OTLP API Keys', () => {
           mappingId: 20,
           serviceNamespace: 'checkout',
           serviceName: 'api',
-          projectId: 30,
+          projectId: 'proj-30',
           projectName: 'Web App',
           seenLogs: true,
           seenTraces: true,
@@ -211,25 +211,25 @@ describe('OTLP API Keys', () => {
             id: 40,
             service_namespace: 'checkout',
             service_name: 'api',
-            project_id: 50,
+            project_resource_id: 'proj-50',
             project_name: 'Backend',
             updated_at: '2026-01-03T00:00:00Z',
           })
         })
       )
 
-      const result = await api.upsertOtlpServiceMapping('api', 50, 'checkout')
+      const result = await api.upsertOtlpServiceMapping('api', 'proj-50', 'checkout')
 
       expect(capturedBody).toEqual({
         service_name: 'api',
         service_namespace: 'checkout',
-        project_id: 50,
+        project_resource_id: 'proj-50',
       })
       expect(result).toEqual({
         id: 40,
         serviceNamespace: 'checkout',
         serviceName: 'api',
-        projectId: 50,
+        projectId: 'proj-50',
         projectName: 'Backend',
         updatedAt: '2026-01-03T00:00:00Z',
       })
@@ -244,22 +244,22 @@ describe('OTLP API Keys', () => {
             id: 41,
             serviceNamespace: '',
             serviceName: 'worker',
-            projectId: 51,
+            projectResourceId: 'proj-51',
             projectName: 'Jobs',
             updatedAt: '2026-01-04T00:00:00Z',
           })
         })
       )
 
-      const result = await api.upsertOtlpServiceMapping('worker', 51)
+      const result = await api.upsertOtlpServiceMapping('worker', 'proj-51')
 
       expect(capturedBody).toEqual({
         service_name: 'worker',
         service_namespace: '',
-        project_id: 51,
+        project_resource_id: 'proj-51',
       })
       expect(result.serviceName).toBe('worker')
-      expect(result.projectId).toBe(51)
+      expect(result.projectId).toBe('proj-51')
     })
 
     it('deletes a service mapping by id', async () => {

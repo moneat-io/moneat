@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS users (
 private const val CREATE_FOLDERS_DDL = """
 CREATE TABLE IF NOT EXISTS dashboard_folders (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
     org_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
     color VARCHAR(7) NULL,
@@ -66,6 +67,7 @@ CREATE TABLE IF NOT EXISTS dashboard_folders (
 private const val CREATE_DASHBOARDS_DDL = """
 CREATE TABLE IF NOT EXISTS dashboards (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
     org_id BIGINT NOT NULL,
     project_id BIGINT NULL,
     folder_id BIGINT NULL,
@@ -94,6 +96,7 @@ CREATE TABLE IF NOT EXISTS dashboard_favorites (
 private const val CREATE_WIDGETS_DDL = """
 CREATE TABLE IF NOT EXISTS dashboard_widgets (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
     dashboard_id BIGINT NOT NULL,
     title VARCHAR(255) NULL,
     widget_type VARCHAR(50) NOT NULL,

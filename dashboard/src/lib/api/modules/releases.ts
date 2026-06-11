@@ -23,7 +23,7 @@ export function releasesMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getReleases: (projectId: string | number) =>
+    getReleases: (projectId: string) =>
       core.request<Release[]>(`${base}/projects/${projectId}/releases`),
 
     getOrganizationReleases: (params: ServiceScopeParams = {}) =>
@@ -31,7 +31,7 @@ export function releasesMethods(core: ApiClientCore) {
         urlWithQuery(`${base}/releases`, serviceScopeQuery(params))
       ),
 
-    getReleaseStats: (projectId: string | number, version: string) =>
+    getReleaseStats: (projectId: string, version: string) =>
       core.request<ReleaseStats>(
         `${base}/projects/${projectId}/releases/${encodeURIComponent(version)}/stats`
       ),

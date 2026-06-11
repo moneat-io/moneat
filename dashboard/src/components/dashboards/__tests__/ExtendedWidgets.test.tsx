@@ -104,8 +104,8 @@ function makeWidget(
   title: string | null = `Widget ${type}`
 ): DashboardWidget {
   return {
-    id: 1,
-    dashboard_id: 1,
+    id: "widget-1",
+    dashboard_id: "widget-1",
     title,
     widget_type: type,
     grid_x: 0,

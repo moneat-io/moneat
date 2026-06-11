@@ -42,8 +42,10 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
@@ -87,6 +89,27 @@ class ApiRoutesExtendedTest {
     @AfterTest
     fun teardown() {
         stopTestKoin()
+    }
+
+    private fun seedProjectResourceId(): String {
+        val projectId = transaction {
+            val orgId = Organizations.insert {
+                it[name] = "Forbidden Org"
+                it[slug] = "forbidden-org-${System.nanoTime()}"
+            } get Organizations.id
+            Projects.insert {
+                it[organization_id] = orgId
+                it[name] = "Forbidden Project"
+                it[slug] = "forbidden-project-${System.nanoTime()}"
+            } get Projects.id
+        }
+        return transaction {
+            Projects
+                .selectAll()
+                .where { Projects.id eq projectId }
+                .first()[Projects.resource_id]
+                .toString()
+        }
     }
 
     @Test
@@ -344,7 +367,7 @@ class ApiRoutesExtendedTest {
     }
 
     @Test
-    fun `GET project by id returns forbidden for unknown project`() = testApplication {
+    fun `GET project by id rejects numeric project IDs`() = testApplication {
         application {
             installJwtAuth()
             installApiRouteRateLimits("api-routes-extended")
@@ -352,7 +375,7 @@ class ApiRoutesExtendedTest {
         }
         val token = RouteTestSupport.createToken(userId = 1)
         val response = client.get("/v1/projects/424242") { withAuth(token) }
-        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertEquals(HttpStatusCode.BadRequest, response.status)
     }
 
     @Test
@@ -378,7 +401,8 @@ class ApiRoutesExtendedTest {
             routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 42)
-        val response = client.get("/v1/projects/7/issues") { withAuth(token) }
+        val resourceId = seedProjectResourceId()
+        val response = client.get("/v1/projects/$resourceId/issues") { withAuth(token) }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
@@ -420,7 +444,8 @@ class ApiRoutesExtendedTest {
             routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 3)
-        val response = client.get("/v1/projects/9/transactions") { withAuth(token) }
+        val resourceId = seedProjectResourceId()
+        val response = client.get("/v1/projects/$resourceId/transactions") { withAuth(token) }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
@@ -432,7 +457,8 @@ class ApiRoutesExtendedTest {
             routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 1)
-        val response = client.get("/v1/projects/2/stats") { withAuth(token) }
+        val resourceId = seedProjectResourceId()
+        val response = client.get("/v1/projects/$resourceId/stats") { withAuth(token) }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
@@ -444,7 +470,8 @@ class ApiRoutesExtendedTest {
             routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 50)
-        val response = client.get("/v1/projects/88/traces/trace-abc") { withAuth(token) }
+        val resourceId = seedProjectResourceId()
+        val response = client.get("/v1/projects/$resourceId/traces/trace-abc") { withAuth(token) }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
@@ -469,7 +496,8 @@ class ApiRoutesExtendedTest {
             routing { apiRoutes(includePublicContactRoutes = false) }
         }
         val token = RouteTestSupport.createToken(userId = 2)
-        val response = client.get("/v1/projects/3/releases") { withAuth(token) }
+        val resourceId = seedProjectResourceId()
+        val response = client.get("/v1/projects/$resourceId/releases") { withAuth(token) }
         assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 

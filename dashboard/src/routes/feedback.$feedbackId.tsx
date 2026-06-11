@@ -586,7 +586,7 @@ function FeedbackDetailPage() {
                             <Link
                               to="/issues/$issueId"
                               params={{ issueId: issueLinkForEvent.issueId }}
-                              search={{ projectId: issueLinkForEvent.projectResourceId }}
+                              search={{ projectId: issueLinkForEvent.projectId }}
                               className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium"
                             >
                               View related issue

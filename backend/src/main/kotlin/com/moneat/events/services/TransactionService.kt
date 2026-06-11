@@ -77,7 +77,7 @@ class TransactionService(
         }
 
     private fun projectResourceId(projectId: Long): String =
-        projectIdResolver.resourceIdFor(projectId) ?: projectId.toString()
+        projectIdResolver.resourceIdFor(projectId) ?: ""
 
     private fun mapSpanRowFromApm(obj: JsonObject): SpanResponse {
         val startNs = obj["start_ns"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
@@ -409,8 +409,7 @@ class TransactionService(
             return EventTraceResponse(
                 eventId = lookup.eventId,
                 eventType = lookup.eventType,
-                projectId = lookup.projectId,
-                projectResourceId = projectResourceId(lookup.projectId),
+                projectId = projectResourceId(lookup.projectId),
                 traceId = "",
                 transaction = null,
                 spans = emptyList()
@@ -427,8 +426,7 @@ class TransactionService(
         return EventTraceResponse(
             eventId = lookup.eventId,
             eventType = lookup.eventType,
-            projectId = lookup.projectId,
-            projectResourceId = projectResourceId(lookup.projectId),
+            projectId = projectResourceId(lookup.projectId),
             traceId = lookup.traceId,
             transaction = transactionWithSpans?.transaction,
             spans = transactionWithSpans?.spans?.takeIf { it.isNotEmpty() } ?: traceSpans
@@ -440,8 +438,7 @@ class TransactionService(
         return EventTraceResponse(
             eventId = null,
             eventType = null,
-            projectId = projectId,
-            projectResourceId = projectResourceId(projectId),
+            projectId = projectResourceId(projectId),
             traceId = traceId,
             transaction = null,
             spans = trace.spans
@@ -486,8 +483,7 @@ class TransactionService(
 
             TraceDetailResponse(
                 traceId = traceId,
-                projectId = projectId,
-                projectResourceId = projectResourceId(projectId),
+                projectId = projectResourceId(projectId),
                 spans = spans,
                 startTimestamp = startTs,
                 endTimestamp = endTs,

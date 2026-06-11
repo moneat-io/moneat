@@ -2716,14 +2716,14 @@ function NotificationsTab() {
               </TableHeader>
               <TableBody>
                 {servicePreferences.map((servicePreference) => (
-                  <TableRow key={servicePreference.projectResourceId}>
+                  <TableRow key={servicePreference.projectId}>
                     <TableCell className="font-medium">{servicePreference.projectName}</TableCell>
                     <TableCell className="text-center">
                       <Checkbox
                         checked={servicePreference.issueAlerts}
                         onCheckedChange={(checked) =>
                           updateServiceMutation.mutate({
-                            serviceId: servicePreference.projectResourceId,
+                            serviceId: servicePreference.projectId,
                             prefs: { issueAlerts: checked === true },
                           })
                         }
@@ -2734,7 +2734,7 @@ function NotificationsTab() {
                         checked={servicePreference.errorAlerts}
                         onCheckedChange={(checked) =>
                           updateServiceMutation.mutate({
-                            serviceId: servicePreference.projectResourceId,
+                            serviceId: servicePreference.projectId,
                             prefs: { errorAlerts: checked === true },
                           })
                         }
@@ -2745,7 +2745,7 @@ function NotificationsTab() {
                         checked={servicePreference.weeklySummary}
                         onCheckedChange={(checked) =>
                           updateServiceMutation.mutate({
-                            serviceId: servicePreference.projectResourceId,
+                            serviceId: servicePreference.projectId,
                             prefs: { weeklySummary: checked === true },
                           })
                         }
@@ -2760,7 +2760,7 @@ function NotificationsTab() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => deleteServiceMutation.mutate(servicePreference.projectResourceId)}
+                        onClick={() => deleteServiceMutation.mutate(servicePreference.projectId)}
                       >
                         Reset
                       </Button>

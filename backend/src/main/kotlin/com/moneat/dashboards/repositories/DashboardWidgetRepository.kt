@@ -33,7 +33,9 @@ interface DashboardWidgetRepository {
 
 data class WidgetData(
     val id: Long,
+    val resourceId: String = id.toString(),
     val dashboardId: Long,
+    val dashboardResourceId: String = dashboardId.toString(),
     val title: String?,
     val widgetType: String,
     val gridX: Int,

@@ -42,6 +42,7 @@ import mu.KotlinLogging
 import kotlin.collections.filter
 
 private val logger = KotlinLogging.logger {}
+private const val CUSTOM_DATA_SOURCE_PREFIX = "custom:"
 
 class DashboardQueryEngine {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -506,7 +507,7 @@ class DashboardQueryEngine {
         val builtIn = getBuiltInDataSources()
         val custom = customSources.filter { it.enabled }.map { src ->
             DataSourceInfo(
-                name = "custom:${src.id}",
+                name = "$CUSTOM_DATA_SOURCE_PREFIX${src.id}",
                 label = "${src.name} (${src.sourceType})",
                 fields = emptyList() // Fields fetched on demand via schema endpoint
             )
@@ -514,10 +515,10 @@ class DashboardQueryEngine {
         return builtIn + custom
     }
 
-    fun isCustomDataSource(dataSource: String): Boolean = dataSource.startsWith("custom:")
+    fun isCustomDataSource(dataSource: String): Boolean = dataSource.startsWith(CUSTOM_DATA_SOURCE_PREFIX)
 
-    fun parseCustomDataSourceId(dataSource: String): Long? =
-        if (dataSource.startsWith("custom:")) dataSource.removePrefix("custom:").toLongOrNull() else null
+    fun parseCustomDataSourceId(dataSource: String): String? =
+        dataSource.takeIf { it.startsWith(CUSTOM_DATA_SOURCE_PREFIX) }?.removePrefix(CUSTOM_DATA_SOURCE_PREFIX)
 
     private fun QueryDsl.isLogsDataSource(): Boolean =
         DataSource.fromString(dataSource)?.tableName == LOGS_TABLE_NAME

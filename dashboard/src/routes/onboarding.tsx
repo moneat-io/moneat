@@ -230,7 +230,7 @@ function OnboardingPage() {
     mutationFn: (data: ServiceSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
     onSuccess: (service, submission) => {
-      storeTelemetrySourceIdsForService(service.resourceId, submission.sourceIds)
+      storeTelemetrySourceIdsForService(service.id, submission.sourceIds)
       trackEvent('Onboarding Service Create', {
         framework: service.framework || 'none',
         sources: serializeTelemetrySourceIds(submission.sourceIds),
@@ -238,7 +238,7 @@ function OnboardingPage() {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate({
         to: '/projects/$projectId',
-        params: { projectId: service.resourceId },
+        params: { projectId: service.id },
         search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
       })
     },

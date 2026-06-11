@@ -32,12 +32,28 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 class CustomDataSourceService {
+    private fun parseUuid(value: String): Uuid? =
+        runCatching { Uuid.parse(value) }.getOrNull()
+
+    fun isValidResourceId(value: String?): Boolean =
+        value?.let(::parseUuid) != null
+
+    fun resolveDataSourceId(resourceId: String, orgId: Long): Long? =
+        parseUuid(resourceId)?.let { parsed ->
+            transaction {
+                CustomDataSources.selectAll()
+                    .where { (CustomDataSources.resourceId eq parsed) and (CustomDataSources.orgId eq orgId) }
+                    .firstOrNull()
+                    ?.get(CustomDataSources.id)
+            }
+        }
 
     fun listDataSources(orgId: Long): List<CustomDataSourceResponse> = transaction {
         CustomDataSources.selectAll()
@@ -52,6 +68,9 @@ class CustomDataSourceService {
             .firstOrNull()
             ?.toResponse()
     }
+
+    fun getDataSource(resourceId: String, orgId: Long): CustomDataSourceResponse? =
+        resolveDataSourceId(resourceId, orgId)?.let { getDataSource(it, orgId) }
 
     fun createDataSource(orgId: Long, userId: Long, request: CreateCustomDataSourceRequest): CustomDataSourceResponse {
         val sourceType = CustomDataSourceType.fromString(request.sourceType)
@@ -189,7 +208,7 @@ class CustomDataSourceService {
     }
 
     private fun ResultRow.toResponse() = CustomDataSourceResponse(
-        id = this[CustomDataSources.id],
+        id = this[CustomDataSources.resourceId].toString(),
         orgId = this[CustomDataSources.orgId],
         name = this[CustomDataSources.name],
         description = this[CustomDataSources.description],
@@ -206,7 +225,8 @@ class CustomDataSourceService {
         createdBy = this[CustomDataSources.createdBy],
         createdAt = this[CustomDataSources.createdAt].toString(),
         updatedAt = this[CustomDataSources.updatedAt].toString(),
-        hasCredentials = this[CustomDataSources.encryptedCredentials].isNotBlank()
+        hasCredentials = this[CustomDataSources.encryptedCredentials].isNotBlank(),
+        numericId = this[CustomDataSources.id]
     )
 }
 

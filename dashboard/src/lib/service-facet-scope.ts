@@ -29,11 +29,11 @@ export function hasAccessibleServices(services: ServiceList): boolean {
 }
 
 export function primaryServiceResourceId(services: ServiceList): string | undefined {
-  return services?.[0]?.resourceId
+  return services?.[0]?.id
 }
 
-export function issueDetailSearch(issue: Pick<Issue, 'projectResourceId'>): {projectId: string} {
-  return {projectId: issue.projectResourceId}
+export function issueDetailSearch(issue: Pick<Issue, 'projectId'>): {projectId: string} {
+  return {projectId: issue.projectId}
 }
 
 export function serviceNamesForQuery(

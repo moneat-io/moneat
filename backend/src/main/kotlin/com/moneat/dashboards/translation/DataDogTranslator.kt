@@ -53,6 +53,7 @@ private const val DD_IMPORT_STRATEGY_NATIVE = "native"
 private const val DD_IMPORT_STRATEGY_UNSUPPORTED = "unsupported"
 private const val SOURCE_DEFINITION_JSON_KEY = "source_definition_json"
 private const val SOURCE_LAYOUT_JSON_KEY = "source_layout_json"
+private const val IMPORT_PLACEHOLDER_ID = "00000000-0000-0000-0000-000000000000"
 
 private val DD_METRIC_QUERY_REGEX = Regex(
     """^\s*([A-Za-z_][A-Za-z0-9_]*):([A-Za-z0-9_.]+)\{([^}]*)}\s*(?:by\s+\{([^}]*)})?\s*$"""
@@ -176,7 +177,7 @@ class DataDogTranslator : DashboardTranslator {
             .mapIndexed { index, widget -> widget.copy(sortOrder = index) }
 
         val dashboard = DashboardResponse(
-            id = 0,
+            id = IMPORT_PLACEHOLDER_ID,
             orgId = 0,
             title = title,
             description = description,
@@ -247,8 +248,8 @@ class DataDogTranslator : DashboardTranslator {
 
         return listOf(
             WidgetResponse(
-                id = 0,
-                dashboardId = 0,
+                id = IMPORT_PLACEHOLDER_ID,
+                dashboardId = IMPORT_PLACEHOLDER_ID,
                 title = widgetTitle,
                 widgetType = support?.moneatType ?: "text",
                 gridX = resolvedLayout.x.coerceIn(0, DD_MAX_GRID_COL),
@@ -273,8 +274,8 @@ class DataDogTranslator : DashboardTranslator {
         val title = definition["title"]?.jsonPrimitive?.contentOrNull ?: "Section"
         val children = definition["widgets"]?.jsonArray ?: JsonArray(emptyList())
         val section = WidgetResponse(
-            id = 0,
-            dashboardId = 0,
+            id = IMPORT_PLACEHOLDER_ID,
+            dashboardId = IMPORT_PLACEHOLDER_ID,
             title = title,
             widgetType = "section",
             gridX = resolvedLayout.x.coerceIn(0, DD_MAX_GRID_COL),

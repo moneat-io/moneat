@@ -18,11 +18,14 @@ package com.moneat.dashboards.repositories
 
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.DashboardFavorites
+import com.moneat.dashboards.models.DashboardFolders
 import com.moneat.dashboards.models.DashboardVariable
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.UpdateDashboardRequest
+import com.moneat.shared.models.Projects
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -47,6 +50,44 @@ class DashboardRepositoryImpl : DashboardRepository {
         private const val RECENTLY_VIEWED_LIMIT = 10
     }
 
+    private fun ResultRow.toDashboardWithFavoriteFlag(isFavorited: Boolean): DashboardWithFavoriteFlag =
+        DashboardWithFavoriteFlag(
+            id = this[Dashboards.id],
+            resourceId = this[Dashboards.resourceId].toString(),
+            orgId = this[Dashboards.orgId],
+            projectId = this[Dashboards.projectId],
+            projectResourceId = projectResourceId(this[Dashboards.projectId]),
+            folderId = this[Dashboards.folderId],
+            folderResourceId = folderResourceId(this[Dashboards.folderId]),
+            title = this[Dashboards.title],
+            description = this[Dashboards.description],
+            layoutType = this[Dashboards.layoutType],
+            isDefault = this[Dashboards.isDefault],
+            isFavorited = isFavorited,
+            variables = this[Dashboards.variables],
+            createdBy = this[Dashboards.createdBy],
+            createdAt = this[Dashboards.createdAt].toString(),
+            updatedAt = this[Dashboards.updatedAt].toString()
+        )
+
+    private fun projectResourceId(projectId: Long?): String? =
+        projectId?.let { id ->
+            Projects.selectAll()
+                .where { Projects.id eq id }
+                .firstOrNull()
+                ?.get(Projects.resource_id)
+                ?.toString()
+        }
+
+    private fun folderResourceId(folderId: Long?): String? =
+        folderId?.let { id ->
+            DashboardFolders.selectAll()
+                .where { DashboardFolders.id eq id }
+                .firstOrNull()
+                ?.get(DashboardFolders.resourceId)
+                ?.toString()
+        }
+
     override fun list(orgId: Long, projectId: Long?, userId: Int?): List<DashboardWithFavoriteFlag> =
         transaction {
             val query = Dashboards.selectAll().where {
@@ -64,23 +105,7 @@ class DashboardRepositoryImpl : DashboardRepository {
                     .toSet()
             } ?: emptySet()
 
-            query.map { row ->
-                DashboardWithFavoriteFlag(
-                    id = row[Dashboards.id],
-                    orgId = row[Dashboards.orgId],
-                    projectId = row[Dashboards.projectId],
-                    folderId = row[Dashboards.folderId],
-                    title = row[Dashboards.title],
-                    description = row[Dashboards.description],
-                    layoutType = row[Dashboards.layoutType],
-                    isDefault = row[Dashboards.isDefault],
-                    isFavorited = row[Dashboards.id] in favoritedIds,
-                    variables = row[Dashboards.variables],
-                    createdBy = row[Dashboards.createdBy],
-                    createdAt = row[Dashboards.createdAt].toString(),
-                    updatedAt = row[Dashboards.updatedAt].toString()
-                )
-            }
+            query.map { row -> row.toDashboardWithFavoriteFlag(row[Dashboards.id] in favoritedIds) }
         }
 
     override fun getById(id: Long, orgId: Long, userId: Int?): DashboardWithFavoriteFlag? =
@@ -97,30 +122,22 @@ class DashboardRepositoryImpl : DashboardRepository {
                     .any()
             } ?: false
 
-            DashboardWithFavoriteFlag(
-                id = row[Dashboards.id],
-                orgId = row[Dashboards.orgId],
-                projectId = row[Dashboards.projectId],
-                folderId = row[Dashboards.folderId],
-                title = row[Dashboards.title],
-                description = row[Dashboards.description],
-                layoutType = row[Dashboards.layoutType],
-                isDefault = row[Dashboards.isDefault],
-                isFavorited = isFavorited,
-                variables = row[Dashboards.variables],
-                createdBy = row[Dashboards.createdBy],
-                createdAt = row[Dashboards.createdAt].toString(),
-                updatedAt = row[Dashboards.updatedAt].toString()
-            )
+            row.toDashboardWithFavoriteFlag(isFavorited)
         }
 
-    override fun create(orgId: Long, userId: Long, request: CreateDashboardRequest): CreatedDashboardData =
+    override fun create(
+        orgId: Long,
+        userId: Long,
+        request: CreateDashboardRequest,
+        projectId: Long?,
+        folderId: Long?
+    ): CreatedDashboardData =
         transaction {
             val now = Clock.System.now()
             val dashboardId = Dashboards.insert {
                 it[Dashboards.orgId] = orgId
-                it[Dashboards.projectId] = request.projectId
-                it[Dashboards.folderId] = request.folderId
+                it[Dashboards.projectId] = projectId
+                it[Dashboards.folderId] = folderId
                 it[Dashboards.title] = request.title
                 it[Dashboards.description] = request.description
                 it[Dashboards.layoutType] = request.layoutType
@@ -131,10 +148,18 @@ class DashboardRepositoryImpl : DashboardRepository {
                 it[Dashboards.updatedAt] = now
             } get Dashboards.id
 
+            val dashboard = Dashboards.selectAll()
+                .where { Dashboards.id eq dashboardId }
+                .first()
+
             CreatedDashboardData(
                 id = dashboardId,
+                resourceId = dashboard[Dashboards.resourceId].toString(),
                 orgId = orgId,
-                projectId = request.projectId,
+                projectId = projectId,
+                projectResourceId = projectResourceId(projectId),
+                folderId = folderId,
+                folderResourceId = folderResourceId(folderId),
                 title = request.title,
                 description = request.description,
                 layoutType = request.layoutType,
@@ -146,7 +171,7 @@ class DashboardRepositoryImpl : DashboardRepository {
             )
         }
 
-    override fun update(id: Long, orgId: Long, request: UpdateDashboardRequest): Boolean =
+    override fun update(id: Long, orgId: Long, request: UpdateDashboardRequest, folderId: Long?): Boolean =
         transaction {
             val exists = Dashboards.selectAll().where {
                 (Dashboards.id eq id) and (Dashboards.orgId eq orgId)
@@ -157,7 +182,7 @@ class DashboardRepositoryImpl : DashboardRepository {
             Dashboards.update({ (Dashboards.id eq id) and (Dashboards.orgId eq orgId) }) {
                 request.title?.let { t -> it[Dashboards.title] = t }
                 request.description?.let { d -> it[Dashboards.description] = d }
-                request.folderId?.let { fid -> it[Dashboards.folderId] = fid }
+                if (request.folderId != null) it[Dashboards.folderId] = folderId
                 request.layoutType?.let { lt -> it[Dashboards.layoutType] = lt }
                 request.isDefault?.let { d -> it[Dashboards.isDefault] = d }
                 request.variables?.let { v ->
@@ -255,21 +280,7 @@ class DashboardRepositoryImpl : DashboardRepository {
                             }
                             .any()
                     } ?: false
-                    DashboardWithFavoriteFlag(
-                        id = did,
-                        orgId = row[Dashboards.orgId],
-                        projectId = row[Dashboards.projectId],
-                        folderId = row[Dashboards.folderId],
-                        title = row[Dashboards.title],
-                        description = row[Dashboards.description],
-                        layoutType = row[Dashboards.layoutType],
-                        isDefault = row[Dashboards.isDefault],
-                        isFavorited = isFav,
-                        variables = row[Dashboards.variables],
-                        createdBy = row[Dashboards.createdBy],
-                        createdAt = row[Dashboards.createdAt].toString(),
-                        updatedAt = row[Dashboards.updatedAt].toString()
-                    )
+                    row.toDashboardWithFavoriteFlag(isFav)
                 }
         }
 }

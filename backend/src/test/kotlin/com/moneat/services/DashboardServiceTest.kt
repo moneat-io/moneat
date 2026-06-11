@@ -24,6 +24,7 @@ import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
@@ -251,7 +252,7 @@ class DashboardServiceTest {
 
                 assertNotNull(issue)
                 assertEquals("issue-1", issue.id)
-                assertEquals(-1, issue.projectId)
+                assertEquals(ProjectIdResolver().resourceIdFor(-1), issue.projectId)
                 assertEquals("Android", issue.projectName)
                 assertEquals(2, issue.fingerprint.size)
                 assertNotNull(issue.latestEvent)

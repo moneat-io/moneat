@@ -29,8 +29,7 @@ vi.mock('@tanstack/react-router', () => ({
 import {Route as ConfigurationRoute} from '../configuration'
 
 const mockProject = {
-  id: 1,
-  resourceId: 'proj-1',
+  id: 'proj-1',
   name: 'Test Service',
   slug: 'test-service',
   framework: 'react',

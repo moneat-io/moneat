@@ -40,10 +40,10 @@ export interface AnalyticsParams {
   filters?: AnalyticsFilter[]
   comparison?: AnalyticsComparison
   services?: string[]
-  serviceIds?: Array<string | number>
+  serviceIds?: string[]
 }
 
-export type AnalyticsScopeId = string | number | null | undefined
+export type AnalyticsScopeId = string | null | undefined
 
 export type AnalyticsEventSource = 'web' | 'server'
 export type AnalyticsGroupBy = 'session_id' | 'user_id'

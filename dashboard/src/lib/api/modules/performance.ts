@@ -30,7 +30,7 @@ export function performanceMethods(core: ApiClientCore) {
 
   return {
     getTransactions: async (
-      projectId: string | number,
+      projectId: string,
       options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}
     ) => {
       const params = new URLSearchParams()
@@ -48,7 +48,7 @@ export function performanceMethods(core: ApiClientCore) {
     },
 
     getPerformanceStats: (
-      projectId: string | number,
+      projectId: string,
       options: { period?: '24h' | '7d' | '30d' | '90d'; environment?: string; operation?: string } = {}
     ) => {
       const params = new URLSearchParams()
@@ -68,12 +68,12 @@ export function performanceMethods(core: ApiClientCore) {
         `${base}/transactions/${encodeURIComponent(eventId)}/spans`
       ),
 
-    getTraceDetails: (projectId: string | number, traceId: string) =>
+    getTraceDetails: (projectId: string, traceId: string) =>
       core.request<TraceDetail>(
         `${base}/projects/${projectId}/traces/${encodeURIComponent(traceId)}`
       ),
 
-    getSpanDetails: (projectId: string | number, spanId: string) =>
+    getSpanDetails: (projectId: string, spanId: string) =>
       core.request<SpanDetail>(
         `${base}/projects/${projectId}/spans/${encodeURIComponent(spanId)}`
       ),

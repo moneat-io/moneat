@@ -33,7 +33,7 @@ describe('Analytics API – branch coverage', () => {
   describe('buildAnalyticsQuery – param combinations', () => {
     it('passes date_from and date_to params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('date_from')).toBe('2024-01-01')
           expect(url.searchParams.get('date_to')).toBe('2024-01-31')
@@ -47,7 +47,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      await api.getAnalyticsOverview(1, {
+      await api.getAnalyticsOverview('svc-1', {
         from: '2024-01-01',
         to: '2024-01-31',
       })
@@ -55,7 +55,7 @@ describe('Analytics API – branch coverage', () => {
 
     it('omits comparison param when value is "none"', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.has('comparison')).toBe(false)
           return HttpResponse.json({
@@ -68,12 +68,12 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      await api.getAnalyticsOverview(1, { comparison: 'none' })
+      await api.getAnalyticsOverview('svc-1', { comparison: 'none' })
     })
 
     it('passes filter array params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, ({ request }) => {
           const url = new URL(request.url)
           const filters = url.searchParams.getAll('filters[]')
           expect(filters).toEqual(['country:is:US', 'browser:is:Chrome'])
@@ -87,7 +87,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      await api.getAnalyticsOverview(1, {
+      await api.getAnalyticsOverview('svc-1', {
         filters: [
           { property: 'country', operator: 'is', value: 'US' },
           { property: 'browser', operator: 'is', value: 'Chrome' },
@@ -97,7 +97,7 @@ describe('Analytics API – branch coverage', () => {
 
     it('produces empty query string when no params given', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.search).toBe('')
           return HttpResponse.json({
@@ -110,7 +110,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      await api.getAnalyticsOverview(1)
+      await api.getAnalyticsOverview('svc-1')
     })
   })
 
@@ -119,12 +119,12 @@ describe('Analytics API – branch coverage', () => {
   describe('normalizeAnalyticsOverview – defaults', () => {
     it('defaults missing overview fields to 0', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({})
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.uniqueVisitors).toBe(0)
       expect(result.totalPageviews).toBe(0)
       expect(result.bounceRate).toBe(0)
@@ -135,7 +135,7 @@ describe('Analytics API – branch coverage', () => {
 
     it('includes comparison when any comp field is present', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({
             uniqueVisitors: 10,
             totalPageviews: 20,
@@ -147,7 +147,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.comparison).toBeDefined()
       expect(result.comparison!.bounceRate).toBe(8)
       expect(result.comparison!.uniqueVisitors).toBe(0)
@@ -158,7 +158,7 @@ describe('Analytics API – branch coverage', () => {
 
     it('detects comparison via compPageviews', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({
             visitors: 5,
             pageviews: 10,
@@ -167,14 +167,14 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.comparison).toBeDefined()
       expect(result.comparison!.totalPageviews).toBe(15)
     })
 
     it('detects comparison via compAvgVisitDuration', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({
             uniqueVisitors: 1,
             totalPageviews: 1,
@@ -183,14 +183,14 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.comparison).toBeDefined()
       expect(result.comparison!.avgVisitDuration).toBe(99)
     })
 
     it('detects comparison via compViewsPerVisit', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({
             uniqueVisitors: 1,
             totalPageviews: 1,
@@ -199,7 +199,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.comparison).toBeDefined()
       expect(result.comparison!.viewsPerVisit).toBe(3.5)
     })
@@ -210,24 +210,24 @@ describe('Analytics API – branch coverage', () => {
   describe('normalizeAnalyticsTimeseries – defaults', () => {
     it('defaults missing visitors and pageviews to 0', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/timeseries`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/timeseries`, () => {
           return HttpResponse.json([{ timestamp: '2024-01-01' }])
         })
       )
 
-      const result = await api.getAnalyticsTimeseries(1)
+      const result = await api.getAnalyticsTimeseries('svc-1')
       expect(result[0].visitors).toBe(0)
       expect(result[0].pageviews).toBe(0)
     })
 
     it('uses empty string for missing timestamp and date', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/timeseries`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/timeseries`, () => {
           return HttpResponse.json([{ visitors: 5, pageviews: 10 }])
         })
       )
 
-      const result = await api.getAnalyticsTimeseries(1)
+      const result = await api.getAnalyticsTimeseries('svc-1')
       expect(result[0].timestamp).toBe('')
     })
   })
@@ -237,25 +237,25 @@ describe('Analytics API – branch coverage', () => {
   describe('normalizeAnalyticsBreakdown – non-array', () => {
     it('handles wrapped response with no results array', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/pages`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/pages`, () => {
           return HttpResponse.json({ total: 0 })
         })
       )
 
-      const result = await api.getAnalyticsPages(1)
+      const result = await api.getAnalyticsPages('svc-1')
       expect(result).toEqual([])
     })
 
     it('returns results array from wrapped response', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/sources`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/sources`, () => {
           return HttpResponse.json({
             results: [{ name: 'Google', visitors: 100, pageviews: 200 }],
           })
         })
       )
 
-      const result = await api.getAnalyticsSources(1)
+      const result = await api.getAnalyticsSources('svc-1')
       expect(result).toHaveLength(1)
     })
   })
@@ -265,19 +265,19 @@ describe('Analytics API – branch coverage', () => {
   describe('getAnalyticsDevices – query string separator', () => {
     it('uses ? when no other params exist', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/devices`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/devices`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('type')).toBe('device')
           return HttpResponse.json([])
         })
       )
 
-      await api.getAnalyticsDevices(1, 'device')
+      await api.getAnalyticsDevices('svc-1', 'device')
     })
 
     it('uses & when other params exist', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/devices`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/devices`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('30d')
           expect(url.searchParams.get('type')).toBe('browser')
@@ -285,7 +285,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      await api.getAnalyticsDevices(1, 'browser', { period: '30d' })
+      await api.getAnalyticsDevices('svc-1', 'browser', { period: '30d' })
     })
   })
 
@@ -294,19 +294,19 @@ describe('Analytics API – branch coverage', () => {
   describe('getAnalyticsFunnel – query string separator', () => {
     it('uses ? separator when no analytics params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/funnel`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/funnel`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.getAll('steps[]')).toEqual(['/a', '/b'])
           return HttpResponse.json({ steps: [] })
         })
       )
 
-      await api.getAnalyticsFunnel(1, ['/a', '/b'])
+      await api.getAnalyticsFunnel('svc-1', ['/a', '/b'])
     })
 
     it('uses & separator when analytics params exist', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/funnel`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/funnel`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           expect(url.searchParams.getAll('steps[]')).toEqual(['/x'])
@@ -314,7 +314,7 @@ describe('Analytics API – branch coverage', () => {
         })
       )
 
-      await api.getAnalyticsFunnel(1, ['/x'], { period: '7d' })
+      await api.getAnalyticsFunnel('svc-1', ['/x'], { period: '7d' })
     })
   })
 
@@ -323,12 +323,12 @@ describe('Analytics API – branch coverage', () => {
   describe('getAnalyticsRealtime – defaults', () => {
     it('defaults to 0 when both fields are missing', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/realtime`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/realtime`, () => {
           return HttpResponse.json({})
         })
       )
 
-      const result = await api.getAnalyticsRealtime(1)
+      const result = await api.getAnalyticsRealtime('svc-1')
       expect(result.currentVisitors).toBe(0)
     })
   })

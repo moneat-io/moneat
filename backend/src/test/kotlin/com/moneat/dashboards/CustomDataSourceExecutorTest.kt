@@ -398,9 +398,9 @@ class CustomDataSourceExecutorTest {
     }
 
     @Test
-    fun `parseCustomDataSourceId extracts numeric ID`() {
+    fun `parseCustomDataSourceId extracts resource ID`() {
         val engine = com.moneat.dashboards.services.DashboardQueryEngine()
-        assertEquals(42L, engine.parseCustomDataSourceId("custom:42"))
+        assertEquals("source-42", engine.parseCustomDataSourceId("custom:source-42"))
     }
 
     @Test
@@ -413,12 +413,12 @@ class CustomDataSourceExecutorTest {
     fun `getDataSources includes custom sources`() {
         val engine = com.moneat.dashboards.services.DashboardQueryEngine()
         val customSource = CustomDataSourceResponse(
-            id = 1, orgId = 1, name = "My PG", sourceType = "postgresql",
+            id = "source-1", orgId = 1, name = "My PG", sourceType = "postgresql",
             host = "localhost", port = 5432, databaseName = "test",
-            enabled = true, createdBy = 1, createdAt = "", updatedAt = ""
+            enabled = true, createdBy = 1, createdAt = "", updatedAt = "", numericId = 1
         )
         val sources = engine.getDataSources(listOf(customSource))
-        assertTrue(sources.any { it.name == "custom:1" })
+        assertTrue(sources.any { it.name == "custom:source-1" })
         assertTrue(sources.any { it.name == "events" })
     }
 
@@ -426,12 +426,12 @@ class CustomDataSourceExecutorTest {
     fun `getDataSources excludes disabled custom sources`() {
         val engine = com.moneat.dashboards.services.DashboardQueryEngine()
         val disabledSource = CustomDataSourceResponse(
-            id = 2, orgId = 1, name = "Disabled PG", sourceType = "postgresql",
+            id = "source-2", orgId = 1, name = "Disabled PG", sourceType = "postgresql",
             host = "localhost", port = 5432, enabled = false, createdBy = 1,
-            createdAt = "", updatedAt = ""
+            createdAt = "", updatedAt = "", numericId = 2
         )
         val sources = engine.getDataSources(listOf(disabledSource))
-        assertTrue(sources.none { it.name == "custom:2" })
+        assertTrue(sources.none { it.name == "custom:source-2" })
     }
 
     // ──── Custom data source model tests ────

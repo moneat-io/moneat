@@ -21,7 +21,7 @@ function AnalyticsLayoutInner() {
   })
 
   const serviceId = primaryServiceResourceId(services)
-  const service = services?.find((candidate) => candidate.resourceId === serviceId)
+  const service = services?.find((candidate) => candidate.id === serviceId)
 
   return (
     <div className="p-3 space-y-2">

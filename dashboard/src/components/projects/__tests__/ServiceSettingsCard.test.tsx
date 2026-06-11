@@ -27,8 +27,7 @@ import {ServiceSettingsCard} from '@/components/projects/ServiceSettingsCard'
 import type {TelemetrySourceId} from '@/lib/telemetry-sources'
 
 const mockProject = {
-  id: 1,
-  resourceId: 'proj-1',
+  id: 'proj-1',
   name: 'Test Service',
   slug: 'test-service',
   framework: 'react',

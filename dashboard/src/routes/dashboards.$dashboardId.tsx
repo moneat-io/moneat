@@ -63,7 +63,7 @@ function DashboardViewPage() {
 
   const [isEditing, setIsEditing] = useState(edit ?? false)
   const [selectedWidget, setSelectedWidget] = useState<DashboardWidget | null>(null)
-  const [selectedWidgetId, setSelectedWidgetId] = useState<number | null>(null)
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null)
   const [showExport, setShowExport] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [timeRange, setTimeRange] = useState(
@@ -80,9 +80,9 @@ function DashboardViewPage() {
     sources: string[]
   } | null>(null)
 
-  const id = parseInt(dashboardId, 10)
+  const id = dashboardId
   const toWidgetUpdateRequest = useCallback((w: DashboardWidget): CreateWidgetRequest => ({
-    ...(w.id > 0 ? {id: w.id} : {}),
+    ...(w.id ? {id: w.id} : {}),
     title: w.title,
     widget_type: w.widget_type,
     grid_x: w.grid_x,
@@ -97,7 +97,7 @@ function DashboardViewPage() {
   const {data: dashboard, isLoading} = useQuery({
     queryKey: ['custom-dashboard', id],
     queryFn: () => api.getDashboard(id),
-    enabled: !isNaN(id),
+    enabled: id.length > 0,
   })
   const {data: projects = []} = useQuery({
     queryKey: ['projects'],
@@ -280,7 +280,7 @@ function DashboardViewPage() {
   const handleAddWidget = useCallback(() => {
     if (!dashboard) return
     const newWidget: DashboardWidget = {
-      id: 0,
+      id: `draft-widget-${Date.now()}`,
       dashboard_id: id,
       title: 'New Widget',
       widget_type: 'timeseries',
@@ -313,7 +313,7 @@ function DashboardViewPage() {
         widgets = dashboard.widgets.map((w, i) =>
           i === existingIndex
             ? {
-                ...(widget.id > 0 ? {id: widget.id} : {}),
+                ...(widget.id ? {id: widget.id} : {}),
                 title: widget.title,
                 widget_type: widget.widget_type,
                 grid_x: widget.grid_x,
@@ -349,7 +349,7 @@ function DashboardViewPage() {
   )
 
   const handleDeleteWidget = useCallback(
-    (widgetId: number) => {
+    (widgetId: string) => {
       if (!dashboard) return
       const widgets = dashboard.widgets
         .filter((w) => w.id !== widgetId)

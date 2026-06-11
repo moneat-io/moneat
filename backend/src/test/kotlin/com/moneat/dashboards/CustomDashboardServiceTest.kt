@@ -37,6 +37,7 @@ import com.moneat.dashboards.repositories.WidgetData
 import com.moneat.dashboards.repositories.models.DashboardFolderRow
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.events.repositories.ProjectRepository
+import com.moneat.shared.services.ProjectIdResolver
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -57,6 +58,7 @@ class CustomDashboardServiceTest {
     private lateinit var dashboardRepository: DashboardRepository
     private lateinit var widgetRepository: DashboardWidgetRepository
     private lateinit var projectRepository: ProjectRepository
+    private lateinit var projectIdResolver: ProjectIdResolver
     private lateinit var service: CustomDashboardService
 
     companion object {
@@ -71,6 +73,12 @@ class CustomDashboardServiceTest {
         private const val COLOR_GREEN = "#00ff00"
         private const val COLOR_BLUE = "#0000ff"
         private const val SEARCH_PATTERN_HELLO_WORLD = "%hello world%"
+
+        private fun resourceId(id: Long): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
+
+        private fun resourceNumber(resourceId: String): Long? =
+            resourceId.takeLast(12).toLongOrNull()
     }
 
     @BeforeTest
@@ -79,19 +87,25 @@ class CustomDashboardServiceTest {
         dashboardRepository = mockk(relaxed = true)
         widgetRepository = mockk(relaxed = true)
         projectRepository = mockk(relaxed = true)
+        projectIdResolver = mockk(relaxed = true)
+        every { projectIdResolver.resolve(any()) } answers { resourceNumber(firstArg()) }
         service = CustomDashboardService(
             folderRepository = folderRepository,
             dashboardRepository = dashboardRepository,
             dashboardWidgetRepository = widgetRepository,
             projectRepository = projectRepository,
+            projectIdResolver = projectIdResolver,
         )
     }
 
     private data class DashboardFlagParams(
         val id: Long = 1L,
+        val resourceId: String = resourceId(id),
         val orgId: Long = ORG_ID,
         val projectId: Long? = PROJECT_ID,
+        val projectResourceId: String? = projectId?.let(::resourceId),
         val folderId: Long? = null,
+        val folderResourceId: String? = folderId?.let(::resourceId),
         val title: String = "Test Dashboard",
         val description: String? = "A description",
         val layoutType: String = "grid",
@@ -106,9 +120,12 @@ class CustomDashboardServiceTest {
     private fun buildDashboardFlag(p: DashboardFlagParams = DashboardFlagParams()): DashboardWithFavoriteFlag =
         DashboardWithFavoriteFlag(
             id = p.id,
+            resourceId = p.resourceId,
             orgId = p.orgId,
             projectId = p.projectId,
+            projectResourceId = p.projectResourceId,
             folderId = p.folderId,
+            folderResourceId = p.folderResourceId,
             title = p.title,
             description = p.description,
             layoutType = p.layoutType,
@@ -127,7 +144,9 @@ class CustomDashboardServiceTest {
         widgetType: String = "timeseries",
     ): WidgetData = WidgetData(
         id = id,
+        resourceId = resourceId(id),
         dashboardId = dashboardId,
+        dashboardResourceId = resourceId(dashboardId),
         title = title,
         widgetType = widgetType,
         gridX = 0,
@@ -142,14 +161,16 @@ class CustomDashboardServiceTest {
 
     private fun buildCreatedDashboardData(
         id: Long = 1L,
-        orgId: Long = ORG_ID,
         title: String = "New Dashboard",
         description: String? = null,
-        projectId: Long? = null,
     ): CreatedDashboardData = CreatedDashboardData(
         id = id,
-        orgId = orgId,
-        projectId = projectId,
+        resourceId = resourceId(id),
+        orgId = ORG_ID,
+        projectId = null,
+        projectResourceId = null,
+        folderId = null,
+        folderResourceId = null,
         title = title,
         description = description,
         layoutType = "grid",
@@ -168,6 +189,7 @@ class CustomDashboardServiceTest {
         sortOrder: Int = 0,
     ): DashboardFolderRow = DashboardFolderRow(
         id = id,
+        resourceId = resourceId(id),
         orgId = orgId,
         name = name,
         color = color,
@@ -240,7 +262,7 @@ class CustomDashboardServiceTest {
         val result = service.getDashboard(5L, ORG_ID)
 
         assertNotNull(result)
-        assertEquals(5L, result.id)
+        assertEquals(resourceId(5), result.id)
         assertEquals(1, result.widgets.size)
     }
 
@@ -282,10 +304,14 @@ class CustomDashboardServiceTest {
             description = "desc",
         )
         every { dashboardRepository.create(ORG_ID, USER_ID_LONG, request) } returns data
+        every { dashboardRepository.getById(7L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
+            DashboardFlagParams(id = 7L, title = MY_DASHBOARD, description = "desc")
+        )
+        every { widgetRepository.listByDashboardId(7L) } returns emptyList()
 
         val result = service.createDashboard(ORG_ID, USER_ID_LONG, request)
 
-        assertEquals(7L, result.id)
+        assertEquals(resourceId(7), result.id)
         assertEquals(MY_DASHBOARD, result.title)
         assertEquals("desc", result.description)
         assertTrue(result.widgets.isEmpty())
@@ -315,12 +341,18 @@ class CustomDashboardServiceTest {
         val data = buildCreatedDashboardData(id = 10L, title = "Dashboard")
         every { dashboardRepository.create(ORG_ID, USER_ID_LONG, request) } returns data
         every { widgetRepository.insert(10L, widgetReq, any(), any()) } returns 50L
+        every { dashboardRepository.getById(10L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
+            DashboardFlagParams(id = 10L, title = "Dashboard")
+        )
+        every { widgetRepository.listByDashboardId(10L) } returns listOf(
+            buildWidgetData(id = 50L, dashboardId = 10L, title = "Error Count")
+        )
 
         val result = service.createDashboard(ORG_ID, USER_ID_LONG, request)
 
-        assertEquals(10L, result.id)
+        assertEquals(resourceId(10), result.id)
         assertEquals(1, result.widgets.size)
-        assertEquals(50L, result.widgets[0].id)
+        assertEquals(resourceId(50), result.widgets[0].id)
         assertEquals("Error Count", result.widgets[0].title)
         assertEquals("timeseries", result.widgets[0].widgetType)
     }
@@ -368,8 +400,15 @@ class CustomDashboardServiceTest {
         )
         val data = buildCreatedDashboardData(id = 1L)
         every {
-            dashboardRepository.create(ORG_ID, USER_ID_LONG, request)
+            dashboardRepository.create(ORG_ID, USER_ID_LONG, request, null, null)
         } returns data
+        every { dashboardRepository.getById(1L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
+            DashboardFlagParams(
+                id = 1L,
+                variables = """[{"name":"env","label":"Environment"}]""",
+            )
+        )
+        every { widgetRepository.listByDashboardId(1L) } returns emptyList()
         every { widgetRepository.insert(1L, widget, 5, any()) } returns 1L
 
         service.createDashboard(ORG_ID, USER_ID_LONG, request)
@@ -391,8 +430,15 @@ class CustomDashboardServiceTest {
             variables = """[{"name":"env","label":"Environment"}]""",
         )
         every {
-            dashboardRepository.create(ORG_ID, USER_ID_LONG, request)
+            dashboardRepository.create(ORG_ID, USER_ID_LONG, request, null, null)
         } returns data
+        every { dashboardRepository.getById(1L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
+            DashboardFlagParams(
+                id = 1L,
+                variables = """[{"name":"env","label":"Environment"}]""",
+            )
+        )
+        every { widgetRepository.listByDashboardId(1L) } returns emptyList()
 
         val result = service.createDashboard(ORG_ID, USER_ID_LONG, request)
 
@@ -435,7 +481,7 @@ class CustomDashboardServiceTest {
     fun `updateDashboard with widgets performs bulkUpsert and deleteNotIn`() =
         runBlocking {
             val widgetReq = UpdateWidgetRequest(
-                id = 10L,
+                id = resourceId(10),
                 title = "W",
                 widgetType = "stat",
             )
@@ -506,8 +552,12 @@ class CustomDashboardServiceTest {
         every { widgetRepository.listByDashboardId(7L) } returns listOf(widget)
         val request = slot<CreateDashboardRequest>()
         every {
-            dashboardRepository.create(ORG_ID, USER_ID_LONG, capture(request))
+            dashboardRepository.create(ORG_ID, USER_ID_LONG, capture(request), PROJECT_ID, null)
         } returns buildCreatedDashboardData(id = 99L, title = "Test Dashboard (Copy)")
+        every { dashboardRepository.getById(99L, ORG_ID, USER_ID_INT) } returns buildDashboardFlag(
+            DashboardFlagParams(id = 99L, title = "Test Dashboard (Copy)")
+        )
+        every { widgetRepository.listByDashboardId(99L) } returns emptyList()
 
         val result = service.duplicateDashboard(7L, ORG_ID, USER_ID_LONG)
 
@@ -587,10 +637,16 @@ class CustomDashboardServiceTest {
         every {
             folderRepository.create(ORG_ID, NEW_FOLDER, COLOR_GREEN, 1)
         } returns 5L
+        every { folderRepository.getByIdAndOrgId(5L, ORG_ID) } returns buildFolderRow(
+            id = 5L,
+            name = NEW_FOLDER,
+            color = COLOR_GREEN,
+            sortOrder = 1,
+        )
 
         val result = service.createFolder(ORG_ID, request)
 
-        assertEquals(5L, result.id)
+        assertEquals(resourceId(5), result.id)
         assertEquals(ORG_ID, result.orgId)
         assertEquals(NEW_FOLDER, result.name)
         assertEquals(COLOR_GREEN, result.color)
@@ -702,8 +758,7 @@ class CustomDashboardServiceTest {
         assertEquals(1, result.dashboards.size)
         assertEquals("Error Dashboard", result.dashboards[0].title)
         assertEquals(1, result.projects.size)
-        assertEquals(42L, result.projects[0].id)
-        assertEquals("018f4ce4-3f2a-7a67-a32b-0c1848f62b9d", result.projects[0].resourceId)
+        assertEquals("018f4ce4-3f2a-7a67-a32b-0c1848f62b9d", result.projects[0].id)
         assertEquals("error-tracker", result.projects[0].name)
     }
 

@@ -89,9 +89,15 @@ private const val AUTH_JWT = "auth-jwt"
 private const val ERR_NO_ORGANIZATION = "No organization found"
 private const val ERR_INVALID_DASHBOARD_ID = "Invalid dashboard ID"
 private const val ERR_DASHBOARD_NOT_FOUND = "Dashboard not found"
+private const val ERR_INVALID_FOLDER_ID = "Invalid folder ID"
+private const val ERR_FOLDER_NOT_FOUND = "Folder not found"
+private const val ERR_INVALID_ALERT_ID = "Invalid alert ID"
+private const val ERR_ALERT_NOT_FOUND = "Alert not found"
 private const val ERR_DATA_SOURCE_NOT_FOUND = "Data source not found"
 private const val ERR_UNKNOWN_SOURCE_TYPE = "Unknown source type"
 private const val ERR_INVALID_DATA_SOURCE_ID = "Invalid data source ID"
+private const val ERR_INVALID_QUERY = "Invalid query"
+private const val ERR_FAILED_DECRYPT_CREDENTIALS = "Failed to decrypt credentials"
 
 private fun currentOrgIdFromPrincipal(userId: Int, principal: JWTPrincipal): Long? =
     principal.currentOrgContextOrNull()
@@ -102,6 +108,27 @@ private fun currentOrgIdFromPrincipal(userId: Int, principal: JWTPrincipal): Lon
 private data class DashboardScope(
     val projectId: Long?
 )
+
+private data class DashboardQueryRouteDependencies(
+    val dashboardService: CustomDashboardService,
+    val queryEngine: DashboardQueryEngine,
+    val retentionPolicyService: RetentionPolicyService,
+    val dataSourceService: CustomDataSourceService,
+    val dataSourceExecutor: CustomDataSourceExecutor,
+    val projectIdResolver: ProjectIdResolver,
+)
+
+private data class DashboardQueryContext(
+    val orgId: Long,
+    val projectId: Long,
+    val demoEpochMs: Long?,
+    val retentionDays: Int,
+)
+
+private class DashboardQueryRouteException(
+    val status: HttpStatusCode,
+    message: String,
+) : IllegalArgumentException(message)
 
 private fun hasProjectAccess(orgId: Long, projectId: Long): Boolean {
     return transaction {
@@ -122,6 +149,71 @@ private fun getDashboardScope(dashboardId: Long, orgId: Long): DashboardScope? {
                 )
             }
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveDashboardRouteId(
+    dashboardService: CustomDashboardService,
+    orgId: Long
+): Long? {
+    val resourceId = call.parameters["id"]
+    if (!dashboardService.isValidResourceId(resourceId)) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+        return null
+    }
+    val dashboardId = dashboardService.resolveDashboardId(resourceId.orEmpty(), orgId)
+    if (dashboardId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
+    }
+    return dashboardId
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveFolderRouteId(
+    dashboardService: CustomDashboardService,
+    orgId: Long
+): Long? {
+    val resourceId = call.parameters["folderId"]
+    if (!dashboardService.isValidResourceId(resourceId)) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_FOLDER_ID))
+        return null
+    }
+    val folderId = dashboardService.resolveFolderId(resourceId.orEmpty(), orgId)
+    if (folderId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
+    }
+    return folderId
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveDataSourceRouteId(
+    dataSourceService: CustomDataSourceService,
+    orgId: Long
+): Long? {
+    val resourceId = call.parameters["id"]
+    if (!dataSourceService.isValidResourceId(resourceId)) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
+        return null
+    }
+    val dataSourceId = dataSourceService.resolveDataSourceId(resourceId.orEmpty(), orgId)
+    if (dataSourceId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
+    }
+    return dataSourceId
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveAlertRouteId(
+    dashboardAlertService: DashboardAlertService,
+    dashboardId: Long,
+    orgId: Long
+): Long? {
+    val resourceId = call.parameters["alertId"]
+    if (!dashboardAlertService.isValidResourceId(resourceId)) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_ALERT_ID))
+        return null
+    }
+    val alertId = dashboardAlertService.resolveAlertId(resourceId.orEmpty(), dashboardId, orgId)
+    if (alertId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
+    }
+    return alertId
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListDashboards(
@@ -145,8 +237,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateDashboard(
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
     val request = call.receive<CreateDashboardRequest>()
-    val dashboard = dashboardService.createDashboard(orgId, userId.toLong(), request)
-    call.respond(HttpStatusCode.Created, dashboard)
+    try {
+        val dashboard = dashboardService.createDashboard(orgId, userId.toLong(), request)
+        call.respond(HttpStatusCode.Created, dashboard)
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid dashboard request"))
+    }
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListFolders(
@@ -179,11 +275,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateFolder(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val folderId = call.parameters["folderId"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
+    val folderId = resolveFolderRouteId(dashboardService, orgId) ?: return
     val request = call.receive<UpdateFolderRequest>()
     val folder = dashboardService.updateFolder(folderId, orgId, request)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     call.respond(folder)
 }
 
@@ -194,12 +289,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteFolder(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val folderId = call.parameters["folderId"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid folder ID"))
+    val folderId = resolveFolderRouteId(dashboardService, orgId) ?: return
     if (dashboardService.deleteFolder(folderId, orgId)) {
         call.respond(HttpStatusCode.NoContent, "")
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Folder not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     }
 }
 
@@ -210,8 +304,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDashboard(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val dashboard = dashboardService.getDashboard(id, orgId, userId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     call.respond(dashboard)
@@ -224,8 +317,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleToggleFavorite(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val isFavorited = dashboardService.toggleFavorite(userId, id, orgId)
     call.respond(HttpStatusCode.OK, mapOf("is_favorited" to isFavorited))
 }
@@ -237,10 +329,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleMoveDashboardToF
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val request = call.receive<MoveToFolderRequest>()
-    if (dashboardService.moveDashboardToFolder(id, orgId, request.folderId)) {
+    val folderId = request.folderId?.let {
+        if (!dashboardService.isValidResourceId(it)) {
+            return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_FOLDER_ID))
+        }
+        dashboardService.resolveFolderId(it, orgId)
+            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
+    }
+    if (dashboardService.moveDashboardToFolder(id, orgId, folderId)) {
         call.respond(HttpStatusCode.OK, mapOf("folder_id" to request.folderId))
     } else {
         call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
@@ -254,12 +352,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateDashboard(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val request = call.receive<UpdateDashboardRequest>()
-    val updated = dashboardService.updateDashboard(id, orgId, request)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
-    call.respond(updated)
+    try {
+        val updated = dashboardService.updateDashboard(id, orgId, request)
+            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
+        call.respond(updated)
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid dashboard request"))
+    }
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteDashboard(
@@ -269,8 +370,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteDashboard(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     if (dashboardService.deleteDashboard(id, orgId)) {
         call.respond(HttpStatusCode.NoContent, "")
     } else {
@@ -285,8 +385,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDuplicateDashboa
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val duplicate = dashboardService.duplicateDashboard(id, orgId, userId.toLong())
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     call.respond(HttpStatusCode.Created, duplicate)
@@ -299,8 +398,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSetDefaultDashbo
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     if (dashboardService.setDefaultDashboard(id, orgId)) {
         call.respond(HttpStatusCode.OK, mapOf("is_default" to true))
     } else {
@@ -309,166 +407,191 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSetDefaultDashbo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
-    queryEngine: DashboardQueryEngine,
-    retentionPolicyService: RetentionPolicyService,
-    dataSourceService: CustomDataSourceService,
-    dataSourceExecutor: CustomDataSourceExecutor,
-    projectIdResolver: ProjectIdResolver,
+    dependencies: DashboardQueryRouteDependencies,
 ) {
-    val principal = call.principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = currentOrgIdFromPrincipal(userId, principal)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
-    val dashboardScope = getDashboardScope(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
-
+    val queryContext = resolveDashboardQueryContext(dependencies) ?: return
     val request = call.receive<ExecuteQueryRequest>()
-    val demoEpochMs = call.getDemoEpochMs()
-    val isDemoUser = demoEpochMs != null
-
-    // Demo users are scoped to demo projects; regular users must supply a projectId
-    val projectId: Long = if (isDemoUser) {
-        -1L // Queries against all 3 demo projects via ClickHouseQueryUtils.projectIdClause
-    } else {
-        call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
-            ?: return call.respond(
-                HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
-            )
-    }
-    if (!isDemoUser && !hasProjectAccess(orgId, projectId)) {
-        return call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
-    }
-    if (!isDemoUser && dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
-        return call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
-        )
-    }
-
-    val retentionDays = if (isDemoUser) {
-        DEFAULT_RETENTION_DAYS
-    } else {
-        retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
-    }
     val withTimeRange = if (request.timeRange != null) {
         request.queryConfig.copy(timeRange = request.timeRange)
     } else {
         request.queryConfig
     }
-    val effectiveQuery = queryEngine.resolvePrometheusDataSource(
-        queryEngine.applyVariables(withTimeRange, request.variables),
-        orgId,
-        dataSourceService
+    val effectiveQuery = dependencies.queryEngine.resolvePrometheusDataSource(
+        dependencies.queryEngine.applyVariables(withTimeRange, request.variables),
+        queryContext.orgId,
+        dependencies.dataSourceService
     )
 
     try {
-        // Check if this is a custom data source query
-        if (queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
-            val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
-                ?: return call.respond(
-                    HttpStatusCode.BadRequest, ErrorResponse("Invalid custom data source ID")
-                )
-            val source = dataSourceService.getDataSource(sourceId, orgId)
-                ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
-            val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId)
-                ?: return call.respond(
-                    HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
-                )
-            val sourceType = CustomDataSourceType.fromString(source.sourceType)
-                ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
-            val rawQuery = effectiveQuery.rawQuery
-                ?: return call.respond(
-                    HttpStatusCode.BadRequest,
-                    ErrorResponse("Custom data source queries require a rawQuery")
-                )
-            val results = dataSourceExecutor.executeQuery(
-                sourceId, sourceType, source.host, source.port,
-                source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
-            )
-            call.respond(results)
-        } else {
-            val results = queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays, orgId)
-            call.respond(results)
-        }
+        call.respond(executeDashboardQuery(effectiveQuery, queryContext, dependencies))
+    } catch (e: DashboardQueryRouteException) {
+        call.respond(e.status, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     } catch (e: IllegalArgumentException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveDashboardQueryContext(
+    dependencies: DashboardQueryRouteDependencies,
+): DashboardQueryContext? {
+    val principal = call.principal<JWTPrincipal>() ?: return null
+    val userId = principal.payload.getClaim("userId").asInt()
+    val orgId = currentOrgIdFromPrincipal(userId, principal)
+        ?: return respondForbidden(ERR_NO_ORGANIZATION)
+    val dashboardId = resolveDashboardRouteId(dependencies.dashboardService, orgId) ?: return null
+    val dashboardScope = getDashboardScope(dashboardId, orgId)
+        ?: return respondNotFound(ERR_DASHBOARD_NOT_FOUND)
+    val demoEpochMs = call.getDemoEpochMs()
+    val projectId = resolveQueryProjectId(demoEpochMs != null, dependencies.projectIdResolver) ?: return null
+    if (!validateQueryProjectScope(orgId, projectId, dashboardScope, demoEpochMs != null)) return null
+    return DashboardQueryContext(
+        orgId = orgId,
+        projectId = projectId,
+        demoEpochMs = demoEpochMs,
+        retentionDays = resolveRetentionDays(projectId, demoEpochMs, dependencies.retentionPolicyService),
+    )
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveQueryProjectId(
+    isDemoUser: Boolean,
+    projectIdResolver: ProjectIdResolver,
+): Long? {
+    if (isDemoUser) return -1L
+    val resourceId = call.request.queryParameters["projectId"]
+        ?: return respondBadRequest("projectId query parameter required")
+    return projectIdResolver.resolve(resourceId)
+        ?: respondBadRequest("projectId query parameter required")
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.validateQueryProjectScope(
+    orgId: Long,
+    projectId: Long,
+    dashboardScope: DashboardScope,
+    isDemoUser: Boolean,
+): Boolean {
+    if (isDemoUser) return true
+    if (!hasProjectAccess(orgId, projectId)) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
+        return false
+    }
+    if (dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
+        )
+        return false
+    }
+    return true
+}
+
+private suspend fun resolveRetentionDays(
+    projectId: Long,
+    demoEpochMs: Long?,
+    retentionPolicyService: RetentionPolicyService,
+): Int =
+    if (demoEpochMs != null) {
+        DEFAULT_RETENTION_DAYS
+    } else {
+        retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
+    }
+
+private suspend fun executeDashboardQuery(
+    effectiveQuery: QueryDsl,
+    queryContext: DashboardQueryContext,
+    dependencies: DashboardQueryRouteDependencies,
+): List<Map<String, kotlinx.serialization.json.JsonElement>> {
+    if (!dependencies.queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
+        return dependencies.queryEngine.executeQuery(
+            effectiveQuery,
+            queryContext.projectId,
+            queryContext.demoEpochMs,
+            queryContext.retentionDays,
+            queryContext.orgId
+        )
+    }
+    return executeCustomDashboardQuery(effectiveQuery, queryContext.orgId, dependencies)
+}
+
+private suspend fun executeCustomDashboardQuery(
+    effectiveQuery: QueryDsl,
+    orgId: Long,
+    dependencies: DashboardQueryRouteDependencies,
+): List<Map<String, kotlinx.serialization.json.JsonElement>> {
+    val sourceResourceId = dependencies.queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource)
+        ?: throw DashboardQueryRouteException(HttpStatusCode.BadRequest, "Invalid custom data source ID")
+    val sourceId = dependencies.dataSourceService.resolveDataSourceId(sourceResourceId, orgId)
+        ?: throw DashboardQueryRouteException(HttpStatusCode.NotFound, ERR_DATA_SOURCE_NOT_FOUND)
+    val source = dependencies.dataSourceService.getDataSource(sourceId, orgId)
+        ?: throw DashboardQueryRouteException(HttpStatusCode.NotFound, ERR_DATA_SOURCE_NOT_FOUND)
+    val creds = dependencies.dataSourceService.getDecryptedCredentials(sourceId, orgId)
+        ?: throw DashboardQueryRouteException(HttpStatusCode.InternalServerError, ERR_FAILED_DECRYPT_CREDENTIALS)
+    val sourceType = CustomDataSourceType.fromString(source.sourceType)
+        ?: throw DashboardQueryRouteException(HttpStatusCode.BadRequest, ERR_UNKNOWN_SOURCE_TYPE)
+    val rawQuery = effectiveQuery.rawQuery
+        ?: throw DashboardQueryRouteException(
+            HttpStatusCode.BadRequest,
+            "Custom data source queries require a rawQuery"
+        )
+    return dependencies.dataSourceExecutor.executeQuery(
+        sourceId, sourceType, source.host, source.port,
+        source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
+    )
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondBadRequest(message: String): Nothing? {
+    call.respond(HttpStatusCode.BadRequest, ErrorResponse(message))
+    return null
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondForbidden(message: String): Nothing? {
+    call.respond(HttpStatusCode.Forbidden, ErrorResponse(message))
+    return null
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondNotFound(message: String): Nothing? {
+    call.respond(HttpStatusCode.NotFound, ErrorResponse(message))
+    return null
 }
 
 private suspend fun executeSingleQuery(
     effectiveQuery: QueryDsl,
-    orgId: Long,
-    projectId: Long,
-    demoEpochMs: Long?,
-    retentionDays: Int,
-    queryEngine: DashboardQueryEngine,
-    dataSourceService: CustomDataSourceService,
-    dataSourceExecutor: CustomDataSourceExecutor,
+    queryContext: DashboardQueryContext,
+    dependencies: DashboardQueryRouteDependencies,
 ): List<Map<String, kotlinx.serialization.json.JsonElement>>? {
-    if (!queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
-        return queryEngine.executeQuery(effectiveQuery, projectId, demoEpochMs, retentionDays, orgId)
+    if (!dependencies.queryEngine.isCustomDataSource(effectiveQuery.dataSource)) {
+        return dependencies.queryEngine.executeQuery(
+            effectiveQuery,
+            queryContext.projectId,
+            queryContext.demoEpochMs,
+            queryContext.retentionDays,
+            queryContext.orgId
+        )
     }
-    val sourceId = queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource) ?: return null
-    val source = dataSourceService.getDataSource(sourceId, orgId) ?: return null
-    val creds = dataSourceService.getDecryptedCredentials(sourceId, orgId) ?: return null
+    val sourceResourceId = dependencies.queryEngine.parseCustomDataSourceId(effectiveQuery.dataSource) ?: return null
+    val sourceId = dependencies.dataSourceService.resolveDataSourceId(
+        sourceResourceId,
+        queryContext.orgId
+    ) ?: return null
+    val source = dependencies.dataSourceService.getDataSource(sourceId, queryContext.orgId) ?: return null
+    val creds = dependencies.dataSourceService.getDecryptedCredentials(sourceId, queryContext.orgId) ?: return null
     val sourceType = CustomDataSourceType.fromString(source.sourceType) ?: return null
     val rawQuery = effectiveQuery.rawQuery ?: return null
-    return dataSourceExecutor.executeQuery(
+    return dependencies.dataSourceExecutor.executeQuery(
         sourceId, sourceType, source.host, source.port,
         source.databaseName, creds, rawQuery, effectiveQuery.limit, effectiveQuery.timeRange
     )
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQuery(
-    queryEngine: DashboardQueryEngine,
-    retentionPolicyService: RetentionPolicyService,
-    dataSourceService: CustomDataSourceService,
-    dataSourceExecutor: CustomDataSourceExecutor,
-    projectIdResolver: ProjectIdResolver,
+    dependencies: DashboardQueryRouteDependencies,
 ) {
-    val principal = call.principal<JWTPrincipal>()
-    val userId = principal!!.payload.getClaim("userId").asInt()
-    val orgId = currentOrgIdFromPrincipal(userId, principal)
-        ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
-    val dashboardScope = getDashboardScope(id, orgId)
-        ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
-
+    val queryContext = resolveDashboardQueryContext(dependencies) ?: return
     val request = call.receive<ExecuteBatchQueryRequest>()
-    val demoEpochMs = call.getDemoEpochMs()
-    val isDemoUser = demoEpochMs != null
-
-    val projectId: Long = if (isDemoUser) {
-        -1L
-    } else {
-        call.request.queryParameters["projectId"]?.let(projectIdResolver::resolve)
-            ?: return call.respond(
-                HttpStatusCode.BadRequest, ErrorResponse("projectId query parameter required")
-            )
-    }
-    if (!isDemoUser && !hasProjectAccess(orgId, projectId)) {
-        return call.respond(HttpStatusCode.Forbidden, ErrorResponse("Project access denied"))
-    }
-    if (!isDemoUser && dashboardScope.projectId != null && dashboardScope.projectId != projectId) {
-        return call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse("Dashboard is scoped to project ${dashboardScope.projectId}")
-        )
-    }
-
     if (request.queries.size > MAX_QUERIES_PER_REQUEST) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Maximum 10 queries per batch"))
         return
     }
 
-    val retentionDays = if (isDemoUser) {
-        DEFAULT_RETENTION_DAYS
-    } else {
-        retentionPolicyService.getRetentionDaysForProject(projectId) ?: DEFAULT_RETENTION_DAYS
-    }
     val results = mutableMapOf<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>()
     val metadata = mutableMapOf<String, BatchQueryResultMetadata>()
 
@@ -481,21 +604,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         } else {
             query
         }
-        val effectiveQuery = queryEngine.resolvePrometheusDataSource(
-            queryEngine.applyVariables(withTimeRange, request.variables),
-            orgId,
-            dataSourceService
+        val effectiveQuery = dependencies.queryEngine.resolvePrometheusDataSource(
+            dependencies.queryEngine.applyVariables(withTimeRange, request.variables),
+            queryContext.orgId,
+            dependencies.dataSourceService
         )
         suspendRunCatching {
             executeSingleQuery(
                 effectiveQuery,
-                orgId,
-                projectId,
-                demoEpochMs,
-                retentionDays,
-                queryEngine,
-                dataSourceService,
-                dataSourceExecutor,
+                queryContext,
+                dependencies,
             )?.let { results[refId] = it }
         }.getOrElse { e ->
             logger.warn(e) { "Batch query ${originalRefId ?: refId} failed" }
@@ -515,8 +633,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     getDashboardScope(id, orgId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
 
@@ -545,7 +662,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
                 .replace("\$$name", value)
         }
 
-        val creds = dataSourceService.getDecryptedCredentials(source.id, orgId) ?: continue
+        val creds = dataSourceService.getDecryptedCredentials(source.numericId, orgId) ?: continue
         val sourceType = CustomDataSourceType.fromString(source.sourceType)
             ?: continue
         val options = dataSourceExecutor.executeLabelValuesQuery(
@@ -633,8 +750,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleExportDashboard(
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val format = call.parameters["format"]
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Format required"))
     val dashboard = dashboardService.getDashboard(id, orgId)
@@ -652,26 +768,26 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleExportDashboard(
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListAlerts(
+    dashboardService: CustomDashboardService,
     dashboardAlertService: DashboardAlertService,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     call.respond(dashboardAlertService.listAlerts(id, orgId))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAlert(
+    dashboardService: CustomDashboardService,
     dashboardAlertService: DashboardAlertService,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
     val request = call.receive<CreateDashboardAlertRequest>()
     try {
         val alert = dashboardAlertService.createAlert(id, orgId, userId.toLong(), request)
@@ -682,20 +798,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateAlert(
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateAlert(
+    dashboardService: CustomDashboardService,
     dashboardAlertService: DashboardAlertService,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
-    val alertId = call.parameters["alertId"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
+    val alertId = resolveAlertRouteId(dashboardAlertService, id, orgId) ?: return
     val request = receiveUpdateAlertRequest()
     try {
         val updated = dashboardAlertService.updateAlert(alertId, id, orgId, request)
-            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+            ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
         call.respond(updated)
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid request"))
@@ -714,20 +829,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.receiveUpdateAlertRequ
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAlert(
+    dashboardService: CustomDashboardService,
     dashboardAlertService: DashboardAlertService,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
-    val alertId = call.parameters["alertId"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert ID"))
+    val id = resolveDashboardRouteId(dashboardService, orgId) ?: return
+    val alertId = resolveAlertRouteId(dashboardAlertService, id, orgId) ?: return
     if (dashboardAlertService.deleteAlert(alertId, id, orgId)) {
         call.respond(HttpStatusCode.NoContent, "")
     } else {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
     }
 }
 
@@ -851,8 +965,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetCustomDataSou
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
+    val id = resolveDataSourceRouteId(dataSourceService, orgId) ?: return
     val source = dataSourceService.getDataSource(id, orgId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     call.respond(source)
@@ -866,8 +979,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateCustomData
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
+    val id = resolveDataSourceRouteId(dataSourceService, orgId) ?: return
     val request = call.receive<UpdateCustomDataSourceRequest>()
     val updated = dataSourceService.updateDataSource(id, orgId, request)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
@@ -885,11 +997,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteCustomData
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(
-            HttpStatusCode.BadRequest,
-            ErrorResponse(ERR_INVALID_DATA_SOURCE_ID)
-        )
+    val id = resolveDataSourceRouteId(dataSourceService, orgId) ?: return
     if (dataSourceService.deleteDataSource(id, orgId)) {
         dataSourceExecutor.closePool(id)
         call.respond(HttpStatusCode.NoContent, "")
@@ -906,13 +1014,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetDataSourceSch
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
+    val id = resolveDataSourceRouteId(dataSourceService, orgId) ?: return
     val source = dataSourceService.getDataSource(id, orgId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     val creds = dataSourceService.getDecryptedCredentials(id, orgId)
         ?: return call.respond(
-            HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
+            HttpStatusCode.InternalServerError, ErrorResponse(ERR_FAILED_DECRYPT_CREDENTIALS)
         )
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
@@ -934,14 +1041,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
     val userId = principal!!.payload.getClaim("userId").asInt()
     val orgId = currentOrgIdFromPrincipal(userId, principal)
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(ERR_NO_ORGANIZATION))
-    val id = call.parameters["id"]?.toLongOrNull()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
+    val id = resolveDataSourceRouteId(dataSourceService, orgId) ?: return
     val request = call.receive<CustomDataSourceQueryRequest>()
     val source = dataSourceService.getDataSource(id, orgId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     val creds = dataSourceService.getDecryptedCredentials(id, orgId)
         ?: return call.respond(
-            HttpStatusCode.InternalServerError, ErrorResponse("Failed to decrypt credentials")
+            HttpStatusCode.InternalServerError, ErrorResponse(ERR_FAILED_DECRYPT_CREDENTIALS)
         )
     val sourceType = CustomDataSourceType.fromString(source.sourceType)
         ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_UNKNOWN_SOURCE_TYPE))
@@ -952,7 +1058,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
         )
         call.respond(results)
     } catch (e: IllegalArgumentException) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: "Invalid query"))
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
 }
 
@@ -993,6 +1099,14 @@ fun Route.customDashboardRoutes(
     val dataSourceExecutor = dependencies.dataSources.dataSourceExecutor
     val dashboardAlertService = dependencies.dashboardAlertService
     val templateCatalogService = dependencies.templateCatalogService
+    val queryDependencies = DashboardQueryRouteDependencies(
+        dashboardService = dashboardService,
+        queryEngine = queryEngine,
+        retentionPolicyService = retentionPolicyService,
+        dataSourceService = dataSourceService,
+        dataSourceExecutor = dataSourceExecutor,
+        projectIdResolver = projectIdResolver,
+    )
 
     route("/v1/dashboards") {
         authenticate(AUTH_JWT) {
@@ -1016,24 +1130,8 @@ fun Route.customDashboardRoutes(
             put("/{id}/folder") { handleMoveDashboardToFolder(dashboardService) }
             put("/{id}") { handleUpdateDashboard(dashboardService) }
             delete("/{id}") { handleDeleteDashboard(dashboardService) }
-            post("/{id}/query") {
-                handleDashboardQuery(
-                    queryEngine,
-                    retentionPolicyService,
-                    dataSourceService,
-                    dataSourceExecutor,
-                    projectIdResolver
-                )
-            }
-            post("/{id}/query/batch") {
-                handleBatchDashboardQuery(
-                    queryEngine,
-                    retentionPolicyService,
-                    dataSourceService,
-                    dataSourceExecutor,
-                    projectIdResolver
-                )
-            }
+            post("/{id}/query") { handleDashboardQuery(queryDependencies) }
+            post("/{id}/query/batch") { handleBatchDashboardQuery(queryDependencies) }
             post("/{id}/variables/resolve") {
                 handleVariablesResolve(dashboardService, dataSourceService, dataSourceExecutor)
             }
@@ -1041,10 +1139,10 @@ fun Route.customDashboardRoutes(
             get("/{id}/export/{format}") {
                 handleExportDashboard(dashboardService, translators.dataDog, translators.grafana)
             }
-            get("/{id}/alerts") { handleListAlerts(dashboardAlertService) }
-            post("/{id}/alerts") { handleCreateAlert(dashboardAlertService) }
-            put("/{id}/alerts/{alertId}") { handleUpdateAlert(dashboardAlertService) }
-            delete("/{id}/alerts/{alertId}") { handleDeleteAlert(dashboardAlertService) }
+            get("/{id}/alerts") { handleListAlerts(dashboardService, dashboardAlertService) }
+            post("/{id}/alerts") { handleCreateAlert(dashboardService, dashboardAlertService) }
+            put("/{id}/alerts/{alertId}") { handleUpdateAlert(dashboardService, dashboardAlertService) }
+            delete("/{id}/alerts/{alertId}") { handleDeleteAlert(dashboardService, dashboardAlertService) }
             get("/datasources") { handleGetAvailableDataSources(dataSourceService, queryEngine) }
         }
     }

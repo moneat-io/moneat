@@ -33,7 +33,7 @@ describe('Performance API', () => {
   describe('getTransactions', () => {
     it('fetches transactions with default period', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/transactions`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-1/transactions`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           return HttpResponse.json([
@@ -52,7 +52,7 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getTransactions(1)
+      const result = await api.getTransactions('proj-1')
       expect(result).toHaveLength(1)
       expect(result[0].name).toBe('/api/users')
       expect(result[0].latestEventId).toBe('evt-1')
@@ -61,7 +61,7 @@ describe('Performance API', () => {
 
     it('passes period, environment, and operation params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/2/transactions`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-2/transactions`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('24h')
           expect(url.searchParams.get('environment')).toBe('production')
@@ -70,7 +70,7 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getTransactions(2, {
+      const result = await api.getTransactions('proj-2', {
         period: '24h',
         environment: 'production',
         operation: 'http.server',
@@ -80,7 +80,7 @@ describe('Performance API', () => {
 
     it('maps snake_case fields to camelCase', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/3/transactions`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-3/transactions`, () => {
           return HttpResponse.json([
             {
               name: '/api/health',
@@ -97,14 +97,14 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getTransactions(3)
+      const result = await api.getTransactions('proj-3')
       expect(result[0].latestEventId).toBe('evt-snake')
       expect(result[0].failureRate).toBe(0.1)
     })
 
     it('defaults failureRate to 0 when missing', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/4/transactions`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-4/transactions`, () => {
           return HttpResponse.json([
             {
               name: '/api/data',
@@ -119,7 +119,7 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getTransactions(4)
+      const result = await api.getTransactions('proj-4')
       expect(result[0].failureRate).toBe(0)
     })
   })
@@ -129,7 +129,7 @@ describe('Performance API', () => {
   describe('getPerformanceStats', () => {
     it('fetches performance stats with default period', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/transactions/stats`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-1/transactions/stats`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           return HttpResponse.json({
@@ -143,14 +143,14 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getPerformanceStats(1)
+      const result = await api.getPerformanceStats('proj-1')
       expect(result.totalTransactions).toBe(1000)
       expect(result.avgDuration).toBe(150)
     })
 
     it('passes period, environment, and operation params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/5/transactions/stats`, ({ request }) => {
+        http.get(`${API_BASE}/v1/projects/proj-5/transactions/stats`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('30d')
           expect(url.searchParams.get('environment')).toBe('staging')
@@ -162,7 +162,7 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getPerformanceStats(5, {
+      const result = await api.getPerformanceStats('proj-5', {
         period: '30d',
         environment: 'staging',
         operation: 'db.query',
@@ -275,10 +275,10 @@ describe('Performance API', () => {
   describe('getTraceDetails', () => {
     it('fetches trace details by projectId and traceId', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/1/traces/trace-abc`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-1/traces/trace-abc`, () => {
           return HttpResponse.json({
             traceId: 'trace-abc',
-            projectId: 1,
+            projectId: 'proj-1',
             spans: [],
             startTimestamp: 1704067200000,
             endTimestamp: 1704067201200,
@@ -287,7 +287,7 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getTraceDetails(1, 'trace-abc')
+      const result = await api.getTraceDetails('proj-1', 'trace-abc')
       expect(result.traceId).toBe('trace-abc')
       expect(result.duration).toBe(1200)
     })
@@ -298,7 +298,7 @@ describe('Performance API', () => {
   describe('getSpanDetails', () => {
     it('fetches span details by projectId and spanId', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/projects/2/spans/span-xyz`, () => {
+        http.get(`${API_BASE}/v1/projects/proj-2/spans/span-xyz`, () => {
           return HttpResponse.json({
             span: {
               spanId: 'span-xyz',
@@ -315,7 +315,7 @@ describe('Performance API', () => {
         })
       )
 
-      const result = await api.getSpanDetails(2, 'span-xyz')
+      const result = await api.getSpanDetails('proj-2', 'span-xyz')
       expect(result.span.spanId).toBe('span-xyz')
       expect(result.span.op).toBe('http.server')
       expect(result.span.duration).toBe(100)

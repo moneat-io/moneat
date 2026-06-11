@@ -22,7 +22,6 @@ import com.moneat.mcp.protocol.ToolContent
 import com.moneat.shared.services.ProjectIdResolver
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -63,14 +62,14 @@ suspend fun withRequiredProjectId(
     return block(projectId)
 }
 
-fun schemaProjectId(description: String = "Project resource ID or legacy numeric project ID"): JsonObject = JsonObject(
+fun schemaProjectId(description: String = "Project resource ID"): JsonObject = JsonObject(
     mapOf(
-        "type" to JsonArray(listOf(JsonPrimitive("string"), JsonPrimitive("number"))),
+        "type" to JsonPrimitive("string"),
         "description" to JsonPrimitive(description)
     )
 )
 
-fun projectIdInputSchema(description: String = "Project resource ID or legacy numeric project ID"): InputSchema =
+fun projectIdInputSchema(description: String = "Project resource ID"): InputSchema =
     InputSchema(
         properties = JsonObject(
             mapOf("project_id" to schemaProjectId(description))

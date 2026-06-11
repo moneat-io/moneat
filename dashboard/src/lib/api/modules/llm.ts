@@ -28,7 +28,7 @@ import type {
 } from '../types'
 import { urlWithQuery } from '../utils'
 
-function appendListParam(searchParams: URLSearchParams, key: string, values?: Array<string | number>) {
+function appendListParam(searchParams: URLSearchParams, key: string, values?: string[]) {
   values?.forEach((value) => searchParams.append(key, String(value)))
 }
 

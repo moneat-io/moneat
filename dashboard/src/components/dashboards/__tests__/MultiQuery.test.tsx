@@ -66,8 +66,8 @@ function renderWithQuery(ui: React.ReactElement) {
 }
 
 const baseWidget: DashboardWidget = {
-  id: 1,
-  dashboard_id: 1,
+  id: 'widget-1',
+  dashboard_id: 'dashboard-1',
   title: 'Test Widget',
   widget_type: 'timeseries',
   grid_x: 0,
@@ -96,8 +96,8 @@ describe('MultiQuery', () => {
         widget={baseWidget}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     expect(screen.getByText('A')).toBeInTheDocument()
@@ -109,8 +109,8 @@ describe('MultiQuery', () => {
         widget={baseWidget}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
     // The + button for adding queries
@@ -125,8 +125,8 @@ describe('MultiQuery', () => {
         widget={baseWidget}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
 
@@ -159,8 +159,8 @@ describe('MultiQuery', () => {
         widget={multiQueryWidget}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
 
@@ -184,8 +184,8 @@ describe('MultiQuery', () => {
         widget={baseWidget}
         onSave={onSave}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
 
@@ -217,8 +217,8 @@ describe('MultiQuery', () => {
         widget={{...baseWidget, query_configs: manyQueries}}
         onSave={vi.fn()}
         onClose={vi.fn()}
-        dashboardId={1}
-        projectId={1}
+        dashboardId="dashboard-1"
+        projectId="proj-1"
       />
     )
 

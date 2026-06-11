@@ -86,10 +86,17 @@ import {Route as DashboardsRoute} from '../dashboards.index'
 
 const NOW_ISO = new Date().toISOString()
 const OLD_ISO = new Date(Date.now() - 172_800_000).toISOString()
+const OPS_FOLDER_ID = 'folder-7'
+const EMPTY_FOLDER_ID = 'folder-8'
+const API_DASHBOARD_ID = 'dashboard-11'
+const QUEUE_DASHBOARD_ID = 'dashboard-12'
+const CREATED_DASHBOARD_ID = 'dashboard-21'
+const TEMPLATE_DASHBOARD_ID = 'dashboard-22'
+const REQUESTS_WIDGET_ID = 'widget-1'
 
 const FOLDERS: readonly DashboardFolder[] = [
   {
-    id: 7,
+    id: OPS_FOLDER_ID,
     org_id: 1,
     name: 'Ops',
     color: '#2563eb',
@@ -98,7 +105,7 @@ const FOLDERS: readonly DashboardFolder[] = [
     updated_at: NOW_ISO,
   },
   {
-    id: 8,
+    id: EMPTY_FOLDER_ID,
     org_id: 1,
     name: 'Empty',
     color: null,
@@ -110,10 +117,10 @@ const FOLDERS: readonly DashboardFolder[] = [
 
 const DASHBOARDS: readonly CustomDashboard[] = [
   {
-    id: 11,
+    id: API_DASHBOARD_ID,
     org_id: 1,
     project_id: null,
-    folder_id: 7,
+    folder_id: OPS_FOLDER_ID,
     title: 'API Health',
     description: 'Service dashboard',
     layout_type: 'grid',
@@ -124,8 +131,8 @@ const DASHBOARDS: readonly CustomDashboard[] = [
     created_at: NOW_ISO,
     updated_at: NOW_ISO,
     widgets: [{
-      id: 1,
-      dashboard_id: 11,
+      id: REQUESTS_WIDGET_ID,
+      dashboard_id: API_DASHBOARD_ID,
       title: 'Requests',
       widget_type: 'line',
       grid_x: 0,
@@ -138,7 +145,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
     }],
   },
   {
-    id: 12,
+    id: QUEUE_DASHBOARD_ID,
     org_id: 1,
     project_id: null,
     folder_id: null,
@@ -178,11 +185,11 @@ describe('Dashboards index route', () => {
     mockApi.getDashboards.mockResolvedValue(DASHBOARDS)
     mockApi.getDashboardFolders.mockResolvedValue(FOLDERS)
     mockApi.getDashboardTemplates.mockResolvedValue([TEMPLATE])
-    mockApi.createDashboard.mockResolvedValue({id: 21})
-    mockApi.createDashboardFromTemplate.mockResolvedValue({id: 22})
+    mockApi.createDashboard.mockResolvedValue({id: CREATED_DASHBOARD_ID})
+    mockApi.createDashboardFromTemplate.mockResolvedValue({id: TEMPLATE_DASHBOARD_ID})
     mockApi.deleteDashboard.mockResolvedValue(undefined)
     mockApi.toggleDashboardFavorite.mockResolvedValue({is_favorited: true})
-    mockApi.moveDashboardToFolder.mockResolvedValue({folder_id: 7})
+    mockApi.moveDashboardToFolder.mockResolvedValue({folder_id: OPS_FOLDER_ID})
     mockApi.createDashboardFolder.mockResolvedValue(FOLDERS[0])
     mockApi.deleteDashboardFolder.mockResolvedValue(undefined)
     mockApi.updateDashboardFolder.mockResolvedValue(FOLDERS[0])
@@ -206,7 +213,7 @@ describe('Dashboards index route', () => {
       )
       expect(mockNavigate).toHaveBeenCalledWith({
         to: '/dashboards/$dashboardId',
-        params: {dashboardId: '22'},
+        params: {dashboardId: TEMPLATE_DASHBOARD_ID},
         search: {edit: true},
       })
     })
@@ -242,7 +249,7 @@ describe('Dashboards index route', () => {
       expect(mockApi.createDashboard).toHaveBeenCalledWith({
         title: 'New Dashboard',
         widgets: [],
-        folder_id: 8,
+        folder_id: EMPTY_FOLDER_ID,
       })
     })
   })
@@ -263,19 +270,23 @@ describe('Dashboards index route', () => {
     fireEvent.change(screen.getByDisplayValue('Ops'), {target: {value: 'Platform'}})
     fireEvent.keyDown(screen.getByDisplayValue('Platform'), {key: 'Enter'})
 
-    await waitFor(() => expect(mockApi.updateDashboardFolder).toHaveBeenCalledWith(7, {name: 'Platform'}))
+    await waitFor(() => expect(mockApi.updateDashboardFolder).toHaveBeenCalledWith(OPS_FOLDER_ID, {name: 'Platform'}))
 
     fireEvent.click(screen.getByTitle('Add to favorites'))
-    await waitFor(() => expect(mockApi.toggleDashboardFavorite).toHaveBeenCalledWith(12))
+    await waitFor(() => expect(mockApi.toggleDashboardFavorite).toHaveBeenCalledWith(QUEUE_DASHBOARD_ID))
 
     fireEvent.click(screen.getAllByRole('button', {name: /Duplicate/})[0])
     await waitFor(() => {
-      expect(mockApi.getDashboard).toHaveBeenCalledWith(11)
+      expect(mockApi.getDashboard).toHaveBeenCalledWith(API_DASHBOARD_ID)
       expect(mockApi.createDashboard).toHaveBeenCalledWith(expect.objectContaining({
         title: 'API Health (Copy)',
-        folder_id: 7,
+        folder_id: OPS_FOLDER_ID,
       }))
     })
+
+    fireEvent.click(screen.getAllByRole('button', {name: /^Ops$/})[0])
+    fireEvent.click(screen.getAllByRole('button', {name: /Delete folder/})[0])
+    await waitFor(() => expect(mockApi.deleteDashboardFolder).toHaveBeenCalledWith(OPS_FOLDER_ID))
 
     fireEvent.click(screen.getAllByRole('button', {name: /Move to folder/})[0])
     fireEvent.click(screen.getAllByRole('button', {name: /^Uncategorized$/})[0])
@@ -283,11 +294,11 @@ describe('Dashboards index route', () => {
     fireEvent.click(opsButtons[opsButtons.length - 1])
 
     await waitFor(() => {
-      expect(mockApi.moveDashboardToFolder).toHaveBeenCalledWith(expect.any(Number), null)
-      expect(mockApi.moveDashboardToFolder).toHaveBeenCalledWith(expect.any(Number), 7)
+      expect(mockApi.moveDashboardToFolder).toHaveBeenCalledWith(expect.any(String), null)
+      expect(mockApi.moveDashboardToFolder).toHaveBeenCalledWith(expect.any(String), OPS_FOLDER_ID)
     })
 
     fireEvent.click(screen.getAllByRole('button', {name: /^Delete$/})[0])
-    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith(11))
+    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith(API_DASHBOARD_ID))
   })
 })

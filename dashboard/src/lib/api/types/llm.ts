@@ -22,11 +22,9 @@ export interface LlmTimelinePoint {
   errors: number
 }
 
-export type LlmServiceId = string | number
-
 export interface LlmScopeParams {
   services?: string[]
-  serviceIds?: LlmServiceId[]
+  serviceIds?: string[]
 }
 
 export interface LlmRangeParams extends LlmScopeParams {

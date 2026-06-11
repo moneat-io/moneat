@@ -30,7 +30,7 @@ import kotlin.test.assertNull
 
 class ProjectIdResolverTest {
     @Test
-    fun `resolve returns legacy numeric project IDs without lookup`() {
+    fun `resolve rejects legacy numeric project IDs without lookup`() {
         var lookupCalls = 0
         val resolver = ProjectIdResolver(
             lookupProjectIdByResourceId = {
@@ -39,7 +39,22 @@ class ProjectIdResolverTest {
             }
         )
 
-        assertEquals(42L, resolver.resolve("42"))
+        assertNull(resolver.resolve("42"))
+        assertEquals(0, lookupCalls)
+    }
+
+    @Test
+    fun `resolveProtocolId accepts legacy numeric project IDs without lookup`() {
+        var lookupCalls = 0
+        val resolver = ProjectIdResolver(
+            lookupProjectIdByResourceId = {
+                lookupCalls++
+                10L
+            }
+        )
+
+        assertEquals(42L, resolver.resolveProtocolId("42"))
+        assertNull(resolver.resolveProtocolId("-1"))
         assertEquals(0, lookupCalls)
     }
 

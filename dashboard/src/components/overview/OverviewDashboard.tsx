@@ -46,9 +46,8 @@ function saveWidgets(widgets: DashboardWidget[]) {
   }
 }
 
-function nextNegativeId(widgets: DashboardWidget[]): number {
-  const minId = widgets.reduce((min, w) => Math.min(min, w.id), 0)
-  return minId - 1
+function nextLocalId(widgets: DashboardWidget[]): string {
+  return `overview-local-widget-${widgets.length + 1}-${Date.now()}`
 }
 
 function maxGridY(widgets: DashboardWidget[]): number {
@@ -78,7 +77,7 @@ export function OverviewDashboard() {
       if (!def) return
 
       const newWidget: DashboardWidget = {
-        id: nextNegativeId(widgets),
+        id: nextLocalId(widgets),
         dashboard_id: OVERVIEW_DASHBOARD_ID,
         title: def.label,
         widget_type: widgetType,
@@ -99,7 +98,7 @@ export function OverviewDashboard() {
   )
 
   const handleDeleteWidget = useCallback(
-    (widgetId: number) => {
+    (widgetId: string) => {
       const next = widgets.filter((w) => w.id !== widgetId)
       setWidgets(next)
       saveWidgets(next)
@@ -113,7 +112,7 @@ export function OverviewDashboard() {
         const reqId = req.id
         const existing = widgets.find((w) => w.id === reqId)
         return {
-          id: reqId ?? existing?.id ?? nextNegativeId(widgets),
+          id: reqId ?? existing?.id ?? nextLocalId(widgets),
           dashboard_id: OVERVIEW_DASHBOARD_ID,
           title: req.title ?? existing?.title ?? '',
           widget_type: req.widget_type,

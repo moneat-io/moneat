@@ -103,7 +103,7 @@ function OtlpServiceRoutingPanel() {
   })
 
   const upsertMapping = useMutation({
-    mutationFn: (input: {service: OtlpObservedService; serviceId: string | number}) =>
+    mutationFn: (input: {service: OtlpObservedService; serviceId: string}) =>
       api.upsertOtlpServiceMapping(
         input.service.serviceName,
         input.serviceId,
@@ -195,12 +195,12 @@ function OtlpServiceRoutingPanel() {
 function OtlpServiceRoutingRow(props: {
   readonly service: OtlpObservedService
   readonly moneatServices: Project[]
-  readonly upsertMapping: (serviceId: string | number) => void
+  readonly upsertMapping: (serviceId: string) => void
   readonly deleteMapping: () => void
   readonly isPending: boolean
 }) {
   const {service, moneatServices, upsertMapping, deleteMapping, isPending} = props
-  const selectedMoneatService = service.projectResourceId ?? UNMAPPED_SERVICE_VALUE
+  const selectedMoneatService = service.projectId ?? UNMAPPED_SERVICE_VALUE
 
   return (
     <TableRow>
@@ -245,7 +245,7 @@ function OtlpServiceRoutingRow(props: {
             <SelectGroup>
               <SelectItem value={UNMAPPED_SERVICE_VALUE}>Unmapped</SelectItem>
               {moneatServices.map((moneatService) => (
-                <SelectItem key={moneatService.id} value={moneatService.resourceId}>
+                <SelectItem key={moneatService.id} value={moneatService.id}>
                   {moneatService.name}
                 </SelectItem>
               ))}

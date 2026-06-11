@@ -40,7 +40,7 @@ export const Route = createFileRoute('/dashboards/datasources')({
 function DataSourcesPage() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<TestConnectionResult | null>(null)
   const [connectionMode, setConnectionMode] = useState<'fields' | 'url'>('fields')
   const [connectionUrl, setConnectionUrl] = useState('')
@@ -69,7 +69,7 @@ function DataSourcesPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({id, req}: {id: number; req: CreateCustomDataSourceRequest}) =>
+    mutationFn: ({id, req}: {id: string; req: CreateCustomDataSourceRequest}) =>
       api.updateCustomDataSource(id, req),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['custom-datasources']})
@@ -79,7 +79,7 @@ function DataSourcesPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteCustomDataSource(id),
+    mutationFn: (id: string) => api.deleteCustomDataSource(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['custom-datasources']})
       queryClient.invalidateQueries({queryKey: ['datasources']})
@@ -87,7 +87,7 @@ function DataSourcesPage() {
   })
 
   const toggleMutation = useMutation({
-    mutationFn: ({id, enabled}: {id: number; enabled: boolean}) =>
+    mutationFn: ({id, enabled}: {id: string; enabled: boolean}) =>
       api.updateCustomDataSource(id, {enabled}),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['custom-datasources']}),
   })

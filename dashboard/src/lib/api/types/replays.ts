@@ -22,8 +22,7 @@ export type ReplaySignal = 'error' | 'rage_click' | 'dead_click' | 'bounce' | 'p
 
 export interface Replay {
   replayId: string
-  projectId: number
-  projectResourceId: string
+  projectId: string
   startedAt: string
   finishedAt: string
   durationMs: number
@@ -64,7 +63,7 @@ export interface ReplayRecordingResponse {
 
 export interface EventIssueLink {
   issueId: string
-  projectResourceId: string
+  projectId: string
 }
 
 export interface Feedback {

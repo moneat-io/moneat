@@ -20,8 +20,7 @@ import {Route as ReplaysRoute, replaysHelperTestHooks as helpers} from '../repla
 function replay(overrides: Partial<Replay> = {}): Replay {
   return {
     replayId: 'replay-123456789',
-    projectId: 1,
-    projectResourceId: 'svc-api',
+    projectId: 'svc-api',
     startedAt: '2026-06-01T00:00:00.000Z',
     finishedAt: '2026-06-01T00:01:00.000Z',
     durationMs: 60_000,

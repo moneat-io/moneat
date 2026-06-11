@@ -54,8 +54,8 @@ interface WidgetConfigPanelProps {
   widget: DashboardWidget
   onSave: (widget: DashboardWidget) => void
   onClose: () => void
-  dashboardId: number
-  projectId?: string | number
+  dashboardId: string
+  projectId?: string
 }
 
 export function WidgetConfigPanel({

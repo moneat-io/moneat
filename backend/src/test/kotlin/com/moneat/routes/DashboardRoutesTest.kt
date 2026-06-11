@@ -19,6 +19,7 @@ package com.moneat.routes
 import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CreateDashboardRequest
+import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.DashboardAlertResponse
 import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.DashboardVariable
@@ -69,8 +70,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.serialization.json.JsonPrimitive
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -85,11 +88,20 @@ class DashboardRoutesTest {
         private const val DEFAULT_TIMESTAMP = "2024-01-01T00:00:00"
         private const val TEST_DS = "Test DS"
         private const val DASHBOARDS_PATH = "/v1/dashboards"
-        private const val DASHBOARDS_1 = "/v1/dashboards/1"
-        private const val DASHBOARDS_99 = "/v1/dashboards/99"
+        private const val DASHBOARD_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_DASHBOARD_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val FOLDER_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_FOLDER_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val ALERT_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_ALERT_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val DATA_SOURCE_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val MISSING_DATA_SOURCE_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val WIDGET_RESOURCE_ID = "00000000-0000-0000-0000-000000000010"
+        private const val DASHBOARDS_1 = "/v1/dashboards/$DASHBOARD_RESOURCE_ID"
+        private const val DASHBOARDS_99 = "/v1/dashboards/$MISSING_DASHBOARD_RESOURCE_ID"
         private const val BODY_NAME_X = """{"name":"X"}"""
-        private const val DATASOURCES_1 = "/v1/datasources/1"
-        private const val DATASOURCES_99 = "/v1/datasources/99"
+        private const val DATASOURCES_1 = "/v1/datasources/$DATA_SOURCE_RESOURCE_ID"
+        private const val DATASOURCES_99 = "/v1/datasources/$MISSING_DATA_SOURCE_RESOURCE_ID"
         private var db: Database? = null
     }
 
@@ -127,7 +139,36 @@ class DashboardRoutesTest {
             Memberships,
             Projects
         )
+        every { mockDashboardService.isValidResourceId(any()) } answers {
+            isUuid(firstArg())
+        }
+        every { mockDashboardService.resolveDashboardId(any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
+        every { mockDashboardService.resolveFolderId(any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
+        every { mockDataSourceService.isValidResourceId(any()) } answers {
+            isUuid(firstArg())
+        }
+        every { mockDataSourceService.resolveDataSourceId(any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
+        every { mockAlertService.isValidResourceId(any()) } answers {
+            isUuid(firstArg())
+        }
+        every { mockAlertService.resolveAlertId(any(), any(), any()) } answers {
+            resourceNumber(firstArg())
+        }
     }
+
+    private fun isUuid(value: String?): Boolean =
+        value?.let {
+            runCatching { java.util.UUID.fromString(it) }.isSuccess
+        } ?: false
+
+    private fun resourceNumber(value: String): Long? =
+        value.takeIf(::isUuid)?.takeLast(12)?.toLongOrNull()
 
     private fun Application.installAuth() {
         installJwtAuth()
@@ -169,11 +210,20 @@ class DashboardRoutesTest {
         } get Projects.id
     }
 
-    private fun seedDashboardScope(orgId: Long): Long = transaction {
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
+    }
+
+    private fun seedDashboardScope(orgId: Long, projectId: Long? = null): Long = transaction {
         exec(
             """
             CREATE TABLE IF NOT EXISTS dashboards (
                 id BIGSERIAL PRIMARY KEY,
+                resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                 org_id BIGINT NOT NULL,
                 project_id BIGINT,
                 folder_id BIGINT,
@@ -192,6 +242,9 @@ class DashboardRoutesTest {
             it[Dashboards.orgId] = orgId
             it[title] = TEST_DASHBOARD
             it[description] = null
+            if (projectId != null) {
+                it[Dashboards.projectId] = projectId
+            }
             it[createdBy] = 1L
             it[createdAt] = Clock.System.now()
             it[updatedAt] = Clock.System.now()
@@ -209,7 +262,7 @@ class DashboardRoutesTest {
         id: Long = 1L,
         orgId: Long = 1L
     ) = DashboardResponse(
-        id = id, orgId = orgId, projectId = null,
+        id = resourceId(id), orgId = orgId, projectId = null,
         folderId = null, title = TEST_DASHBOARD,
         description = null, layoutType = "grid",
         isDefault = false, isFavorited = false,
@@ -223,7 +276,7 @@ class DashboardRoutesTest {
         id: Long = 1L,
         orgId: Long = 1L
     ) = FolderResponse(
-        id = id,
+        id = resourceId(id),
         orgId = orgId,
         name = "Test Folder",
         color = "#FF0000",
@@ -236,7 +289,7 @@ class DashboardRoutesTest {
         id: Long = 1L,
         dashboardId: Long = 1L
     ) = DashboardAlertResponse(
-        id = id, widgetId = 1L, dashboardId = dashboardId,
+        id = resourceId(id), widgetId = WIDGET_RESOURCE_ID, dashboardId = resourceId(dashboardId),
         name = "Test Alert", condition = "gt",
         threshold = 90.0, metricIndex = 0,
         durationSeconds = 60, alertPriority = null,
@@ -251,15 +304,19 @@ class DashboardRoutesTest {
         id: Long = 1L,
         orgId: Long = 1L
     ) = CustomDataSourceResponse(
-        id = id, orgId = orgId, name = TEST_DS,
+        id = resourceId(id), orgId = orgId, name = TEST_DS,
         description = null, sourceType = "postgresql",
         host = "localhost", port = 5432,
         databaseName = "testdb", extraConfig = emptyMap(),
         enabled = true, createdBy = 1L,
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
+        numericId = id,
         hasCredentials = true
     )
+
+    private fun resourceId(id: Long): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     private fun installRoutes(app: Application) {
         app.installAuth()
@@ -346,6 +403,26 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `POST dashboards returns 400 when create request is rejected`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDashboardService.createDashboard(
+                    orgId.toLong(), userId.toLong(), any()
+                )
+            } throws IllegalArgumentException("Invalid dashboard request")
+            application { installRoutes(this) }
+
+            val r = client.post(DASHBOARDS_PATH) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Rejected"}""")
+            }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(r.bodyAsText().contains("Invalid dashboard request"))
+        }
+
+    @Test
     fun `GET dashboard by id returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
         val dash = makeDashboard(orgId = orgId.toLong())
@@ -382,6 +459,23 @@ class DashboardRoutesTest {
             every {
                 mockDashboardService.getDashboard(
                     99L, orgId.toLong(), any()
+                )
+            } returns null
+            application { installRoutes(this) }
+
+            val r = client.get(DASHBOARDS_99) {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `GET dashboard by id returns 404 when resource id is unresolved`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDashboardService.resolveDashboardId(
+                    MISSING_DASHBOARD_RESOURCE_ID, orgId.toLong()
                 )
             } returns null
             application { installRoutes(this) }
@@ -432,6 +526,26 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `PUT dashboard returns 400 when update request is rejected`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDashboardService.updateDashboard(
+                    1L, orgId.toLong(), any()
+                )
+            } throws IllegalArgumentException("Invalid dashboard request")
+            application { installRoutes(this) }
+
+            val r = client.put(DASHBOARDS_1) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Rejected"}""")
+            }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(r.bodyAsText().contains("Invalid dashboard request"))
+        }
+
+    @Test
     fun `DELETE dashboard returns 204 on success`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
@@ -442,7 +556,7 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/dashboards/1") {
+            val r = client.delete(DASHBOARDS_1) {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
@@ -463,6 +577,43 @@ class DashboardRoutesTest {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `POST dashboard duplicate returns 201`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dash = makeDashboard(id = 2L, orgId = orgId.toLong())
+            every {
+                mockDashboardService.duplicateDashboard(
+                    1L, orgId.toLong(), userId.toLong()
+                )
+            } returns dash
+            application { installRoutes(this) }
+
+            val r = client.post("$DASHBOARDS_1/duplicate") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.Created, r.status)
+            assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
+        }
+
+    @Test
+    fun `POST dashboard default returns 200`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDashboardService.setDefaultDashboard(
+                    1L, orgId.toLong()
+                )
+            } returns true
+            application { installRoutes(this) }
+
+            val r = client.post("$DASHBOARDS_1/default") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains("is_default"))
         }
 
     // ──── Folder management ────
@@ -516,7 +667,7 @@ class DashboardRoutesTest {
             } returns folder
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/folders/1") {
+            val r = client.put("/v1/dashboards/folders/$FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"name":"Renamed"}""")
@@ -535,7 +686,7 @@ class DashboardRoutesTest {
             } returns null
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/folders/99") {
+            val r = client.put("/v1/dashboards/folders/$MISSING_FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(BODY_NAME_X)
@@ -568,7 +719,7 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/dashboards/folders/1") {
+            val r = client.delete("/v1/dashboards/folders/$FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)
@@ -585,7 +736,24 @@ class DashboardRoutesTest {
             } returns false
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/dashboards/folders/99") {
+            val r = client.delete("/v1/dashboards/folders/$MISSING_FOLDER_RESOURCE_ID") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `DELETE folder returns 404 when resource id is unresolved`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDashboardService.resolveFolderId(
+                    MISSING_FOLDER_RESOURCE_ID, orgId.toLong()
+                )
+            } returns null
+            application { installRoutes(this) }
+
+            val r = client.delete("/v1/dashboards/folders/$MISSING_FOLDER_RESOURCE_ID") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
@@ -603,7 +771,7 @@ class DashboardRoutesTest {
         } returns true
         application { installRoutes(this) }
 
-        val r = client.post("/v1/dashboards/1/favorite") {
+        val r = client.post("$DASHBOARDS_1/favorite") {
             withAuth(token(userId, orgId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
@@ -621,10 +789,10 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/1/folder") {
+            val r = client.put("$DASHBOARDS_1/folder") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
-                setBody("""{"folder_id":2}""")
+                setBody("""{"folder_id":"$FOLDER_RESOURCE_ID"}""")
             }
             assertEquals(HttpStatusCode.OK, r.status)
         }
@@ -640,10 +808,43 @@ class DashboardRoutesTest {
             } returns false
             application { installRoutes(this) }
 
-            val r = client.put("/v1/dashboards/99/folder") {
+            val r = client.put("$DASHBOARDS_99/folder") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
-                setBody("""{"folder_id":2}""")
+                setBody("""{"folder_id":"$FOLDER_RESOURCE_ID"}""")
+            }
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `PUT dashboard folder returns 400 when folder id is malformed`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r = client.put("$DASHBOARDS_1/folder") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"folder_id":"not-a-uuid"}""")
+            }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `PUT dashboard folder returns 404 when target folder id is unresolved`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDashboardService.resolveFolderId(
+                    MISSING_FOLDER_RESOURCE_ID, orgId.toLong()
+                )
+            } returns null
+            application { installRoutes(this) }
+
+            val r = client.put("$DASHBOARDS_1/folder") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"folder_id":"$MISSING_FOLDER_RESOURCE_ID"}""")
             }
             assertEquals(HttpStatusCode.NotFound, r.status)
         }
@@ -680,6 +881,227 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `POST query returns 400 when project id is missing`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            application { installRoutes(this) }
+
+            val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/query") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"query_config":{"dataSource":"events"}}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `POST query denies project resource ids outside the current org`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val otherOrgId = seedOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val otherProjectId = seedProject(otherOrgId)
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(otherProjectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"query_config":{"dataSource":"events"}}""")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, r.status)
+        }
+
+    @Test
+    fun `POST query rejects project resource ids outside dashboard scope`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardProjectId = seedProject(orgId)
+            val requestedProjectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong(), projectId = dashboardProjectId)
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(requestedProjectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"query_config":{"dataSource":"events"}}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `POST query executes built in query with resource scoped project id`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource("events") } returns false
+            coEvery {
+                mockQueryEngine.executeQuery(any(), projectId, null, any(), orgId.toLong())
+            } returns listOf(mapOf("count" to JsonPrimitive(2)))
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(projectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "query_config": {"dataSource": "events"},
+                      "time_range": {"from": "now-1h", "to": "now"},
+                      "variables": {"service": "api"}
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains(""""count":2"""))
+        }
+
+    @Test
+    fun `POST query executes custom data source query by resource id`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val sourceName = "custom:$DATA_SOURCE_RESOURCE_ID"
+            val dataSource = makeDataSource(id = 1L, orgId = orgId.toLong())
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
+            every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
+            every { mockDataSourceService.getDataSource(1L, orgId.toLong()) } returns dataSource
+            every {
+                mockDataSourceService.getDecryptedCredentials(1L, orgId.toLong())
+            } returns DataSourceCredentials(username = "user", password = "pass")
+            coEvery {
+                mockDataSourceExecutor.executeQuery(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any()
+                )
+            } returns listOf(mapOf("answer" to JsonPrimitive(42)))
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(projectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "query_config": {
+                        "dataSource": "$sourceName",
+                        "rawQuery": "select 42",
+                        "limit": 25
+                      }
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains(""""answer":42"""))
+        }
+
+    @Test
+    fun `POST query returns 404 when custom data source resource id is unresolved`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val sourceName = "custom:$DATA_SOURCE_RESOURCE_ID"
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
+            every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
+            every {
+                mockDataSourceService.resolveDataSourceId(DATA_SOURCE_RESOURCE_ID, orgId.toLong())
+            } returns null
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(projectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "query_config": {
+                        "dataSource": "$sourceName",
+                        "rawQuery": "select 42"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `POST query returns 400 when custom data source raw query is missing`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val sourceName = "custom:$DATA_SOURCE_RESOURCE_ID"
+            val dataSource = makeDataSource(id = 1L, orgId = orgId.toLong())
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
+            every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
+            every { mockDataSourceService.getDataSource(1L, orgId.toLong()) } returns dataSource
+            every {
+                mockDataSourceService.getDecryptedCredentials(1L, orgId.toLong())
+            } returns DataSourceCredentials(username = "user", password = "pass")
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(projectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "query_config": {
+                        "dataSource": "$sourceName"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(r.bodyAsText().contains("Custom data source queries require a rawQuery"))
+        }
+
+    @Test
     fun `POST batch query normalizes response refs and includes original ref metadata`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
@@ -706,8 +1128,9 @@ class DashboardRoutesTest {
             )
             application { installRoutes(this) }
 
+            val projectResourceIdValue = projectResourceId(projectId)
             val r =
-                client.post("/v1/dashboards/$dashboardId/query/batch?projectId=$projectId") {
+                client.post("/v1/dashboards/${resourceId(dashboardId)}/query/batch?projectId=$projectResourceIdValue") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody(
@@ -731,6 +1154,49 @@ class DashboardRoutesTest {
             assertTrue(body.contains(""""original_ref_id":"RabbitMQ 4.2+""""))
             assertTrue(body.contains(""""query_index":0"""))
             assertTrue(!body.contains(""""RabbitMQ 4.2+":"""))
+        }
+
+    @Test
+    fun `POST batch query skips unresolved custom data source query`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val sourceName = "custom:$MISSING_DATA_SOURCE_RESOURCE_ID"
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
+            every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns MISSING_DATA_SOURCE_RESOURCE_ID
+            every {
+                mockDataSourceService.resolveDataSourceId(MISSING_DATA_SOURCE_RESOURCE_ID, orgId.toLong())
+            } returns null
+            application { installRoutes(this) }
+
+            val projectResourceIdValue = projectResourceId(projectId)
+            val r =
+                client.post("/v1/dashboards/${resourceId(dashboardId)}/query/batch?projectId=$projectResourceIdValue") {
+                    withAuth(token(userId, orgId))
+                    contentType(ContentType.Application.Json)
+                    setBody(
+                        """
+                        {
+                          "queries": [
+                            {
+                              "dataSource": "$sourceName",
+                              "rawQuery": "select 1",
+                              "ref_id": "custom"
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains(""""original_ref_id":"custom""""))
         }
 
     @Test
@@ -793,13 +1259,13 @@ class DashboardRoutesTest {
             every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
             every { mockDataSourceService.listDataSources(orgId.toLong()) } returns listOf(prometheus, loki, redis)
             every {
-                mockDataSourceService.getDecryptedCredentials(prometheus.id, orgId.toLong())
+                mockDataSourceService.getDecryptedCredentials(prometheus.numericId, orgId.toLong())
             } returns DataSourceCredentials(apiKey = "prom-token")
             every {
-                mockDataSourceService.getDecryptedCredentials(loki.id, orgId.toLong())
+                mockDataSourceService.getDecryptedCredentials(loki.numericId, orgId.toLong())
             } returns DataSourceCredentials(apiKey = "loki-token")
             every {
-                mockDataSourceService.getDecryptedCredentials(redis.id, orgId.toLong())
+                mockDataSourceService.getDecryptedCredentials(redis.numericId, orgId.toLong())
             } returns DataSourceCredentials(password = "redis-token")
             coEvery {
                 mockDataSourceExecutor.executeLabelValuesQuery(
@@ -830,7 +1296,7 @@ class DashboardRoutesTest {
             } returns listOf("cache-0")
             application { installRoutes(this) }
 
-            val r = client.post("/v1/dashboards/$dashboardId/variables/resolve") {
+            val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/variables/resolve") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody("""{"job":"api","namespace":"default"}""")
@@ -890,7 +1356,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(
-                "/v1/dashboards/1/export/moneat"
+                "$DASHBOARDS_1/export/moneat"
             ) {
                 withAuth(token(userId, orgId))
             }
@@ -909,7 +1375,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(
-                "/v1/dashboards/99/export/moneat"
+                "$DASHBOARDS_99/export/moneat"
             ) {
                 withAuth(token(userId, orgId))
             }
@@ -929,7 +1395,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r = client.get(
-                "/v1/dashboards/1/export/xml"
+                "$DASHBOARDS_1/export/xml"
             ) {
                 withAuth(token(userId, orgId))
             }
@@ -962,7 +1428,7 @@ class DashboardRoutesTest {
             } returns listOf(alert)
             application { installRoutes(this) }
 
-            val r = client.get("/v1/dashboards/1/alerts") {
+            val r = client.get("$DASHBOARDS_1/alerts") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.OK, r.status)
@@ -982,11 +1448,11 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val body = """
-                {"widget_id":1,"name":"A","condition":"gt",
+                {"widget_id":"$WIDGET_RESOURCE_ID","name":"A","condition":"gt",
                  "threshold":90.0,"metric_index":0,
                  "duration_seconds":60}
             """.trimIndent()
-            val r = client.post("/v1/dashboards/1/alerts") {
+            val r = client.post("$DASHBOARDS_1/alerts") {
                 withAuth(token(userId, orgId))
                 contentType(ContentType.Application.Json)
                 setBody(body)
@@ -1007,7 +1473,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.put("/v1/dashboards/1/alerts/1") {
+                client.put("$DASHBOARDS_1/alerts/$ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
@@ -1022,10 +1488,25 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.put("/v1/dashboards/1/alerts/1") {
+                client.put("$DASHBOARDS_1/alerts/$ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+        }
+
+    @Test
+    fun `PUT dashboard alert returns 400 when alert id is malformed`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            application { installRoutes(this) }
+
+            val r =
+                client.put("$DASHBOARDS_1/alerts/not-a-uuid") {
+                    withAuth(token(userId, orgId))
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"enabled":false}""")
                 }
             assertEquals(HttpStatusCode.BadRequest, r.status)
         }
@@ -1042,7 +1523,27 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.put("/v1/dashboards/1/alerts/99") {
+                client.put("$DASHBOARDS_1/alerts/$MISSING_ALERT_RESOURCE_ID") {
+                    withAuth(token(userId, orgId))
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"enabled":false}""")
+                }
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `PUT dashboard alert returns 404 when alert resource id is unresolved`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockAlertService.resolveAlertId(
+                    MISSING_ALERT_RESOURCE_ID, 1L, orgId.toLong()
+                )
+            } returns null
+            application { installRoutes(this) }
+
+            val r =
+                client.put("$DASHBOARDS_1/alerts/$MISSING_ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
                     setBody("""{"enabled":false}""")
@@ -1062,7 +1563,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.delete("/v1/dashboards/1/alerts/1") {
+                client.delete("$DASHBOARDS_1/alerts/$ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.NoContent, r.status)
@@ -1080,7 +1581,7 @@ class DashboardRoutesTest {
             application { installRoutes(this) }
 
             val r =
-                client.delete("/v1/dashboards/1/alerts/99") {
+                client.delete("$DASHBOARDS_1/alerts/$MISSING_ALERT_RESOURCE_ID") {
                     withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.NotFound, r.status)
@@ -1179,12 +1680,12 @@ class DashboardRoutesTest {
                 client.post("/v1/dashboards/templates/001-1860-node-exporter-full") {
                     withAuth(token(userId, orgId))
                     contentType(ContentType.Application.Json)
-                    setBody("""{"project_id":77,"folder_id":88}""")
+                    setBody("""{"project_id":"project-77","folder_id":"folder-88"}""")
                 }
 
             assertEquals(HttpStatusCode.Created, r.status)
-            assertEquals(77L, requestSlot.captured.projectId)
-            assertEquals(88L, requestSlot.captured.folderId)
+            assertEquals("project-77", requestSlot.captured.projectId)
+            assertEquals("folder-88", requestSlot.captured.folderId)
             assertEquals("Node Exporter Full", requestSlot.captured.title)
             assertTrue(requestSlot.captured.widgets.isNotEmpty())
         }
@@ -1336,6 +1837,77 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `GET custom datasource returns 404 when resource id is unresolved`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            every {
+                mockDataSourceService.resolveDataSourceId(
+                    MISSING_DATA_SOURCE_RESOURCE_ID, orgId.toLong()
+                )
+            } returns null
+            application { installRoutes(this) }
+
+            val r = client.get(DATASOURCES_99) {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.NotFound, r.status)
+        }
+
+    @Test
+    fun `GET custom datasource schema returns 200`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dataSource = makeDataSource(id = 1L, orgId = orgId.toLong())
+            every { mockDataSourceService.getDataSource(1L, orgId.toLong()) } returns dataSource
+            every {
+                mockDataSourceService.getDecryptedCredentials(1L, orgId.toLong())
+            } returns DataSourceCredentials(username = "user", password = "pass")
+            coEvery {
+                mockDataSourceExecutor.getSchema(any(), any(), any(), any(), any())
+            } returns listOf(DataSourceField(name = "events", type = "table"))
+            application { installRoutes(this) }
+
+            val r = client.get("$DATASOURCES_1/schema") {
+                withAuth(token(userId, orgId))
+            }
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(r.bodyAsText().contains("events"))
+        }
+
+    @Test
+    fun `POST custom datasource query returns 400 when executor rejects query`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dataSource = makeDataSource(id = 1L, orgId = orgId.toLong())
+            every { mockDataSourceService.getDataSource(1L, orgId.toLong()) } returns dataSource
+            every {
+                mockDataSourceService.getDecryptedCredentials(1L, orgId.toLong())
+            } returns DataSourceCredentials(username = "user", password = "pass")
+            coEvery {
+                mockDataSourceExecutor.executeQuery(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any()
+                )
+            } throws IllegalArgumentException("bad query")
+            application { installRoutes(this) }
+
+            val r = client.post("$DATASOURCES_1/query") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "data_source_id": "$DATA_SOURCE_RESOURCE_ID",
+                      "query": "bad",
+                      "limit": 10
+                    }
+                    """.trimIndent()
+                )
+            }
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(r.bodyAsText().contains("bad query"))
+        }
+
+    @Test
     fun `PUT custom datasource returns 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
@@ -1385,7 +1957,7 @@ class DashboardRoutesTest {
             } returns true
             application { installRoutes(this) }
 
-            val r = client.delete("/v1/datasources/1") {
+            val r = client.delete(DATASOURCES_1) {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NoContent, r.status)

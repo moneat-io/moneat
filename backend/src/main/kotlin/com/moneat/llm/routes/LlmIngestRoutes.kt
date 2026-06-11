@@ -52,7 +52,7 @@ fun Route.llmIngestRoutes() {
                     .propertyOrNull("llm.queueKey")
                     ?.getString()
                     ?: "moneat:llm:queue"
-            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolve)
+            val projectId = call.parameters["projectId"]?.let(projectIdResolver::resolveProtocolId)
             if (projectId == null) {
                 call.respond(HttpStatusCode.BadRequest, "Invalid project ID")
                 return@post
