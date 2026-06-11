@@ -176,6 +176,7 @@ services:
       - "${FRONTEND_PORT:-3000}:80"
     environment:
       VITE_BACKEND_URL: ${BACKEND_URL:-http://localhost:8080}
+      VITE_MONEAT_VERSION: ${MONEAT_VERSION:-}
     depends_on:
       backend:
         condition: service_healthy

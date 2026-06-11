@@ -70,7 +70,7 @@ interface ServiceSettingsCardProps {
 }
 
 /**
- * Editing surface for a single service, shared by the Configuration page and the
+ * Editing surface for a single service, shared by the Setup page and the
  * legacy /projects/$projectId/settings route. Sections are gated by the service's
  * enabled telemetry sources: Sentry slug/CLI/DSN-targets only with the Sentry SDK
  * source; short OTLP/Datadog pointers with those sources. General + Danger always.
@@ -465,7 +465,7 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
             Send telemetry with the resource attribute <code className="font-mono text-[11px]">service.name</code> set
             to this service.
           </p>
-          <Link to="/projects/$projectId" params={{projectId: serviceId}}>
+          <Link to="/setup" search={{tab: 'services', service: serviceId}}>
             <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
               <ExternalLink className="h-3.5 w-3.5" />
               View ingestion setup
@@ -479,7 +479,7 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
           <p className="text-xs text-muted-foreground">
             Point a compatible agent at Moneat and tag it with this service.
           </p>
-          <Link to="/projects/$projectId" params={{projectId: serviceId}}>
+          <Link to="/setup" search={{tab: 'services', service: serviceId}}>
             <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
               <ExternalLink className="h-3.5 w-3.5" />
               View ingestion setup

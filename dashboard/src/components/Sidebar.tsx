@@ -32,7 +32,6 @@ import {
     BookOpen,
     Boxes,
     Brain,
-    HelpCircle,
     ChevronLeft,
     ChevronRight,
     Flag,
@@ -46,7 +45,6 @@ import {
     MessageSquare,
     Package,
     Play,
-    Rocket,
     ScrollText,
     Search,
     Settings,
@@ -80,7 +78,6 @@ import {
   serializeTelemetrySourceIds,
   storeTelemetrySourceIdsForService,
 } from '@/lib/telemetry-sources'
-import {primaryServiceResourceId} from '@/lib/service-facet-scope'
 
 export const SIDEBAR_COLLAPSED_WIDTH = 56
 export const SIDEBAR_EXPANDED_WIDTH = 176
@@ -119,13 +116,6 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     enabled: api.isAuthenticated(),
   })
 
-  const { data: projects } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => api.getProjects(),
-    enabled: api.isAuthenticated(),
-  })
-  const primaryServiceId = primaryServiceResourceId(projects)
-
   const createServiceMutation = useMutation({
     mutationFn: (data: ServiceSetupSubmission) =>
       api.createProject(data.name, data.framework, data.targets),
@@ -138,9 +128,11 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       resetCreateForm()
       navigate({
-        to: '/projects/$projectId',
-        params: { projectId: service.id },
-        search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
+        to: '/setup',
+        search: {
+          tab: 'services',
+          service: service.id,
+        },
       })
     },
     onError: (error: Error) => {
@@ -263,7 +255,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
     { key: 'workflows', icon: Workflow, label: 'Workflows', href: '/workflows', requiresProject: false, group: 'operations' },
     { key: 'analytics', icon: BarChart3, label: 'Analytics', href: '/analytics', requiresProject: false, group: 'analytics' },
     // Management
-    { key: 'configuration', icon: SlidersHorizontal, label: 'Configuration', href: '/configuration', requiresProject: false, group: 'management' },
+    { key: 'setup', icon: SlidersHorizontal, label: 'Setup', href: '/setup', requiresProject: false, group: 'management' },
     ...adminNavItems,
   ]
 
@@ -440,38 +432,22 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <p>Theme</p>
               </TooltipContent>
             </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href="/docs/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Source setup and docs"
+                  title="Docs"
                 >
-                  <HelpCircle className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (primaryServiceId) {
-                      navigate({to: `/projects/${primaryServiceId}`})
-                      return
-                    }
-
-                    navigate({to: '/', search: APP_OVERVIEW_SEARCH})
-                  }}
-                >
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Source setup
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/docs/" target="_blank" rel="noopener noreferrer">
-                    <BookOpen className="h-4 w-4 mr-2" />
-                    Docs
-                  </a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <BookOpen className="h-3.5 w-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Docs</p>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -490,11 +466,11 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
             <div className="ml-auto shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <Avatar className="h-5 w-5">
+                  <button
+                    type="button"
+                    className="flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring"
+                  >
+                    <Avatar className="h-5 w-5">
                       <AvatarFallback className="bg-primary text-primary-foreground text-[8px]">
                         {getInitials(user?.name)}
                       </AvatarFallback>
@@ -502,17 +478,17 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side="right" className="w-48">
-            <DropdownMenuItem onClick={() => navigate({to: '/settings', search: {tab: 'api-keys'}})}>
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={async () => { await api.logout(); window.location.href = '/login' }}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+                  <DropdownMenuItem onClick={() => navigate({to: '/settings', search: {tab: 'api-keys'}})}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={async () => { await api.logout(); globalThis.window.location.href = '/login' }}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         ) : (
@@ -527,38 +503,22 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <p>Theme</p>
               </TooltipContent>
             </Tooltip>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <a
+                  href="/docs/"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex w-full items-center justify-center rounded-md py-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Source setup and docs"
+                  title="Docs"
                 >
-                  <HelpCircle className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="right" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (primaryServiceId) {
-                      navigate({to: `/projects/${primaryServiceId}`})
-                      return
-                    }
-
-                    navigate({to: '/', search: APP_OVERVIEW_SEARCH})
-                  }}
-                >
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Source setup
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/docs/" target="_blank" rel="noopener noreferrer">
-                    <BookOpen className="h-4 w-4 mr-2" />
-                    Docs
-                  </a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <BookOpen className="h-3.5 w-3.5" />
+                </a>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Docs</p>
+              </TooltipContent>
+            </Tooltip>
             <Button
               variant="ghost"
               size="icon"

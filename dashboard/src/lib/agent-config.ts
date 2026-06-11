@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 // Single source of truth for the infrastructure agent configuration the dashboard
-// generates. The Configuration page's guided builder and the host inventory's
+// generates. The Setup page's guided builder and the host inventory's
 // "Add host" dialog both render artifacts from these functions so the two surfaces
 // never drift. The agent is Datadog-compatible: a stock agent pointed at Moneat's
 // intake, the same way the SDK path is Sentry-compatible.

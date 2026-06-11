@@ -84,7 +84,7 @@ describe('ResourceCatalog', () => {
 
     await user.click(screen.getByRole('button', {name: /Configure/}))
     const cloudSetupLink = screen.getByRole('link', {name: /Cloud accounts/})
-    expect(cloudSetupLink).toHaveAttribute('href', '/configuration')
+    expect(cloudSetupLink).toHaveAttribute('href', '/setup')
     await user.click(cloudSetupLink)
     await waitFor(() => expect(screen.queryByRole('dialog', {name: 'Set up monitoring'})).not.toBeInTheDocument())
 

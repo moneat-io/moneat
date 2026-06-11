@@ -31,7 +31,7 @@ import {
   type TelemetrySourceId,
 } from '@/lib/telemetry-sources'
 
-// Creation is owned by the sidebar's shared dialog — Configuration just opens it.
+// Creation is owned by the sidebar's shared dialog — Setup just opens it.
 function openCreateServiceDialog() {
   globalThis.dispatchEvent(new CustomEvent('open-create-service-dialog'))
 }
@@ -42,7 +42,11 @@ function loadSourcesForService(serviceId: string | null): TelemetrySourceId[] {
   return stored.length > 0 ? stored : DEFAULT_SELECTED_TELEMETRY_SOURCE_IDS
 }
 
-export function ServicesAndSdksSetup() {
+interface ServicesAndSdksSetupProps {
+  readonly selectedServiceId?: string
+}
+
+export function ServicesAndSdksSetup({selectedServiceId}: ServicesAndSdksSetupProps) {
   const {data: services, isLoading} = useQuery({
     queryKey: ['projects'],
     queryFn: () => api.getProjects(),
@@ -54,9 +58,10 @@ export function ServicesAndSdksSetup() {
   const selectedId = useMemo(() => {
     if (!services || services.length === 0) return null
     const ids = services.map((service) => service.id)
-    if (chosenId && ids.includes(chosenId)) return chosenId
+    const requestedId = chosenId ?? selectedServiceId
+    if (requestedId && ids.includes(requestedId)) return requestedId
     return services[0].id
-  }, [services, chosenId])
+  }, [services, chosenId, selectedServiceId])
 
   // Telemetry-source selection for the chosen service, persisted to localStorage.
   // Reload (without an effect) whenever the selected service changes.

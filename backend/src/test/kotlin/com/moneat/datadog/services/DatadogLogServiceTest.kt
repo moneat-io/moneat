@@ -200,6 +200,22 @@ class DatadogLogServiceTest {
     }
 
     @Test
+    fun `mapDdLogs mirrors Datadog version tag to service version resource attribute`() {
+        val entries = listOf(
+            DatadogLogEntry(
+                message = "test",
+                status = "info",
+                ddtags = "env:production,version:2.0"
+            )
+        )
+
+        val batch = DatadogLogService.mapDdLogs(1L, entries)
+
+        assertEquals("2.0", batch.logs[0].tags["version"])
+        assertEquals("2.0", batch.logs[0].resourceAttributes["service.version"])
+    }
+
+    @Test
     fun `mapDdLogs uses provided timestamp`() {
         val ts = 1700000000000L
         val entries = listOf(

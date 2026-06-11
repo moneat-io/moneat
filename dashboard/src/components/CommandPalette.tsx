@@ -441,7 +441,7 @@ export function CommandPalette() {
                       onSelect={() => {
                         setIsOpen(false)
                         setSearch('')
-                        navigate({to: '/projects/$projectId', params: {projectId: p.id}})
+                        navigate({to: '/services/$service', params: {service: p.id}})
                       }}
                     >
                       <Folder className="mr-2 h-4 w-4" />
