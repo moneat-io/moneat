@@ -16,7 +16,6 @@
 
 package com.moneat.events.services
 
-import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.repositories.EventRepositoryImpl
@@ -29,23 +28,13 @@ import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
-import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.suspendRunCatching
 import io.sentry.Sentry
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.isActive
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.Base64
 
 private val logger = KotlinLogging.logger {}
-private const val ERROR_DELAY_MS = 1000L
 
 /**
  * Background worker that drains the ingestion queue (Redis list),
@@ -62,8 +51,6 @@ class IngestionWorker(
     },
 ) {
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
     private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
@@ -100,35 +87,6 @@ class IngestionWorker(
             "IngestionWorker stopped",
             emptyMap()
         )
-    }
-
-    private suspend fun runWorker(workerId: Int) {
-        val conn = RedisConfig.newBlockingConnection()
-        try {
-            val redis = conn.sync()
-            while (scope.isActive) {
-                try {
-                    // BRPOP block with 5s timeout so we can check isActive periodically
-                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                    val value = result?.value ?: continue
-                    processMessageForTest(workerId, value) { message ->
-                        RedisConfig.sync().rpush(dlqKey, message)
-                    }
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: SerializationException) {
-                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
-                } catch (e: IOException) {
-                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
-                } catch (e: IllegalStateException) {
-                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
-                } catch (e: IllegalArgumentException) {
-                    brpopLoopBackoff(logger, workerId, "Event", ERROR_DELAY_MS, e)
-                }
-            }
-        } finally {
-            RedisConfig.closeBlockingConnection(conn)
-        }
     }
 
     internal suspend fun processMessageForTest(

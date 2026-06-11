@@ -44,8 +44,15 @@ enum class MoneatProcessRole {
 }
 
 object RuntimeMode {
+    @Volatile
+    private var cachedRole: MoneatProcessRole? = null
+
     fun role(): MoneatProcessRole =
-        MoneatProcessRole.from(EnvConfig.get("MONEAT_PROCESS_ROLE"))
+        cachedRole ?: synchronized(this) {
+            cachedRole ?: MoneatProcessRole.from(EnvConfig.get(PROCESS_ROLE_ENV)).also { parsedRole ->
+                cachedRole = parsedRole
+            }
+        }
 
     fun servesApi(): Boolean =
         role() == MoneatProcessRole.ALL || role() == MoneatProcessRole.API
@@ -61,4 +68,10 @@ object RuntimeMode {
 
     fun shouldStartPipeline(pipeline: IngestionPipeline): Boolean =
         startsIngestionWorkers() && IngestionQueueSettings.isSelected(pipeline)
+
+    internal fun resetCachedRoleForTest() {
+        cachedRole = null
+    }
+
+    const val PROCESS_ROLE_ENV = "MONEAT_PROCESS_ROLE"
 }

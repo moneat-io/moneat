@@ -16,7 +16,6 @@
 
 package com.moneat.logs.services
 
-import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.ingestion.queue.IngestionDlqRequest
 import com.moneat.ingestion.queue.IngestionPipeline
@@ -25,22 +24,12 @@ import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.monitoring.OperationalMetrics
-import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.suspendRunCatching
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.isActive
-import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
-import java.io.IOException
 import kotlin.random.Random
 
 private val logger = KotlinLogging.logger {}
 private const val FULL_SAMPLING_RATE = 1.0f
-private const val ERROR_DELAY_MS = 1000L
 
 class LogIngestionWorker(
     private val queueKey: String,
@@ -50,8 +39,6 @@ class LogIngestionWorker(
     private val logIndexService: LogIndexService = LogIndexService(),
     private val logManagementService: LogManagementService = LogManagementService(),
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
     private val filterEvaluator = LogEntryFilterEvaluator()
     private var queueWorker: RedisQueueWorker? = null
 
@@ -76,32 +63,6 @@ class LogIngestionWorker(
     fun stop() {
         queueWorker?.stop()
         logger.info { "LogIngestionWorker stopped" }
-    }
-
-    private suspend fun runWorker(workerId: Int) {
-        val conn = RedisConfig.newBlockingConnection()
-        try {
-            val redis = conn.sync()
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                    val payload = result?.value ?: continue
-                    processMessageForTest(workerId, payload)
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: SerializationException) {
-                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
-                } catch (e: IOException) {
-                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
-                } catch (e: IllegalStateException) {
-                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
-                } catch (e: IllegalArgumentException) {
-                    brpopLoopBackoff(logger, workerId, "Log", ERROR_DELAY_MS, e)
-                }
-            }
-        } finally {
-            RedisConfig.closeBlockingConnection(conn)
-        }
     }
 
     internal suspend fun processMessageForTest(

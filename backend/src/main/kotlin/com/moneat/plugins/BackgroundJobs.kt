@@ -65,6 +65,7 @@ import kotlin.time.Duration.Companion.hours
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
+private const val DEFAULT_PULSE_INTERVAL_HOURS = 4
 private const val WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 30L
 private const val WORKFLOW_WORKER_MODE_CONFIG = "workflows.workerMode"
 
@@ -298,7 +299,7 @@ private fun Application.startPulseIfEnabled(
             .propertyOrNull("pulse.intervalHours")
             ?.getString()
             ?.toIntOrNull()
-            ?.takeIf { it > 0 } ?: DEFAULT_WORKER_THREADS
+            ?.takeIf { it > 0 } ?: DEFAULT_PULSE_INTERVAL_HOURS
     return PulseService(interval = telemetryIntervalHours.hours).also {
         logger.info { "Telemetry pulse enabled for self-hosted deployment" }
         it.start(jobScope)

@@ -16,24 +16,15 @@
 
 package com.moneat.otlp.services
 
-import com.moneat.config.BRPOP_TIMEOUT_SECONDS
-import com.moneat.config.RedisConfig
 import com.moneat.ingestion.queue.IngestionDlqRequest
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
-import com.moneat.utils.suspendRunCatching
 import io.lettuce.core.RedisException
-import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
@@ -54,8 +45,6 @@ abstract class OtlpIngestionWorkerBase(
         require(workerCount > 0) { "workerCount must be > 0" }
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
     private val queueSpec = IngestionQueueSettings.spec(pipeline, queueKey, dlqKey, workerCount)
     private var queueWorker: RedisQueueWorker? = null
 
@@ -63,7 +52,7 @@ abstract class OtlpIngestionWorkerBase(
         logger.info {
             "Starting $workerName with $workerCount workers, queue=$queueKey"
         }
-        queueWorker = RedisQueueWorker(queueSpec, logger, ::processBrpopPayload)
+        queueWorker = RedisQueueWorker(queueSpec, logger, ::processQueuePayload)
             .also { it.start() }
     }
 
@@ -72,60 +61,7 @@ abstract class OtlpIngestionWorkerBase(
         logger.info { "$workerName stopped" }
     }
 
-    private suspend fun runWorker(workerId: Int) {
-        var conn: StatefulRedisConnection<String, String>? = null
-        try {
-            while (scope.isActive) {
-                when (val outcome = runBrpopIteration(workerId, conn)) {
-                    is BrpopIterationOutcome.Break -> break
-                    is BrpopIterationOutcome.Continue -> {
-                        conn = outcome.connection
-                    }
-                }
-            }
-        } finally {
-            conn?.let { disposeRedisConnection(workerId, it) }
-        }
-    }
-
-    private sealed class BrpopIterationOutcome {
-        data class Continue(val connection: StatefulRedisConnection<String, String>?) : BrpopIterationOutcome()
-        data object Break : BrpopIterationOutcome()
-    }
-
-    private suspend fun runBrpopIteration(
-        workerId: Int,
-        conn: StatefulRedisConnection<String, String>?,
-    ): BrpopIterationOutcome {
-        var activeConn = conn
-        return try {
-            if (activeConn == null || !activeConn.isOpen) {
-                activeConn?.let { disposeRedisConnection(workerId, it) }
-                activeConn = RedisConfig.newStatefulBlockingConnection()
-            }
-            val redis = activeConn.sync()
-            val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-            val payload = result?.value ?: return BrpopIterationOutcome.Continue(activeConn)
-            processBrpopPayload(workerId, payload)
-            BrpopIterationOutcome.Continue(activeConn)
-        } catch (e: CancellationException) {
-            BrpopIterationOutcome.Break
-        } catch (e: RedisException) {
-            onOtlpBrpopLoopFailure(workerId, e, activeConn) { c ->
-                disposeRedisConnection(workerId, c)
-                activeConn = null
-            }
-            BrpopIterationOutcome.Continue(activeConn)
-        } catch (e: IOException) {
-            onOtlpBrpopLoopFailure(workerId, e, activeConn) { c ->
-                disposeRedisConnection(workerId, c)
-                activeConn = null
-            }
-            BrpopIterationOutcome.Continue(activeConn)
-        }
-    }
-
-    private suspend fun processBrpopPayload(workerId: Int, payload: String) {
+    internal suspend fun processQueuePayload(workerId: Int, payload: String) {
         try {
             processMessage(workerId, payload)
             OperationalMetrics.recordWorkerMessageProcessed("OTLP $workerLabel", workerId)
@@ -155,26 +91,6 @@ abstract class OtlpIngestionWorkerBase(
         }
         OperationalMetrics.recordWorkerProcessingFailure("OTLP $workerLabel", workerId, proc)
         delay(ERROR_RETRY_DELAY_MS)
-    }
-
-    private suspend fun onOtlpBrpopLoopFailure(
-        workerId: Int,
-        e: Throwable,
-        connection: StatefulRedisConnection<String, String>?,
-        resetConnection: (StatefulRedisConnection<String, String>) -> Unit,
-    ) {
-        logger.error(e) { "OTLP $workerLabel worker $workerId error in BRPOP loop" }
-        OperationalMetrics.recordWorkerBrpopFailure("OTLP $workerLabel", workerId, e)
-        connection?.let(resetConnection)
-        delay(ERROR_RETRY_DELAY_MS)
-    }
-
-    private fun disposeRedisConnection(workerId: Int, c: StatefulRedisConnection<String, String>) {
-        suspendRunCatching {
-            RedisConfig.closeBlockingConnection(c)
-        }.getOrElse { e ->
-            logger.warn(e) { "Failed to close Redis connection for OTLP worker $workerId" }
-        }
     }
 
     protected abstract suspend fun processMessage(workerId: Int, payload: String)

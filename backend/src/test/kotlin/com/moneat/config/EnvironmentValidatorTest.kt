@@ -71,6 +71,15 @@ class EnvironmentValidatorTest {
     }
 
     @Test
+    fun `validate reports invalid process role`() {
+        withSystemProperty("MONEAT_PROCESS_ROLE", "web") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("MONEAT_PROCESS_ROLE") })
+        }
+    }
+
+    @Test
     fun `validate checks critical secrets`() {
         val validator = EnvironmentValidator()
         val result = validator.validate()

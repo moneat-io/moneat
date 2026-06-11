@@ -293,7 +293,15 @@ class RedisQueueWorker(
         }
 
     private fun consumerName(workerId: Int): String =
-        "${spec.pipeline.id}-${java.net.InetAddress.getLocalHost().hostName}-$workerId"
+        "${spec.pipeline.id}-${resolveHostName()}-$workerId"
+
+    private fun resolveHostName(): String =
+        runCatching { java.net.InetAddress.getLocalHost().hostName }
+            .getOrElse { UNKNOWN_HOST }
+
+    companion object {
+        private const val UNKNOWN_HOST = "unknown-host"
+    }
 
     private suspend fun <T> withClickHouseDeduplication(
         messages: List<QueuedIngestionMessage>,

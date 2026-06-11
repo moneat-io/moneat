@@ -16,6 +16,8 @@
 
 package com.moneat.config
 
+import com.moneat.runtime.MoneatProcessRole
+import com.moneat.runtime.RuntimeMode
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -145,7 +147,17 @@ class EnvironmentValidator {
             }
         }
 
+        validateProcessRole(errors)
         validateWorkflowRuntimeConfig(errors)
+    }
+
+    private fun validateProcessRole(errors: MutableList<String>) {
+        val configuredRole = getConfigValue(RuntimeMode.PROCESS_ROLE_ENV)
+        try {
+            MoneatProcessRole.from(configuredRole)
+        } catch (e: IllegalArgumentException) {
+            errors.add("REQUIRED: ${e.message}")
+        }
     }
 
     private fun validateWorkflowRuntimeConfig(errors: MutableList<String>) {

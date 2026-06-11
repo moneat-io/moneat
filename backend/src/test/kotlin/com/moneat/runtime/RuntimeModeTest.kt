@@ -22,12 +22,19 @@ import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RuntimeModeTest {
+    @BeforeTest
+    fun resetCachedRole() {
+        RuntimeMode.resetCachedRoleForTest()
+    }
+
     @AfterTest
     fun resetEnvConfigMock() {
+        RuntimeMode.resetCachedRoleForTest()
         unmockkObject(EnvConfig)
     }
 

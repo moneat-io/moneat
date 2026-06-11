@@ -18,12 +18,7 @@ package com.moneat.otlp.services
 
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.monitoring.OperationalMetrics
-import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.runBlocking
-import kotlin.reflect.KFunction
-import kotlin.reflect.full.callSuspend
-import kotlin.reflect.full.declaredFunctions
-import kotlin.reflect.jvm.isAccessible
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -145,8 +140,8 @@ class OtlpIngestionWorkerBaseTest {
         val failingWorker = FailingOtlpIngestionWorker()
 
         runBlocking {
-            processBrpopPayloadFunction.callSuspend(successWorker, 1, "{}")
-            processBrpopPayloadFunction.callSuspend(failingWorker, 2, "{}")
+            successWorker.processQueuePayload(1, "{}")
+            failingWorker.processQueuePayload(2, "{}")
         }
 
         val rendered = OperationalMetrics.scrape()
@@ -157,41 +152,5 @@ class OtlpIngestionWorkerBaseTest {
         assertContains(rendered, "worker=\"OTLP failing\"")
         assertContains(rendered, "worker_id=\"2\"")
         assertContains(rendered, "exception=\"IllegalStateException\"")
-    }
-
-    @Test
-    fun `base brpop loop failure records metrics`() {
-        val worker =
-            NoOpOtlpIngestionWorker(
-                "test:otlp:noop:queue",
-                "test:otlp:noop:dlq",
-                1,
-            )
-
-        runBlocking {
-            onOtlpBrpopLoopFailureFunction.callSuspend(
-                worker,
-                3,
-                IllegalStateException("redis down"),
-                null,
-                { _: StatefulRedisConnection<String, String> -> },
-            )
-        }
-
-        val rendered = OperationalMetrics.scrape()
-        assertContains(rendered, "moneat_worker_brpop_failures_total")
-        assertContains(rendered, "worker=\"OTLP noop\"")
-        assertContains(rendered, "worker_id=\"3\"")
-        assertContains(rendered, "exception=\"IllegalStateException\"")
-    }
-
-    private companion object {
-        private val processBrpopPayloadFunction = privateBaseFunction("processBrpopPayload")
-        private val onOtlpBrpopLoopFailureFunction = privateBaseFunction("onOtlpBrpopLoopFailure")
-
-        private fun privateBaseFunction(name: String): KFunction<*> =
-            OtlpIngestionWorkerBase::class.declaredFunctions
-                .single { it.name == name }
-                .also { it.isAccessible = true }
     }
 }

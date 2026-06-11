@@ -30,13 +30,6 @@ import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.lettuce.core.RedisException
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
@@ -53,8 +46,6 @@ class AnalyticsIngestionWorker(
     private val dlqKey: String = DLQ_KEY,
     private val workerCount: Int = DEFAULT_WORKER_COUNT,
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
     private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
@@ -80,34 +71,6 @@ class AnalyticsIngestionWorker(
         logger.info { "AnalyticsIngestionWorker stopped" }
     }
 
-    private suspend fun runWorker(workerId: Int) {
-        val conn = RedisConfig.newBlockingConnection()
-        try {
-            val redis = conn.sync()
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(
-                        BRPOP_TIMEOUT,
-                        queueKey
-                    )
-                    val value = result?.value ?: continue
-                    processMessage(workerId, value)
-                } catch (_: CancellationException) {
-                    break
-                } catch (e: RedisException) {
-                    logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
-                    OperationalMetrics.recordWorkerBrpopFailure("Analytics", workerId, e)
-                    delay(ERROR_BACKOFF_MS)
-                } catch (e: IOException) {
-                    logger.error(e) { "Analytics worker $workerId error in BRPOP loop" }
-                    OperationalMetrics.recordWorkerBrpopFailure("Analytics", workerId, e)
-                    delay(ERROR_BACKOFF_MS)
-                }
-            }
-        } finally {
-            RedisConfig.closeBlockingConnection(conn)
-        }
-    }
     internal suspend fun processMessage(
         workerId: Int,
         value: String,
@@ -203,8 +166,6 @@ class AnalyticsIngestionWorker(
         const val DLQ_KEY = "moneat:analytics:dlq"
         const val REALTIME_KEY_PREFIX = "moneat:analytics:realtime:"
         private const val DEFAULT_WORKER_COUNT = 2
-        private const val BRPOP_TIMEOUT = 5L
-        private const val ERROR_BACKOFF_MS = 1000L
         private const val ERROR_BODY_MAX_LENGTH = 500
 
         fun escapeCH(s: String): String = ClickHouseSqlUtils.escapeSql(s)
