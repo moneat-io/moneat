@@ -242,7 +242,7 @@ const SETUP_OPTIONS: {
   {icon: Cloud, title: 'Cloud accounts', desc: 'Connect AWS, Google Cloud, or Azure agentlessly.', tab: 'cloud'},
 ]
 
-/** Onboarding entry point: routes to the guided setup on the Configuration page. */
+/** Onboarding entry point: routes to the guided setup on the Setup page. */
 function ConfigureDialog() {
   const [open, setOpen] = useState(false)
   return (
@@ -255,7 +255,7 @@ function ConfigureDialog() {
           <DialogHeader>
             <DialogTitle>Set up monitoring</DialogTitle>
             <DialogDescription>
-              Pick what to connect — each opens the guided setup on the Configuration page.
+              Pick what to connect — each opens the guided setup on the Setup page.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -264,7 +264,7 @@ function ConfigureDialog() {
               return (
                 <Link
                   key={option.title}
-                  to="/configuration"
+                  to="/setup"
                   search={{tab: option.tab}}
                   onClick={() => setOpen(false)}
                   className={SETUP_ROW_CLASS}

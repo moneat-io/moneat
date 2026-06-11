@@ -31,6 +31,8 @@ private const val LOG_QUEUE_KEY = "moneat:logs:queue"
 private const val DEFAULT_LOG_LEVEL = "info"
 private const val TAG_CATEGORY = "category"
 private const val TAG_DD_SOURCE = "ddsource"
+private const val TAG_VERSION = "version"
+private const val RESOURCE_SERVICE_VERSION = "service.version"
 
 object DatadogLogService {
 
@@ -50,6 +52,7 @@ object DatadogLogService {
             }
             val classification = LogLineClassifier.classify(entry.message)
             addClassificationTags(tags, classification)
+            val resourceAttributes = serviceVersionResourceAttributes(tags)
 
             QueuedLogEntry(
                 logId = UUID.randomUUID().toString(),
@@ -67,7 +70,8 @@ object DatadogLogService {
                 containerImage = "",
                 traceId = "",
                 spanId = "",
-                tags = tags
+                tags = tags,
+                resourceAttributes = resourceAttributes
             )
         }
 
@@ -134,5 +138,13 @@ object DatadogLogService {
                 tags[key] = value
             }
         }
+    }
+
+    private fun serviceVersionResourceAttributes(tags: Map<String, String>): Map<String, String> {
+        val serviceVersion = tags[RESOURCE_SERVICE_VERSION]
+            ?.takeIf { it.isNotBlank() }
+            ?: tags[TAG_VERSION]?.takeIf { it.isNotBlank() }
+
+        return serviceVersion?.let { mapOf(RESOURCE_SERVICE_VERSION to it) } ?: emptyMap()
     }
 }

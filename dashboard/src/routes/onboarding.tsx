@@ -237,9 +237,11 @@ function OnboardingPage() {
       })
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       navigate({
-        to: '/projects/$projectId',
-        params: { projectId: service.id },
-        search: { sources: serializeTelemetrySourceIds(submission.sourceIds) },
+        to: '/setup',
+        search: {
+          tab: 'services',
+          service: service.id,
+        },
       })
     },
     onError: (error: Error) => {

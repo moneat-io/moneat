@@ -19,6 +19,7 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SyntheticsRouteImport } from './routes/synthetics'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SignozAlternativeRouteImport } from './routes/signoz-alternative'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionReplayRouteImport } from './routes/session-replay'
 import { Route as ServicesRouteImport } from './routes/services'
@@ -57,7 +58,6 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as DatadogAlternativeRouteImport } from './routes/datadog-alternative'
 import { Route as DashboardsRouteImport } from './routes/dashboards'
 import { Route as CustomDashboardsRouteImport } from './routes/custom-dashboards'
-import { Route as ConfigurationRouteImport } from './routes/configuration'
 import { Route as CompareRouteImport } from './routes/compare'
 import { Route as BlogRouteImport } from './routes/blog'
 import { Route as BetterStackAlternativeRouteImport } from './routes/better-stack-alternative'
@@ -99,7 +99,6 @@ import { Route as SecurityComplianceRouteImport } from './routes/security.compli
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ReplaysReplayIdRouteImport } from './routes/replays.$replayId'
 import { Route as ReleasesVersionRouteImport } from './routes/releases.$version'
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects.$projectId'
 import { Route as ProfilesProfileIdRouteImport } from './routes/profiles.$profileId'
 import { Route as PerformanceTracesRouteImport } from './routes/performance.traces'
 import { Route as PerformanceServiceMapRouteImport } from './routes/performance.service-map'
@@ -209,6 +208,11 @@ const SignupRoute = SignupRouteImport.update({
 const SignozAlternativeRoute = SignozAlternativeRouteImport.update({
   id: '/signoz-alternative',
   path: '/signoz-alternative',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -400,11 +404,6 @@ const DashboardsRoute = DashboardsRouteImport.update({
 const CustomDashboardsRoute = CustomDashboardsRouteImport.update({
   id: '/custom-dashboards',
   path: '/custom-dashboards',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ConfigurationRoute = ConfigurationRouteImport.update({
-  id: '/configuration',
-  path: '/configuration',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompareRoute = CompareRouteImport.update({
@@ -611,11 +610,6 @@ const ReleasesVersionRoute = ReleasesVersionRouteImport.update({
   id: '/$version',
   path: '/$version',
   getParentRoute: () => ReleasesRoute,
-} as any)
-const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
-  id: '/$projectId',
-  path: '/$projectId',
-  getParentRoute: () => ProjectsRoute,
 } as any)
 const ProfilesProfileIdRoute = ProfilesProfileIdRouteImport.update({
   id: '/$profileId',
@@ -843,9 +837,9 @@ const MonitoringHostsIndexRoute = MonitoringHostsIndexRouteImport.update({
 } as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
-    getParentRoute: () => ProjectsProjectIdRoute,
+    id: '/$projectId/settings',
+    path: '/$projectId/settings',
+    getParentRoute: () => ProjectsRoute,
   } as any)
 const ProfilesServiceServiceRoute = ProfilesServiceServiceRouteImport.update({
   id: '/service/$service',
@@ -926,9 +920,9 @@ const ServicesServiceResourcesResourceRoute =
   } as any)
 const ProjectsProjectIdSpansSpanIdRoute =
   ProjectsProjectIdSpansSpanIdRouteImport.update({
-    id: '/spans/$spanId',
-    path: '/spans/$spanId',
-    getParentRoute: () => ProjectsProjectIdRoute,
+    id: '/$projectId/spans/$spanId',
+    path: '/$projectId/spans/$spanId',
+    getParentRoute: () => ProjectsRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -942,7 +936,6 @@ export interface FileRoutesByFullPath {
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
   '/compare': typeof CompareRoute
-  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
@@ -981,6 +974,7 @@ export interface FileRoutesByFullPath {
   '/services': typeof ServicesRouteWithChildren
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
@@ -1032,7 +1026,6 @@ export interface FileRoutesByFullPath {
   '/performance/service-map': typeof PerformanceServiceMapRoute
   '/performance/traces': typeof PerformanceTracesRouteWithChildren
   '/profiles/$profileId': typeof ProfilesProfileIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
@@ -1091,7 +1084,6 @@ export interface FileRoutesByTo {
   '/alerting': typeof AlertingRoute
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/compare': typeof CompareRoute
-  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/datadog-alternative': typeof DatadogAlternativeRoute
   '/demo': typeof DemoRoute
@@ -1121,6 +1113,7 @@ export interface FileRoutesByTo {
   '/sentry-alternative': typeof SentryAlternativeRoute
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
   '/signup': typeof SignupRoute
   '/terms': typeof TermsRoute
@@ -1169,7 +1162,6 @@ export interface FileRoutesByTo {
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/performance/service-map': typeof PerformanceServiceMapRoute
   '/profiles/$profileId': typeof ProfilesProfileIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
@@ -1233,7 +1225,6 @@ export interface FileRoutesById {
   '/better-stack-alternative': typeof BetterStackAlternativeRoute
   '/blog': typeof BlogRouteWithChildren
   '/compare': typeof CompareRoute
-  '/configuration': typeof ConfigurationRoute
   '/custom-dashboards': typeof CustomDashboardsRoute
   '/dashboards': typeof DashboardsRouteWithChildren
   '/datadog-alternative': typeof DatadogAlternativeRoute
@@ -1272,6 +1263,7 @@ export interface FileRoutesById {
   '/services': typeof ServicesRouteWithChildren
   '/session-replay': typeof SessionReplayRoute
   '/settings': typeof SettingsRoute
+  '/setup': typeof SetupRoute
   '/signoz-alternative': typeof SignozAlternativeRoute
   '/signup': typeof SignupRoute
   '/synthetics': typeof SyntheticsRouteWithChildren
@@ -1323,7 +1315,6 @@ export interface FileRoutesById {
   '/performance/service-map': typeof PerformanceServiceMapRoute
   '/performance/traces': typeof PerformanceTracesRouteWithChildren
   '/profiles/$profileId': typeof ProfilesProfileIdRoute
-  '/projects/$projectId': typeof ProjectsProjectIdRouteWithChildren
   '/releases/$version': typeof ReleasesVersionRoute
   '/replays/$replayId': typeof ReplaysReplayIdRoute
   '/s/$slug': typeof SSlugRoute
@@ -1388,7 +1379,6 @@ export interface FileRouteTypes {
     | '/better-stack-alternative'
     | '/blog'
     | '/compare'
-    | '/configuration'
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
@@ -1427,6 +1417,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/session-replay'
     | '/settings'
+    | '/setup'
     | '/signoz-alternative'
     | '/signup'
     | '/synthetics'
@@ -1478,7 +1469,6 @@ export interface FileRouteTypes {
     | '/performance/service-map'
     | '/performance/traces'
     | '/profiles/$profileId'
-    | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
     | '/s/$slug'
@@ -1537,7 +1527,6 @@ export interface FileRouteTypes {
     | '/alerting'
     | '/better-stack-alternative'
     | '/compare'
-    | '/configuration'
     | '/custom-dashboards'
     | '/datadog-alternative'
     | '/demo'
@@ -1567,6 +1556,7 @@ export interface FileRouteTypes {
     | '/sentry-alternative'
     | '/session-replay'
     | '/settings'
+    | '/setup'
     | '/signoz-alternative'
     | '/signup'
     | '/terms'
@@ -1615,7 +1605,6 @@ export interface FileRouteTypes {
     | '/performance/$transactionId'
     | '/performance/service-map'
     | '/profiles/$profileId'
-    | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
     | '/s/$slug'
@@ -1678,7 +1667,6 @@ export interface FileRouteTypes {
     | '/better-stack-alternative'
     | '/blog'
     | '/compare'
-    | '/configuration'
     | '/custom-dashboards'
     | '/dashboards'
     | '/datadog-alternative'
@@ -1717,6 +1705,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/session-replay'
     | '/settings'
+    | '/setup'
     | '/signoz-alternative'
     | '/signup'
     | '/synthetics'
@@ -1768,7 +1757,6 @@ export interface FileRouteTypes {
     | '/performance/service-map'
     | '/performance/traces'
     | '/profiles/$profileId'
-    | '/projects/$projectId'
     | '/releases/$version'
     | '/replays/$replayId'
     | '/s/$slug'
@@ -1832,7 +1820,6 @@ export interface RootRouteChildren {
   BetterStackAlternativeRoute: typeof BetterStackAlternativeRoute
   BlogRoute: typeof BlogRouteWithChildren
   CompareRoute: typeof CompareRoute
-  ConfigurationRoute: typeof ConfigurationRoute
   CustomDashboardsRoute: typeof CustomDashboardsRoute
   DashboardsRoute: typeof DashboardsRouteWithChildren
   DatadogAlternativeRoute: typeof DatadogAlternativeRoute
@@ -1871,6 +1858,7 @@ export interface RootRouteChildren {
   ServicesRoute: typeof ServicesRouteWithChildren
   SessionReplayRoute: typeof SessionReplayRoute
   SettingsRoute: typeof SettingsRoute
+  SetupRoute: typeof SetupRoute
   SignozAlternativeRoute: typeof SignozAlternativeRoute
   SignupRoute: typeof SignupRoute
   SyntheticsRoute: typeof SyntheticsRouteWithChildren
@@ -1966,6 +1954,13 @@ declare module '@tanstack/react-router' {
       path: '/signoz-alternative'
       fullPath: '/signoz-alternative'
       preLoaderRoute: typeof SignozAlternativeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -2232,13 +2227,6 @@ declare module '@tanstack/react-router' {
       path: '/custom-dashboards'
       fullPath: '/custom-dashboards'
       preLoaderRoute: typeof CustomDashboardsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/configuration': {
-      id: '/configuration'
-      path: '/configuration'
-      fullPath: '/configuration'
-      preLoaderRoute: typeof ConfigurationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/compare': {
@@ -2527,13 +2515,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/releases/$version'
       preLoaderRoute: typeof ReleasesVersionRouteImport
       parentRoute: typeof ReleasesRoute
-    }
-    '/projects/$projectId': {
-      id: '/projects/$projectId'
-      path: '/$projectId'
-      fullPath: '/projects/$projectId'
-      preLoaderRoute: typeof ProjectsProjectIdRouteImport
-      parentRoute: typeof ProjectsRoute
     }
     '/profiles/$profileId': {
       id: '/profiles/$profileId'
@@ -2845,10 +2826,10 @@ declare module '@tanstack/react-router' {
     }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
-      path: '/settings'
+      path: '/$projectId/settings'
       fullPath: '/projects/$projectId/settings'
       preLoaderRoute: typeof ProjectsProjectIdSettingsRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
+      parentRoute: typeof ProjectsRoute
     }
     '/profiles/service/$service': {
       id: '/profiles/service/$service'
@@ -2950,10 +2931,10 @@ declare module '@tanstack/react-router' {
     }
     '/projects/$projectId/spans/$spanId': {
       id: '/projects/$projectId/spans/$spanId'
-      path: '/spans/$spanId'
+      path: '/$projectId/spans/$spanId'
       fullPath: '/projects/$projectId/spans/$spanId'
       preLoaderRoute: typeof ProjectsProjectIdSpansSpanIdRouteImport
-      parentRoute: typeof ProjectsProjectIdRoute
+      parentRoute: typeof ProjectsRoute
     }
   }
 }
@@ -3251,25 +3232,14 @@ const ProfilesRouteWithChildren = ProfilesRoute._addFileChildren(
   ProfilesRouteChildren,
 )
 
-interface ProjectsProjectIdRouteChildren {
+interface ProjectsRouteChildren {
   ProjectsProjectIdSettingsRoute: typeof ProjectsProjectIdSettingsRoute
   ProjectsProjectIdSpansSpanIdRoute: typeof ProjectsProjectIdSpansSpanIdRoute
 }
 
-const ProjectsProjectIdRouteChildren: ProjectsProjectIdRouteChildren = {
+const ProjectsRouteChildren: ProjectsRouteChildren = {
   ProjectsProjectIdSettingsRoute: ProjectsProjectIdSettingsRoute,
   ProjectsProjectIdSpansSpanIdRoute: ProjectsProjectIdSpansSpanIdRoute,
-}
-
-const ProjectsProjectIdRouteWithChildren =
-  ProjectsProjectIdRoute._addFileChildren(ProjectsProjectIdRouteChildren)
-
-interface ProjectsRouteChildren {
-  ProjectsProjectIdRoute: typeof ProjectsProjectIdRouteWithChildren
-}
-
-const ProjectsRouteChildren: ProjectsRouteChildren = {
-  ProjectsProjectIdRoute: ProjectsProjectIdRouteWithChildren,
 }
 
 const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
@@ -3386,7 +3356,6 @@ const rootRouteChildren: RootRouteChildren = {
   BetterStackAlternativeRoute: BetterStackAlternativeRoute,
   BlogRoute: BlogRouteWithChildren,
   CompareRoute: CompareRoute,
-  ConfigurationRoute: ConfigurationRoute,
   CustomDashboardsRoute: CustomDashboardsRoute,
   DashboardsRoute: DashboardsRouteWithChildren,
   DatadogAlternativeRoute: DatadogAlternativeRoute,
@@ -3425,6 +3394,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRoute: ServicesRouteWithChildren,
   SessionReplayRoute: SessionReplayRoute,
   SettingsRoute: SettingsRoute,
+  SetupRoute: SetupRoute,
   SignozAlternativeRoute: SignozAlternativeRoute,
   SignupRoute: SignupRoute,
   SyntheticsRoute: SyntheticsRouteWithChildren,

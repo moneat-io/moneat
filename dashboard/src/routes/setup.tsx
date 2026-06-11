@@ -19,30 +19,36 @@ import {Boxes, CloudCog, ServerCog, SlidersHorizontal, type LucideIcon} from 'lu
 import {api} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
-import {ServicesAndSdksSetup} from '@/components/configuration/ServicesAndSdksSetup'
-import {InfrastructureAgentSetup} from '@/components/configuration/InfrastructureAgentSetup'
-import {CloudAccountSetup} from '@/components/configuration/CloudAccountSetup'
+import {ServicesAndSdksSetup} from '@/components/setup/ServicesAndSdksSetup'
+import {InfrastructureAgentSetup} from '@/components/setup/InfrastructureAgentSetup'
+import {CloudAccountSetup} from '@/components/setup/CloudAccountSetup'
 
-type ConfigTab = 'services' | 'infrastructure' | 'cloud'
+type SetupTab = 'services' | 'infrastructure' | 'cloud'
 
-function parseConfigTab(value: unknown): ConfigTab {
+function parseSetupTab(value: unknown): SetupTab {
   return value === 'infrastructure' || value === 'cloud' ? value : 'services'
 }
 
-export const Route = createFileRoute('/configuration')({
-  validateSearch: (search: Record<string, unknown>): {tab: ConfigTab} => ({
-    tab: parseConfigTab(search.tab),
+interface SetupSearch {
+  readonly tab: SetupTab
+  readonly service?: string
+}
+
+export const Route = createFileRoute('/setup')({
+  validateSearch: (search: Record<string, unknown>): SetupSearch => ({
+    tab: parseSetupTab(search.tab),
+    service: typeof search.service === 'string' ? search.service : undefined,
   }),
   beforeLoad: async ({location}) => {
     if (!api.isAuthenticated()) {
       throw redirect({to: '/login', search: {redirect: location.href}})
     }
   },
-  component: ConfigurationPage,
+  component: SetupPage,
 })
 
 interface ConfigMode {
-  readonly id: ConfigTab
+  readonly id: SetupTab
   readonly label: string
   readonly icon: LucideIcon
   readonly description: string
@@ -69,22 +75,22 @@ const MODES: readonly ConfigMode[] = [
   },
 ]
 
-function renderConfigTab(tab: ConfigTab) {
+function renderSetupTab(tab: SetupTab, serviceId?: string) {
   if (tab === 'infrastructure') return <InfrastructureAgentSetup />
   if (tab === 'cloud') return <CloudAccountSetup />
-  return <ServicesAndSdksSetup />
+  return <ServicesAndSdksSetup selectedServiceId={serviceId} />
 }
 
-function ConfigurationPage() {
-  const {tab} = useSearch({from: '/configuration'})
-  const navigate = useNavigate({from: '/configuration'})
+function SetupPage() {
+  const {tab, service} = useSearch({from: '/setup'})
+  const navigate = useNavigate({from: '/setup'})
   const activeMode = MODES.find((mode) => mode.id === tab) ?? MODES[0]
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
       <PageHeader
         icon={SlidersHorizontal}
-        title="Configuration"
+        title="Setup"
         description="Connect telemetry — instrument services, deploy the infrastructure agent, or link a cloud account."
       />
 
@@ -115,7 +121,7 @@ function ConfigurationPage() {
         <p className="text-xs text-muted-foreground">{activeMode.description}</p>
       </div>
 
-      {renderConfigTab(tab)}
+      {renderSetupTab(tab, service)}
     </div>
   )
 }

@@ -457,7 +457,7 @@ export const platforms: PlatformType[] = [
   {
     id: 'other',
     name: 'Other Platform',
-    description: 'Generic source setup',
+    description: 'Generic service configuration',
     icon: Code2,
     color: '#4b5563',
     category: 'backend',
@@ -483,6 +483,6 @@ function ProjectsLayout() {
     return <Outlet />
   }
 
-  // /projects base path now redirects to the overview; service setup lives under child routes.
+  // /projects base path redirects to the overview; legacy child utility routes still render above.
   return <Navigate to="/" search={APP_OVERVIEW_SEARCH} />
 }

@@ -46,12 +46,12 @@ function ServiceSettingsPage() {
       <div className="p-6 max-w-4xl mx-auto space-y-6">
         <div className="space-y-2">
           <Link
-            to="/projects/$projectId"
-            params={{projectId: service.id}}
+            to="/setup"
+            search={{tab: 'services', service: service.id}}
             className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to ingestion setup
+            Back to setup
           </Link>
           <div>
             <h1 className="text-2xl font-bold">Service settings</h1>

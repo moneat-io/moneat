@@ -162,6 +162,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_MONEAT_VERSION=${{ github.ref_name }}
+            VITE_SENTRY_RELEASE=${{ github.ref_name }}
+            VITE_DD_VERSION=${{ github.ref_name }}
           cache-from: type=gha,scope=dashboard
           cache-to: type=gha,mode=max,scope=dashboard
 

@@ -178,6 +178,13 @@ describe('ServiceSettingsCard', () => {
     expect(screen.queryByLabelText('Service slug')).not.toBeInTheDocument()
   })
 
+  it('points setup guidance to the Setup page', async () => {
+    renderCard(['opentelemetry'])
+
+    const setupButton = await screen.findByRole('button', {name: /View ingestion setup/})
+    expect(setupButton.closest('a')).toHaveAttribute('to', '/setup')
+  })
+
   it('deletes the selected service and calls the supplied delete callback', async () => {
     const onDeleted = vi.fn()
 

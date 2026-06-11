@@ -26,7 +26,7 @@ vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({invalidate: vi.fn()}),
 }))
 
-import {Route as ConfigurationRoute} from '../configuration'
+import {Route as SetupRoute} from '../setup'
 
 const mockProject = {
   id: 'proj-1',
@@ -36,7 +36,7 @@ const mockProject = {
   keys: [],
 }
 
-describe('Configuration page', () => {
+describe('Setup page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearAuthStorage()
@@ -48,14 +48,14 @@ describe('Configuration page', () => {
 
   it('shows an empty state with a create affordance when there are no services', async () => {
     mockApi.getProjects.mockResolvedValue([])
-    renderRoute(ConfigurationRoute)
+    renderRoute(SetupRoute)
 
     expect(await screen.findByText('No services yet')).toBeInTheDocument()
     expect(screen.getAllByRole('button', {name: /New Service/}).length).toBeGreaterThan(0)
   })
 
   it('renders the service selector, telemetry picker, and settings card', async () => {
-    renderRoute(ConfigurationRoute)
+    renderRoute(SetupRoute)
 
     expect(await screen.findByRole('option', {name: 'Test Service'})).toBeInTheDocument()
     expect(screen.getByRole('button', {name: /Sentry SDK/})).toBeInTheDocument()
@@ -64,7 +64,7 @@ describe('Configuration page', () => {
   })
 
   it('reveals the Sentry config only when the Sentry SDK source is enabled', async () => {
-    renderRoute(ConfigurationRoute)
+    renderRoute(SetupRoute)
 
     await screen.findByText('General')
     // Default source is OpenTelemetry → no Sentry-specific config.

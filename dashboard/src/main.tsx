@@ -26,11 +26,33 @@ import {initAnalytics} from './lib/analytics'
 import {shouldRetryQuery} from './lib/query-retry'
 import './index.css'
 
+function configuredEnv(value: string | undefined): string | undefined {
+  if (!value || !value.trim()) return undefined
+  if (value.startsWith('__') && value.endsWith('__')) return undefined
+  return value
+}
+
+function sampleRate(value: string | undefined, fallback: number): number {
+  const configured = configuredEnv(value)
+  if (!configured) return fallback
+
+  const parsed = Number.parseFloat(configured)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const moneatVersion = configuredEnv(import.meta.env.VITE_MONEAT_VERSION)
+const telemetryRelease =
+  configuredEnv(import.meta.env.VITE_SENTRY_RELEASE) ||
+  configuredEnv(import.meta.env.VITE_DD_VERSION) ||
+  moneatVersion
+
 // Initialize Sentry (error monitoring)
-if (import.meta.env.VITE_SENTRY_DSN) {
+const sentryDsn = configuredEnv(import.meta.env.VITE_SENTRY_DSN)
+if (sentryDsn) {
   Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || 'production',
+    dsn: sentryDsn,
+    environment: configuredEnv(import.meta.env.VITE_SENTRY_ENVIRONMENT) || 'production',
+    release: telemetryRelease,
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({
@@ -39,35 +61,39 @@ if (import.meta.env.VITE_SENTRY_DSN) {
       }),
     ],
     // Performance Monitoring
-    tracesSampleRate: parseFloat(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE) || 0.1,
+    tracesSampleRate: sampleRate(import.meta.env.VITE_SENTRY_TRACES_SAMPLE_RATE, 0.1),
     // Session Replay
-    replaysSessionSampleRate: 0.1,
-    replaysOnErrorSampleRate: 1.0,
+    replaysSessionSampleRate: sampleRate(import.meta.env.VITE_SENTRY_REPLAYS_SESSION_SAMPLE_RATE, 1.0),
+    replaysOnErrorSampleRate: sampleRate(import.meta.env.VITE_SENTRY_REPLAYS_ON_ERROR_SAMPLE_RATE, 1.0),
   })
 }
 
 // Initialize Moneat product analytics (pageviews + custom events)
 // Only enabled when VITE_ANALYTICS_KEY is set (self-hosters can omit it)
-if (import.meta.env.VITE_ANALYTICS_KEY) {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
+const analyticsKey = configuredEnv(import.meta.env.VITE_ANALYTICS_KEY)
+if (analyticsKey) {
+  const backendUrl = configuredEnv(import.meta.env.VITE_BACKEND_URL) || 'https://api.moneat.io'
   initAnalytics({
-    domain: window.location.hostname,
+    domain: globalThis.window.location.hostname,
     apiHost: backendUrl,
-    key: import.meta.env.VITE_ANALYTICS_KEY,
+    key: analyticsKey,
   })
 }
 
 // Initialize Datadog RUM & Browser Logs (enterprise deployments only)
 // Data is sent to Moneat's DD-compatible intake via the proxy parameter.
-if (import.meta.env.VITE_DD_APPLICATION_ID && import.meta.env.VITE_DD_CLIENT_TOKEN) {
+const datadogApplicationId = configuredEnv(import.meta.env.VITE_DD_APPLICATION_ID)
+const datadogClientToken = configuredEnv(import.meta.env.VITE_DD_CLIENT_TOKEN)
+if (datadogApplicationId && datadogClientToken) {
   const {initDatadog} = await import('./lib/datadog')
   initDatadog({
-    applicationId: import.meta.env.VITE_DD_APPLICATION_ID,
-    clientToken: import.meta.env.VITE_DD_CLIENT_TOKEN,
-    proxyUrl: import.meta.env.VITE_DD_PROXY_URL,
-    backendUrl: import.meta.env.VITE_BACKEND_URL,
-    service: import.meta.env.VITE_DD_SERVICE,
-    env: import.meta.env.VITE_DD_ENV,
+    applicationId: datadogApplicationId,
+    clientToken: datadogClientToken,
+    proxyUrl: configuredEnv(import.meta.env.VITE_DD_PROXY_URL),
+    backendUrl: configuredEnv(import.meta.env.VITE_BACKEND_URL),
+    service: configuredEnv(import.meta.env.VITE_DD_SERVICE),
+    env: configuredEnv(import.meta.env.VITE_DD_ENV),
+    version: configuredEnv(import.meta.env.VITE_DD_VERSION) || moneatVersion,
   })
 }
 

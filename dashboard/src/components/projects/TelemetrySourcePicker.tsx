@@ -47,7 +47,7 @@ export function TelemetrySourcePicker({
   value,
   onChange,
   label = 'Telemetry sources',
-  description = 'Pick the source setup Moneat should walk you through after the service is created.',
+  description = 'Pick the telemetry sources Moneat should configure after the service is created.',
 }: TelemetrySourcePickerProps) {
   return (
     <div className="flex flex-col gap-3">
