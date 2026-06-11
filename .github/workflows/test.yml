@@ -115,8 +115,8 @@ jobs:
           set -euo pipefail
 
           if [[ -n "${BASE_REF}" ]]; then
-            git -c http.extraheader="AUTHORIZATION: bearer ${GITHUB_TOKEN}" \
-              fetch --no-tags origin "${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            auth_remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git fetch --no-tags "${auth_remote}" "${BASE_REF}:refs/remotes/origin/${BASE_REF}"
             python3 scripts/check-migration-versions.py --base-ref "origin/${BASE_REF}"
           else
             python3 scripts/check-migration-versions.py
