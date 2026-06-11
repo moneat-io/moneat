@@ -59,8 +59,8 @@ data class CatalogCostItem(
 
 @Serializable
 data class CatalogResourceTelemetry(
-    val cpuPct: Int,
-    val memPct: Int,
+    val cpuPct: Int? = null,
+    val memPct: Int? = null,
     val latencyMs: Int? = null,
     val errorRatePct: Double? = null,
     val throughput: String? = null

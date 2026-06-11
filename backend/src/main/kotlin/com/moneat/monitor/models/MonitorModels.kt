@@ -251,6 +251,7 @@ data class HostData(
     val processor: String? = null,
     val cpuCores: Int? = null,
     val memoryTotalKb: Long? = null,
+    val tags: Map<String, String> = emptyMap(),
     @Serializable(with = KotlinInstantSerializer::class)
     val firstSeenAt: kotlin.time.Instant,
     @Serializable(with = KotlinInstantSerializer::class)

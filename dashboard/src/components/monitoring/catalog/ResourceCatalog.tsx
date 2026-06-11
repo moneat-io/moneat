@@ -400,13 +400,13 @@ function ResourceTable({
                   </div>
                 </TableCell>
                 <TableCell className="hidden lg:table-cell">
-                  {r.telemetry.cpuPct > 0 ? (
+                  {r.telemetry.cpuPct == null ? (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  ) : (
                     <div className="flex items-center gap-2">
                       <Sparkline seed={`${r.id}-cpu`} tone={utilTone(r.telemetry.cpuPct)} className="h-5 w-14" />
                       <span className="text-xs tabular-nums text-muted-foreground">{r.telemetry.cpuPct}%</span>
                     </div>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </TableCell>
                 <TableCell>

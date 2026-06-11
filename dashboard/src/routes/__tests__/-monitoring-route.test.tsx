@@ -53,7 +53,7 @@ import {Route as MonitoringRoute} from '../monitoring'
 let monitoringNavWidth = 900
 
 const tabWidths: Record<string, number> = {
-  Catalog: 84,
+  Resources: 96,
   Map: 66,
   Processes: 106,
   Network: 98,
@@ -118,9 +118,11 @@ describe('monitoring route shell', () => {
   })
 
   it('renders core monitoring tabs and hides Datadog tabs without the module', () => {
+    mockRouteState.pathname = '/monitoring/map'
+
     renderMonitoringRoute()
 
-    expect(screen.getByRole('link', {name: /Catalog/})).toHaveAttribute('href', '/monitoring')
+    expect(screen.getByRole('link', {name: /Resources/})).toHaveAttribute('href', '/resources')
     expect(screen.getByRole('link', {name: /Map/})).toHaveAttribute('href', '/monitoring/map')
     expect(screen.queryByRole('link', {name: /Containers/})).not.toBeInTheDocument()
     expect(screen.queryByRole('link', {name: /Processes/})).not.toBeInTheDocument()
@@ -139,7 +141,7 @@ describe('monitoring route shell', () => {
     await waitFor(() => expect(screen.queryByRole('link', {name: /Debugger/})).toBeInTheDocument())
 
     expect(moreButton).toHaveClass('text-primary')
-    expect(screen.getByRole('link', {name: /Catalog/})).toBeInTheDocument()
+    expect(screen.getByRole('link', {name: /Resources/})).toBeInTheDocument()
     expect(screen.getByRole('link', {name: /Map/})).toBeInTheDocument()
     expect(screen.getByRole('link', {name: /Debugger/})).toHaveClass('text-primary')
     expect(screen.getByRole('link', {name: /Network Devices/})).toHaveAttribute(
@@ -161,7 +163,7 @@ describe('monitoring route shell', () => {
     mockRouteState.pathname = '/monitoring/system-42'
     rerender(<Component />)
 
-    expect(screen.getByRole('link', {name: /Back to Infrastructure/})).toHaveAttribute('href', '/monitoring')
+    expect(screen.getByRole('link', {name: /Back to Resources/})).toHaveAttribute('href', '/resources')
     expect(screen.queryByLabelText('Monitoring tabs')).not.toBeInTheDocument()
   })
 })

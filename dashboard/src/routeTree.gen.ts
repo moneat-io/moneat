@@ -25,6 +25,7 @@ import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SentryAlternativeRouteImport } from './routes/sentry-alternative'
 import { Route as SecuritySbomRouteImport } from './routes/security-sbom'
 import { Route as SecurityRouteImport } from './routes/security'
+import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReplaysRouteImport } from './routes/replays'
 import { Route as ReleasesRouteImport } from './routes/releases'
@@ -76,7 +77,6 @@ import { Route as SecurityIndexRouteImport } from './routes/security.index'
 import { Route as ProfilesIndexRouteImport } from './routes/profiles.index'
 import { Route as PerformanceIndexRouteImport } from './routes/performance.index'
 import { Route as OnCallIndexRouteImport } from './routes/on-call.index'
-import { Route as MonitoringIndexRouteImport } from './routes/monitoring.index'
 import { Route as IssuesIndexRouteImport } from './routes/issues.index'
 import { Route as DocsIndexRouteImport } from './routes/docs.index'
 import { Route as DashboardsIndexRouteImport } from './routes/dashboards.index'
@@ -239,6 +239,11 @@ const SecuritySbomRoute = SecuritySbomRouteImport.update({
 const SecurityRoute = SecurityRouteImport.update({
   id: '/security',
   path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -496,11 +501,6 @@ const OnCallIndexRoute = OnCallIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => OnCallRoute,
-} as any)
-const MonitoringIndexRoute = MonitoringIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => MonitoringRoute,
 } as any)
 const IssuesIndexRoute = IssuesIndexRouteImport.update({
   id: '/',
@@ -975,6 +975,7 @@ export interface FileRoutesByFullPath {
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/resources': typeof ResourcesRoute
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
@@ -1055,7 +1056,6 @@ export interface FileRoutesByFullPath {
   '/dashboards/': typeof DashboardsIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
-  '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
@@ -1105,6 +1105,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/logs': typeof LogsRoute
   '/mcp-server': typeof McpServerRoute
+  '/monitoring': typeof MonitoringRouteWithChildren
   '/on-call-management': typeof OnCallManagementRoute
   '/onboarding': typeof OnboardingRoute
   '/performance-monitoring': typeof PerformanceMonitoringRoute
@@ -1117,6 +1118,7 @@ export interface FileRoutesByTo {
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/resources': typeof ResourcesRoute
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
   '/session-replay': typeof SessionReplayRoute
@@ -1192,7 +1194,6 @@ export interface FileRoutesByTo {
   '/dashboards': typeof DashboardsIndexRoute
   '/docs': typeof DocsIndexRoute
   '/issues': typeof IssuesIndexRoute
-  '/monitoring': typeof MonitoringIndexRoute
   '/on-call': typeof OnCallIndexRoute
   '/performance': typeof PerformanceIndexRoute
   '/profiles': typeof ProfilesIndexRoute
@@ -1266,6 +1267,7 @@ export interface FileRoutesById {
   '/releases': typeof ReleasesRouteWithChildren
   '/replays': typeof ReplaysRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
+  '/resources': typeof ResourcesRoute
   '/security': typeof SecurityRouteWithChildren
   '/security-sbom': typeof SecuritySbomRoute
   '/sentry-alternative': typeof SentryAlternativeRoute
@@ -1346,7 +1348,6 @@ export interface FileRoutesById {
   '/dashboards/': typeof DashboardsIndexRoute
   '/docs/': typeof DocsIndexRoute
   '/issues/': typeof IssuesIndexRoute
-  '/monitoring/': typeof MonitoringIndexRoute
   '/on-call/': typeof OnCallIndexRoute
   '/performance/': typeof PerformanceIndexRoute
   '/profiles/': typeof ProfilesIndexRoute
@@ -1421,6 +1422,7 @@ export interface FileRouteTypes {
     | '/releases'
     | '/replays'
     | '/reset-password'
+    | '/resources'
     | '/security'
     | '/security-sbom'
     | '/sentry-alternative'
@@ -1501,7 +1503,6 @@ export interface FileRouteTypes {
     | '/dashboards/'
     | '/docs/'
     | '/issues/'
-    | '/monitoring/'
     | '/on-call/'
     | '/performance/'
     | '/profiles/'
@@ -1551,6 +1552,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/logs'
     | '/mcp-server'
+    | '/monitoring'
     | '/on-call-management'
     | '/onboarding'
     | '/performance-monitoring'
@@ -1563,6 +1565,7 @@ export interface FileRouteTypes {
     | '/releases'
     | '/replays'
     | '/reset-password'
+    | '/resources'
     | '/security-sbom'
     | '/sentry-alternative'
     | '/session-replay'
@@ -1638,7 +1641,6 @@ export interface FileRouteTypes {
     | '/dashboards'
     | '/docs'
     | '/issues'
-    | '/monitoring'
     | '/on-call'
     | '/performance'
     | '/profiles'
@@ -1711,6 +1713,7 @@ export interface FileRouteTypes {
     | '/releases'
     | '/replays'
     | '/reset-password'
+    | '/resources'
     | '/security'
     | '/security-sbom'
     | '/sentry-alternative'
@@ -1791,7 +1794,6 @@ export interface FileRouteTypes {
     | '/dashboards/'
     | '/docs/'
     | '/issues/'
-    | '/monitoring/'
     | '/on-call/'
     | '/performance/'
     | '/profiles/'
@@ -1865,6 +1867,7 @@ export interface RootRouteChildren {
   ReleasesRoute: typeof ReleasesRouteWithChildren
   ReplaysRoute: typeof ReplaysRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ResourcesRoute: typeof ResourcesRoute
   SecurityRoute: typeof SecurityRouteWithChildren
   SecuritySbomRoute: typeof SecuritySbomRoute
   SentryAlternativeRoute: typeof SentryAlternativeRoute
@@ -2008,6 +2011,13 @@ declare module '@tanstack/react-router' {
       path: '/security'
       fullPath: '/security'
       preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -2366,13 +2376,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/on-call/'
       preLoaderRoute: typeof OnCallIndexRouteImport
       parentRoute: typeof OnCallRoute
-    }
-    '/monitoring/': {
-      id: '/monitoring/'
-      path: '/'
-      fullPath: '/monitoring/'
-      preLoaderRoute: typeof MonitoringIndexRouteImport
-      parentRoute: typeof MonitoringRoute
     }
     '/issues/': {
       id: '/issues/'
@@ -3135,7 +3138,6 @@ interface MonitoringRouteChildren {
   MonitoringProcessesRoute: typeof MonitoringProcessesRoute
   MonitoringSbomRoute: typeof MonitoringSbomRoute
   MonitoringServiceMapRoute: typeof MonitoringServiceMapRoute
-  MonitoringIndexRoute: typeof MonitoringIndexRoute
   MonitoringHostsHostIdRoute: typeof MonitoringHostsHostIdRoute
   MonitoringHostsIndexRoute: typeof MonitoringHostsIndexRoute
 }
@@ -3152,7 +3154,6 @@ const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringProcessesRoute: MonitoringProcessesRoute,
   MonitoringSbomRoute: MonitoringSbomRoute,
   MonitoringServiceMapRoute: MonitoringServiceMapRoute,
-  MonitoringIndexRoute: MonitoringIndexRoute,
   MonitoringHostsHostIdRoute: MonitoringHostsHostIdRoute,
   MonitoringHostsIndexRoute: MonitoringHostsIndexRoute,
 }
@@ -3419,6 +3420,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReleasesRoute: ReleasesRouteWithChildren,
   ReplaysRoute: ReplaysRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  ResourcesRoute: ResourcesRoute,
   SecurityRoute: SecurityRouteWithChildren,
   SecuritySbomRoute: SecuritySbomRoute,
   SentryAlternativeRoute: SentryAlternativeRoute,

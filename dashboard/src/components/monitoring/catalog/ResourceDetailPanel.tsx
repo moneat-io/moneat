@@ -53,7 +53,7 @@ import {Button} from '@/components/ui/button'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
-import {HealthBadge, KindIcon, Meter, Sparkline, TagChip, VulnBar} from './CatalogPrimitives'
+import {HealthBadge, KindIcon, Meter, TagChip, VulnBar} from './CatalogPrimitives'
 import {
   CHANGE_ICON,
   CHANGE_TONE,
@@ -102,11 +102,9 @@ function getMetricsHostId(resource: Resource): string | null {
 
 function metricTileVisual({
   pct,
-  seed,
   tone,
 }: {
   readonly pct?: number
-  readonly seed?: string
   readonly tone: StatusTone
 }) {
   if (pct !== undefined) {
@@ -115,9 +113,6 @@ function metricTileVisual({
         <Meter value={pct} tone={tone} />
       </div>
     )
-  }
-  if (seed) {
-    return <Sparkline seed={seed} tone={tone} className="mt-1 h-6 w-full" />
   }
   return null
 }
@@ -156,7 +151,6 @@ function MetricTile({
   icon: Icon,
   pct,
   tone,
-  seed,
 }: {
   readonly label: string
   readonly value: string
@@ -164,7 +158,6 @@ function MetricTile({
   readonly icon: ComponentType<{className?: string}>
   readonly pct?: number
   readonly tone: StatusTone
-  readonly seed?: string
 }) {
   return (
     <div className="rounded-md border border-border/70 bg-background/40 p-2.5">
@@ -176,9 +169,17 @@ function MetricTile({
         <span className="text-lg font-semibold tabular-nums">{value}</span>
         {unit && <span className="text-[11px] text-muted-foreground">{unit}</span>}
       </div>
-      {metricTileVisual({pct, seed, tone})}
+      {metricTileVisual({pct, tone})}
     </div>
   )
+}
+
+function metricNumber(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'No data' : String(value)
+}
+
+function metricUnit(value: number | null | undefined, unit: string): string | undefined {
+  return value === null || value === undefined ? undefined : unit
 }
 
 function OverviewTab({resource}: {readonly resource: Resource}) {
@@ -186,10 +187,24 @@ function OverviewTab({resource}: {readonly resource: Resource}) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
-        <MetricTile label="CPU" value={`${t.cpuPct}`} unit="%" icon={Cpu} pct={t.cpuPct} tone={utilTone(t.cpuPct)} />
-        <MetricTile label="Memory" value={`${t.memPct}`} unit="%" icon={MemoryStick} pct={t.memPct} tone={utilTone(t.memPct)} />
+        <MetricTile
+          label="CPU"
+          value={metricNumber(t.cpuPct)}
+          unit={metricUnit(t.cpuPct, '%')}
+          icon={Cpu}
+          pct={t.cpuPct ?? undefined}
+          tone={t.cpuPct == null ? 'neutral' : utilTone(t.cpuPct)}
+        />
+        <MetricTile
+          label="Memory"
+          value={metricNumber(t.memPct)}
+          unit={metricUnit(t.memPct, '%')}
+          icon={MemoryStick}
+          pct={t.memPct ?? undefined}
+          tone={t.memPct == null ? 'neutral' : utilTone(t.memPct)}
+        />
         {t.latencyMs !== undefined && (
-          <MetricTile label="p99 latency" value={`${t.latencyMs}`} unit="ms" icon={Activity} tone="info" seed={`${resource.id}-lat`} />
+          <MetricTile label="p99 latency" value={`${t.latencyMs}`} unit="ms" icon={Activity} tone="info" />
         )}
         {t.errorRatePct !== undefined && (
           <MetricTile
@@ -198,7 +213,6 @@ function OverviewTab({resource}: {readonly resource: Resource}) {
             unit="%"
             icon={AlertTriangle}
             tone={errorRateTone(t.errorRatePct)}
-            seed={`${resource.id}-err`}
           />
         )}
       </div>
@@ -251,31 +265,42 @@ function TelemetryChart({
   suffix,
   current,
   tone,
-  seed,
 }: {
   readonly label: string
   readonly suffix: string
-  readonly current: number | string
+  readonly current: number | string | null | undefined
   readonly tone: StatusTone
-  readonly seed: string
 }) {
+  const hasValue = current !== null && current !== undefined && current !== ''
   return (
     <div className="rounded-md border border-border/70 bg-background/40 p-3">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <span className={cn('text-sm font-semibold tabular-nums', TONE_TEXT[tone])}>
-          {current}
-          {suffix}
+        <span className={cn('text-sm font-semibold tabular-nums', hasValue ? TONE_TEXT[tone] : 'text-muted-foreground')}>
+          {hasValue ? `${current}${suffix}` : 'No data'}
         </span>
       </div>
-      <Sparkline seed={seed} tone={tone} className="mt-2 h-12 w-full" />
+      <div className="mt-2 flex h-12 items-center rounded bg-muted/30 px-3 text-xs text-muted-foreground">
+        {hasValue ? 'Current sample only' : 'No samples received'}
+      </div>
     </div>
   )
+}
+
+function hasTelemetryValue(value: number | string | null | undefined): boolean {
+  return value !== null && value !== undefined && value !== ''
 }
 
 function TelemetryTab({resource}: {readonly resource: Resource}) {
   const t = resource.telemetry
   const metricsHostId = getMetricsHostId(resource)
+  const hasAnyTelemetry = [
+    t.cpuPct,
+    t.memPct,
+    t.latencyMs,
+    t.errorRatePct,
+    t.throughput,
+  ].some(hasTelemetryValue)
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -288,25 +313,43 @@ function TelemetryTab({resource}: {readonly resource: Resource}) {
           </Button>
         )}
       </div>
-      <div className="grid grid-cols-1 gap-2">
-        <TelemetryChart label="CPU utilization" suffix="%" current={t.cpuPct} tone={utilTone(t.cpuPct)} seed={`${resource.id}-cpu`} />
-        <TelemetryChart label="Memory utilization" suffix="%" current={t.memPct} tone={utilTone(t.memPct)} seed={`${resource.id}-mem`} />
-        {t.latencyMs !== undefined && (
-          <TelemetryChart label="p99 latency" suffix=" ms" current={t.latencyMs} tone="info" seed={`${resource.id}-lat`} />
-        )}
-        {t.errorRatePct !== undefined && (
+      {hasAnyTelemetry ? (
+        <div className="grid grid-cols-1 gap-2">
           <TelemetryChart
-            label="Error rate"
+            label="CPU utilization"
             suffix="%"
-            current={t.errorRatePct}
-            tone={t.errorRatePct >= 2 ? 'danger' : 'warning'}
-            seed={`${resource.id}-err`}
+            current={t.cpuPct}
+            tone={t.cpuPct == null ? 'neutral' : utilTone(t.cpuPct)}
           />
-        )}
-        {t.throughput !== undefined && (
-          <TelemetryChart label="Throughput" suffix="" current={t.throughput} tone="accent" seed={`${resource.id}-tput`} />
-        )}
-      </div>
+          <TelemetryChart
+            label="Memory utilization"
+            suffix="%"
+            current={t.memPct}
+            tone={t.memPct == null ? 'neutral' : utilTone(t.memPct)}
+          />
+          {t.latencyMs !== undefined && (
+            <TelemetryChart label="p99 latency" suffix=" ms" current={t.latencyMs} tone="info" />
+          )}
+          {t.errorRatePct !== undefined && (
+            <TelemetryChart
+              label="Error rate"
+              suffix="%"
+              current={t.errorRatePct}
+              tone={t.errorRatePct >= 2 ? 'danger' : 'warning'}
+            />
+          )}
+          {t.throughput !== undefined && (
+            <TelemetryChart label="Throughput" suffix="" current={t.throughput} tone="accent" />
+          )}
+        </div>
+      ) : (
+        <EmptyState
+          icon={Activity}
+          title="No telemetry data"
+          description="CPU, memory, latency, and throughput samples have not been received for this resource yet."
+          className="py-10"
+        />
+      )}
     </div>
   )
 }
@@ -396,8 +439,10 @@ function OwnershipTab({resource}: {readonly resource: Resource}) {
           title="No owner assigned"
           description="This resource has no team, on-call, or escalation path. Unowned resources are a common source of orphaned cost and slow incident response."
           action={
-            <Button type="button" size="sm" className="gap-1">
-              <Plus className="h-3.5 w-3.5" /> Claim ownership
+            <Button type="button" size="sm" className="gap-1" asChild>
+              <Link to="/settings" search={{tab: 'team'}}>
+                <Plus className="h-3.5 w-3.5" /> Claim ownership
+              </Link>
             </Button>
           }
         />
@@ -503,7 +548,11 @@ function CostTab({resource}: {readonly resource: Resource}) {
     [resource],
   )
   const maxMonth = Math.max(...months, 1)
-  const lowUtil = resource.telemetry.cpuPct > 0 && resource.telemetry.cpuPct < 35 && resource.monthlyUsd >= 120
+  const lowUtil =
+    resource.telemetry.cpuPct != null &&
+    resource.telemetry.cpuPct > 0 &&
+    resource.telemetry.cpuPct < 35 &&
+    resource.monthlyUsd >= 120
   return (
     <div className="space-y-3">
       <PanelSection title="Estimated monthly cost">

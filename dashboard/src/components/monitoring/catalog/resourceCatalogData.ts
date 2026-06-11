@@ -81,8 +81,8 @@ export interface CostItem {
 }
 
 export interface Telemetry {
-  readonly cpuPct: number
-  readonly memPct: number
+  readonly cpuPct: number | null
+  readonly memPct: number | null
   readonly latencyMs?: number
   readonly errorRatePct?: number
   readonly throughput?: string

@@ -78,8 +78,8 @@ export const TELEMETRY_SOURCES: TelemetrySource[] = [
     description: 'Point a compatible agent at Moneat for infrastructure, logs, APM, and profiling data.',
     setupTitle: 'Connect a Datadog Agent',
     setupDescription: 'Create an agent key and configure the agent intake URLs.',
-    productHref: '/monitoring',
-    productLabel: 'View monitoring',
+    productHref: '/resources',
+    productLabel: 'View resources',
   },
 ]
 

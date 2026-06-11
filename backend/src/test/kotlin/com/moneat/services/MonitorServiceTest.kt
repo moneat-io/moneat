@@ -109,7 +109,7 @@ class MonitorServiceTest {
             } get PricingTierConfigs.id
         }
 
-    private fun seedHost(orgId: Int, name: String = "test-server"): Int =
+    private fun seedHost(orgId: Int, name: String = "test-server", rawTags: String = "{}"): Int =
         transaction {
             val now = kotlin.time.Clock.System.now()
             val hostId = Hosts.insert {
@@ -117,6 +117,7 @@ class MonitorServiceTest {
                 it[display_name] = name
                 it[hostname] = name
                 it[status] = "pending"
+                it[tags] = rawTags
                 it[first_seen_at] = now
                 it[last_seen_at] = now
             } get Hosts.id
@@ -156,6 +157,28 @@ class MonitorServiceTest {
         val hosts1 = service.listHosts(org1)
         assertEquals(1, hosts1.size)
         assertEquals("server-1", hosts1[0].displayName)
+    }
+
+    @Test
+    fun `listHosts ignores nested host tag values`() {
+        val orgId = seedOrg()
+        seedHost(
+            orgId = orgId,
+            name = "server-with-tags",
+            rawTags = """
+                {
+                  "env": "production",
+                  "team": "infra",
+                  "blank": "",
+                  "roles": ["web"],
+                  "cloud": {"region": "sfo3"}
+                }
+            """.trimIndent()
+        )
+
+        val host = service.listHosts(orgId).single()
+
+        assertEquals(mapOf("env" to "production", "team" to "infra"), host.tags)
     }
 
     // ──── getHostById ────
