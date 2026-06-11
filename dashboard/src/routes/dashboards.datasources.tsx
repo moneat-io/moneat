@@ -23,7 +23,7 @@ import {Badge} from '@/components/ui/badge'
 import {PageHeader} from '@/components/ui/page-header'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot} from '@/components/ui/status-dot'
-import {useState} from 'react'
+import {useState, type ReactNode} from 'react'
 import {DATA_SOURCE_TYPES} from '@/components/dashboards/DataSourceTypes'
 import {DataSourceConnectDialog} from '@/components/dashboards/DataSourceConnectDialog'
 
@@ -101,6 +101,88 @@ function DataSourcesPage() {
     dialog.mode === 'edit' ? dataSources?.find((d) => d.id === dialog.editId) : undefined
   const dialogReady = dialog.open && (dialog.mode === 'create' || editSource != null)
 
+  let sourcesContent: ReactNode
+  if (isLoading) {
+    sourcesContent = <div className="text-muted-foreground py-12 text-center">Loading data sources...</div>
+  } else if (!dataSources?.length) {
+    sourcesContent = (
+      <EmptyState
+        icon={Database}
+        title="No data sources yet"
+        description="Connect a database, a metrics backend like Prometheus, or a cloud source to query it from your dashboards."
+        action={
+          <Button size="sm" onClick={openCreate} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            Add data source
+          </Button>
+        }
+      />
+    )
+  } else {
+    sourcesContent = (
+      <div className="space-y-3">
+        {dataSources.map((ds) => (
+          <div
+            key={ds.id}
+            className="flex items-center justify-between rounded-lg border p-4 hover:bg-accent/40 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`flex items-center justify-center rounded-md p-2 ${ds.enabled ? 'bg-[hsl(var(--primary)/0.12)] text-primary' : 'bg-muted text-muted-foreground'}`}
+              >
+                {DATA_SOURCE_TYPES.find((t) => t.value === ds.source_type)?.logo || (
+                  <Database className="h-5 w-5" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <StatusDot tone={ds.enabled ? 'success' : 'neutral'} size="sm" />
+                  <span className="font-medium">{ds.name}</span>
+                  <Badge variant="neutral" size="sm">{ds.source_type}</Badge>
+                  {!ds.enabled && <Badge variant="warning" size="sm">Disabled</Badge>}
+                </div>
+                <div className="text-muted-foreground text-sm font-mono">
+                  {ds.host}
+                  {ds.port ? `:${ds.port}` : ''}
+                  {ds.database_name && ` / ${ds.database_name}`}
+                </div>
+                {ds.description && (
+                  <div className="text-muted-foreground text-xs">{ds.description}</div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={() => openEdit(ds)} title="Edit">
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleMutation.mutate({id: ds.id, enabled: !ds.enabled})}
+                title={ds.enabled ? 'Disable' : 'Enable'}
+              >
+                {ds.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`Delete data source "${ds.name}"?`)) {
+                    deleteMutation.mutate(ds.id)
+                  }
+                }}
+                title="Delete"
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-4">
       <PageHeader
@@ -115,82 +197,7 @@ function DataSourcesPage() {
         }
       />
 
-      {isLoading ? (
-        <div className="text-muted-foreground py-12 text-center">Loading data sources...</div>
-      ) : !dataSources?.length ? (
-        <EmptyState
-          icon={Database}
-          title="No data sources yet"
-          description="Connect a database, a metrics backend like Prometheus, or a cloud source to query it from your dashboards."
-          action={
-            <Button size="sm" onClick={openCreate} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              Add data source
-            </Button>
-          }
-        />
-      ) : (
-        <div className="space-y-3">
-          {dataSources.map((ds) => (
-            <div
-              key={ds.id}
-              className="flex items-center justify-between rounded-lg border p-4 hover:bg-accent/40 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex items-center justify-center rounded-md p-2 ${ds.enabled ? 'bg-[hsl(var(--primary)/0.12)] text-primary' : 'bg-muted text-muted-foreground'}`}
-                >
-                  {DATA_SOURCE_TYPES.find((t) => t.value === ds.source_type)?.logo || (
-                    <Database className="h-5 w-5" />
-                  )}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <StatusDot tone={ds.enabled ? 'success' : 'neutral'} size="sm" />
-                    <span className="font-medium">{ds.name}</span>
-                    <Badge variant="neutral" size="sm">{ds.source_type}</Badge>
-                    {!ds.enabled && <Badge variant="warning" size="sm">Disabled</Badge>}
-                  </div>
-                  <div className="text-muted-foreground text-sm font-mono">
-                    {ds.host}
-                    {ds.port ? `:${ds.port}` : ''}
-                    {ds.database_name && ` / ${ds.database_name}`}
-                  </div>
-                  {ds.description && (
-                    <div className="text-muted-foreground text-xs">{ds.description}</div>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="sm" onClick={() => openEdit(ds)} title="Edit">
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleMutation.mutate({id: ds.id, enabled: !ds.enabled})}
-                  title={ds.enabled ? 'Disable' : 'Enable'}
-                >
-                  {ds.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (confirm(`Delete data source "${ds.name}"?`)) {
-                      deleteMutation.mutate(ds.id)
-                    }
-                  }}
-                  title="Delete"
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {sourcesContent}
 
       {dialogReady && (
         <DataSourceConnectDialog

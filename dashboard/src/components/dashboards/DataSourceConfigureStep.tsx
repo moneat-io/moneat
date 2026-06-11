@@ -50,11 +50,13 @@ const TONE_COLOR: Record<PreviewTone, string> = {
 
 // ---- small field primitives (module-scope, not exported) -------------------
 
-function Field(props: {
+type FieldProps = Readonly<{
   label: ReactNode; value: string; onChange: (v: string) => void; id: string
   placeholder?: string; hint?: ReactNode; optional?: boolean; mono?: boolean
   invalid?: boolean; errorText?: string
-}) {
+}>
+
+function Field(props: FieldProps) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <label htmlFor={props.id} className="flex items-center gap-1.5 text-xs font-medium text-foreground">
@@ -78,10 +80,12 @@ function Field(props: {
   )
 }
 
-function PasswordField(props: {
+type PasswordFieldProps = Readonly<{
   label: ReactNode; value: string; onChange: (v: string) => void; id: string
   placeholder?: string; hint?: ReactNode
-}) {
+}>
+
+function PasswordField(props: PasswordFieldProps) {
   const [show, setShow] = useState(false)
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -110,7 +114,9 @@ function PasswordField(props: {
   )
 }
 
-function CredGroup({title = 'Credentials', children}: {title?: string; children: ReactNode}) {
+type CredGroupProps = Readonly<{title?: string; children: ReactNode}>
+
+function CredGroup({title = 'Credentials', children}: CredGroupProps) {
   return (
     <div className="flex flex-col gap-3 rounded-md border border-border/70 bg-background p-3">
       <div className="flex items-center gap-1.5 text-[0.6875rem] font-bold uppercase tracking-wider text-muted-foreground/80">
@@ -124,9 +130,11 @@ function CredGroup({title = 'Credentials', children}: {title?: string; children:
   )
 }
 
-function Segmented<T extends string>(props: {
+type SegmentedProps<T extends string> = Readonly<{
   value: T; onChange: (v: T) => void; options: ReadonlyArray<{value: T; label: ReactNode}>
-}) {
+}>
+
+function Segmented<T extends string>(props: SegmentedProps<T>) {
   return (
     <div className="inline-flex rounded-md border border-input bg-muted p-0.5">
       {props.options.map((o) => (
@@ -148,7 +156,7 @@ function Segmented<T extends string>(props: {
   )
 }
 
-function Advanced({children}: {children: ReactNode}) {
+function Advanced({children}: Readonly<{children: ReactNode}>) {
   const [open, setOpen] = useState(false)
   return (
     <div className="mt-3 border-t border-dashed border-border/70 pt-3">
@@ -163,6 +171,16 @@ function Advanced({children}: {children: ReactNode}) {
     </div>
   )
 }
+
+type ConfigureRenderContext = Readonly<{
+  state: DsFormState
+  vendor: VendorDef
+  update: (patch: Partial<DsFormState>) => void
+  hostPortRow: (full?: boolean) => ReactNode
+  nameAndDescription: ReactNode
+  credPlaceholder: string
+  onServiceAccountFile: (files: FileList | null) => Promise<void>
+}>
 
 // ---- the configure step ----------------------------------------------------
 
@@ -316,8 +334,8 @@ export function DataSourceConfigureStep({
             <Target className="h-3 w-3" /> Moneat will connect to
           </div>
           <div className="break-all font-mono text-sm leading-relaxed">
-            {preview.segments.map((seg, i) => (
-              <span key={i} style={{color: TONE_COLOR[seg.tone]}}>{seg.text}</span>
+            {preview.segments.map((seg) => (
+              <span key={previewKey(seg)} style={{color: TONE_COLOR[seg.tone]}}>{seg.text}</span>
             ))}
           </div>
           <div className="mt-1.5 text-xs" style={{color: '#8a99a9'}}>
@@ -346,242 +364,413 @@ export function DataSourceConfigureStep({
 
       {/* fields */}
       <div className="grid gap-3">
-        {state.method === 'string' ? (
-          <>
-            <Field id="ds-connstr" label="Connection string" mono value={state.connStr} onChange={(v) => update({connStr: v})}
-              placeholder={vendor.stringPlaceholder ?? `${vendor.scheme ?? 'scheme'}://user:pass@host:${vendor.port ?? ''}/db`}
-              hint="Paste a full URI. We parse host, port, database and credentials from it — nothing is sent anywhere until you press Test." />
-            {nameAndDescription}
-          </>
-        ) : vendor.arch === 'sql' || vendor.arch === 'clickhouse' ? (
-          <>
-            {vendor.arch === 'clickhouse' && (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-foreground">Protocol</span>
-                <Segmented
-                  value={state.chProtocol}
-                  onChange={(v) => update({chProtocol: v, port: v === 'native' ? '9000' : '8123'})}
-                  options={[{value: 'http', label: 'HTTP · 8123'}, {value: 'native', label: 'Native · 9000'}]}
-                />
-                <span className="text-[10px] text-muted-foreground/70">HTTP interface is firewall-friendly; native is lower-latency.</span>
-              </div>
-            )}
-            {hostPortRow(false)}
-            <div className="grid grid-cols-2 gap-3">
-              <Field id="ds-db" label="Database" value={state.database} onChange={(v) => update({database: v})}
-                placeholder={vendor.dbPlaceholder ?? 'database'} />
-              <Field id="ds-user" label="Username" value={state.username} onChange={(v) => update({username: v})}
-                placeholder={vendor.userPlaceholder ?? 'user'} />
-            </div>
-            <CredGroup>
-              <PasswordField id="ds-pass" label="Password" value={state.password} onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
-            </CredGroup>
-            {nameAndDescription}
-            <Advanced>
-              {vendor.arch === 'sql' && (
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor="ds-tls" className="text-xs font-medium text-foreground">TLS / SSL mode</label>
-                  <select id="ds-tls" className={SELECT} value={state.tlsMode} onChange={(e) => update({tlsMode: e.target.value})}>
-                    <option value="disable">Disable — no encryption</option>
-                    <option value="require">Require — encrypt, skip cert check</option>
-                    <option value="verify-ca">Verify CA</option>
-                    <option value="verify-full">Verify full — encrypt + hostname check</option>
-                  </select>
-                  <span className="text-[10px] text-muted-foreground/70">Most managed databases require TLS.</span>
-                </div>
-              )}
-              <Field id="ds-timeout" label="Connect timeout (s)" optional value={state.timeout} onChange={(v) => update({timeout: v})} placeholder="10" />
-              <Field id="ds-schema" label="Default schema" optional value={state.schema} onChange={(v) => update({schema: v})} placeholder="public" />
-            </Advanced>
-          </>
-        ) : vendor.arch === 'http' ? (
-          <>
-            {hostPortRow(true)}
-            <Field id="ds-path" label="Base path" optional mono value={state.basePath} onChange={(v) => update({basePath: v})}
-              placeholder="/"
-              hint={<>Prefix if it sits behind a reverse proxy (e.g. <code className="font-mono">/prometheus</code>). The API path <code className="font-mono">{vendor.apiPath}</code> is appended automatically.</>} />
-            {vendor.indexField && (
-              <Field id="ds-index" label={vendor.indexField} optional value={state.database} onChange={(v) => update({database: v})} placeholder={vendor.indexPlaceholder} />
-            )}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="ds-auth" className="text-xs font-medium text-foreground">Authentication</label>
-              <select id="ds-auth" className={SELECT} value={state.authMethod} onChange={(e) => update({authMethod: e.target.value as DsFormState['authMethod']})}>
-                <option value="none">None (open / network-restricted)</option>
-                <option value="basic">Basic auth</option>
-                <option value="bearer">Bearer token</option>
-                <option value="header">Custom header (API key)</option>
-              </select>
-            </div>
-            {state.authMethod === 'basic' && (
-              <CredGroup>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field id="ds-user" label="Username" value={state.username} onChange={(v) => update({username: v})} placeholder="user" />
-                  <PasswordField id="ds-pass" label="Password" value={state.password} onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
-                </div>
-              </CredGroup>
-            )}
-            {state.authMethod === 'bearer' && (
-              <CredGroup>
-                <PasswordField id="ds-token" label="Bearer token" value={state.token} onChange={(v) => update({token: v})} placeholder="eyJhbGciOi…" />
-              </CredGroup>
-            )}
-            {state.authMethod === 'header' && (
-              <CredGroup>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field id="ds-hk" label="Header name" value={state.headerName} onChange={(v) => update({headerName: v})} placeholder="X-Scope-OrgID" />
-                  <PasswordField id="ds-hv" label="Header value" value={state.headerValue} onChange={(v) => update({headerValue: v})} placeholder={credPlaceholder} />
-                </div>
-              </CredGroup>
-            )}
-            {nameAndDescription}
-            <Advanced>
-              <Field id="ds-timeout" label="Request timeout (s)" optional value={state.timeout} onChange={(v) => update({timeout: v})} placeholder="30" />
-            </Advanced>
-          </>
-        ) : vendor.arch === 'influx' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-foreground">InfluxDB version</span>
-              <Segmented
-                value={state.influxVersion}
-                onChange={(v) => update({influxVersion: v})}
-                options={[{value: '2', label: '2.x (Flux)'}, {value: '1', label: '1.x (InfluxQL)'}]}
-              />
-            </div>
-            {hostPortRow(true)}
-            {state.influxVersion === '2' ? (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field id="ds-org" label="Organization" value={state.org} onChange={(v) => update({org: v})} placeholder="my-org" />
-                  <Field id="ds-bucket" label="Bucket" value={state.bucket} onChange={(v) => update({bucket: v})} placeholder="metrics" />
-                </div>
-                <CredGroup title="API token">
-                  <PasswordField id="ds-token" label="API token" value={state.token} onChange={(v) => update({token: v})}
-                    placeholder={credPlaceholder} hint="Generate a read or all-access token in InfluxDB → Load Data → API Tokens." />
-                </CredGroup>
-              </>
-            ) : (
-              <>
-                <Field id="ds-db" label="Database" value={state.database} onChange={(v) => update({database: v})} placeholder="telegraf" />
-                <CredGroup>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field id="ds-user" label="Username" optional value={state.username} onChange={(v) => update({username: v})} placeholder="admin" />
-                    <PasswordField id="ds-pass" label="Password" value={state.password} onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
-                  </div>
-                </CredGroup>
-              </>
-            )}
-            {nameAndDescription}
-          </>
-        ) : vendor.arch === 'file' ? (
-          <>
-            <Field id="ds-host" label="Database file path" mono value={state.host} onChange={(v) => update({host: v})}
-              placeholder="/var/lib/moneat/analytics.db"
-              hint="Absolute path on the Moneat server. The file must be readable by the Moneat service account." />
-            <div className="flex items-start gap-2 rounded-md border border-info-border bg-info-bg p-2.5 text-xs text-info-fg">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>SQLite is a local file — there is no host, port, or network credential to configure.</span>
-            </div>
-            {nameAndDescription}
-          </>
-        ) : vendor.arch === 'connstr' ? (
-          <>
-            <Field id="ds-connstr" label="Connection string" mono value={state.connStr} onChange={(v) => update({connStr: v})}
-              placeholder={vendor.stringPlaceholder}
-              hint={`The recommended way to connect ${vendor.label}. Credentials and options travel inside the URI.`} />
-            <button type="button" onClick={() => update({manual: !state.manual})}
-              className="flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
-              <ChevronRight className={cn('h-3 w-3 transition-transform', state.manual && 'rotate-90')} /> Enter host &amp; port manually instead
-            </button>
-            {state.manual && (
-              <div className="grid gap-3">
-                {hostPortRow(false)}
-                <div className="grid grid-cols-2 gap-3">
-                  <Field id="ds-db" label={vendor.dbPlaceholder === 'db index' ? 'Database (index)' : 'Database'} optional
-                    value={state.database} onChange={(v) => update({database: v})} placeholder={vendor.dbPlaceholder} />
-                  <Field id="ds-user" label="Username" optional value={state.username} onChange={(v) => update({username: v})} placeholder="default" />
-                </div>
-                <CredGroup>
-                  <PasswordField id="ds-pass" label="Password" value={state.password} onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
-                </CredGroup>
-              </div>
-            )}
-            {nameAndDescription}
-          </>
-        ) : vendor.arch === 'bigquery' ? (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <Field id="ds-proj" label="GCP Project ID" value={state.projectId} onChange={(v) => update({projectId: v})} placeholder="my-gcp-project" />
-              <Field id="ds-db" label="Default dataset" optional value={state.database} onChange={(v) => update({database: v})} placeholder="analytics" />
-            </div>
-            <CredGroup title="Service account">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-medium text-foreground">Service account JSON key</span>
-                <label htmlFor="ds-sa-file" className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent/40">
-                  <Upload className="h-3 w-3" /> Upload JSON key file
-                </label>
-                <input
-                  id="ds-sa-file"
-                  type="file"
-                  accept="application/json,.json"
-                  className="sr-only"
-                  onChange={(e) => { void onServiceAccountFile(e.currentTarget.files) }}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="ds-sa" className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                  …or paste the JSON <span className="font-normal text-muted-foreground/70">optional</span>
-                </label>
-                <textarea id="ds-sa" rows={5} value={state.serviceAccount} onChange={(e) => update({serviceAccount: e.target.value})}
-                  placeholder={'{ "type": "service_account", "project_id": "…" }'}
-                  className={cn(INPUT, 'h-auto resize-y py-2 font-mono text-xs leading-relaxed')} />
-              </div>
-            </CredGroup>
-            {nameAndDescription}
-          </>
-        ) : vendor.arch === 'snowflake' ? (
-          <>
-            <Field id="ds-acct" label="Account identifier" mono value={state.account} onChange={(v) => update({account: v})}
-              placeholder="xy12345.us-east-1"
-              hint={<>From your account URL — the part before <code className="font-mono">.snowflakecomputing.com</code>.</>} />
-            <div className="grid grid-cols-2 gap-3">
-              <Field id="ds-wh" label="Warehouse" value={state.warehouse} onChange={(v) => update({warehouse: v})} placeholder="COMPUTE_WH" />
-              <Field id="ds-db" label="Database" value={state.database} onChange={(v) => update({database: v})} placeholder="ANALYTICS" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field id="ds-schema" label="Schema" optional value={state.schema} onChange={(v) => update({schema: v})} placeholder="PUBLIC" />
-              <Field id="ds-role" label="Role" optional value={state.role} onChange={(v) => update({role: v})} placeholder="ACCOUNTADMIN" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field id="ds-user" label="Username" value={state.username} onChange={(v) => update({username: v})} placeholder="svc_moneat" />
-              <PasswordField id="ds-pass" label="Password" value={state.password} onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
-            </div>
-            {nameAndDescription}
-          </>
-        ) : vendor.arch === 'cloudwatch' ? (
-          <>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="ds-region" className="text-xs font-medium text-foreground">AWS region</label>
-              <select id="ds-region" className={SELECT} value={state.region} onChange={(e) => update({region: e.target.value})}>
-                {AWS_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
-              <input type="checkbox" checked={state.useRole} onChange={(e) => update({useRole: e.target.checked})} className="h-3.5 w-3.5" />
-              Use the instance role / default credential chain
-            </label>
-            {!state.useRole && (
-              <CredGroup title="Access keys">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field id="ds-ak" label="Access key ID" mono value={state.accessKey} onChange={(v) => update({accessKey: v})} placeholder="AKIA…" />
-                  <PasswordField id="ds-sk" label="Secret access key" value={state.secretKey} onChange={(v) => update({secretKey: v})} placeholder={credPlaceholder} />
-                </div>
-              </CredGroup>
-            )}
-            {nameAndDescription}
-          </>
-        ) : null}
+        {renderSourceFields({
+          state,
+          vendor,
+          update,
+          hostPortRow,
+          nameAndDescription,
+          credPlaceholder,
+          onServiceAccountFile,
+        })}
       </div>
     </div>
+  )
+}
+
+function previewKey(seg: Readonly<{tone: PreviewTone; text: string}>): string {
+  return `${seg.tone}:${seg.text}`
+}
+
+function renderSourceFields(context: ConfigureRenderContext): ReactNode {
+  if (context.state.method === 'string') return renderConnectionStringFields(context)
+
+  switch (context.vendor.arch) {
+    case 'sql':
+    case 'clickhouse':
+      return renderSqlLikeFields(context)
+    case 'http':
+      return renderHttpFields(context)
+    case 'influx':
+      return renderInfluxFields(context)
+    case 'file':
+      return renderFileFields(context)
+    case 'connstr':
+      return renderConnectionStringSourceFields(context)
+    case 'bigquery':
+      return renderBigQueryFields(context)
+    case 'snowflake':
+      return renderSnowflakeFields(context)
+    case 'cloudwatch':
+      return renderCloudWatchFields(context)
+    default:
+      return null
+  }
+}
+
+function renderConnectionStringFields({state, vendor, update, nameAndDescription}: ConfigureRenderContext) {
+  return (
+    <>
+      <Field id="ds-connstr" label="Connection string" mono value={state.connStr} onChange={(v) => update({connStr: v})}
+        placeholder={vendor.stringPlaceholder ?? `${vendor.scheme ?? 'scheme'}://user:pass@host:${vendor.port ?? ''}/db`}
+        hint="Paste a full URI. We parse host, port, database and credentials from it — nothing is sent anywhere until you press Test." />
+      {nameAndDescription}
+    </>
+  )
+}
+
+function renderSqlLikeFields({
+  state,
+  vendor,
+  update,
+  hostPortRow,
+  nameAndDescription,
+  credPlaceholder,
+}: ConfigureRenderContext) {
+  return (
+    <>
+      {vendor.arch === 'clickhouse' && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-foreground">Protocol</span>
+          <Segmented
+            value={state.chProtocol}
+            onChange={(v) => update({chProtocol: v, port: v === 'native' ? '9000' : '8123'})}
+            options={[{value: 'http', label: 'HTTP · 8123'}, {value: 'native', label: 'Native · 9000'}]}
+          />
+          <span className="text-[10px] text-muted-foreground/70">
+            HTTP interface is firewall-friendly; native is lower-latency.
+          </span>
+        </div>
+      )}
+      {hostPortRow(false)}
+      <div className="grid grid-cols-2 gap-3">
+        <Field id="ds-db" label="Database" value={state.database} onChange={(v) => update({database: v})}
+          placeholder={vendor.dbPlaceholder ?? 'database'} />
+        <Field id="ds-user" label="Username" value={state.username} onChange={(v) => update({username: v})}
+          placeholder={vendor.userPlaceholder ?? 'user'} />
+      </div>
+      <CredGroup>
+        <PasswordField id="ds-pass" label="Password" value={state.password} onChange={(v) => update({password: v})}
+          placeholder={credPlaceholder} />
+      </CredGroup>
+      {nameAndDescription}
+      <Advanced>
+        {vendor.arch === 'sql' && renderTlsModeSelect(state, update)}
+        <Field id="ds-timeout" label="Connect timeout (s)" optional value={state.timeout}
+          onChange={(v) => update({timeout: v})} placeholder="10" />
+        <Field id="ds-schema" label="Default schema" optional value={state.schema}
+          onChange={(v) => update({schema: v})} placeholder="public" />
+      </Advanced>
+    </>
+  )
+}
+
+function renderTlsModeSelect(
+  state: DsFormState,
+  update: (patch: Partial<DsFormState>) => void,
+) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor="ds-tls" className="text-xs font-medium text-foreground">TLS / SSL mode</label>
+      <select id="ds-tls" className={SELECT} value={state.tlsMode} onChange={(e) => update({tlsMode: e.target.value})}>
+        <option value="disable">Disable — no encryption</option>
+        <option value="require">Require — encrypt, skip cert check</option>
+        <option value="verify-ca">Verify CA</option>
+        <option value="verify-full">Verify full — encrypt + hostname check</option>
+      </select>
+      <span className="text-[10px] text-muted-foreground/70">Most managed databases require TLS.</span>
+    </div>
+  )
+}
+
+function renderHttpFields({
+  state,
+  vendor,
+  update,
+  hostPortRow,
+  nameAndDescription,
+  credPlaceholder,
+}: ConfigureRenderContext) {
+  return (
+    <>
+      {hostPortRow(true)}
+      <Field id="ds-path" label="Base path" optional mono value={state.basePath} onChange={(v) => update({basePath: v})}
+        placeholder="/"
+        hint={<>Prefix if it sits behind a reverse proxy (e.g. <code className="font-mono">/prometheus</code>). The API path <code className="font-mono">{vendor.apiPath}</code> is appended automatically.</>} />
+      {vendor.indexField && (
+        <Field id="ds-index" label={vendor.indexField} optional value={state.database}
+          onChange={(v) => update({database: v})} placeholder={vendor.indexPlaceholder} />
+      )}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="ds-auth" className="text-xs font-medium text-foreground">Authentication</label>
+        <select id="ds-auth" className={SELECT} value={state.authMethod}
+          onChange={(e) => update({authMethod: e.target.value as DsFormState['authMethod']})}>
+          <option value="none">None (open / network-restricted)</option>
+          <option value="basic">Basic auth</option>
+          <option value="bearer">Bearer token</option>
+          <option value="header">Custom header (API key)</option>
+        </select>
+      </div>
+      {renderHttpCredentials(state, update, credPlaceholder)}
+      {nameAndDescription}
+      <Advanced>
+        <Field id="ds-timeout" label="Request timeout (s)" optional value={state.timeout}
+          onChange={(v) => update({timeout: v})} placeholder="30" />
+      </Advanced>
+    </>
+  )
+}
+
+function renderHttpCredentials(
+  state: DsFormState,
+  update: (patch: Partial<DsFormState>) => void,
+  credPlaceholder: string,
+) {
+  if (state.authMethod === 'basic') {
+    return (
+      <CredGroup>
+        <div className="grid grid-cols-2 gap-3">
+          <Field id="ds-user" label="Username" value={state.username} onChange={(v) => update({username: v})}
+            placeholder="user" />
+          <PasswordField id="ds-pass" label="Password" value={state.password}
+            onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
+        </div>
+      </CredGroup>
+    )
+  }
+  if (state.authMethod === 'bearer') {
+    return (
+      <CredGroup>
+        <PasswordField id="ds-token" label="Bearer token" value={state.token}
+          onChange={(v) => update({token: v})} placeholder="eyJhbGciOi…" />
+      </CredGroup>
+    )
+  }
+  if (state.authMethod === 'header') {
+    return (
+      <CredGroup>
+        <div className="grid grid-cols-2 gap-3">
+          <Field id="ds-hk" label="Header name" value={state.headerName}
+            onChange={(v) => update({headerName: v})} placeholder="X-Scope-OrgID" />
+          <PasswordField id="ds-hv" label="Header value" value={state.headerValue}
+            onChange={(v) => update({headerValue: v})} placeholder={credPlaceholder} />
+        </div>
+      </CredGroup>
+    )
+  }
+  return null
+}
+
+function renderInfluxFields(context: ConfigureRenderContext) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs font-medium text-foreground">InfluxDB version</span>
+        <Segmented
+          value={context.state.influxVersion}
+          onChange={(v) => context.update({influxVersion: v})}
+          options={[{value: '2', label: '2.x (Flux)'}, {value: '1', label: '1.x (InfluxQL)'}]}
+        />
+      </div>
+      {context.hostPortRow(true)}
+      {renderInfluxCredentialFields(context)}
+      {context.nameAndDescription}
+    </>
+  )
+}
+
+function renderInfluxCredentialFields({
+  state,
+  update,
+  credPlaceholder,
+}: ConfigureRenderContext) {
+  if (state.influxVersion === '2') {
+    return (
+      <>
+        <div className="grid grid-cols-2 gap-3">
+          <Field id="ds-org" label="Organization" value={state.org} onChange={(v) => update({org: v})}
+            placeholder="my-org" />
+          <Field id="ds-bucket" label="Bucket" value={state.bucket} onChange={(v) => update({bucket: v})}
+            placeholder="metrics" />
+        </div>
+        <CredGroup title="API token">
+          <PasswordField id="ds-token" label="API token" value={state.token} onChange={(v) => update({token: v})}
+            placeholder={credPlaceholder} hint="Generate a read or all-access token in InfluxDB → Load Data → API Tokens." />
+        </CredGroup>
+      </>
+    )
+  }
+  return (
+    <>
+      <Field id="ds-db" label="Database" value={state.database} onChange={(v) => update({database: v})}
+        placeholder="telegraf" />
+      <CredGroup>
+        <div className="grid grid-cols-2 gap-3">
+          <Field id="ds-user" label="Username" optional value={state.username}
+            onChange={(v) => update({username: v})} placeholder="admin" />
+          <PasswordField id="ds-pass" label="Password" value={state.password}
+            onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
+        </div>
+      </CredGroup>
+    </>
+  )
+}
+
+function renderFileFields({state, update, nameAndDescription}: ConfigureRenderContext) {
+  return (
+    <>
+      <Field id="ds-host" label="Database file path" mono value={state.host} onChange={(v) => update({host: v})}
+        placeholder="/var/lib/moneat/analytics.db"
+        hint="Absolute path on the Moneat server. The file must be readable by the Moneat service account." />
+      <div className="flex items-start gap-2 rounded-md border border-info-border bg-info-bg p-2.5 text-xs text-info-fg">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>SQLite is a local file — there is no host, port, or network credential to configure.</span>
+      </div>
+      {nameAndDescription}
+    </>
+  )
+}
+
+function renderConnectionStringSourceFields({
+  state,
+  vendor,
+  update,
+  hostPortRow,
+  nameAndDescription,
+  credPlaceholder,
+}: ConfigureRenderContext) {
+  return (
+    <>
+      <Field id="ds-connstr" label="Connection string" mono value={state.connStr} onChange={(v) => update({connStr: v})}
+        placeholder={vendor.stringPlaceholder}
+        hint={`The recommended way to connect ${vendor.label}. Credentials and options travel inside the URI.`} />
+      <button type="button" onClick={() => update({manual: !state.manual})}
+        className="flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground">
+        <ChevronRight className={cn('h-3 w-3 transition-transform', state.manual && 'rotate-90')} />
+        <span>Enter host &amp; port manually instead</span>
+      </button>
+      {state.manual && (
+        <div className="grid gap-3">
+          {hostPortRow(false)}
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="ds-db" label={databaseLabel(vendor)} optional value={state.database}
+              onChange={(v) => update({database: v})} placeholder={vendor.dbPlaceholder} />
+            <Field id="ds-user" label="Username" optional value={state.username}
+              onChange={(v) => update({username: v})} placeholder="default" />
+          </div>
+          <CredGroup>
+            <PasswordField id="ds-pass" label="Password" value={state.password}
+              onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
+          </CredGroup>
+        </div>
+      )}
+      {nameAndDescription}
+    </>
+  )
+}
+
+function databaseLabel(vendor: VendorDef): string {
+  if (vendor.dbPlaceholder === 'db index') return 'Database (index)'
+  return 'Database'
+}
+
+function renderBigQueryFields({
+  state,
+  update,
+  nameAndDescription,
+  onServiceAccountFile,
+}: ConfigureRenderContext) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <Field id="ds-proj" label="GCP Project ID" value={state.projectId}
+          onChange={(v) => update({projectId: v})} placeholder="my-gcp-project" />
+        <Field id="ds-db" label="Default dataset" optional value={state.database}
+          onChange={(v) => update({database: v})} placeholder="analytics" />
+      </div>
+      <CredGroup title="Service account">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-foreground">Service account JSON key</span>
+          <label htmlFor="ds-sa-file" className="inline-flex w-fit cursor-pointer items-center gap-1.5 rounded-md border border-input bg-card px-2.5 py-1 text-xs font-medium hover:bg-accent/40">
+            <Upload className="h-3 w-3" /> Upload JSON key file
+          </label>
+          <input
+            id="ds-sa-file"
+            type="file"
+            accept="application/json,.json"
+            className="sr-only"
+            onChange={(e) => { void onServiceAccountFile(e.currentTarget.files) }}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="ds-sa" className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+            …or paste the JSON <span className="font-normal text-muted-foreground/70">optional</span>
+          </label>
+          <textarea id="ds-sa" rows={5} value={state.serviceAccount}
+            onChange={(e) => update({serviceAccount: e.target.value})}
+            placeholder={'{ "type": "service_account", "project_id": "…" }'}
+            className={cn(INPUT, 'h-auto resize-y py-2 font-mono text-xs leading-relaxed')} />
+        </div>
+      </CredGroup>
+      {nameAndDescription}
+    </>
+  )
+}
+
+function renderSnowflakeFields({state, update, nameAndDescription, credPlaceholder}: ConfigureRenderContext) {
+  return (
+    <>
+      <Field id="ds-acct" label="Account identifier" mono value={state.account} onChange={(v) => update({account: v})}
+        placeholder="xy12345.us-east-1"
+        hint={<>From your account URL — the part before <code className="font-mono">.snowflakecomputing.com</code>.</>} />
+      <div className="grid grid-cols-2 gap-3">
+        <Field id="ds-wh" label="Warehouse" value={state.warehouse} onChange={(v) => update({warehouse: v})}
+          placeholder="COMPUTE_WH" />
+        <Field id="ds-db" label="Database" value={state.database} onChange={(v) => update({database: v})}
+          placeholder="ANALYTICS" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field id="ds-schema" label="Schema" optional value={state.schema} onChange={(v) => update({schema: v})}
+          placeholder="PUBLIC" />
+        <Field id="ds-role" label="Role" optional value={state.role} onChange={(v) => update({role: v})}
+          placeholder="ACCOUNTADMIN" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field id="ds-user" label="Username" value={state.username} onChange={(v) => update({username: v})}
+          placeholder="svc_moneat" />
+        <PasswordField id="ds-pass" label="Password" value={state.password}
+          onChange={(v) => update({password: v})} placeholder={credPlaceholder} />
+      </div>
+      {nameAndDescription}
+    </>
+  )
+}
+
+function renderCloudWatchFields({state, update, nameAndDescription, credPlaceholder}: ConfigureRenderContext) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="ds-region" className="text-xs font-medium text-foreground">AWS region</label>
+        <select id="ds-region" className={SELECT} value={state.region} onChange={(e) => update({region: e.target.value})}>
+          {AWS_REGIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </div>
+      <label className="flex cursor-pointer items-center gap-2 text-xs text-foreground">
+        <input type="checkbox" checked={state.useRole} onChange={(e) => update({useRole: e.target.checked})}
+          className="h-3.5 w-3.5" />
+        <span>Use the instance role / default credential chain</span>
+      </label>
+      {!state.useRole && (
+        <CredGroup title="Access keys">
+          <div className="grid grid-cols-2 gap-3">
+            <Field id="ds-ak" label="Access key ID" mono value={state.accessKey}
+              onChange={(v) => update({accessKey: v})} placeholder="AKIA…" />
+            <PasswordField id="ds-sk" label="Secret access key" value={state.secretKey}
+              onChange={(v) => update({secretKey: v})} placeholder={credPlaceholder} />
+          </div>
+        </CredGroup>
+      )}
+      {nameAndDescription}
+    </>
   )
 }

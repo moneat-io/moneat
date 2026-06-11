@@ -17,6 +17,11 @@
 package com.moneat.dashboards.services.handlers
 
 internal object JdbcHandlerCommon {
+    private const val TLS_DISABLE = "disable"
+    private const val TLS_REQUIRE = "require"
+    private const val TLS_VERIFY_CA = "verify-ca"
+    private const val TLS_VERIFY_FULL = "verify-full"
+
     fun wb(kw: String) = Regex("""\b${Regex.escape(kw)}\b""", RegexOption.IGNORE_CASE)
 
     val JDBC_COMMON_FORBIDDEN = listOf(
@@ -49,19 +54,19 @@ internal object JdbcHandlerCommon {
 
     /** MySQL Connector/J sslMode enum for a tls_mode, or null to leave the driver default. */
     fun mysqlSslMode(tlsMode: String?): String? = when (tlsMode) {
-        "disable" -> "DISABLED"
-        "require" -> "REQUIRED"
-        "verify-ca" -> "VERIFY_CA"
-        "verify-full" -> "VERIFY_IDENTITY"
+        TLS_DISABLE -> "DISABLED"
+        TLS_REQUIRE -> "REQUIRED"
+        TLS_VERIFY_CA -> "VERIFY_CA"
+        TLS_VERIFY_FULL -> "VERIFY_IDENTITY"
         else -> null
     }
 
     /** MariaDB sslMode value for a tls_mode, or null to leave the driver default. */
     fun mariadbSslMode(tlsMode: String?): String? = when (tlsMode) {
-        "disable" -> "disable"
-        "require" -> "trust"
-        "verify-ca" -> "verify-ca"
-        "verify-full" -> "verify-full"
+        TLS_DISABLE -> TLS_DISABLE
+        TLS_REQUIRE -> "trust"
+        TLS_VERIFY_CA -> TLS_VERIFY_CA
+        TLS_VERIFY_FULL -> TLS_VERIFY_FULL
         else -> null
     }
 }

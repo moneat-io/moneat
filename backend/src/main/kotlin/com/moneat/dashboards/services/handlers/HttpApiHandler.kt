@@ -33,6 +33,8 @@ abstract class HttpApiHandler : DataSourceHandler {
     companion object {
         internal const val DEFAULT_HTTP_PORT = 80
         internal const val DEFAULT_HTTPS_PORT = 443
+        private const val HTTP_SCHEME = "http://"
+        private const val HTTPS_SCHEME = "https://"
         private const val DEFAULT_REQUEST_TIMEOUT_MS = 30_000L
         private const val DEFAULT_CONNECT_TIMEOUT_MS = 10_000L
         private const val MILLIS_PER_SECOND = 1_000L
@@ -112,11 +114,11 @@ abstract class HttpApiHandler : DataSourceHandler {
     /** Builds the URL string without performing SSRF validation. */
     internal fun buildUrlString(host: String, port: Int?): String {
         val scheme = when {
-            host.startsWith("https://") -> "https://"
-            host.startsWith("http://") -> "http://"
-            else -> "http://"
+            host.startsWith(HTTPS_SCHEME) -> HTTPS_SCHEME
+            host.startsWith(HTTP_SCHEME) -> HTTP_SCHEME
+            else -> HTTP_SCHEME
         }
-        val withoutScheme = host.removePrefix("https://").removePrefix("http://")
+        val withoutScheme = host.removePrefix(HTTPS_SCHEME).removePrefix(HTTP_SCHEME)
         // Preserve a reverse-proxy base path (e.g. "/prometheus") so the API path
         // appended by handlers lands under it.
         val slashIdx = withoutScheme.indexOf('/')
@@ -140,8 +142,8 @@ abstract class HttpApiHandler : DataSourceHandler {
         }
         if (port == null || hostHasPort) return normalizedHost
         val isDefaultPort =
-            (scheme == "http://" && port == DEFAULT_HTTP_PORT) ||
-                (scheme == "https://" && port == DEFAULT_HTTPS_PORT)
+            (scheme == HTTP_SCHEME && port == DEFAULT_HTTP_PORT) ||
+                (scheme == HTTPS_SCHEME && port == DEFAULT_HTTPS_PORT)
         return if (isDefaultPort) normalizedHost else "$normalizedHost:$port"
     }
 

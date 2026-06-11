@@ -50,12 +50,18 @@ export const Route = createFileRoute('/dashboards/')({
 })
 
 type TabKey = 'boards' | 'templates' | 'sources'
+type ConcreteFolderFilter = Exclude<FolderFilter, 'all' | 'favorites' | 'uncategorized'>
 
 const SEARCH_PLACEHOLDER: Record<TabKey, string> = {
   boards: 'Search dashboards…',
   templates: 'Search templates…',
   sources: 'Search data sources…',
 }
+const SYSTEM_FOLDER_FILTERS: readonly Exclude<FolderFilter, ConcreteFolderFilter>[] = [
+  'all',
+  'favorites',
+  'uncategorized',
+]
 
 function DashboardsHubPage() {
   const navigate = useNavigate()
@@ -316,8 +322,8 @@ function activeFolderId(selectedFolder: FolderFilter): string | undefined {
   return isConcreteFolder(selectedFolder) ? selectedFolder : undefined
 }
 
-function isConcreteFolder(selectedFolder: FolderFilter): selectedFolder is string {
-  return !['all', 'favorites', 'uncategorized'].includes(selectedFolder)
+function isConcreteFolder(selectedFolder: FolderFilter): selectedFolder is ConcreteFolderFilter {
+  return !SYSTEM_FOLDER_FILTERS.includes(selectedFolder as Exclude<FolderFilter, ConcreteFolderFilter>)
 }
 
 function HubSearch({

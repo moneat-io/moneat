@@ -52,10 +52,13 @@ import {getDashboardThumb, getDashboardSources} from './dashboardThumbHelpers'
 // "Your dashboards" tab of the hub: a folder rail beside a dense, sortable list
 // (preview · name · widgets · updated · owner) that toggles to a preview-led grid.
 
-export type FolderFilter = 'all' | 'favorites' | 'uncategorized' | string
+type SystemFolderFilter = 'all' | 'favorites' | 'uncategorized'
+type FolderIdFilter = string & {readonly __folderIdFilter: unique symbol}
+export type FolderFilter = SystemFolderFilter | FolderIdFilter
 type SortKey = 'updated' | 'name' | 'widgets' | 'created'
 type ViewMode = 'list' | 'grid'
 
+const SYSTEM_FOLDER_FILTERS: readonly SystemFolderFilter[] = ['all', 'favorites', 'uncategorized']
 const SORT_LABELS: Record<SortKey, string> = {
   updated: 'Recently updated',
   name: 'Name (A–Z)',
@@ -135,6 +138,44 @@ export function DashboardsBoardsPanel({
     return sortDashboards(bySearch, sort, now)
   }, [dashboards, selectedFolder, searchQuery, sort, now])
 
+  let panelContent: ReactNode
+  if (visible.length === 0) {
+    panelContent = (
+      <BoardsEmptyState
+        selectedFolder={selectedFolder}
+        folderName={folderName}
+        hasSearch={searchQuery.trim().length > 0}
+        onCreateBlank={onCreateBlank}
+      />
+    )
+  } else if (view === 'list') {
+    panelContent = (
+      <ListView
+        dashboards={visible}
+        folders={folders}
+        now={now}
+        onDelete={onDeleteDashboard}
+        onDuplicate={onDuplicateDashboard}
+        onSetDefault={onSetDefaultDashboard}
+        onFavoriteToggle={onFavoriteToggle}
+        onMoveToFolder={onMoveToFolder}
+      />
+    )
+  } else {
+    panelContent = (
+      <GridView
+        dashboards={visible}
+        folders={folders}
+        now={now}
+        onDelete={onDeleteDashboard}
+        onDuplicate={onDuplicateDashboard}
+        onSetDefault={onSetDefaultDashboard}
+        onFavoriteToggle={onFavoriteToggle}
+        onMoveToFolder={onMoveToFolder}
+      />
+    )
+  }
+
   return (
     <div className="flex items-start gap-4">
       <FolderRail
@@ -164,36 +205,7 @@ export function DashboardsBoardsPanel({
           </div>
         </div>
 
-        {visible.length === 0 ? (
-          <BoardsEmptyState
-            selectedFolder={selectedFolder}
-            folderName={folderName}
-            hasSearch={searchQuery.trim().length > 0}
-            onCreateBlank={onCreateBlank}
-          />
-        ) : view === 'list' ? (
-          <ListView
-            dashboards={visible}
-            folders={folders}
-            now={now}
-            onDelete={onDeleteDashboard}
-            onDuplicate={onDuplicateDashboard}
-            onSetDefault={onSetDefaultDashboard}
-            onFavoriteToggle={onFavoriteToggle}
-            onMoveToFolder={onMoveToFolder}
-          />
-        ) : (
-          <GridView
-            dashboards={visible}
-            folders={folders}
-            now={now}
-            onDelete={onDeleteDashboard}
-            onDuplicate={onDuplicateDashboard}
-            onSetDefault={onSetDefaultDashboard}
-            onFavoriteToggle={onFavoriteToggle}
-            onMoveToFolder={onMoveToFolder}
-          />
-        )}
+        {panelContent}
       </div>
     </div>
   )
@@ -258,18 +270,21 @@ function FolderRail({
         onClick={() => onSelectFolder('favorites')}
       />
       <div className="my-2 h-px bg-border/60" />
-      {folders.map((folder, index) => (
-        <FolderRailItem
-          key={folder.id}
-          folder={folder}
-          color={folderColor(folder, index)}
-          count={dashboards.filter((d) => d.folder_id === folder.id).length}
-          active={selectedFolder === folder.id}
-          onSelect={() => onSelectFolder(folder.id)}
-          onRename={(name) => onRenameFolder(folder.id, name)}
-          onDelete={() => onDeleteFolder(folder.id)}
-        />
-      ))}
+      {folders.map((folder, index) => {
+        const filter = folderIdFilter(folder.id)
+        return (
+          <FolderRailItem
+            key={folder.id}
+            folder={folder}
+            color={folderColor(folder, index)}
+            count={dashboards.filter((d) => d.folder_id === folder.id).length}
+            active={selectedFolder === filter}
+            onSelect={() => onSelectFolder(filter)}
+            onRename={(name) => onRenameFolder(folder.id, name)}
+            onDelete={() => onDeleteFolder(folder.id)}
+          />
+        )
+      })}
       <RailButton
         icon={<Folder className="h-4 w-4 text-muted-foreground/70" />}
         label="Uncategorized"
@@ -725,7 +740,7 @@ function FavoriteButton({
         overlay
           ? 'h-6 w-6 border border-white/10 bg-black/55 text-[#cfd8e3] hover:text-white'
           : 'h-6 w-6 text-muted-foreground/60 hover:text-warning-solid',
-        favorited && (overlay ? 'text-warning-solid' : 'text-warning-solid'),
+        favorited && 'text-warning-solid',
       )}
     >
       <Star className={cn('h-3.5 w-3.5', favorited && 'fill-current')} />
@@ -982,8 +997,12 @@ function getFolderName(selectedFolder: FolderFilter, folders: readonly Dashboard
   return folders.find((f) => f.id === selectedFolder)?.name ?? 'Folder'
 }
 
-function isConcreteFolderFilter(selectedFolder: FolderFilter): boolean {
-  return !['all', 'favorites', 'uncategorized'].includes(selectedFolder)
+function folderIdFilter(id: string): FolderIdFilter {
+  return id as FolderIdFilter
+}
+
+function isConcreteFolderFilter(selectedFolder: FolderFilter): selectedFolder is FolderIdFilter {
+  return !SYSTEM_FOLDER_FILTERS.includes(selectedFolder as SystemFolderFilter)
 }
 
 function folderIndex(folders: readonly DashboardFolder[], folderId: string): number {
@@ -997,10 +1016,10 @@ function folderColor(folder: DashboardFolder, index: number): string {
 // Owner identity for the row avatar. Prefers a real owner name and falls back to
 // created_by when old rows or clients do not carry one yet.
 function ownerAvatar(dashboard: CustomDashboard): Owner {
-  const named = dashboard.owner_name
+  const named = dashboard.owner_name?.trim()
   const color = SWATCHES[dashboard.created_by % SWATCHES.length]
-  if (named && named.trim()) {
-    return {initials: initialsFromName(named), color, label: named.trim()}
+  if (named) {
+    return {initials: initialsFromName(named), color, label: named}
   }
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
   const initials = `${letters[dashboard.created_by % 26]}${letters[(dashboard.created_by * 7 + 3) % 26]}`

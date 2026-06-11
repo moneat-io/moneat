@@ -89,6 +89,7 @@ export function DataSourceConnectDialog({mode, initial, onClose, onSaved}: DataS
   }
 
   const ready = form != null && isFormReady(form)
+  const saveLabel = saveButtonLabel(saveMutation.isPending, editing)
 
   return (
     <DialogPrimitive.Root open onOpenChange={(o) => { if (!o) onClose() }}>
@@ -152,9 +153,7 @@ export function DataSourceConnectDialog({mode, initial, onClose, onSaved}: DataS
               <div className="ml-auto flex items-center gap-2">
                 <Button variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
                 <Button size="sm" disabled={!ready || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-                  {saveMutation.isPending
-                    ? 'Saving…'
-                    : editing ? 'Save changes' : 'Add data source'}
+                  {saveLabel}
                 </Button>
               </div>
             </div>
@@ -165,7 +164,12 @@ export function DataSourceConnectDialog({mode, initial, onClose, onSaved}: DataS
   )
 }
 
-function StepPill({n, label, on}: {n: number; label: string; on: boolean}) {
+function saveButtonLabel(isPending: boolean, editing: boolean): string {
+  if (isPending) return 'Saving…'
+  return editing ? 'Save changes' : 'Add data source'
+}
+
+function StepPill({n, label, on}: Readonly<{n: number; label: string; on: boolean}>) {
   return (
     <span className={cn('flex items-center gap-1.5', on ? 'text-foreground' : 'text-muted-foreground/70')}>
       <span className={cn(

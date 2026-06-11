@@ -89,6 +89,9 @@ const BLANK: DsFormState = {
   region: 'us-east-1', useRole: false, accessKey: '', secretKey: '',
 }
 
+const HOST_FIELD_ARCHES: readonly VendorDef['arch'][] = ['sql', 'clickhouse', 'http', 'influx', 'connstr']
+const PORT_FIELD_ARCHES: readonly VendorDef['arch'][] = ['sql', 'clickhouse', 'http', 'influx', 'connstr']
+
 export function defaultFormState(vendorKey: string): DsFormState {
   const v = getVendor(vendorKey)
   return {
@@ -105,11 +108,12 @@ export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
   const x = ds.extra_config ?? {}
   const base = defaultFormState(ds.source_type)
   const v = getVendor(ds.source_type)
+  const host = sourceUsesHostField(v) ? ds.host : ''
   return {
     ...base,
     name: ds.name,
     description: ds.description ?? '',
-    host: v?.arch === 'file' || v?.arch === 'snowflake' || v?.arch === 'bigquery' || v?.arch === 'cloudwatch' ? '' : ds.host,
+    host,
     port: ds.port != null ? String(ds.port) : base.port,
     database: ds.database_name ?? '',
     scheme: x.scheme === 'http' ? 'http' : 'https',
@@ -130,6 +134,10 @@ export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
     region: v?.arch === 'cloudwatch' ? ds.host || x.region || 'us-east-1' : 'us-east-1',
     useRole: x.use_role === 'true',
   }
+}
+
+function sourceUsesHostField(vendor: VendorDef | undefined): boolean {
+  return vendor === undefined || HOST_FIELD_ARCHES.some((arch) => arch === vendor.arch)
 }
 
 // ----- smart host paste-splitting -------------------------------------------
@@ -281,92 +289,168 @@ export function buildEndpointPreview(state: DsFormState): EndpointPreview {
 
   const host = state.host || '⟨host⟩'
   const port = resolvedPort(state, v.port)
-  let segments: PreviewSeg[] = []
-  let sub = ''
+  const preview = buildPreviewBody({state, vendor: v, host, port})
+  return {...preview, portOk}
+}
 
-  if (state.method === 'string') {
-    segments = state.connStr
-      ? maskUri(state.connStr)
-      : [{tone: 'pw', text: 'paste a connection string above'}]
-    sub = 'Parsed on save · credentials read from the URI'
-  } else if (v.arch === 'sql') {
-    segments = [
-      {tone: 'scheme', text: `${v.scheme}://`},
-      ...(state.username ? [{tone: 'user' as const, text: state.username}, {tone: 'pw' as const, text: state.password ? ':••••' : ''}, {tone: 'user' as const, text: '@'}] : []),
+type PreviewContext = Readonly<{
+  state: DsFormState
+  vendor: VendorDef
+  host: string
+  port: string
+}>
+
+type PreviewBody = Readonly<Pick<EndpointPreview, 'segments' | 'sub'>>
+
+function buildPreviewBody(context: PreviewContext): PreviewBody {
+  if (context.state.method === 'string') return connectionStringPreview(context.state)
+
+  switch (context.vendor.arch) {
+    case 'sql': return sqlPreview(context)
+    case 'clickhouse': return clickhousePreview(context)
+    case 'http': return httpPreview(context)
+    case 'influx': return influxPreview(context)
+    case 'file': return filePreview(context.state)
+    case 'connstr': return connectionStringSourcePreview(context)
+    case 'bigquery': return bigQueryPreview(context.state)
+    case 'snowflake': return snowflakePreview(context.state)
+    case 'cloudwatch': return cloudWatchPreview(context.state)
+    default: return {segments: [], sub: ''}
+  }
+}
+
+function connectionStringPreview(state: DsFormState): PreviewBody {
+  return {
+    segments: state.connStr ? maskUri(state.connStr) : [{tone: 'pw', text: 'paste a connection string above'}],
+    sub: 'Parsed on save · credentials read from the URI',
+  }
+}
+
+function sqlPreview({state, vendor, host, port}: PreviewContext): PreviewBody {
+  const userSegments = state.username
+    ? [
+        {tone: 'user' as const, text: state.username},
+        {tone: 'pw' as const, text: state.password ? ':••••' : ''},
+        {tone: 'user' as const, text: '@'},
+      ]
+    : []
+  const noteSuffix = vendor.note ? ` · ${vendor.note}` : ''
+  const scheme = vendor.scheme === 'postgresql' ? 'PostgreSQL' : vendor.scheme
+  return {
+    segments: [
+      {tone: 'scheme', text: `${vendor.scheme}://`},
+      ...userSegments,
       {tone: 'host', text: host},
       {tone: 'port', text: `:${port}`},
       {tone: 'path', text: '/'},
       {tone: 'db', text: state.database || 'database'},
-    ]
-    const noteSuffix = v.note ? ` · ${v.note}` : ''
-    sub = `${v.scheme === 'postgresql' ? 'PostgreSQL' : v.scheme} wire protocol · TLS: ${state.tlsMode || 'off'}${noteSuffix}`
-  } else if (v.arch === 'clickhouse') {
-    const native = state.chProtocol === 'native'
-    segments = [
+    ],
+    sub: `${scheme} wire protocol · TLS: ${state.tlsMode || 'off'}${noteSuffix}`,
+  }
+}
+
+function clickhousePreview({state, host}: PreviewContext): PreviewBody {
+  const native = state.chProtocol === 'native'
+  const userSegments = state.username ? [{tone: 'user' as const, text: `${state.username}@`}] : []
+  return {
+    segments: [
       {tone: 'scheme', text: native ? 'clickhouse://' : `${state.scheme}://`},
-      ...(state.username ? [{tone: 'user' as const, text: `${state.username}@`}] : []),
+      ...userSegments,
       {tone: 'host', text: host},
       {tone: 'port', text: `:${resolvedPort(state, native ? 9000 : 8123)}`},
       {tone: 'path', text: '/'},
       {tone: 'db', text: state.database || 'default'},
-    ]
-    sub = native ? 'Native TCP protocol' : 'HTTP interface'
-  } else if (v.arch === 'http') {
-    const base = state.basePath && state.basePath !== '/' ? state.basePath.replace(/\/$/, '') : ''
-    segments = [
+    ],
+    sub: native ? 'Native TCP protocol' : 'HTTP interface',
+  }
+}
+
+function httpPreview({state, vendor, host, port}: PreviewContext): PreviewBody {
+  const base = state.basePath && state.basePath !== '/' ? state.basePath.replace(/\/$/, '') : ''
+  const pathSegments = base ? [{tone: 'path' as const, text: base}] : []
+  return {
+    segments: [
       {tone: 'scheme', text: `${state.scheme}://`},
       {tone: 'host', text: host},
       {tone: 'port', text: `:${port}`},
-      ...(base ? [{tone: 'path' as const, text: base}] : []),
-    ]
-    sub = `Moneat calls ${base}${v.apiPath} · auth: ${authLabel(state)}`
-  } else if (v.arch === 'influx') {
-    segments = [
+      ...pathSegments,
+    ],
+    sub: `Moneat calls ${base}${vendor.apiPath} · auth: ${authLabel(state)}`,
+  }
+}
+
+function influxPreview({state, host}: PreviewContext): PreviewBody {
+  const sub = state.influxVersion === '2'
+    ? `v2 Flux · org ${state.org || '⟨org⟩'} · bucket ${state.bucket || '⟨bucket⟩'} · token auth`
+    : `v1 InfluxQL · db ${state.database || '⟨db⟩'}`
+  return {
+    segments: [
       {tone: 'scheme', text: `${state.scheme}://`},
       {tone: 'host', text: host},
       {tone: 'port', text: `:${resolvedPort(state, 8086)}`},
-    ]
-    sub =
-      state.influxVersion === '2'
-        ? `v2 Flux · org ${state.org || '⟨org⟩'} · bucket ${state.bucket || '⟨bucket⟩'} · token auth`
-        : `v1 InfluxQL · db ${state.database || '⟨db⟩'}`
-  } else if (v.arch === 'file') {
-    segments = [{tone: 'scheme', text: 'file:'}, {tone: 'path', text: state.host || '/path/to/database.db'}]
-    sub = 'Local file on the Moneat server'
-  } else if (v.arch === 'connstr') {
-    if (state.manual) {
-      segments = [
-        {tone: 'scheme', text: `${v.scheme}://`},
-        ...(state.username ? [{tone: 'user' as const, text: `${state.username}${state.password ? ':••••' : ''}@`}] : []),
-        {tone: 'host', text: host},
-        {tone: 'port', text: `:${resolvedPort(state, v.port)}`},
-        ...(state.database ? [{tone: 'db' as const, text: `/${state.database}`}] : []),
-      ]
-      sub = 'Built from host & port'
-    } else {
-      segments = state.connStr ? maskUri(state.connStr) : [{tone: 'pw', text: v.stringPlaceholder ?? ''}]
-      sub = 'Parsed on save · credentials read from the URI'
+    ],
+    sub,
+  }
+}
+
+function filePreview(state: DsFormState): PreviewBody {
+  return {
+    segments: [{tone: 'scheme', text: 'file:'}, {tone: 'path', text: state.host || '/path/to/database.db'}],
+    sub: 'Local file on the Moneat server',
+  }
+}
+
+function connectionStringSourcePreview({state, vendor, host}: PreviewContext): PreviewBody {
+  if (!state.manual) {
+    return {
+      segments: state.connStr ? maskUri(state.connStr) : [{tone: 'pw', text: vendor.stringPlaceholder ?? ''}],
+      sub: 'Parsed on save · credentials read from the URI',
     }
-  } else if (v.arch === 'bigquery') {
-    segments = [
+  }
+  const userSegments = state.username
+    ? [{tone: 'user' as const, text: `${state.username}${state.password ? ':••••' : ''}@`}]
+    : []
+  const databaseSegments = state.database ? [{tone: 'db' as const, text: `/${state.database}`}] : []
+  return {
+    segments: [
+      {tone: 'scheme', text: `${vendor.scheme}://`},
+      ...userSegments,
+      {tone: 'host', text: host},
+      {tone: 'port', text: `:${resolvedPort(state, vendor.port)}`},
+      ...databaseSegments,
+    ],
+    sub: 'Built from host & port',
+  }
+}
+
+function bigQueryPreview(state: DsFormState): PreviewBody {
+  const databaseSegments = state.database ? [{tone: 'db' as const, text: `/${state.database}`}] : []
+  return {
+    segments: [
       {tone: 'scheme', text: 'bigquery://'},
       {tone: 'host', text: state.projectId || '⟨project⟩'},
-      ...(state.database ? [{tone: 'db' as const, text: `/${state.database}`}] : []),
-    ]
-    sub = 'Authenticated with a service-account key'
-  } else if (v.arch === 'snowflake') {
-    segments = [
+      ...databaseSegments,
+    ],
+    sub: 'Authenticated with a service-account key',
+  }
+}
+
+function snowflakePreview(state: DsFormState): PreviewBody {
+  return {
+    segments: [
       {tone: 'scheme', text: 'https://'},
       {tone: 'host', text: state.account || '⟨account⟩'},
       {tone: 'path', text: '.snowflakecomputing.com'},
-    ]
-    sub = `warehouse ${state.warehouse || '⟨wh⟩'} · db ${state.database || '⟨db⟩'}`
-  } else if (v.arch === 'cloudwatch') {
-    segments = [{tone: 'scheme', text: 'cloudwatch://'}, {tone: 'host', text: state.region || 'us-east-1'}]
-    sub = state.useRole ? 'Instance role / default credential chain' : 'Static access keys'
+    ],
+    sub: `warehouse ${state.warehouse || '⟨wh⟩'} · db ${state.database || '⟨db⟩'}`,
   }
+}
 
-  return {segments, sub, portOk}
+function cloudWatchPreview(state: DsFormState): PreviewBody {
+  return {
+    segments: [{tone: 'scheme', text: 'cloudwatch://'}, {tone: 'host', text: state.region || 'us-east-1'}],
+    sub: state.useRole ? 'Instance role / default credential chain' : 'Static access keys',
+  }
 }
 
 export function authLabel(state: DsFormState): string {
@@ -469,73 +553,149 @@ export function buildPayload(state: DsFormState): CreateCustomDataSourceRequest 
   const v = getVendor(state.vendor)
   if (!v) throw new Error(`Unknown source type: ${state.vendor}`)
 
-  const isString = state.method === 'string'
-  const useManual = v.arch === 'connstr' ? state.manual : !isString
-  const parsedConnection = isString && v.arch === 'sql' ? parseConnectionUri(state.connStr) : {}
-
   const req: CreateCustomDataSourceRequest & {header_value?: string} = {
     name: effectiveName(state),
     source_type: state.vendor,
     host: payloadHost(state, v),
   }
-  if (state.description.trim()) req.description = state.description.trim()
 
-  const port = payloadPort(state, v)
-  if (port != null && v.arch !== 'file' && v.arch !== 'bigquery' && v.arch !== 'cloudwatch' && v.arch !== 'snowflake') {
-    req.port = port
+  addDescription(req, state)
+  addPort(req, state, v)
+  addDatabase(req, state, v)
+  addConnectionString(req, state, v)
+  addCredentials(req, state, v)
+  addExtraConfig(req, state)
+  return req
+}
+
+type DataSourcePayload = CreateCustomDataSourceRequest & {header_value?: string}
+
+function addDescription(req: DataSourcePayload, state: DsFormState) {
+  const description = state.description.trim()
+  if (description) req.description = description
+}
+
+function addPort(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
+  const port = payloadPort(state, vendor)
+  if (port != null && shouldPersistPort(vendor)) req.port = port
+}
+
+function shouldPersistPort(vendor: VendorDef): boolean {
+  return PORT_FIELD_ARCHES.some((arch) => arch === vendor.arch)
+}
+
+function addDatabase(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
+  const parsedConnection = parsedSqlConnection(state, vendor)
+  if (parsedConnection.database) {
+    req.database_name = parsedConnection.database
+    return
   }
-
-  // database / index
-  if (parsedConnection.database) req.database_name = parsedConnection.database
-  else if (v.arch === 'influx' && state.influxVersion === '1') req.database_name = state.database || undefined
-  else if (state.database && v.arch !== 'file') req.database_name = state.database
-
-  // connection string
-  if (isString || (v.arch === 'connstr' && !state.manual)) {
-    if (state.connStr) req.connection_string = state.connStr
+  if (vendor.arch === 'influx' && state.influxVersion === '1') {
+    req.database_name = state.database || undefined
+    return
   }
+  if (state.database && vendor.arch !== 'file') req.database_name = state.database
+}
 
-  // credentials by archetype
-  if (v.arch === 'bigquery') {
-    if (state.projectId) req.project_id = state.projectId
-    if (state.serviceAccount) req.service_account_json = state.serviceAccount
-  } else if (v.arch === 'cloudwatch') {
-    req.region = state.region || 'us-east-1'
-    if (!state.useRole) {
-      if (state.accessKey) req.access_key_id = state.accessKey
-      if (state.secretKey) req.secret_access_key = state.secretKey
-    }
-  } else if (v.arch === 'snowflake') {
-    if (state.account) req.account_identifier = state.account
+function addConnectionString(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
+  const shouldPersist = state.method === 'string' || (vendor.arch === 'connstr' && !state.manual)
+  if (shouldPersist && state.connStr) req.connection_string = state.connStr
+}
+
+function addCredentials(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
+  switch (vendor.arch) {
+    case 'bigquery':
+      addBigQueryCredentials(req, state)
+      break
+    case 'cloudwatch':
+      addCloudWatchCredentials(req, state)
+      break
+    case 'snowflake':
+      addSnowflakeCredentials(req, state)
+      break
+    case 'influx':
+      addInfluxCredentials(req, state)
+      break
+    case 'http':
+      addHttpCredentials(req, state)
+      break
+    case 'sql':
+      addSqlCredentials(req, state, vendor)
+      break
+    case 'clickhouse':
+    case 'connstr':
+      addManualCredentials(req, state, vendor)
+      break
+    default:
+      break
+  }
+}
+
+function addBigQueryCredentials(req: DataSourcePayload, state: DsFormState) {
+  if (state.projectId) req.project_id = state.projectId
+  if (state.serviceAccount) req.service_account_json = state.serviceAccount
+}
+
+function addCloudWatchCredentials(req: DataSourcePayload, state: DsFormState) {
+  req.region = state.region || 'us-east-1'
+  if (state.useRole) return
+  if (state.accessKey) req.access_key_id = state.accessKey
+  if (state.secretKey) req.secret_access_key = state.secretKey
+}
+
+function addSnowflakeCredentials(req: DataSourcePayload, state: DsFormState) {
+  if (state.account) req.account_identifier = state.account
+  if (state.username) req.username = state.username
+  if (state.password) req.password = state.password
+}
+
+function addInfluxCredentials(req: DataSourcePayload, state: DsFormState) {
+  if (state.influxVersion === '2') {
+    if (state.token) req.api_key = state.token
+    return
+  }
+  if (state.username) req.username = state.username
+  if (state.password) req.password = state.password
+}
+
+function addHttpCredentials(req: DataSourcePayload, state: DsFormState) {
+  if (state.authMethod === 'basic') {
     if (state.username) req.username = state.username
     if (state.password) req.password = state.password
-  } else if (v.arch === 'influx') {
-    if (state.influxVersion === '2') {
-      if (state.token) req.api_key = state.token
-    } else {
-      if (state.username) req.username = state.username
-      if (state.password) req.password = state.password
-    }
-  } else if (v.arch === 'http') {
-    if (state.authMethod === 'basic') {
-      if (state.username) req.username = state.username
-      if (state.password) req.password = state.password
-    } else if (state.authMethod === 'bearer') {
-      if (state.token) req.api_key = state.token
-    } else if (state.authMethod === 'header') {
-      if (state.headerValue) req.header_value = state.headerValue
-    }
-  } else if (v.arch === 'sql' && isString) {
+    return
+  }
+  if (state.authMethod === 'bearer') {
+    if (state.token) req.api_key = state.token
+    return
+  }
+  if (state.authMethod === 'header' && state.headerValue) req.header_value = state.headerValue
+}
+
+function addSqlCredentials(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
+  if (state.method === 'string') {
+    const parsedConnection = parsedSqlConnection(state, vendor)
     if (parsedConnection.username) req.username = parsedConnection.username
     if (parsedConnection.password) req.password = parsedConnection.password
-  } else if (useManual && (v.arch === 'sql' || v.arch === 'clickhouse' || v.arch === 'connstr')) {
-    if (state.username) req.username = state.username
-    if (state.password) req.password = state.password
+    return
   }
+  addManualCredentials(req, state, vendor)
+}
 
+function addManualCredentials(req: DataSourcePayload, state: DsFormState, vendor: VendorDef) {
+  const useManual = vendor.arch === 'connstr' ? state.manual : state.method !== 'string'
+  if (!useManual) return
+  if (state.username) req.username = state.username
+  if (state.password) req.password = state.password
+}
+
+function parsedSqlConnection(state: DsFormState, vendor: VendorDef): ParsedConnectionUri {
+  if (state.method === 'string' && vendor.arch === 'sql') return parseConnectionUri(state.connStr)
+  return {}
+}
+
+function addExtraConfig(req: DataSourcePayload, state: DsFormState) {
   const extra = buildExtraConfig(state)
   if (Object.keys(extra).length > 0) req.extra_config = extra
-  return req
 }
 
 /** The test-connection request mirrors the payload's connection-relevant bits. */
