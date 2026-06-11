@@ -17,8 +17,9 @@
 package com.moneat.datadog.networkdevices
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdNdmPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -186,7 +187,7 @@ object NdmIngestionService {
         val count = batch.devices.size + batch.traps.size +
             batch.flows.size + batch.paths.size + batch.configs.size
         if (count == 0) return 0
-        RedisConfig.sync().lpush(NDM_QUEUE_KEY, json.encodeToString(batch))
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_NDM, NDM_QUEUE_KEY, json.encodeToString(batch))
         return count
     }
 

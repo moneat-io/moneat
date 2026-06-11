@@ -17,6 +17,7 @@
 package com.moneat.analytics
 
 import com.moneat.analytics.routes.analyticsIngestRoutes
+import com.moneat.analytics.routes.AnalyticsIngestRouteDependencies
 import com.moneat.analytics.routes.extractAnalyticsPublicKey
 import com.moneat.analytics.routes.extractPathname
 import com.moneat.analytics.routes.extractUtmParams
@@ -28,7 +29,6 @@ import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.config.RedisConfig
-import com.moneat.events.services.EventService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -74,6 +74,18 @@ class AnalyticsIngestRoutesTest {
     }
 
     private val mockRedis = mockk<RedisCommands<String, String>>(relaxed = true)
+
+    private fun analyticsDependencies(
+        quotaService: BillingQuotaService = GlobalContext.get().get(),
+        enqueueEvent: (String) -> Unit = {},
+    ): AnalyticsIngestRouteDependencies =
+        AnalyticsIngestRouteDependencies().apply {
+            sessionHashService = SessionHashService()
+            geoIpService = GeoIpService()
+            eventService = GlobalContext.get().get()
+            this.quotaService = quotaService
+            this.enqueueEvent = enqueueEvent
+        }
 
     @BeforeTest
     fun setupKoin() {
@@ -179,10 +191,7 @@ class AnalyticsIngestRoutesTest {
         application {
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { },
+                    dependencies = analyticsDependencies(enqueueEvent = { }),
                 )
             }
         }
@@ -199,10 +208,7 @@ class AnalyticsIngestRoutesTest {
         application {
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { },
+                    dependencies = analyticsDependencies(enqueueEvent = { }),
                 )
             }
         }
@@ -218,10 +224,7 @@ class AnalyticsIngestRoutesTest {
         application {
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { },
+                    dependencies = analyticsDependencies(enqueueEvent = { }),
                 )
             }
         }
@@ -242,10 +245,7 @@ class AnalyticsIngestRoutesTest {
             install(ContentNegotiation) { json() }
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { queuedMessage = it },
+                    dependencies = analyticsDependencies(enqueueEvent = { queuedMessage = it }),
                 )
             }
         }
@@ -284,10 +284,7 @@ class AnalyticsIngestRoutesTest {
         application {
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { queuedMessage = it },
+                    dependencies = analyticsDependencies(enqueueEvent = { queuedMessage = it }),
                 )
             }
         }
@@ -310,10 +307,7 @@ class AnalyticsIngestRoutesTest {
             install(ContentNegotiation) { json() }
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { },
+                    dependencies = analyticsDependencies(enqueueEvent = { }),
                 )
             }
         }
@@ -343,11 +337,7 @@ class AnalyticsIngestRoutesTest {
             install(ContentNegotiation) { json() }
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    quotaService = quotaService,
-                    enqueueEvent = { },
+                    dependencies = analyticsDependencies(quotaService = quotaService, enqueueEvent = { }),
                 )
             }
         }
@@ -373,11 +363,10 @@ class AnalyticsIngestRoutesTest {
             install(ContentNegotiation) { json() }
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    quotaService = quotaService,
-                    enqueueEvent = { throw RuntimeException("queue down") },
+                    dependencies = analyticsDependencies(
+                        quotaService = quotaService,
+                        enqueueEvent = { throw RuntimeException("queue down") },
+                    ),
                 )
             }
         }
@@ -400,10 +389,7 @@ class AnalyticsIngestRoutesTest {
             install(ContentNegotiation) { json() }
             routing {
                 analyticsIngestRoutes(
-                    sessionHashService = SessionHashService(),
-                    geoIpService = GeoIpService(),
-                    eventService = GlobalContext.get().get<EventService>(),
-                    enqueueEvent = { },
+                    dependencies = analyticsDependencies(enqueueEvent = { }),
                 )
             }
         }

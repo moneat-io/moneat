@@ -20,6 +20,7 @@ import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.repositories.models.ProjectKeyVerification
+import com.moneat.events.routes.IngestRouteDependencies
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.events.routes.mapEnvelopeItemToQuotaType
 import com.moneat.events.routes.mapEnvelopeItemTypeToQuotaType
@@ -119,12 +120,14 @@ class IngestRoutesEnvelopeTest {
                 install(ContentNegotiation) { json() }
                 routing {
                     ingestRoutes(
-                        enqueueEnvelope = { _, _ -> },
-                        isQuotaEnforcementEnabled = { true },
-                        reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
-                            reservations.add(requestedUnitsByType)
-                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
-                        }
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                                reservations.add(requestedUnitsByType)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
                     )
                 }
             }
@@ -169,12 +172,14 @@ class IngestRoutesEnvelopeTest {
                 install(ContentNegotiation) { json() }
                 routing {
                     ingestRoutes(
-                        enqueueEnvelope = { _, _ -> },
-                        isQuotaEnforcementEnabled = { true },
-                        reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
-                            reservations.add(requestedUnitsByType)
-                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
-                        }
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                                reservations.add(requestedUnitsByType)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
                     )
                 }
             }
@@ -224,12 +229,14 @@ class IngestRoutesEnvelopeTest {
                 install(ContentNegotiation) { json() }
                 routing {
                     ingestRoutes(
-                        eventService = eventService,
-                        isQuotaEnforcementEnabled = { true },
-                        reserveSingleQuota = { orgId, _, eventType, _ ->
-                            reservedTypes.add(eventType)
-                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
-                        }
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            isQuotaEnforcementEnabled = { true }
+                            reserveSingleQuota = { orgId, _, eventType, _ ->
+                                reservedTypes.add(eventType)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
                     )
                 }
             }
@@ -263,15 +270,17 @@ class IngestRoutesEnvelopeTest {
                 install(ContentNegotiation) { json() }
                 routing {
                     ingestRoutes(
-                        enqueueEnvelope = { _, _ -> },
-                        isQuotaEnforcementEnabled = { true },
-                        reserveEnvelopeQuota = { orgId, _, _ ->
-                            QuotaReservationResult(
-                                allowed = false,
-                                reason = "quota_exceeded",
-                                usage = emptyUsage(orgId)
-                            )
-                        }
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, _, _ ->
+                                QuotaReservationResult(
+                                    allowed = false,
+                                    reason = "quota_exceeded",
+                                    usage = emptyUsage(orgId)
+                                )
+                            }
+                        },
                     )
                 }
             }
@@ -303,7 +312,11 @@ class IngestRoutesEnvelopeTest {
             application {
                 install(ContentNegotiation) { json() }
                 routing {
-                    ingestRoutes(enqueueEnvelope = { _, _ -> })
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                        }
+                    )
                 }
             }
 

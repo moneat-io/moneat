@@ -17,10 +17,11 @@
 package com.moneat.llm.routes
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.utils.ErrorResponse
@@ -109,7 +110,7 @@ fun Route.llmIngestRoutes() {
                 }
 
                 val message = LlmIngestionWorker.encodeMessage(projectId, decompressedBytes)
-                RedisConfig.sync().lpush(queueKey, message)
+                IngestionQueueClient.enqueue(IngestionPipeline.LLM, queueKey, message)
 
                 call.respond(HttpStatusCode.Accepted, mapOf("accepted" to payload.generations.size))
             }.getOrElse { e ->

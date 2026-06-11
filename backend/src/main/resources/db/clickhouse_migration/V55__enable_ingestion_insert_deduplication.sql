@@ -1,0 +1,33 @@
+-- Enable query-token based insert deduplication for queued ingestion retries.
+-- Stream workers set insert_deduplication_token per deterministic batch/query.
+
+ALTER TABLE IF EXISTS events MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS spans MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS sessions MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS logs MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS replay_events MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS replay_segments MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS user_feedback MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS llm_generations MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS analytics_events MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS metrics MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS metric_sketches MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS apm_spans MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS infra_events MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS service_checks MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS profiles MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS dbm_queries MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS dbm_metrics MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS dbm_activity MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS dbm_metadata MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS dbm_health MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS debugger_logs MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS debugger_diagnostics MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS security_events MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS security_dumps MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS compliance_findings MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS ndm_devices MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS ndm_traps MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS ndm_flows MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS ndm_paths MODIFY SETTING non_replicated_deduplication_window = 1000;
+ALTER TABLE IF EXISTS ndm_configs MODIFY SETTING non_replicated_deduplication_window = 1000;

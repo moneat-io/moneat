@@ -29,6 +29,8 @@ import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.events.services.EventService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
@@ -65,22 +67,32 @@ private data class AnalyticsQuotaReservationResult(
     val responseSent: Boolean = false
 )
 
+class AnalyticsIngestRouteDependencies {
+    var sessionHashService: SessionHashService = GlobalContext.get().get()
+    var geoIpService: GeoIpService = GlobalContext.get().get()
+    var eventService: EventService = GlobalContext.get().get()
+    var quotaService: BillingQuotaService = GlobalContext.get().get()
+    var pricingTierService: PricingTierService = GlobalContext.get().get()
+    var projectIdResolver: ProjectIdResolver = ProjectIdResolver()
+    var enqueueEvent: (String) -> Unit = { message ->
+        IngestionQueueClient.enqueue(IngestionPipeline.ANALYTICS, AnalyticsIngestionWorker.QUEUE_KEY, message)
+    }
+}
+
 /**
  * Public ingestion endpoint for analytics events from the tracking script.
  * Supports /api/{domain}/analytics/event (SDK) and /api/{projectId}/analytics/event (API).
  * Also serves the tracking script at /js/m.js.
  */
-fun Route.analyticsIngestRoutes(
-    sessionHashService: SessionHashService = GlobalContext.get().get(),
-    geoIpService: GeoIpService = GlobalContext.get().get(),
-    eventService: EventService = GlobalContext.get().get(),
-    quotaService: BillingQuotaService = GlobalContext.get().get(),
-    pricingTierService: PricingTierService = GlobalContext.get().get(),
-    projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
-    enqueueEvent: (String) -> Unit = { message ->
-        RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, message)
-    },
-) {
+fun Route.analyticsIngestRoutes(dependencies: AnalyticsIngestRouteDependencies = AnalyticsIngestRouteDependencies()) {
+    val sessionHashService = dependencies.sessionHashService
+    val geoIpService = dependencies.geoIpService
+    val eventService = dependencies.eventService
+    val quotaService = dependencies.quotaService
+    val pricingTierService = dependencies.pricingTierService
+    val projectIdResolver = dependencies.projectIdResolver
+    val enqueueEvent = dependencies.enqueueEvent
+
     // Domain-based route for SDK / script tag (data-domain in path, sentry_key in query)
     route("/api/{domain}/analytics") {
         post("/event") {

@@ -17,10 +17,11 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.models.DatadogSketchPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.monitor.services.InfraMetricRollupRow
 import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.monitoring.OperationalMetrics
@@ -189,7 +190,7 @@ object DatadogMetricService {
         val batch = mapV1Series(organizationId, payload, projectId)
         if (batch.metrics.isEmpty()) return 0
         val message = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, message)
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_METRICS, queueKey, message)
         OperationalMetrics.recordDatadogMetricPayloadQueued(batch.metrics.size)
         logger.debug {
             "Enqueued ${batch.metrics.size} DD metrics for org $organizationId"

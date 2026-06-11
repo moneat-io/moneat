@@ -20,7 +20,8 @@ import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.analytics.models.ServerAnalyticsEvent
 import com.moneat.analytics.models.ServerAnalyticsEventPayload
 import com.moneat.analytics.services.AnalyticsIngestionWorker
-import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.shared.models.Projects
@@ -51,8 +52,8 @@ fun Route.analyticsServerIngestRoutes(
     otlpApiKeyService: OtlpApiKeyService = GlobalContext.get().get(),
     projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     enqueueEvents: (List<String>) -> Unit = { messages ->
-        if (messages.isNotEmpty()) {
-            RedisConfig.sync().lpush(AnalyticsIngestionWorker.QUEUE_KEY, *messages.toTypedArray())
+        messages.forEach { message ->
+            IngestionQueueClient.enqueue(IngestionPipeline.ANALYTICS, AnalyticsIngestionWorker.QUEUE_KEY, message)
         }
     },
 ) {

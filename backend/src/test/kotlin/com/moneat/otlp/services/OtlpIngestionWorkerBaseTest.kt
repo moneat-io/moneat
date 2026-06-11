@@ -16,6 +16,7 @@
 
 package com.moneat.otlp.services
 
+import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.monitoring.OperationalMetrics
 import io.lettuce.core.api.StatefulRedisConnection
 import kotlinx.coroutines.runBlocking
@@ -38,6 +39,7 @@ class OtlpIngestionWorkerBaseTest {
         queueKey,
         dlqKey,
         workerCount,
+        IngestionPipeline.OTLP_TRACES,
         "NoOpOtlpIngestionWorker",
         "noop",
     ) {
@@ -60,6 +62,7 @@ class OtlpIngestionWorkerBaseTest {
         "test:otlp:failing:queue",
         "test:otlp:failing:dlq",
         1,
+        IngestionPipeline.OTLP_TRACES,
         "FailingOtlpIngestionWorker",
         "failing",
     ) {

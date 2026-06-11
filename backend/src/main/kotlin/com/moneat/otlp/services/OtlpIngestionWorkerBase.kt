@@ -18,6 +18,11 @@ package com.moneat.otlp.services
 
 import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionDlqRequest
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
 import io.lettuce.core.RedisException
@@ -27,11 +32,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.joinAll
-import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
@@ -44,6 +46,7 @@ abstract class OtlpIngestionWorkerBase(
     private val queueKey: String,
     private val dlqKey: String,
     private val workerCount: Int,
+    private val pipeline: IngestionPipeline,
     private val workerName: String,
     private val workerLabel: String,
 ) {
@@ -53,21 +56,19 @@ abstract class OtlpIngestionWorkerBase(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
+    private val queueSpec = IngestionQueueSettings.spec(pipeline, queueKey, dlqKey, workerCount)
+    private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
         logger.info {
             "Starting $workerName with $workerCount workers, queue=$queueKey"
         }
-        OperationalMetrics.registerWorkerQueues("OTLP $workerLabel", queueKey, dlqKey)
-        jobs = (1..workerCount).map { workerId ->
-            scope.launch { runWorker(workerId) }
-        }
+        queueWorker = RedisQueueWorker(queueSpec, logger, ::processBrpopPayload)
+            .also { it.start() }
     }
 
     suspend fun stop() {
-        jobs.forEach { it.cancel() }
-        jobs.joinAll()
-        scope.cancel()
+        queueWorker?.stop()
         logger.info { "$workerName stopped" }
     }
 
@@ -179,12 +180,14 @@ abstract class OtlpIngestionWorkerBase(
     protected abstract suspend fun processMessage(workerId: Int, payload: String)
 
     protected fun pushToDlq(workerId: Int, payload: String) {
-        try {
-            RedisConfig.sync().rpush(dlqKey, payload)
-            OperationalMetrics.recordDlqPush("OTLP $workerLabel", dlqKey, "success")
-        } catch (dlqErr: RedisException) {
-            OperationalMetrics.recordDlqPush("OTLP $workerLabel", dlqKey, "failure")
-            logger.error(dlqErr) { "Failed to push to DLQ $dlqKey for worker=$workerId" }
-        }
+        IngestionQueueClient.pushToDlq(
+            logger = logger,
+            request = IngestionDlqRequest(
+                spec = queueSpec,
+                payload = payload,
+                workerId = workerId,
+                cause = IllegalStateException("OTLP $workerLabel processing failed"),
+            ),
+        )
     }
 }

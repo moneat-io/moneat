@@ -26,6 +26,7 @@ import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
 import com.moneat.plugins.configureDemoModeRestrictions
 import com.moneat.plugins.configureEgressWorkflowWorker
+import com.moneat.plugins.configureHealthRouting
 import com.moneat.plugins.configureHTTP
 import com.moneat.plugins.configureMonitoring
 import com.moneat.plugins.configureRateLimiting
@@ -34,6 +35,8 @@ import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
 import com.moneat.plugins.WorkflowWorkerMode
 import com.moneat.plugins.workflowWorkerMode
+import com.moneat.runtime.MoneatProcessRole
+import com.moneat.runtime.RuntimeMode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
@@ -85,7 +88,8 @@ fun Application.module() {
         val frontendBaseUrl = environment.config.property("email.frontendUrl").getString()
         modules(buildAppModules(frontendBaseUrl = frontendBaseUrl))
     }
-    if (workflowWorkerMode() == WorkflowWorkerMode.EGRESS) {
+    val processRole = RuntimeMode.role()
+    if (processRole == MoneatProcessRole.WORKFLOW_EGRESS || workflowWorkerMode() == WorkflowWorkerMode.EGRESS) {
         configureSerialization()
         configureEgressWorkflowWorker()
         log.info("Workflow egress worker startup complete")
@@ -100,8 +104,30 @@ fun Application.module() {
     configureRedis()
     configureClickHouse()
     configureDatabases()
-    configureBackgroundJobs()
-    log.info("About to configure routing...")
-    configureRouting()
-    log.info("Routing configured successfully, application startup complete")
+    when (processRole) {
+        MoneatProcessRole.ALL -> {
+            configureBackgroundJobs(startSchedulers = true, startIngestionWorkers = true)
+            log.info("About to configure routing...")
+            configureRouting()
+            log.info("Routing configured successfully, application startup complete")
+        }
+        MoneatProcessRole.API -> {
+            configureBackgroundJobs(startSchedulers = false, startIngestionWorkers = false)
+            log.info("Starting API-only process")
+            configureRouting()
+        }
+        MoneatProcessRole.SCHEDULER -> {
+            configureBackgroundJobs(startSchedulers = true, startIngestionWorkers = false)
+            log.info("Starting scheduler-only process")
+            configureHealthRouting()
+        }
+        MoneatProcessRole.INGESTION_WORKER -> {
+            configureBackgroundJobs(startSchedulers = false, startIngestionWorkers = true)
+            log.info("Starting ingestion-worker process")
+            configureHealthRouting()
+        }
+        MoneatProcessRole.WORKFLOW_EGRESS -> {
+            // Handled before full infrastructure startup.
+        }
+    }
 }

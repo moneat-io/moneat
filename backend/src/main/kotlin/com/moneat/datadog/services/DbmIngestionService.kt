@@ -17,12 +17,13 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdDbmActivityPayload
 import com.moneat.datadog.models.DdDbmHealthPayload
 import com.moneat.datadog.models.DdDbmMetadataPayload
 import com.moneat.datadog.models.DdDbmMetricsPayload
 import com.moneat.datadog.models.DdDbmQueryPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
@@ -281,7 +282,7 @@ object DbmIngestionService {
 
     private fun enqueueBatch(batch: QueuedDbmBatch, entryCount: Int, queueKey: String): Int {
         if (entryCount == 0) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_DBM, queueKey, json.encodeToString(batch))
         return entryCount
     }
 

@@ -17,11 +17,12 @@
 package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.reserveDatadogQuota
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.DecompressionService
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -172,7 +173,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
         }.toString()
     }
 
-    RedisConfig.sync().lpush(QUEUE_KEY, queuePayload)
+    IngestionQueueClient.enqueue(IngestionPipeline.DD_TRACES, QUEUE_KEY, queuePayload)
 
     // Return rate_by_service response (DD agent expects this)
     call.respond(

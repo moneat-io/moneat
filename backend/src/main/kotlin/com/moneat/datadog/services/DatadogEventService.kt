@@ -17,9 +17,10 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogEvent
 import com.moneat.datadog.models.DatadogServiceCheck
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -149,7 +150,7 @@ object DatadogEventService {
         val batch = mapEvents(organizationId, events)
         if (batch.events.isEmpty()) return 0
         val message = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, message)
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_EVENTS, queueKey, message)
         logger.debug {
             "Enqueued ${batch.events.size} DD events for org $organizationId"
         }

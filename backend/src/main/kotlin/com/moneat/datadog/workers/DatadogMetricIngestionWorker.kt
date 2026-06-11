@@ -20,6 +20,11 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.QueuedMetricBatch
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueReadMode
+import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.ingestion.queue.QueuedIngestionMessage
+import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
@@ -68,6 +73,7 @@ class DatadogMetricIngestionWorker(
     private val scope =
         CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
+    private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
         registerQueues()
@@ -75,6 +81,16 @@ class DatadogMetricIngestionWorker(
         logger.info {
             "Starting DatadogMetricIngestionWorker with " +
                 "$workerCount workers, queue=$queueKey"
+        }
+        if (IngestionQueueSettings.readMode() != IngestionQueueReadMode.LIST) {
+            val spec = IngestionQueueSettings.spec(IngestionPipeline.DD_METRICS, queueKey, dlqKey, workerCount)
+            queueWorker = RedisQueueWorker(
+                spec = spec,
+                logger = logger,
+                processMessage = ::processMessage,
+                processBatch = ::processQueuedMessages,
+            ).also { it.start() }
+            return
         }
         jobs = (1..workerCount).map { workerId ->
             scope.launch {
@@ -84,8 +100,11 @@ class DatadogMetricIngestionWorker(
     }
 
     fun stop() {
+        queueWorker?.stop()
         jobs.forEach { it.cancel() }
-        scope.cancel()
+        if (jobs.isNotEmpty()) {
+            scope.cancel()
+        }
         logger.info { "DatadogMetricIngestionWorker stopped" }
     }
 
@@ -134,6 +153,13 @@ class DatadogMetricIngestionWorker(
         payload: String,
     ) {
         processPayloads(workerId, listOf(payload))
+    }
+
+    private suspend fun processQueuedMessages(
+        workerId: Int,
+        messages: List<QueuedIngestionMessage>,
+    ) {
+        processPayloads(workerId, messages.map { it.payload })
     }
 
     internal fun collectPayloadsForProcessing(

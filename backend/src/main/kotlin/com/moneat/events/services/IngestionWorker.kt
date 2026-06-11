@@ -20,6 +20,11 @@ import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.RedisConfig
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.repositories.EventRepositoryImpl
+import com.moneat.ingestion.queue.IngestionDlqRequest
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
@@ -32,9 +37,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 import java.io.IOException
@@ -61,10 +64,24 @@ class IngestionWorker(
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
+    private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
         logger.info { "Starting IngestionWorker with $workerCount workers, queue=$queueKey" }
-        OperationalMetrics.registerWorkerQueues("Event", queueKey, dlqKey)
+        val spec = IngestionQueueSettings.spec(IngestionPipeline.EVENTS, queueKey, dlqKey, workerCount)
+        queueWorker = RedisQueueWorker(spec, logger, processMessage = { workerId, payload ->
+            processMessageForTest(workerId, payload) { message ->
+                IngestionQueueClient.pushToDlq(
+                    logger = logger,
+                    request = IngestionDlqRequest(
+                        spec = spec,
+                        payload = message,
+                        workerId = workerId,
+                        cause = IllegalStateException("Event processing failed"),
+                    ),
+                )
+            }
+        }).also { it.start() }
         SentryUtils.breadcrumb(
             "worker",
             "IngestionWorker starting",
@@ -73,17 +90,10 @@ class IngestionWorker(
                 "queue" to queueKey
             )
         )
-        jobs =
-            (1..workerCount).map { id ->
-                scope.launch {
-                    runWorker(id)
-                }
-            }
     }
 
     fun stop() {
-        jobs.forEach { it.cancel() }
-        scope.cancel()
+        queueWorker?.stop()
         logger.info { "IngestionWorker stopped" }
         SentryUtils.breadcrumb(
             "worker",

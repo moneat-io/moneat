@@ -16,6 +16,7 @@
 
 package com.moneat.otlp.services
 
+import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
@@ -31,6 +32,7 @@ class OtlpMetricsIngestionWorker(
     queueKey,
     dlqKey,
     workerCount,
+    IngestionPipeline.OTLP_METRICS,
     "OtlpMetricsIngestionWorker",
     "metrics",
 ) {

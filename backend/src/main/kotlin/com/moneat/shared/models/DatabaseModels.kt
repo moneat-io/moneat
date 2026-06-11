@@ -494,6 +494,19 @@ object UsageRecords : Table("usage_records") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object IngestionUsageEvents : Table("ingestion_usage_events") {
+    val id = integer("id").autoIncrement()
+    val idempotency_key = varchar("idempotency_key", 64).uniqueIndex()
+    val organization_id = integer("organization_id").references(Organizations.id)
+    val project_id = integer("project_id").nullable()
+    val event_type = varchar("event_type", 50)
+    val event_count = integer("event_count")
+    val bytes_ingested = long("bytes_ingested")
+    val recordDate = date("date")
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object Subscriptions : Table("subscriptions") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)

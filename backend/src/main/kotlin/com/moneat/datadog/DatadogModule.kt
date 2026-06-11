@@ -52,7 +52,9 @@ import com.moneat.datadog.workers.MiscIngestionWorker
 import com.moneat.datadog.workers.OrchestratorIngestionWorker
 import com.moneat.datadog.workers.TraceIngestionWorker
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.monitoring.OperationalMetrics
+import com.moneat.runtime.RuntimeMode
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
@@ -124,37 +126,61 @@ class DatadogModule : EnterpriseModule {
     }
 
     override fun startBackgroundJobs(application: Application) {
+        startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)
+    }
+
+    override fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (!startIngestionWorkers) {
+            logger.info { "Skipping Datadog ingestion workers for this process role" }
+            return
+        }
         logger.info { "Starting Datadog enterprise background jobs" }
         registerQueueMetrics()
-        ProfileStorageService.init()
-        traceWorker = TraceIngestionWorker()
-        traceWorker.start()
-        orchestratorWorker = OrchestratorIngestionWorker()
-        orchestratorWorker.start()
-        dbmWorker = DbmIngestionWorker()
-        dbmWorker.start()
-        debuggerWorker = DebuggerIngestionWorker()
-        debuggerWorker.start()
-        metricWorker = DatadogMetricIngestionWorker(
-            METRICS_QUEUE, METRICS_DLQ, WORKER_COUNT_2
-        )
-        metricWorker?.start()
-        eventWorker = DatadogEventIngestionWorker(
-            EVENTS_QUEUE, EVENTS_DLQ, WORKER_COUNT_2
-        )
-        eventWorker?.start()
-        infraWorker = DatadogInfraIngestionWorker(
-            INFRA_QUEUE, INFRA_DLQ, WORKER_COUNT_1
-        )
-        infraWorker?.start()
-        miscWorker = MiscIngestionWorker(
-            MISC_QUEUE, MISC_DLQ, WORKER_COUNT_1
-        )
-        miscWorker?.start()
-        ndmWorker = NdmIngestionWorker()
-        ndmWorker?.start()
-        securityWorker = SecurityIngestionWorker()
-        securityWorker?.start()
+        if (shouldStart(IngestionPipeline.DD_TRACES)) {
+            ProfileStorageService.init()
+            traceWorker = TraceIngestionWorker()
+            traceWorker.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_ORCHESTRATOR)) {
+            orchestratorWorker = OrchestratorIngestionWorker()
+            orchestratorWorker.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_DBM)) {
+            dbmWorker = DbmIngestionWorker()
+            dbmWorker.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_DEBUGGER)) {
+            debuggerWorker = DebuggerIngestionWorker()
+            debuggerWorker.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_METRICS)) {
+            metricWorker = DatadogMetricIngestionWorker(METRICS_QUEUE, METRICS_DLQ, WORKER_COUNT_2)
+            metricWorker?.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_EVENTS)) {
+            eventWorker = DatadogEventIngestionWorker(EVENTS_QUEUE, EVENTS_DLQ, WORKER_COUNT_2)
+            eventWorker?.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_INFRA)) {
+            infraWorker = DatadogInfraIngestionWorker(INFRA_QUEUE, INFRA_DLQ, WORKER_COUNT_1)
+            infraWorker?.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_MISC)) {
+            miscWorker = MiscIngestionWorker(MISC_QUEUE, MISC_DLQ, WORKER_COUNT_1)
+            miscWorker?.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_NDM)) {
+            ndmWorker = NdmIngestionWorker()
+            ndmWorker?.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_SECURITY)) {
+            securityWorker = SecurityIngestionWorker()
+            securityWorker?.start()
+        }
     }
 
     override fun stopBackgroundJobs() {
@@ -187,6 +213,9 @@ class DatadogModule : EnterpriseModule {
             OperationalMetrics.registerWorkerQueues(queue.workerName, queue.queueKey, queue.dlqKey)
         }
     }
+
+    private fun shouldStart(pipeline: IngestionPipeline): Boolean =
+        RuntimeMode.shouldStartPipeline(pipeline)
 
     private data class WorkerQueue(
         val workerName: String,

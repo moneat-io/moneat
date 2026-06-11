@@ -17,10 +17,11 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogConnectionsPayload
 import com.moneat.datadog.models.DatadogContainerPayload
 import com.moneat.datadog.models.DatadogProcessPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.monitor.services.InfraContainerRollupRow
 import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -205,7 +206,7 @@ object DatadogInfraService {
             batch.containers.size + batch.connections.size
         if (count == 0) return 0
         val message = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, message)
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_INFRA, queueKey, message)
         logger.debug {
             "Enqueued $count DD infra entries (${batch.type}) " +
                 "for org ${batch.organizationId}"

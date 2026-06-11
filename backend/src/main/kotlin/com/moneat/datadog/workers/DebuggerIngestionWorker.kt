@@ -18,6 +18,9 @@ package com.moneat.datadog.workers
 
 import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DebuggerIngestionService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
@@ -27,9 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import java.io.IOException
 import com.moneat.utils.suspendRunCatching
@@ -46,20 +47,19 @@ class DebuggerIngestionWorker(
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
+    private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
         logger.info {
             "Starting DebuggerIngestionWorker with " +
                 "$workerCount workers, queue=$queueKey"
         }
-        jobs = (1..workerCount).map { workerId ->
-            scope.launch { runWorker(workerId) }
-        }
+        val spec = IngestionQueueSettings.spec(IngestionPipeline.DD_DEBUGGER, queueKey, dlqKey, workerCount)
+        queueWorker = RedisQueueWorker(spec, logger, ::processMessage).also { it.start() }
     }
 
     fun stop() {
-        jobs.forEach { it.cancel() }
-        scope.cancel()
+        queueWorker?.stop()
         logger.info { "DebuggerIngestionWorker stopped" }
     }
     private suspend fun runWorker(workerId: Int) {

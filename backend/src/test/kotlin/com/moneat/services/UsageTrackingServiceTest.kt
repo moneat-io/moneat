@@ -18,19 +18,23 @@ package com.moneat.services
 
 import com.moneat.billing.models.OrgUsageCounters
 import com.moneat.billing.models.PricingTierConfigs
+import com.moneat.shared.models.IngestionUsageEvents
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.IngestionUsageDeduplication
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.testsupport.TestDatabaseHelper
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -49,7 +53,7 @@ class UsageTrackingServiceTest {
     fun setupDatabase() {
         if (db == null) {
             db = Database.connect(
-                url = "jdbc:h2:mem:moneat_usage_tracking;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                url = "jdbc:h2:mem:moneat_usage_tracking;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
                 driver = "org.h2.Driver"
             )
         }
@@ -61,6 +65,7 @@ class UsageTrackingServiceTest {
             Organizations,
             Projects,
             UsageRecords,
+            IngestionUsageEvents,
             Subscriptions,
             PricingTierConfigs,
             OrgUsageCounters
@@ -320,6 +325,49 @@ class UsageTrackingServiceTest {
         service.recordUsage(99999L, "error", 100)
         service.flushBuffer()
     }
+
+    @Test
+    fun `recordUsage with ingestion dedupe seed ignores stream redelivery`() = runBlocking {
+        val orgId = seedOrg()
+        val projectId = seedProject(orgId)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+        val startDate = today.plus(DatePeriod(days = -1))
+        val service = UsageTrackingService()
+
+        IngestionUsageDeduplication.withSeed("logs:1-0") {
+            service.recordUsage(projectId, "error", 100)
+        }
+        IngestionUsageDeduplication.withSeed("logs:1-0") {
+            service.recordUsage(projectId, "error", 100)
+        }
+
+        assertEquals(1L, service.getEventCountForOrg(orgId, startDate, today))
+        assertEquals(100L, service.getTotalBytesForOrg(orgId, startDate, today))
+        assertEquals(1L, ingestionUsageEventCount())
+    }
+
+    @Test
+    fun `recordUsage with ingestion dedupe seed keeps repeated usage effects in one batch`() = runBlocking {
+        val orgId = seedOrg()
+        val projectId = seedProject(orgId)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+        val startDate = today.plus(DatePeriod(days = -1))
+        val service = UsageTrackingService()
+
+        IngestionUsageDeduplication.withSeed("logs:2-0,2-1") {
+            service.recordUsage(projectId, "log", 100)
+            service.recordUsage(projectId, "log", 200)
+        }
+
+        assertEquals(2L, service.getEventCountForOrg(orgId, startDate, today, listOf("log")))
+        assertEquals(300L, service.getTotalBytesForOrg(orgId, startDate, today))
+        assertEquals(2L, ingestionUsageEventCount())
+    }
+
+    private fun ingestionUsageEventCount(): Long =
+        transaction {
+            IngestionUsageEvents.selectAll().count()
+        }
 
     // ──── checkQuota ────
 
