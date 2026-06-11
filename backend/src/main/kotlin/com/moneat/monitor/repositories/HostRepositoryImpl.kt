@@ -21,11 +21,10 @@ import com.moneat.monitor.models.HostData
 import com.moneat.shared.models.Hosts
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -114,18 +113,17 @@ class HostRepositoryImpl : HostRepository {
 
 private fun parseHostTags(rawTags: String): Map<String, String> {
     if (rawTags.isBlank()) return emptyMap()
-    return try {
+    return runCatching {
         hostTagsJson
             .parseToJsonElement(rawTags)
             .jsonObject
             .entries
             .mapNotNull { (key, value) ->
-                value.jsonPrimitive.contentOrNull?.takeIf { it.isNotBlank() }?.let { key to it }
+                (value as? JsonPrimitive)
+                    ?.contentOrNull
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { key to it }
             }
             .toMap()
-    } catch (_: SerializationException) {
-        emptyMap()
-    } catch (_: IllegalArgumentException) {
-        emptyMap()
-    }
+    }.getOrDefault(emptyMap())
 }
