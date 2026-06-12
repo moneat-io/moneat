@@ -22,8 +22,8 @@ class PostgresHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDat
     driverClass = "org.postgresql.Driver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String =
-        "jdbc:postgresql://$host:$port/$database"
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String =
+        "jdbc:postgresql://$host:$port/$database" + JdbcHandlerCommon.postgresQuerySuffix(options)
 
     override fun defaultPort(): Int = 5432
 

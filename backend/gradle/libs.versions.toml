@@ -94,6 +94,9 @@ opentelemetry-proto = { module = "io.opentelemetry.proto:opentelemetry-proto", v
 jsonpath = { module = "com.jayway.jsonpath:json-path", version = "3.0.0" }
 snakeyaml = { module = "org.yaml:snakeyaml", version = "2.5" }
 
+# Synthetic browser/E2E tests (headless Chromium)
+playwright = { module = "com.microsoft.playwright:playwright", version = "1.49.0" }
+
 # Environment
 dotenv-kotlin = { module = "io.github.cdimascio:dotenv-kotlin", version = "6.5.1" }
 

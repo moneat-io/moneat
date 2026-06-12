@@ -26,8 +26,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.concurrent.thread
@@ -224,6 +226,101 @@ class SyntheticsCheckExecutorTest {
     }
 
     @Test
+    fun `header assertion fails when response header is missing`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, "{}")
+        }.use { server ->
+            val assertions = Json.encodeToString(
+                listOf(
+                    mapOf(
+                        "type" to "header",
+                        "target" to "X-Request-Id",
+                        "operator" to "equals",
+                        "value" to "abc"
+                    )
+                )
+            )
+            val test = makeTestData(url = server.baseUrl, assertions = assertions)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertEquals("<missing>", result.assertionResults.single().actual)
+        }
+    }
+
+    @Test
+    fun `response time and unknown assertions report assertion details`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, "{}")
+        }.use { server ->
+            val assertions = Json.encodeToString(
+                listOf(
+                    mapOf(
+                        "type" to "response_time",
+                        "operator" to "less_than",
+                        "value" to "10000"
+                    ),
+                    mapOf(
+                        "type" to "custom_check",
+                        "operator" to "equals",
+                        "value" to "ok"
+                    )
+                )
+            )
+            val test = makeTestData(url = server.baseUrl, assertions = assertions)
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertEquals(2, result.assertionResults.size)
+            assertTrue(result.assertionResults.first().passed)
+            assertEquals("unknown", result.assertionResults.last().actual)
+        }
+    }
+
+    @Test
+    fun `body json path not equals operator works`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, """{"data":{"status":"degraded"}}""")
+        }.use { server ->
+            val assertions = Json.encodeToString(
+                listOf(
+                    mapOf(
+                        "type" to "body_json_path",
+                        "target" to "$.data.status",
+                        "operator" to "not_equals",
+                        "value" to "healthy"
+                    )
+                )
+            )
+            val test = makeTestData(url = server.baseUrl, assertions = assertions)
+            val result = executor.executeTest(test)
+            assertEquals("passed", result.status)
+            assertEquals("degraded", result.assertionResults.single().actual)
+        }
+    }
+
+    @Test
+    fun `executeTest captures request and response metadata without raw bodies`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, """{"token":"server-secret"}""", "application/json")
+        }.use { server ->
+            val test = makeTestData(
+                url = server.baseUrl,
+                method = "POST",
+                body = """{"token":"client-secret"}"""
+            )
+
+            val result = executor.executeTest(test)
+
+            assertEquals("passed", result.status)
+            val request = assertNotNull(result.request)
+            val response = assertNotNull(result.response)
+            assertEquals("POST", request.method)
+            assertEquals("", request.body)
+            assertEquals(200, response.statusCode)
+            assertEquals("", response.body)
+        }
+    }
+
+    @Test
     fun `status_code less_than operator works`() = runBlocking {
         MockHttpServer { exchange ->
             exchange.respond(200, "{}")
@@ -372,6 +469,35 @@ class SyntheticsCheckExecutorTest {
         }
     }
 
+    @Test
+    fun `API test sends configured authentication headers`() = runBlocking {
+        val expectedBasic = "Basic " + Base64.getEncoder().encodeToString("alice:secret".toByteArray())
+        MockHttpServer { exchange ->
+            val expected = if (exchange.requestURI.path == "/basic") {
+                expectedBasic
+            } else {
+                "Bearer token-123"
+            }
+            exchange.respond(
+                if (exchange.requestHeaders.getFirst("Authorization") == expected) 200 else 401,
+                "{}"
+            )
+        }.use { server ->
+            val basic = makeTestData(url = "${server.baseUrl}/basic").copy(
+                authMethod = "basic",
+                authUser = "alice",
+                authPass = "secret"
+            )
+            val bearer = makeTestData(url = "${server.baseUrl}/bearer").copy(
+                authMethod = "bearer",
+                authPass = "token-123"
+            )
+
+            assertEquals("passed", executor.executeTest(basic).status)
+            assertEquals("passed", executor.executeTest(bearer).status)
+        }
+    }
+
     // ──── Test type dispatch ────
 
     @Test
@@ -415,6 +541,48 @@ class SyntheticsCheckExecutorTest {
         )
         val result = executor.executeTest(test)
         assertEquals("passed", result.status)
+    }
+
+    @Test
+    fun `DNS test with resolution time assertion works`() = runBlocking {
+        val assertions = Json.encodeToString(
+            listOf(
+                mapOf(
+                    "type" to "resolution_time",
+                    "operator" to "less_than",
+                    "value" to "10000"
+                )
+            )
+        )
+        val test = makeTestData(
+            testType = "dns",
+            url = "localhost",
+            assertions = assertions
+        )
+        val result = executor.executeTest(test)
+        assertEquals("passed", result.status)
+        assertEquals(1, result.assertionResults.size)
+    }
+
+    @Test
+    fun `DNS test fails unknown assertion type`() = runBlocking {
+        val assertions = Json.encodeToString(
+            listOf(
+                mapOf(
+                    "type" to "dns_unknown",
+                    "operator" to "equals",
+                    "value" to "ok"
+                )
+            )
+        )
+        val test = makeTestData(
+            testType = "dns",
+            url = "localhost",
+            assertions = assertions
+        )
+        val result = executor.executeTest(test)
+        assertEquals("failed", result.status)
+        assertEquals("unknown", result.assertionResults.single().actual)
     }
 
     @Test
@@ -517,6 +685,62 @@ class SyntheticsCheckExecutorTest {
             )
             val result = executor.executeTest(test)
             assertEquals("passed", result.status)
+        }
+    }
+
+    @Test
+    fun `TCP connection time assertion works`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, "{}")
+        }.use { server ->
+            val port = server.baseUrl.substringAfterLast(":").toInt()
+            val config = """{"hostname":"127.0.0.1","port":$port}"""
+            val assertions = Json.encodeToString(
+                listOf(
+                    mapOf(
+                        "type" to "connection_time",
+                        "operator" to "less_than",
+                        "value" to "10000"
+                    )
+                )
+            )
+            val test = makeTestData(
+                testType = "tcp",
+                url = "127.0.0.1",
+                config = config,
+                assertions = assertions
+            )
+            val result = executor.executeTest(test)
+            assertEquals("passed", result.status)
+            assertEquals(1, result.assertionResults.size)
+        }
+    }
+
+    @Test
+    fun `TCP test fails unknown assertion type`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, "{}")
+        }.use { server ->
+            val port = server.baseUrl.substringAfterLast(":").toInt()
+            val config = """{"hostname":"127.0.0.1","port":$port}"""
+            val assertions = Json.encodeToString(
+                listOf(
+                    mapOf(
+                        "type" to "tcp_unknown",
+                        "operator" to "equals",
+                        "value" to "ok"
+                    )
+                )
+            )
+            val test = makeTestData(
+                testType = "tcp",
+                url = "127.0.0.1",
+                config = config,
+                assertions = assertions
+            )
+            val result = executor.executeTest(test)
+            assertEquals("failed", result.status)
+            assertEquals("unknown", result.assertionResults.single().actual)
         }
     }
 

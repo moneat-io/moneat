@@ -421,7 +421,7 @@ class OverviewService(
             } + deploys.map { deploy ->
                 OverviewActivityItem("deploy", "${deploy.version} released to ${deploy.service}", deploy.ageLabel)
             } + issues.map { issue ->
-                OverviewActivityItem("issue", issue.title, issue.ageLabel)
+                OverviewActivityItem("incident", issue.title, issue.ageLabel)
             }
             ).take(MAX_ACTIVITY_ROWS)
 

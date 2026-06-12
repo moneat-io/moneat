@@ -22,12 +22,11 @@ class MySQLHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataSo
     driverClass = "com.mysql.cj.jdbc.Driver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String =
-        if (database.isBlank()) {
-            "jdbc:mysql://$host:$port/"
-        } else {
-            "jdbc:mysql://$host:$port/$database"
-        }
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
+        val base = if (database.isBlank()) "jdbc:mysql://$host:$port/" else "jdbc:mysql://$host:$port/$database"
+        val sslMode = JdbcHandlerCommon.mysqlSslMode(options.tlsMode)
+        return if (sslMode != null) "$base?sslMode=$sslMode" else base
+    }
 
     override fun defaultPort(): Int = 3306
 

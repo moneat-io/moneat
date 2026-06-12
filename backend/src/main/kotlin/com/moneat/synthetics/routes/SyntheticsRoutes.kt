@@ -18,6 +18,7 @@ package com.moneat.synthetics.routes
 
 import com.moneat.auth.currentOrgContextOrNull
 import com.moneat.config.ClickHouseClient
+import com.moneat.config.StorageConfig
 import com.moneat.shared.services.parseJavaUuidOrNull
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
@@ -31,6 +32,7 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
@@ -55,6 +57,8 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
+private const val NO_ORGANIZATION_ERROR = "No organization"
+private const val INVALID_ID_ERROR = "Invalid ID"
 
 private fun getOrgIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
     principal
@@ -96,6 +100,9 @@ private fun parseJsonEachRow(body: String): List<JsonObject> {
         }
 }
 
+private fun publicSyntheticResult(row: JsonObject): JsonObject =
+    JsonObject(row.filterKeys { key -> key != "organizationId" })
+
 private suspend fun executeChQuery(query: String): List<JsonObject>? {
     return runCatching {
         val response = ClickHouseClient.execute(query)
@@ -112,7 +119,46 @@ private suspend fun executeChQuery(query: String): List<JsonObject>? {
 
 fun Route.syntheticsRoutes() {
     val syntheticsService = GlobalContext.get().get<SyntheticsService>()
+    val locationService = SyntheticLocationService()
     route("/v1") {
+        // --- Private-location worker (probe) protocol: key-auth, not JWT ---
+
+        get("/synthetics/probe/work") {
+            val key = call.request.headers["X-Probe-Key"].orEmpty()
+            val locationCode = call.request.queryParameters["location"].orEmpty()
+            val identity = locationService.authenticateProbe(key, locationCode)
+            if (identity == null) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid probe key"))
+                return@get
+            }
+            val items = syntheticsService.getProbeWork(
+                identity.organizationId,
+                identity.locationCode
+            )
+            call.respond(HttpStatusCode.OK, ProbeWorkResponse(identity.locationCode, items))
+        }
+
+        post("/synthetics/probe/results") {
+            val key = call.request.headers["X-Probe-Key"].orEmpty()
+            val locationCode = call.request.queryParameters["location"].orEmpty()
+            val identity = locationService.authenticateProbe(key, locationCode)
+            if (identity == null) {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid probe key"))
+                return@post
+            }
+            val submission = call.receive<ProbeResultSubmission>()
+            val ok = syntheticsService.recordProbeResult(
+                identity.organizationId,
+                identity.locationCode,
+                submission
+            )
+            if (ok) {
+                call.respond(HttpStatusCode.Accepted, mapOf("ok" to true))
+            } else {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unknown test"))
+            }
+        }
+
         authenticate("auth-jwt") {
             // --- Synthetic Test Results ---
 
@@ -176,8 +222,9 @@ fun Route.syntheticsRoutes() {
                     response.bodyAsText().trim().toLongOrNull() ?: 0L
                 }.getOrElse { 0L }
 
+                val publicResults = results.map(::publicSyntheticResult)
                 val responseJson = buildJsonObject {
-                    put("results", JsonArray(results))
+                    put("results", JsonArray(publicResults))
                     put("totalCount", JsonPrimitive(totalCount))
                 }
                 call.respondText(
@@ -199,7 +246,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -215,7 +262,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -223,7 +270,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -257,7 +304,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -292,8 +339,9 @@ fun Route.syntheticsRoutes() {
                     response.bodyAsText().trim().toLongOrNull() ?: 0L
                 }.getOrElse { 0L }
 
+                val publicResults = results.map(::publicSyntheticResult)
                 val responseJson = buildJsonObject {
-                    put("results", JsonArray(results))
+                    put("results", JsonArray(publicResults))
                     put("totalCount", JsonPrimitive(totalCount))
                 }
                 call.respondText(
@@ -313,7 +361,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -321,7 +369,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -339,6 +387,123 @@ fun Route.syntheticsRoutes() {
                 }
             }
 
+            get("/synthetics/tests/{id}/results/{resultId}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@get
+                }
+                val testId = parseSyntheticTestId(call.parameters["id"])?.toString()
+                if (testId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_ID_ERROR)
+                    )
+                    return@get
+                }
+                val resultId = parseSyntheticTestId(call.parameters["resultId"])?.toString()
+                if (resultId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Invalid result ID")
+                    )
+                    return@get
+                }
+                val run = syntheticsService.getRunDetail(testId, resultId, orgIds)
+                if (run == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Run not found")
+                    )
+                } else {
+                    call.respond(HttpStatusCode.OK, run)
+                }
+            }
+
+            // Serves a captured browser-step screenshot. Keys are scoped as
+            // synthetics/{orgId}/{runId}/step-N.png, so the org segment authorizes access.
+            get("/synthetics/screenshots/{key...}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@get
+                }
+                val key = call.parameters.getAll("key")?.joinToString("/").orEmpty()
+                val allowed = orgIds.any { key.startsWith("synthetics/$it/") }
+                if (!allowed || key.contains("..")) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to "Forbidden")
+                    )
+                    return@get
+                }
+                val bytes = StorageConfig.provider.read(key)
+                if (bytes == null) {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Not found")
+                    )
+                } else {
+                    call.respondBytes(bytes, ContentType.Image.PNG)
+                }
+            }
+
+            get("/synthetics/tests/{id}/locations/summary") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@get
+                }
+                val testId = parseSyntheticTestId(call.parameters["id"])?.toString()
+                if (testId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_ID_ERROR)
+                    )
+                    return@get
+                }
+                val summaries = syntheticsService.getLocationSummaries(testId, orgIds)
+                call.respond(HttpStatusCode.OK, summaries)
+            }
+
+            post("/synthetics/preview") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@post
+                }
+                val request = call.receive<CreateSyntheticTestRequest>()
+                val run = syntheticsService.previewTest(
+                    orgIds.first(),
+                    request
+                )
+                call.respond(HttpStatusCode.OK, run)
+            }
+
             post("/synthetics/tests") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload
@@ -347,7 +512,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -375,7 +540,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@put
                 }
@@ -383,7 +548,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@put
                 }
@@ -411,7 +576,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@delete
                 }
@@ -419,7 +584,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@delete
                 }
@@ -445,7 +610,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -453,7 +618,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@post
                 }
@@ -484,7 +649,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -502,7 +667,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -522,7 +687,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@put
                 }
@@ -530,7 +695,7 @@ fun Route.syntheticsRoutes() {
                 if (varId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@put
                 }
@@ -558,7 +723,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@delete
                 }
@@ -566,7 +731,7 @@ fun Route.syntheticsRoutes() {
                 if (varId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@delete
                 }
@@ -580,6 +745,80 @@ fun Route.syntheticsRoutes() {
                     call.respond(
                         HttpStatusCode.NotFound,
                         mapOf("error" to "Variable not found")
+                    )
+                }
+            }
+
+            // --- Synthetic Locations ---
+
+            get("/synthetics/locations") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@get
+                }
+                call.respond(
+                    HttpStatusCode.OK,
+                    locationService.listLocations(orgIds.first())
+                )
+            }
+
+            post("/synthetics/locations") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@post
+                }
+                val request = call.receive<CreatePrivateLocationRequest>()
+                val created = locationService.createPrivateLocation(
+                    orgIds.first(),
+                    request
+                )
+                call.respond(HttpStatusCode.Created, created)
+            }
+
+            delete("/synthetics/locations/{id}") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal!!.payload
+                    .getClaim("userId").asInt()
+                val orgIds = getOrgIdsForUser(userId, principal)
+                if (orgIds.isEmpty()) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
+                    )
+                    return@delete
+                }
+                val locId = parseSyntheticTestId(call.parameters["id"])
+                if (locId == null) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to INVALID_ID_ERROR)
+                    )
+                    return@delete
+                }
+                val deleted = locationService.deletePrivateLocation(
+                    locId,
+                    orgIds.first()
+                )
+                if (deleted) {
+                    call.respond(HttpStatusCode.OK, mapOf("ok" to true))
+                } else {
+                    call.respond(
+                        HttpStatusCode.NotFound,
+                        mapOf("error" to "Location not found")
                     )
                 }
             }

@@ -22,12 +22,11 @@ class MariaDBHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariData
     driverClass = "org.mariadb.jdbc.Driver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String =
-        if (database.isBlank()) {
-            "jdbc:mariadb://$host:$port/"
-        } else {
-            "jdbc:mariadb://$host:$port/$database"
-        }
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
+        val base = if (database.isBlank()) "jdbc:mariadb://$host:$port/" else "jdbc:mariadb://$host:$port/$database"
+        val sslMode = JdbcHandlerCommon.mariadbSslMode(options.tlsMode)
+        return if (sslMode != null) "$base?sslMode=$sslMode" else base
+    }
 
     override fun defaultPort(): Int = 3306
 

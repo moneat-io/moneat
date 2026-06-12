@@ -264,6 +264,12 @@ class DashboardRepositoryTest {
     }
 
     @Test
+    fun `create returns owner name from creating user`() {
+        val result = createDashboard(title = "Owned Dashboard")
+        assertEquals("Test User", result.ownerName)
+    }
+
+    @Test
     fun `create with description stores description`() {
         val result = createDashboard(title = "WithDesc", description = "A detailed description")
         assertEquals("A detailed description", result.description)
@@ -304,6 +310,15 @@ class DashboardRepositoryTest {
     }
 
     @Test
+    fun `list returns dashboard owner names`() {
+        createDashboard(title = "Owned List")
+
+        val dashboards = repository.list(orgId = ORG_ID)
+
+        assertEquals("Test User", dashboards.single().ownerName)
+    }
+
+    @Test
     fun `list returns empty for different org`() {
         createDashboard()
         val dashboards = repository.list(orgId = 999L)
@@ -338,6 +353,16 @@ class DashboardRepositoryTest {
         val found = repository.getById(created.id, ORG_ID)
         assertNotNull(found)
         assertEquals("FindMe", found.title)
+    }
+
+    @Test
+    fun `getById returns dashboard owner name`() {
+        val created = createDashboard(title = "FindOwner")
+
+        val found = repository.getById(created.id, ORG_ID)
+
+        assertNotNull(found)
+        assertEquals("Test User", found.ownerName)
     }
 
     @Test

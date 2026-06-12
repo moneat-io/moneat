@@ -51,7 +51,7 @@ function PerformanceMonitoringHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(99,102,241,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · transactions" live className="relative">
+      <WindowFrame title="moneat · transactions" className="relative">
         <div className="grid gap-3">
           {/* Transaction header */}
           <div className="flex items-baseline justify-between gap-3">

@@ -63,7 +63,8 @@ data class DashboardWithFavoriteFlag(
     val createdBy: Long,
     val createdByResourceId: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val ownerName: String? = null
 )
 
 data class CreatedDashboardData(
@@ -83,5 +84,6 @@ data class CreatedDashboardData(
     val createdBy: Long,
     val createdByResourceId: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val ownerName: String? = null
 )

@@ -23,9 +23,9 @@ class CockroachHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDa
     driverClass = "org.postgresql.Driver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String {
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
         val db = if (database.isBlank()) "defaultdb" else database
-        return "jdbc:postgresql://$host:$port/$db"
+        return "jdbc:postgresql://$host:$port/$db" + JdbcHandlerCommon.postgresQuerySuffix(options)
     }
 
     override fun defaultPort(): Int = 26257

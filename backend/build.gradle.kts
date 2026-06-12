@@ -167,6 +167,9 @@ dependencies {
     // YAML parsing for Sigma detection-rule import
     implementation(libs.snakeyaml)
 
+    // Headless Chromium for synthetic browser/E2E tests
+    implementation(libs.playwright)
+
     // Environment variables
     implementation(libs.dotenv.kotlin)
 

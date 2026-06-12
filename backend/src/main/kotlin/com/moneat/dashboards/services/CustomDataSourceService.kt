@@ -20,12 +20,17 @@ import com.moneat.dashboards.models.CreateCustomDataSourceRequest
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
 import com.moneat.dashboards.models.CustomDataSources
+import com.moneat.dashboards.models.DashboardWidgets
+import com.moneat.dashboards.models.Dashboards
+import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
+import com.moneat.dashboards.services.handlers.ConnectionOptions
 import com.moneat.shared.services.organizationResourceId
 import com.moneat.shared.services.requireResourceId
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.shared.services.userResourceIds
 import com.moneat.utils.suspendRunCatching
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
@@ -33,6 +38,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -43,6 +49,20 @@ private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
 
 class CustomDataSourceService {
+    companion object {
+        private val TEMPLATE_DATA_SOURCE_MARKERS = mapOf(
+            "__prometheus" to "prometheus",
+            "__cloudwatch" to "cloudwatch",
+            "__elasticsearch" to "elasticsearch",
+            "__graphite" to "graphite",
+            "__influxdb" to "influxdb",
+            "__loki" to "loki",
+            "__postgresql" to "postgresql",
+            "__postgres" to "postgresql",
+            "__redis" to "redis"
+        )
+    }
+
     private data class ResponseResourceIds(
         val orgResourceId: String,
         val users: Map<Int, String>,
@@ -75,7 +95,11 @@ class CustomDataSourceService {
         if (rows.isEmpty()) return@transaction emptyList()
 
         val resourceIds = responseResourceIds(orgId, rows)
-        rows.map { row -> row.toResponse(resourceIds) }
+        val sources = rows.map { row -> row.toResponse(resourceIds) }
+        val usageCounts = dataSourceUsageCounts(orgId, sources)
+        sources.map { source ->
+            source.copy(usedByDashboardCount = usageCounts[source.id] ?: 0)
+        }
     }
 
     fun getDataSource(id: Long, orgId: Long): CustomDataSourceResponse? = transaction {
@@ -99,6 +123,8 @@ class CustomDataSourceService {
             username = request.username,
             password = request.password,
             apiKey = request.apiKey,
+            headerName = request.extraConfig["header_name"],
+            headerValue = request.headerValue,
             accessKeyId = request.accessKeyId,
             secretAccessKey = request.secretAccessKey,
             serviceAccountJson = request.serviceAccountJson,
@@ -143,6 +169,7 @@ class CustomDataSourceService {
 
             // Only re-encrypt credentials if new values are provided
             val hasNewCreds = request.username != null || request.password != null || request.apiKey != null ||
+                request.headerValue != null || request.extraConfig?.containsKey("header_name") == true ||
                 request.accessKeyId != null || request.secretAccessKey != null || request.serviceAccountJson != null ||
                 request.accountIdentifier != null || request.connectionString != null || request.projectId != null ||
                 request.region != null
@@ -161,6 +188,8 @@ class CustomDataSourceService {
                     username = request.username ?: existingCreds.username,
                     password = request.password ?: existingCreds.password,
                     apiKey = request.apiKey ?: existingCreds.apiKey,
+                    headerName = request.extraConfig?.get("header_name") ?: existingCreds.headerName,
+                    headerValue = request.headerValue ?: existingCreds.headerValue,
                     accessKeyId = request.accessKeyId ?: existingCreds.accessKeyId,
                     secretAccessKey = request.secretAccessKey ?: existingCreds.secretAccessKey,
                     serviceAccountJson = request.serviceAccountJson ?: existingCreds.serviceAccountJson,
@@ -224,6 +253,79 @@ class CustomDataSourceService {
         return CredentialEncryption.encrypt(credsJson)
     }
 
+    private fun dataSourceUsageCounts(
+        orgId: Long,
+        sources: List<CustomDataSourceResponse>,
+    ): Map<String, Int> {
+        if (sources.isEmpty()) return emptyMap()
+
+        val sourceIds = sources.map { it.id }.toSet()
+        val firstEnabledSourceByType = sources
+            .filter { it.enabled }
+            .groupBy { it.sourceType.lowercase() }
+            .mapValues { (_, matchingSources) -> matchingSources.first().id }
+        val dashboardIdsBySource = sourceIds.associateWith { mutableSetOf<Long>() }.toMutableMap()
+
+        DashboardWidgets.innerJoin(Dashboards)
+            .select(DashboardWidgets.dashboardId, DashboardWidgets.queryConfig, DashboardWidgets.queryConfigs)
+            .where { Dashboards.orgId eq orgId }
+            .forEach { row ->
+                val dashboardId = row[DashboardWidgets.dashboardId]
+                val referencedSourceIds = referencedSourceIds(
+                    queryConfig = row[DashboardWidgets.queryConfig],
+                    queryConfigs = row[DashboardWidgets.queryConfigs],
+                    sourceIds = sourceIds,
+                    firstEnabledSourceByType = firstEnabledSourceByType,
+                )
+                referencedSourceIds.forEach { sourceId ->
+                    dashboardIdsBySource[sourceId]?.add(dashboardId)
+                }
+            }
+
+        return dashboardIdsBySource.mapValues { (_, dashboardIds) -> dashboardIds.size }
+    }
+
+    private fun referencedSourceIds(
+        queryConfig: String,
+        queryConfigs: String,
+        sourceIds: Set<String>,
+        firstEnabledSourceByType: Map<String, String>,
+    ): Set<String> {
+        val queries = decodeQueryConfigs(queryConfigs).ifEmpty {
+            decodeQueryConfig(queryConfig)?.let(::listOf).orEmpty()
+        }
+        return queries.mapNotNullTo(mutableSetOf()) { query ->
+            sourceIdForDataSource(query.dataSource, sourceIds, firstEnabledSourceByType)
+        }
+    }
+
+    private fun sourceIdForDataSource(
+        dataSource: String,
+        sourceIds: Set<String>,
+        firstEnabledSourceByType: Map<String, String>,
+    ): String? {
+        if (dataSource.startsWith("custom:")) {
+            val sourceId = dataSource.removePrefix("custom:")
+            return sourceId.takeIf(sourceIds::contains)
+        }
+        val sourceType = TEMPLATE_DATA_SOURCE_MARKERS[dataSource] ?: return null
+        return firstEnabledSourceByType[sourceType]
+    }
+
+    private fun decodeQueryConfigs(value: String): List<QueryDsl> =
+        try {
+            json.decodeFromString<List<QueryDsl>>(value)
+        } catch (_: SerializationException) {
+            emptyList()
+        }
+
+    private fun decodeQueryConfig(value: String): QueryDsl? =
+        try {
+            json.decodeFromString<QueryDsl>(value)
+        } catch (_: SerializationException) {
+            null
+        }
+
     private fun responseResourceIds(orgId: Long, rows: List<ResultRow>) =
         ResponseResourceIds(
             orgResourceId = organizationResourceId(orgId),
@@ -258,6 +360,10 @@ data class DataSourceCredentials(
     val username: String? = null,
     val password: String? = null,
     @kotlinx.serialization.SerialName("api_key") val apiKey: String? = null,
+    // Custom-header auth (e.g. Loki multi-tenancy): name is non-secret config but
+    // stored alongside the value so handlers get everything they need at query time.
+    @kotlinx.serialization.SerialName("header_name") val headerName: String? = null,
+    @kotlinx.serialization.SerialName("header_value") val headerValue: String? = null,
     @kotlinx.serialization.SerialName("access_key_id") val accessKeyId: String? = null,
     @kotlinx.serialization.SerialName("secret_access_key") val secretAccessKey: String? = null,
     @kotlinx.serialization.SerialName("service_account_json") val serviceAccountJson: String? = null,
@@ -265,4 +371,8 @@ data class DataSourceCredentials(
     @kotlinx.serialization.SerialName("connection_string") val connectionString: String? = null,
     @kotlinx.serialization.SerialName("project_id") val projectId: String? = null,
     val region: String? = null,
+    // Non-secret connection options (auth method, TLS mode, org/bucket, warehouse,
+    // use_role, …) parsed from extra_config and injected by the executor at query
+    // time. @Transient so it never touches the encrypted-at-rest credential blob.
+    @kotlinx.serialization.Transient val options: ConnectionOptions = ConnectionOptions(),
 )

@@ -142,6 +142,7 @@ class CustomDashboardService(
             createdBy = d.createdByResourceId,
             createdAt = d.createdAt,
             updatedAt = d.updatedAt,
+            ownerName = d.ownerName,
             widgets = widgets
         )
 

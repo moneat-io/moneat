@@ -22,7 +22,6 @@ import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -49,6 +48,8 @@ class GraphiteHandler : HttpApiHandler() {
         private const val MILLIS_PER_SECOND = 1_000
     }
 
+    override val httpAuthDefault = HttpAuthDefault.BEARER
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: GRAPHITE_DEFAULT_PORT)
@@ -56,7 +57,7 @@ class GraphiteHandler : HttpApiHandler() {
                 parameter("target", "constantLine(1)")
                 parameter("format", "json")
                 parameter("from", "-1min")
-                request.apiKey?.let { header("Authorization", "Bearer $it") }
+                applyHttpAuth(request.toCredentials())
             }
             if (response.status.isSuccess()) {
                 TestConnectionResult(true, "Connected successfully")
@@ -91,7 +92,7 @@ class GraphiteHandler : HttpApiHandler() {
                 parameter("format", "json")
                 parameter("from", from)
                 parameter("until", until)
-                credentials.apiKey?.let { header("Authorization", "Bearer $it") }
+                applyHttpAuth(credentials)
             }
             if (!response.status.isSuccess()) {
                 logger.error { "Graphite query failed: ${response.status}" }
@@ -113,7 +114,7 @@ class GraphiteHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port ?: GRAPHITE_DEFAULT_PORT)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/metrics/index.json") {
-                credentials.apiKey?.let { header("Authorization", "Bearer $it") }
+                applyHttpAuth(credentials)
             }
             if (response.status.isSuccess()) {
                 val arr = json.parseToJsonElement(response.bodyAsText()).jsonArray

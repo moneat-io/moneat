@@ -16,7 +16,7 @@
 
 export type OverviewTone = 'good' | 'warn' | 'bad' | 'neutral'
 export type OverviewSeriesKey = 'errors' | 'latency' | 'throughput' | 'logs'
-export type OverviewActivityKind = 'incident' | 'flag' | 'deploy' | 'workflow' | 'replay' | 'feedback'
+export type OverviewActivityKind = 'incident' | 'issue' | 'flag' | 'deploy' | 'workflow' | 'replay' | 'feedback'
 export type OverviewHeartbeatState = 'up' | 'warn' | 'down'
 
 export interface OverviewResponse {

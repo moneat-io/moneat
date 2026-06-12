@@ -70,13 +70,12 @@ function FeatureHeroDashboard({config}: {readonly config: FeaturePageConfig}) {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title={`moneat · ${config.tagline}`} live className="relative">
+      <WindowFrame title={`moneat · ${config.tagline}`} className="relative">
         <div className="grid gap-3">
           <div className="flex items-center justify-between">
             <span className="font-brandmono text-[11px] uppercase tracking-[0.12em] text-slate-500">
               {config.title}
             </span>
-            <span className="font-brandmono text-[11px] text-slate-500">live</span>
           </div>
           <SignalChart heightClass="h-36 sm:h-44" />
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
