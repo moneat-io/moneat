@@ -88,6 +88,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as WorkflowsInsightsRouteImport } from './routes/workflows.insights'
 import { Route as WorkflowsConnectionsRouteImport } from './routes/workflows.connections'
 import { Route as UptimeMonitorIdRouteImport } from './routes/uptime.$monitorId'
+import { Route as SyntheticsNewRouteImport } from './routes/synthetics.new'
 import { Route as SyntheticsTestIdRouteImport } from './routes/synthetics.$testId'
 import { Route as StatusPagesPageIdRouteImport } from './routes/status-pages.$pageId'
 import { Route as ServicesServiceRouteImport } from './routes/services.$service'
@@ -140,9 +141,11 @@ import { Route as AdminIncidentsRouteImport } from './routes/admin.incidents'
 import { Route as AdminEmailsRouteImport } from './routes/admin.emails'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAttributionRouteImport } from './routes/admin.attribution'
+import { Route as SyntheticsTestIdIndexRouteImport } from './routes/synthetics.$testId.index'
 import { Route as PerformanceTracesIndexRouteImport } from './routes/performance.traces.index'
 import { Route as MonitoringKubernetesIndexRouteImport } from './routes/monitoring.kubernetes.index'
 import { Route as MonitoringHostsIndexRouteImport } from './routes/monitoring.hosts.index'
+import { Route as SyntheticsTestIdEditRouteImport } from './routes/synthetics.$testId.edit'
 import { Route as ProjectsProjectIdSettingsRouteImport } from './routes/projects.$projectId.settings'
 import { Route as ProfilesServiceServiceRouteImport } from './routes/profiles.service.$service'
 import { Route as PerformanceTracesTraceIdRouteImport } from './routes/performance.traces.$traceId'
@@ -157,6 +160,7 @@ import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
 import { Route as AdminOrganizationsOrgIdRouteImport } from './routes/admin.organizations.$orgId'
+import { Route as SyntheticsTestIdResultsResultIdRouteImport } from './routes/synthetics.$testId.results.$resultId'
 import { Route as ServicesServiceResourcesResourceRouteImport } from './routes/services.$service.resources.$resource'
 import { Route as ProjectsProjectIdSpansSpanIdRouteImport } from './routes/projects.$projectId.spans.$spanId'
 
@@ -556,6 +560,11 @@ const UptimeMonitorIdRoute = UptimeMonitorIdRouteImport.update({
   path: '/uptime/$monitorId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SyntheticsNewRoute = SyntheticsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => SyntheticsRoute,
+} as any)
 const SyntheticsTestIdRoute = SyntheticsTestIdRouteImport.update({
   id: '/$testId',
   path: '/$testId',
@@ -819,6 +828,11 @@ const AdminAttributionRoute = AdminAttributionRouteImport.update({
   path: '/attribution',
   getParentRoute: () => AdminRoute,
 } as any)
+const SyntheticsTestIdIndexRoute = SyntheticsTestIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SyntheticsTestIdRoute,
+} as any)
 const PerformanceTracesIndexRoute = PerformanceTracesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -834,6 +848,11 @@ const MonitoringHostsIndexRoute = MonitoringHostsIndexRouteImport.update({
   id: '/hosts/',
   path: '/hosts/',
   getParentRoute: () => MonitoringRoute,
+} as any)
+const SyntheticsTestIdEditRoute = SyntheticsTestIdEditRouteImport.update({
+  id: '/edit',
+  path: '/edit',
+  getParentRoute: () => SyntheticsTestIdRoute,
 } as any)
 const ProjectsProjectIdSettingsRoute =
   ProjectsProjectIdSettingsRouteImport.update({
@@ -912,6 +931,12 @@ const AdminOrganizationsOrgIdRoute = AdminOrganizationsOrgIdRouteImport.update({
   path: '/$orgId',
   getParentRoute: () => AdminOrganizationsRoute,
 } as any)
+const SyntheticsTestIdResultsResultIdRoute =
+  SyntheticsTestIdResultsResultIdRouteImport.update({
+    id: '/results/$resultId',
+    path: '/results/$resultId',
+    getParentRoute: () => SyntheticsTestIdRoute,
+  } as any)
 const ServicesServiceResourcesResourceRoute =
   ServicesServiceResourcesResourceRouteImport.update({
     id: '/resources/$resource',
@@ -1037,7 +1062,8 @@ export interface FileRoutesByFullPath {
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
   '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
-  '/synthetics/$testId': typeof SyntheticsTestIdRoute
+  '/synthetics/$testId': typeof SyntheticsTestIdRouteWithChildren
+  '/synthetics/new': typeof SyntheticsNewRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/workflows/connections': typeof WorkflowsConnectionsRoute
   '/workflows/insights': typeof WorkflowsInsightsRoute
@@ -1071,11 +1097,14 @@ export interface FileRoutesByFullPath {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/synthetics/$testId/edit': typeof SyntheticsTestIdEditRoute
   '/monitoring/hosts/': typeof MonitoringHostsIndexRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
+  '/synthetics/$testId/': typeof SyntheticsTestIdIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
+  '/synthetics/$testId/results/$resultId': typeof SyntheticsTestIdResultsResultIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -1174,7 +1203,7 @@ export interface FileRoutesByTo {
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
   '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
-  '/synthetics/$testId': typeof SyntheticsTestIdRoute
+  '/synthetics/new': typeof SyntheticsNewRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/workflows/connections': typeof WorkflowsConnectionsRoute
   '/workflows/insights': typeof WorkflowsInsightsRoute
@@ -1208,11 +1237,14 @@ export interface FileRoutesByTo {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/synthetics/$testId/edit': typeof SyntheticsTestIdEditRoute
   '/monitoring/hosts': typeof MonitoringHostsIndexRoute
   '/monitoring/kubernetes': typeof MonitoringKubernetesIndexRoute
   '/performance/traces': typeof PerformanceTracesIndexRoute
+  '/synthetics/$testId': typeof SyntheticsTestIdIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
+  '/synthetics/$testId/results/$resultId': typeof SyntheticsTestIdResultsResultIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -1327,7 +1359,8 @@ export interface FileRoutesById {
   '/security/vulnerabilities': typeof SecurityVulnerabilitiesRoute
   '/services/$service': typeof ServicesServiceRouteWithChildren
   '/status-pages/$pageId': typeof StatusPagesPageIdRoute
-  '/synthetics/$testId': typeof SyntheticsTestIdRoute
+  '/synthetics/$testId': typeof SyntheticsTestIdRouteWithChildren
+  '/synthetics/new': typeof SyntheticsNewRoute
   '/uptime/$monitorId': typeof UptimeMonitorIdRoute
   '/workflows/connections': typeof WorkflowsConnectionsRoute
   '/workflows/insights': typeof WorkflowsInsightsRoute
@@ -1361,11 +1394,14 @@ export interface FileRoutesById {
   '/performance/traces/$traceId': typeof PerformanceTracesTraceIdRoute
   '/profiles/service/$service': typeof ProfilesServiceServiceRoute
   '/projects/$projectId/settings': typeof ProjectsProjectIdSettingsRoute
+  '/synthetics/$testId/edit': typeof SyntheticsTestIdEditRoute
   '/monitoring/hosts/': typeof MonitoringHostsIndexRoute
   '/monitoring/kubernetes/': typeof MonitoringKubernetesIndexRoute
   '/performance/traces/': typeof PerformanceTracesIndexRoute
+  '/synthetics/$testId/': typeof SyntheticsTestIdIndexRoute
   '/projects/$projectId/spans/$spanId': typeof ProjectsProjectIdSpansSpanIdRoute
   '/services/$service/resources/$resource': typeof ServicesServiceResourcesResourceRoute
+  '/synthetics/$testId/results/$resultId': typeof SyntheticsTestIdResultsResultIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1482,6 +1518,7 @@ export interface FileRouteTypes {
     | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
+    | '/synthetics/new'
     | '/uptime/$monitorId'
     | '/workflows/connections'
     | '/workflows/insights'
@@ -1515,11 +1552,14 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
     | '/projects/$projectId/settings'
+    | '/synthetics/$testId/edit'
     | '/monitoring/hosts/'
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
+    | '/synthetics/$testId/'
     | '/projects/$projectId/spans/$spanId'
     | '/services/$service/resources/$resource'
+    | '/synthetics/$testId/results/$resultId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1618,7 +1658,7 @@ export interface FileRouteTypes {
     | '/security/vulnerabilities'
     | '/services/$service'
     | '/status-pages/$pageId'
-    | '/synthetics/$testId'
+    | '/synthetics/new'
     | '/uptime/$monitorId'
     | '/workflows/connections'
     | '/workflows/insights'
@@ -1652,11 +1692,14 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
     | '/projects/$projectId/settings'
+    | '/synthetics/$testId/edit'
     | '/monitoring/hosts'
     | '/monitoring/kubernetes'
     | '/performance/traces'
+    | '/synthetics/$testId'
     | '/projects/$projectId/spans/$spanId'
     | '/services/$service/resources/$resource'
+    | '/synthetics/$testId/results/$resultId'
   id:
     | '__root__'
     | '/'
@@ -1771,6 +1814,7 @@ export interface FileRouteTypes {
     | '/services/$service'
     | '/status-pages/$pageId'
     | '/synthetics/$testId'
+    | '/synthetics/new'
     | '/uptime/$monitorId'
     | '/workflows/connections'
     | '/workflows/insights'
@@ -1804,11 +1848,14 @@ export interface FileRouteTypes {
     | '/performance/traces/$traceId'
     | '/profiles/service/$service'
     | '/projects/$projectId/settings'
+    | '/synthetics/$testId/edit'
     | '/monitoring/hosts/'
     | '/monitoring/kubernetes/'
     | '/performance/traces/'
+    | '/synthetics/$testId/'
     | '/projects/$projectId/spans/$spanId'
     | '/services/$service/resources/$resource'
+    | '/synthetics/$testId/results/$resultId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -2442,6 +2489,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UptimeMonitorIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/synthetics/new': {
+      id: '/synthetics/new'
+      path: '/new'
+      fullPath: '/synthetics/new'
+      preLoaderRoute: typeof SyntheticsNewRouteImport
+      parentRoute: typeof SyntheticsRoute
+    }
     '/synthetics/$testId': {
       id: '/synthetics/$testId'
       path: '/$testId'
@@ -2806,6 +2860,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAttributionRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/synthetics/$testId/': {
+      id: '/synthetics/$testId/'
+      path: '/'
+      fullPath: '/synthetics/$testId/'
+      preLoaderRoute: typeof SyntheticsTestIdIndexRouteImport
+      parentRoute: typeof SyntheticsTestIdRoute
+    }
     '/performance/traces/': {
       id: '/performance/traces/'
       path: '/'
@@ -2826,6 +2887,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/monitoring/hosts/'
       preLoaderRoute: typeof MonitoringHostsIndexRouteImport
       parentRoute: typeof MonitoringRoute
+    }
+    '/synthetics/$testId/edit': {
+      id: '/synthetics/$testId/edit'
+      path: '/edit'
+      fullPath: '/synthetics/$testId/edit'
+      preLoaderRoute: typeof SyntheticsTestIdEditRouteImport
+      parentRoute: typeof SyntheticsTestIdRoute
     }
     '/projects/$projectId/settings': {
       id: '/projects/$projectId/settings'
@@ -2924,6 +2992,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/organizations/$orgId'
       preLoaderRoute: typeof AdminOrganizationsOrgIdRouteImport
       parentRoute: typeof AdminOrganizationsRoute
+    }
+    '/synthetics/$testId/results/$resultId': {
+      id: '/synthetics/$testId/results/$resultId'
+      path: '/results/$resultId'
+      fullPath: '/synthetics/$testId/results/$resultId'
+      preLoaderRoute: typeof SyntheticsTestIdResultsResultIdRouteImport
+      parentRoute: typeof SyntheticsTestIdRoute
     }
     '/services/$service/resources/$resource': {
       id: '/services/$service/resources/$resource'
@@ -3318,13 +3393,30 @@ const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
   ServicesRouteChildren,
 )
 
+interface SyntheticsTestIdRouteChildren {
+  SyntheticsTestIdEditRoute: typeof SyntheticsTestIdEditRoute
+  SyntheticsTestIdIndexRoute: typeof SyntheticsTestIdIndexRoute
+  SyntheticsTestIdResultsResultIdRoute: typeof SyntheticsTestIdResultsResultIdRoute
+}
+
+const SyntheticsTestIdRouteChildren: SyntheticsTestIdRouteChildren = {
+  SyntheticsTestIdEditRoute: SyntheticsTestIdEditRoute,
+  SyntheticsTestIdIndexRoute: SyntheticsTestIdIndexRoute,
+  SyntheticsTestIdResultsResultIdRoute: SyntheticsTestIdResultsResultIdRoute,
+}
+
+const SyntheticsTestIdRouteWithChildren =
+  SyntheticsTestIdRoute._addFileChildren(SyntheticsTestIdRouteChildren)
+
 interface SyntheticsRouteChildren {
-  SyntheticsTestIdRoute: typeof SyntheticsTestIdRoute
+  SyntheticsTestIdRoute: typeof SyntheticsTestIdRouteWithChildren
+  SyntheticsNewRoute: typeof SyntheticsNewRoute
   SyntheticsIndexRoute: typeof SyntheticsIndexRoute
 }
 
 const SyntheticsRouteChildren: SyntheticsRouteChildren = {
-  SyntheticsTestIdRoute: SyntheticsTestIdRoute,
+  SyntheticsTestIdRoute: SyntheticsTestIdRouteWithChildren,
+  SyntheticsNewRoute: SyntheticsNewRoute,
   SyntheticsIndexRoute: SyntheticsIndexRoute,
 }
 

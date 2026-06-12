@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
+import {SyntheticBuilder} from '@/components/synthetics/SyntheticBuilder'
 
-// Pass-through layout: the detail (index), edit, and result drill-in routes each own their chrome.
-export const Route = createFileRoute('/synthetics/$testId')({
-  component: () => <Outlet />,
+export const Route = createFileRoute('/synthetics/new')({
+  component: () => <SyntheticBuilder mode="create" />,
 })

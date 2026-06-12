@@ -15,12 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {BookOpen, FlaskConical, Plus} from 'lucide-react'
-import {useState} from 'react'
 import {api} from '@/lib/api'
-import {Button} from '@/components/ui/button'
-import {PageHeader} from '@/components/ui/page-header'
-import CreateSyntheticTestDialog from '@/components/CreateSyntheticTestDialog'
 
 export const Route = createFileRoute('/synthetics')({
   beforeLoad: async () => {
@@ -32,36 +27,8 @@ export const Route = createFileRoute('/synthetics')({
   component: SyntheticsLayout,
 })
 
+// Child routes own their full chrome (the overview fills the viewport via ExplorerShell;
+// the builder and result drill-in are full-page). The layout is just the auth gate.
 function SyntheticsLayout() {
-  const [createOpen, setCreateOpen] = useState(false)
-
-  return (
-    <div className="space-y-2">
-      <div className="px-6 py-4 space-y-4">
-      <PageHeader
-        icon={FlaskConical}
-        title="Synthetics"
-        description="Synthetic test results and monitoring"
-        actions={
-          <>
-            <a href="/docs/datadog-agent/synthetics" target="_blank" rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-              <BookOpen className="h-3.5 w-3.5" />
-              View docs
-            </a>
-            <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1.5">
-              <Plus className="h-4 w-4" />New test
-            </Button>
-          </>
-        }
-      />
-      <Outlet />
-    </div>
-      <CreateSyntheticTestDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSuccess={() => setCreateOpen(false)}
-      />
-    </div>
-  )
+  return <Outlet />
 }

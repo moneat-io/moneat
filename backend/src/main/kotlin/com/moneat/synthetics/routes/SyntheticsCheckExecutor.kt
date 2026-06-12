@@ -55,6 +55,8 @@ private const val DNS_TIMEOUT_MS = 5000L
 private const val TCP_TIMEOUT_MS = 10000
 private const val UDP_TIMEOUT_MS = 5000
 private const val DAYS_PER_MS = 86_400_000L
+private const val SECRET_MASK_SHORT_LENGTH = 4
+private const val SECRET_VISIBLE_SUFFIX_LENGTH = 3
 
 private data class SyntheticHostValidation(
     val addresses: List<InetAddress> = emptyList(),
@@ -65,7 +67,36 @@ data class SyntheticCheckResult(
     val status: String, // "passed" or "failed"
     val durationMs: Long,
     val errorMessage: String = "",
-    val timings: Map<String, Double> = emptyMap()
+    val timings: Map<String, Double> = emptyMap(),
+    val statusCode: Int = 0,
+    val assertionResults: List<AssertionResult> = emptyList(),
+    val request: CapturedRequest? = null,
+    val response: CapturedResponse? = null,
+    val resolvedIp: String = "",
+    val browser: BrowserRunDetail? = null
+)
+
+private val assertionOperatorLabels = mapOf(
+    "equals" to "is",
+    "not_equals" to "is not",
+    "contains" to "contains",
+    "less_than" to "<",
+    "greater_than" to ">"
+)
+
+private val assertionLabelBuilders = mapOf<String, (SyntheticAssertion, String) -> String>(
+    "status_code" to { a, op -> "Status code $op ${a.value}" },
+    "response_time" to { a, op -> "Response time $op ${a.value} ms" },
+    "body_contains" to { a, _ -> "Body contains \"${a.value}\"" },
+    "body_json_path" to { a, op -> "${a.target} $op \"${a.value}\"" },
+    "header" to { a, op -> "${a.target} $op ${a.value}" },
+    "resolved_ip" to { a, op -> "Resolved IP $op ${a.value}" },
+    "resolution_time" to { a, op -> "Resolution time $op ${a.value} ms" },
+    "connection_time" to { a, op -> "Connection time $op ${a.value} ms" },
+    "port_open" to { _, _ -> "Port is open" },
+    "certificate_valid" to { _, _ -> "Certificate is valid" },
+    "certificate_expiry_days" to { a, op -> "Cert expiry $op ${a.value} days" },
+    "certificate_issuer" to { a, op -> "Issuer $op ${a.value}" }
 )
 
 open class SyntheticsCheckExecutor {
@@ -94,6 +125,7 @@ open class SyntheticsCheckExecutor {
 
     open suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
         return when (test.testType.lowercase()) {
+            "browser" -> BrowserCheckExecutor.execute(test)
             "multistep" -> executeMultistepTest(test)
             "ssl" -> executeSslTest(test)
             "dns" -> executeDnsTest(test)
@@ -156,7 +188,7 @@ open class SyntheticsCheckExecutor {
                 "total" to (totalNs.toDouble() / NS_PER_MS)
             )
 
-            val allPassed = assertionList.all { assertion ->
+            val assertionResults = assertionList.map { assertion ->
                 evaluateAssertion(
                     assertion,
                     statusCode,
@@ -165,21 +197,29 @@ open class SyntheticsCheckExecutor {
                     responseHeaders
                 )
             }
+            val allPassed = assertionResults.all { it.passed }
+            val capturedRequest = CapturedRequest(
+                method = test.method.uppercase(),
+                url = url,
+                headers = redactHeaders(headersMap),
+                body = ""
+            )
+            val capturedResponse = CapturedResponse(
+                statusCode = statusCode,
+                headers = redactHeaders(responseHeaders),
+                body = ""
+            )
 
-            if (allPassed) {
-                SyntheticCheckResult(
-                    status = "passed",
-                    durationMs = durationMs,
-                    timings = timings
-                )
-            } else {
-                SyntheticCheckResult(
-                    status = "failed",
-                    durationMs = durationMs,
-                    errorMessage = "One or more assertions failed",
-                    timings = timings
-                )
-            }
+            SyntheticCheckResult(
+                status = if (allPassed) "passed" else "failed",
+                durationMs = durationMs,
+                errorMessage = if (allPassed) "" else "One or more assertions failed",
+                timings = timings,
+                statusCode = statusCode,
+                assertionResults = assertionResults,
+                request = capturedRequest,
+                response = capturedResponse
+            )
         } catch (e: SerializationException) {
             val durationMs = (System.nanoTime() - totalStart) / NS_PER_MS
             logger.warn { "API test failed for ${test.id}: ${e.message}" }
@@ -275,31 +315,22 @@ open class SyntheticsCheckExecutor {
                     val expiryDays = expiryMs / DAYS_PER_MS
 
                     val assertionList = parseAssertions(test.assertions)
-                    val allPassed = assertionList.all { assertion ->
-                        evaluateSslAssertion(
-                            assertion,
-                            cert,
-                            expiryDays
-                        )
+                    val assertionResults = assertionList.map { assertion ->
+                        evaluateSslAssertion(assertion, cert, expiryDays)
                     }
+                    val allPassed = assertionResults.all { it.passed }
 
                     timings["certificate_expiry_days"] =
                         expiryDays.toDouble()
 
-                    if (allPassed) {
-                        SyntheticCheckResult(
-                            status = "passed",
-                            durationMs = durationMs,
-                            timings = timings
-                        )
-                    } else {
-                        SyntheticCheckResult(
-                            status = "failed",
-                            durationMs = durationMs,
-                            errorMessage = "SSL assertion failed",
-                            timings = timings
-                        )
-                    }
+                    SyntheticCheckResult(
+                        status = if (allPassed) "passed" else "failed",
+                        durationMs = durationMs,
+                        errorMessage = if (allPassed) "" else "SSL assertion failed",
+                        timings = timings,
+                        assertionResults = assertionResults,
+                        resolvedIp = address.hostAddress
+                    )
                 }
             }
         }.getOrElse { e ->
@@ -339,28 +370,19 @@ open class SyntheticsCheckExecutor {
             )
 
             val assertionList = parseAssertions(test.assertions)
-            val allPassed = assertionList.all { assertion ->
-                evaluateDnsAssertion(
-                    assertion,
-                    resolvedIps,
-                    dnsMs
-                )
+            val assertionResults = assertionList.map { assertion ->
+                evaluateDnsAssertion(assertion, resolvedIps, dnsMs)
             }
+            val allPassed = assertionResults.all { it.passed }
 
-            if (allPassed) {
-                SyntheticCheckResult(
-                    status = "passed",
-                    durationMs = durationMs,
-                    timings = timings
-                )
-            } else {
-                SyntheticCheckResult(
-                    status = "failed",
-                    durationMs = durationMs,
-                    errorMessage = "DNS assertion failed",
-                    timings = timings
-                )
-            }
+            SyntheticCheckResult(
+                status = if (allPassed) "passed" else "failed",
+                durationMs = durationMs,
+                errorMessage = if (allPassed) "" else "DNS assertion failed",
+                timings = timings,
+                assertionResults = assertionResults,
+                resolvedIp = resolvedIps.firstOrNull() ?: ""
+            )
         } catch (_: TimeoutCancellationException) {
             SyntheticCheckResult(
                 status = "failed",
@@ -436,24 +458,19 @@ open class SyntheticsCheckExecutor {
             )
 
             val assertionList = parseAssertions(test.assertions)
-            val allPassed = assertionList.all { assertion ->
+            val assertionResults = assertionList.map { assertion ->
                 evaluateTcpAssertion(assertion, connectMs, true)
             }
+            val allPassed = assertionResults.all { it.passed }
 
-            if (allPassed) {
-                SyntheticCheckResult(
-                    status = "passed",
-                    durationMs = durationMs,
-                    timings = timings
-                )
-            } else {
-                SyntheticCheckResult(
-                    status = "failed",
-                    durationMs = durationMs,
-                    errorMessage = "TCP assertion failed",
-                    timings = timings
-                )
-            }
+            SyntheticCheckResult(
+                status = if (allPassed) "passed" else "failed",
+                durationMs = durationMs,
+                errorMessage = if (allPassed) "" else "TCP assertion failed",
+                timings = timings,
+                assertionResults = assertionResults,
+                resolvedIp = address.hostAddress
+            )
         }.getOrElse { e ->
             SyntheticCheckResult(
                 status = "failed",
@@ -523,24 +540,19 @@ open class SyntheticsCheckExecutor {
             )
 
             val assertionList = parseAssertions(test.assertions)
-            val allPassed = assertionList.all { assertion ->
+            val assertionResults = assertionList.map { assertion ->
                 evaluateTcpAssertion(assertion, connectMs, portOpen)
             }
+            val allPassed = assertionResults.all { it.passed }
 
-            if (allPassed) {
-                SyntheticCheckResult(
-                    status = "passed",
-                    durationMs = durationMs,
-                    timings = timings
-                )
-            } else {
-                SyntheticCheckResult(
-                    status = "failed",
-                    durationMs = durationMs,
-                    errorMessage = "UDP assertion failed",
-                    timings = timings
-                )
-            }
+            SyntheticCheckResult(
+                status = if (allPassed) "passed" else "failed",
+                durationMs = durationMs,
+                errorMessage = if (allPassed) "" else "UDP assertion failed",
+                timings = timings,
+                assertionResults = assertionResults,
+                resolvedIp = address.hostAddress
+            )
         }.getOrElse { e ->
             SyntheticCheckResult(
                 status = "failed",
@@ -624,7 +636,7 @@ open class SyntheticsCheckExecutor {
             .associate { (k, v) -> k to v.firstOrNull().orEmpty() }
 
         val allPassed = step.assertions.all { assertion ->
-            evaluateAssertion(assertion, statusCode, body, stepDurationMs, responseHeaders)
+            evaluateAssertion(assertion, statusCode, body, stepDurationMs, responseHeaders).passed
         }
         if (!allPassed) {
             val durationMs = System.currentTimeMillis() - startTime
@@ -675,48 +687,129 @@ open class SyntheticsCheckExecutor {
         body: String,
         responseTimeMs: Long,
         headers: Map<String, String>
-    ): Boolean {
-        return suspendRunCatching {
-            when (assertion.type) {
-                "status_code" -> {
-                    val expected = assertion.value.toIntOrNull() ?: return false
-                    compareValues(statusCode.toLong(), expected.toLong(), assertion.operator)
-                }
-                "body_contains" -> body.contains(assertion.value)
-                "body_json_path" -> {
-                    val jsonValue = extractJsonPath(body, assertion.target) ?: return false
-                    when (assertion.operator) {
-                        "equals" -> jsonValue == assertion.value
-                        "not_equals" -> jsonValue != assertion.value
-                        "contains" -> jsonValue.contains(assertion.value)
-                        else -> jsonValue == assertion.value
-                    }
-                }
-                "response_time" -> {
-                    val threshold = assertion.value.toLongOrNull() ?: return false
-                    compareValues(responseTimeMs, threshold, assertion.operator)
-                }
-                "header" -> {
-                    val headerValue = headers[assertion.target] ?: return false
-                    when (assertion.operator) {
-                        "equals" -> headerValue == assertion.value
-                        "not_equals" -> headerValue != assertion.value
-                        "contains" -> headerValue.contains(assertion.value)
-                        else -> headerValue == assertion.value
-                    }
-                }
-                else -> {
-                    logger.warn {
-                        "Unknown assertion type '${assertion.type}' " +
-                            "(assertion operator: ${assertion.operator}) - failing assertion"
-                    }
-                    false
-                }
-            }
-        }.getOrElse { _ ->
-            false
+    ): AssertionResult {
+        val (passed, actual) = suspendRunCatching {
+            evaluateAssertionValue(assertion, statusCode, body, responseTimeMs, headers)
+        }.getOrElse { false to "error" }
+        return AssertionResult(
+            label = describeAssertion(assertion),
+            expected = assertion.value,
+            actual = actual,
+            passed = passed
+        )
+    }
+
+    private fun evaluateAssertionValue(
+        assertion: SyntheticAssertion,
+        statusCode: Int,
+        body: String,
+        responseTimeMs: Long,
+        headers: Map<String, String>
+    ): Pair<Boolean, String> =
+        when (assertion.type) {
+            "status_code" -> evaluateStatusCodeAssertion(assertion, statusCode)
+            "body_contains" -> evaluateBodyContainsAssertion(assertion, body)
+            "body_json_path" -> evaluateJsonPathAssertion(assertion, body)
+            "response_time" -> evaluateResponseTimeAssertion(assertion, responseTimeMs)
+            "header" -> evaluateHeaderAssertion(assertion, headers)
+            else -> unknownAssertion(assertion)
+        }
+
+    private fun evaluateStatusCodeAssertion(
+        assertion: SyntheticAssertion,
+        statusCode: Int
+    ): Pair<Boolean, String> {
+        val expected = assertion.value.toIntOrNull()
+        val ok = expected != null &&
+            compareValues(statusCode.toLong(), expected.toLong(), assertion.operator)
+        return ok to statusCode.toString()
+    }
+
+    private fun evaluateBodyContainsAssertion(
+        assertion: SyntheticAssertion,
+        body: String
+    ): Pair<Boolean, String> {
+        val ok = body.contains(assertion.value)
+        return ok to if (ok) "present" else "absent"
+    }
+
+    private fun evaluateJsonPathAssertion(
+        assertion: SyntheticAssertion,
+        body: String
+    ): Pair<Boolean, String> {
+        val jsonValue = extractJsonPath(body, assertion.target)
+        val ok = jsonValue?.let {
+            compareStringValue(it, assertion.value, assertion.operator)
+        } ?: false
+        return ok to (jsonValue ?: "<null>")
+    }
+
+    private fun evaluateResponseTimeAssertion(
+        assertion: SyntheticAssertion,
+        responseTimeMs: Long
+    ): Pair<Boolean, String> {
+        val threshold = assertion.value.toLongOrNull()
+        val ok = threshold != null &&
+            compareValues(responseTimeMs, threshold, assertion.operator)
+        return ok to responseTimeMs.toString()
+    }
+
+    private fun evaluateHeaderAssertion(
+        assertion: SyntheticAssertion,
+        headers: Map<String, String>
+    ): Pair<Boolean, String> {
+        val headerValue = headers.entries
+            .firstOrNull { (name, _) -> name.equals(assertion.target, ignoreCase = true) }
+            ?.value
+        val ok = headerValue?.let {
+            compareStringValue(it, assertion.value, assertion.operator)
+        } ?: false
+        return ok to (headerValue ?: "<missing>")
+    }
+
+    private fun compareStringValue(actual: String, expected: String, operator: String): Boolean =
+        when (operator) {
+            "not_equals" -> actual != expected
+            "contains" -> actual.contains(expected)
+            else -> actual == expected
+        }
+
+    private fun unknownAssertion(assertion: SyntheticAssertion): Pair<Boolean, String> {
+        logger.warn {
+            "Unknown assertion type '${assertion.type}' " +
+                "(assertion operator: ${assertion.operator}) - failing assertion"
+        }
+        return false to "unknown"
+    }
+
+    /** Human-readable assertion label for run-detail (mirrors the builder's phrasing). */
+    private fun describeAssertion(a: SyntheticAssertion): String {
+        val op = assertionOperatorLabels[a.operator] ?: a.operator
+        val builder = assertionLabelBuilders[a.type]
+        return builder?.invoke(a, op) ?: "${a.type} $op ${a.value}"
+    }
+
+    /** Mask sensitive request/response header values before capture. */
+    private fun redactHeaders(headers: Map<String, String>): Map<String, String> {
+        val sensitive = setOf(
+            "authorization",
+            "cookie",
+            "set-cookie",
+            "x-api-key",
+            "proxy-authorization",
+            "x-auth-token"
+        )
+        return headers.mapValues { (k, v) ->
+            if (k.lowercase() in sensitive) maskSecret(v) else v
         }
     }
+
+    private fun maskSecret(v: String): String =
+        if (v.length <= SECRET_MASK_SHORT_LENGTH) {
+            "••••"
+        } else {
+            "••••" + v.takeLast(SECRET_VISIBLE_SUFFIX_LENGTH)
+        }
 
     private fun compareValues(actual: Long, expected: Long, operator: String): Boolean {
         return when (operator) {
@@ -805,11 +898,13 @@ open class SyntheticsCheckExecutor {
         assertion: SyntheticAssertion,
         cert: java.security.cert.X509Certificate,
         expiryDays: Long
-    ): Boolean {
-        return when (assertion.type) {
+    ): AssertionResult {
+        val (passed, actual) = when (assertion.type) {
             "certificate_expiry_days" -> {
-                val threshold = assertion.value.toLongOrNull() ?: return false
-                compareValues(expiryDays, threshold, assertion.operator)
+                val threshold = assertion.value.toLongOrNull()
+                val ok = threshold != null &&
+                    compareValues(expiryDays, threshold, assertion.operator)
+                ok to "$expiryDays"
             }
             "certificate_valid" -> {
                 val expected = assertion.value.toBooleanStrictOrNull()
@@ -820,82 +915,70 @@ open class SyntheticsCheckExecutor {
                 }.getOrElse { _ ->
                     false
                 }
-                valid == expected
+                (valid == expected) to valid.toString()
             }
             "certificate_issuer" -> {
                 val issuer = cert.issuerX500Principal.name
-                when (assertion.operator) {
-                    "contains" -> issuer.contains(
-                        assertion.value,
-                        ignoreCase = true
-                    )
-                    else -> issuer.contains(
-                        assertion.value,
-                        ignoreCase = true
-                    )
-                }
+                issuer.contains(assertion.value, ignoreCase = true) to issuer
             }
             else -> {
                 logger.warn { "Unknown SSL assertion type: '${assertion.type}'" }
-                false
+                false to "unknown"
             }
         }
+        return AssertionResult(describeAssertion(assertion), assertion.value, actual, passed)
     }
 
     private fun evaluateDnsAssertion(
         assertion: SyntheticAssertion,
         resolvedIps: List<String>,
         resolutionTimeMs: Long
-    ): Boolean {
-        return when (assertion.type) {
-            "resolved_ip" -> when (assertion.operator) {
-                "contains" -> resolvedIps.any {
-                    it.contains(assertion.value)
+    ): AssertionResult {
+        val (passed, actual) = when (assertion.type) {
+            "resolved_ip" -> {
+                val ok = when (assertion.operator) {
+                    "contains" -> resolvedIps.any { it.contains(assertion.value) }
+                    else -> resolvedIps.contains(assertion.value)
                 }
-                "equals" -> resolvedIps.contains(assertion.value)
-                else -> resolvedIps.contains(assertion.value)
+                ok to resolvedIps.joinToString(", ")
             }
             "resolution_time" -> {
                 val threshold = assertion.value.toLongOrNull()
-                    ?: return false
-                compareValues(
-                    resolutionTimeMs,
-                    threshold,
-                    assertion.operator
-                )
+                val ok = threshold != null &&
+                    compareValues(resolutionTimeMs, threshold, assertion.operator)
+                ok to "$resolutionTimeMs"
             }
             else -> {
                 logger.warn { "Unknown DNS assertion type: '${assertion.type}'" }
-                false
+                false to "unknown"
             }
         }
+        return AssertionResult(describeAssertion(assertion), assertion.value, actual, passed)
     }
 
     private fun evaluateTcpAssertion(
         assertion: SyntheticAssertion,
         connectionTimeMs: Long,
         portOpen: Boolean
-    ): Boolean {
-        return when (assertion.type) {
+    ): AssertionResult {
+        val (passed, actual) = when (assertion.type) {
             "connection_time" -> {
                 val threshold = assertion.value.toLongOrNull()
-                    ?: return false
-                compareValues(
-                    connectionTimeMs,
-                    threshold,
-                    assertion.operator
-                )
+                val ok = threshold != null &&
+                    compareValues(connectionTimeMs, threshold, assertion.operator)
+                ok to "$connectionTimeMs"
             }
             "port_open" -> {
                 val expected = assertion.value.toBooleanStrictOrNull()
                     ?: true
-                portOpen == expected
+                (portOpen == expected) to portOpen.toString()
             }
             else -> {
                 logger.warn { "Unknown TCP assertion type: '${assertion.type}'" }
-                false
+                false to "unknown"
             }
         }
+        return AssertionResult(describeAssertion(assertion), assertion.value, actual, passed)
     }
 
     companion object {

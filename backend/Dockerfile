@@ -34,6 +34,14 @@ RUN groupadd --system moneat && useradd --system --gid moneat --home /app --crea
 WORKDIR /app
 COPY --from=build /app/build/libs/moneat-backend-all.jar app.jar
 
+# Synthetic browser/E2E tests: install Chromium + its OS deps via Playwright's CLI
+# (bundled in the shaded jar). Browsers land in PLAYWRIGHT_BROWSERS_PATH; enable the
+# probe to run them. Concurrency is capped to one run at a time inside the app.
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+ENV SYNTHETICS_BROWSER_ENABLED=true
+RUN java -cp app.jar com.microsoft.playwright.CLI install --with-deps chromium && \
+    chown -R moneat:moneat /app/ms-playwright
+
 # Download Datadog Java agent (profiling, APM, dynamic instrumentation)
 ARG DD_JAVA_AGENT_VERSION=1.59.0
 ARG DD_JAVA_AGENT_SHA256=f2aa729581b60af266cc6555cf9d9701e98ee71c194b4f25d97de354f46fc533
