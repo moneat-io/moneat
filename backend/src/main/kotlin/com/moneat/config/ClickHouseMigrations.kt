@@ -42,6 +42,12 @@ object ClickHouseMigrations {
     private const val MIGRATIONS_TABLE = "schema_migrations"
     private const val MIGRATIONS_PATH = "db/clickhouse_migration"
     private const val ERROR_BODY_MAX_LEN = 500
+    private const val CLICKHOUSE_UNKNOWN_TABLE_CODE = "60"
+    private val optionalAlterTableIfExistsPattern =
+        Regex(
+            pattern = """^ALTER\s+TABLE\s+IF\s+EXISTS\s+([A-Za-z0-9_`.]+)\s+(MODIFY\s+SETTING\s+.+?)\s*;?$""",
+            option = RegexOption.IGNORE_CASE
+        )
 
     data class Migration(
         val version: Int,
@@ -229,10 +235,22 @@ object ClickHouseMigrations {
         for ((index, statement) in statements.withIndex()) {
             if (statement.isBlank()) continue
 
-            val response = ClickHouseClient.executeMigration(statement)
+            val preparedStatement = prepareClickHouseMigrationStatement(statement)
+            val response = ClickHouseClient.executeMigration(preparedStatement.sql)
             val body = response.bodyAsText()
 
             if (response.isClickHouseError(body)) {
+                if (
+                    preparedStatement.optionalTableName != null &&
+                    isUnknownTableError(body)
+                ) {
+                    logger.info(
+                        "Skipping optional ClickHouse migration statement for missing table " +
+                            preparedStatement.optionalTableName
+                    )
+                    continue
+                }
+
                 throw RuntimeException(
                     "Migration V${migration.version} failed at statement ${index + 1}/${statements.size}: $body"
                 )
@@ -255,6 +273,28 @@ object ClickHouseMigrations {
 
         logger.info("Applied V${migration.version}__${migration.description}")
     }
+
+    internal data class PreparedMigrationStatement(
+        val sql: String,
+        val optionalTableName: String? = null
+    )
+
+    internal fun prepareClickHouseMigrationStatement(statement: String): PreparedMigrationStatement {
+        val trimmedStatement = statement.trim()
+        val match = optionalAlterTableIfExistsPattern.matchEntire(trimmedStatement)
+            ?: return PreparedMigrationStatement(trimmedStatement)
+        val tableName = match.groupValues[1]
+        val alterCommand = match.groupValues[2].trim()
+
+        return PreparedMigrationStatement(
+            sql = "ALTER TABLE $tableName $alterCommand",
+            optionalTableName = tableName
+        )
+    }
+
+    private fun isUnknownTableError(body: String): Boolean =
+        body.startsWith("Code: $CLICKHOUSE_UNKNOWN_TABLE_CODE") ||
+            body.contains("UNKNOWN_TABLE")
 
     /**
      * Split SQL file into individual statements.

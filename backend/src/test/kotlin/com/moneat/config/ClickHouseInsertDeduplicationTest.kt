@@ -19,10 +19,39 @@ package com.moneat.config
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ClickHouseInsertDeduplicationTest {
+
+    @Test
+    fun `optional alter table statements are rewritten for ClickHouse modify setting`() {
+        val preparedStatement =
+            ClickHouseMigrations.prepareClickHouseMigrationStatement(
+                "ALTER TABLE IF EXISTS events MODIFY SETTING non_replicated_deduplication_window = 1000;"
+            )
+
+        assertEquals(
+            "ALTER TABLE events MODIFY SETTING non_replicated_deduplication_window = 1000",
+            preparedStatement.sql
+        )
+        assertEquals("events", preparedStatement.optionalTableName)
+    }
+
+    @Test
+    fun `network paths deduplication migration targets real ClickHouse table`() {
+        val migrationSql =
+            requireNotNull(
+                Thread.currentThread().contextClassLoader.getResource(
+                    "db/clickhouse_migration/V58__enable_network_paths_insert_deduplication.sql"
+                )
+            ).readText()
+
+        assertFalse(migrationSql.contains("ndm_paths"), "NDM paths table is named network_paths")
+        assertTrue(migrationSql.contains("ALTER TABLE network_paths MODIFY SETTING"))
+    }
 
     @Test
     fun `token is scoped to ingestion seed and normalized query`() = runBlocking {
