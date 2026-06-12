@@ -103,7 +103,7 @@ class ReplayServiceTest {
                 rows.breadcrumbRow
             ),
             TimelineQueryResponse({ query -> query.contains("SELECT toInt64(project_id)") }, """{"project_id":1}"""),
-            TimelineQueryResponse({ query -> query.contains("GROUP BY replay_id") }, rows.detailRow),
+            TimelineQueryResponse({ query -> query.contains("GROUP BY e.replay_id") }, rows.detailRow),
             TimelineQueryResponse(
                 { query -> query.contains("event_type = 'error'") && query.contains("IN (") },
                 rows.errorRow
@@ -273,6 +273,43 @@ class ReplayServiceTest {
     }
 
     @Test
+    fun `getReplays uses recording window and native mobile metadata`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val replayRow = """
+{"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:02:00.000Z","started_ms":"1767225600000","finished_ms":"1767225720000","duration_ms":"0","recording_segment_count":2,"urls":[],"error_count":0,"user_id":"u-1","user_email":"","user_username":"","browser_name":"","browser_version":"","os_name":"","os_version":"","platform":"android","sdk_name":"sentry.java.android","device_name":"","device_family":"","activity":0}
+        """.trimIndent()
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            queries += query
+            when {
+                query.contains("countDistinct(event_id)") -> {
+                    assertTrue(query.contains("timestamp <= fromUnixTimestamp64Milli(1767225720000)"))
+                    exchange.respond(200, """{"count":1}""", TEXT_PLAIN)
+                }
+
+                query.contains("toUnixTimestamp64Milli(timestamp) as ts_ms") ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+
+                else ->
+                    exchange.respond(200, replayRow, TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplays(projectId = 1, page = 1, limit = 25, period = "7d")
+
+            assertEquals(1, result.size)
+            val replay = result.first()
+            assertEquals(10000.0, replay.durationMs)
+            assertEquals(1, replay.errorCount)
+            assertEquals("Android", replay.osName)
+            assertTrue("error" in replay.signals)
+            assertTrue("dead_click" !in replay.signals)
+            assertTrue(queries.any { it.contains("replay_segments") })
+            assertTrue(queries.any { it.contains("max(greatest(e.timestamp") })
+        }
+    }
+
+    @Test
     fun `getReplays returns empty list on error`() = runBlocking {
         withClickHouseMockServer({ exchange ->
             exchange.respond(500, "Internal Server Error", TEXT_PLAIN)
@@ -304,7 +341,7 @@ class ReplayServiceTest {
                     exchange.respond(200, contextRow, TEXT_PLAIN)
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("GROUP BY replay_id") ->
+                query.contains("GROUP BY e.replay_id") ->
                     exchange.respond(200, detailRow, TEXT_PLAIN)
                 else ->
                     exchange.respond(200, "", TEXT_PLAIN)
@@ -350,7 +387,7 @@ class ReplayServiceTest {
             when {
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("GROUP BY replay_id") ->
+                query.contains("GROUP BY e.replay_id") ->
                     exchange.respond(200, detailRow, TEXT_PLAIN)
                 query.contains("SELECT toString(event_id) as event_id") ->
                     exchange.respond(200, errorIdRows, TEXT_PLAIN)
@@ -391,7 +428,7 @@ class ReplayServiceTest {
             when {
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("GROUP BY replay_id") ->
+                query.contains("GROUP BY e.replay_id") ->
                     exchange.respond(200, detailRow, TEXT_PLAIN)
                 query.contains("countDistinct(event_id)") ->
                     exchange.respond(200, """{"count":0}""", TEXT_PLAIN)
