@@ -107,7 +107,7 @@ function UptimeMonitoringHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(16,185,129,0.22),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · uptime" live className="relative">
+      <WindowFrame title="moneat · uptime" className="relative">
         <div className="grid gap-3">
           {/* column header */}
           <div className="flex items-center gap-2 px-0.5">

@@ -16,6 +16,7 @@
 
 import {useEffect, useId, useRef} from 'react'
 import {Link} from '@tanstack/react-router'
+import {useQuery} from '@tanstack/react-query'
 import {
   Activity,
   ArrowRight,
@@ -31,6 +32,8 @@ import {
 } from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
+import {api} from '@/lib/api'
+import {buildPricingCardModel, type PricingCardModel} from '@/lib/pricing-display'
 import {compareColumns, compareRows, SOURCE_REVIEW_DATE, type CellValue} from './competitorComparisonData'
 
 // ── Brand signal: one violet→indigo→cyan gradient (style-guide) ──────────────
@@ -105,12 +108,10 @@ export function ScreenshotFrame({
 // ─────────────────────────────────────────────────────────────────────────────
 function WindowFrame({
   title,
-  live,
   children,
   className,
 }: {
   readonly title: string
-  readonly live?: boolean
   readonly children: React.ReactNode
   readonly className?: string
 }) {
@@ -126,12 +127,6 @@ function WindowFrame({
       <div className="flex items-center gap-2 border-b border-white/[0.06] bg-[#0a0b12] px-3.5 py-2.5">
         <span className={cn('size-2.5 shrink-0 rounded-[3px]', GRADIENT_BG)} />
         <span className="truncate font-brandmono text-[11px] text-slate-400">{title}</span>
-        {live ? (
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 font-brandmono text-[10px] tracking-wide text-emerald-300">
-            <span className="size-1.5 rounded-full bg-emerald-400" />
-            live
-          </span>
-        ) : null}
       </div>
       <div className="p-3.5">{children}</div>
     </div>
@@ -1080,51 +1075,127 @@ function OpenSourceSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Condensed pricing — the free tier up front, paid tiers summarized.
+// Condensed pricing — same /billing/plans API as the full /pricing page,
+// summarized to the free tier up front with the paid tiers behind it. Prices and
+// the per-tier ingestion limit come straight from the API so they never drift.
 // ─────────────────────────────────────────────────────────────────────────────
-const pricingTiers: Array<{
+interface CondensedTier {
   name: string
   price: string
   cadence: string
   blurb: string
   points: string[]
   highlight: boolean
-}> = [
-  {
-    name: 'Free',
-    price: '$0',
-    cadence: '',
-    blurb: 'Side projects and getting started',
-    points: ['1 GB ingest / month', 'Every signal type included', 'Community support'],
-    highlight: false,
-  },
-  {
-    name: 'Pro',
-    price: '$29',
-    cadence: '/mo',
-    blurb: 'Growing teams shipping to production',
-    points: ['More ingest & retention', '$0.40 / GB overage', 'Slack & Discord alerts'],
-    highlight: true,
-  },
-  {
-    name: 'Team',
-    price: '$79',
-    cadence: '/mo',
-    blurb: 'Teams that need scale and compliance',
-    points: ['Higher limits', 'SSO (SAML / OIDC)', 'Priority support'],
-    highlight: false,
-  },
-  {
-    name: 'Enterprise',
-    price: 'Custom',
-    cadence: '',
-    blurb: 'Scale, compliance, and a dedicated partner',
-    points: ['Volume discounts', 'Dedicated support & SLA', 'Everything in Team'],
-    highlight: false,
-  },
-]
+}
+
+// Tiers above this price are sold as custom Enterprise, not self-serve (mirrors PricingSection).
+const SELF_SERVE_HIDDEN_TIERS = new Set(['BUSINESS'])
+
+// One stable, non-numeric highlight per tier. Numbers (price, ingestion, retention) come from the API.
+const TIER_HIGHLIGHTS: Record<string, string> = {
+  FREE: 'Every signal type included',
+  PRO: 'Slack & Discord alerts',
+  TEAM: 'SSO (SAML / OIDC)',
+}
+
+const ENTERPRISE_TIER: CondensedTier = {
+  name: 'Enterprise',
+  price: 'Custom',
+  cadence: '',
+  blurb: 'Scale, compliance, and a dedicated partner',
+  points: ['Volume discounts', 'Dedicated support & SLA', 'Everything in Team'],
+  highlight: false,
+}
+
+function toCondensedTier(model: PricingCardModel): CondensedTier {
+  const ingestion = model.includedLimits[0]
+  const retention = model.includedLimits.find((limit) => limit.includes('retention'))
+  const points = [ingestion, retention, TIER_HIGHLIGHTS[model.tierName]].filter(
+    (point): point is string => Boolean(point),
+  )
+  return {
+    name: model.name,
+    price: model.displayPrice === 0 ? '$0' : `$${model.displayPrice.toFixed(0)}`,
+    cadence: model.displayPrice === 0 ? '' : '/mo',
+    blurb: model.description,
+    points,
+    highlight: model.highlight,
+  }
+}
+
+function PricingBandCard({tier}: {readonly tier: CondensedTier}) {
+  return (
+    <div
+      className={cn(
+        'relative rounded-lg border bg-[#0c0e16] p-6',
+        tier.highlight ? 'border-indigo-400/40' : 'border-white/[0.08]',
+      )}
+    >
+      {tier.highlight ? <div className={cn('absolute inset-x-0 top-0 h-px', GRADIENT_BAR)} /> : null}
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-lg font-semibold text-white">{tier.name}</h3>
+        <div className="text-right">
+          <span className={cn('font-brandmono text-2xl font-bold', tier.highlight ? GRADIENT_TEXT : 'text-white')}>
+            {tier.price}
+          </span>
+          <span className="font-brandmono text-xs text-slate-500">{tier.cadence}</span>
+        </div>
+      </div>
+      <p className="mt-2 min-h-10 text-sm leading-6 text-slate-400">{tier.blurb}</p>
+      <div className="mt-5 grid gap-2.5">
+        {tier.points.map((point) => (
+          <div key={point} className="flex items-center gap-2.5 text-sm text-slate-300">
+            <Check className="size-4 shrink-0 text-emerald-400" />
+            {point}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PricingBandSkeleton() {
+  return (
+    <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {Array.from({length: 4}, (_, idx) => `pricing-skeleton-${idx}`).map((id) => (
+        <div key={id} className="rounded-lg border border-white/[0.08] bg-[#0c0e16] p-6">
+          <div className="flex items-baseline justify-between">
+            <div className="h-5 w-16 animate-pulse rounded bg-white/[0.06]" />
+            <div className="h-7 w-14 animate-pulse rounded bg-white/[0.06]" />
+          </div>
+          <div className="mt-3 h-4 w-40 animate-pulse rounded bg-white/[0.06]" />
+          <div className="mt-6 space-y-2.5">
+            {Array.from({length: 3}, (_, pointIdx) => `${id}-point-${pointIdx}`).map((pointId) => (
+              <div key={pointId} className="h-3.5 w-full animate-pulse rounded bg-white/[0.06]" />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function PricingBand() {
+  const {
+    data: billingPlans,
+    isPending: isBillingPlansLoading,
+    isError: isBillingPlansError,
+  } = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => api.getBillingPlans(),
+  })
+
+  const apiTiers: CondensedTier[] =
+    billingPlans?.plans
+      .filter((plan) => !SELF_SERVE_HIDDEN_TIERS.has(plan.tier.tierName))
+      .map((plan) =>
+        toCondensedTier(
+          buildPricingCardModel({...plan.tier, trialDays: plan.trialDays ?? plan.tier.trialDays}, 'monthly'),
+        ),
+      ) ?? []
+
+  const tiers = [...apiTiers, ENTERPRISE_TIER]
+
   return (
     <section className="border-y border-white/[0.06] bg-[#0a0b12] px-4 py-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
@@ -1133,37 +1204,29 @@ function PricingBand() {
           title="Pay only for what you ingest."
           lead="Pricing is based on ingestion volume, with no per-host fees. Send the telemetry you need and scale usage as your systems grow."
         />
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {pricingTiers.map((tier) => (
-            <div
-              key={tier.name}
-              className={cn(
-                'relative rounded-lg border bg-[#0c0e16] p-6',
-                tier.highlight ? 'border-indigo-400/40' : 'border-white/[0.08]',
-              )}
-            >
-              {tier.highlight ? <div className={cn('absolute inset-x-0 top-0 h-px', GRADIENT_BAR)} /> : null}
-              <div className="flex items-baseline justify-between">
-                <h3 className="text-lg font-semibold text-white">{tier.name}</h3>
-                <div className="text-right">
-                  <span className={cn('font-brandmono text-2xl font-bold', tier.highlight ? GRADIENT_TEXT : 'text-white')}>
-                    {tier.price}
-                  </span>
-                  <span className="font-brandmono text-xs text-slate-500">{tier.cadence}</span>
-                </div>
+        {(() => {
+          if (isBillingPlansLoading) return <PricingBandSkeleton />
+          if (isBillingPlansError) {
+            return (
+              <div className="mt-12 rounded-lg border border-white/[0.08] bg-[#0c0e16] p-6 text-center">
+                <p className="text-sm text-slate-400">
+                  Pricing is taking a moment to load —{' '}
+                  <Link to="/pricing" className="text-indigo-300 hover:text-white">
+                    see full pricing
+                  </Link>
+                  .
+                </p>
               </div>
-              <p className="mt-2 min-h-10 text-sm leading-6 text-slate-400">{tier.blurb}</p>
-              <div className="mt-5 grid gap-2.5">
-                {tier.points.map((point) => (
-                  <div key={point} className="flex items-center gap-2.5 text-sm text-slate-300">
-                    <Check className="size-4 shrink-0 text-emerald-400" />
-                    {point}
-                  </div>
-                ))}
-              </div>
+            )
+          }
+          return (
+            <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {tiers.map((tier) => (
+                <PricingBandCard key={tier.name} tier={tier} />
+              ))}
             </div>
-          ))}
-        </div>
+          )
+        })()}
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button asChild variant="ghost" className="text-indigo-300 hover:bg-white/[0.05] hover:text-white">
             <Link to="/pricing">

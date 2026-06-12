@@ -76,7 +76,7 @@ function ProfilingHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · profile" live className="relative">
+      <WindowFrame title="moneat · profile" className="relative">
         <div className="grid gap-3">
           {/* flamegraph label row */}
           <div className="flex items-center justify-between gap-2">

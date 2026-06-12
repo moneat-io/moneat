@@ -39,7 +39,7 @@ function SessionReplayHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · replay" live className="relative">
+      <WindowFrame title="moneat · replay" className="relative">
         <div className="grid gap-3">
           {/* Faux recorded viewport */}
           <div className="relative overflow-hidden rounded-md border border-white/[0.08] bg-white/[0.02] px-4 pb-4 pt-3">
