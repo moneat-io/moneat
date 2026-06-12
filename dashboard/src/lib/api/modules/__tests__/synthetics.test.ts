@@ -260,6 +260,21 @@ describe('Synthetics API', () => {
     expect(result).toEqual(mock)
   })
 
+  it('previews a synthetic test without an empty location query', async () => {
+    const mock = {resultId: 'preview', locationCode: 'moneat'}
+
+    server.use(
+      http.post(`${API_BASE}/v1/synthetics/preview`, async ({request}) => {
+        const url = new URL(request.url)
+        expect(url.search).toBe('')
+        return HttpResponse.json(mock)
+      })
+    )
+
+    const result = await api.previewSyntheticTest({name: 'Preview API'} as never)
+    expect(result).toEqual(mock)
+  })
+
   // ──── Location CRUD ────
 
   it('lists synthetic locations', async () => {

@@ -25,12 +25,16 @@ export const Route = createFileRoute('/synthetics/$testId/edit')({
 
 function EditSyntheticTest() {
   const {testId} = Route.useParams()
-  const {data: test, isLoading} = useQuery({
+  const {data: test, error, isLoading} = useQuery({
     queryKey: ['synthetic-test', testId],
     queryFn: () => api.getSyntheticTest(testId),
   })
   if (isLoading) {
     return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
+  }
+  if (error) {
+    const message = error instanceof Error ? error.message : 'Unable to load test'
+    return <div className="flex h-full items-center justify-center text-sm text-danger-fg">{message}</div>
   }
   if (!test) {
     return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Test not found</div>

@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import {urlWithQuery} from '../utils'
 import type {
   SyntheticTestResponse,
   SyntheticResultListResponse,
@@ -125,14 +126,16 @@ export function syntheticsMethods(core: ApiClientCore) {
     previewSyntheticTest: (
       request: CreateSyntheticTestPayload,
       location = ''
-    ) =>
-      core.request<SyntheticRunResponse>(
-        `${base}/synthetics/preview?location=${encodeURIComponent(location)}`,
+    ) => {
+      const query = location ? `location=${encodeURIComponent(location)}` : ''
+      return core.request<SyntheticRunResponse>(
+        urlWithQuery(`${base}/synthetics/preview`, query),
         {
           method: 'POST',
           body: JSON.stringify(request),
         }
-      ),
+      )
+    },
 
     listSyntheticLocations: () =>
       core.request<SyntheticLocationResponse[]>(`${base}/synthetics/locations`),

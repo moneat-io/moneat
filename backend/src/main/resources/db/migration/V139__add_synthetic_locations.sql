@@ -13,12 +13,16 @@ CREATE TABLE IF NOT EXISTS synthetic_locations (
     worker_count INTEGER NOT NULL DEFAULT 0,
     last_seen_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_synthetic_locations_scope_type CHECK (
+        (organization_id IS NULL AND location_type = 'managed')
+        OR (organization_id IS NOT NULL AND location_type = 'private')
+    )
 );
 
--- Managed codes are globally unique; private codes are unique per organization.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_synthetic_locations_managed_code
-    ON synthetic_locations(code) WHERE organization_id IS NULL;
+-- Codes are globally unique because tests and probe payloads resolve locations by code string.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_synthetic_locations_code
+    ON synthetic_locations(code);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_synthetic_locations_private_code
     ON synthetic_locations(organization_id, code) WHERE organization_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_synthetic_locations_org ON synthetic_locations(organization_id);

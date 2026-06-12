@@ -28,6 +28,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.concurrent.thread
@@ -220,6 +221,29 @@ class SyntheticsCheckExecutorTest {
             val test = makeTestData(url = server.baseUrl, assertions = assertions)
             val result = executor.executeTest(test)
             assertEquals("passed", result.status)
+        }
+    }
+
+    @Test
+    fun `executeTest captures request and response metadata without raw bodies`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.respond(200, """{"token":"server-secret"}""", "application/json")
+        }.use { server ->
+            val test = makeTestData(
+                url = server.baseUrl,
+                method = "POST",
+                body = """{"token":"client-secret"}"""
+            )
+
+            val result = executor.executeTest(test)
+
+            assertEquals("passed", result.status)
+            val request = assertNotNull(result.request)
+            val response = assertNotNull(result.response)
+            assertEquals("POST", request.method)
+            assertEquals("", request.body)
+            assertEquals(200, response.statusCode)
+            assertEquals("", response.body)
         }
     }
 

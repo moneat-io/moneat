@@ -216,8 +216,8 @@ function deriveTest(test: SyntheticTestResponse, results: SyntheticResultRespons
   const recent = results.slice(0, 30)
   const hasFailure = recent.some((r) => r.status === 'failed')
   let status: DerivedStatus
-  if (test.lastStatus === 'failed') status = 'failing'
-  else if (!test.active) status = 'paused'
+  if (!test.active) status = 'paused'
+  else if (test.lastStatus === 'failed') status = 'failing'
   else if (hasFailure) status = 'degraded'
   else status = 'passing'
 
@@ -623,8 +623,16 @@ function SyntheticsOverview() {
                   return (
                     <tr
                       key={t.id}
+                      role="link"
+                      tabIndex={0}
                       className="group cursor-pointer transition-colors hover:bg-muted/40"
                       onClick={() => navigate({to: '/synthetics/$testId', params: {testId: t.id}})}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate({to: '/synthetics/$testId', params: {testId: t.id}})
+                        }
+                      }}
                     >
                       <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleSelect(t.id)} aria-label={t.name} />

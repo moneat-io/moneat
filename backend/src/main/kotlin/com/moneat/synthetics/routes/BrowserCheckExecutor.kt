@@ -160,16 +160,7 @@ object BrowserCheckExecutor {
             val failed = failedStep != null
 
             val totalMs = System.currentTimeMillis() - start
-            val assertionResults = stepResults
-                .filterIndexed { i, _ -> steps[i].action == "assert" }
-                .map { sr ->
-                    AssertionResult(
-                        label = sr.label,
-                        expected = "visible",
-                        actual = if (sr.status == "passed") "visible" else "not visible",
-                        passed = sr.status == "passed"
-                    )
-                }
+            val assertionResults = browserAssertionResults(steps, stepResults)
             val detail = BrowserRunDetail(
                 steps = stepResults,
                 console = console,
@@ -279,6 +270,29 @@ object BrowserCheckExecutor {
             "selector_visible" -> page.isVisible(step.selector)
             else -> step.selector.isBlank() || page.isVisible(step.selector)
         }
+
+    private fun browserAssertionResults(
+        steps: List<BrowserStep>,
+        stepResults: List<BrowserStepResult>
+    ): List<AssertionResult> =
+        steps.zip(stepResults)
+            .filter { (step, _) -> step.action == "assert" }
+            .map { (step, result) -> browserAssertionResult(step, result) }
+
+    private fun browserAssertionResult(step: BrowserStep, result: BrowserStepResult): AssertionResult {
+        val expected = when (step.assertType) {
+            "url_contains" -> "URL contains ${step.value}"
+            "text_visible" -> "Text visible: ${step.value}"
+            "selector_visible" -> "Selector visible: ${step.selector}"
+            else -> "Visible: ${step.selector.ifBlank { step.value }}"
+        }
+        return AssertionResult(
+            label = result.label,
+            expected = expected,
+            actual = if (result.status == "passed") expected else result.errorMessage.ifBlank { "Assertion failed" },
+            passed = result.status == "passed"
+        )
+    }
 
     private fun captureScreenshot(
         page: Page,

@@ -307,6 +307,15 @@ class SyntheticsService(
         }
     }
 
+    private fun markRunAttempted(testId: UUID) {
+        transaction {
+            SyntheticTests.update({ SyntheticTests.id eq testId }) {
+                it[SyntheticTests.lastRunAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }
+        }
+    }
+
     fun runTestNow(testId: UUID, organizationId: Int): Boolean {
         val test = transaction {
             SyntheticTests
@@ -336,7 +345,10 @@ class SyntheticsService(
         } else {
             test.locations.filter { it in managed }
         }
-        if (toRun.isEmpty()) return
+        if (toRun.isEmpty()) {
+            markRunAttempted(test.id)
+            return
+        }
 
         var anyFailed = false
         var firstFailure: SyntheticCheckResult? = null
@@ -988,7 +1000,6 @@ class SyntheticsService(
     suspend fun previewTest(
         organizationId: Int,
         request: CreateSyntheticTestRequest,
-        location: String,
         executor: SyntheticsCheckExecutor = SyntheticsCheckExecutor()
     ): SyntheticRunResponse {
         val now = Clock.System.now()
@@ -1037,7 +1048,7 @@ class SyntheticsService(
             testName = data.name,
             testType = data.testType,
             status = result.status,
-            locationCode = location.ifBlank { DEFAULT_LOCATION },
+            locationCode = DEFAULT_LOCATION,
             durationMs = result.durationMs,
             statusCode = result.statusCode,
             attempt = 1,
@@ -1150,9 +1161,25 @@ class SyntheticsService(
         }
         suspendRunCatching { incrementSyntheticRunCount(organizationId) }
         suspendRunCatching {
-            updateTestStatus(test.id, submission.status, submission.status, test.lastStatus)
+            val aggregateStatus = aggregateProbeStatus(test, submission.status)
+            updateTestStatus(test.id, aggregateStatus, aggregateStatus, test.lastStatus)
         }
         return true
+    }
+
+    private suspend fun aggregateProbeStatus(test: SyntheticTestData, fallbackStatus: String): String {
+        val rows = executeChRows(
+            """
+            SELECT location_code, argMax(status, timestamp) AS status
+            FROM synthetic_results
+            WHERE test_id = '${test.id}'
+              AND organization_id = toUInt64(${test.organizationId})
+            GROUP BY location_code
+            FORMAT JSONEachRow
+            """.trimIndent()
+        )
+        if (rows.isNullOrEmpty()) return fallbackStatus
+        return if (rows.any { it["status"]?.jsonPrimitive?.content == "failed" }) "failed" else "passed"
     }
 
     private fun parseHeadersMap(raw: String?): Map<String, String>? =

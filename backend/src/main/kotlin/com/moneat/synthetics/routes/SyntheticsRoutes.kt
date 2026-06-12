@@ -497,11 +497,9 @@ fun Route.syntheticsRoutes() {
                     return@post
                 }
                 val request = call.receive<CreateSyntheticTestRequest>()
-                val location = call.request.queryParameters["location"].orEmpty()
                 val run = syntheticsService.previewTest(
                     orgIds.first(),
-                    request,
-                    location
+                    request
                 )
                 call.respond(HttpStatusCode.OK, run)
             }

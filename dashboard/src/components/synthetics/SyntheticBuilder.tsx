@@ -46,6 +46,7 @@ import {
   type SyntheticAssertionPayload,
   type SyntheticLocationResponse,
   type SyntheticRunResponse,
+  type SyntheticStepPayload,
   type SyntheticTestResponse,
 } from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
@@ -78,8 +79,8 @@ const STEPS: ReadonlyArray<{value: Step; label: string}> = [
 
 const DEFAULT_ALERT: AlertConfig = {
   consecutiveChecks: 3,
-  minLocations: 2,
-  totalLocations: 4,
+  minLocations: 1,
+  totalLocations: 1,
   retestCount: 1,
   renotifyMinutes: 30,
   notifyOnRecovery: true,
@@ -95,6 +96,7 @@ interface Draft {
   headers: Array<[string, string]>
   body: string
   assertions: SyntheticAssertionPayload[]
+  steps: SyntheticStepPayload[]
   browserSteps: BrowserStep[]
   locations: string[]
   alertConfig: AlertConfig
@@ -115,6 +117,7 @@ function initialDraft(initial?: SyntheticTestResponse): Draft {
     headers: Object.entries(initial?.headers ?? {}),
     body: initial?.body ?? '',
     assertions: initial?.assertions ?? [{type: 'status_code', operator: 'equals', value: '200'}],
+    steps: initial?.steps ?? [{name: 'Step 1', url: initial?.url ?? '', method: initial?.method ?? 'GET'}],
     browserSteps: initial?.browserSteps ?? [],
     locations: initial?.locations ?? ['aws-us-east-1'],
     alertConfig: initial?.alertConfig ?? DEFAULT_ALERT,
@@ -127,8 +130,22 @@ function initialDraft(initial?: SyntheticTestResponse): Draft {
   }
 }
 
+function isNetworkTest(testType: TestType): boolean {
+  return testType === 'tcp' || testType === 'dns' || testType === 'ssl' || testType === 'ping'
+}
+
+function normalizeAlertConfig(config: AlertConfig, selectedLocations: number): AlertConfig {
+  const totalLocations = Math.max(1, selectedLocations)
+  return {
+    ...config,
+    minLocations: Math.min(config.minLocations, totalLocations),
+    totalLocations: Math.min(config.totalLocations, totalLocations),
+  }
+}
+
 function toPayload(draft: Draft): CreateSyntheticTestPayload {
   const headers = Object.fromEntries(draft.headers.filter(([k]) => k.trim()))
+  const networkConfig = isNetworkTest(draft.testType) ? {hostname: draft.url || null} : null
   return {
     name: draft.name,
     testType: draft.testType,
@@ -139,9 +156,11 @@ function toPayload(draft: Draft): CreateSyntheticTestPayload {
     headers: Object.keys(headers).length ? headers : null,
     body: draft.body || null,
     assertions: draft.assertions,
+    steps: draft.testType === 'multistep' ? draft.steps : undefined,
+    config: networkConfig,
     browserSteps: draft.browserSteps,
     locations: draft.locations,
-    alertConfig: draft.alertConfig,
+    alertConfig: normalizeAlertConfig(draft.alertConfig, draft.locations.length),
     alertRecipients: draft.alertRecipients,
     service: draft.service || null,
     environment: draft.environment || null,
@@ -230,7 +249,7 @@ export function SyntheticBuilder({
   })
 
   const isBrowser = draft.testType === 'browser'
-  const isNet = draft.testType === 'tcp' || draft.testType === 'dns' || draft.testType === 'ssl' || draft.testType === 'ping'
+  const isNet = isNetworkTest(draft.testType)
   const stepIdx = STEPS.findIndex((s) => s.value === step)
 
   return (
@@ -255,7 +274,7 @@ export function SyntheticBuilder({
           </Button>
           <Button size="sm" className="h-7 gap-1.5" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
             <Save className="h-3.5 w-3.5" />
-            {mode === 'edit' ? 'Save changes' : 'Save & run'}
+            {mode === 'edit' ? 'Save changes' : 'Create test'}
           </Button>
         </div>
       </div>
@@ -347,6 +366,8 @@ function RequestStep({
     editor = <BrowserStepsEditor draft={draft} patch={patch} />
   } else if (isNet) {
     editor = <NetEditor draft={draft} patch={patch} />
+  } else if (draft.testType === 'multistep') {
+    editor = <MultistepEditor draft={draft} patch={patch} />
   } else {
     editor = <ApiEditor draft={draft} patch={patch} variables={variables} />
   }
@@ -447,6 +468,56 @@ function ApiEditor({
   )
 }
 
+function MultistepEditor({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial<Draft>) => void}>) {
+  const update = (index: number, nextStep: Partial<SyntheticStepPayload>) => {
+    patch({steps: draft.steps.map((step, stepIndex) => (stepIndex === index ? {...step, ...nextStep} : step))})
+  }
+  return (
+    <div>
+      <h3 className="mb-1 text-base font-semibold">Multistep request</h3>
+      <p className="mb-4 text-xs text-muted-foreground">Run ordered HTTP requests from every selected location.</p>
+      <div className="flex flex-col gap-1.5">
+        {draft.steps.map((requestStep, index) => (
+          <div key={rowKey('request-step', index, requestStep.name, requestStep.url)} className="grid grid-cols-[1fr_auto_1.8fr_auto] gap-2 rounded-md border bg-card p-2">
+            <input
+              value={requestStep.name ?? ''}
+              onChange={(e) => update(index, {name: e.target.value})}
+              placeholder="Step name"
+              className={cn(inputClass, 'h-7')}
+            />
+            <select
+              value={requestStep.method ?? 'GET'}
+              onChange={(e) => update(index, {method: e.target.value})}
+              className={cn(inputClass, 'h-7 w-24 font-semibold text-accent-subtle-fg')}
+            >
+              {['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'PATCH'].map((method) => (
+                <option key={method}>{method}</option>
+              ))}
+            </select>
+            <input
+              value={requestStep.url}
+              onChange={(e) => update(index, {url: e.target.value})}
+              placeholder="https://api.example.com/step"
+              className={cn(inputClass, 'h-7 font-mono text-xs')}
+            />
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => patch({steps: draft.steps.filter((_, stepIndex) => stepIndex !== index)})}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => patch({steps: [...draft.steps, {name: `Step ${draft.steps.length + 1}`, url: '', method: 'GET'}]})}
+        className="mt-2 flex items-center gap-1.5 py-1.5 text-xs font-semibold text-accent-subtle-fg"
+      >
+        <Plus className="h-3 w-3" />
+        Add request
+      </button>
+    </div>
+  )
+}
+
 function NetEditor({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial<Draft>) => void}>) {
   return (
     <div>
@@ -535,7 +606,7 @@ function AssertionsStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Parti
       <p className="mb-4 text-xs text-muted-foreground">The test passes only when every assertion holds, at every location.</p>
       <div className="flex flex-col gap-2">
         {draft.assertions.map((a, i) => (
-          <div key={rowKey('assertion', i, a.type, a.operator, a.target, a.value)} className="grid grid-cols-[1.2fr_1fr_1fr_auto] items-center gap-2 rounded-md border bg-card p-2">
+          <div key={rowKey('assertion', i, a.type, a.operator, a.target, a.value)} className="grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] items-center gap-2 rounded-md border bg-card p-2">
             <select value={a.type} onChange={(e) => update(i, {type: e.target.value})} className={cn(inputClass, 'h-7')}>
               {ASSERTION_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -544,12 +615,13 @@ function AssertionsStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Parti
             {a.type === 'body_json_path' || a.type === 'header' ? (
               <input value={a.target ?? ''} onChange={(e) => update(i, {target: e.target.value})} placeholder={a.type === 'header' ? 'header name' : '$.path'} className={cn(inputClass, 'h-7 font-mono text-xs')} />
             ) : (
-              <select value={a.operator} onChange={(e) => update(i, {operator: e.target.value})} className={cn(inputClass, 'h-7')}>
-                {OPERATORS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+              <span />
             )}
+            <select value={a.operator} onChange={(e) => update(i, {operator: e.target.value})} className={cn(inputClass, 'h-7')}>
+              {OPERATORS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
             <input value={a.value ?? ''} onChange={(e) => update(i, {value: e.target.value})} placeholder="value" className={cn(inputClass, 'h-7 font-mono text-xs')} />
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => patch({assertions: draft.assertions.filter((_, j) => j !== i)})}>
               <X className="h-3.5 w-3.5" />
@@ -646,7 +718,10 @@ function NumberStepper({value, onChange, min = 1, max = 20}: Readonly<{value: nu
 
 function AlertingStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial<Draft>) => void}>) {
   const cfg = draft.alertConfig
-  const setCfg = (p: Partial<AlertConfig>) => patch({alertConfig: {...cfg, ...p}})
+  const maxLocations = Math.max(1, draft.locations.length)
+  const setCfg = (p: Partial<AlertConfig>) => {
+    patch({alertConfig: normalizeAlertConfig({...cfg, ...p}, maxLocations)})
+  }
   return (
     <div>
       <h3 className="mb-1 text-base font-semibold">Alerting</h3>
@@ -655,8 +730,8 @@ function AlertingStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial
       <div className="rounded-md border bg-muted/40 p-4 text-base leading-loose">
         Alert when the test is <b className="text-accent-subtle-fg">failing</b> for{' '}
         <NumberStepper value={cfg.consecutiveChecks} onChange={(v) => setCfg({consecutiveChecks: v})} min={1} max={10} /> consecutive checks from at least{' '}
-        <NumberStepper value={cfg.minLocations} onChange={(v) => setCfg({minLocations: v})} min={1} max={8} /> of{' '}
-        <NumberStepper value={cfg.totalLocations} onChange={(v) => setCfg({totalLocations: v})} min={1} max={8} /> locations. Re-test{' '}
+        <NumberStepper value={Math.min(cfg.minLocations, maxLocations)} onChange={(v) => setCfg({minLocations: v})} min={1} max={maxLocations} /> of{' '}
+        <NumberStepper value={Math.min(cfg.totalLocations, maxLocations)} onChange={(v) => setCfg({totalLocations: v})} min={1} max={maxLocations} /> locations. Re-test{' '}
         <NumberStepper value={cfg.retestCount} onChange={(v) => setCfg({retestCount: v})} min={0} max={5} /> times before alerting.
       </div>
       <div className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Recipients</div>

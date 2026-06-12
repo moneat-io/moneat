@@ -46,13 +46,15 @@ export const Route = createFileRoute('/synthetics/$testId/')({
 })
 
 function testStatusVariant(isFailing: boolean, active: boolean): 'danger' | 'success' | 'neutral' {
+  if (!active) return 'neutral'
   if (isFailing) return 'danger'
-  return active ? 'success' : 'neutral'
+  return 'success'
 }
 
 function testStatusLabel(isFailing: boolean, active: boolean): string {
+  if (!active) return 'Paused'
   if (isFailing) return 'Failing'
-  return active ? 'Passing' : 'Paused'
+  return 'Passing'
 }
 
 function recipientKey(target: string, type: string, index: number): string {
@@ -317,8 +319,16 @@ function SyntheticTestDetail() {
                     return (
                       <tr
                         key={r.resultId}
+                        role="link"
+                        tabIndex={0}
                         className="cursor-pointer transition-colors hover:bg-muted/40"
                         onClick={() => navigate({to: '/synthetics/$testId/results/$resultId', params: {testId, resultId: r.resultId}})}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate({to: '/synthetics/$testId/results/$resultId', params: {testId, resultId: r.resultId}})
+                          }
+                        }}
                       >
                         <td className="px-3.5 py-1.5">
                           <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', passed ? 'text-success-fg' : 'text-danger-fg')}>

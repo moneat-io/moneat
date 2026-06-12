@@ -76,7 +76,6 @@ data class SyntheticCheckResult(
     val browser: BrowserRunDetail? = null
 )
 
-private const val CAPTURE_BODY_MAX = 8192
 private val assertionOperatorLabels = mapOf(
     "equals" to "is",
     "not_equals" to "is not",
@@ -203,12 +202,12 @@ open class SyntheticsCheckExecutor {
                 method = test.method.uppercase(),
                 url = url,
                 headers = redactHeaders(headersMap),
-                body = (test.body ?: "").take(CAPTURE_BODY_MAX)
+                body = ""
             )
             val capturedResponse = CapturedResponse(
                 statusCode = statusCode,
                 headers = redactHeaders(responseHeaders),
-                body = body.take(CAPTURE_BODY_MAX)
+                body = ""
             )
 
             SyntheticCheckResult(
@@ -759,7 +758,9 @@ open class SyntheticsCheckExecutor {
         assertion: SyntheticAssertion,
         headers: Map<String, String>
     ): Pair<Boolean, String> {
-        val headerValue = headers[assertion.target]
+        val headerValue = headers.entries
+            .firstOrNull { (name, _) -> name.equals(assertion.target, ignoreCase = true) }
+            ?.value
         val ok = headerValue?.let {
             compareStringValue(it, assertion.value, assertion.operator)
         } ?: false

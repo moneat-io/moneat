@@ -191,7 +191,7 @@ private fun buildSyntheticResultsInsertSql(): String {
                 number % 41 = 7, 'failed',
                 'passed') AS st
         SELECT
-            generateUUIDv4(), toUInt64(-1), tid, tname, ttype, st, loc, loc,
+            generateUUIDv4(), toUInt64($DEMO_ORG), tid, tname, ttype, st, loc, loc,
             toUInt64(multiIf(ttype = 'browser', 1500 + number % 1500, 60 + number % 400)),
             multiIf(st = 'failed', 'Assertion failed: status code is 200', ''),
             map('dns', toFloat64(5 + number % 15), 'tcp', toFloat64(8 + number % 20),

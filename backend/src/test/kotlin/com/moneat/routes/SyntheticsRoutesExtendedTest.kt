@@ -709,17 +709,16 @@ class SyntheticsRoutesExtendedTest {
     // ──── Preview ────
 
     @Test
-    fun `POST preview forwards location query parameter`() =
+    fun `POST preview accepts location query parameter`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             coEvery {
                 mockService.previewTest(
                     orgId,
                     any<CreateSyntheticTestRequest>(),
-                    "aws-eu-central-1",
                     any<SyntheticsCheckExecutor>()
                 )
-            } returns sampleRunResponse("aws-eu-central-1")
+            } returns sampleRunResponse("moneat")
             application { installTestApp() }
 
             val r = client.post("/v1/synthetics/preview?location=aws-eu-central-1") {
@@ -739,12 +738,11 @@ class SyntheticsRoutesExtendedTest {
             }
 
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("aws-eu-central-1"))
+            assertTrue(r.bodyAsText().contains("moneat"))
             coVerify(exactly = 1) {
                 mockService.previewTest(
                     orgId,
                     any<CreateSyntheticTestRequest>(),
-                    "aws-eu-central-1",
                     any<SyntheticsCheckExecutor>()
                 )
             }

@@ -132,7 +132,8 @@ class SyntheticsServiceTest {
     private fun syntheticTestData(
         id: java.util.UUID = java.util.UUID.randomUUID(),
         lastStatus: String? = null,
-        alertOnFailure: Boolean = true
+        alertOnFailure: Boolean = true,
+        locations: List<String> = emptyList()
     ): SyntheticTestData {
         val now = kotlin.time.Clock.System.now()
         return SyntheticTestData(
@@ -151,6 +152,7 @@ class SyntheticsServiceTest {
             retryCount = 0,
             retryIntervalMs = 100,
             alertOnFailure = alertOnFailure,
+            locations = locations,
             createdAt = now,
             updatedAt = now
         )
@@ -567,6 +569,46 @@ class SyntheticsServiceTest {
             assertEquals("moneat-synthetic-${testData.id}", event.deduplicationKey)
             assertEquals(TEST_ORG_ID, event.organizationId)
             assertTrue(event.description.contains("passed after previous failures"))
+        }
+
+    @Test
+    fun `executeTestAndRecord touches private-only tests without executing locally`() =
+        runBlocking {
+            val created = service.createTest(
+                TEST_ORG_ID,
+                createRequest {
+                    locations = listOf("private-us-east")
+                }
+            )
+            val testId = java.util.UUID.fromString(created.id)
+            val testData = syntheticTestData(id = testId, locations = listOf("private-us-east"))
+            var executed = false
+            val executor = object : SyntheticsCheckExecutor() {
+                override suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult {
+                    executed = true
+                    return SyntheticCheckResult(status = "passed", durationMs = 1)
+                }
+            }
+
+            service.executeTestAndRecord(testData, executor)
+
+            val fetched = service.getTest(testId, TEST_ORG_ID)
+            assertNotNull(fetched)
+            assertFalse(executed)
+            assertNotNull(fetched.lastRunAt)
+            assertEquals(created.status, fetched.status)
+        }
+
+    @Test
+    fun `previewTest reports local preview location`() =
+        runBlocking {
+            val run = service.previewTest(
+                TEST_ORG_ID,
+                createRequest(),
+                executor = executorReturning(SyntheticCheckResult(status = "passed", durationMs = 12))
+            )
+
+            assertEquals("moneat", run.locationCode)
         }
 
     // ──── Probe Protocol ────
