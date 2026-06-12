@@ -25,14 +25,19 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.synthetics.routes.AlertConfig
+import com.moneat.synthetics.routes.AlertRecipient
 import com.moneat.synthetics.routes.AssertionResult
 import com.moneat.synthetics.routes.BrowserStep
 import com.moneat.synthetics.routes.CapturedRequest
 import com.moneat.synthetics.routes.CapturedResponse
+import com.moneat.synthetics.routes.CreatePrivateLocationRequest
 import com.moneat.synthetics.routes.CreateSyntheticTestRequest
 import com.moneat.synthetics.routes.ProbeResultSubmission
 import com.moneat.synthetics.routes.SyntheticAssertion
 import com.moneat.synthetics.routes.SyntheticCheckResult
+import com.moneat.synthetics.routes.SyntheticLocationService
+import com.moneat.synthetics.routes.SyntheticLocations
 import com.moneat.synthetics.routes.SyntheticRunDetail
 import com.moneat.synthetics.routes.SyntheticStep
 import com.moneat.synthetics.routes.SyntheticTestConfig
@@ -57,13 +62,16 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
 
 class SyntheticsServiceTest {
@@ -91,6 +99,7 @@ class SyntheticsServiceTest {
             Organizations,
             Memberships,
             Subscriptions,
+            SyntheticLocations,
             SyntheticTests,
             SyntheticVariables
         )
@@ -107,28 +116,56 @@ class SyntheticsServiceTest {
     private class SyntheticRequestBuilder {
         var name: String = "API Health Check"
         var testType: String = "api"
+        var intervalSeconds: Int = 60
+        var timeoutSeconds: Int = 10
         var url: String? = "https://example.com/health"
+        var method: String = "GET"
+        var headers: Map<String, String>? = null
+        var body: String? = null
+        var authMethod: String? = null
+        var authUser: String? = null
+        var authPass: String? = null
         var tags: List<String> = emptyList()
         var retryCount: Int = 0
         var retryIntervalMs: Int = 300
         var alertOnFailure: Boolean = false
+        var alertChannels: List<String> = emptyList()
         var assertions: List<SyntheticAssertion> = emptyList()
+        var steps: List<SyntheticStep> = emptyList()
         var config: SyntheticTestConfig? = null
+        var service: String? = null
+        var environment: String? = null
         var locations: List<String> = emptyList()
+        var alertConfig: AlertConfig? = null
+        var alertRecipients: List<AlertRecipient> = emptyList()
+        var browserSteps: List<BrowserStep> = emptyList()
 
         fun build(): CreateSyntheticTestRequest = CreateSyntheticTestRequest(
             name = name,
             testType = testType,
-            intervalSeconds = 60,
-            timeoutSeconds = 10,
+            intervalSeconds = intervalSeconds,
+            timeoutSeconds = timeoutSeconds,
             url = url,
+            method = method,
+            headers = headers,
+            body = body,
+            authMethod = authMethod,
+            authUser = authUser,
+            authPass = authPass,
             assertions = assertions,
+            steps = steps,
             tags = tags,
             retryCount = retryCount,
             retryIntervalMs = retryIntervalMs,
             alertOnFailure = alertOnFailure,
+            alertChannels = alertChannels,
             config = config,
-            locations = locations
+            service = service,
+            environment = environment,
+            locations = locations,
+            alertConfig = alertConfig,
+            alertRecipients = alertRecipients,
+            browserSteps = browserSteps
         )
     }
 
@@ -197,6 +234,73 @@ class SyntheticsServiceTest {
         }
     }
 
+    private fun seedManagedLocation(code: String, name: String = code): java.util.UUID {
+        val id = java.util.UUID.randomUUID()
+        val now = kotlin.time.Clock.System.now()
+        transaction {
+            SyntheticLocations.insert {
+                it[SyntheticLocations.id] = id
+                it[SyntheticLocations.organizationId] = null
+                it[SyntheticLocations.code] = code
+                it[SyntheticLocations.name] = name
+                it[SyntheticLocations.region] = "us-east"
+                it[SyntheticLocations.locationType] = "managed"
+                it[SyntheticLocations.active] = true
+                it[SyntheticLocations.workerCount] = 0
+                it[SyntheticLocations.createdAt] = now
+                it[SyntheticLocations.updatedAt] = now
+            }
+        }
+        return id
+    }
+
+    // ──── Locations ────
+
+    @Test
+    fun `location service lists authenticates and deletes private locations`() {
+        val locationService = SyntheticLocationService()
+        val managedId = seedManagedLocation("aws-us-east-1", "US East")
+        val created = locationService.createPrivateLocation(
+            TEST_ORG_ID,
+            CreatePrivateLocationRequest(
+                code = "private-us-east",
+                name = "Private US East",
+                region = "iad"
+            )
+        )
+
+        assertTrue(created.key.startsWith("mloc_"))
+        val initialLocations = locationService.listLocations(TEST_ORG_ID)
+        assertEquals(2, initialLocations.size)
+        assertEquals(1, initialLocations.single { it.code == "aws-us-east-1" }.workerCount)
+        assertEquals(0, initialLocations.single { it.code == "private-us-east" }.workerCount)
+        assertNull(locationService.authenticateProbe("bad-key", "private-us-east"))
+        assertNull(locationService.authenticateProbe(created.key, "private-eu-west"))
+
+        val identity = locationService.authenticateProbe(created.key, "private-us-east")
+
+        assertNotNull(identity)
+        assertEquals(TEST_ORG_ID, identity.organizationId)
+        assertEquals("private-us-east", identity.locationCode)
+        val online = locationService.getLocation(java.util.UUID.fromString(created.location.id), TEST_ORG_ID)
+        assertNotNull(online)
+        assertEquals(1, online.workerCount)
+        assertNotNull(online.lastSeenAt)
+        transaction {
+            SyntheticLocations.update({ SyntheticLocations.id eq java.util.UUID.fromString(created.location.id) }) {
+                it[lastSeenAt] = kotlin.time.Clock.System.now() - 300.seconds
+                it[workerCount] = 4
+            }
+        }
+        val offline = locationService.getLocation(java.util.UUID.fromString(created.location.id), TEST_ORG_ID)
+        assertNotNull(offline)
+        assertEquals(0, offline.workerCount)
+        assertFalse(locationService.deletePrivateLocation(managedId, TEST_ORG_ID))
+        assertFalse(locationService.deletePrivateLocation(java.util.UUID.fromString(created.location.id), 999))
+        assertTrue(locationService.deletePrivateLocation(java.util.UUID.fromString(created.location.id), TEST_ORG_ID))
+        assertNull(locationService.getLocation(java.util.UUID.fromString(created.location.id), TEST_ORG_ID))
+    }
+
     // ──── CRUD: Create ────
 
     @Test
@@ -243,6 +347,50 @@ class SyntheticsServiceTest {
             }
         )
         assertTrue(response.alertOnFailure)
+    }
+
+    @Test
+    fun `createTest stores structured workflow and browser fields`() {
+        val response = service.createTest(
+            TEST_ORG_ID,
+            createRequest {
+                name = "Checkout journey"
+                testType = "browser"
+                method = "POST"
+                headers = mapOf("X-Test" to "synthetic")
+                body = """{"checkout":true}"""
+                authMethod = "basic"
+                authUser = "robot"
+                authPass = "secret"
+                alertChannels = listOf("slack-primary")
+                service = "checkout"
+                environment = "production"
+                locations = listOf("aws-us-east-1", "private-us-east")
+                steps = listOf(
+                    SyntheticStep(
+                        name = "Cart API",
+                        url = "https://example.com/cart",
+                        method = "GET"
+                    )
+                )
+                alertConfig = AlertConfig(consecutiveChecks = 2, minLocations = 2, retestCount = 1)
+                alertRecipients = listOf(AlertRecipient(type = "email", target = "alerts@example.com"))
+                browserSteps = listOf(BrowserStep(action = "click", selector = "#checkout", value = "Pay"))
+            }
+        )
+
+        assertEquals("browser", response.testType)
+        assertEquals("POST", response.method)
+        assertEquals(mapOf("X-Test" to "synthetic"), response.headers)
+        assertEquals("robot", response.authUser)
+        assertEquals(listOf("slack-primary"), response.alertChannels)
+        assertEquals("checkout", response.service)
+        assertEquals("production", response.environment)
+        assertEquals(listOf("aws-us-east-1", "private-us-east"), response.locations)
+        assertEquals("Cart API", response.steps.single().name)
+        assertEquals(2, response.alertConfig?.consecutiveChecks)
+        assertEquals("alerts@example.com", response.alertRecipients.single().target)
+        assertEquals("#checkout", response.browserSteps.single().selector)
     }
 
     @Test
@@ -405,6 +553,86 @@ class SyntheticsServiceTest {
         assertNotNull(updated)
         assertEquals(5, updated.retryCount)
         assertEquals(1000, updated.retryIntervalMs)
+    }
+
+    @Test
+    fun `updateTest updates structured fields and clears empty browser steps`() {
+        val created = service.createTest(
+            TEST_ORG_ID,
+            createRequest {
+                browserSteps = listOf(BrowserStep(action = "click", selector = "#old"))
+            }
+        )
+        val updated = service.updateTest(
+            java.util.UUID.fromString(created.id),
+            TEST_ORG_ID,
+            UpdateSyntheticTestRequest(
+                intervalSeconds = 120,
+                timeoutSeconds = 20,
+                url = "https://example.com/v2",
+                method = "PUT",
+                headers = mapOf("X-Env" to "prod"),
+                body = """{"enabled":true}""",
+                authMethod = "bearer",
+                authUser = "unused",
+                authPass = "token",
+                assertions = listOf(SyntheticAssertion(type = "status_code", value = "204")),
+                steps = listOf(SyntheticStep(name = "Warmup", url = "https://example.com/warmup")),
+                alertOnFailure = true,
+                alertChannels = listOf("pagerduty"),
+                config = SyntheticTestConfig(hostname = "example.com", port = 443),
+                service = "payments",
+                environment = "staging",
+                locations = listOf("aws-us-west-2"),
+                alertConfig = AlertConfig(consecutiveChecks = 3, minLocations = 1),
+                alertRecipients = listOf(AlertRecipient(type = "slack", target = "#alerts")),
+                browserSteps = emptyList()
+            )
+        )
+
+        assertNotNull(updated)
+        assertEquals(120, updated.intervalSeconds)
+        assertEquals(20, updated.timeoutSeconds)
+        assertEquals("PUT", updated.method)
+        assertEquals(mapOf("X-Env" to "prod"), updated.headers)
+        assertEquals("bearer", updated.authMethod)
+        assertEquals("status_code", updated.assertions.single().type)
+        assertEquals("Warmup", updated.steps.single().name)
+        assertTrue(updated.alertOnFailure)
+        assertEquals(listOf("pagerduty"), updated.alertChannels)
+        assertEquals("payments", updated.service)
+        assertEquals("staging", updated.environment)
+        assertEquals(listOf("aws-us-west-2"), updated.locations)
+        assertEquals(3, updated.alertConfig?.consecutiveChecks)
+        assertEquals("#alerts", updated.alertRecipients.single().target)
+        assertTrue(updated.browserSteps.isEmpty())
+
+        val browserUpdated = service.updateTest(
+            java.util.UUID.fromString(created.id),
+            TEST_ORG_ID,
+            UpdateSyntheticTestRequest(browserSteps = listOf(BrowserStep(action = "click", selector = "#new")))
+        )
+        assertNotNull(browserUpdated)
+        assertEquals("#new", browserUpdated.browserSteps.single().selector)
+    }
+
+    @Test
+    fun `updateTest validates negative retry fields`() {
+        val created = service.createTest(TEST_ORG_ID, createRequest())
+        assertFailsWith<IllegalArgumentException> {
+            service.updateTest(
+                java.util.UUID.fromString(created.id),
+                TEST_ORG_ID,
+                UpdateSyntheticTestRequest(retryCount = -1)
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.updateTest(
+                java.util.UUID.fromString(created.id),
+                TEST_ORG_ID,
+                UpdateSyntheticTestRequest(retryIntervalMs = -1)
+            )
+        }
     }
 
     @Test
@@ -597,6 +825,43 @@ class SyntheticsServiceTest {
         }
 
     @Test
+    fun `executeTestAndRecord fires structured alert from failing location history`() =
+        runBlocking {
+            seedManagedLocation("aws-us-east-1", "US East")
+            seedManagedLocation("aws-us-west-2", "US West")
+            val workflowService = mockk<WorkflowService>(relaxed = true)
+            val service = SyntheticsService(
+                billingQuotaService = mockk<BillingQuotaService>(relaxed = true),
+                workflowService = workflowService
+            )
+            val eventSlot = slot<AlertLifecycleEvent>()
+            val testData = syntheticTestData(
+                alertOnFailure = false,
+                locations = listOf("aws-us-east-1", "aws-us-west-2")
+            ).copy(
+                alertConfig = AlertConfig(consecutiveChecks = 1, minLocations = 2),
+                alertRecipients = listOf(AlertRecipient(type = "email", target = "alerts@example.com"))
+            )
+            val locationHistory = """
+                {"location_code":"aws-us-east-1","status":"failed"}
+                {"location_code":"aws-us-west-2","status":"failed"}
+            """.trimIndent()
+
+            withClickHouseMock("SELECT location_code, status" to locationHistory) {
+                service.executeTestAndRecord(
+                    testData,
+                    executorReturning(SyntheticCheckResult(status = "passed", durationMs = 25))
+                )
+            }
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(capture(eventSlot))
+            }
+            assertEquals(AlertStatus.FIRING, eventSlot.captured.status)
+            assertEquals(AlertSource.SYNTHETIC_TEST, eventSlot.captured.source)
+        }
+
+    @Test
     fun `executeTestAndRecord touches private-only tests without executing locally`() =
         runBlocking {
             val created = service.createTest(
@@ -634,6 +899,41 @@ class SyntheticsServiceTest {
             )
 
             assertEquals("moneat", run.locationCode)
+        }
+
+    @Test
+    fun `previewTest maps full request fields and failed assertion count`() =
+        runBlocking {
+            val run = service.previewTest(
+                TEST_ORG_ID,
+                createRequest {
+                    name = ""
+                    headers = mapOf("X-Preview" to "yes")
+                    steps = listOf(SyntheticStep(name = "Step", url = "https://example.com/step"))
+                    config = SyntheticTestConfig(hostname = "example.com", port = 443)
+                    browserSteps = listOf(BrowserStep(action = "assert", value = "Ready"))
+                },
+                executor = executorReturning(
+                    SyntheticCheckResult(
+                        status = "failed",
+                        durationMs = 15,
+                        assertionResults = listOf(
+                            AssertionResult(
+                                label = "Status code equals 200",
+                                expected = "200",
+                                actual = "500",
+                                passed = false
+                            )
+                        )
+                    )
+                )
+            )
+
+            assertEquals("Preview", run.testName)
+            assertEquals("failed", run.status)
+            assertEquals(1, run.assertionsTotal)
+            assertEquals(1, run.assertionsFailed)
+            assertEquals("Status code equals 200", run.detail?.assertions?.single()?.label)
         }
 
     @Test
@@ -741,6 +1041,33 @@ class SyntheticsServiceTest {
         }
 
     @Test
+    fun `recordProbeResult rejects invalid and missing test ids`() =
+        runBlocking {
+            assertFalse(
+                service.recordProbeResult(
+                    organizationId = TEST_ORG_ID,
+                    locationCode = "private-us-east",
+                    submission = ProbeResultSubmission(
+                        testId = "not-a-uuid",
+                        status = "passed",
+                        durationMs = 100L
+                    )
+                )
+            )
+            assertFalse(
+                service.recordProbeResult(
+                    organizationId = TEST_ORG_ID,
+                    locationCode = "private-us-east",
+                    submission = ProbeResultSubmission(
+                        testId = java.util.UUID.randomUUID().toString(),
+                        status = "passed",
+                        durationMs = 100L
+                    )
+                )
+            )
+        }
+
+    @Test
     fun `recordProbeResult accepts assigned result and updates aggregate status`() =
         runBlocking {
             val test = service.createTest(
@@ -831,6 +1158,70 @@ class SyntheticsServiceTest {
             assertEquals("status_code", item.assertions.single().type)
             assertEquals("https://private.example.com/health", item.steps.single().url)
             assertEquals("#buy", item.browserSteps.single().selector)
+        }
+
+    @Test
+    fun `getProbeWork returns empty when no tests are assigned to location`() =
+        runBlocking {
+            service.createTest(TEST_ORG_ID, createRequest { locations = listOf("private-us-east") })
+
+            val work = service.getProbeWork(TEST_ORG_ID, "private-eu-west")
+
+            assertTrue(work.isEmpty())
+        }
+
+    @Test
+    fun `getProbeWork tolerates malformed optional stored config`() =
+        runBlocking {
+            val test = service.createTest(
+                TEST_ORG_ID,
+                createRequest {
+                    locations = listOf("private-us-east")
+                    headers = mapOf("X-Valid" to "yes")
+                    steps = listOf(SyntheticStep(name = "Valid", url = "https://example.com"))
+                    config = SyntheticTestConfig(hostname = "example.com", port = 443)
+                    browserSteps = listOf(BrowserStep(action = "click", selector = "#ok"))
+                }
+            )
+            transaction {
+                SyntheticTests.update({ SyntheticTests.id eq java.util.UUID.fromString(test.id) }) {
+                    it[headers] = "not-json"
+                    it[assertions] = "not-json"
+                    it[steps] = "not-json"
+                    it[config] = "not-json"
+                    it[browserSteps] = "not-json"
+                }
+            }
+
+            withClickHouseMock {
+                val work = service.getProbeWork(TEST_ORG_ID, "private-us-east")
+
+                assertEquals(1, work.size)
+                assertNull(work.single().headers)
+                assertTrue(work.single().assertions.isEmpty())
+                assertTrue(work.single().steps.isEmpty())
+                assertTrue(work.single().browserSteps.isEmpty())
+                assertNull(work.single().config)
+            }
+        }
+
+    @Test
+    fun `getProbeWork excludes tests with fresh private location results`() =
+        runBlocking {
+            val test = service.createTest(
+                TEST_ORG_ID,
+                createRequest {
+                    intervalSeconds = 60
+                    locations = listOf("private-us-east")
+                }
+            )
+            val freshRun = """{"test_id":"${test.id}","last_ms":${System.currentTimeMillis()}}"""
+
+            withClickHouseMock("SELECT test_id, toUnixTimestamp64Milli" to freshRun) {
+                val work = service.getProbeWork(TEST_ORG_ID, "private-us-east")
+
+                assertTrue(work.isEmpty())
+            }
         }
 
     // ──── Global Variables CRUD ────
@@ -1005,6 +1396,19 @@ class SyntheticsServiceTest {
             UpdateSyntheticTestRequest(active = false)
         )
         val due = service.getTestsDueForRun()
+        assertFalse(due.any { it.id.toString() == created.id })
+    }
+
+    @Test
+    fun `getTestsDueForRun excludes recently run active tests`() {
+        val created = service.createTest(
+            TEST_ORG_ID,
+            createRequest { intervalSeconds = 300 }
+        )
+        service.updateTestStatus(java.util.UUID.fromString(created.id), "passed", "passed")
+
+        val due = service.getTestsDueForRun()
+
         assertFalse(due.any { it.id.toString() == created.id })
     }
 }
