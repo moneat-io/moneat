@@ -20,14 +20,21 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
+import com.moneat.synthetics.routes.AssertionResult
+import com.moneat.synthetics.routes.BrowserStep
+import com.moneat.synthetics.routes.CapturedRequest
+import com.moneat.synthetics.routes.CapturedResponse
 import com.moneat.synthetics.routes.CreateSyntheticTestRequest
 import com.moneat.synthetics.routes.ProbeResultSubmission
 import com.moneat.synthetics.routes.SyntheticAssertion
 import com.moneat.synthetics.routes.SyntheticCheckResult
+import com.moneat.synthetics.routes.SyntheticRunDetail
+import com.moneat.synthetics.routes.SyntheticStep
 import com.moneat.synthetics.routes.SyntheticTestConfig
 import com.moneat.synthetics.routes.SyntheticTestData
 import com.moneat.synthetics.routes.SyntheticTests
@@ -36,11 +43,14 @@ import com.moneat.synthetics.routes.SyntheticVariables
 import com.moneat.synthetics.routes.SyntheticsCheckExecutor
 import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.synthetics.routes.UpdateSyntheticTestRequest
+import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.testsupport.queryBasedClickHouseHandler
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.eq
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -171,6 +181,21 @@ class SyntheticsServiceTest {
                 .single()[Organizations.resource_id]
                 .toString()
         }
+
+    private suspend fun <T> withClickHouseMock(
+        vararg rules: Pair<String, String>,
+        block: suspend () -> T
+    ): T {
+        val server = MockHttpServer(queryBasedClickHouseHandler(*rules))
+        ClickHouseClient.close()
+        ClickHouseClient.init(server.baseUrl, "test", "default", "")
+        return try {
+            block()
+        } finally {
+            ClickHouseClient.close()
+            server.close()
+        }
+    }
 
     // ──── CRUD: Create ────
 
@@ -611,6 +636,85 @@ class SyntheticsServiceTest {
             assertEquals("moneat", run.locationCode)
         }
 
+    @Test
+    fun `getRunDetail maps result row and persisted detail`() =
+        runBlocking {
+            val detail = SyntheticRunDetail(
+                assertions = listOf(
+                    AssertionResult(
+                        label = "Status code",
+                        expected = "200",
+                        actual = "503",
+                        passed = false
+                    )
+                ),
+                request = CapturedRequest(
+                    method = "POST",
+                    url = "https://api.example.com/orders",
+                    headers = mapOf("content-type" to "application/json"),
+                    body = ""
+                ),
+                response = CapturedResponse(
+                    statusCode = 503,
+                    headers = mapOf("content-type" to "application/json"),
+                    body = ""
+                ),
+                timings = mapOf("dns" to 2.5),
+                resolvedIp = "203.0.113.10"
+            )
+            val detailJson = Json.encodeToString(detail)
+            val resultRow =
+                """{"result_id":"run-1","test_id":"test-1","test_name":"Checkout API","test_type":"api",""" +
+                    """"status":"failed","location_code":"private-us-east","duration_ms":540,""" +
+                    """"status_code":503,"attempt":2,"assertions_total":1,"assertions_failed":1,""" +
+                    """"error_message":"upstream unavailable","ts":"2026-06-11T00:00:00"}"""
+            val detailRow = """{"details":${Json.encodeToString(detailJson)}}"""
+
+            withClickHouseMock(
+                "FROM synthetic_results" to resultRow,
+                "FROM synthetic_run_details" to detailRow
+            ) {
+                val run = service.getRunDetail("test-1", "run-1", listOf(TEST_ORG_ID))
+
+                assertNotNull(run)
+                assertEquals("run-1", run.resultId)
+                assertEquals("failed", run.status)
+                assertEquals("private-us-east", run.locationCode)
+                assertEquals(503, run.statusCode)
+                assertEquals(2, run.attempt)
+                assertEquals("upstream unavailable", run.errorMessage)
+                assertEquals("203.0.113.10", run.detail?.resolvedIp)
+                assertEquals("Status code", run.detail?.assertions?.single()?.label)
+                assertEquals("POST", run.detail?.request?.method)
+            }
+        }
+
+    @Test
+    fun `summary queries map ClickHouse rows into response models`() =
+        runBlocking {
+            withClickHouseMock(
+                "GROUP BY location_code" to
+                    """{"location_code":"private-us-east","uptime":50.0,"avg_ms":125.0,""" +
+                    """"p95_ms":200.0,"total":4,"failures":2}""",
+                "countIf(status = 'passed')" to "99.5\t123.4\t250.0\t10\t1"
+            ) {
+                val summary = service.getTestSummary("test-1", listOf(TEST_ORG_ID))
+                val locations = service.getLocationSummaries("test-1", listOf(TEST_ORG_ID))
+
+                assertNotNull(summary)
+                assertEquals(99.5, summary.uptimePercent)
+                assertEquals(123.4, summary.avgResponseMs)
+                assertEquals(250.0, summary.p95ResponseMs)
+                assertEquals(10, summary.totalRuns)
+                assertEquals(1, summary.failureCount)
+                assertEquals(1, locations.size)
+                assertEquals("private-us-east", locations.single().locationCode)
+                assertEquals(50.0, locations.single().uptimePercent)
+                assertEquals(4, locations.single().totalRuns)
+                assertEquals(2, locations.single().failureCount)
+            }
+        }
+
     // ──── Probe Protocol ────
 
     @Test
@@ -634,6 +738,99 @@ class SyntheticsServiceTest {
             )
 
             assertFalse(accepted)
+        }
+
+    @Test
+    fun `recordProbeResult accepts assigned result and updates aggregate status`() =
+        runBlocking {
+            val test = service.createTest(
+                TEST_ORG_ID,
+                createRequest {
+                    locations = listOf("private-us-east")
+                }
+            )
+
+            withClickHouseMock(
+                "argMax(status, timestamp)" to
+                    """{"location_code":"private-us-east","status":"failed"}"""
+            ) {
+                val accepted = service.recordProbeResult(
+                    organizationId = TEST_ORG_ID,
+                    locationCode = "private-us-east",
+                    submission = ProbeResultSubmission(
+                        testId = test.id,
+                        status = "failed",
+                        durationMs = 250L,
+                        statusCode = 503,
+                        errorMessage = "upstream unavailable",
+                        resolvedIp = "203.0.113.10",
+                        timings = mapOf("dns" to 2.0),
+                        assertions = listOf(
+                            AssertionResult(
+                                label = "Status code",
+                                expected = "200",
+                                actual = "503",
+                                passed = false
+                            )
+                        ),
+                        request = CapturedRequest(method = "GET", url = "https://example.com"),
+                        response = CapturedResponse(statusCode = 503)
+                    )
+                )
+
+                assertTrue(accepted)
+                val fetched = service.getTest(java.util.UUID.fromString(test.id), TEST_ORG_ID)
+                assertNotNull(fetched)
+                assertEquals("failed", fetched.lastStatus)
+            }
+        }
+
+    @Test
+    fun `getProbeWork returns resolved work for assigned private location`() =
+        runBlocking {
+            service.createVariable(
+                TEST_ORG_ID,
+                SyntheticVariableRequest(name = "HOST", value = "private.example.com")
+            )
+            val test = service.createTest(
+                TEST_ORG_ID,
+                CreateSyntheticTestRequest(
+                    name = "Private checkout",
+                    testType = "browser",
+                    intervalSeconds = 60,
+                    timeoutSeconds = 45,
+                    url = "https://{{global.HOST}}/checkout",
+                    method = "POST",
+                    headers = mapOf("X-Probe" to "{{global.HOST}}"),
+                    body = """{"host":"{{global.HOST}}"}""",
+                    assertions = listOf(SyntheticAssertion(type = "status_code", operator = "equals", value = "200")),
+                    steps = listOf(
+                        SyntheticStep(
+                            name = "Health",
+                            url = "https://{{global.HOST}}/health",
+                            method = "GET"
+                        )
+                    ),
+                    browserSteps = listOf(BrowserStep(action = "click", selector = "#buy", value = "Buy")),
+                    locations = listOf("private-us-east")
+                )
+            )
+
+            val work = service.getProbeWork(TEST_ORG_ID, "private-us-east")
+
+            assertEquals(1, work.size)
+            val item = work.single()
+            assertEquals(test.id, item.testId)
+            assertEquals("browser", item.testType)
+            assertEquals("https://private.example.com/checkout", item.url)
+            assertEquals("POST", item.method)
+            assertEquals(mapOf("X-Probe" to "private.example.com"), item.headers)
+            assertEquals("""{"host":"private.example.com"}""", item.body)
+            assertEquals(45, item.timeoutSeconds)
+            assertEquals(1, item.assertions.size)
+            assertEquals("status_code", item.assertions.single().type)
+            assertEquals("https://private.example.com/health", item.steps.single().url)
+            assertEquals("#buy", item.browserSteps.single().selector)
         }
 
     // ──── Global Variables CRUD ────

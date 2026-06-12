@@ -26,6 +26,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -393,6 +394,35 @@ class SyntheticsCheckExecutorTest {
             )
             val result = executor.executeTest(test)
             assertEquals("passed", result.status)
+        }
+    }
+
+    @Test
+    fun `API test sends configured authentication headers`() = runBlocking {
+        val expectedBasic = "Basic " + Base64.getEncoder().encodeToString("alice:secret".toByteArray())
+        MockHttpServer { exchange ->
+            val expected = if (exchange.requestURI.path == "/basic") {
+                expectedBasic
+            } else {
+                "Bearer token-123"
+            }
+            exchange.respond(
+                if (exchange.requestHeaders.getFirst("Authorization") == expected) 200 else 401,
+                "{}"
+            )
+        }.use { server ->
+            val basic = makeTestData(url = "${server.baseUrl}/basic").copy(
+                authMethod = "basic",
+                authUser = "alice",
+                authPass = "secret"
+            )
+            val bearer = makeTestData(url = "${server.baseUrl}/bearer").copy(
+                authMethod = "bearer",
+                authPass = "token-123"
+            )
+
+            assertEquals("passed", executor.executeTest(basic).status)
+            assertEquals("passed", executor.executeTest(bearer).status)
         }
     }
 

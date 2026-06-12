@@ -18,6 +18,7 @@ import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 
+import type {SyntheticTestResponse} from '@/lib/api'
 import {SyntheticBuilder} from '../SyntheticBuilder'
 
 const {mockApi, mockNavigate} = vi.hoisted(() => ({
@@ -43,15 +44,46 @@ vi.mock('@tanstack/react-router', async () => {
   }
 })
 
-function renderBuilder() {
+function renderBuilder({
+  mode = 'create',
+  initial,
+}: {
+  mode?: 'create' | 'edit'
+  initial?: SyntheticTestResponse
+} = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {queries: {retry: false}, mutations: {retry: false}},
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <SyntheticBuilder mode="create" />
+      <SyntheticBuilder mode={mode} initial={initial} />
     </QueryClientProvider>
   )
+}
+
+function baseTest(overrides: Partial<SyntheticTestResponse> = {}): SyntheticTestResponse {
+  return {
+    id: 'test-1',
+    organizationId: 'org-1',
+    name: 'Checkout API',
+    testType: 'api',
+    active: true,
+    intervalSeconds: 300,
+    timeoutSeconds: 30,
+    url: 'https://api.example.com/health',
+    method: 'GET',
+    assertions: [{type: 'status_code', operator: 'equals', value: '200'}],
+    steps: [],
+    status: 'active',
+    lastRunAt: null,
+    lastStatus: 'passed',
+    tags: [],
+    alertRecipients: [],
+    locations: ['aws-us-east-1'],
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -67,11 +99,34 @@ beforeEach(() => {
       active: true,
       workerCount: 1,
     },
+    {
+      id: 'loc-2',
+      code: 'private-iad',
+      name: 'Private IAD',
+      region: 'iad',
+      type: 'private',
+      active: true,
+      workerCount: 2,
+    },
   ])
-  mockApi.listSyntheticVariables.mockResolvedValue([])
+  mockApi.listSyntheticVariables.mockResolvedValue([{id: 'var-1', name: 'API_TOKEN', value: '********', isSecret: true}])
   mockApi.createSyntheticTest.mockResolvedValue({id: 'test-1'})
   mockApi.updateSyntheticTest.mockResolvedValue({id: 'test-1'})
-  mockApi.previewSyntheticTest.mockResolvedValue({resultId: 'preview', status: 'passed'})
+  mockApi.previewSyntheticTest.mockResolvedValue({
+    resultId: 'preview',
+    testId: 'test-1',
+    testName: 'Preview',
+    testType: 'api',
+    status: 'passed',
+    locationCode: 'moneat',
+    durationMs: 12,
+    statusCode: 200,
+    attempt: 1,
+    assertionsTotal: 0,
+    assertionsFailed: 0,
+    errorMessage: '',
+    timestamp: new Date().toISOString(),
+  })
 })
 
 describe('SyntheticBuilder', () => {
@@ -122,5 +177,119 @@ describe('SyntheticBuilder', () => {
     fireEvent.change(controls[1], {target: {value: 'contains'}})
 
     expect(controls[1]).toHaveValue('contains')
+  })
+
+  it('submits api checks with headers, body, private locations, and metadata', async () => {
+    renderBuilder()
+
+    expect(await screen.findByText('{{API_TOKEN}}')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Endpoint'), {target: {value: 'https://api.example.com/orders'}})
+    fireEvent.change(screen.getAllByRole('combobox')[0], {target: {value: 'POST'}})
+    fireEvent.change(screen.getByLabelText('Request body'), {target: {value: '{"ok":true}'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Add header'}))
+    fireEvent.change(screen.getByPlaceholderText('Header'), {target: {value: 'Authorization'}})
+    fireEvent.change(screen.getByPlaceholderText('Value'), {target: {value: 'Bearer {{API_TOKEN}}'}})
+
+    fireEvent.click(screen.getByRole('button', {name: /Locations$/}))
+    expect(await screen.findByText('Private locations')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', {name: /Private IAD/}))
+
+    fireEvent.click(screen.getByRole('button', {name: /Alerting$/}))
+    fireEvent.click(screen.getByRole('button', {name: 'Add recipient'}))
+    fireEvent.change(screen.getByPlaceholderText('#channel or email'), {target: {value: '#synthetics'}})
+
+    fireEvent.click(screen.getByRole('button', {name: /Schedule$/}))
+    fireEvent.change(screen.getByLabelText('Run every'), {target: {value: '60'}})
+    fireEvent.change(screen.getByLabelText('Timeout'), {target: {value: '120'}})
+    fireEvent.change(screen.getByLabelText('Service'), {target: {value: 'checkout'}})
+    fireEvent.change(screen.getByLabelText('Environment'), {target: {value: 'staging'}})
+    const tagInput = screen.getByLabelText('Tags')
+    fireEvent.change(tagInput, {target: {value: 'tier:critical'}})
+    fireEvent.keyDown(tagInput, {key: 'Enter', code: 'Enter'})
+
+    fireEvent.click(screen.getByRole('button', {name: 'Create test'}))
+
+    await waitFor(() => expect(mockApi.createSyntheticTest).toHaveBeenCalled())
+    const payload = mockApi.createSyntheticTest.mock.calls[0][0]
+    expect(payload).toMatchObject({
+      method: 'POST',
+      body: '{"ok":true}',
+      headers: {Authorization: 'Bearer {{API_TOKEN}}'},
+      locations: ['aws-us-east-1', 'private-iad'],
+      service: 'checkout',
+      environment: 'staging',
+      tags: ['tier:critical'],
+      intervalSeconds: 60,
+      timeoutSeconds: 120,
+    })
+    expect(payload.alertRecipients).toEqual([{type: 'slack', target: '#synthetics'}])
+  })
+
+  it('previews browser journeys and submits edited tests', async () => {
+    mockApi.previewSyntheticTest.mockResolvedValueOnce({
+      resultId: 'preview',
+      testId: 'test-1',
+      testName: 'Preview',
+      testType: 'browser',
+      status: 'failed',
+      locationCode: 'aws-us-east-1',
+      durationMs: 3400,
+      statusCode: 0,
+      attempt: 1,
+      assertionsTotal: 1,
+      assertionsFailed: 1,
+      errorMessage: 'button missing',
+      timestamp: new Date().toISOString(),
+      detail: {
+        timings: {load: 1200},
+        assertions: [{label: 'Status code', expected: '200', actual: '500', passed: false}],
+        browser: {
+          steps: [
+            {action: 'navigate', label: 'Open checkout', status: 'passed', durationMs: 400},
+            {action: 'click', label: 'Buy button', status: 'failed', durationMs: 3000},
+            {action: 'assert', label: 'Receipt visible', status: 'skipped'},
+          ],
+        },
+        response: {body: 'login failed'},
+      },
+    })
+
+    renderBuilder({
+      mode: 'edit',
+      initial: baseTest({
+        testType: 'browser',
+        browserSteps: [{action: 'click', selector: '#buy', value: 'Buy'}],
+      }),
+    })
+
+    fireEvent.change(screen.getByLabelText('Starting URL'), {target: {value: 'https://shop.example.com'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Add step'}))
+    const stepActions = screen.getAllByRole('combobox')
+    fireEvent.change(stepActions[stepActions.length - 2], {target: {value: 'wait'}})
+    fireEvent.change(screen.getByPlaceholderText('ms'), {target: {value: '500'}})
+
+    fireEvent.click(screen.getByRole('button', {name: 'Run it now'}))
+    expect(await screen.findByText('button missing')).toBeInTheDocument()
+    expect(screen.getByText('Receipt visible')).toBeInTheDocument()
+    expect(mockApi.previewSyntheticTest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        testType: 'browser',
+        url: 'https://shop.example.com',
+        browserSteps: expect.arrayContaining([
+          expect.objectContaining({action: 'click', selector: '#buy'}),
+          expect.objectContaining({action: 'wait', value: '500'}),
+        ]),
+      }),
+      'aws-us-east-1'
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: 'Save changes'}))
+
+    await waitFor(() => expect(mockApi.updateSyntheticTest).toHaveBeenCalled())
+    expect(mockApi.updateSyntheticTest).toHaveBeenCalledWith(
+      'test-1',
+      expect.objectContaining({testType: 'browser', url: 'https://shop.example.com'})
+    )
   })
 })

@@ -176,6 +176,8 @@ function routeComponent(route: unknown): React.ComponentType {
 
 beforeEach(() => {
   mockNavigate.mockReset()
+  routeParams.testId = 'test-1'
+  routeParams.resultId = 'run-1'
   mockApi.listSyntheticTests.mockResolvedValue(tests)
   mockApi.listSyntheticResults.mockResolvedValue({results, totalCount: results.length})
   mockApi.listSyntheticLocations.mockResolvedValue(locations)
@@ -268,5 +270,57 @@ describe('synthetics redesign routes', () => {
 
     const network = screen.getByText('Network').closest('div')?.parentElement
     expect(network ? within(network).getByText('500') : null).toBeInTheDocument()
+  })
+
+  it('renders http run request, response, assertions, and metadata', async () => {
+    routeParams.resultId = 'run-http'
+    mockApi.getSyntheticRunDetail.mockResolvedValueOnce({
+      resultId: 'run-http',
+      testId: 'test-1',
+      testName: 'Checkout API',
+      testType: 'api',
+      status: 'failed',
+      locationCode: 'private-iad',
+      durationMs: 540,
+      statusCode: 503,
+      errorMessage: 'upstream unavailable',
+      attempt: 1,
+      assertionsTotal: 2,
+      assertionsFailed: 1,
+      timestamp: new Date().toISOString(),
+      detail: {
+        timings: {dns: 5, connect: 12, firstByte: 320},
+        resolvedIp: '203.0.113.10',
+        request: {
+          method: 'POST',
+          url: 'https://api.example.com/orders',
+          headers: {'content-type': 'application/json'},
+          body: '{"probe":true}',
+        },
+        response: {
+          headers: {'content-type': 'application/json'},
+          body: '{"error":"checkout unavailable"}',
+        },
+        assertions: [
+          {label: 'Status code', expected: '200', actual: '503', passed: false},
+          {label: 'Body contains healthy', expected: 'healthy', actual: 'healthy', passed: true},
+        ],
+      },
+    })
+
+    renderRoute(routeComponent(SyntheticRunRoute))
+
+    expect(await screen.findByText('Run detail')).toBeInTheDocument()
+    expect(screen.getByText('upstream unavailable')).toBeInTheDocument()
+    expect(screen.getByText('503')).toBeInTheDocument()
+    expect(screen.getByText('got 503')).toBeInTheDocument()
+    expect(screen.getByText('203.0.113.10')).toBeInTheDocument()
+    expect(screen.getByText('{"error":"checkout unavailable"}')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', {name: /request/i}))
+
+    expect(screen.getByText('POST')).toBeInTheDocument()
+    expect(screen.getByText('https://api.example.com/orders')).toBeInTheDocument()
+    expect(screen.getByText('{"probe":true}')).toBeInTheDocument()
   })
 })
