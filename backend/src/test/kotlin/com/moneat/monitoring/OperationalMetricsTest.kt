@@ -16,6 +16,16 @@
 
 package com.moneat.monitoring
 
+import com.moneat.config.EnvConfig
+import com.moneat.config.RedisConfig
+import io.lettuce.core.Range
+import io.lettuce.core.StreamMessage
+import io.lettuce.core.api.sync.RedisCommands
+import io.lettuce.core.models.stream.PendingMessages
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -31,6 +41,8 @@ class OperationalMetricsTest {
 
     @AfterTest
     fun resetAfter() {
+        unmockkObject(EnvConfig)
+        unmockkObject(RedisConfig)
         OperationalMetrics.resetForTest()
     }
 
@@ -120,6 +132,58 @@ class OperationalMetricsTest {
         assertContains(rendered, "worker=\"Event\"")
         assertContains(rendered, "moneat_worker_dlq_depth")
         assertContains(rendered, "dlq_key=\"moneat:events:dlq\"")
+        assertHasApplicationTag(rendered)
+    }
+
+    @Test
+    fun `renders ingestion queue mode defaults`() {
+        mockkObject(EnvConfig)
+        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns null
+        every { EnvConfig.get("QUEUE_BACKEND") } returns null
+        every { EnvConfig.get("INGESTION_QUEUE_READ_MODE") } returns null
+
+        OperationalMetrics.bindSystemMetrics()
+
+        val rendered = OperationalMetrics.scrape()
+
+        assertContains(rendered, "moneat_ingestion_queue_mode")
+        assertContains(rendered, "backend=\"redis_list\"")
+        assertContains(rendered, "read_mode=\"list\"")
+        assertHasApplicationTag(rendered)
+    }
+
+    @Test
+    fun `renders registered stream gauges`() {
+        val streamKey = "moneat:logs:queue:stream"
+        val consumerGroup = "moneat:logs:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+        val oldStreamId = "${System.currentTimeMillis() - 10_000L}-0"
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every {
+            redis.xpending(streamKey, consumerGroup)
+        } returns PendingMessages(2, Range.create(oldStreamId, oldStreamId), mapOf("worker-1" to 2L))
+        every {
+            redis.xrange(streamKey, any<Range<String>>(), any())
+        } returns listOf(StreamMessage(streamKey, oldStreamId, emptyMap()))
+
+        OperationalMetrics.registerWorkerStream(
+            workerName = "Log",
+            streamKey = streamKey,
+            streamType = "primary",
+            consumerGroup = consumerGroup,
+        )
+
+        val rendered = OperationalMetrics.scrape()
+
+        assertContains(rendered, "moneat_worker_stream_pending_messages")
+        assertContains(rendered, "moneat_worker_stream_oldest_message_age_seconds")
+        assertContains(rendered, "stream_key=\"$streamKey\"")
+        assertContains(rendered, "consumer_group=\"$consumerGroup\"")
+        assertContains(rendered, "stream_type=\"primary\"")
+        assertContains(rendered, " 2.0")
         assertHasApplicationTag(rendered)
     }
 
