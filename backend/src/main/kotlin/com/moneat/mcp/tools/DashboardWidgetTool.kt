@@ -31,6 +31,7 @@ import com.moneat.dashboards.repositories.WidgetData
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.handlers.withConnectionOptions
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.events.repositories.ProjectRepositoryImpl
 import com.moneat.mcp.models.McpContext
@@ -567,10 +568,10 @@ class PreviewDashboardWidgetQueryTool : McpTool {
             host = source.host,
             port = source.port,
             databaseName = source.databaseName,
-            credentials = credentials,
+            credentials = credentials.withConnectionOptions(source.extraConfig),
             query = rawQuery,
             limit = effectiveQuery.limit,
-            timeRange = effectiveQuery.timeRange
+            timeRange = effectiveQuery.timeRange,
         )
     }
 }

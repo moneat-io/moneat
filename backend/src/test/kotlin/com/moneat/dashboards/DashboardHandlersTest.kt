@@ -20,6 +20,7 @@ import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.handlers.CloudWatchHandler
+import com.moneat.dashboards.services.handlers.ConnectionOptions
 import com.moneat.dashboards.services.handlers.ElasticsearchHandler
 import com.moneat.dashboards.services.handlers.GraphiteHandler
 import com.moneat.dashboards.services.handlers.InfluxDBHandler
@@ -1006,6 +1007,67 @@ class DashboardHandlersTest {
                         JsonPrimitive("2024-01-01T00:00:00Z"),
                         rows[0]["_time"]
                     )
+                }
+            }
+        }
+
+    @Test
+    fun `InfluxDB v1 testConnection uses query endpoint`() = withSelfHosted {
+        runBlocking {
+            val paths = mutableListOf<String>()
+            MockHttpServer { ex ->
+                paths.add(ex.requestURI.path)
+                ex.respond(200, """{"results":[{"series":[{"name":"cpu"}]}]}""")
+            }.use { server ->
+                val port = extractPort(server.baseUrl)
+                val result = InfluxDBHandler().testConnection(
+                    TestConnectionRequest(
+                        sourceType = "influxdb",
+                        host = DEFAULT_HOST,
+                        port = port,
+                        databaseName = "telegraf",
+                        username = "u",
+                        password = "p",
+                        extraConfig = mapOf("influx_version" to "1")
+                    )
+                )
+
+                assertTrue(result.success)
+                assertEquals("/query", paths.single())
+            }
+        }
+    }
+
+    @Test
+    fun `InfluxDB v1 executeQuery parses series values`() =
+        withSelfHosted {
+            runBlocking {
+                val body =
+                    """{"results":[{"series":[{"name":"cpu","columns":["time","value"],""" +
+                        """"values":[["2024-01-01T00:00:00Z",42.5]]}]}]}"""
+                MockHttpServer { ex ->
+                    ex.respond(200, body)
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val rows = InfluxDBHandler().executeQuery(
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
+                        port,
+                        "telegraf",
+                        DataSourceCredentials(
+                            username = "u",
+                            password = "p",
+                            options = ConnectionOptions(influxVersion = "1")
+                        ),
+                        "SELECT value FROM cpu",
+                        DEFAULT_LIMIT,
+                        null
+                    )
+
+                    assertEquals(1, rows.size)
+                    assertEquals(JsonPrimitive("cpu"), rows[0]["measurement"])
+                    assertEquals(JsonPrimitive("2024-01-01T00:00:00Z"), rows[0]["time"])
+                    assertEquals(JsonPrimitive(42.5), rows[0]["value"])
                 }
             }
         }

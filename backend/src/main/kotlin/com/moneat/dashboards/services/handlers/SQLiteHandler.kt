@@ -26,7 +26,7 @@ class SQLiteHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataS
     driverClass = "org.sqlite.JDBC",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String {
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
         val path = host.trim()
         return if (path.startsWith("jdbc:sqlite:")) path else "jdbc:sqlite:$path"
     }

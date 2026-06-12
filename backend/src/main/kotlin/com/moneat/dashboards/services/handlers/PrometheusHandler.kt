@@ -31,10 +31,8 @@ import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
 import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -60,12 +58,13 @@ class PrometheusHandler : HttpApiHandler() {
     }
 
     override val defaultPort: Int = 9090
+    override val httpAuthDefault = HttpAuthDefault.BEARER
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                request.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                applyHttpAuth(request.toCredentials())
                 parameter("limit", PROMETHEUS_LABEL_LIMIT)
             }
             if (response.status.isSuccess()) {
@@ -115,7 +114,7 @@ class PrometheusHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/$labelName/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                applyHttpAuth(credentials)
                 if (!matcher.isNullOrEmpty()) parameter("match[]", matcher)
             }
             if (response.status.isSuccess()) {
@@ -158,7 +157,7 @@ class PrometheusHandler : HttpApiHandler() {
                 val step = resolvePrometheusStep(toSec - fromSec)
 
                 httpClient.get("$baseUrl/api/v1/query_range") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                    applyHttpAuth(credentials)
                     parameter("query", query)
                     parameter("start", fromSec)
                     parameter("end", toSec)
@@ -166,7 +165,7 @@ class PrometheusHandler : HttpApiHandler() {
                 }
             } else {
                 httpClient.get("$baseUrl/api/v1/query") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                    applyHttpAuth(credentials)
                     parameter("query", query)
                 }
             }
@@ -197,7 +196,7 @@ class PrometheusHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                applyHttpAuth(credentials)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject

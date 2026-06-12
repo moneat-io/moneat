@@ -16,6 +16,8 @@
 
 package com.moneat.dashboards.services.handlers
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -26,20 +28,26 @@ class SnowflakeHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDa
     driverClass = "net.snowflake.client.jdbc.SnowflakeDriver",
     pools = pools,
 ) {
-    override fun buildJdbcUrl(host: String, port: Int, database: String): String {
+    override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String {
         val account = host.removePrefix("https://").removePrefix("http://")
             .replace(".snowflakecomputing.com", "").trim()
-        val params = buildString {
-            if (database.isNotBlank()) append("db=$database")
+        val params = buildList {
+            if (database.isNotBlank()) add("db=${encodeParam(database)}")
+            options.warehouse?.let { add("warehouse=${encodeParam(it)}") }
+            options.role?.let { add("role=${encodeParam(it)}") }
+            options.schema?.let { add("schema=${encodeParam(it)}") }
         }
         return if (params.isNotEmpty()) {
-            "jdbc:snowflake://$account.snowflakecomputing.com/?$params"
+            "jdbc:snowflake://$account.snowflakecomputing.com/?" + params.joinToString("&")
         } else {
             "jdbc:snowflake://$account.snowflakecomputing.com/"
         }
     }
 
     override fun defaultPort(): Int = 443
+
+    private fun encodeParam(value: String): String =
+        URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
 
     override fun defaultDatabase(): String = ""
 

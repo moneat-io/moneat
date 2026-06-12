@@ -260,7 +260,8 @@ class DashboardRoutesTest {
 
     private fun makeDashboard(
         id: Long = 1L,
-        orgId: Long = 1L
+        orgId: Long = 1L,
+        ownerName: String? = null,
     ) = DashboardResponse(
         id = resourceId(id), orgId = resourceId(orgId), projectId = null,
         folderId = null, title = TEST_DASHBOARD,
@@ -269,6 +270,7 @@ class DashboardRoutesTest {
         variables = emptyList(), createdBy = resourceId(1L),
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
+        ownerName = ownerName,
         widgets = emptyList()
     )
 
@@ -302,7 +304,8 @@ class DashboardRoutesTest {
 
     private fun makeDataSource(
         id: Long = 1L,
-        orgId: Long = 1L
+        orgId: Long = 1L,
+        usedByDashboardCount: Int = 0,
     ) = CustomDataSourceResponse(
         id = resourceId(id), orgId = resourceId(orgId), name = TEST_DS,
         description = null, sourceType = "postgresql",
@@ -312,7 +315,8 @@ class DashboardRoutesTest {
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
         numericId = id,
-        hasCredentials = true
+        hasCredentials = true,
+        usedByDashboardCount = usedByDashboardCount,
     )
 
     private fun resourceId(id: Long): String =
@@ -367,7 +371,7 @@ class DashboardRoutesTest {
     fun `GET dashboards returns 200 with list`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            val dash = makeDashboard(orgId = orgId.toLong())
+            val dash = makeDashboard(orgId = orgId.toLong(), ownerName = "Sam Lee")
             every {
                 mockDashboardService.listDashboards(
                     orgId.toLong(), any(), any()
@@ -380,6 +384,7 @@ class DashboardRoutesTest {
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
+            assertTrue(r.bodyAsText().contains(""""owner_name":"Sam Lee""""))
         }
 
     @Test
@@ -425,7 +430,7 @@ class DashboardRoutesTest {
     @Test
     fun `GET dashboard by id returns 200`() = testApplication {
         val (userId, orgId) = seedUserAndOrg()
-        val dash = makeDashboard(orgId = orgId.toLong())
+        val dash = makeDashboard(orgId = orgId.toLong(), ownerName = "Sam Lee")
         every {
             mockDashboardService.getDashboard(
                 1L, orgId.toLong(), any()
@@ -438,6 +443,7 @@ class DashboardRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, r.status)
         assertTrue(r.bodyAsText().contains(TEST_DASHBOARD))
+        assertTrue(r.bodyAsText().contains(""""owner_name":"Sam Lee""""))
     }
 
     @Test
@@ -1734,7 +1740,7 @@ class DashboardRoutesTest {
     fun `GET custom datasources returns 200`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
-            val ds = makeDataSource(orgId = orgId.toLong())
+            val ds = makeDataSource(orgId = orgId.toLong(), usedByDashboardCount = 3)
             every {
                 mockDataSourceService.listDataSources(
                     orgId.toLong()
@@ -1747,6 +1753,7 @@ class DashboardRoutesTest {
             }
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(r.bodyAsText().contains(TEST_DS))
+            assertTrue(r.bodyAsText().contains(""""used_by_dashboard_count":3"""))
         }
 
     @Test

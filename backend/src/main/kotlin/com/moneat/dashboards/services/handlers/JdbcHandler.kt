@@ -16,12 +16,13 @@
 
 package com.moneat.dashboards.services.handlers
 
-import com.moneat.utils.suspendRunCatching
 import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import kotlinx.serialization.json.JsonElement
@@ -51,7 +52,7 @@ abstract class JdbcHandler(
         private const val TEMP_POOL_MAX_SIZE = 1
     }
 
-    protected abstract fun buildJdbcUrl(host: String, port: Int, database: String): String
+    internal abstract fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String
     protected abstract fun defaultPort(): Int
     protected abstract fun schemaIntrospectionQuery(): String
     protected abstract fun testConnectionQuery(): String
@@ -62,8 +63,9 @@ abstract class JdbcHandler(
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val port = request.port ?: defaultPort()
         val database = request.databaseName ?: defaultDatabase()
+        val credentials = request.toCredentials()
         return suspendRunCatching {
-            val ds = createTempDataSource(request.host, port, database, request.username, request.password)
+            val ds = createTempDataSource(request.host, port, database, credentials)
             try {
                 ds.connection.use { conn ->
                     val tables = mutableListOf<String>()
@@ -100,7 +102,7 @@ abstract class JdbcHandler(
         return ds.connection.use { conn ->
             conn.createStatement().use { stmt ->
                 stmt.maxRows = limit.coerceIn(1, QUERY_MAX_ROWS)
-                stmt.queryTimeout = QUERY_TIMEOUT_SECONDS
+                stmt.queryTimeout = credentials.options.timeoutSeconds ?: QUERY_TIMEOUT_SECONDS
                 stmt.executeQuery(query).use { rs -> resultSetToMaps(rs) }
             }
         }
@@ -114,7 +116,7 @@ abstract class JdbcHandler(
     ): List<DataSourceField> {
         val p = port ?: defaultPort()
         val db = databaseName ?: defaultDatabase()
-        val ds = createTempDataSource(host, p, db, credentials.username, credentials.password)
+        val ds = createTempDataSource(host, p, db, credentials)
         return try {
             ds.connection.use { conn -> readJdbcSchemaFields(conn) }
         } finally {
@@ -150,26 +152,25 @@ abstract class JdbcHandler(
         database: String,
         credentials: DataSourceCredentials,
     ): HikariDataSource = pools.computeIfAbsent(sourceId) {
-        createPool(host, port, database, credentials.username, credentials.password)
+        createPool(host, port, database, credentials)
     }
 
     protected open fun createPool(
         host: String,
         port: Int,
         database: String,
-        username: String?,
-        password: String?,
+        credentials: DataSourceCredentials,
     ): HikariDataSource {
         val config = HikariConfig().apply {
             setDriverClassName(driverClass)
-            jdbcUrl = buildJdbcUrl(host, port, database)
-            this.username = username ?: ""
-            this.password = password ?: ""
+            jdbcUrl = buildJdbcUrl(host, port, database, credentials.options)
+            this.username = credentials.username ?: ""
+            this.password = credentials.password ?: ""
             maximumPoolSize = POOL_MAX_SIZE
-            minimumIdle = 0
+            minimumIdle = POOL_MIN_IDLE
             idleTimeout = POOL_IDLE_TIMEOUT_MS
             maxLifetime = POOL_MAX_LIFETIME_MS
-            connectionTimeout = POOL_CONNECTION_TIMEOUT_MS
+            connectionTimeout = connectionTimeoutMs(credentials.options)
             isReadOnly = true
             addDataSourceProperty("ApplicationName", "moneat-custom-datasource")
         }
@@ -180,20 +181,22 @@ abstract class JdbcHandler(
         host: String,
         port: Int,
         database: String,
-        username: String?,
-        password: String?,
+        credentials: DataSourceCredentials,
     ): HikariDataSource {
         val config = HikariConfig().apply {
             setDriverClassName(driverClass)
-            jdbcUrl = buildJdbcUrl(host, port, database)
-            this.username = username ?: ""
-            this.password = password ?: ""
+            jdbcUrl = buildJdbcUrl(host, port, database, credentials.options)
+            this.username = credentials.username ?: ""
+            this.password = credentials.password ?: ""
             maximumPoolSize = 1
-            connectionTimeout = POOL_CONNECTION_TIMEOUT_MS
+            connectionTimeout = connectionTimeoutMs(credentials.options)
             isReadOnly = true
         }
         return HikariDataSource(config)
     }
+
+    private fun connectionTimeoutMs(options: ConnectionOptions): Long =
+        options.timeoutSeconds?.let { it * MILLIS_PER_SECOND_LONG } ?: POOL_CONNECTION_TIMEOUT_MS
 
     protected fun resultSetToMaps(rs: ResultSet): List<Map<String, JsonElement>> {
         val meta = rs.metaData

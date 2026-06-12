@@ -161,6 +161,7 @@ export interface CustomDashboard {
   is_default: boolean
   is_favorited?: boolean
   variables?: DashboardVariable[]
+  owner_name?: string | null
   created_by: string
   created_at: string
   updated_at: string
@@ -294,6 +295,7 @@ export interface CustomDataSourceResponse {
   created_at: string
   updated_at: string
   has_credentials: boolean
+  used_by_dashboard_count?: number
 }
 
 export interface CreateCustomDataSourceRequest {
@@ -306,6 +308,7 @@ export interface CreateCustomDataSourceRequest {
   username?: string
   password?: string
   api_key?: string
+  header_value?: string
   access_key_id?: string
   secret_access_key?: string
   service_account_json?: string
@@ -325,6 +328,7 @@ export interface UpdateCustomDataSourceRequest {
   username?: string
   password?: string
   api_key?: string
+  header_value?: string
   access_key_id?: string
   secret_access_key?: string
   service_account_json?: string
@@ -344,6 +348,7 @@ export interface TestConnectionRequest {
   username?: string
   password?: string
   api_key?: string
+  header_value?: string
   access_key_id?: string
   secret_access_key?: string
   service_account_json?: string
@@ -351,6 +356,7 @@ export interface TestConnectionRequest {
   connection_string?: string
   project_id?: string
   region?: string
+  extra_config?: Record<string, string>
 }
 
 export interface TestConnectionResult {

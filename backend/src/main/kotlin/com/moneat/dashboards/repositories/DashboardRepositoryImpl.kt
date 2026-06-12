@@ -23,6 +23,7 @@ import com.moneat.dashboards.models.DashboardVariable
 import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.UpdateDashboardRequest
 import com.moneat.shared.models.Projects
+import com.moneat.shared.models.Users
 import com.moneat.shared.services.organizationResourceId
 import com.moneat.shared.services.organizationResourceIds
 import com.moneat.shared.services.userResourceId
@@ -40,6 +41,7 @@ import org.jetbrains.exposed.v1.core.lowerCase
 import org.jetbrains.exposed.v1.core.or
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -77,6 +79,7 @@ class DashboardRepositoryImpl : DashboardRepository {
     private fun ResultRow.toDashboardWithFavoriteFlag(
         isFavorited: Boolean,
         resourceIds: DashboardResourceIds,
+        ownerName: String? = null,
     ): DashboardWithFavoriteFlag =
         DashboardWithFavoriteFlag(
             id = this[Dashboards.id],
@@ -96,7 +99,8 @@ class DashboardRepositoryImpl : DashboardRepository {
             createdBy = this[Dashboards.createdBy],
             createdByResourceId = resourceIds.user(this[Dashboards.createdBy]),
             createdAt = this[Dashboards.createdAt].toString(),
-            updatedAt = this[Dashboards.updatedAt].toString()
+            updatedAt = this[Dashboards.updatedAt].toString(),
+            ownerName = ownerName
         )
 
     private fun resourceIdsForRows(rows: List<ResultRow>): DashboardResourceIds {
@@ -128,6 +132,20 @@ class DashboardRepositoryImpl : DashboardRepository {
             .associate { row -> row[DashboardFolders.id] to row[DashboardFolders.resourceId].toString() }
     }
 
+    private fun loadOwnerNames(createdByIds: Iterable<Long>): Map<Long, String?> {
+        val ownerIds = createdByIds.distinct()
+            .mapNotNull { createdBy ->
+                val intId = createdBy.toInt()
+                if (intId.toLong() == createdBy) createdBy to intId else null
+            }
+        if (ownerIds.isEmpty()) return emptyMap()
+        val userIds = ownerIds.map { it.second }
+        val namesByUserId = Users.select(Users.id, Users.name)
+            .where { Users.id inList userIds }
+            .associate { row -> row[Users.id] to row[Users.name] }
+        return ownerIds.associate { (createdBy, userId) -> createdBy to namesByUserId[userId] }
+    }
+
     override fun list(orgId: Long, projectId: Long?, userId: Int?): List<DashboardWithFavoriteFlag> =
         transaction {
             val query = Dashboards.selectAll().where {
@@ -146,8 +164,17 @@ class DashboardRepositoryImpl : DashboardRepository {
             } ?: emptySet()
 
             val rows = query.toList()
+            val ownerNames = loadOwnerNames(rows.map { row -> row[Dashboards.createdBy] })
             val resourceIds = resourceIdsForRows(rows)
-            rows.map { row -> row.toDashboardWithFavoriteFlag(row[Dashboards.id] in favoritedIds, resourceIds) }
+
+            rows.map { row ->
+                val createdBy = row[Dashboards.createdBy]
+                row.toDashboardWithFavoriteFlag(
+                    isFavorited = row[Dashboards.id] in favoritedIds,
+                    resourceIds = resourceIds,
+                    ownerName = ownerNames[createdBy]
+                )
+            }
         }
 
     override fun getById(id: Long, orgId: Long, userId: Int?): DashboardWithFavoriteFlag? =
@@ -164,7 +191,12 @@ class DashboardRepositoryImpl : DashboardRepository {
                     .any()
             } ?: false
 
-            row.toDashboardWithFavoriteFlag(isFavorited, resourceIdsForRows(listOf(row)))
+            val createdBy = row[Dashboards.createdBy]
+            row.toDashboardWithFavoriteFlag(
+                isFavorited = isFavorited,
+                resourceIds = resourceIdsForRows(listOf(row)),
+                ownerName = loadOwnerNames(listOf(createdBy))[createdBy]
+            )
         }
 
     override fun create(
@@ -176,6 +208,7 @@ class DashboardRepositoryImpl : DashboardRepository {
     ): CreatedDashboardData =
         transaction {
             val now = Clock.System.now()
+            val ownerName = loadOwnerNames(listOf(userId))[userId]
             val dashboardId = Dashboards.insert {
                 it[Dashboards.orgId] = orgId
                 it[Dashboards.projectId] = projectId
@@ -211,7 +244,8 @@ class DashboardRepositoryImpl : DashboardRepository {
                 createdBy = userId,
                 createdByResourceId = userResourceId(userId),
                 createdAt = now.toString(),
-                updatedAt = now.toString()
+                updatedAt = now.toString(),
+                ownerName = ownerName
             )
         }
 
@@ -330,7 +364,15 @@ class DashboardRepositoryImpl : DashboardRepository {
                         .toSet()
                 }
             } ?: emptySet()
+            val ownerNames = loadOwnerNames(rows.map { row -> row[Dashboards.createdBy] })
             val resourceIds = resourceIdsForRows(rows)
-            rows.map { row -> row.toDashboardWithFavoriteFlag(row[Dashboards.id] in favoritedIds, resourceIds) }
+            rows.map { row ->
+                val createdBy = row[Dashboards.createdBy]
+                row.toDashboardWithFavoriteFlag(
+                    isFavorited = row[Dashboards.id] in favoritedIds,
+                    resourceIds = resourceIds,
+                    ownerName = ownerNames[createdBy]
+                )
+            }
         }
 }
