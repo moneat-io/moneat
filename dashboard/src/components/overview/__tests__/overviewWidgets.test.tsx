@@ -18,6 +18,7 @@ import {describe, expect, it, vi} from 'vitest'
 import {fireEvent, render, screen} from '@testing-library/react'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import type {ReactElement, ReactNode} from 'react'
+import type {OverviewActivityItem, OverviewResponse} from '@/lib/api/types'
 import {OverviewDataProvider} from '../OverviewDataProvider'
 import {SystemStatusWidget} from '../widgets/SystemStatusWidget'
 import {KpiWidget} from '../widgets/KpiWidget'
@@ -34,11 +35,11 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({children, to}: {children: ReactNode; to?: string}) => <a href={to}>{children}</a>,
 }))
 
-function renderWithOverview(ui: ReactElement) {
+function renderWithOverview(ui: ReactElement, overrides: Partial<OverviewResponse> = {}) {
   const queryClient = new QueryClient({defaultOptions: {queries: {retry: false}}})
   return render(
     <QueryClientProvider client={queryClient}>
-      <OverviewDataProvider data={overviewTestData}>{ui}</OverviewDataProvider>
+      <OverviewDataProvider data={{...overviewTestData, ...overrides}}>{ui}</OverviewDataProvider>
     </QueryClientProvider>,
   )
 }
@@ -131,5 +132,20 @@ describe('ActivityWidget', () => {
     renderWithOverview(<ActivityWidget />)
     expect(screen.getByTestId('widget-activity')).toBeInTheDocument()
     expect(screen.getByText('v2.4.1 released to checkout-api')).toBeInTheDocument()
+  })
+
+  it('renders issue activity items emitted by the backend', () => {
+    renderWithOverview(<ActivityWidget />, {
+      activity: [{kind: 'issue', text: 'NullPointerException in checkout', meta: '2m ago'}],
+    })
+    expect(screen.getByText('NullPointerException in checkout')).toBeInTheDocument()
+  })
+
+  it('renders an unrecognized activity kind instead of crashing', () => {
+    // The backend sends kind as a free-form string, so an unmapped value must
+    // degrade gracefully rather than throw while destructuring its style.
+    const unknown = [{kind: 'mystery', text: 'Future activity', meta: 'now'}] as unknown as OverviewActivityItem[]
+    renderWithOverview(<ActivityWidget />, {activity: unknown})
+    expect(screen.getByText('Future activity')).toBeInTheDocument()
   })
 })
