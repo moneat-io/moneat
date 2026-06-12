@@ -94,6 +94,8 @@ class DashboardAlertServiceTest {
         private const val ORG_ID = 1L
         private const val OTHER_ORG_ID = 2L
         private const val CREATED_BY = 100L
+        private const val ORG_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val CREATED_BY_RESOURCE_ID = "00000000-0000-0000-0000-000000000100"
         private const val DEFAULT_PROJECT_ID = 1L
         private const val RECOVERY_RETENTION_DAYS = 90
         private const val RECOVERED_TOTAL = 50.0
@@ -330,14 +332,14 @@ class DashboardAlertServiceTest {
         hasCredentials: Boolean = false,
     ): CustomDataSourceResponse = CustomDataSourceResponse(
         id = customDataSourceResourceId(id),
-        orgId = ORG_ID,
+        orgId = ORG_RESOURCE_ID,
         name = "Prometheus",
         sourceType = sourceType,
         host = "https://prometheus.example.com",
         port = null,
         databaseName = null,
         enabled = enabled,
-        createdBy = CREATED_BY,
+        createdBy = CREATED_BY_RESOURCE_ID,
         createdAt = Clock.System.now().toString(),
         updatedAt = Clock.System.now().toString(),
         hasCredentials = hasCredentials,

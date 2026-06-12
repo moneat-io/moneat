@@ -15,8 +15,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface Priority {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   priority: string
   isPageable: boolean
   label: string
@@ -24,16 +24,16 @@ export interface Priority {
 }
 
 export interface BusinessHoursWindow {
-  id: number
-  businessHoursId: number
+  id: string
+  businessHoursId: string
   dayOfWeek: number
   startTime: string
   endTime: string
 }
 
 export interface BusinessHours {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   timezone: string
   enabled: boolean
   windows: BusinessHoursWindow[]
@@ -42,8 +42,8 @@ export interface BusinessHours {
 export type OnCallRotationType = 'DAILY' | 'WEEKLY' | 'CUSTOM'
 
 export interface OnCallSchedule {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   name: string
   rotationType: OnCallRotationType
   handoffTime: string
@@ -53,7 +53,7 @@ export interface OnCallSchedule {
   participants: OnCallParticipant[]
   overrides: OnCallOverride[]
   currentOnCall?: {
-    userId: number
+    userId: string
     userName: string
   }
   slackUsergroupId?: string
@@ -61,34 +61,34 @@ export interface OnCallSchedule {
 }
 
 export interface OnCallParticipant {
-  id: number
-  scheduleId: number
-  userId: number
+  id: string
+  scheduleId: string
+  userId: string
   userName: string
   position: number
 }
 
 export interface OnCallOverride {
-  id: number
-  scheduleId: number
-  userId: number
+  id: string
+  scheduleId: string
+  userId: string
   userName: string
   startAt: string
   endAt: string
-  createdBy: number
+  createdBy: string
 }
 
 export interface EscalationTarget {
-  id: number
-  escalationStepId: number
+  id: string
+  escalationStepId: string
   targetType: 'USER' | 'ON_CALL_SCHEDULE'
-  targetId: number
+  targetId: string
   targetName: string
 }
 
 export interface EscalationStep {
-  id: number
-  escalationPolicyId: number
+  id: string
+  escalationPolicyId: string
   stepOrder: number
   timeoutMinutes: number
   smsFallbackDelayMinutes: number
@@ -97,8 +97,8 @@ export interface EscalationStep {
 }
 
 export interface EscalationPolicy {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   name: string
   description?: string
   repeatCount: number
@@ -110,9 +110,9 @@ export interface EscalationPolicy {
 export type IncidentStatus = 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
 
 export interface Incident {
-  id: number
-  organizationId: number
-  escalationPolicyId: number
+  id: string
+  organizationId: string
+  escalationPolicyId: string
   title: string
   description?: string
   priority: string
@@ -121,10 +121,10 @@ export interface Incident {
   deduplicationKey?: string
   triggeredAt: string
   acknowledgedAt?: string
-  acknowledgedBy?: number
+  acknowledgedBy?: string
   acknowledgedByName?: string
   resolvedAt?: string
-  resolvedBy?: number
+  resolvedBy?: string
   resolvedByName?: string
   metadata?: Record<string, unknown>
   nextEscalationAt?: string
@@ -132,8 +132,8 @@ export interface Incident {
 }
 
 export interface IncidentTimeline {
-  id: number
-  incidentId: number
+  id: string
+  incidentId: string
   eventType:
     | 'TRIGGERED'
     | 'ESCALATED'
@@ -144,7 +144,7 @@ export interface IncidentTimeline {
     | 'STEP_TIMEOUT'
     | 'NOTIFICATION_SENT'
     | 'VIEWED'
-  actorUserId?: number
+  actorUserId?: string
   actorUserName?: string
   details?: Record<string, unknown>
   createdAt: string
@@ -155,20 +155,20 @@ export interface IncidentDetail extends Incident {
 }
 
 export interface OnCallIncident {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   title: string
   description?: string
   severity: string
   status: string
-  declaredBy: number
+  declaredBy: string
   declaredByName?: string
   declaredAt: string
-  resolvedBy?: number
+  resolvedBy?: string
   resolvedByName?: string
   resolvedAt?: string
   alertCount: number
-  alerts?: Array<{ id: number; title: string; status: string; priority?: string }>
+  alerts?: Array<{ id: string; title: string; status: string; priority?: string }>
   createdAt: string
   updatedAt: string
 }
@@ -178,8 +178,8 @@ export interface OnCallIncidentDetail extends OnCallIncident {
 }
 
 export interface DeviceToken {
-  id: number
-  userId: number
+  id: string
+  userId: string
   deviceToken: string
   platform: 'IOS' | 'ANDROID'
   deviceName?: string
@@ -192,7 +192,7 @@ export interface CreateOnCallScheduleRequest {
   rotationType: OnCallRotationType
   handoffTime: string
   timezone: string
-  participants: { userId: number; position: number }[]
+  participants: { userId: string; position: number }[]
 }
 
 export interface UpdateOnCallScheduleRequest {
@@ -200,11 +200,11 @@ export interface UpdateOnCallScheduleRequest {
   rotationType?: OnCallRotationType
   handoffTime?: string
   timezone?: string
-  participants?: { userId: number; position: number }[]
+  participants?: { userId: string; position: number }[]
 }
 
 export interface CreateOverrideRequest {
-  userId: number
+  userId: string
   startAt: string
   endAt: string
 }
@@ -219,7 +219,7 @@ export interface CreateEscalationPolicyRequest {
     smsFallbackDelayMinutes?: number
     targets: {
       targetType: 'USER' | 'ON_CALL_SCHEDULE'
-      targetId: number
+      targetId: string
     }[]
   }[]
 }
@@ -234,7 +234,7 @@ export interface UpdateEscalationPolicyRequest {
     smsFallbackDelayMinutes?: number
     targets: {
       targetType: 'USER' | 'ON_CALL_SCHEDULE'
-      targetId: number
+      targetId: string
     }[]
   }[]
 }

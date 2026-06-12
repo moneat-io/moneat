@@ -7,6 +7,7 @@ package com.moneat.enterprise.workflows.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.enterprise.sso.support.EnterpriseTestDatabaseHelper
+import com.moneat.enterprise.workflows.models.WorkflowConnections
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -35,15 +36,20 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.ktor.serialization.kotlinx.json.json
-import kotlin.time.Clock
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -69,7 +75,7 @@ class ConnectionRoutesTest {
                 )
         }
         TransactionManager.defaultDatabase = db
-        EnterpriseTestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
+        EnterpriseTestDatabaseHelper.resetSchema(Users, Organizations, Memberships, WorkflowConnections)
         vault.reset()
     }
 
@@ -101,7 +107,9 @@ class ConnectionRoutesTest {
             }
 
         assertEquals(HttpStatusCode.Created, createResponse.status)
-        assertSecretNotSerialized(createResponse.bodyAsText())
+        val createBody = createResponse.bodyAsText()
+        assertSecretNotSerialized(createBody)
+        val connectionResourceId = connectionIdFromBody(createBody)
 
         val listResponse =
             client.get("/v1/workflows/connections") {
@@ -111,7 +119,7 @@ class ConnectionRoutesTest {
         assertSecretNotSerialized(listResponse.bodyAsText())
 
         val rotateResponse =
-            client.put("/v1/workflows/connections/1/rotate") {
+            client.put("/v1/workflows/connections/$connectionResourceId/rotate") {
                 bearerAuth(token)
                 header(HttpHeaders.ContentType, ContentType.Application.Json)
                 setBody("""{"secret":"rotated-sensitive-token-9876"}""")
@@ -149,6 +157,32 @@ class ConnectionRoutesTest {
             }
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `connection group creation rejects numeric member connection ids`() = testApplication {
+        application { installAuthJsonAndRoutes() }
+        val (orgId, userId) = seedMember(role = "admin")
+        val token = bearerForUser(userId, orgId)
+
+        val response =
+            client.post("/v1/workflows/connection-groups") {
+                bearerAuth(token)
+                header(HttpHeaders.ContentType, ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "name": "primary-group",
+                      "connection_type": "webhook",
+                      "member_connection_ids": ["1"],
+                      "selection_strategy": "first_match"
+                    }
+                    """.trimIndent()
+                )
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid connection ID"))
     }
 
     private fun Application.installAuthJsonAndRoutes() {
@@ -213,15 +247,16 @@ class ConnectionRoutesTest {
         assertTrue(body.contains("\"last_four\":\"1234\""))
         assertTrue(body.contains("\"identifier_tags\""))
     }
+
+    private fun connectionIdFromBody(body: String): String =
+        Json.parseToJsonElement(body).jsonObject.getValue("id").jsonPrimitive.content
 }
 
 private class RecordingConnectionVault : WorkflowConnectionVault {
     private val connections = mutableMapOf<Int, WorkflowConnectionSummary>()
-    private var nextId = 1
 
     fun reset() {
         connections.clear()
-        nextId = 1
     }
 
     override suspend fun listConnections(organizationId: Int): List<WorkflowConnectionSummary> =
@@ -233,6 +268,14 @@ private class RecordingConnectionVault : WorkflowConnectionVault {
     ): WorkflowConnectionSummary? =
         connections[connectionId]?.takeIf { it.organizationId == organizationId }
 
+    override suspend fun resolveConnectionId(
+        organizationId: Int,
+        connectionResourceId: String
+    ): Int? =
+        connections.values
+            .firstOrNull { it.organizationId == organizationId && it.resourceId == connectionResourceId }
+            ?.id
+
     override suspend fun createConnection(
         organizationId: Int,
         type: String,
@@ -241,18 +284,35 @@ private class RecordingConnectionVault : WorkflowConnectionVault {
         secret: String,
         createdBy: Int?
     ): WorkflowConnectionSummary {
-        val now = Clock.System.now().toString()
-        val id = nextId++
+        val now = Clock.System.now()
+        val resourceId = Uuid.random()
+        val id =
+            transaction {
+                WorkflowConnections.insertAndGetId {
+                    it[WorkflowConnections.resourceId] = resourceId
+                    it[WorkflowConnections.organizationId] = organizationId
+                    it[WorkflowConnections.type] = type
+                    it[WorkflowConnections.name] = name
+                    it[WorkflowConnections.identifierTags] = Json.encodeToString(identifierTags)
+                    it[WorkflowConnections.encryptedCredentials] = "encrypted"
+                    it[WorkflowConnections.keyId] = "test-key"
+                    it[WorkflowConnections.lastFour] = secret.takeLast(LAST_FOUR_LENGTH)
+                    it[WorkflowConnections.createdBy] = createdBy
+                    it[WorkflowConnections.createdAt] = now
+                    it[WorkflowConnections.updatedAt] = now
+                }.value
+            }
         val summary =
             WorkflowConnectionSummary(
                 id = id,
+                resourceId = resourceId.toString(),
                 organizationId = organizationId,
                 type = type,
                 name = name,
                 identifierTags = identifierTags,
                 lastFour = secret.takeLast(LAST_FOUR_LENGTH),
-                createdAt = now,
-                updatedAt = now
+                createdAt = now.toString(),
+                updatedAt = now.toString()
             )
         connections[id] = summary
         return summary
@@ -282,6 +342,11 @@ private class RecordingConnectionVault : WorkflowConnectionVault {
 
     override suspend fun listGroups(organizationId: Int): List<WorkflowConnectionGroupSummary> =
         emptyList()
+
+    override suspend fun resolveGroupId(
+        organizationId: Int,
+        groupResourceId: String
+    ): Int? = null
 
     override suspend fun createGroup(
         organizationId: Int,

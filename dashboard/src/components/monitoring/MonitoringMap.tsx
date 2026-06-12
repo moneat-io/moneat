@@ -903,7 +903,7 @@ function HostDetailDock({node, resourceKind, onClose}: HostDetailDockProps) {
   // metrics in node.details, and getProcesses/getHostMetrics are host-scoped).
   const metricsQuery = useQuery({
     queryKey: ['hostMetrics', node.hostId],
-    queryFn: () => api.getHostMetrics(node.hostId as number),
+    queryFn: () => api.getHostMetrics(node.hostId ?? ''),
     enabled: api.isAuthenticated() && isHost,
     refetchInterval: HOST_REFRESH_MS,
   })

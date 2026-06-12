@@ -676,7 +676,7 @@ class LogManagementServiceTest {
         steps: List<LogPipelineStep> = listOf(LogPipelineStep(type = "parse"))
     ): LogPipelineResponse =
         LogPipelineResponse(
-            id = 1,
+            id = "11111111-1111-1111-1111-111111111111",
             name = "Pipeline",
             steps = steps,
             priority = 0,

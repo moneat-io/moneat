@@ -75,7 +75,7 @@ class OtlpServiceRoutingServiceTest {
             request = CreateOtlpServiceMappingRequest(
                 serviceName = "checkout-api",
                 serviceNamespace = "checkout",
-                projectId = orgOne.projects.first()
+                projectId = projectResourceId(orgOne.projects.first())
             )
         )
 
@@ -98,7 +98,7 @@ class OtlpServiceRoutingServiceTest {
 
         val observed = service.listObservedServices(orgOne.id).single()
         assertEquals(mapping.id, observed.mappingId)
-        assertEquals(orgOne.projects.first(), observed.projectId)
+        assertEquals(projectResourceId(orgOne.projects.first()), observed.projectId)
         assertEquals("API", observed.projectName)
         assertEquals("production", observed.lastEnvironment)
         assertFalse(observed.seenLogs)
@@ -195,7 +195,7 @@ class OtlpServiceRoutingServiceTest {
             request = CreateOtlpServiceMappingRequest(
                 serviceName = "unknown_service:java",
                 serviceNamespace = null,
-                projectId = orgOne.projects.first()
+                projectId = projectResourceId(orgOne.projects.first())
             )
         )
         val crossOrgMapping = service.upsertMapping(
@@ -203,7 +203,7 @@ class OtlpServiceRoutingServiceTest {
             request = CreateOtlpServiceMappingRequest(
                 serviceName = "checkout-api",
                 serviceNamespace = "checkout",
-                projectId = orgTwo.projects.first()
+                projectId = projectResourceId(orgTwo.projects.first())
             )
         )
 
@@ -218,7 +218,7 @@ class OtlpServiceRoutingServiceTest {
             request = CreateOtlpServiceMappingRequest(
                 serviceName = "checkout-api",
                 serviceNamespace = "checkout",
-                projectId = orgOne.projects.first()
+                projectId = projectResourceId(orgOne.projects.first())
             )
         )
         val second = service.upsertMapping(
@@ -226,14 +226,14 @@ class OtlpServiceRoutingServiceTest {
             request = CreateOtlpServiceMappingRequest(
                 serviceName = "checkout-api",
                 serviceNamespace = "checkout",
-                projectId = orgOne.projects.last()
+                projectId = projectResourceId(orgOne.projects.last())
             )
         )
 
         assertNotNull(first)
         assertNotNull(second)
         assertEquals(first.id, second.id)
-        assertEquals(orgOne.projects.last(), second.projectId)
+        assertEquals(projectResourceId(orgOne.projects.last()), second.projectId)
         assertEquals("Worker", second.projectName)
     }
 
@@ -250,7 +250,7 @@ class OtlpServiceRoutingServiceTest {
         )
 
         assertNotNull(mapping)
-        assertEquals(orgOne.projects.first(), mapping.projectId)
+        assertEquals(resourceId, mapping.projectId)
         assertEquals(resourceId, mapping.projectResourceId)
 
         service.resolveProjectIds(
@@ -276,7 +276,7 @@ class OtlpServiceRoutingServiceTest {
             request = CreateOtlpServiceMappingRequest(
                 serviceName = "checkout-api",
                 serviceNamespace = "checkout",
-                projectId = orgOne.projects.first()
+                projectId = projectResourceId(orgOne.projects.first())
             )
         )
 

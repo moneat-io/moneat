@@ -23,9 +23,10 @@ import com.moneat.logs.models.LogAggregateResponse
 import com.moneat.logs.models.LogQueryResponse
 import com.moneat.logs.services.LogService
 import com.moneat.monitor.models.HistoricalMetricsResponse
-import com.moneat.monitor.models.HostData
+import com.moneat.monitor.models.SilencePeriodResponse
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
@@ -53,6 +54,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 class WorkflowTrustedActionExecutorTest {
     companion object {
@@ -69,6 +72,10 @@ class WorkflowTrustedActionExecutorTest {
     private var orgId: Int = 0
     private var otherOrgId: Int = 0
     private var projectId: Long = 0
+    private var projectResourceId: Uuid = Uuid.random()
+    private var hostId: Int = 0
+    private var hostResourceId: Uuid = Uuid.random()
+    private var otherHostResourceId: Uuid = Uuid.random()
 
     @BeforeTest
     fun setup() {
@@ -79,9 +86,9 @@ class WorkflowTrustedActionExecutorTest {
             )
         }
         TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.dropAndPatchJsonb(Users, Organizations, Memberships, Projects)
+        TestDatabaseHelper.dropAndPatchJsonb(Users, Organizations, Memberships, Projects, Hosts)
         transaction {
-            SchemaUtils.create(Users, Organizations, Memberships, Projects)
+            SchemaUtils.create(Users, Organizations, Memberships, Projects, Hosts)
             val userId =
                 Users.insert {
                     it[email] = "actor@moneat.io"
@@ -105,10 +112,30 @@ class WorkflowTrustedActionExecutorTest {
             }
             projectId =
                 Projects.insert {
+                    projectResourceId = Uuid.parse("33333333-3333-4333-8333-333333333333")
+                    it[resource_id] = projectResourceId
                     it[organization_id] = orgId
                     it[name] = "Checkout"
                     it[slug] = "checkout"
                 } get Projects.id
+            val now = Clock.System.now()
+            hostResourceId = Uuid.parse("11111111-1111-4111-8111-111111111111")
+            otherHostResourceId = Uuid.parse("22222222-2222-4222-8222-222222222222")
+            hostId =
+                Hosts.insert {
+                    it[resource_id] = hostResourceId
+                    it[organization_id] = orgId
+                    it[hostname] = "checkout-host"
+                    it[first_seen_at] = now
+                    it[last_seen_at] = now
+                } get Hosts.id
+            Hosts.insert {
+                it[resource_id] = otherHostResourceId
+                it[organization_id] = otherOrgId
+                it[hostname] = "other-host"
+                it[first_seen_at] = now
+                it[last_seen_at] = now
+            }
         }
         executor =
             WorkflowTrustedActionExecutor(
@@ -168,30 +195,35 @@ class WorkflowTrustedActionExecutorTest {
 
     @Test
     fun `metrics query requires the host to belong to the organization`() {
-        every { monitorService.getHostById(42) } returns hostData(hostOrg = otherOrgId)
         assertFailsWith<IllegalArgumentException> {
-            run(WorkflowTrustedActionExecutor.METRICS_QUERY_STEP, mapOf("host_id" to "42"))
+            run(WorkflowTrustedActionExecutor.METRICS_QUERY_STEP, mapOf("host_id" to otherHostResourceId.toString()))
         }
     }
 
     @Test
     fun `metrics query succeeds for an in-org host`() {
-        every { monitorService.getHostById(7) } returns hostData(hostOrg = orgId)
         coEvery { monitorService.getHistoricalMetrics(any(), any(), any(), any()) } returns
             HistoricalMetricsResponse(
                 systemId = "sys",
-                hostId = 7,
+                hostId = hostResourceId.toString(),
                 from = 0,
                 to = 1,
                 intervalSeconds = 60,
                 dataPoints = emptyList()
             )
-        val result = run(WorkflowTrustedActionExecutor.METRICS_QUERY_STEP, mapOf("host_id" to "7", "hours" to "1"))
+        val result =
+            run(
+                WorkflowTrustedActionExecutor.METRICS_QUERY_STEP,
+                mapOf("host_id" to hostResourceId.toString(), "hours" to "1")
+            )
         assertTrue(result.containsKey("metrics"))
+        coVerify(exactly = 1) {
+            monitorService.getHistoricalMetrics(hostId, any(), any(), intervalSeconds = null)
+        }
     }
 
     @Test
-    fun `metrics query rejects a non-integer host id`() {
+    fun `metrics query rejects a non-uuid host id`() {
         assertFailsWith<IllegalArgumentException> {
             run(WorkflowTrustedActionExecutor.METRICS_QUERY_STEP, mapOf("host_id" to "abc"))
         }
@@ -204,7 +236,7 @@ class WorkflowTrustedActionExecutorTest {
         assertFailsWith<IllegalArgumentException> {
             run(
                 WorkflowTrustedActionExecutor.TRACES_SEARCH_STEP,
-                mapOf("project_id" to projectId.toString()),
+                mapOf("project_id" to projectResourceId.toString()),
                 organizationId = otherOrgId
             )
         }
@@ -213,7 +245,10 @@ class WorkflowTrustedActionExecutorTest {
     @Test
     fun `trace search succeeds for an accessible project`() {
         coEvery { dashboardService.getTransactions(any(), any(), any(), any()) } returns emptyList()
-        val result = run(WorkflowTrustedActionExecutor.TRACES_SEARCH_STEP, mapOf("project_id" to projectId.toString()))
+        val result = run(
+            WorkflowTrustedActionExecutor.TRACES_SEARCH_STEP,
+            mapOf("project_id" to projectResourceId.toString())
+        )
         assertTrue(result.containsKey("traces"))
     }
 
@@ -223,7 +258,7 @@ class WorkflowTrustedActionExecutorTest {
         val result =
             run(
                 WorkflowTrustedActionExecutor.ISSUES_LIST_STEP,
-                mapOf("project_id" to projectId.toString(), "status" to "unresolved")
+                mapOf("project_id" to projectResourceId.toString(), "status" to "unresolved")
             )
         assertTrue(result.containsKey("issues"))
     }
@@ -231,14 +266,14 @@ class WorkflowTrustedActionExecutorTest {
     @Test
     fun `span get requires the span id parameter`() {
         assertFailsWith<IllegalArgumentException> {
-            run(WorkflowTrustedActionExecutor.SPAN_GET_STEP, mapOf("project_id" to projectId.toString()))
+            run(WorkflowTrustedActionExecutor.SPAN_GET_STEP, mapOf("project_id" to projectResourceId.toString()))
         }
     }
 
     @Test
-    fun `trace search rejects a non-numeric project id`() {
+    fun `trace search rejects a non-uuid project id`() {
         assertFailsWith<IllegalArgumentException> {
-            run(WorkflowTrustedActionExecutor.TRACES_SEARCH_STEP, mapOf("project_id" to "not-a-number"))
+            run(WorkflowTrustedActionExecutor.TRACES_SEARCH_STEP, mapOf("project_id" to projectId.toString()))
         }
     }
 
@@ -311,14 +346,14 @@ class WorkflowTrustedActionExecutorTest {
 
     @Test
     fun `alert silence falls back to an org member when no actor is supplied`() {
-        every { monitorAlertService.createSilencePeriod(any(), any(), any()) } returns mockk(relaxed = true)
+        every { monitorAlertService.createSilencePeriod(any(), any(), any()) } returns silenceResponse()
         val result = run(WorkflowTrustedActionExecutor.ALERT_SILENCE_STEP, emptyMap())
         assertTrue(result.containsKey("silence"))
     }
 
     @Test
     fun `alert silence uses the explicit actor when provided`() {
-        every { monitorAlertService.createSilencePeriod(any(), any(), any()) } returns mockk(relaxed = true)
+        every { monitorAlertService.createSilencePeriod(any(), any(), any()) } returns silenceResponse()
         val result =
             run(
                 WorkflowTrustedActionExecutor.ALERT_SILENCE_STEP,
@@ -361,6 +396,7 @@ class WorkflowTrustedActionExecutorTest {
     @Test
     fun `on-call incident declaration sends explicit canonical severity`() {
         val bridge = mockk<OnCallBridge>()
+        val incidentResourceId = "77777777-7777-4777-8777-777777777777"
         mockkObject(FeatureRegistry)
         try {
             every { FeatureRegistry.getOnCallBridge() } returns bridge
@@ -373,7 +409,7 @@ class WorkflowTrustedActionExecutorTest {
                     description = "Investigating elevated checkout errors",
                     severity = "SEV-1"
                 )
-            } returns 42
+            } returns incidentResourceId
 
             val result =
                 run(
@@ -386,7 +422,7 @@ class WorkflowTrustedActionExecutorTest {
                     actorUserId = 99
                 )
 
-            assertEquals("42", result["incident_id"]?.jsonPrimitive?.content)
+            assertEquals(incidentResourceId, result["incident_id"]?.jsonPrimitive?.content)
             coVerify(exactly = 1) {
                 bridge.declareIncident(
                     organizationId = orgId,
@@ -402,10 +438,63 @@ class WorkflowTrustedActionExecutorTest {
         }
     }
 
+    @Test
+    fun `on-call incident declaration resolves alert resource id`() {
+        val bridge = mockk<OnCallBridge>()
+        val alertResourceId = "66666666-6666-4666-8666-666666666666"
+        val incidentResourceId = "77777777-7777-4777-8777-777777777777"
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+            every { bridge.resolveAlertId(orgId, alertResourceId) } returns 7
+            coEvery {
+                bridge.declareIncident(
+                    organizationId = orgId,
+                    userId = 99,
+                    alertId = 7,
+                    title = "Checkout outage",
+                    description = null,
+                    severity = "SEV-1"
+                )
+            } returns incidentResourceId
+
+            val result =
+                run(
+                    WorkflowTrustedActionExecutor.ON_CALL_DECLARE_INCIDENT_STEP,
+                    mapOf(
+                        "title" to "Checkout outage",
+                        "incident_severity" to "SEV-1",
+                        "alert_id" to alertResourceId
+                    ),
+                    actorUserId = 99
+                )
+
+            assertEquals(incidentResourceId, result["incident_id"]?.jsonPrimitive?.content)
+            coVerify(exactly = 1) {
+                bridge.declareIncident(
+                    organizationId = orgId,
+                    userId = 99,
+                    alertId = 7,
+                    title = "Checkout outage",
+                    description = null,
+                    severity = "SEV-1"
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
+    }
+
     // ──── Helpers ────
 
-    private fun hostData(hostOrg: Int): HostData =
-        mockk(relaxed = true) {
-            every { organizationId } returns hostOrg
-        }
+    private fun silenceResponse(): SilencePeriodResponse =
+        SilencePeriodResponse(
+            id = "33333333-3333-4333-8333-333333333333",
+            organizationId = "44444444-4444-4444-8444-444444444444",
+            reason = "Workflow automation",
+            startsAt = 1,
+            endsAt = 2,
+            createdBy = "55555555-5555-4555-8555-555555555555",
+            createdAt = 1
+        )
 }

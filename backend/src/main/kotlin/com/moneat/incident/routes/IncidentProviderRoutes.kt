@@ -23,9 +23,11 @@ import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.incident.models.ProviderConfig
 import com.moneat.incident.services.IncidentProviderRegistry
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.request.receive
 import io.ktor.server.plugins.BadRequestException
@@ -55,6 +57,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import com.moneat.utils.suspendRunCatching
 
 private const val PROVIDER_TYPE_MAX_LENGTH = 50
@@ -82,7 +85,7 @@ fun Route.incidentProviderRoutes() {
                                 IncidentProviderConfigs.organizationId eq organizationId
                             }.map { row ->
                                 ProviderConfigResponse(
-                                    id = row[IncidentProviderConfigs.id].value,
+                                    id = row[IncidentProviderConfigs.resourceId].toString(),
                                     providerType = row[IncidentProviderConfigs.providerType],
                                     name = row[IncidentProviderConfigs.name],
                                     configJson =
@@ -115,11 +118,10 @@ fun Route.incidentProviderRoutes() {
 
             // Test connection
             post("/{id}/test") {
-                val configId =
-                    call.parameters["id"]?.toIntOrNull()
-                        ?: return@post call.respond(HttpStatusCode.BadRequest)
-
                 val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
+                val configId =
+                    call.resolveIncidentProviderConfigId(organizationId)
+                        ?: return@post
 
                 val config =
                     transaction {
@@ -166,23 +168,10 @@ fun Route.incidentProviderRoutes() {
 
             // Get routing rules
             get("/{id}/rules") {
-                val configId =
-                    call.parameters["id"]?.toIntOrNull()
-                        ?: return@get call.respond(HttpStatusCode.BadRequest)
-
                 val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
-
-                val hasAccess =
-                    transaction {
-                        IncidentProviderConfigs
-                            .selectAll()
-                            .where {
-                                (IncidentProviderConfigs.id eq configId) and
-                                    (IncidentProviderConfigs.organizationId eq organizationId)
-                            }.count() > 0
-                    }
-
-                if (!hasAccess) return@get call.respond(HttpStatusCode.NotFound)
+                val configId =
+                    call.resolveIncidentProviderConfigId(organizationId)
+                        ?: return@get
 
                 val rules =
                     transaction {
@@ -192,7 +181,7 @@ fun Route.incidentProviderRoutes() {
                                 IncidentRoutingRules.providerConfigId eq configId
                             }.map { row ->
                                 RoutingRuleResponse(
-                                    id = row[IncidentRoutingRules.id].value,
+                                    id = row[IncidentRoutingRules.resourceId].toString(),
                                     alertSource = row[IncidentRoutingRules.alertSource],
                                     alertType = row[IncidentRoutingRules.alertType],
                                     alertPriority = row[IncidentRoutingRules.alertPriority]
@@ -238,13 +227,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderCo
                 INSERT INTO incident_provider_configs
                 (organization_id, provider_type, name, api_key, config_json, enabled, created_at, updated_at)
                 VALUES (?, ?, ?, ?, CAST(? AS JSONB), ?, CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))
-                RETURNING id
+                RETURNING resource_id
                 """.trimIndent()
 
             val now = Clock.System.now()
             val nowStr = now.toString()
 
-            var resultId: Int? = null
+            var resultId: String? = null
             TransactionManager.current().exec(
                 sql,
                 listOf(
@@ -259,7 +248,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderCo
                 )
             ) { rs ->
                 if (rs.next()) {
-                    resultId = rs.getInt(1)
+                    resultId = rs.getString(1)
                 }
             }
 
@@ -270,11 +259,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderCo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateProviderConfig() {
-    val configId =
-        call.parameters["id"]?.toIntOrNull()
-            ?: return call.respond(HttpStatusCode.BadRequest)
-
     val organizationId = call.requireCurrentOrg()?.orgId ?: return
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
 
     val request = call.receive<UpdateProviderConfigRequest>()
 
@@ -337,11 +325,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateProviderCo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteProviderConfig() {
-    val configId =
-        call.parameters["id"]?.toIntOrNull()
-            ?: return call.respond(HttpStatusCode.BadRequest)
-
     val organizationId = call.requireCurrentOrg()?.orgId ?: return
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
 
     val deleted =
         transaction {
@@ -358,23 +345,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteProviderCo
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRules() {
-    val configId =
-        call.parameters["id"]?.toIntOrNull()
-            ?: return call.respond(HttpStatusCode.BadRequest)
-
     val organizationId = call.requireCurrentOrg()?.orgId ?: return
-
-    val hasAccess =
-        transaction {
-            IncidentProviderConfigs
-                .selectAll()
-                .where {
-                    (IncidentProviderConfigs.id eq configId) and
-                        (IncidentProviderConfigs.organizationId eq organizationId)
-                }.count() > 0
-        }
-
-    if (!hasAccess) return call.respond(HttpStatusCode.NotFound)
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
 
     val request = call.receive<List<UpsertRoutingRuleRequest>>()
 
@@ -404,27 +378,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRul
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
-    val configId =
-        call.parameters["id"]?.toIntOrNull()
-            ?: return call.respond(HttpStatusCode.BadRequest)
     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_INCIDENT_PAGE_LIMIT
     if (limit <= 0) {
         throw BadRequestException("limit must be a positive integer")
     }
 
     val organizationId = call.requireCurrentOrg()?.orgId ?: return
-
-    val hasAccess =
-        transaction {
-            IncidentProviderConfigs
-                .selectAll()
-                .where {
-                    (IncidentProviderConfigs.id eq configId) and
-                        (IncidentProviderConfigs.organizationId eq organizationId)
-                }.count() > 0
-        }
-
-    if (!hasAccess) return call.respond(HttpStatusCode.NotFound)
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
 
     val events =
         transaction {
@@ -435,7 +397,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
                 .limit(limit)
                 .map { row ->
                     EventLogResponse(
-                        id = row[IncidentEventLog.id].value,
+                        id = row[IncidentEventLog.resourceId].toString(),
                         alertSource = row[IncidentEventLog.alertSource],
                         deduplicationKey = row[IncidentEventLog.deduplicationKey],
                         alertPriority = row[IncidentEventLog.alertPriority],
@@ -453,9 +415,36 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
     call.respond(events)
 }
 
+private suspend fun ApplicationCall.resolveIncidentProviderConfigId(organizationId: Int): Int? {
+    val resourceId = parameters["id"]?.let(::parseIncidentProviderResourceId)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest)
+        return null
+    }
+
+    val configId = transaction {
+        IncidentProviderConfigs
+            .selectAll()
+            .where {
+                (IncidentProviderConfigs.resourceId eq resourceId) and
+                    (IncidentProviderConfigs.organizationId eq organizationId)
+            }
+            .firstOrNull()
+            ?.get(IncidentProviderConfigs.id)
+            ?.value
+    }
+    if (configId == null) {
+        respond(HttpStatusCode.NotFound)
+    }
+    return configId
+}
+
+private fun parseIncidentProviderResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
 @Serializable
 data class ProviderConfigResponse(
-    val id: Int,
+    val id: String,
     val providerType: String,
     val name: String,
     val configJson: Map<String, String>,
@@ -482,7 +471,7 @@ data class UpdateProviderConfigRequest(
 
 @Serializable
 data class RoutingRuleResponse(
-    val id: Int,
+    val id: String,
     val alertSource: String,
     val alertType: String?,
     val alertPriority: String
@@ -498,7 +487,7 @@ data class UpsertRoutingRuleRequest(
 
 @Serializable
 data class EventLogResponse(
-    val id: Int,
+    val id: String,
     val alertSource: String,
     val deduplicationKey: String,
     val alertPriority: String,

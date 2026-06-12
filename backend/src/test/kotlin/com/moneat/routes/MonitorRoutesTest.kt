@@ -219,7 +219,7 @@ class MonitorRoutesTest {
             val orgId = seedOrg()
             seedMembership(userId, orgId)
             val response =
-                client.get("/v1/monitor/hosts/2147483647") {
+                client.get("/v1/monitor/hosts/11111111-1111-4111-8111-111111111111") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
                 }
             assertEquals(HttpStatusCode.NotFound, response.status)

@@ -20,9 +20,17 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const ENVIRONMENT_ID = '11111111-1111-4111-8111-111111111111'
+const ENVIRONMENT_STAGING_ID = '22222222-2222-4222-8222-222222222222'
+const FLAG_ID = '33333333-3333-4333-8333-333333333333'
+const VARIANT_ID = '44444444-4444-4444-8444-444444444444'
+const SEGMENT_ID = '55555555-5555-4555-8555-555555555555'
+const SDK_KEY_ID = '66666666-6666-4666-8666-666666666666'
+const AUDIT_EVENT_ID = '77777777-7777-4777-8777-777777777777'
+const ACTOR_USER_ID = '88888888-8888-4888-8888-888888888888'
 
 const environment = {
-  id: 1,
+  id: ENVIRONMENT_ID,
   key: 'production',
   name: 'Production',
   description: null,
@@ -32,7 +40,7 @@ const environment = {
 }
 
 const flag = {
-  id: 10,
+  id: FLAG_ID,
   key: 'checkout-flow',
   name: 'Checkout Flow',
   description: 'Controls the checkout experience',
@@ -41,7 +49,7 @@ const flag = {
   tags: ['checkout'],
   variants: [
     {
-      id: 20,
+      id: VARIANT_ID,
       key: 'on',
       name: 'On',
       value: true,
@@ -90,7 +98,7 @@ describe('Feature Flags API', () => {
       name: 'Staging',
       description: 'Pre-production',
     }
-    const response = { ...environment, id: 2, ...request }
+    const response = { ...environment, id: ENVIRONMENT_STAGING_ID, ...request }
 
     server.use(
       http.post(`${API_BASE}/v1/feature-flags/environments`, async ({ request: req }) => {
@@ -240,7 +248,7 @@ describe('Feature Flags API', () => {
 
   it('lists, upserts, and deletes feature flag segments', async () => {
     const segment = {
-      id: 1,
+      id: SEGMENT_ID,
       key: 'beta-users',
       name: 'Beta Users',
       description: null,
@@ -285,7 +293,7 @@ describe('Feature Flags API', () => {
 
   it('lists, creates, and revokes feature flag SDK keys', async () => {
     const sdkKey = {
-      id: 1,
+      id: SDK_KEY_ID,
       environmentKey: 'production',
       name: 'Server key',
       keyType: 'server',
@@ -311,7 +319,7 @@ describe('Feature Flags API', () => {
         expect(await req.json()).toEqual(request)
         return HttpResponse.json(createdKey)
       }),
-      http.delete(`${API_BASE}/v1/feature-flags/sdk-keys/1`, () => {
+      http.delete(`${API_BASE}/v1/feature-flags/sdk-keys/${SDK_KEY_ID}`, () => {
         calls.push('revoke')
         return new HttpResponse(null, { status: 204 })
       })
@@ -319,7 +327,7 @@ describe('Feature Flags API', () => {
 
     const listResult = await api.listFeatureFlagSdkKeys()
     const createResult = await api.createFeatureFlagSdkKey(request)
-    await api.revokeFeatureFlagSdkKey(1)
+    await api.revokeFeatureFlagSdkKey(SDK_KEY_ID)
 
     expect(listResult).toEqual({ keys: [sdkKey] })
     expect(createResult).toEqual(createdKey)
@@ -332,10 +340,10 @@ describe('Feature Flags API', () => {
     const response = {
       events: [
         {
-          id: 1,
+          id: AUDIT_EVENT_ID,
           environmentKey: 'production',
           flagKey: 'checkout-flow',
-          actorUserId: 7,
+          actorUserId: ACTOR_USER_ID,
           eventType: 'flag.updated',
           before: null,
           after: { enabled: true },

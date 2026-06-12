@@ -130,7 +130,7 @@ object DashboardWidgets : Table("dashboard_widgets") {
 @Serializable
 data class DashboardResponse(
     val id: String,
-    @SerialName("org_id") val orgId: Long,
+    @SerialName("org_id") val orgId: String,
     @SerialName("project_id") val projectId: String? = null,
     @SerialName("folder_id") val folderId: String? = null,
     val title: String,
@@ -139,7 +139,7 @@ data class DashboardResponse(
     @SerialName("is_default") val isDefault: Boolean = false,
     @SerialName("is_favorited") val isFavorited: Boolean = false,
     val variables: List<DashboardVariable> = emptyList(),
-    @SerialName("created_by") val createdBy: Long,
+    @SerialName("created_by") val createdBy: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("owner_name") val ownerName: String? = null,
@@ -187,7 +187,7 @@ data class UpdateDashboardRequest(
 @Serializable
 data class FolderResponse(
     val id: String,
-    @SerialName("org_id") val orgId: Long,
+    @SerialName("org_id") val orgId: String,
     val name: String,
     val color: String? = null,
     @SerialName("sort_order") val sortOrder: Int = 0,

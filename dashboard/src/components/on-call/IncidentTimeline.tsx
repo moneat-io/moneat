@@ -18,9 +18,9 @@ import { CheckCircle2, Circle, AlertTriangle, Clock, MessageSquare, UserPlus, Be
 import { cn } from '@/lib/utils'
 
 export interface TimelineEvent {
-  id: number
+  id: string
   eventType: string
-  actorUserId?: number
+  actorUserId?: string
   actorUserName?: string
   details?: Record<string, string | number | undefined>
   createdAt: string

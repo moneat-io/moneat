@@ -71,7 +71,7 @@ private const val UNAUTHORIZED_MESSAGE = "Unauthorized"
 
 @Serializable
 data class OrganizationIntegrationResponse(
-    val id: Int,
+    val id: String,
     val integrationType: String,
     val teamName: String?,
     val channelId: String?,
@@ -275,7 +275,7 @@ fun Route.integrationRoutes() {
                             .where { OrganizationIntegrations.organization_id eq organizationId }
                             .map { row ->
                                 OrganizationIntegrationResponse(
-                                    id = row[OrganizationIntegrations.id],
+                                    id = row[OrganizationIntegrations.resource_id].toString(),
                                     integrationType = row[OrganizationIntegrations.integration_type],
                                     teamName = row[OrganizationIntegrations.team_name],
                                     channelId = row[OrganizationIntegrations.channel_id],
@@ -912,10 +912,10 @@ fun Route.integrationCallbackRoutes() {
                         val action = actions[0].jsonObject
                         val actionId = action["action_id"]?.jsonPrimitive?.content ?: ""
 
-                        // Parse action ID format: "incident_{action}_{incidentId}"
+                        // Parse action ID format: "incident_{action}_{alertResourceId}"
                         if (actionId.startsWith("incident_acknowledge_")) {
-                            val incidentId = actionId.removePrefix("incident_acknowledge_").toIntOrNull()
-                            if (incidentId != null) {
+                            val alertResourceId = actionId.removePrefix("incident_acknowledge_")
+                            if (alertResourceId.isNotBlank()) {
                                 // Get user from Slack user ID
                                 val slackUserId =
                                     payloadJson["user"]
@@ -945,8 +945,6 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
 
-                                        // Verify user's organization matches alert's organization
-                                        val alert = bridge.getAlert(incidentId, userId)
                                         val userOrgId =
                                             transaction {
                                                 Memberships
@@ -955,9 +953,20 @@ fun Route.integrationCallbackRoutes() {
                                                     .singleOrNull()
                                                     ?.get(Memberships.organization_id)
                                             }
+                                        if (userOrgId == null) {
+                                            call.respond(
+                                                mapOf(
+                                                    "response_type" to "ephemeral",
+                                                    "text" to "❌ Alert not found or access denied"
+                                                )
+                                            )
+                                            return@post
+                                        }
+
+                                        val alertId = bridge.resolveAlertId(userOrgId, alertResourceId)
+                                        val alert = alertId?.let { bridge.getAlert(it, userId) }
 
                                         if (alert == null ||
-                                            userOrgId == null ||
                                             alert.organizationId != userOrgId
                                         ) {
                                             call.respond(
@@ -969,7 +978,7 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
 
-                                        val acknowledged = bridge.acknowledgeAlert(incidentId, userId)
+                                        val acknowledged = bridge.acknowledgeAlert(alertId, userId)
 
                                         if (acknowledged) {
                                             // Send success response

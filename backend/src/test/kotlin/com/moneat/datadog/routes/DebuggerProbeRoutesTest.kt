@@ -46,6 +46,8 @@ import kotlin.test.assertTrue
 class DebuggerProbeRoutesTest {
 
     private val probeId = UUID.fromString("00000000-0000-0000-0000-000000000001")
+    private val organizationResourceId = "00000000-0000-4000-8000-000000000042"
+    private val userResourceId = "00000000-0000-4000-8000-000000000007"
 
     @BeforeTest
     fun setup() {
@@ -193,7 +195,7 @@ class DebuggerProbeRoutesTest {
     private fun sampleProbe(): DebuggerProbe =
         DebuggerProbe(
             id = probeId.toString(),
-            organizationId = 42,
+            organizationId = organizationResourceId,
             probeType = "log_probe",
             service = "probe-service",
             environment = "*",
@@ -202,7 +204,7 @@ class DebuggerProbeRoutesTest {
             whereType = "method",
             typeName = "com.example.Worker",
             methodName = "run",
-            createdBy = 7,
+            createdBy = userResourceId,
             createdAt = "2026-01-01T00:00:00Z",
             updatedAt = "2026-01-01T00:00:00Z"
         )

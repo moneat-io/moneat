@@ -88,7 +88,7 @@ class CustomDashboardServiceTest {
         widgetRepository = mockk(relaxed = true)
         projectRepository = mockk(relaxed = true)
         projectIdResolver = mockk(relaxed = true)
-        every { projectIdResolver.resolve(any()) } answers { resourceNumber(firstArg()) }
+        every { projectIdResolver.resolve(any(), any<Long>()) } answers { resourceNumber(firstArg()) }
         service = CustomDashboardService(
             folderRepository = folderRepository,
             dashboardRepository = dashboardRepository,
@@ -102,6 +102,7 @@ class CustomDashboardServiceTest {
         val id: Long = 1L,
         val resourceId: String = resourceId(id),
         val orgId: Long = ORG_ID,
+        val orgResourceId: String = resourceId(orgId),
         val projectId: Long? = PROJECT_ID,
         val projectResourceId: String? = projectId?.let(::resourceId),
         val folderId: Long? = null,
@@ -113,6 +114,7 @@ class CustomDashboardServiceTest {
         val isFavorited: Boolean = false,
         val variables: String = "[]",
         val createdBy: Long = USER_ID_LONG,
+        val createdByResourceId: String = resourceId(createdBy),
         val createdAt: String = DEFAULT_TIMESTAMP,
         val updatedAt: String = DEFAULT_TIMESTAMP,
         val ownerName: String? = null,
@@ -123,6 +125,7 @@ class CustomDashboardServiceTest {
             id = p.id,
             resourceId = p.resourceId,
             orgId = p.orgId,
+            orgResourceId = p.orgResourceId,
             projectId = p.projectId,
             projectResourceId = p.projectResourceId,
             folderId = p.folderId,
@@ -134,6 +137,7 @@ class CustomDashboardServiceTest {
             isFavorited = p.isFavorited,
             variables = p.variables,
             createdBy = p.createdBy,
+            createdByResourceId = p.createdByResourceId,
             createdAt = p.createdAt,
             updatedAt = p.updatedAt,
             ownerName = p.ownerName,
@@ -176,6 +180,7 @@ class CustomDashboardServiceTest {
         id = params.id,
         resourceId = resourceId(params.id),
         orgId = ORG_ID,
+        orgResourceId = resourceId(ORG_ID),
         projectId = params.projectId,
         projectResourceId = params.projectId?.let(::resourceId),
         folderId = params.folderId,
@@ -186,6 +191,7 @@ class CustomDashboardServiceTest {
         isDefault = false,
         variables = "[]",
         createdBy = USER_ID_LONG,
+        createdByResourceId = resourceId(USER_ID_LONG),
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
         ownerName = params.ownerName,
@@ -201,6 +207,7 @@ class CustomDashboardServiceTest {
         id = id,
         resourceId = resourceId(id),
         orgId = orgId,
+        orgResourceId = resourceId(orgId),
         name = name,
         color = color,
         sortOrder = sortOrder,
@@ -665,7 +672,7 @@ class CustomDashboardServiceTest {
 
         assertEquals(1, result.size)
         assertEquals("General", result[0].name)
-        assertEquals(ORG_ID, result[0].orgId)
+        assertEquals(resourceId(ORG_ID), result[0].orgId)
     }
 
     @Test
@@ -695,7 +702,7 @@ class CustomDashboardServiceTest {
         val result = service.createFolder(ORG_ID, request)
 
         assertEquals(resourceId(5), result.id)
-        assertEquals(ORG_ID, result.orgId)
+        assertEquals(resourceId(ORG_ID), result.orgId)
         assertEquals(NEW_FOLDER, result.name)
         assertEquals(COLOR_GREEN, result.color)
         assertEquals(1, result.sortOrder)

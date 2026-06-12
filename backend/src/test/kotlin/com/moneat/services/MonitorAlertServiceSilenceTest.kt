@@ -22,7 +22,9 @@ import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -33,6 +35,7 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.uuid.Uuid
 
 class MonitorAlertServiceSilenceTest {
     companion object {
@@ -322,12 +325,12 @@ class MonitorAlertServiceSilenceTest {
 
         val result = service.createSilencePeriod(orgId, userId, request)
 
-        assertEquals(orgId, result.organizationId)
+        assertEquals(organizationResourceId(orgId), result.organizationId)
         assertEquals("Deployment window", result.reason)
-        assertEquals(userId, result.createdBy)
+        assertEquals(userResourceId(userId), result.createdBy)
         assertEquals(startsAt.toEpochMilliseconds(), result.startsAt)
         assertEquals(endsAt.toEpochMilliseconds(), result.endsAt)
-        assertTrue(result.id > 0)
+        assertEquals(result.id, Uuid.parse(result.id).toString())
     }
 
     @Test
@@ -390,7 +393,7 @@ class MonitorAlertServiceSilenceTest {
     @Test
     fun `deleteSilencePeriod returns false for non-existent period`() {
         val orgId = seedOrg()
-        val result = service.deleteSilencePeriod(99999, orgId)
+        val result = service.deleteSilencePeriod("99999", orgId)
         assertFalse(result)
     }
 
@@ -441,4 +444,22 @@ class MonitorAlertServiceSilenceTest {
         assertEquals(1, remaining.size)
         assertEquals("Keep this", remaining.first().reason)
     }
+
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
+        }
 }

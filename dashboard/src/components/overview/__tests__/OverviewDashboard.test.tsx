@@ -23,6 +23,8 @@ import {OverviewDashboard} from '../OverviewDashboard'
 import {overviewTestData} from './overviewTestData'
 
 const LAYOUT_STORAGE_KEY = 'moneat.overview.layout.v3'
+const WIDGET_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174501'
+const DASHBOARD_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174502'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -119,8 +121,8 @@ describe('OverviewDashboard', () => {
 
   it('loads layout from localStorage on mount', async () => {
     const singleWidget = [{
-      id: -1,
-      dashboard_id: 0,
+      id: WIDGET_RESOURCE_ID,
+      dashboard_id: DASHBOARD_RESOURCE_ID,
       title: 'Activity',
       widget_type: 'activity',
       grid_x: 0,

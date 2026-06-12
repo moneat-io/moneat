@@ -73,20 +73,67 @@ class DashboardCrudToolTest {
             exec("DROP TABLE IF EXISTS custom_data_sources")
             exec("DROP TABLE IF EXISTS dashboards")
             exec("DROP TABLE IF EXISTS projects")
+            exec("DROP TABLE IF EXISTS organizations")
             exec("DROP TABLE IF EXISTS users")
             patchJsonbForH2(DashboardWidgets, DashboardWidgetAlerts)
             exec(
                 """
                 CREATE TABLE users (
                     id INT PRIMARY KEY,
-                    "name" VARCHAR(255)
+                    resource_id UUID NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    password_hash VARCHAR(255) NOT NULL,
+                    "name" VARCHAR(255),
+                    email_verified BOOLEAN DEFAULT FALSE NOT NULL,
+                    is_admin BOOLEAN DEFAULT FALSE NOT NULL,
+                    email_verification_token VARCHAR(255),
+                    email_verification_expires_at BIGINT,
+                    password_reset_token VARCHAR(255),
+                    password_reset_expires_at BIGINT,
+                    onboarding_completed BOOLEAN DEFAULT FALSE NOT NULL,
+                    oauth_provider VARCHAR(20),
+                    oauth_provider_id VARCHAR(512),
+                    phone_number VARCHAR(20),
+                    oncall_phone_opt_in BOOLEAN DEFAULT FALSE NOT NULL,
+                    oncall_phone_consented_at TIMESTAMP,
+                    oncall_phone_consent_version VARCHAR(50),
+                    oncall_phone_consent_ip VARCHAR(45),
+                    oncall_phone_consent_user_agent TEXT,
+                    oncall_phone_opted_out_at TIMESTAMP,
+                    timezone VARCHAR(64),
+                    deleted_at TIMESTAMP
                 )
                 """.trimIndent()
             )
             exec(
                 """
-                INSERT INTO users (id, "name")
-                VALUES ($CREATED_BY, 'MCP Test User')
+                INSERT INTO users (id, resource_id, email, password_hash, "name", email_verified)
+                VALUES ($CREATED_BY, '$CREATED_BY_RESOURCE_ID', 'dashboard-tool@example.com', 'hash', 'Dashboard Tool', TRUE)
+                """.trimIndent()
+            )
+            exec(
+                """
+                CREATE TABLE organizations (
+                    id INT PRIMARY KEY,
+                    resource_id UUID NOT NULL,
+                    "name" VARCHAR(255) NOT NULL,
+                    slug VARCHAR(255) NOT NULL,
+                    company_size VARCHAR(50),
+                    referral_source VARCHAR(100),
+                    utm_source VARCHAR(255),
+                    utm_medium VARCHAR(255),
+                    utm_campaign VARCHAR(255),
+                    utm_content VARCHAR(255),
+                    utm_term VARCHAR(255),
+                    deleted_at TIMESTAMP,
+                    deleted_by INT
+                )
+                """.trimIndent()
+            )
+            exec(
+                """
+                INSERT INTO organizations (id, resource_id, "name", slug)
+                VALUES ($ORG_ID, '$ORG_RESOURCE_ID', 'MCP Dashboard Org', 'mcp-dashboard-org')
                 """.trimIndent()
             )
             exec(
@@ -1154,7 +1201,9 @@ class DashboardCrudToolTest {
     companion object {
         private var db: Database? = null
         private const val ORG_ID = 1L
+        private const val ORG_RESOURCE_ID = "118f4ce4-3f2a-7a67-a32b-0c1848f62b9e"
         private const val CREATED_BY = 100L
+        private const val CREATED_BY_RESOURCE_ID = "118f4ce4-3f2a-7a67-a32b-0c1848f62b9f"
         private const val PROJECT_ID = 200L
         private const val SECOND_PROJECT_ID = PROJECT_ID + 1
         private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"

@@ -19,7 +19,7 @@ export type FeatureFlagSdkKeyType = 'server' | 'client'
 export type FeatureFlagJsonValue = boolean | string | number | Record<string, unknown> | null
 
 export interface FeatureFlagEnvironment {
-  id: number
+  id: string
   key: string
   name: string
   description?: string | null
@@ -29,7 +29,7 @@ export interface FeatureFlagEnvironment {
 }
 
 export interface FeatureFlagVariant {
-  id: number
+  id: string
   key: string
   name: string
   value: FeatureFlagJsonValue
@@ -48,7 +48,7 @@ export interface FeatureFlagConfig {
 }
 
 export interface FeatureFlag {
-  id: number
+  id: string
   key: string
   name: string
   description?: string | null
@@ -100,7 +100,7 @@ export interface UpdateFeatureFlagConfigRequest {
 }
 
 export interface FeatureFlagSegment {
-  id: number
+  id: string
   key: string
   name: string
   description?: string | null
@@ -117,7 +117,7 @@ export interface FeatureFlagSegmentRequest {
 }
 
 export interface FeatureFlagSdkKey {
-  id: number
+  id: string
   environmentKey: string
   name: string
   keyType: FeatureFlagSdkKeyType
@@ -137,10 +137,10 @@ export interface CreatedFeatureFlagSdkKey extends FeatureFlagSdkKey {
 }
 
 export interface FeatureFlagAuditEvent {
-  id: number
+  id: string
   environmentKey?: string | null
   flagKey?: string | null
-  actorUserId?: number | null
+  actorUserId?: string | null
   eventType: string
   before?: unknown
   after?: unknown

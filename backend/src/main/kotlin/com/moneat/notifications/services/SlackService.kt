@@ -21,6 +21,7 @@ import java.io.IOException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
+import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.workflows.models.WorkflowStepPreview
@@ -264,13 +265,7 @@ class SlackService {
 
     suspend fun sendHostAlert(
         organizationId: Int,
-        hostName: String,
-        metric: String,
-        condition: String,
-        threshold: String,
-        currentValue: String,
-        hostId: Int,
-        baseUrl: String
+        alert: HostAlertNotification,
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
 
@@ -293,10 +288,10 @@ class SlackService {
                     type = "section",
                     fields =
                     listOf(
-                        SlackText(type = "mrkdwn", text = "*Host:*\n$hostName"),
-                        SlackText(type = "mrkdwn", text = "*Metric:*\n$metric"),
-                        SlackText(type = "mrkdwn", text = "*Condition:*\n$condition $threshold"),
-                        SlackText(type = "mrkdwn", text = "*Current Value:*\n$currentValue")
+                        SlackText(type = "mrkdwn", text = "*Host:*\n${alert.hostName}"),
+                        SlackText(type = "mrkdwn", text = "*Metric:*\n${alert.metric}"),
+                        SlackText(type = "mrkdwn", text = "*Condition:*\n${alert.condition} ${alert.threshold}"),
+                        SlackText(type = "mrkdwn", text = "*Current Value:*\n${alert.currentValue}")
                     )
                 ),
                 SlackBlock(
@@ -306,7 +301,7 @@ class SlackService {
                         SlackElement(
                             type = "button",
                             text = SlackText(type = "plain_text", text = "View"),
-                            url = "$baseUrl/monitoring/hosts/$hostId"
+                            url = "${alert.baseUrl}/monitoring/hosts/${alert.hostResourceId}"
                         )
                     )
                 )
@@ -317,17 +312,20 @@ class SlackService {
                 SlackAttachment(
                     color = SLACK_COLOR_YELLOW,
                     blocks = attachmentBlocks,
-                    fallback = "⚠️ Host Alert: $hostName"
+                    fallback = "⚠️ Host Alert: ${alert.hostName}"
                 )
             )
 
+        val fallbackText =
+            "⚠️ Host Alert: ${alert.hostName} - ${alert.metric} ${alert.condition} " +
+                "${alert.threshold} (current: ${alert.currentValue})"
         val (success, _) =
             sendMessage(
                 accessToken = config.accessToken,
                 channel = config.channelId,
                 blocks = mainBlocks,
                 attachments = attachments,
-                fallbackText = "⚠️ Host Alert: $hostName - $metric $condition $threshold (current: $currentValue)"
+                fallbackText = fallbackText
             )
         return success
     }
@@ -450,7 +448,7 @@ class SlackService {
         organizationId: Int,
         hostName: String,
         lastSeen: String,
-        hostId: Int,
+        hostResourceId: String,
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
@@ -485,7 +483,7 @@ class SlackService {
                         SlackElement(
                             type = "button",
                             text = SlackText(type = "plain_text", text = "View"),
-                            url = "$baseUrl/monitoring/hosts/$hostId"
+                            url = "$baseUrl/monitoring/hosts/$hostResourceId"
                         )
                     )
                 )
@@ -514,7 +512,7 @@ class SlackService {
     suspend fun sendHostUp(
         organizationId: Int,
         hostName: String,
-        hostId: Int,
+        hostResourceId: String,
         baseUrl: String
     ): Boolean {
         val config = getSlackConfig(organizationId) ?: return false
@@ -549,7 +547,7 @@ class SlackService {
                         SlackElement(
                             type = "button",
                             text = SlackText(type = "plain_text", text = "View"),
-                            url = "$baseUrl/monitoring/hosts/$hostId"
+                            url = "$baseUrl/monitoring/hosts/$hostResourceId"
                         )
                     )
                 )
@@ -1047,7 +1045,7 @@ class SlackService {
 
     suspend fun sendOnCallAlert(
         userId: Int,
-        incidentId: Int,
+        alertResourceId: String?,
         title: String,
         priority: String
     ) {
@@ -1063,9 +1061,29 @@ class SlackService {
             val orgId = getUserOrganizationId(userId) ?: return
             val accessToken = getAccessToken(orgId) ?: return
 
-            // Send DM with interactive buttons
+            val actionsBlock = alertResourceId?.let { publicAlertId ->
+                SlackBlock(
+                    type = "actions",
+                    elements =
+                    listOf(
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "Acknowledge alert", emoji = false),
+                            actionId = "incident_acknowledge_$publicAlertId"
+                        ),
+                        SlackElement(
+                            type = "button",
+                            text = SlackText(type = "plain_text", text = "View Details", emoji = false),
+                            url = "${EnvConfig.get("FRONTEND_URL", "https://moneat.io")}/on-call/alerts/$publicAlertId",
+                            actionId = "incident_view_$publicAlertId"
+                        )
+                    )
+                )
+            }
+
+            // Send DM with interactive buttons when this is tied to a real alert.
             val blocks =
-                listOf(
+                listOfNotNull(
                     SlackBlock(
                         type = "header",
                         text = SlackText(type = "plain_text", text = "🚨 On-Call Alert", emoji = true)
@@ -1074,26 +1092,7 @@ class SlackService {
                         type = "section",
                         text = SlackText(type = "mrkdwn", text = "*Priority:* $priority\n*Alert:* $title")
                     ),
-                    SlackBlock(
-                        type = "actions",
-                        elements =
-                        listOf(
-                            SlackElement(
-                                type = "button",
-                                text = SlackText(type = "plain_text", text = "Acknowledge alert", emoji = false),
-                                actionId = "incident_acknowledge_$incidentId"
-                            ),
-                            SlackElement(
-                                type = "button",
-                                text = SlackText(type = "plain_text", text = "View Details", emoji = false),
-                                url = "${com.moneat.config.EnvConfig.get(
-                                    "FRONTEND_URL",
-                                    "https://moneat.io"
-                                )}/on-call/alerts/$incidentId",
-                                actionId = "incident_view_$incidentId"
-                            )
-                        )
-                    )
+                    actionsBlock
                 )
 
             val response =
@@ -1111,7 +1110,7 @@ class SlackService {
 
             val result = json.decodeFromString<SlackPostMessageResponse>(response.bodyAsText())
             if (result.ok) {
-                logger.info("Sent on-call Slack DM to user $userId for incident $incidentId")
+                logger.info("Sent on-call Slack DM to user $userId for alert $alertResourceId")
             } else {
                 logger.error("Failed to send on-call Slack DM: ${result.error}")
             }

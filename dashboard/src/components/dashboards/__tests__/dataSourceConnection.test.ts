@@ -413,9 +413,16 @@ describe('effectiveName', () => {
 describe('hydrateFormState', () => {
   it('rebuilds form state from a stored source + extra_config', () => {
     const ds: CustomDataSourceResponse = {
-      id: '00000000-0000-0000-0000-000000000005', org_id: 1, name: 'Edge Prom', source_type: 'prometheus',
+      id: '00000000-0000-0000-0000-000000000005',
+      org_id: '11111111-1111-4111-8111-111111111111',
+      name: 'Edge Prom',
+      source_type: 'prometheus',
       host: 'prom.example.com', port: 9090, extra_config: {scheme: 'http', base_path: '/p', auth_method: 'bearer'},
-      enabled: true, created_by: 1, created_at: '', updated_at: '', has_credentials: true,
+      enabled: true,
+      created_by: '22222222-2222-4222-8222-222222222222',
+      created_at: '',
+      updated_at: '',
+      has_credentials: true,
     }
     const s = hydrateFormState(ds)
     expect(s.vendor).toBe('prometheus')

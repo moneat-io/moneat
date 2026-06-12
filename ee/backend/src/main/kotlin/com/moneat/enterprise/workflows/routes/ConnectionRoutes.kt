@@ -10,8 +10,11 @@ import com.moneat.enterprise.workflows.models.ConnectionResponse
 import com.moneat.enterprise.workflows.models.CreateConnectionGroupRequest
 import com.moneat.enterprise.workflows.models.CreateConnectionRequest
 import com.moneat.enterprise.workflows.models.RotateConnectionRequest
+import com.moneat.enterprise.workflows.models.WorkflowConnectionGroups
+import com.moneat.enterprise.workflows.models.WorkflowConnections
 import com.moneat.org.services.OrgRole
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.WorkflowConnectionGroupSummary
@@ -32,8 +35,10 @@ import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 
 private const val INVALID_ID_MESSAGE = "Invalid connection ID"
 private const val INVALID_GROUP_ID_MESSAGE = "Invalid connection group ID"
@@ -80,8 +85,7 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
 
             get("/{connectionId}") {
                 val member = requireMember() ?: return@get
-                val connectionId = call.parameters["connectionId"]?.toIntOrNull()
-                    ?: return@get call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
+                val connectionId = connectionIdParam(member.organizationId) ?: return@get
                 val connection = vault.getConnection(member.organizationId, connectionId)
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorResponse(NOT_FOUND_MESSAGE))
                 call.respond(connection.toResponse())
@@ -90,8 +94,7 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
             put("/{connectionId}/rotate") {
                 val member = requireMember() ?: return@put
                 requireConnectionAdmin(member) ?: return@put
-                val connectionId = call.parameters["connectionId"]?.toIntOrNull()
-                    ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
+                val connectionId = connectionIdParam(member.organizationId) ?: return@put
                 val request = call.receive<RotateConnectionRequest>()
                 suspendRunCatching {
                     vault.rotateConnection(member.organizationId, connectionId, request.secret)
@@ -110,8 +113,7 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
             delete("/{connectionId}") {
                 val member = requireMember() ?: return@delete
                 requireConnectionAdmin(member) ?: return@delete
-                val connectionId = call.parameters["connectionId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
+                val connectionId = connectionIdParam(member.organizationId) ?: return@delete
                 if (vault.deleteConnection(member.organizationId, connectionId)) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
@@ -132,12 +134,16 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
                 val member = requireMember() ?: return@post
                 val userId = requireConnectionAdmin(member) ?: return@post
                 val request = call.receive<CreateConnectionGroupRequest>()
+                val memberConnectionIds = resolveConnectionIds(
+                    organizationId = member.organizationId,
+                    resourceIds = request.memberConnectionIds
+                ) ?: return@post
                 suspendRunCatching {
                     vault.createGroup(
                         organizationId = member.organizationId,
                         name = request.name,
                         connectionType = request.connectionType,
-                        memberConnectionIds = request.memberConnectionIds,
+                        memberConnectionIds = memberConnectionIds,
                         selectionStrategy = request.selectionStrategy,
                         createdBy = userId
                     )
@@ -150,8 +156,7 @@ fun Route.connectionRoutes(vault: WorkflowConnectionVault) {
             delete("/{groupId}") {
                 val member = requireMember() ?: return@delete
                 requireConnectionAdmin(member) ?: return@delete
-                val groupId = call.parameters["groupId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_GROUP_ID_MESSAGE))
+                val groupId = groupIdParam(member.organizationId) ?: return@delete
                 if (vault.deleteGroup(member.organizationId, groupId)) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
@@ -170,7 +175,7 @@ private data class WorkflowConnectionMember(
 
 private fun WorkflowConnectionSummary.toResponse(): ConnectionResponse =
     ConnectionResponse(
-        id = id,
+        id = resourceId,
         type = type,
         name = name,
         identifierTags = identifierTags,
@@ -181,14 +186,127 @@ private fun WorkflowConnectionSummary.toResponse(): ConnectionResponse =
 
 private fun WorkflowConnectionGroupSummary.toResponse(): ConnectionGroupResponse =
     ConnectionGroupResponse(
-        id = id,
+        id = resourceId,
         name = name,
         connectionType = connectionType,
-        memberConnectionIds = memberConnectionIds,
+        memberConnectionIds = connectionResourceIds(organizationId, memberConnectionIds),
         selectionStrategy = selectionStrategy,
         createdAt = createdAt,
         updatedAt = updatedAt
     )
+
+private suspend fun RoutingContext.connectionIdParam(organizationId: Int): Int? =
+    resolveConnectionId(
+        organizationId = organizationId,
+        raw = call.parameters["connectionId"],
+        invalidMessage = INVALID_ID_MESSAGE
+    )
+
+private suspend fun RoutingContext.groupIdParam(organizationId: Int): Int? {
+    val resourceId = parseResourceId(call.parameters["groupId"], INVALID_GROUP_ID_MESSAGE) ?: return null
+    val groupId =
+        transaction {
+            WorkflowConnectionGroups
+                .selectAll()
+                .where {
+                    (WorkflowConnectionGroups.organizationId eq organizationId) and
+                        (WorkflowConnectionGroups.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(WorkflowConnectionGroups.id)
+                ?.value
+        }
+    if (groupId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(GROUP_NOT_FOUND_MESSAGE))
+    }
+    return groupId
+}
+
+private suspend fun RoutingContext.resolveConnectionId(
+    organizationId: Int,
+    raw: String?,
+    invalidMessage: String
+): Int? {
+    val resourceId = parseResourceId(raw, invalidMessage) ?: return null
+    val connectionId =
+        transaction {
+            WorkflowConnections
+                .selectAll()
+                .where {
+                    (WorkflowConnections.organizationId eq organizationId) and
+                        (WorkflowConnections.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(WorkflowConnections.id)
+                ?.value
+        }
+    if (connectionId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(NOT_FOUND_MESSAGE))
+    }
+    return connectionId
+}
+
+private suspend fun RoutingContext.parseResourceId(raw: String?, invalidMessage: String): Uuid? {
+    val resourceId = raw?.toUuidOrNull()
+    if (resourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(invalidMessage))
+    }
+    return resourceId
+}
+
+private suspend fun RoutingContext.resolveConnectionIds(
+    organizationId: Int,
+    resourceIds: List<String>
+): List<Int>? {
+    if (resourceIds.isEmpty()) return emptyList()
+    val parsedResourceIds = mutableListOf<Uuid>()
+    resourceIds.forEach { raw ->
+        val resourceId = raw.toUuidOrNull()
+        if (resourceId == null) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ID_MESSAGE))
+            return null
+        }
+        parsedResourceIds.add(resourceId)
+    }
+    val idsByResourceId =
+        transaction {
+            WorkflowConnections
+                .selectAll()
+                .where {
+                    (WorkflowConnections.organizationId eq organizationId) and
+                        (WorkflowConnections.resourceId inList parsedResourceIds)
+                }
+                .associate {
+                    it[WorkflowConnections.resourceId] to it[WorkflowConnections.id].value
+                }
+        }
+    val connectionIds = parsedResourceIds.mapNotNull { idsByResourceId[it] }
+    if (connectionIds.size != parsedResourceIds.size) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(NOT_FOUND_MESSAGE))
+        return null
+    }
+    return connectionIds
+}
+
+private fun connectionResourceIds(
+    organizationId: Int,
+    connectionIds: List<Int>
+): List<String> {
+    if (connectionIds.isEmpty()) return emptyList()
+    val resourceIdsByConnectionId =
+        transaction {
+            WorkflowConnections
+                .selectAll()
+                .where {
+                    (WorkflowConnections.organizationId eq organizationId) and
+                        (WorkflowConnections.id inList connectionIds)
+                }
+                .associate {
+                    it[WorkflowConnections.id].value to it[WorkflowConnections.resourceId].toString()
+                }
+        }
+    return connectionIds.mapNotNull { resourceIdsByConnectionId[it] }
+}
 
 private suspend fun RoutingContext.respondConnectionError(error: Throwable) {
     if (error is IllegalArgumentException) {

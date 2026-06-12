@@ -37,6 +37,7 @@ import {useToast} from '@/hooks/useToast'
 import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2, Eye, Send} from 'lucide-react'
 import {useState, useEffect, useRef} from 'react'
 import {cn} from '@/lib/utils'
+import {isUuidResourceId} from '@/lib/api/utils'
 
 export const Route = createFileRoute('/on-call/alerts/$alertId')({
   component: IncidentDetailPage,
@@ -123,19 +124,19 @@ function IncidentDetailPage() {
   const [declareTitle, setDeclareTitle] = useState('')
   const [declareDesc, setDeclareDesc] = useState('')
   const [declareSeverity, setDeclareSeverity] = useState('SEV-2')
-  const parsedAlertId = Number(alertId)
-  const hasValidAlertId = Number.isInteger(parsedAlertId) && parsedAlertId > 0
-  const alertQueryKey = ['incident', parsedAlertId] as const
-  const alertTimelineQueryKey = ['incident-timeline', parsedAlertId] as const
+  const normalizedAlertId = alertId.trim()
+  const hasValidAlertId = isUuidResourceId(normalizedAlertId)
+  const alertQueryKey = ['incident', normalizedAlertId] as const
+  const alertTimelineQueryKey = ['incident-timeline', normalizedAlertId] as const
 
   const {data: incident, isLoading} = useQuery({
     queryKey: alertQueryKey,
-    queryFn: () => api.getIncident(parsedAlertId),
+    queryFn: () => api.getIncident(normalizedAlertId),
     enabled: hasValidAlertId,
   })
 
   // Initialize declare form when dialog opens
-  const lastInitializedRef = useRef<number | null>(null)
+  const lastInitializedRef = useRef<string | null>(null)
   useEffect(() => {
     if (declareOpen && incident && lastInitializedRef.current !== incident.id) {
       lastInitializedRef.current = incident.id
@@ -147,7 +148,7 @@ function IncidentDetailPage() {
 
   const declareMutation = useMutation({
     mutationFn: () =>
-      api.declareIncident(parsedAlertId, {
+      api.declareIncident(normalizedAlertId, {
         title: declareTitle,
         description: declareDesc,
         severity: declareSeverity,
@@ -168,7 +169,7 @@ function IncidentDetailPage() {
 
   const {data: timeline = [], isLoading: timelineLoading} = useQuery({
     queryKey: alertTimelineQueryKey,
-    queryFn: () => api.getIncidentTimeline(parsedAlertId),
+    queryFn: () => api.getIncidentTimeline(normalizedAlertId),
     enabled: hasValidAlertId,
   })
 
@@ -176,12 +177,12 @@ function IncidentDetailPage() {
   const incidentLoaded = !!incident
   useEffect(() => {
     if (hasValidAlertId && incidentLoaded) {
-      api.viewIncident(parsedAlertId).catch(() => {})
+      api.viewIncident(normalizedAlertId).catch(() => {})
     }
-  }, [hasValidAlertId, incidentLoaded, parsedAlertId])
+  }, [normalizedAlertId, hasValidAlertId, incidentLoaded])
 
   const acknowledgeMutation = useMutation({
-    mutationFn: () => api.acknowledgeIncident(parsedAlertId),
+    mutationFn: () => api.acknowledgeIncident(normalizedAlertId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: alertQueryKey})
       queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
@@ -197,7 +198,7 @@ function IncidentDetailPage() {
   })
 
   const resolveMutation = useMutation({
-    mutationFn: () => api.resolveIncident(parsedAlertId),
+    mutationFn: () => api.resolveIncident(normalizedAlertId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: alertQueryKey})
       queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
@@ -213,7 +214,7 @@ function IncidentDetailPage() {
   })
 
   const markUnavailableMutation = useMutation({
-    mutationFn: () => api.markUnavailable(parsedAlertId),
+    mutationFn: () => api.markUnavailable(normalizedAlertId),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: alertQueryKey})
       queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})
@@ -229,7 +230,7 @@ function IncidentDetailPage() {
   })
 
   const addNoteMutation = useMutation({
-    mutationFn: (note: string) => api.addIncidentNote(parsedAlertId, note),
+    mutationFn: (note: string) => api.addIncidentNote(normalizedAlertId, note),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: alertQueryKey})
       queryClient.invalidateQueries({queryKey: alertTimelineQueryKey})

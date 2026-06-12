@@ -434,7 +434,7 @@ function AuthTokensSection() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (tokenId: number) => api.deleteAuthToken(tokenId),
+    mutationFn: (tokenId: string) => api.deleteAuthToken(tokenId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['authTokens'] })
       setRevokeToken(null)
@@ -2906,7 +2906,7 @@ function SilencePeriodsTab() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteSilencePeriod(id),
+    mutationFn: (id: string) => api.deleteSilencePeriod(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['silence-periods'] })
       toast({ title: 'Silence period removed' })

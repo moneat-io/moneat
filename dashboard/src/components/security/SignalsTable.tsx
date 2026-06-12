@@ -22,7 +22,7 @@ import {colorFor, severityColors, STATUS_LABELS, statusColors} from './securityC
 
 interface SignalsTableProps {
   signals: SignalResponse[]
-  selectedId?: number
+  selectedId?: string
   onSelect: (signal: SignalResponse) => void
 }
 

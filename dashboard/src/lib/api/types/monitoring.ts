@@ -33,8 +33,8 @@ export interface LatestMetrics {
 }
 
 export interface MonitorHostResponse {
-  id: number
-  project_id?: number
+  id: string
+  project_id?: string
   name: string
   hostname: string
   status: string
@@ -113,8 +113,8 @@ export interface ContainerMetricsHistory {
 }
 
 export interface HostAlert {
-  id: number
-  hostId?: number
+  id: string
+  hostId?: string
   scope: 'global' | 'host'
   metric: string
   condition: string
@@ -134,12 +134,12 @@ export interface HostAlertConfig {
 }
 
 export interface SilencePeriod {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   reason: string | null
   startsAt: number
   endsAt: number
-  createdBy: number
+  createdBy: string
   createdAt: number
 }
 
@@ -150,8 +150,8 @@ export interface CreateSilencePeriodRequest {
 }
 
 export interface AlertEpisode {
-  id: number
-  organization_id: number
+  id: string
+  organization_id: string
   source: string
   deduplication_key: string
   episode_seq: number
@@ -163,7 +163,7 @@ export interface AlertEpisode {
   last_notification_at?: string | null
   notification_count: number
   suppressed_at?: string | null
-  suppressed_by_user_id?: number | null
+  suppressed_by_user_id?: string | null
   suppress_reason?: string | null
   created_at: string
   updated_at: string
@@ -196,7 +196,7 @@ export interface CloudSourceCreateRequest {
 }
 
 export interface CloudSourceResponse {
-  id: number
+  id: string
   provider: CloudSourceProvider
   displayName: string
   status: string

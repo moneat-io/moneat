@@ -68,7 +68,12 @@ class OrgManagementRoutesMockTest {
     companion object {
         private const val OWNER_EMAIL = "owner@acme.test"
         private const val NEW_MEMBER_EMAIL = "new@acme.test"
+        private const val INVITATION_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
+        private const val NEW_INVITATION_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
         private var dbInitialized = false
+
+        private fun resourceId(id: Int): String =
+            "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
     }
 
     private val mockMembershipService = mockk<OrgMembershipService>(relaxed = true)
@@ -140,12 +145,12 @@ class OrgManagementRoutesMockTest {
         every { mockMembershipService.requireRole(orgId, userId, OrgRole.MEMBER) } just runs
         every { mockMembershipService.getMembers(orgId) } returns listOf(
             OrgMemberResponse(
-                userId = userId, email = OWNER_EMAIL, name = "owner", role = "owner", joinedAt = null
+                userId = resourceId(userId), email = OWNER_EMAIL, name = "owner", role = "owner", joinedAt = null
             )
         )
         every { mockInvitationService.getPendingInvitations(orgId) } returns listOf(
             InvitationResponse(
-                id = 1,
+                id = INVITATION_RESOURCE_ID,
                 email = "invitee@acme.test",
                 role = "member",
                 status = "pending",
@@ -233,7 +238,7 @@ class OrgManagementRoutesMockTest {
         every { mockMembershipService.requireRole(orgId, userId, OrgRole.ADMIN) } just runs
         every { mockInvitationService.inviteMember(orgId, NEW_MEMBER_EMAIL, "member", userId) } returns
             InvitationResponse(
-                id = 99,
+                id = NEW_INVITATION_RESOURCE_ID,
                 email = NEW_MEMBER_EMAIL,
                 role = "member",
                 status = "pending",

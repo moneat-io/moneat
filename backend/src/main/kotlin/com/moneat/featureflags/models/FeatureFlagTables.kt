@@ -21,9 +21,11 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.models.jsonb
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 object FeatureFlagEnvironments : Table("feature_flag_environments") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val key = varchar("key", 64)
     val name = varchar("name", 255)
@@ -36,6 +38,7 @@ object FeatureFlagEnvironments : Table("feature_flag_environments") {
 
 object FeatureFlags : Table("feature_flags") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val key = varchar("key", 255)
     val name = varchar("name", 255)
@@ -52,6 +55,7 @@ object FeatureFlags : Table("feature_flags") {
 
 object FeatureFlagVariants : Table("feature_flag_variants") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val flagId = integer("flag_id").references(FeatureFlags.id)
     val key = varchar("key", 255)
     val name = varchar("name", 255)
@@ -79,6 +83,7 @@ object FeatureFlagEnvironmentConfigs : Table("feature_flag_environment_configs")
 
 object FeatureFlagSegments : Table("feature_flag_segments") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val key = varchar("key", 255)
     val name = varchar("name", 255)
@@ -92,6 +97,7 @@ object FeatureFlagSegments : Table("feature_flag_segments") {
 
 object FeatureFlagSdkKeys : Table("feature_flag_sdk_keys") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val environmentId = integer("environment_id").references(FeatureFlagEnvironments.id)
     val name = varchar("name", 255)
@@ -108,6 +114,7 @@ object FeatureFlagSdkKeys : Table("feature_flag_sdk_keys") {
 
 object FeatureFlagAuditEvents : Table("feature_flag_audit_events") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val environmentId = integer("environment_id").references(FeatureFlagEnvironments.id).nullable()
     val flagId = integer("flag_id").references(FeatureFlags.id).nullable()

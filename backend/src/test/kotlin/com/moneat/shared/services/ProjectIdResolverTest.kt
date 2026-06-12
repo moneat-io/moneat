@@ -95,6 +95,23 @@ class ProjectIdResolverTest {
     }
 
     @Test
+    fun `resolve with organization scope only returns projects in that organization`() {
+        val resourceId = Uuid.parse("818f4ce4-3f2a-7a67-a32b-0c1848f62b9d")
+        var lookupCalls = 0
+        val resolver = ProjectIdResolver(
+            lookupProjectIdByResourceIdForOrg = { requestedResourceId, organizationId ->
+                lookupCalls++
+                if (requestedResourceId == resourceId && organizationId == 7) 99L else null
+            }
+        )
+
+        assertEquals(99L, resolver.resolve(resourceId.toString(), 7))
+        assertNull(resolver.resolve(resourceId.toString(), 8))
+        assertEquals(99L, resolver.resolve(resourceId.toString(), 7))
+        assertEquals(2, lookupCalls)
+    }
+
+    @Test
     fun `resolve refreshes expired cache entries`() {
         val resourceId = Uuid.parse("318f4ce4-3f2a-7a67-a32b-0c1848f62b9d")
         var now = 0L
@@ -174,6 +191,17 @@ class ProjectIdResolverTest {
     }
 
     @Test
+    fun `resolve with organization scope uses scoped default database lookup`() {
+        resetProjectTables()
+        val resourceId = Uuid.parse("918f4ce4-3f2a-7a67-a32b-0c1848f62b9d")
+        val (organizationId, projectId) = seedProjectWithOrg(resourceId)
+        val otherOrganizationId = seedOrganization("Other Org", "other-org")
+
+        assertEquals(projectId, ProjectIdResolver().resolve(resourceId.toString(), organizationId))
+        assertNull(ProjectIdResolver().resolve(resourceId.toString(), otherOrganizationId))
+    }
+
+    @Test
     fun `resourceIdFor uses the default database lookup when no lookup is injected`() {
         resetProjectTables()
         val resourceId = Uuid.parse("718f4ce4-3f2a-7a67-a32b-0c1848f62b9d")
@@ -193,11 +221,23 @@ class ProjectIdResolverTest {
         TestDatabaseHelper.resetSchema(Organizations, Projects)
     }
 
-    private fun seedProject(resourceId: Uuid): Long = transaction {
-        val organizationId = Organizations.insert {
-            it[name] = "Resolver Org"
-            it[slug] = "resolver-org"
+    private fun seedProject(resourceId: Uuid): Long =
+        seedProjectWithOrg(resourceId).second
+
+    private fun seedProjectWithOrg(resourceId: Uuid): Pair<Int, Long> {
+        val organizationId = seedOrganization("Resolver Org", "resolver-org")
+        val projectId = seedProjectInExistingOrg(resourceId, organizationId)
+        return organizationId to projectId
+    }
+
+    private fun seedOrganization(name: String, slug: String): Int = transaction {
+        Organizations.insert {
+            it[Organizations.name] = name
+            it[Organizations.slug] = slug
         } get Organizations.id
+    }
+
+    private fun seedProjectInExistingOrg(resourceId: Uuid, organizationId: Int): Long = transaction {
         Projects.insert {
             it[organization_id] = organizationId
             it[Projects.resource_id] = resourceId

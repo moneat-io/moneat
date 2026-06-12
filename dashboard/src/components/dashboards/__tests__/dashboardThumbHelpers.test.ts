@@ -41,7 +41,7 @@ function makeTemplate(overrides: Partial<DashboardTemplateSummary> = {}): Dashbo
 function makeDashboard(overrides: Partial<CustomDashboard> = {}): CustomDashboard {
   return {
     id: '00000000-0000-0000-0000-000000000001',
-    org_id: 1,
+    org_id: '11111111-1111-4111-8111-111111111111',
     folder_id: null,
     title: 'Board',
     description: null,
@@ -49,7 +49,7 @@ function makeDashboard(overrides: Partial<CustomDashboard> = {}): CustomDashboar
     is_default: false,
     is_favorited: false,
     variables: [],
-    created_by: 1,
+    created_by: '22222222-2222-4222-8222-222222222222',
     created_at: '2026-06-10T00:00:00.000Z',
     updated_at: '2026-06-10T00:00:00.000Z',
     widgets: [],

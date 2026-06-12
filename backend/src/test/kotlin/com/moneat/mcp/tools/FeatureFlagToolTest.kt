@@ -379,6 +379,7 @@ class FeatureFlagToolTest {
         """
         CREATE TABLE IF NOT EXISTS feature_flag_environments (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
             organization_id INT NOT NULL,
             "key" VARCHAR(64) NOT NULL,
             "name" VARCHAR(255) NOT NULL,
@@ -391,6 +392,7 @@ class FeatureFlagToolTest {
         """
         CREATE TABLE IF NOT EXISTS feature_flags (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
             organization_id INT NOT NULL,
             "key" VARCHAR(255) NOT NULL,
             "name" VARCHAR(255) NOT NULL,
@@ -407,6 +409,7 @@ class FeatureFlagToolTest {
         """
         CREATE TABLE IF NOT EXISTS feature_flag_variants (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
             flag_id INT NOT NULL,
             "key" VARCHAR(255) NOT NULL,
             "name" VARCHAR(255) NOT NULL,
@@ -434,6 +437,7 @@ class FeatureFlagToolTest {
         """
         CREATE TABLE IF NOT EXISTS feature_flag_segments (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
             organization_id INT NOT NULL,
             "key" VARCHAR(255) NOT NULL,
             "name" VARCHAR(255) NOT NULL,
@@ -447,6 +451,7 @@ class FeatureFlagToolTest {
         """
         CREATE TABLE IF NOT EXISTS feature_flag_sdk_keys (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
             organization_id INT NOT NULL,
             environment_id INT NOT NULL,
             "name" VARCHAR(255) NOT NULL,
@@ -463,6 +468,7 @@ class FeatureFlagToolTest {
         """
         CREATE TABLE IF NOT EXISTS feature_flag_audit_events (
             id INT AUTO_INCREMENT PRIMARY KEY,
+            resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
             organization_id INT NOT NULL,
             environment_id INT NULL,
             flag_id INT NULL,

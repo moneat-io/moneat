@@ -48,11 +48,14 @@ import com.moneat.featureflags.models.FeatureFlags
 import com.moneat.featureflags.models.FeatureFlagSdkKeys
 import com.moneat.featureflags.models.FeatureFlagSegments
 import com.moneat.featureflags.models.FeatureFlagSnapshotFlag
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.featureflags.models.FeatureFlagVariants
 import com.moneat.featureflags.models.FLAG_KEY_TYPE_CLIENT
 import com.moneat.featureflags.models.FLAG_KEY_TYPE_SERVER
 import com.moneat.featureflags.models.UpdateFeatureFlagConfigRequest
 import com.moneat.featureflags.models.UpdateFeatureFlagRequest
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.userResourceIds
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.encodeToString
@@ -82,6 +85,7 @@ import java.security.SecureRandom
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 private const val SERVER_KEY_PREFIX = "mffsk_"
 private const val CLIENT_KEY_PREFIX = "mffpk_"
@@ -560,7 +564,7 @@ class FeatureFlagService {
                 .orderBy(FeatureFlagSdkKeys.createdAt to SortOrder.DESC)
                 .map { row ->
                     FeatureFlagSdkKeyResponse(
-                        id = row[FeatureFlagSdkKeys.id],
+                        id = row[FeatureFlagSdkKeys.resourceId].toString(),
                         environmentKey = environments[row[FeatureFlagSdkKeys.environmentId]].orEmpty(),
                         name = row[FeatureFlagSdkKeys.name],
                         keyType = row[FeatureFlagSdkKeys.keyType],
@@ -588,7 +592,7 @@ class FeatureFlagService {
             ensureDefaultEnvironmentsInTransaction(organizationId)
             val environment = findEnvironmentRow(organizationId, request.environmentKey)
                 ?: throw IllegalArgumentException("Environment not found")
-            val id = FeatureFlagSdkKeys.insert {
+            val row = FeatureFlagSdkKeys.insert {
                 it[FeatureFlagSdkKeys.organizationId] = organizationId
                 it[environmentId] = environment[FeatureFlagEnvironments.id]
                 it[name] = request.name.trim()
@@ -598,7 +602,7 @@ class FeatureFlagService {
                 it[createdBy] = actorUserId
                 it[createdAt] = now
                 it[isActive] = true
-            }[FeatureFlagSdkKeys.id]
+            }
             audit(
                 FeatureFlagAuditRecord(
                     organizationId = organizationId,
@@ -612,7 +616,7 @@ class FeatureFlagService {
                 )
             )
             CreateFeatureFlagSdkKeyResponse(
-                id = id,
+                id = row[FeatureFlagSdkKeys.resourceId].toString(),
                 environmentKey = environment[FeatureFlagEnvironments.key],
                 name = request.name.trim(),
                 keyType = keyType,
@@ -623,17 +627,18 @@ class FeatureFlagService {
         }
     }
 
-    fun revokeSdkKey(organizationId: Int, actorUserId: Int, keyId: Int): Boolean {
+    fun revokeSdkKey(organizationId: Int, actorUserId: Int, keyResourceId: Uuid): Boolean {
         val now = Clock.System.now()
         return transaction {
             val row = FeatureFlagSdkKeys
                 .selectAll()
                 .where {
                     (FeatureFlagSdkKeys.organizationId eq organizationId) and
-                        (FeatureFlagSdkKeys.id eq keyId) and
+                        (FeatureFlagSdkKeys.resourceId eq keyResourceId) and
                         (FeatureFlagSdkKeys.isActive eq true)
                 }
                 .firstOrNull() ?: return@transaction false
+            val keyId = row[FeatureFlagSdkKeys.id]
             FeatureFlagSdkKeys.update({ FeatureFlagSdkKeys.id eq keyId }) {
                 it[isActive] = false
                 it[revokedAt] = now
@@ -652,6 +657,11 @@ class FeatureFlagService {
             )
             true
         }
+    }
+
+    fun revokeSdkKey(organizationId: Int, actorUserId: Int, keyResourceId: String): Boolean {
+        val parsedResourceId = parseResourceId(keyResourceId) ?: return false
+        return revokeSdkKey(organizationId, actorUserId, parsedResourceId)
     }
 
     fun validateSdkKey(rawKey: String): FeatureFlagSdkKeyPrincipal? {
@@ -727,12 +737,13 @@ class FeatureFlagService {
                     .where { FeatureFlags.id inList flagIds }
                     .associateBy({ it[FeatureFlags.id] }, { it[FeatureFlags.key] })
             }
+            val actorUserResourceIds = userResourceIds(rows.mapNotNull { it[FeatureFlagAuditEvents.actorUserId] })
             rows.map { row ->
                 FeatureFlagAuditEventResponse(
-                    id = row[FeatureFlagAuditEvents.id],
+                    id = row[FeatureFlagAuditEvents.resourceId].toString(),
                     environmentKey = row[FeatureFlagAuditEvents.environmentId]?.let(environments::get),
                     flagKey = row[FeatureFlagAuditEvents.flagId]?.let(flags::get),
-                    actorUserId = row[FeatureFlagAuditEvents.actorUserId],
+                    actorUserId = row[FeatureFlagAuditEvents.actorUserId]?.let(actorUserResourceIds::get),
                     eventType = row[FeatureFlagAuditEvents.eventType],
                     before = row[FeatureFlagAuditEvents.beforeJson]?.let(::parseElement),
                     after = row[FeatureFlagAuditEvents.afterJson]?.let(::parseElement),
@@ -806,29 +817,33 @@ class FeatureFlagService {
     private fun loadSnapshot(organizationId: Int, environmentKey: String): FeatureFlagEnvironmentConfigSnapshot? {
         return transaction {
             val environment = findEnvironmentRow(organizationId, environmentKey) ?: return@transaction null
-            val flags = FeatureFlags
-                .selectAll()
-                .where {
-                    (FeatureFlags.organizationId eq organizationId) and FeatureFlags.archivedAt.isNull()
-                }
-                .mapNotNull { flagRow ->
-                    val configRow = findConfigRow(flagRow[FeatureFlags.id], environment[FeatureFlagEnvironments.id])
-                        ?: return@mapNotNull null
-                    FeatureFlagSnapshotFlag(
-                        id = flagRow[FeatureFlags.id],
-                        key = flagRow[FeatureFlags.key],
-                        valueType = FeatureFlagValueType.valueOf(flagRow[FeatureFlags.valueType]),
-                        clientVisible = flagRow[FeatureFlags.clientVisible],
-                        variants = loadVariantSnapshots(flagRow[FeatureFlags.id]),
-                        config = com.moneat.featureflags.models.FeatureFlagConfigSnapshot(
-                            enabled = configRow[FeatureFlagEnvironmentConfigs.enabled],
-                            defaultVariantKey = configRow[FeatureFlagEnvironmentConfigs.defaultVariantKey],
-                            offVariantKey = configRow[FeatureFlagEnvironmentConfigs.offVariantKey],
-                            rules = parseElement(configRow[FeatureFlagEnvironmentConfigs.rulesJson]),
-                            version = configRow[FeatureFlagEnvironmentConfigs.version],
+            val organizationResourceId = organizationResourceId(organizationId)
+            val flags =
+                FeatureFlags
+                    .selectAll()
+                    .where {
+                        (FeatureFlags.organizationId eq organizationId) and FeatureFlags.archivedAt.isNull()
+                    }
+                    .mapNotNull { flagRow ->
+                        val configRow =
+                            findConfigRow(flagRow[FeatureFlags.id], environment[FeatureFlagEnvironments.id])
+                                ?: return@mapNotNull null
+                        FeatureFlagSnapshotFlag(
+                            id = flagRow[FeatureFlags.resourceId].toString(),
+                            key = flagRow[FeatureFlags.key],
+                            valueType = FeatureFlagValueType.valueOf(flagRow[FeatureFlags.valueType]),
+                            clientVisible = flagRow[FeatureFlags.clientVisible],
+                            variants = loadVariantSnapshots(flagRow[FeatureFlags.id]),
+                            config = com.moneat.featureflags.models.FeatureFlagConfigSnapshot(
+                                enabled = configRow[FeatureFlagEnvironmentConfigs.enabled],
+                                defaultVariantKey = configRow[FeatureFlagEnvironmentConfigs.defaultVariantKey],
+                                offVariantKey = configRow[FeatureFlagEnvironmentConfigs.offVariantKey],
+                                rules = parseElement(configRow[FeatureFlagEnvironmentConfigs.rulesJson]),
+                                version = configRow[FeatureFlagEnvironmentConfigs.version],
+                            ),
+                            internalId = flagRow[FeatureFlags.id],
                         )
-                    )
-                }
+                    }
             val segments = FeatureFlagSegments
                 .selectAll()
                 .where {
@@ -841,17 +856,19 @@ class FeatureFlagService {
                     )
                 }
             val environmentSnapshot = FeatureFlagEnvironmentSnapshot(
-                id = environment[FeatureFlagEnvironments.id],
+                id = environment[FeatureFlagEnvironments.resourceId].toString(),
                 key = environment[FeatureFlagEnvironments.key],
                 name = environment[FeatureFlagEnvironments.name],
                 version = environment[FeatureFlagEnvironments.version],
+                internalId = environment[FeatureFlagEnvironments.id],
             )
             val provisional = FeatureFlagEnvironmentConfigSnapshot(
-                organizationId = organizationId,
+                organizationResourceId = organizationResourceId,
                 environment = environmentSnapshot,
                 etag = "",
                 flags = flags,
                 segments = segments,
+                organizationId = organizationId,
             )
             provisional.copy(etag = etagForSnapshot(provisional))
         }
@@ -869,7 +886,7 @@ class FeatureFlagService {
             environments.filter { it[FeatureFlagEnvironments.key] == environmentKey }
         }
         return FeatureFlagResponse(
-            id = flagId,
+            id = row[FeatureFlags.resourceId].toString(),
             key = row[FeatureFlags.key],
             name = row[FeatureFlags.name],
             description = row[FeatureFlags.description],
@@ -905,7 +922,7 @@ class FeatureFlagService {
             .orderBy(FeatureFlagVariants.sortOrder to SortOrder.ASC)
             .map { row ->
                 FeatureFlagVariantResponse(
-                    id = row[FeatureFlagVariants.id],
+                    id = row[FeatureFlagVariants.resourceId].toString(),
                     key = row[FeatureFlagVariants.key],
                     name = row[FeatureFlagVariants.name],
                     value = parseElement(row[FeatureFlagVariants.valueJson]),
@@ -1086,6 +1103,9 @@ class FeatureFlagService {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
+
     private fun audit(record: FeatureFlagAuditRecord) {
         FeatureFlagAuditEvents.insert {
             it[FeatureFlagAuditEvents.organizationId] = record.organizationId
@@ -1180,7 +1200,7 @@ class FeatureFlagService {
 
     private fun segmentResponse(row: ResultRow): FeatureFlagSegmentResponse {
         return FeatureFlagSegmentResponse(
-            id = row[FeatureFlagSegments.id],
+            id = row[FeatureFlagSegments.resourceId].toString(),
             key = row[FeatureFlagSegments.key],
             name = row[FeatureFlagSegments.name],
             description = row[FeatureFlagSegments.description],
@@ -1192,7 +1212,7 @@ class FeatureFlagService {
 
     private fun environmentResponse(row: ResultRow): FeatureFlagEnvironmentResponse {
         return FeatureFlagEnvironmentResponse(
-            id = row[FeatureFlagEnvironments.id],
+            id = row[FeatureFlagEnvironments.resourceId].toString(),
             key = row[FeatureFlagEnvironments.key],
             name = row[FeatureFlagEnvironments.name],
             description = row[FeatureFlagEnvironments.description],

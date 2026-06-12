@@ -49,6 +49,7 @@ class UptimeCheckExecutorTest {
         return UptimeMonitorData(
             id = UUID.randomUUID(),
             organizationId = 1,
+            organizationResourceId = "11111111-1111-4111-8111-111111111111",
             name = "test-$type",
             type = type,
             active = true,

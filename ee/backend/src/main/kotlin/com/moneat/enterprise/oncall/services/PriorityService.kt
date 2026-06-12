@@ -5,6 +5,7 @@
 package com.moneat.enterprise.oncall.services
 
 import com.moneat.alerts.models.AlertPriority as AlertPriorityValue
+import com.moneat.enterprise.oncall.organizationResourceId
 import com.moneat.enterprise.oncall.models.AlertPriorities
 import com.moneat.enterprise.oncall.models.AlertPriority
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -70,14 +71,16 @@ class PriorityService {
                 }.firstOrNull()
                 ?.let { row ->
                     AlertPriority(
-                        id = row[AlertPriorities.id].value,
-                        organizationId = row[AlertPriorities.organizationId],
+                        id = row[AlertPriorities.resourceId].toString(),
+                        organizationResourceId = organizationResourceId(organizationId),
                         priority = normalizedPriority(row[AlertPriorities.priority]),
                         isPageable = row[AlertPriorities.isPageable],
                         label = row[AlertPriorities.label],
                         description = row[AlertPriorities.description],
                         createdAt = row[AlertPriorities.createdAt].toString(),
                         updatedAt = row[AlertPriorities.updatedAt].toString(),
+                        internalId = row[AlertPriorities.id].value,
+                        organizationId = row[AlertPriorities.organizationId],
                     )
                 }
         }
@@ -102,20 +105,23 @@ class PriorityService {
     fun getAllPriorities(organizationId: Int): List<AlertPriority> =
         transaction {
             seedDefaultsIfEmpty(organizationId)
+            val orgResourceId = organizationResourceId(organizationId)
             AlertPriorities
                 .selectAll()
                 .where { AlertPriorities.organizationId eq organizationId }
                 .orderBy(AlertPriorities.priority to SortOrder.ASC)
                 .map { row ->
                     AlertPriority(
-                        id = row[AlertPriorities.id].value,
-                        organizationId = row[AlertPriorities.organizationId],
+                        id = row[AlertPriorities.resourceId].toString(),
+                        organizationResourceId = orgResourceId,
                         priority = normalizedPriority(row[AlertPriorities.priority]),
                         isPageable = row[AlertPriorities.isPageable],
                         label = row[AlertPriorities.label],
                         description = row[AlertPriorities.description],
                         createdAt = row[AlertPriorities.createdAt].toString(),
                         updatedAt = row[AlertPriorities.updatedAt].toString(),
+                        internalId = row[AlertPriorities.id].value,
+                        organizationId = row[AlertPriorities.organizationId],
                     )
                 }
         }

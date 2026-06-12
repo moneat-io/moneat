@@ -40,6 +40,9 @@ interface WorkflowConnectionVault {
     /** Fetch a single connection (no secret material) or null if not found in the org. */
     suspend fun getConnection(organizationId: Int, connectionId: Int): WorkflowConnectionSummary?
 
+    /** Resolve a public connection resource ID to its internal ID within the organization. */
+    suspend fun resolveConnectionId(organizationId: Int, connectionResourceId: String): Int?
+
     /**
      * Create a connection. The secret is entered once, immediately encrypted with
      * envelope encryption and never returned. Returns the redacted summary.
@@ -68,6 +71,9 @@ interface WorkflowConnectionVault {
 
     /** List the org's connection groups. */
     suspend fun listGroups(organizationId: Int): List<WorkflowConnectionGroupSummary>
+
+    /** Resolve a public connection group resource ID to its internal ID within the organization. */
+    suspend fun resolveGroupId(organizationId: Int, groupResourceId: String): Int?
 
     /** Create a connection group whose members are resolved by identifier tags at run time. */
     suspend fun createGroup(
@@ -101,6 +107,7 @@ interface WorkflowConnectionVault {
 /** Redacted view of a connection — safe to serialize to API responses. */
 data class WorkflowConnectionSummary(
     val id: Int,
+    val resourceId: String,
     val organizationId: Int,
     val type: String,
     val name: String,
@@ -113,6 +120,7 @@ data class WorkflowConnectionSummary(
 /** Redacted view of a connection group — safe to serialize to API responses. */
 data class WorkflowConnectionGroupSummary(
     val id: Int,
+    val resourceId: String,
     val organizationId: Int,
     val name: String,
     val connectionType: String,
@@ -134,6 +142,7 @@ sealed interface WorkflowConnectionReference {
  */
 data class WorkflowResolvedConnection(
     val connectionId: Int,
+    val resourceId: String,
     val type: String,
     val secret: String
 )

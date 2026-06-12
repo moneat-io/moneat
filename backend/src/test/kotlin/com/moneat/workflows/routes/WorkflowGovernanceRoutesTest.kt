@@ -66,12 +66,17 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class WorkflowGovernanceRoutesTest {
     companion object {
         private var db: Database? = null
         private const val ORGANIZATION_NAME = "Workflow Governance Routes"
         private const val WORKFLOW_ID = 55
+        private const val MISSING_WORKFLOW_ID = 56
+        private const val WORKFLOW_RESOURCE_ID = "11111111-1111-1111-1111-111111111155"
+        private const val MISSING_WORKFLOW_RESOURCE_ID = "11111111-1111-1111-1111-111111111156"
+        private const val AUDIT_EVENT_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
     }
 
     private val json = Json { encodeDefaults = true }
@@ -99,6 +104,7 @@ class WorkflowGovernanceRoutesTest {
 
         stopTestKoin()
         workflowService = mockk()
+        stubWorkflowResourceResolution()
         governanceService = mockk()
         startKoin {
             modules(
@@ -211,8 +217,8 @@ class WorkflowGovernanceRoutesTest {
 
             val orgAudit = client.get("/v1/workflows/audit") { withAuth(token()) }
             val clampedAudit = client.get("/v1/workflows/audit?limit=100000") { withAuth(token()) }
-            val invalidWorkflow = client.get("/v1/workflows/not-a-number/audit") { withAuth(token()) }
-            val workflowAudit = client.get("/v1/workflows/$WORKFLOW_ID/audit") { withAuth(token()) }
+            val invalidWorkflow = client.get("/v1/workflows/not-a-uuid/audit") { withAuth(token()) }
+            val workflowAudit = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/audit") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.OK, orgAudit.status)
             assertTrue(orgAudit.bodyAsText().contains("run_started"))
@@ -228,11 +234,11 @@ class WorkflowGovernanceRoutesTest {
         testApplication {
             setupApp()
             every { governanceService.export(organizationId, WORKFLOW_ID, userId) } returns exportResponse()
-            every { governanceService.export(organizationId, WORKFLOW_ID + 1, userId) } returns null
+            every { governanceService.export(organizationId, MISSING_WORKFLOW_ID, userId) } returns null
 
             val invalidId = client.get("/v1/workflows/nope/export") { withAuth(token()) }
-            val missing = client.get("/v1/workflows/${WORKFLOW_ID + 1}/export") { withAuth(token()) }
-            val exported = client.get("/v1/workflows/$WORKFLOW_ID/export") { withAuth(token()) }
+            val missing = client.get("/v1/workflows/$MISSING_WORKFLOW_RESOURCE_ID/export") { withAuth(token()) }
+            val exported = client.get("/v1/workflows/$WORKFLOW_RESOURCE_ID/export") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.BadRequest, invalidId.status)
             assertEquals(HttpStatusCode.NotFound, missing.status)
@@ -288,6 +294,14 @@ class WorkflowGovernanceRoutesTest {
     private fun token(): String =
         RouteTestSupport.createToken(userId = userId, orgId = organizationId)
 
+    private fun stubWorkflowResourceResolution() {
+        every { workflowService.resolveWorkflowId(organizationId, Uuid.parse(WORKFLOW_RESOURCE_ID)) } returns
+            WORKFLOW_ID
+        every {
+            workflowService.resolveWorkflowId(organizationId, Uuid.parse(MISSING_WORKFLOW_RESOURCE_ID))
+        } returns MISSING_WORKFLOW_ID
+    }
+
     private fun seedUser(email: String): Int =
         transaction {
             Users.insert {
@@ -322,7 +336,7 @@ class WorkflowGovernanceRoutesTest {
 
     private fun workflowResponse(name: String = "Governance workflow"): WorkflowResponse =
         WorkflowResponse(
-            id = WORKFLOW_ID,
+            id = WORKFLOW_RESOURCE_ID,
             name = name,
             triggerName = "alert.triggered",
             enabled = false,
@@ -351,8 +365,8 @@ class WorkflowGovernanceRoutesTest {
 
     private fun auditResponse(): WorkflowAuditEventResponse =
         WorkflowAuditEventResponse(
-            id = 1,
-            workflowId = WORKFLOW_ID,
+            id = AUDIT_EVENT_RESOURCE_ID,
+            workflowId = WORKFLOW_RESOURCE_ID,
             action = "run_started",
             createdAt = "2026-01-01T00:00:00Z"
         )

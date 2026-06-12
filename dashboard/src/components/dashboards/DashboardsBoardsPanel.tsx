@@ -1017,13 +1017,18 @@ function folderColor(folder: DashboardFolder, index: number): string {
 // created_by when old rows or clients do not carry one yet.
 function ownerAvatar(dashboard: CustomDashboard): Owner {
   const named = dashboard.owner_name?.trim()
-  const color = SWATCHES[dashboard.created_by % SWATCHES.length]
+  const ownerSeed = stableStringSeed(dashboard.created_by)
+  const color = SWATCHES[ownerSeed % SWATCHES.length]
   if (named) {
     return {initials: initialsFromName(named), color, label: named}
   }
   const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  const initials = `${letters[dashboard.created_by % 26]}${letters[(dashboard.created_by * 7 + 3) % 26]}`
-  return {initials, color, label: `User #${dashboard.created_by}`}
+  const initials = `${letters[ownerSeed % 26]}${letters[(ownerSeed * 7 + 3) % 26]}`
+  return {initials, color, label: `User ${dashboard.created_by.slice(0, 8)}`}
+}
+
+function stableStringSeed(value: string): number {
+  return Array.from(value).reduce((seed, character) => seed + character.charCodeAt(0), 0)
 }
 
 function initialsFromName(name: string): string {

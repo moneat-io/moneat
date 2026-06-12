@@ -42,7 +42,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -285,28 +284,34 @@ class McpAuthorizationTest {
             .toString()
     }
 
-    private fun seedHost(organizationId: Int): Int =
+    private fun seedHost(organizationId: Int): String =
         transaction {
             seedOrganization(organizationId)
+            val resourceId = kotlin.uuid.Uuid.random()
             Hosts.insert {
+                it[Hosts.resource_id] = resourceId
                 it[Hosts.organization_id] = organizationId
                 it[hostname] = "host-$organizationId"
                 it[first_seen_at] = Clock.System.now()
                 it[last_seen_at] = Clock.System.now()
-            }[Hosts.id]
+            }
+            resourceId.toString()
         }
 
-    private fun seedDashboard(organizationId: Int): Long =
+    private fun seedDashboard(organizationId: Int): String =
         transaction {
             seedOrganization(organizationId)
+            val resourceId = kotlin.uuid.Uuid.random()
             Dashboards.insert {
+                it[Dashboards.resourceId] = resourceId
                 it[orgId] = organizationId.toLong()
                 it[title] = "Dashboard $organizationId"
                 it[description] = null
                 it[createdBy] = 1
                 it[createdAt] = Clock.System.now()
                 it[updatedAt] = Clock.System.now()
-            }[Dashboards.id]
+            }
+            resourceId.toString()
         }
 
     private fun seedUptimeMonitor(organizationId: Int): UUID =
@@ -351,14 +356,16 @@ class McpAuthorizationTest {
             pageId
         }
 
-    private fun seedDataSource(organizationId: Int): Long =
+    private fun seedDataSource(organizationId: Int): String =
         transaction {
             seedOrganization(organizationId)
             val dataSourceId = organizationId.toLong()
+            val resourceId = UUID.randomUUID().toString()
             exec(
                 """
                 INSERT INTO custom_data_sources (
                     id,
+                    resource_id,
                     org_id,
                     name,
                     source_type,
@@ -370,6 +377,7 @@ class McpAuthorizationTest {
                     updated_at
                 ) VALUES (
                     $dataSourceId,
+                    '$resourceId',
                     $organizationId,
                     'Warehouse $organizationId',
                     'postgresql',
@@ -382,16 +390,18 @@ class McpAuthorizationTest {
                 )
                 """.trimIndent()
             )
-            dataSourceId
+            resourceId
         }
 
     // ──── Security object helpers ────
 
-    private fun seedSecuritySignal(organizationId: Int): Int =
+    private fun seedSecuritySignal(organizationId: Int): String =
         transaction {
             seedOrganization(organizationId)
             val now = Clock.System.now()
-            SecuritySignals.insertAndGetId {
+            val resourceId = kotlin.uuid.Uuid.random()
+            SecuritySignals.insert {
+                it[SecuritySignals.resourceId] = resourceId
                 it[SecuritySignals.organizationId] = organizationId
                 it[SecuritySignals.signalSource] = "detection"
                 it[SecuritySignals.ruleId] = "rule-$organizationId"
@@ -406,14 +416,17 @@ class McpAuthorizationTest {
                 it[SecuritySignals.lastSeen] = now
                 it[SecuritySignals.createdAt] = now
                 it[SecuritySignals.updatedAt] = now
-            }.value
+            }
+            resourceId.toString()
         }
 
-    private fun seedDetectionRule(organizationId: Int): Int =
+    private fun seedDetectionRule(organizationId: Int): String =
         transaction {
             seedOrganization(organizationId)
             val now = Clock.System.now()
-            DetectionRules.insertAndGetId {
+            val resourceId = kotlin.uuid.Uuid.random()
+            DetectionRules.insert {
+                it[DetectionRules.resourceId] = resourceId
                 it[DetectionRules.organizationId] = organizationId
                 it[DetectionRules.name] = "Rule $organizationId"
                 it[DetectionRules.description] = ""
@@ -431,7 +444,8 @@ class McpAuthorizationTest {
                 it[DetectionRules.tags] = "[]"
                 it[DetectionRules.createdAt] = now
                 it[DetectionRules.updatedAt] = now
-            }.value
+            }
+            resourceId.toString()
         }
 
     private fun seedOrganization(id: Int) {
@@ -526,6 +540,7 @@ class McpAuthorizationTest {
                 """
                 CREATE TABLE security_signals (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     organization_id INT NOT NULL,
                     source VARCHAR(32) NOT NULL,
                     rule_id VARCHAR(255) NOT NULL,
@@ -549,6 +564,7 @@ class McpAuthorizationTest {
                 """
                 CREATE TABLE detection_rules (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                     organization_id INT NOT NULL,
                     name VARCHAR(255) NOT NULL,
                     description TEXT NOT NULL DEFAULT '',

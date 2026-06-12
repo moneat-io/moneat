@@ -41,7 +41,7 @@ data class CloudSourceCreateRequest(
 
 @Serializable
 data class CloudSourceResponse(
-    val id: Int,
+    val id: String,
     val provider: String,
     val displayName: String,
     val status: String,

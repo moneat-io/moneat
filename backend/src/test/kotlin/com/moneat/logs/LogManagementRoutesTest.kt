@@ -40,9 +40,16 @@ import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpServiceRoutingService
+import com.moneat.shared.models.LogMetricRules
+import com.moneat.shared.models.LogMonitors
+import com.moneat.shared.models.LogPipelines
+import com.moneat.shared.models.LogSavedViews
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
+import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.post
@@ -61,10 +68,15 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val TEST_ORG_ID = 7
 private const val TEST_USER_ID = 42
@@ -99,6 +111,19 @@ class LogManagementRoutesTest {
         every { membershipService.requireRole(TEST_ORG_ID, TEST_USER_ID, OrgRole.ADMIN) } just Runs
         every { customDashboardService.resolveDashboardId(DASHBOARD_RESOURCE_ID, TEST_ORG_ID.toLong()) } returns 12
         every { customDashboardService.resolveWidgetId(WIDGET_RESOURCE_ID, 12) } returns 34
+        Database.connect(
+            "jdbc:h2:mem:log_management_routes;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
+            driver = "org.h2.Driver"
+        )
+        TestDatabaseHelper.resetSchema(
+            Users,
+            Organizations,
+            LogPipelines,
+            LogSavedViews,
+            LogMetricRules,
+            LogMonitors
+        )
+        seedResolverRows()
     }
 
     // ──── Index management ────
@@ -177,12 +202,12 @@ class LogManagementRoutesTest {
 
             val list = client.get("/v1/logs/pipelines") { withAuth(token()) }
             val create = client.postJson("/v1/logs/pipelines", """{"name":"Cleanup","steps":[]}""")
-            val update = client.putJson("/v1/logs/pipelines/11", """{"name":"Cleanup v2"}""")
+            val update = client.putJson("/v1/logs/pipelines/${pipeline.id}", """{"name":"Cleanup v2"}""")
             val preview = client.postJson(
                 "/v1/logs/pipelines/preview",
                 """{"steps":[],"sample_logs":[{"message":"token=secret"}]}"""
             )
-            val deleted = client.delete("/v1/logs/pipelines/11") { withAuth(token()) }
+            val deleted = client.delete("/v1/logs/pipelines/${pipeline.id}") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.OK, list.status)
             assertTrue(list.bodyAsText().contains("Cleanup"))
@@ -203,8 +228,9 @@ class LogManagementRoutesTest {
             application { installLogManagementRoutes() }
 
             val invalidId = client.putJson("/v1/logs/pipelines/bad", """{"name":"x"}""")
-            val notFound = client.putJson("/v1/logs/pipelines/99", """{"name":"x"}""")
-            val deleteMissing = client.delete("/v1/logs/pipelines/99") { withAuth(token()) }
+            val missingId = resourceId(99)
+            val notFound = client.putJson("/v1/logs/pipelines/$missingId", """{"name":"x"}""")
+            val deleteMissing = client.delete("/v1/logs/pipelines/$missingId") { withAuth(token()) }
             val badRequest = client.postJson("/v1/logs/pipelines", """{"name":""}""")
 
             assertEquals(HttpStatusCode.BadRequest, invalidId.status)
@@ -232,8 +258,8 @@ class LogManagementRoutesTest {
                 "/v1/logs/saved-views",
                 """{"name":"Errors","state":{"query":"level:error"},"is_shared":true}"""
             )
-            val update = client.putJson("/v1/logs/saved-views/21", """{"name":"Errors v2"}""")
-            val deleted = client.delete("/v1/logs/saved-views/21") { withAuth(token()) }
+            val update = client.putJson("/v1/logs/saved-views/${view.id}", """{"name":"Errors v2"}""")
+            val deleted = client.delete("/v1/logs/saved-views/${view.id}") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.OK, list.status)
             assertEquals(HttpStatusCode.Created, create.status)
@@ -251,8 +277,9 @@ class LogManagementRoutesTest {
             application { installLogManagementRoutes() }
 
             val invalidId = client.putJson("/v1/logs/saved-views/nope", """{"name":"x"}""")
-            val notFound = client.putJson("/v1/logs/saved-views/404", """{"name":"x"}""")
-            val deleteMissing = client.delete("/v1/logs/saved-views/404") { withAuth(token()) }
+            val missingId = resourceId(404)
+            val notFound = client.putJson("/v1/logs/saved-views/$missingId", """{"name":"x"}""")
+            val deleteMissing = client.delete("/v1/logs/saved-views/$missingId") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.BadRequest, invalidId.status)
             assertEquals(HttpStatusCode.NotFound, notFound.status)
@@ -288,10 +315,10 @@ class LogManagementRoutesTest {
 
             val list = client.get("/v1/logs/metrics/rules") { withAuth(token()) }
             val create = client.postJson("/v1/logs/metrics/rules", """{"name":"Errors","group_by":"service"}""")
-            val update = client.putJson("/v1/logs/metrics/rules/31", """{"name":"Errors v2"}""")
+            val update = client.putJson("/v1/logs/metrics/rules/${rule.id}", """{"name":"Errors v2"}""")
             val preview = client.postJson("/v1/logs/metrics/preview", """{"name":"Preview","interval":"2h"}""")
-            val rollup = client.post("/v1/logs/metrics/rules/31/rollup") { withAuth(token()) }
-            val deleted = client.delete("/v1/logs/metrics/rules/31") { withAuth(token()) }
+            val rollup = client.post("/v1/logs/metrics/rules/${rule.id}/rollup") { withAuth(token()) }
+            val deleted = client.delete("/v1/logs/metrics/rules/${rule.id}") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.OK, list.status)
             assertEquals(HttpStatusCode.Created, create.status)
@@ -315,9 +342,10 @@ class LogManagementRoutesTest {
 
             val badCreate = client.postJson("/v1/logs/metrics/rules", """{"name":""}""")
             val invalidId = client.putJson("/v1/logs/metrics/rules/bad", """{"name":"x"}""")
-            val updateMissing = client.putJson("/v1/logs/metrics/rules/404", """{"name":"x"}""")
-            val rollupMissing = client.post("/v1/logs/metrics/rules/404/rollup") { withAuth(token()) }
-            val deleteMissing = client.delete("/v1/logs/metrics/rules/404") { withAuth(token()) }
+            val missingId = resourceId(404)
+            val updateMissing = client.putJson("/v1/logs/metrics/rules/$missingId", """{"name":"x"}""")
+            val rollupMissing = client.post("/v1/logs/metrics/rules/$missingId/rollup") { withAuth(token()) }
+            val deleteMissing = client.delete("/v1/logs/metrics/rules/$missingId") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.BadRequest, badCreate.status)
             assertEquals(HttpStatusCode.BadRequest, invalidId.status)
@@ -392,8 +420,8 @@ class LogManagementRoutesTest {
                 "/v1/logs/monitors",
                 """{"name":"Error burst","threshold":10.0,"group_by":"service"}"""
             )
-            val update = client.putJson("/v1/logs/monitors/41", """{"is_active":false}""")
-            val deleted = client.delete("/v1/logs/monitors/41") { withAuth(token()) }
+            val update = client.putJson("/v1/logs/monitors/${monitor.id}", """{"is_active":false}""")
+            val deleted = client.delete("/v1/logs/monitors/${monitor.id}") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.OK, list.status)
             assertTrue(list.bodyAsText().contains("Error burst"))
@@ -416,9 +444,10 @@ class LogManagementRoutesTest {
 
             val badCreate = client.postJson("/v1/logs/monitors", """{"name":"","threshold":10.0}""")
             val invalidId = client.putJson("/v1/logs/monitors/bad", """{"name":"x"}""")
-            val updateMissing = client.putJson("/v1/logs/monitors/404", """{"name":"x"}""")
-            val badUpdate = client.putJson("/v1/logs/monitors/42", """{"condition":"!="}""")
-            val deleteMissing = client.delete("/v1/logs/monitors/404") { withAuth(token()) }
+            val missingId = resourceId(404)
+            val updateMissing = client.putJson("/v1/logs/monitors/$missingId", """{"name":"x"}""")
+            val badUpdate = client.putJson("/v1/logs/monitors/${resourceId(42)}", """{"condition":"!="}""")
+            val deleteMissing = client.delete("/v1/logs/monitors/$missingId") { withAuth(token()) }
 
             assertEquals(HttpStatusCode.BadRequest, badCreate.status)
             assertEquals(HttpStatusCode.BadRequest, invalidId.status)
@@ -483,7 +512,7 @@ class LogManagementRoutesTest {
 
     private fun pipelineResponse(id: Int, name: String): LogPipelineResponse =
         LogPipelineResponse(
-            id = id,
+            id = resourceId(id),
             name = name,
             description = "",
             steps = listOf(LogPipelineStep(type = "redact", pattern = "secret")),
@@ -495,7 +524,7 @@ class LogManagementRoutesTest {
 
     private fun savedViewResponse(id: Int, name: String): LogSavedViewResponse =
         LogSavedViewResponse(
-            id = id,
+            id = resourceId(id),
             name = name,
             state = LogSavedViewState(query = "level:error", levels = listOf("error")),
             isShared = true,
@@ -505,7 +534,7 @@ class LogManagementRoutesTest {
 
     private fun metricRuleResponse(id: Int, name: String): LogMetricRuleResponse =
         LogMetricRuleResponse(
-            id = id,
+            id = resourceId(id),
             name = name,
             query = "level:error",
             levels = listOf("error"),
@@ -518,7 +547,7 @@ class LogManagementRoutesTest {
 
     private fun logMonitorResponse(id: Int, name: String): LogMonitorResponse =
         LogMonitorResponse(
-            id = id,
+            id = resourceId(id),
             name = name,
             query = "level:error",
             levels = listOf("error"),
@@ -543,4 +572,70 @@ class LogManagementRoutesTest {
             createdAt = TEST_CREATED_AT,
             updatedAt = TEST_UPDATED_AT
         )
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
+
+    private fun seedResolverRows() {
+        val now = Clock.System.now()
+        transaction {
+            Users.insert {
+                it[Users.id] = TEST_USER_ID
+                it[Users.email] = "logs@example.com"
+                it[Users.password_hash] = "hash"
+            }
+            Organizations.insert {
+                it[Organizations.id] = TEST_ORG_ID
+                it[Organizations.name] = "Logs Org"
+                it[Organizations.slug] = "logs-org"
+            }
+            LogPipelines.insert {
+                it[LogPipelines.id] = 11
+                it[LogPipelines.resource_id] = Uuid.parse(resourceId(11))
+                it[LogPipelines.organizationId] = TEST_ORG_ID
+                it[LogPipelines.name] = "Cleanup"
+                it[LogPipelines.createdBy] = TEST_USER_ID
+                it[LogPipelines.createdAt] = now
+                it[LogPipelines.updatedAt] = now
+            }
+            LogSavedViews.insert {
+                it[LogSavedViews.id] = 21
+                it[LogSavedViews.resource_id] = Uuid.parse(resourceId(21))
+                it[LogSavedViews.organizationId] = TEST_ORG_ID
+                it[LogSavedViews.name] = "Errors"
+                it[LogSavedViews.viewStateJson] = """{"query":"level:error"}"""
+                it[LogSavedViews.createdBy] = TEST_USER_ID
+                it[LogSavedViews.createdAt] = now
+                it[LogSavedViews.updatedAt] = now
+            }
+            LogMetricRules.insert {
+                it[LogMetricRules.id] = 31
+                it[LogMetricRules.resource_id] = Uuid.parse(resourceId(31))
+                it[LogMetricRules.organizationId] = TEST_ORG_ID
+                it[LogMetricRules.name] = "Errors"
+                it[LogMetricRules.createdBy] = TEST_USER_ID
+                it[LogMetricRules.createdAt] = now
+                it[LogMetricRules.updatedAt] = now
+            }
+            seedLogMonitor(41, "Error burst", now)
+            seedLogMonitor(42, "Bad condition", now)
+        }
+    }
+
+    private fun seedLogMonitor(
+        id: Int,
+        name: String,
+        now: kotlin.time.Instant
+    ) {
+        LogMonitors.insert {
+            it[LogMonitors.id] = id
+            it[LogMonitors.resource_id] = Uuid.parse(resourceId(id))
+            it[LogMonitors.organizationId] = TEST_ORG_ID
+            it[LogMonitors.name] = name
+            it[LogMonitors.threshold] = 10.0
+            it[LogMonitors.createdBy] = TEST_USER_ID
+            it[LogMonitors.createdAt] = now
+            it[LogMonitors.updatedAt] = now
+        }
+    }
 }

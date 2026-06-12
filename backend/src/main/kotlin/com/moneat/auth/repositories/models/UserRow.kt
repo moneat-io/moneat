@@ -21,6 +21,7 @@ package com.moneat.auth.repositories.models
  */
 data class UserRow(
     val id: Int,
+    val resourceId: String,
     val email: String,
     val passwordHash: String,
     val name: String?,

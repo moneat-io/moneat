@@ -45,7 +45,7 @@ export interface WorkflowPaletteDragPayload {
 }
 
 export interface WorkflowDraft {
-  id?: number
+  id?: string
   name: string
   triggerName: string
   enabled: boolean

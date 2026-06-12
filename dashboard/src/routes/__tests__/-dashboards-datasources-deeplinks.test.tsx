@@ -48,7 +48,7 @@ const DATA_SOURCE_ID = '00000000-0000-0000-0000-000000000001'
 const DATA_SOURCES: readonly CustomDataSourceResponse[] = [
   {
     id: DATA_SOURCE_ID,
-    org_id: 1,
+    org_id: '11111111-1111-4111-8111-111111111111',
     name: 'Prometheus prod',
     description: 'Primary metrics',
     source_type: 'prometheus',
@@ -57,7 +57,7 @@ const DATA_SOURCES: readonly CustomDataSourceResponse[] = [
     database_name: undefined,
     extra_config: {},
     enabled: true,
-    created_by: 1,
+    created_by: '22222222-2222-4222-8222-222222222222',
     created_at: '2026-06-01T12:00:00Z',
     updated_at: '2026-06-02T12:00:00Z',
     has_credentials: false,

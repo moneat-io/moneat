@@ -26,6 +26,8 @@ import com.moneat.monitor.models.CloudSourceSetupPreview
 import com.moneat.monitor.models.CloudSourceSyncResource
 import com.moneat.monitor.models.CloudSourceSyncResult
 import com.moneat.shared.models.CloudSources
+import com.moneat.shared.services.ScopedIntColumnResourceTable
+import com.moneat.shared.services.resolveScopedIntColumnResourceId
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
 import io.ktor.client.statement.bodyAsText
@@ -47,6 +49,7 @@ import java.security.MessageDigest
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.text.Charsets.UTF_8
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val CLOUD_PROVIDER_AWS = "aws"
 private const val CLOUD_PROVIDER_GCP = "gcp"
@@ -300,7 +303,9 @@ class CloudSourceService(
         )
     }
 
-    suspend fun syncSource(organizationId: Int, sourceId: Int): CloudSourceResponse {
+    suspend fun syncSource(organizationId: Int, sourceResourceId: Uuid): CloudSourceResponse {
+        val sourceId = resolveSourceId(organizationId, sourceResourceId)
+            ?: throw InvalidCloudSourceException("Cloud source not found")
         val existing = transaction {
             CloudSources
                 .selectAll()
@@ -326,14 +331,8 @@ class CloudSourceService(
         )
     }
 
-    suspend fun deleteSource(organizationId: Int, sourceId: Int): Boolean {
-        val exists = transaction {
-            CloudSources
-                .selectAll()
-                .where { (CloudSources.id eq sourceId) and (CloudSources.organization_id eq organizationId) }
-                .firstOrNull() != null
-        }
-        if (!exists) return false
+    suspend fun deleteSource(organizationId: Int, sourceResourceId: Uuid): Boolean {
+        val sourceId = resolveSourceId(organizationId, sourceResourceId) ?: return false
 
         resourceWriter.deleteResources(organizationId, sourceId)
         return transaction {
@@ -401,6 +400,13 @@ class CloudSourceService(
             }
         }
     }
+
+    private fun resolveSourceId(organizationId: Int, sourceResourceId: Uuid): Int? =
+        resolveScopedIntColumnResourceId(
+            resourceTable = CLOUD_SOURCE_RESOURCE_TABLE,
+            scopeId = organizationId,
+            resourceId = sourceResourceId,
+        )
 
     private fun validateRequest(request: CloudSourceCreateRequest): CloudSourceCreateRequest {
         val provider = request.provider.normalizedProvider()
@@ -538,7 +544,7 @@ class CloudSourceService(
 
 private fun rowToResponse(row: ResultRow): CloudSourceResponse =
     CloudSourceResponse(
-        id = row[CloudSources.id],
+        id = row[CloudSources.resource_id].toString(),
         provider = row[CloudSources.provider],
         displayName = row[CloudSources.display_name],
         status = row[CloudSources.status],
@@ -560,6 +566,13 @@ private fun rowToResponse(row: ResultRow): CloudSourceResponse =
         createdAt = row[CloudSources.created_at].toString(),
         updatedAt = row[CloudSources.updated_at].toString()
     )
+
+private val CLOUD_SOURCE_RESOURCE_TABLE = ScopedIntColumnResourceTable(
+    table = CloudSources,
+    idColumn = CloudSources.id,
+    resourceIdColumn = CloudSources.resource_id,
+    scopeColumn = CloudSources.organization_id,
+)
 
 private fun externalIdForOrganization(organizationId: Int): String {
     val digest = MessageDigest

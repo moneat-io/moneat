@@ -109,7 +109,7 @@ class GetDataSourceSchemaTool : McpTool {
     override val description = "Get data source connection details"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("datasource_id" to schemaNumber("Data source ID"))
+            mapOf("datasource_id" to schemaResourceId("Data source resource ID"))
         ),
         required = listOf("datasource_id")
     )
@@ -118,12 +118,11 @@ class GetDataSourceSchemaTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val id = args["datasource_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val id = args.stringContent("datasource_id")
             ?: return errorResult("datasource_id is required")
         val source = dataSourceService.getDataSource(
             id, context.organizationId.toLong()
-        ) ?: return errorResult("Data source not found")
+        ) ?: return errorResult("Data source not found: $id")
         return jsonResult(source)
     }
 }
@@ -136,7 +135,7 @@ class ExecuteDataSourceQueryTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "datasource_id" to schemaNumber("Data source ID"),
+                "datasource_id" to schemaResourceId("Data source resource ID"),
                 "query" to schemaString("Query string (SQL or PromQL)"),
                 "limit" to schemaNumber(
                     "Maximum rows to return (default 100)"
@@ -150,16 +149,17 @@ class ExecuteDataSourceQueryTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val id = args["datasource_id"]?.jsonPrimitive
-            ?.content?.toLongOrNull()
+        val resourceId = args.stringContent("datasource_id")
             ?: return errorResult("datasource_id is required")
         val query = args["query"]?.jsonPrimitive?.content
             ?: return errorResult("query is required")
         val limit = args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_QUERY_LIMIT
         val orgId = context.organizationId.toLong()
 
+        val id = dataSourceService.resolveDataSourceId(resourceId, orgId)
+            ?: return errorResult("Data source not found: $resourceId")
         val source = dataSourceService.getDataSource(id, orgId)
-            ?: return errorResult("Data source not found")
+            ?: return errorResult("Data source not found: $resourceId")
         val creds = dataSourceService.getDecryptedCredentials(id, orgId)
             ?: return errorResult("Failed to decrypt credentials")
         val sourceType = CustomDataSourceType.fromString(source.sourceType)

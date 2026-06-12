@@ -35,6 +35,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 class SummaryServiceTest {
     private val monitorService = mockk<MonitorService>()
@@ -61,9 +62,12 @@ class SummaryServiceTest {
         )
 
         every { monitorService.listHosts(ORG_ID) } returns hosts
-        every { monitorService.listAlerts(1, ORG_ID) } returns listOf(alert(systemId = "1", lastTriggeredAt = 300L))
-        every { monitorService.listAlerts(2, ORG_ID) } returns listOf(alert(systemId = "2", lastTriggeredAt = null))
-        every { monitorService.listAlerts(3, ORG_ID) } returns listOf(alert(systemId = "3", lastTriggeredAt = 200L))
+        every { monitorService.listAlerts(1, ORG_ID) } returns
+            listOf(alert(systemId = hostResourceId(1).toString(), lastTriggeredAt = 300L))
+        every { monitorService.listAlerts(2, ORG_ID) } returns
+            listOf(alert(systemId = hostResourceId(2).toString(), lastTriggeredAt = null))
+        every { monitorService.listAlerts(3, ORG_ID) } returns
+            listOf(alert(systemId = hostResourceId(3).toString(), lastTriggeredAt = 200L))
         every { uptimeService.listMonitors(ORG_ID) } returns monitors
         coEvery { monitorService.getLatestMetrics(1) } returns latestMetrics(cpuPercent = 12.5f, memPercent = 30.0f)
         coEvery { monitorService.getLatestMetrics(2) } returns null
@@ -92,7 +96,10 @@ class SummaryServiceTest {
         assertEquals(1, infrastructure.hostSummary.offline)
         assertEquals(1, infrastructure.hostSummary.warning)
         assertEquals(listOf("Homepage", "API"), infrastructure.uptimeMonitors.map { it.name })
-        assertEquals(listOf("1", "3"), infrastructure.topAlerts.map { it.systemId })
+        assertEquals(
+            listOf(hostResourceId(1).toString(), hostResourceId(3).toString()),
+            infrastructure.topAlerts.map { it.systemId }
+        )
         assertEquals(7, infrastructure.topErrorHosts.single().errorCount)
 
         val overnight = service.getOvernightSummary(ORG_ID, "Not/AZone")
@@ -109,8 +116,8 @@ class SummaryServiceTest {
         assertEquals(2L, weekly.logTrend.single().errorCount)
         assertEquals(20L, weekly.logTrend.single().totalCount)
 
-        val context = service.getIncidentContext(ORG_ID, incidentId = 42L, userId = USER_ID)
-        assertEquals(42L, context.incidentId)
+        val context = service.getIncidentContext(ORG_ID, incidentId = INCIDENT_RESOURCE_ID, userId = USER_ID)
+        assertEquals(INCIDENT_RESOURCE_ID.toString(), context.incidentId)
         assertNull(context.incident)
         assertEquals(2, context.relatedAlerts.size)
         assertEquals(5L, context.recentLogErrors)
@@ -130,7 +137,11 @@ class SummaryServiceTest {
         assertTrue(service.getInfrastructureSummary(ORG_ID, "invalid").topErrorHosts.isEmpty())
         assertEquals(LogVolumeSummary(0, 0, 0), service.getOvernightSummary(ORG_ID, "UTC").logErrorVolume)
         assertTrue(service.getWeeklyReport(ORG_ID).logTrend.isEmpty())
-        assertEquals(0L, service.getIncidentContext(ORG_ID, incidentId = 1L, userId = USER_ID).recentLogErrors)
+        assertEquals(
+            0L,
+            service.getIncidentContext(ORG_ID, incidentId = UNKNOWN_INCIDENT_RESOURCE_ID, userId = USER_ID)
+                .recentLogErrors
+        )
     }
 
     private fun startClickHouseStub(responseFor: (String) -> String) {
@@ -160,6 +171,7 @@ class SummaryServiceTest {
         status: String,
     ): HostData = HostData(
         id = id,
+        resourceId = hostResourceId(id),
         organizationId = ORG_ID,
         hostname = hostname,
         displayName = displayName,
@@ -172,13 +184,16 @@ class SummaryServiceTest {
         createdAt = Clock.System.now(),
     )
 
+    private fun hostResourceId(id: Int): Uuid =
+        Uuid.parse("00000000-0000-0000-0000-${id.toString().padStart(12, '0')}")
+
     private fun uptimeMonitor(
         id: String,
         name: String,
         status: String,
     ): UptimeMonitorResponse = UptimeMonitorResponse(
         id = id,
-        organizationId = ORG_ID,
+        organizationId = ORG_RESOURCE_ID,
         name = name,
         type = "http",
         active = true,
@@ -196,9 +211,9 @@ class SummaryServiceTest {
     )
 
     private fun alert(systemId: String, lastTriggeredAt: Long?): AlertResponse = AlertResponse(
-        id = systemId.toInt(),
+        id = alertResourceId(systemId),
         systemId = systemId,
-        hostId = systemId.toInt(),
+        hostId = systemId,
         metric = "cpu",
         condition = ">",
         threshold = 90.0,
@@ -207,6 +222,9 @@ class SummaryServiceTest {
         lastTriggeredAt = lastTriggeredAt,
         createdAt = 1L,
     )
+
+    private fun alertResourceId(systemId: String): String =
+        Uuid.parse("10000000-0000-0000-0000-${systemId.takeLast(12)}").toString()
 
     private fun latestMetrics(cpuPercent: Float, memPercent: Float): LatestMetrics = LatestMetrics(
         cpuPercent = cpuPercent,
@@ -228,6 +246,9 @@ class SummaryServiceTest {
 
     companion object {
         private const val ORG_ID = 7
+        private const val ORG_RESOURCE_ID = "00000000-0000-0000-0000-000000000007"
         private const val USER_ID = 11
+        private val INCIDENT_RESOURCE_ID = Uuid.parse("20000000-0000-0000-0000-000000000042")
+        private val UNKNOWN_INCIDENT_RESOURCE_ID = Uuid.parse("20000000-0000-0000-0000-000000000001")
     }
 }

@@ -263,11 +263,11 @@ class DashboardRoutesTest {
         orgId: Long = 1L,
         ownerName: String? = null,
     ) = DashboardResponse(
-        id = resourceId(id), orgId = orgId, projectId = null,
+        id = resourceId(id), orgId = resourceId(orgId), projectId = null,
         folderId = null, title = TEST_DASHBOARD,
         description = null, layoutType = "grid",
         isDefault = false, isFavorited = false,
-        variables = emptyList(), createdBy = 1L,
+        variables = emptyList(), createdBy = resourceId(1L),
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
         ownerName = ownerName,
@@ -279,7 +279,7 @@ class DashboardRoutesTest {
         orgId: Long = 1L
     ) = FolderResponse(
         id = resourceId(id),
-        orgId = orgId,
+        orgId = resourceId(orgId),
         name = "Test Folder",
         color = "#FF0000",
         sortOrder = 0,
@@ -307,11 +307,11 @@ class DashboardRoutesTest {
         orgId: Long = 1L,
         usedByDashboardCount: Int = 0,
     ) = CustomDataSourceResponse(
-        id = resourceId(id), orgId = orgId, name = TEST_DS,
+        id = resourceId(id), orgId = resourceId(orgId), name = TEST_DS,
         description = null, sourceType = "postgresql",
         host = "localhost", port = 5432,
         databaseName = "testdb", extraConfig = emptyMap(),
-        enabled = true, createdBy = 1L,
+        enabled = true, createdBy = resourceId(1L),
         createdAt = DEFAULT_TIMESTAMP,
         updatedAt = DEFAULT_TIMESTAMP,
         numericId = id,

@@ -65,7 +65,7 @@ class GetDashboardTool : McpTool {
     override val description = "Get a dashboard with its widgets"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("dashboard_id" to schemaNumber("Dashboard ID"))
+            mapOf("dashboard_id" to schemaResourceId("Dashboard resource ID"))
         ),
         required = listOf("dashboard_id")
     )
@@ -74,13 +74,15 @@ class GetDashboardTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val dashboardId = args["dashboard_id"]?.jsonPrimitive?.content?.toLongOrNull()
-            ?: return errorResult("dashboard_id is required or must be a number")
+        val dashboardResourceId = args.stringContent("dashboard_id")
+            ?: return errorResult("dashboard_id is required")
+        val dashboardId = dashboardService.resolveDashboardId(dashboardResourceId, context.organizationId.toLong())
+            ?: return errorResult("Dashboard not found: $dashboardResourceId")
         val dashboard = dashboardService.getDashboard(
             id = dashboardId,
             orgId = context.organizationId.toLong(),
             userId = context.userId
-        ) ?: return errorResult("Dashboard not found: $dashboardId")
+        ) ?: return errorResult("Dashboard not found: $dashboardResourceId")
         return jsonResult(dashboard)
     }
 }

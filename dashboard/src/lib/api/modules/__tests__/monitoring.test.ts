@@ -20,6 +20,21 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const HOST_ID_WEB = '11111111-1111-4111-8111-111111111111'
+const HOST_ID_DB = '22222222-2222-4222-8222-222222222222'
+const HOST_ALERT_ID_CPU = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const HOST_ALERT_ID_MEMORY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const HOST_ALERT_ID_DISK = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const HOST_ALERT_ID_NETWORK = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const HOST_ALERT_ID_CREATED = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const ALERT_EPISODE_ID = '77777777-7777-4777-8777-777777777777'
+const ORGANIZATION_ID = '99999999-9999-4999-8999-999999999999'
+const CLOUD_SOURCE_ID = '55555555-5555-4555-8555-555555555555'
+const INFRA_SAVED_VIEW_ID = '66666666-6666-4666-8666-666666666666'
+const INFRA_SAVED_VIEW_DEFAULT_ID = '77777777-7777-4777-8777-777777777778'
+const AGENT_API_KEY_ID = '88888888-8888-4888-8888-888888888888'
+const AGENT_API_KEY_STAGING_ID = '88888888-8888-4888-8888-888888888889'
+const AGENT_API_KEY_CREATED_ID = '88888888-8888-4888-8888-888888888890'
 
 describe('Monitoring API module', () => {
   beforeEach(() => {
@@ -89,7 +104,7 @@ describe('Monitoring API module', () => {
 
   describe('getHosts', () => {
     it('fetches all hosts', async () => {
-      const mock = { hosts: [{ id: 1, name: 'web-1' }] }
+      const mock = { hosts: [{ id: HOST_ID_WEB, name: 'web-1' }] }
       server.use(http.get(`${API_BASE}/v1/hosts`, () => HttpResponse.json(mock)))
       expect(await api.getHosts()).toEqual(mock)
     })
@@ -97,18 +112,18 @@ describe('Monitoring API module', () => {
 
   describe('getHost', () => {
     it('fetches a single host', async () => {
-      const mock = { id: 42, name: 'web-42' }
-      server.use(http.get(`${API_BASE}/v1/hosts/42`, () => HttpResponse.json(mock)))
-      expect(await api.getHost(42)).toEqual(mock)
+      const mock = { id: HOST_ID_WEB, name: 'web-1' }
+      server.use(http.get(`${API_BASE}/v1/hosts/${HOST_ID_WEB}`, () => HttpResponse.json(mock)))
+      expect(await api.getHost(HOST_ID_WEB)).toEqual(mock)
     })
   })
 
   describe('deleteHost', () => {
     it('deletes a host', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/hosts/42`, () => new HttpResponse(null, { status: 204 }))
+        http.delete(`${API_BASE}/v1/hosts/${HOST_ID_WEB}`, () => new HttpResponse(null, { status: 204 }))
       )
-      await api.deleteHost(42)
+      await api.deleteHost(HOST_ID_WEB)
     })
   })
 
@@ -116,26 +131,26 @@ describe('Monitoring API module', () => {
     it('fetches metrics without time range', async () => {
       const mock = { timestamps: [], cpu: [] }
       server.use(
-        http.get(`${API_BASE}/v1/hosts/1/metrics`, ({ request }) => {
+        http.get(`${API_BASE}/v1/hosts/${HOST_ID_WEB}/metrics`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.has('from')).toBe(false)
           expect(url.searchParams.has('to')).toBe(false)
           return HttpResponse.json(mock)
         })
       )
-      expect(await api.getHostMetrics(1)).toEqual(mock)
+      expect(await api.getHostMetrics(HOST_ID_WEB)).toEqual(mock)
     })
 
     it('passes from/to when provided', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/hosts/1/metrics`, ({ request }) => {
+        http.get(`${API_BASE}/v1/hosts/${HOST_ID_WEB}/metrics`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('from')).toBe('2024-01-01')
           expect(url.searchParams.get('to')).toBe('2024-01-02')
           return HttpResponse.json({ timestamps: [], cpu: [] })
         })
       )
-      await api.getHostMetrics(1, '2024-01-01', '2024-01-02')
+      await api.getHostMetrics(HOST_ID_WEB, '2024-01-01', '2024-01-02')
     })
   })
 
@@ -143,9 +158,9 @@ describe('Monitoring API module', () => {
     it('fetches containers for a host', async () => {
       const mock = { containers: [{ name: 'nginx' }] }
       server.use(
-        http.get(`${API_BASE}/v1/hosts/1/containers`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/v1/hosts/${HOST_ID_WEB}/containers`, () => HttpResponse.json(mock))
       )
-      expect(await api.getHostContainers(1)).toEqual(mock)
+      expect(await api.getHostContainers(HOST_ID_WEB)).toEqual(mock)
     })
   })
 
@@ -207,7 +222,7 @@ describe('Monitoring API module', () => {
           HttpResponse.json({
             views: [
               {
-                id: 7,
+                id: INFRA_SAVED_VIEW_ID,
                 name: 'Production hosts',
                 resource_kind: 'hosts',
                 group_by: 'tag:env',
@@ -227,7 +242,7 @@ describe('Monitoring API module', () => {
 
       expect(result.views).toEqual([
         {
-          id: '7',
+          id: INFRA_SAVED_VIEW_ID,
           name: 'Production hosts',
           resourceKind: 'hosts',
           groupBy: 'tag:env',
@@ -259,7 +274,7 @@ describe('Monitoring API module', () => {
                 updatedAt: '2026-06-04T16:20:00Z',
               },
               {
-                id: 8,
+                id: INFRA_SAVED_VIEW_DEFAULT_ID,
                 name: 'Defaults',
               },
             ],
@@ -283,7 +298,7 @@ describe('Monitoring API module', () => {
           updatedAt: '2026-06-04T16:20:00Z',
         },
         {
-          id: '8',
+          id: INFRA_SAVED_VIEW_DEFAULT_ID,
           name: 'Defaults',
           resourceKind: 'hosts',
           groupBy: 'status',
@@ -320,7 +335,7 @@ describe('Monitoring API module', () => {
             search_query: 'api',
           })
           return HttpResponse.json({
-            id: 9,
+            id: INFRA_SAVED_VIEW_ID,
             name: 'Container load',
             resource_kind: 'containers',
             group_by: 'host',
@@ -344,7 +359,7 @@ describe('Monitoring API module', () => {
       })
 
       expect(result).toMatchObject({
-        id: '9',
+        id: INFRA_SAVED_VIEW_ID,
         name: 'Container load',
         resourceKind: 'containers',
       })
@@ -354,11 +369,11 @@ describe('Monitoring API module', () => {
   describe('deleteInfrastructureMapSavedView', () => {
     it('deletes a saved map view', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/infra/map/saved-views/9`, () =>
+        http.delete(`${API_BASE}/v1/infra/map/saved-views/${INFRA_SAVED_VIEW_ID}`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await expect(api.deleteInfrastructureMapSavedView('9')).resolves.toBeUndefined()
+      await expect(api.deleteInfrastructureMapSavedView(INFRA_SAVED_VIEW_ID)).resolves.toBeUndefined()
     })
   })
 
@@ -396,7 +411,7 @@ describe('Monitoring API module', () => {
           HttpResponse.json({
             keys: [
               {
-                id: 1,
+                id: AGENT_API_KEY_ID,
                 name: 'prod-key',
                 key_prefix: 'mk_abc',
                 created_at: '2024-01-01T00:00:00Z',
@@ -409,7 +424,7 @@ describe('Monitoring API module', () => {
       const result = await api.getAgentApiKeys()
       expect(result.keys).toHaveLength(1)
       expect(result.keys[0]).toEqual({
-        id: 1,
+        id: AGENT_API_KEY_ID,
         name: 'prod-key',
         keyPrefix: 'mk_abc',
         createdAt: '2024-01-01T00:00:00Z',
@@ -423,7 +438,7 @@ describe('Monitoring API module', () => {
           HttpResponse.json({
             keys: [
               {
-                id: 2,
+                id: AGENT_API_KEY_STAGING_ID,
                 name: 'staging-key',
                 keyPrefix: 'mk_def',
                 createdAt: '2024-02-01T00:00:00Z',
@@ -441,7 +456,7 @@ describe('Monitoring API module', () => {
 
   describe('createAgentApiKey', () => {
     it('posts with name in body', async () => {
-      const mock = { id: 3, key: 'mk_full_key_value' }
+      const mock = { id: AGENT_API_KEY_CREATED_ID, key: 'mk_full_key_value' }
       server.use(
         http.post(`${API_BASE}/v1/agent-api-keys`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
@@ -456,11 +471,11 @@ describe('Monitoring API module', () => {
   describe('deleteAgentApiKey', () => {
     it('deletes an agent API key', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/agent-api-keys/5`, () =>
+        http.delete(`${API_BASE}/v1/agent-api-keys/${AGENT_API_KEY_ID}`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.deleteAgentApiKey(5)
+      await api.deleteAgentApiKey(AGENT_API_KEY_ID)
     })
   })
 
@@ -495,7 +510,7 @@ describe('Monitoring API module', () => {
           expect(body.provider).toBe('aws')
           expect(body.collectLogs).toBe(false)
           return HttpResponse.json({
-            id: 1,
+            id: CLOUD_SOURCE_ID,
             provider: 'aws',
             displayName: 'Production AWS',
             status: 'healthy',
@@ -528,7 +543,7 @@ describe('Monitoring API module', () => {
 
     it('lists, syncs, and deletes cloud sources', async () => {
       const source = {
-        id: 1,
+        id: CLOUD_SOURCE_ID,
         provider: 'aws',
         displayName: 'Production AWS',
         status: 'healthy',
@@ -545,13 +560,13 @@ describe('Monitoring API module', () => {
       }
       server.use(
         http.get(`${API_BASE}/v1/cloud-sources`, () => HttpResponse.json([source])),
-        http.post(`${API_BASE}/v1/cloud-sources/1/sync`, () => HttpResponse.json(source)),
-        http.delete(`${API_BASE}/v1/cloud-sources/1`, () => new HttpResponse(null, {status: 204}))
+        http.post(`${API_BASE}/v1/cloud-sources/${CLOUD_SOURCE_ID}/sync`, () => HttpResponse.json(source)),
+        http.delete(`${API_BASE}/v1/cloud-sources/${CLOUD_SOURCE_ID}`, () => new HttpResponse(null, {status: 204}))
       )
 
       await expect(api.getCloudSources()).resolves.toEqual([source])
-      await expect(api.syncCloudSource(1)).resolves.toEqual(source)
-      await expect(api.deleteCloudSource(1)).resolves.toBeUndefined()
+      await expect(api.syncCloudSource(CLOUD_SOURCE_ID)).resolves.toEqual(source)
+      await expect(api.deleteCloudSource(CLOUD_SOURCE_ID)).resolves.toBeUndefined()
     })
   })
 
@@ -559,7 +574,7 @@ describe('Monitoring API module', () => {
 
   describe('getMonitorHosts', () => {
     it('fetches all monitor hosts', async () => {
-      const mock = [{ id: 1, hostname: 'web-1' }]
+      const mock = [{ id: HOST_ID_WEB, hostname: 'web-1' }]
       server.use(
         http.get(`${API_BASE}/v1/monitor/hosts`, () => HttpResponse.json(mock))
       )
@@ -569,11 +584,11 @@ describe('Monitoring API module', () => {
 
   describe('getMonitorHost', () => {
     it('fetches a single monitor host', async () => {
-      const mock = { id: 7, hostname: 'db-1' }
+      const mock = { id: HOST_ID_DB, hostname: 'db-1' }
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/7`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_DB}`, () => HttpResponse.json(mock))
       )
-      expect(await api.getMonitorHost(7)).toEqual(mock)
+      expect(await api.getMonitorHost(HOST_ID_DB)).toEqual(mock)
     })
   })
 
@@ -581,18 +596,18 @@ describe('Monitoring API module', () => {
     it('fetches metrics without optional params', async () => {
       const mock = { timestamps: [], cpu: [] }
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/1/metrics`, ({ request }) => {
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/metrics`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.has('from')).toBe(false)
           return HttpResponse.json(mock)
         })
       )
-      expect(await api.getMonitorHostMetrics(1)).toEqual(mock)
+      expect(await api.getMonitorHostMetrics(HOST_ID_WEB)).toEqual(mock)
     })
 
     it('passes from, to, and interval', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/1/metrics`, ({ request }) => {
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/metrics`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('from')).toBe('2024-01-01')
           expect(url.searchParams.get('to')).toBe('2024-01-02')
@@ -600,7 +615,7 @@ describe('Monitoring API module', () => {
           return HttpResponse.json({ timestamps: [], cpu: [] })
         })
       )
-      await api.getMonitorHostMetrics(1, '2024-01-01', '2024-01-02', '5m')
+      await api.getMonitorHostMetrics(HOST_ID_WEB, '2024-01-01', '2024-01-02', '5m')
     })
   })
 
@@ -609,7 +624,7 @@ describe('Monitoring API module', () => {
   describe('getMonitorHostContainers', () => {
     it('maps snake_case container fields', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/1/containers`, () =>
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/containers`, () =>
           HttpResponse.json({
             containers: [
               {
@@ -627,7 +642,7 @@ describe('Monitoring API module', () => {
           })
         )
       )
-      const result = await api.getMonitorHostContainers(1)
+      const result = await api.getMonitorHostContainers(HOST_ID_WEB)
       expect(result).toHaveLength(1)
       expect(result[0]).toEqual({
         name: 'nginx',
@@ -644,7 +659,7 @@ describe('Monitoring API module', () => {
 
     it('maps camelCase container fields', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/2/containers`, () =>
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_DB}/containers`, () =>
           HttpResponse.json({
             containers: [
               {
@@ -662,7 +677,7 @@ describe('Monitoring API module', () => {
           })
         )
       )
-      const result = await api.getMonitorHostContainers(2)
+      const result = await api.getMonitorHostContainers(HOST_ID_DB)
       expect(result[0].cpuPercent).toBe(5)
       expect(result[0].memUsed).toBe(512)
     })
@@ -708,13 +723,13 @@ describe('Monitoring API module', () => {
   describe('getHostAlertConfig', () => {
     it('maps snake_case alert config fields', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/1/alerts/config`, () =>
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts/config`, () =>
           HttpResponse.json({
             scope: 'global',
             global_alerts: [
               {
-                id: 10,
-                host_id: 1,
+                id: HOST_ALERT_ID_CPU,
+                host_id: HOST_ID_WEB,
                 scope: 'global',
                 metric: 'cpu',
                 condition: 'above',
@@ -728,8 +743,8 @@ describe('Monitoring API module', () => {
             ],
             host_alerts: [
               {
-                id: 20,
-                host_id: 1,
+                id: HOST_ALERT_ID_MEMORY,
+                host_id: HOST_ID_WEB,
                 scope: 'host',
                 metric: 'memory',
                 condition: 'above',
@@ -742,7 +757,7 @@ describe('Monitoring API module', () => {
             ],
             effective_alerts: [
               {
-                id: 10,
+                id: HOST_ALERT_ID_CPU,
                 scope: 'global',
                 metric: 'cpu',
                 condition: 'above',
@@ -757,11 +772,11 @@ describe('Monitoring API module', () => {
         )
       )
 
-      const config = await api.getHostAlertConfig(1)
+      const config = await api.getHostAlertConfig(HOST_ID_WEB)
       expect(config.scope).toBe('global')
       expect(config.globalAlerts).toHaveLength(1)
       expect(config.globalAlerts[0]).toMatchObject({
-        id: 10,
+        id: HOST_ALERT_ID_CPU,
         scope: 'global',
         metric: 'cpu',
         threshold: 90,
@@ -772,26 +787,26 @@ describe('Monitoring API module', () => {
       })
       expect(config.hostAlerts).toHaveLength(1)
       expect(config.hostAlerts[0]).toMatchObject({
-        id: 20,
+        id: HOST_ALERT_ID_MEMORY,
         scope: 'host',
         metric: 'memory',
         durationSeconds: 60,
         enabled: false,
       })
       expect(config.effectiveAlerts).toHaveLength(1)
-      expect(config.effectiveAlerts[0].id).toBe(10)
+      expect(config.effectiveAlerts[0].id).toBe(HOST_ALERT_ID_CPU)
     })
 
     it('maps camelCase alert config fields', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/2/alerts/config`, () =>
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_DB}/alerts/config`, () =>
           HttpResponse.json({
             scope: 'host',
             globalAlerts: [],
             hostAlerts: [
               {
-                id: 30,
-                hostId: 2,
+                id: HOST_ALERT_ID_DISK,
+                hostId: HOST_ID_DB,
                 scope: 'host',
                 metric: 'disk',
                 condition: 'above',
@@ -807,12 +822,12 @@ describe('Monitoring API module', () => {
         )
       )
 
-      const config = await api.getHostAlertConfig(2)
+      const config = await api.getHostAlertConfig(HOST_ID_DB)
       expect(config.scope).toBe('host')
       expect(config.globalAlerts).toHaveLength(0)
       expect(config.hostAlerts[0]).toMatchObject({
-        id: 30,
-        hostId: 2,
+        id: HOST_ALERT_ID_DISK,
+        hostId: HOST_ID_DB,
         metric: 'disk',
         durationSeconds: 120,
         alertPriority: 'P1',
@@ -821,13 +836,13 @@ describe('Monitoring API module', () => {
 
     it('falls back to system_alerts when host_alerts is absent', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/monitor/hosts/3/alerts/config`, () =>
+        http.get(`${API_BASE}/v1/monitor/hosts/${HOST_ID_DB}/alerts/config`, () =>
           HttpResponse.json({
             scope: 'host',
             global_alerts: [],
             system_alerts: [
               {
-                id: 40,
+                id: HOST_ALERT_ID_NETWORK,
                 scope: 'host',
                 metric: 'network',
                 condition: 'above',
@@ -843,7 +858,7 @@ describe('Monitoring API module', () => {
         )
       )
 
-      const config = await api.getHostAlertConfig(3)
+      const config = await api.getHostAlertConfig(HOST_ID_DB)
       expect(config.hostAlerts).toHaveLength(1)
       expect(config.hostAlerts[0].metric).toBe('network')
     })
@@ -854,27 +869,27 @@ describe('Monitoring API module', () => {
   describe('updateHostAlertScope', () => {
     it('puts the new scope', async () => {
       server.use(
-        http.put(`${API_BASE}/v1/monitor/hosts/1/alerts/scope`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts/scope`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.scope).toBe('global')
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.updateHostAlertScope(1, 'global')
+      await api.updateHostAlertScope(HOST_ID_WEB, 'global')
     })
   })
 
   describe('createHostAlert', () => {
     it('posts alert and returns mapped result', async () => {
       server.use(
-        http.post(`${API_BASE}/v1/monitor/hosts/1/alerts`, async ({ request }) => {
+        http.post(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts`, async ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('scope')).toBe('host')
           const body = (await request.json()) as Record<string, unknown>
           expect(body.metric).toBe('cpu')
           return HttpResponse.json({
-            id: 50,
-            host_id: 1,
+            id: HOST_ALERT_ID_CREATED,
+            host_id: HOST_ID_WEB,
             scope: 'host',
             metric: 'cpu',
             condition: 'above',
@@ -887,24 +902,24 @@ describe('Monitoring API module', () => {
         })
       )
 
-      const alert = await api.createHostAlert(1, {
+      const alert = await api.createHostAlert(HOST_ID_WEB, {
         metric: 'cpu',
         condition: 'above',
         threshold: 90,
         durationSeconds: 300,
       })
-      expect(alert.id).toBe(50)
+      expect(alert.id).toBe(HOST_ALERT_ID_CREATED)
       expect(alert.durationSeconds).toBe(300)
       expect(alert.scope).toBe('host')
     })
 
     it('uses custom scope when provided', async () => {
       server.use(
-        http.post(`${API_BASE}/v1/monitor/hosts/1/alerts`, ({ request }) => {
+        http.post(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('scope')).toBe('global')
           return HttpResponse.json({
-            id: 51,
+            id: HOST_ALERT_ID_MEMORY,
             scope: 'global',
             metric: 'memory',
             condition: 'above',
@@ -915,7 +930,7 @@ describe('Monitoring API module', () => {
         })
       )
       const alert = await api.createHostAlert(
-        1,
+        HOST_ID_WEB,
         { metric: 'memory', condition: 'above', threshold: 80 },
         'global'
       )
@@ -926,13 +941,13 @@ describe('Monitoring API module', () => {
   describe('updateHostAlert', () => {
     it('puts updates and returns mapped result', async () => {
       server.use(
-        http.put(`${API_BASE}/v1/monitor/hosts/1/alerts/50`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts/${HOST_ALERT_ID_CREATED}`, async ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('scope')).toBe('host')
           const body = (await request.json()) as Record<string, unknown>
           expect(body.threshold).toBe(95)
           return HttpResponse.json({
-            id: 50,
+            id: HOST_ALERT_ID_CREATED,
             scope: 'host',
             metric: 'cpu',
             condition: 'above',
@@ -944,20 +959,20 @@ describe('Monitoring API module', () => {
           })
         })
       )
-      const alert = await api.updateHostAlert(1, 50, { threshold: 95 })
+      const alert = await api.updateHostAlert(HOST_ID_WEB, HOST_ALERT_ID_CREATED, { threshold: 95 })
       expect(alert?.threshold).toBe(95)
     })
 
     it('returns undefined for a no-content update response', async () => {
       server.use(
-        http.put(`${API_BASE}/v1/monitor/hosts/1/alerts/50`, async ({ request }) => {
+        http.put(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts/${HOST_ALERT_ID_CREATED}`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.enabled).toBe(false)
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      const alert = await api.updateHostAlert(1, 50, { enabled: false })
+      const alert = await api.updateHostAlert(HOST_ID_WEB, HOST_ALERT_ID_CREATED, { enabled: false })
       expect(alert).toBeUndefined()
     })
   })
@@ -965,24 +980,24 @@ describe('Monitoring API module', () => {
   describe('deleteHostAlert', () => {
     it('deletes with default scope', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/monitor/hosts/1/alerts/50`, ({ request }) => {
+        http.delete(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts/${HOST_ALERT_ID_CREATED}`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('scope')).toBe('host')
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.deleteHostAlert(1, 50)
+      await api.deleteHostAlert(HOST_ID_WEB, HOST_ALERT_ID_CREATED)
     })
 
     it('deletes with explicit global scope', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/monitor/hosts/1/alerts/50`, ({ request }) => {
+        http.delete(`${API_BASE}/v1/monitor/hosts/${HOST_ID_WEB}/alerts/${HOST_ALERT_ID_CREATED}`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('scope')).toBe('global')
           return new HttpResponse(null, { status: 204 })
         })
       )
-      await api.deleteHostAlert(1, 50, 'global')
+      await api.deleteHostAlert(HOST_ID_WEB, HOST_ALERT_ID_CREATED, 'global')
     })
   })
 
@@ -997,8 +1012,8 @@ describe('Monitoring API module', () => {
           expect(url.searchParams.get('limit')).toBe('25')
           return HttpResponse.json([
             {
-              id: 1,
-              organization_id: 10,
+              id: ALERT_EPISODE_ID,
+              organization_id: ORGANIZATION_ID,
               source: 'HOST_ALERT',
               deduplication_key: 'host-1',
               episode_seq: 2,
@@ -1023,12 +1038,12 @@ describe('Monitoring API module', () => {
   describe('ignoreAlertLifecycle', () => {
     it('posts an ignore reason', async () => {
       server.use(
-        http.post(`${API_BASE}/v1/alerts/lifecycles/7/ignore`, async ({ request }) => {
+        http.post(`${API_BASE}/v1/alerts/lifecycles/${ALERT_EPISODE_ID}/ignore`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.reason).toBe('Investigating')
           return HttpResponse.json({
-            id: 7,
-            organization_id: 10,
+            id: ALERT_EPISODE_ID,
+            organization_id: ORGANIZATION_ID,
             source: 'HOST_ALERT',
             deduplication_key: 'host-1',
             episode_seq: 1,
@@ -1045,7 +1060,7 @@ describe('Monitoring API module', () => {
         })
       )
 
-      const result = await api.ignoreAlertLifecycle(7, 'Investigating')
+      const result = await api.ignoreAlertLifecycle(ALERT_EPISODE_ID, 'Investigating')
       expect(result.suppress_reason).toBe('Investigating')
     })
   })
@@ -1053,10 +1068,10 @@ describe('Monitoring API module', () => {
   describe('unignoreAlertLifecycle', () => {
     it('posts to unignore an episode', async () => {
       server.use(
-        http.post(`${API_BASE}/v1/alerts/lifecycles/7/unignore`, () =>
+        http.post(`${API_BASE}/v1/alerts/lifecycles/${ALERT_EPISODE_ID}/unignore`, () =>
           HttpResponse.json({
-            id: 7,
-            organization_id: 10,
+            id: ALERT_EPISODE_ID,
+            organization_id: ORGANIZATION_ID,
             source: 'HOST_ALERT',
             deduplication_key: 'host-1',
             episode_seq: 1,
@@ -1073,7 +1088,7 @@ describe('Monitoring API module', () => {
         )
       )
 
-      const result = await api.unignoreAlertLifecycle(7)
+      const result = await api.unignoreAlertLifecycle(ALERT_EPISODE_ID)
       expect(result.suppressed_at).toBeNull()
     })
   })
@@ -1086,12 +1101,12 @@ describe('Monitoring API module', () => {
         http.get(`${API_BASE}/v1/monitor/silence-periods`, () =>
           HttpResponse.json([
             {
-              id: 1,
-              organization_id: 10,
+              id: '11111111-1111-4111-8111-111111111111',
+              organization_id: '22222222-2222-4222-8222-222222222222',
               reason: 'maintenance',
               starts_at: 1700000000,
               ends_at: 1700003600,
-              created_by: 5,
+              created_by: '33333333-3333-4333-8333-333333333333',
               created_at: 1699000000,
             },
           ])
@@ -1100,12 +1115,12 @@ describe('Monitoring API module', () => {
       const result = await api.getSilencePeriods()
       expect(result).toHaveLength(1)
       expect(result[0]).toEqual({
-        id: 1,
-        organizationId: 10,
+        id: '11111111-1111-4111-8111-111111111111',
+        organizationId: '22222222-2222-4222-8222-222222222222',
         reason: 'maintenance',
         startsAt: 1700000000,
         endsAt: 1700003600,
-        createdBy: 5,
+        createdBy: '33333333-3333-4333-8333-333333333333',
         createdAt: 1699000000,
       })
     })
@@ -1115,19 +1130,19 @@ describe('Monitoring API module', () => {
         http.get(`${API_BASE}/v1/monitor/silence-periods`, () =>
           HttpResponse.json([
             {
-              id: 2,
-              organizationId: 10,
+              id: '44444444-4444-4444-8444-444444444444',
+              organizationId: '22222222-2222-4222-8222-222222222222',
               reason: null,
               startsAt: 1700100000,
               endsAt: 1700103600,
-              createdBy: 6,
+              createdBy: '55555555-5555-4555-8555-555555555555',
               createdAt: 1699100000,
             },
           ])
         )
       )
       const result = await api.getSilencePeriods()
-      expect(result[0].organizationId).toBe(10)
+      expect(result[0].organizationId).toBe('22222222-2222-4222-8222-222222222222')
       expect(result[0].reason).toBeNull()
       expect(result[0].startsAt).toBe(1700100000)
     })
@@ -1140,12 +1155,12 @@ describe('Monitoring API module', () => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.reason).toBe('deploy')
           return HttpResponse.json({
-            id: 3,
-            organization_id: 10,
+            id: '66666666-6666-4666-8666-666666666666',
+            organization_id: '22222222-2222-4222-8222-222222222222',
             reason: 'deploy',
             starts_at: 1700200000,
             ends_at: 1700203600,
-            created_by: 7,
+            created_by: '77777777-7777-4777-8777-777777777777',
             created_at: 1700200000,
           })
         })
@@ -1155,20 +1170,21 @@ describe('Monitoring API module', () => {
         starts_at: 1700200000,
         ends_at: 1700203600,
       })
-      expect(result.id).toBe(3)
-      expect(result.organizationId).toBe(10)
+      expect(result.id).toBe('66666666-6666-4666-8666-666666666666')
+      expect(result.organizationId).toBe('22222222-2222-4222-8222-222222222222')
       expect(result.startsAt).toBe(1700200000)
     })
   })
 
   describe('deleteSilencePeriod', () => {
     it('deletes a silence period', async () => {
+      const silencePeriodId = '66666666-6666-4666-8666-666666666666'
       server.use(
-        http.delete(`${API_BASE}/v1/monitor/silence-periods/3`, () =>
+        http.delete(`${API_BASE}/v1/monitor/silence-periods/${silencePeriodId}`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.deleteSilencePeriod(3)
+      await api.deleteSilencePeriod(silencePeriodId)
     })
   })
 })

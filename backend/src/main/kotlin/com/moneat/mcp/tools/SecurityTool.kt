@@ -82,7 +82,7 @@ private const val SECURITY_EVENT_ID = "security_event_id"
 private const val TEMPLATE_ID = "template_id"
 private const val SECURITY_LIMIT_DESCRIPTION = "Max results (default 50, max 200)"
 private const val RESULT_OFFSET_DESCRIPTION = "Result offset for pagination"
-private const val DETECTION_RULE_ID_DESCRIPTION = "Detection rule ID"
+private const val DETECTION_RULE_ID_DESCRIPTION = "Detection rule resource ID"
 
 interface SecurityMcpGateway {
     suspend fun listSignals(
@@ -91,6 +91,8 @@ interface SecurityMcpGateway {
         limit: Int,
         offset: Int,
     ): SignalListResponse
+
+    fun resolveSignalId(organizationId: Int, signalResourceId: String): Int?
 
     suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse?
 
@@ -102,6 +104,8 @@ interface SecurityMcpGateway {
     ): TriageResult
 
     suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse
+
+    fun resolveDetectionRuleId(organizationId: Int, ruleResourceId: String): Int?
 
     suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse?
 
@@ -192,6 +196,9 @@ class DefaultSecurityMcpGateway(
         offset: Int,
     ): SignalListResponse = signalService.list(organizationId, filters, limit, offset)
 
+    override fun resolveSignalId(organizationId: Int, signalResourceId: String): Int? =
+        parseResourceId(signalResourceId)?.let { signalService.resolveSignalId(organizationId, it) }
+
     override suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? =
         signalService.get(organizationId, signalId)
 
@@ -204,6 +211,9 @@ class DefaultSecurityMcpGateway(
 
     override suspend fun listDetectionRules(organizationId: Int): DetectionRuleListResponse =
         ruleService.list(organizationId)
+
+    override fun resolveDetectionRuleId(organizationId: Int, ruleResourceId: String): Int? =
+        parseResourceId(ruleResourceId)?.let { ruleService.resolveRuleId(organizationId, it) }
 
     override suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? =
         ruleService.get(organizationId, ruleId)
@@ -330,14 +340,17 @@ class GetSecuritySignalTool(
     override val name = "get_security_signal"
     override val description = "Get one security signal with evidence, audit trail, samples, and threat intel"
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(SECURITY_SIGNAL_ID to schemaInteger("Security signal ID"))),
+        properties = JsonObject(mapOf(SECURITY_SIGNAL_ID to schemaResourceId("Security signal resource ID"))),
         required = listOf(SECURITY_SIGNAL_ID)
     )
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
-        val signalId = args.intArg(SECURITY_SIGNAL_ID) ?: return errorResult("$SECURITY_SIGNAL_ID is required")
+        val signalResourceId = args.stringArg(SECURITY_SIGNAL_ID)
+            ?: return errorResult("$SECURITY_SIGNAL_ID is required")
+        val signalId = gateway.resolveSignalId(context.organizationId, signalResourceId)
+            ?: return errorResult("Security signal not found: $signalResourceId")
         val signal = gateway.getSignal(context.organizationId, signalId)
-            ?: return errorResult("Security signal not found: $signalId")
+            ?: return errorResult("Security signal not found: $signalResourceId")
         return jsonResult(signal)
     }
 }
@@ -351,10 +364,10 @@ class TriageSecuritySignalTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                SECURITY_SIGNAL_ID to schemaInteger("Security signal ID"),
+                SECURITY_SIGNAL_ID to schemaResourceId("Security signal resource ID"),
                 "status" to schemaEnum("New status", listOf("open", "under_review", "archived")),
                 "reason" to schemaEnum("Archive reason", listOf("true_positive", "false_positive", "benign")),
-                "assignee_user_id" to schemaInteger("User ID to assign"),
+                "assignee_user_id" to schemaString("User resource ID to assign"),
                 "clear_assignee" to schemaBoolean("Clear the current assignee"),
                 "note" to schemaString("Triage note"),
             )
@@ -363,17 +376,20 @@ class TriageSecuritySignalTool(
     )
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
-        val signalId = args.intArg(SECURITY_SIGNAL_ID) ?: return errorResult("$SECURITY_SIGNAL_ID is required")
+        val signalResourceId = args.stringArg(SECURITY_SIGNAL_ID)
+            ?: return errorResult("$SECURITY_SIGNAL_ID is required")
+        val signalId = gateway.resolveSignalId(context.organizationId, signalResourceId)
+            ?: return errorResult("Security signal not found: $signalResourceId")
         val request = TriageRequest(
             status = args.stringArg("status"),
             reason = args.stringArg("reason"),
-            assigneeUserId = args.intArg("assignee_user_id"),
+            assigneeUserId = args.stringArg("assignee_user_id"),
             clearAssignee = args.booleanArg("clear_assignee") ?: false,
             note = args.stringArg("note"),
         )
         return when (val result = gateway.triageSignal(context.organizationId, signalId, context.userId, request)) {
             is TriageResult.Ok -> jsonResult<SignalResponse>(result.signal)
-            is TriageResult.NotFound -> errorResult("Security signal not found: $signalId")
+            is TriageResult.NotFound -> errorResult("Security signal not found: $signalResourceId")
             is TriageResult.Invalid -> errorResult(result.message)
         }
     }
@@ -396,14 +412,17 @@ class GetDetectionRuleTool(
     override val name = "get_detection_rule"
     override val description = "Get one security detection rule"
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger(DETECTION_RULE_ID_DESCRIPTION))),
+        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaResourceId(DETECTION_RULE_ID_DESCRIPTION))),
         required = listOf(DETECTION_RULE_ID)
     )
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
-        val ruleId = args.intArg(DETECTION_RULE_ID) ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleResourceId = args.stringArg(DETECTION_RULE_ID)
+            ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleId = gateway.resolveDetectionRuleId(context.organizationId, ruleResourceId)
+            ?: return errorResult("Detection rule not found: $ruleResourceId")
         val rule = gateway.getDetectionRule(context.organizationId, ruleId)
-            ?: return errorResult("Detection rule not found: $ruleId")
+            ?: return errorResult("Detection rule not found: $ruleResourceId")
         return jsonResult(rule)
     }
 }
@@ -438,14 +457,17 @@ class UpdateDetectionRuleTool(
     override val inputSchema = detectionRuleInputSchema(required = listOf(DETECTION_RULE_ID), includeId = true)
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
-        val ruleId = args.intArg(DETECTION_RULE_ID) ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleResourceId = args.stringArg(DETECTION_RULE_ID)
+            ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleId = gateway.resolveDetectionRuleId(context.organizationId, ruleResourceId)
+            ?: return errorResult("Detection rule not found: $ruleResourceId")
         val request = when (val parsed = decodeSecurityArgs<UpdateDetectionRuleRequest>(args)) {
             is SecurityParseResult.Failure -> return errorResult(parsed.message)
             is SecurityParseResult.Success -> parsed.value
         }
         return try {
             val updated = gateway.updateDetectionRule(context.organizationId, ruleId, request)
-                ?: return errorResult("Detection rule not found: $ruleId")
+                ?: return errorResult("Detection rule not found: $ruleResourceId")
             jsonResult(updated)
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: "Invalid detection rule")
@@ -460,16 +482,19 @@ class DeleteDetectionRuleTool(
     override val description = "Delete a security detection rule"
     override val readOnly = false
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger(DETECTION_RULE_ID_DESCRIPTION))),
+        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaResourceId(DETECTION_RULE_ID_DESCRIPTION))),
         required = listOf(DETECTION_RULE_ID)
     )
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
-        val ruleId = args.intArg(DETECTION_RULE_ID) ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleResourceId = args.stringArg(DETECTION_RULE_ID)
+            ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleId = gateway.resolveDetectionRuleId(context.organizationId, ruleResourceId)
+            ?: return errorResult("Detection rule not found: $ruleResourceId")
         return if (gateway.deleteDetectionRule(context.organizationId, ruleId)) {
-            textResult("Detection rule $ruleId deleted")
+            textResult("Detection rule $ruleResourceId deleted")
         } else {
-            errorResult("Detection rule not found: $ruleId")
+            errorResult("Detection rule not found: $ruleResourceId")
         }
     }
 }
@@ -480,14 +505,17 @@ class PreviewDetectionRuleTool(
     override val name = "preview_detection_rule"
     override val description = "Preview matches for a persisted security detection rule without writing signals"
     override val inputSchema = InputSchema(
-        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaInteger(DETECTION_RULE_ID_DESCRIPTION))),
+        properties = JsonObject(mapOf(DETECTION_RULE_ID to schemaResourceId(DETECTION_RULE_ID_DESCRIPTION))),
         required = listOf(DETECTION_RULE_ID)
     )
 
     override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
-        val ruleId = args.intArg(DETECTION_RULE_ID) ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleResourceId = args.stringArg(DETECTION_RULE_ID)
+            ?: return errorResult("$DETECTION_RULE_ID is required")
+        val ruleId = gateway.resolveDetectionRuleId(context.organizationId, ruleResourceId)
+            ?: return errorResult("Detection rule not found: $ruleResourceId")
         val preview = gateway.previewDetectionRule(context.organizationId, ruleId)
-            ?: return errorResult("Detection rule not found: $ruleId")
+            ?: return errorResult("Detection rule not found: $ruleResourceId")
         return jsonResult(preview)
     }
 }
@@ -989,7 +1017,7 @@ private fun detectionRuleInputSchema(
         "tags" to schemaStringArray("Rule tags such as mitre:T1059"),
     )
     if (includeId) {
-        properties[DETECTION_RULE_ID] = schemaInteger(DETECTION_RULE_ID_DESCRIPTION)
+        properties[DETECTION_RULE_ID] = schemaResourceId(DETECTION_RULE_ID_DESCRIPTION)
     }
     return InputSchema(properties = JsonObject(properties), required = required)
 }

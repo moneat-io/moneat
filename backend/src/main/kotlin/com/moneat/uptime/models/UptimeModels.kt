@@ -209,7 +209,7 @@ data class UpdateUptimeMonitorRequest(
 @Serializable
 data class UptimeMonitorResponse(
     val id: String,
-    val organizationId: Int,
+    val organizationId: String,
     val name: String,
     val type: String,
     val active: Boolean,
@@ -314,6 +314,7 @@ data class CheckResult(
 data class UptimeMonitorData(
     val id: UUID,
     val organizationId: Int,
+    val organizationResourceId: String,
     val name: String,
     val type: String,
     val active: Boolean,

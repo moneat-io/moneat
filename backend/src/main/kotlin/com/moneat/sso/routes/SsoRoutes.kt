@@ -19,6 +19,8 @@ package com.moneat.sso.routes
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.sso.SsoForbiddenException
 import com.moneat.sso.models.SsoConfigRequest
 import com.moneat.sso.models.SsoInitRequest
@@ -48,6 +50,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -67,23 +70,37 @@ private suspend fun ApplicationCall.requireSsoAuth(): SsoAuthContext? {
             respond(HttpStatusCode.Unauthorized, ErrorResponse(ERROR_INVALID_TOKEN))
             return null
         }
-    val orgId = parameters["organizationId"]?.toIntOrNull()
+    val orgResourceId = request.queryParameters["organizationId"]?.let(::parseSsoResourceId)
         ?: run {
             respond(HttpStatusCode.BadRequest, ErrorResponse(ERROR_MISSING_ORG_ID))
             return null
         }
-    val isMember = transaction {
-        Memberships.selectAll()
-            .where {
-                (Memberships.organization_id eq orgId) and (Memberships.user_id eq userId)
-            }.firstOrNull() != null
+    val orgId = transaction {
+        val organization =
+            Organizations
+                .selectAll()
+                .where { Organizations.resource_id eq orgResourceId }
+                .firstOrNull()
+                ?: return@transaction null
+        val numericOrgId = organization[Organizations.id]
+        val isMember =
+            Memberships
+                .selectAll()
+                .where {
+                    (Memberships.organization_id eq numericOrgId) and (Memberships.user_id eq userId)
+                }
+                .firstOrNull() != null
+        numericOrgId.takeIf { isMember }
     }
-    if (!isMember) {
+    if (orgId == null) {
         respond(HttpStatusCode.Forbidden, ErrorResponse("Access denied"))
         return null
     }
     return SsoAuthContext(userId, orgId)
 }
+
+private fun parseSsoResourceId(raw: String): Uuid? =
+    raw.toUuidOrNull()
 
 fun Route.ssoRoutes() {
     val ssoService = SsoService()

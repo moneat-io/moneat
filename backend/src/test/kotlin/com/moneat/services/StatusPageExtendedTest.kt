@@ -70,6 +70,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -87,6 +88,8 @@ class StatusPageExtendedTest {
         private var db: Database? = null
         private const val SAME_SLUG = "same-slug"
         private const val TITLE_X_JSON = """{"title":"x"}"""
+
+        private fun resourceId(value: String): Uuid = Uuid.parse(value)
 
         @JvmStatic
         @BeforeAll
@@ -297,7 +300,7 @@ class StatusPageExtendedTest {
             AddCustomDomainRequest(domain = "removable.example.com")
         )
 
-        assertTrue(service.removeCustomDomain(pageId, orgId, domain.id))
+        assertTrue(service.removeCustomDomain(pageId, orgId, resourceId(domain.id)))
     }
 
     @Test
@@ -309,7 +312,7 @@ class StatusPageExtendedTest {
         )
         val pageId = UUID.fromString(page.id)
 
-        assertFalse(service.removeCustomDomain(pageId, orgId, 99999))
+        assertFalse(service.removeCustomDomain(pageId, orgId, Uuid.random()))
     }
 
     @Test
@@ -334,7 +337,7 @@ class StatusPageExtendedTest {
             } get Organizations.id
         }
 
-        assertFalse(service.removeCustomDomain(pageId, otherOrgId, domain.id))
+        assertFalse(service.removeCustomDomain(pageId, otherOrgId, resourceId(domain.id)))
     }
 
     // ──── Service: verifyCustomDomain ────
@@ -343,7 +346,7 @@ class StatusPageExtendedTest {
     fun `verifyCustomDomain returns null for non-existent page`() {
         val service = StatusPageService()
 
-        assertNull(service.verifyCustomDomain(UUID.randomUUID(), orgId, 1))
+        assertNull(service.verifyCustomDomain(UUID.randomUUID(), orgId, Uuid.random()))
     }
 
     @Test
@@ -368,7 +371,7 @@ class StatusPageExtendedTest {
             } get Organizations.id
         }
 
-        assertNull(service.verifyCustomDomain(pageId, otherOrgId, domain.id))
+        assertNull(service.verifyCustomDomain(pageId, otherOrgId, resourceId(domain.id)))
     }
 
     @Test
@@ -380,7 +383,7 @@ class StatusPageExtendedTest {
         )
         val pageId = UUID.fromString(page.id)
 
-        assertNull(service.verifyCustomDomain(pageId, orgId, 99999))
+        assertNull(service.verifyCustomDomain(pageId, orgId, Uuid.random()))
     }
 
     // ──── Service: updateStatusPage slug validation ────
@@ -985,8 +988,9 @@ class StatusPageExtendedTest {
         }
         val userId = seedUser()
         val pageId = UUID.randomUUID()
+        val domainId = Uuid.random()
 
-        val response = client.post("/v1/status-pages/$pageId/domains/1/verify") {
+        val response = client.post("/v1/status-pages/$pageId/domains/$domainId/verify") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -1000,8 +1004,9 @@ class StatusPageExtendedTest {
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
+        val domainId = Uuid.random()
 
-        val response = client.post("/v1/status-pages/$pageId/domains/99999/verify") {
+        val response = client.post("/v1/status-pages/$pageId/domains/$domainId/verify") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -1106,8 +1111,9 @@ class StatusPageExtendedTest {
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
+        val domainId = Uuid.random()
 
-        val response = client.delete("/v1/status-pages/$pageId/domains/99999") {
+        val response = client.delete("/v1/status-pages/$pageId/domains/$domainId") {
             header(HttpHeaders.Authorization, "Bearer ${token(userId, localOrgId)}")
         }
         assertEquals(HttpStatusCode.NotFound, response.status)

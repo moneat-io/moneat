@@ -21,6 +21,7 @@ import com.moneat.org.repositories.models.InviterAndOrgRow
 import com.moneat.org.repositories.models.OrgInvitationDetailsRow
 import com.moneat.org.repositories.models.OrgInvitationRow
 import com.moneat.org.repositories.models.OrgInvitationUserRow
+import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -36,6 +37,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 class OrgInvitationRepositoryImpl : OrgInvitationRepository {
 
@@ -91,7 +93,7 @@ class OrgInvitationRepositoryImpl : OrgInvitationRepository {
         token: String,
         expiresAt: Long,
         createdAt: Instant,
-    ): Int =
+    ): Uuid =
         transaction {
             OrgInvitations.insert {
                 it[organization_id] = orgId
@@ -102,7 +104,7 @@ class OrgInvitationRepositoryImpl : OrgInvitationRepository {
                 it[OrgInvitations.status] = "pending"
                 it[OrgInvitations.expires_at] = expiresAt
                 it[OrgInvitations.created_at] = createdAt
-            } get OrgInvitations.id
+            } get OrgInvitations.resource_id
         }
 
     override fun findInviterAndOrg(invitedBy: Int, orgId: Int): InviterAndOrgRow? =
@@ -128,6 +130,7 @@ class OrgInvitationRepositoryImpl : OrgInvitationRepository {
                 }.map { row ->
                     InvitationWithInviterRow(
                         id = row[OrgInvitations.id],
+                        resourceId = row[OrgInvitations.resource_id],
                         email = row[OrgInvitations.email],
                         role = row[OrgInvitations.role],
                         status = row[OrgInvitations.status],
@@ -164,6 +167,27 @@ class OrgInvitationRepositoryImpl : OrgInvitationRepository {
     override fun findById(id: Int): OrgInvitationRow? =
         transaction {
             OrgInvitations.selectAll().where { OrgInvitations.id eq id }.singleOrNull()?.toRow()
+        }
+
+    override fun findByResourceIdForUser(
+        resourceId: Uuid,
+        userId: Int
+    ): OrgInvitationRow? =
+        transaction {
+            val organizationIds =
+                Memberships
+                    .selectAll()
+                    .where { Memberships.user_id eq userId }
+                    .map { it[Memberships.organization_id] }
+            if (organizationIds.isEmpty()) return@transaction null
+            OrgInvitations
+                .selectAll()
+                .where {
+                    (OrgInvitations.organization_id inList organizationIds) and
+                        (OrgInvitations.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.toRow()
         }
 
     override fun findUserById(userId: Int): OrgInvitationUserRow? =
@@ -227,6 +251,7 @@ class OrgInvitationRepositoryImpl : OrgInvitationRepository {
     private fun org.jetbrains.exposed.v1.core.ResultRow.toRow(): OrgInvitationRow =
         OrgInvitationRow(
             id = this[OrgInvitations.id],
+            resourceId = this[OrgInvitations.resource_id],
             orgId = this[OrgInvitations.organization_id],
             email = this[OrgInvitations.email],
             role = this[OrgInvitations.role],

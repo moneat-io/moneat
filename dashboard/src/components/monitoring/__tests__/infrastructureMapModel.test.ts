@@ -24,6 +24,12 @@ import {
 } from '../infrastructureMapModel'
 
 const NOW_MS = Date.parse('2026-06-04T16:00:00Z')
+const HOST_ID_WEB = '11111111-1111-4111-8111-111111111111'
+const HOST_ID_DB = '22222222-2222-4222-8222-222222222222'
+const HOST_ID_WORKER = '77777777-7777-4777-8777-777777777777'
+const HOST_ID_FALLBACK = '88888888-8888-4888-8888-888888888888'
+const HOST_ID_FRESH = '33333333-3333-4333-8333-333333333333'
+const HOST_ID_WORKER_TWO = '99999999-9999-4999-8999-999999999999'
 const HOST_VIEW: InfrastructureMapViewState = {
   resourceKind: 'hosts',
   groupBy: 'status',
@@ -44,8 +50,8 @@ describe('infrastructure map model', () => {
     const resources = createInfrastructureMapResources({
       resourceKind: 'hosts',
       hosts: [
-        createHost({id: 1, hostname: 'web-1', isOnline: true}),
-        createHost({id: 2, hostname: 'db-1', isOnline: false}),
+        createHost({id: HOST_ID_WEB, hostname: 'web-1', isOnline: true}),
+        createHost({id: HOST_ID_DB, hostname: 'db-1', isOnline: false}),
       ],
       containers: [],
       nowMs: NOW_MS,
@@ -63,7 +69,7 @@ describe('infrastructure map model', () => {
     expect(result.groups[0].nodes[0]).toMatchObject({
       label: 'db-1',
       fillTone: 'danger',
-      hostId: 2,
+      hostId: HOST_ID_DB,
     })
   })
 
@@ -71,8 +77,8 @@ describe('infrastructure map model', () => {
     const resources = createInfrastructureMapResources({
       resourceKind: 'hosts',
       hosts: [
-        createHost({id: 1, hostname: 'web-1', isOnline: true}),
-        createHost({id: 2, hostname: 'db-1', isOnline: false}),
+        createHost({id: HOST_ID_WEB, hostname: 'web-1', isOnline: true}),
+        createHost({id: HOST_ID_DB, hostname: 'db-1', isOnline: false}),
       ],
       containers: [],
       nowMs: NOW_MS,
@@ -94,7 +100,7 @@ describe('infrastructure map model', () => {
   it('deduplicates containers by host and container id using the newest payload', () => {
     const resources = createInfrastructureMapResources({
       resourceKind: 'containers',
-      hosts: [createHost({id: 7, hostname: 'worker-1'})],
+      hosts: [createHost({id: HOST_ID_WORKER, hostname: 'worker-1'})],
       containers: [
         createContainer({
           containerId: 'abc123',
@@ -121,7 +127,7 @@ describe('infrastructure map model', () => {
     expect(result.groups[0].label).toBe('worker-1')
     expect(result.groups[0].nodes[0]).toMatchObject({
       label: 'api',
-      hostId: 7,
+      hostId: HOST_ID_WORKER,
       metricLabel: '14.5% CPU',
     })
   })
@@ -129,7 +135,7 @@ describe('infrastructure map model', () => {
   it('colors container memory by utilization and network by visible volume', () => {
     const resources = createInfrastructureMapResources({
       resourceKind: 'containers',
-      hosts: [createHost({id: 7, hostname: 'worker-1'})],
+      hosts: [createHost({id: HOST_ID_WORKER, hostname: 'worker-1'})],
       containers: [
         createContainer({
           containerId: 'abc123',
@@ -185,7 +191,7 @@ describe('infrastructure map model', () => {
       resourceKind: 'hosts',
       hosts: [
         createHost({
-          id: 1,
+          id: HOST_ID_FALLBACK,
           hostname: '',
           os: '',
           platform: '',
@@ -196,14 +202,14 @@ describe('infrastructure map model', () => {
           lastSeenAt: undefined,
         }),
         createHost({
-          id: 2,
+          id: HOST_ID_DB,
           hostname: 'old-host',
           cpuCores: 16,
           memoryTotalKb: 16_777_216,
           lastSeenAt: '2026-06-04T12:00:00Z',
         }),
         createHost({
-          id: 3,
+          id: HOST_ID_FRESH,
           hostname: 'fresh-host',
           cpuCores: 4,
           memoryTotalKb: 1_048_576,
@@ -222,14 +228,17 @@ describe('infrastructure map model', () => {
     })
 
     expect(result.groups.map((group) => group.label)).toEqual(['Unknown agent', 'v7.0.0'])
-    expect(getNode(result, 'Host 1')).toMatchObject({
+    expect(getNode(result, `Host ${HOST_ID_FALLBACK}`)).toMatchObject({
       subtitle: 'host',
       fillTone: 'warning',
       metricLabel: '1h ago',
       sizeLabel: '0 cores',
       sizePercent: 36,
     })
-    expect(getNode(result, 'Host 1')?.details).toContainEqual({label: 'Last seen', value: 'never seen'})
+    expect(getNode(result, `Host ${HOST_ID_FALLBACK}`)?.details).toContainEqual({
+      label: 'Last seen',
+      value: 'never seen',
+    })
     expect(getNode(result, 'old-host')).toMatchObject({
       fillTone: 'danger',
       metricLabel: '4h ago',
@@ -247,12 +256,12 @@ describe('infrastructure map model', () => {
       resourceKind: 'hosts',
       hosts: [
         createHost({
-          id: 1,
+          id: HOST_ID_WEB,
           hostname: 'api-1',
           tags: {service: 'api', region: 'us-east-1'},
         }),
         createHost({
-          id: 2,
+          id: HOST_ID_DB,
           hostname: 'db-1',
           tags: {region: 'eu-west-1'},
         }),
@@ -307,7 +316,7 @@ describe('infrastructure map model', () => {
   it('applies container fallbacks for stopped and unnamed resources', () => {
     const resources = createInfrastructureMapResources({
       resourceKind: 'containers',
-      hosts: [createHost({id: 9, hostname: 'worker-2'})],
+      hosts: [createHost({id: HOST_ID_WORKER_TWO, hostname: 'worker-2'})],
       containers: [
         createContainer({
           host: '',
@@ -372,7 +381,7 @@ describe('infrastructure map model', () => {
     })
     expect(getNode(healthResult, 'container')?.details).toContainEqual({label: 'Memory', value: '512 B'})
     expect(getNode(healthResult, 'abcdef123456')).toMatchObject({
-      hostId: 9,
+      hostId: HOST_ID_WORKER_TWO,
       fillTone: 'success',
       metricLabel: 'running',
       sizeLabel: '3 B',
@@ -446,9 +455,10 @@ function getNode(
   return result.groups.flatMap((group) => group.nodes).find((node) => node.label === label)
 }
 
-function createHost(overrides: Partial<DdHostResponse> = {}): DdHostResponse {
+function createHost(
+  overrides: Omit<Partial<DdHostResponse>, 'id'> & {id?: string} = {}
+): DdHostResponse {
   return {
-    id: 1,
     hostname: 'web-1',
     os: 'Ubuntu',
     platform: 'linux',
@@ -461,6 +471,7 @@ function createHost(overrides: Partial<DdHostResponse> = {}): DdHostResponse {
     lastSeenAt: '2026-06-04T15:55:00Z',
     isOnline: true,
     ...overrides,
+    id: overrides.id ?? HOST_ID_WEB,
   }
 }
 

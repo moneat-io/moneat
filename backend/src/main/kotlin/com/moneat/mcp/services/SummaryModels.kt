@@ -87,7 +87,7 @@ data class HostStatusChange(
 
 @Serializable
 data class IncidentSummary(
-    val id: Long,
+    val id: String,
     val title: String,
     val priorityLevel: String,
     val status: String,
@@ -130,7 +130,7 @@ data class DailyLogCount(
 
 @Serializable
 data class IncidentContextResponse(
-    val incidentId: Long,
+    val incidentId: String,
     val incident: IncidentSummary?,
     val relatedAlerts: List<AlertSummary>,
     val hostMetricsSummary: List<HostMetricSnapshot>,

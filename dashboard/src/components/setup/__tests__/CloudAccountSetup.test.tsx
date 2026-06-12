@@ -23,6 +23,7 @@ vi.mock('@/hooks/useToast', () => ({
 }))
 
 const EXTERNAL_ID_CONDITION_KEY = ['sts', 'ExternalId'].join(':')
+const CLOUD_SOURCE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174301'
 
 describe('CloudAccountSetup', () => {
   beforeEach(() => {
@@ -37,7 +38,7 @@ describe('CloudAccountSetup', () => {
     })
     mockApi.getCloudSources.mockResolvedValue([])
     mockApi.createCloudSource.mockResolvedValue({
-      id: 1,
+      id: CLOUD_SOURCE_RESOURCE_ID,
       provider: 'aws',
       displayName: 'AWS 123456789012',
       status: 'healthy',

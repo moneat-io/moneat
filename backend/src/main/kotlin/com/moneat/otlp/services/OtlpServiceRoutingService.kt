@@ -22,7 +22,7 @@ import com.moneat.otlp.models.OtlpServiceMappingResponse
 import com.moneat.shared.models.OtelObservedServices
 import com.moneat.shared.models.OtelServiceProjectMappings
 import com.moneat.shared.models.Projects
-import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.toUuidOrNull
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -33,6 +33,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val UNKNOWN_SERVICE_PREFIX = "unknown_service"
 
@@ -55,8 +56,6 @@ enum class OtlpSignalType {
 }
 
 class OtlpServiceRoutingService {
-    private val projectIdResolver = ProjectIdResolver()
-
     fun resolveProjectIds(
         organizationId: Int,
         services: List<OtlpServiceDescriptor>,
@@ -98,11 +97,11 @@ class OtlpServiceRoutingService {
                     )
                     val mapping = mappings[identity]
                     OtlpObservedServiceResponse(
-                        id = row[OtelObservedServices.id],
+                        id = row[OtelObservedServices.resource_id].toString(),
                         mappingId = mapping?.id,
                         serviceNamespace = identity.serviceNamespace,
                         serviceName = identity.serviceName,
-                        projectId = mapping?.projectId,
+                        projectId = mapping?.projectId?.let { projectsById[it]?.second },
                         projectResourceId = mapping?.projectId?.let { projectsById[it]?.second },
                         projectName = mapping?.projectId?.let { projectsById[it]?.first },
                         seenLogs = row[OtelObservedServices.seen_logs],
@@ -122,16 +121,18 @@ class OtlpServiceRoutingService {
     ): OtlpServiceMappingResponse? {
         val identity = normalizeIdentity(request.serviceNamespace, request.serviceName) ?: return null
         val now = Clock.System.now()
-        val projectId = request.projectResourceId?.let(projectIdResolver::resolve) ?: request.projectId ?: return null
+        val projectResourceId = request.projectId ?: request.projectResourceId ?: return null
+        val parsedProjectResourceId = projectResourceId.toUuidOrNull() ?: return null
         return transaction {
             val projectRow = Projects
                 .selectAll()
                 .where {
-                    (Projects.id eq projectId) and
+                    (Projects.resource_id eq parsedProjectResourceId) and
                         (Projects.organization_id eq organizationId)
                 }
                 .firstOrNull()
                 ?: return@transaction null
+            val projectId = projectRow[Projects.id]
             val projectName = projectRow[Projects.name]
             val projectResourceId = projectResourceId(projectRow)
 
@@ -151,20 +152,20 @@ class OtlpServiceRoutingService {
                 it[OtelServiceProjectMappings.project_id] = projectId
                 it[OtelServiceProjectMappings.updated_at] = now
             }
-            val id = OtelServiceProjectMappings
+            val row = OtelServiceProjectMappings
                 .selectAll()
                 .where {
                     (OtelServiceProjectMappings.organization_id eq organizationId) and
                         (OtelServiceProjectMappings.service_namespace eq identity.serviceNamespace) and
                         (OtelServiceProjectMappings.service_name eq identity.serviceName)
                 }
-                .first()[OtelServiceProjectMappings.id]
+                .first()
 
             OtlpServiceMappingResponse(
-                id = id,
+                id = row[OtelServiceProjectMappings.resource_id].toString(),
                 serviceNamespace = identity.serviceNamespace,
                 serviceName = identity.serviceName,
-                projectId = projectId,
+                projectId = projectResourceId,
                 projectResourceId = projectResourceId,
                 projectName = projectName,
                 updatedAt = now.toString(),
@@ -172,12 +173,12 @@ class OtlpServiceRoutingService {
         }
     }
 
-    fun deleteMapping(organizationId: Int, mappingId: Int): Boolean =
+    fun deleteMapping(organizationId: Int, mappingResourceId: Uuid): Boolean =
         transaction {
             val existing = OtelServiceProjectMappings
                 .selectAll()
                 .where {
-                    (OtelServiceProjectMappings.id eq mappingId) and
+                    (OtelServiceProjectMappings.resource_id eq mappingResourceId) and
                         (OtelServiceProjectMappings.organization_id eq organizationId)
                 }
                 .firstOrNull()
@@ -187,6 +188,11 @@ class OtlpServiceRoutingService {
                 OtelServiceProjectMappings.id eq existing[OtelServiceProjectMappings.id]
             } > 0
         }
+
+    fun deleteMapping(organizationId: Int, mappingResourceId: String): Boolean {
+        val parsedResourceId = mappingResourceId.toUuidOrNull() ?: return false
+        return deleteMapping(organizationId, parsedResourceId)
+    }
 
     fun normalizeIdentity(serviceNamespace: String?, serviceName: String?): OtlpServiceIdentity? {
         val normalizedName = serviceName?.trim()?.takeIf { it.isNotBlank() } ?: return null
@@ -253,18 +259,17 @@ class OtlpServiceRoutingService {
                     serviceNamespace = row[OtelServiceProjectMappings.service_namespace],
                     serviceName = row[OtelServiceProjectMappings.service_name],
                 ) to MappingRow(
-                    id = row[OtelServiceProjectMappings.id],
+                    id = row[OtelServiceProjectMappings.resource_id].toString(),
                     projectId = row[OtelServiceProjectMappings.project_id],
                 )
             }
 
     private fun projectResourceId(row: ResultRow): String {
-        val resourceId = row[Projects.resource_id].toString()
-        return resourceId.takeUnless { it == "null" } ?: row[Projects.id].toString()
+        return row[Projects.resource_id].toString()
     }
 
     private data class MappingRow(
-        val id: Int,
+        val id: String,
         val projectId: Long,
     )
 }

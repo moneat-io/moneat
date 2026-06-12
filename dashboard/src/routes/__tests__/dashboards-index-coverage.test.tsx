@@ -96,11 +96,14 @@ const DUPLICATE_DASHBOARD_ID = '00000000-0000-0000-0000-000000000023'
 const REQUESTS_WIDGET_ID = '00000000-0000-0000-0000-000000000031'
 const PROMETHEUS_SOURCE_ID = '00000000-0000-0000-0000-000000000041'
 const POSTGRES_SOURCE_ID = '00000000-0000-0000-0000-000000000042'
+const ORG_ID = '11111111-1111-4111-8111-111111111111'
+const USER_ID = '22222222-2222-4222-8222-222222222222'
+const SECOND_USER_ID = '33333333-3333-4333-8333-333333333333'
 
 const FOLDERS: readonly DashboardFolder[] = [
   {
     id: OPS_FOLDER_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     name: 'Ops',
     color: '#2563eb',
     sort_order: 0,
@@ -109,7 +112,7 @@ const FOLDERS: readonly DashboardFolder[] = [
   },
   {
     id: EMPTY_FOLDER_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     name: 'Empty',
     color: null,
     sort_order: 1,
@@ -121,7 +124,7 @@ const FOLDERS: readonly DashboardFolder[] = [
 const DASHBOARDS: readonly CustomDashboard[] = [
   {
     id: API_DASHBOARD_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     project_id: null,
     folder_id: OPS_FOLDER_ID,
     title: 'API Health',
@@ -130,7 +133,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
     is_default: true,
     is_favorited: true,
     variables: [],
-    created_by: 1,
+    created_by: USER_ID,
     owner_name: 'Sam Lee',
     created_at: NOW_ISO,
     updated_at: NOW_ISO,
@@ -154,7 +157,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
   },
   {
     id: QUEUE_DASHBOARD_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     project_id: null,
     folder_id: null,
     title: 'Queue Depth',
@@ -163,7 +166,7 @@ const DASHBOARDS: readonly CustomDashboard[] = [
     is_default: false,
     is_favorited: false,
     variables: [],
-    created_by: 2,
+    created_by: SECOND_USER_ID,
     owner_name: null,
     created_at: OLD_ISO,
     updated_at: OLD_ISO,
@@ -199,14 +202,14 @@ const TEMPLATES: readonly DashboardTemplateSummary[] = [
 const DATA_SOURCES: readonly CustomDataSourceResponse[] = [
   {
     id: PROMETHEUS_SOURCE_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     name: 'Prometheus prod',
     source_type: 'prometheus',
     host: 'prom.prod',
     port: 9090,
     extra_config: {},
     enabled: true,
-    created_by: 1,
+    created_by: USER_ID,
     created_at: NOW_ISO,
     updated_at: NOW_ISO,
     has_credentials: false,
@@ -214,7 +217,7 @@ const DATA_SOURCES: readonly CustomDataSourceResponse[] = [
   },
   {
     id: POSTGRES_SOURCE_ID,
-    org_id: 1,
+    org_id: ORG_ID,
     name: 'Disabled PG',
     source_type: 'postgresql',
     host: 'pg',
@@ -222,7 +225,7 @@ const DATA_SOURCES: readonly CustomDataSourceResponse[] = [
     database_name: 'app',
     extra_config: {},
     enabled: false,
-    created_by: 1,
+    created_by: USER_ID,
     created_at: NOW_ISO,
     updated_at: NOW_ISO,
     has_credentials: true,
@@ -284,7 +287,7 @@ describe('Dashboards hub route', () => {
     expect(screen.getByText('Queue Depth')).toBeInTheDocument()
     expect(screen.getByText(/2 yours · 2 templates/)).toBeInTheDocument()
     expect(screen.getByTitle('Sam Lee')).toBeInTheDocument()
-    expect(screen.getByTitle('User #2')).toBeInTheDocument()
+    expect(screen.getByTitle('User 33333333')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', {name: /Favorites/}))
     expect(screen.getByText('API Health')).toBeInTheDocument()

@@ -8,6 +8,8 @@ import com.moneat.enterprise.rbac.models.RbacRoleAssignments
 import com.moneat.enterprise.rbac.models.RbacRoles
 import com.moneat.enterprise.rbac.models.RoleAssignmentResponse
 import com.moneat.enterprise.rbac.models.RoleResponse
+import com.moneat.shared.services.requireResourceId
+import com.moneat.shared.services.userResourceIds
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
@@ -145,13 +147,16 @@ class RbacService {
 
     fun listAssignments(organizationId: Int, roleId: Int): List<RoleAssignmentResponse> =
         transaction {
-            RbacRoleAssignments
+            val rows = RbacRoleAssignments
                 .selectAll()
                 .where {
                     (RbacRoleAssignments.organizationId eq organizationId) and
                         (RbacRoleAssignments.roleId eq roleId)
                 }
-                .map { it.toAssignmentResponse() }
+                .toList()
+            val roleResourceIds = roleResourceIds(rows.map { row -> row[RbacRoleAssignments.roleId] })
+            val userResourceIds = userResourceIds(rows.map { row -> row[RbacRoleAssignments.userId] })
+            rows.map { row -> row.toAssignmentResponse(roleResourceIds, userResourceIds) }
         }
 
     /**
@@ -219,20 +224,31 @@ class RbacService {
 
     private fun ResultRow.toRoleResponse(): RoleResponse =
         RoleResponse(
-            id = this[RbacRoles.id].value,
+            id = this[RbacRoles.resourceId].toString(),
             name = this[RbacRoles.name],
             permissions = json.decodeFromString(this[RbacRoles.permissions]),
             createdAt = this[RbacRoles.createdAt].toString(),
             updatedAt = this[RbacRoles.updatedAt].toString()
         )
 
-    private fun ResultRow.toAssignmentResponse(): RoleAssignmentResponse =
+    private fun ResultRow.toAssignmentResponse(
+        roleResourceIds: Map<Int, String> = roleResourceIds(listOf(this[RbacRoleAssignments.roleId])),
+        userResourceIds: Map<Int, String> = userResourceIds(listOf(this[RbacRoleAssignments.userId])),
+    ): RoleAssignmentResponse =
         RoleAssignmentResponse(
-            id = this[RbacRoleAssignments.id].value,
-            roleId = this[RbacRoleAssignments.roleId],
-            userId = this[RbacRoleAssignments.userId],
+            id = this[RbacRoleAssignments.resourceId].toString(),
+            roleId = roleResourceIds.requireResourceId(this[RbacRoleAssignments.roleId], "role"),
+            userId = userResourceIds.requireResourceId(this[RbacRoleAssignments.userId], "user"),
             createdAt = this[RbacRoleAssignments.createdAt].toString()
         )
+
+    private fun roleResourceIds(roleIds: List<Int>): Map<Int, String> {
+        if (roleIds.isEmpty()) return emptyMap()
+        return RbacRoles
+            .selectAll()
+            .where { RbacRoles.id inList roleIds.distinct() }
+            .associate { row -> row[RbacRoles.id].value to row[RbacRoles.resourceId].toString() }
+    }
 
     private fun normalizeRoleName(name: String): String {
         val normalized = name.trim()

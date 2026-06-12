@@ -46,15 +46,17 @@ const WARNING_DASHBOARD_ID = 'dashboard-99'
 const GRAFANA_EXPORT_DASHBOARD_ID = 'dashboard-3'
 const DATADOG_EXPORT_DASHBOARD_ID = 'dashboard-4'
 const DATA_SOURCE_ID = 'datasource-7'
+const ORG_ID = '11111111-1111-4111-8111-111111111111'
+const USER_ID = '22222222-2222-4222-8222-222222222222'
 
 const makeDashboard = (id: string): CustomDashboard => ({
   id,
-  org_id: 1,
+  org_id: ORG_ID,
   title: 'Imported dashboard',
   description: null,
   layout_type: 'grid',
   is_default: false,
-  created_by: 1,
+  created_by: USER_ID,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   widgets: [],
@@ -64,7 +66,7 @@ const makeDataSource = (
   overrides: Partial<CustomDataSourceResponse> = {}
 ): CustomDataSourceResponse => ({
   id: DATA_SOURCE_ID,
-  org_id: 1,
+  org_id: ORG_ID,
   name: 'My Redis',
   source_type: 'redis',
   description: '',
@@ -72,7 +74,7 @@ const makeDataSource = (
   port: 6379,
   extra_config: {},
   enabled: true,
-  created_by: 1,
+  created_by: USER_ID,
   created_at: '',
   updated_at: '',
   has_credentials: false,

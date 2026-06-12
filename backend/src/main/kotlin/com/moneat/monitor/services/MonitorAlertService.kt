@@ -32,7 +32,13 @@ import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.requireResourceId
 import com.moneat.shared.services.TaskLock
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.shared.services.userResourceId
+import com.moneat.shared.services.userResourceIds
+import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
@@ -64,7 +70,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import com.moneat.utils.suspendRunCatching
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -354,8 +360,7 @@ class MonitorAlertService(
         clearAlertState(alert, alertKey)
 
         val metricLabel = getMetricLabel(alert.metric)
-        val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
-        val dashboardUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
+        val dashboardUrl = hostDashboardUrl(alert.hostId, organizationId)
         val alertPriorityOverride = hostAlertPriorityOverride(alert)
         val title = "$hostName - $metricLabel recovered"
         val description = "The alert for $metricLabel is no longer active."
@@ -748,7 +753,16 @@ class MonitorAlertService(
         val metricLabel = getMetricLabel(alert.metric)
         val formattedValue = formatMetricValue(alert.metric, currentValue)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
-        val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
+        val hostResourceId = hostResourceId(alert.hostId, organizationId)
+        val dashboardUrl = hostDashboardUrl(alert.hostId, organizationId)
+        val metadata =
+            mutableMapOf(
+                "host_name" to JsonPrimitive(hostName),
+                "metric" to JsonPrimitive(alert.metric),
+                "current_value" to JsonPrimitive(formattedValue),
+                "threshold" to JsonPrimitive(formattedThreshold)
+            )
+        hostResourceId?.let { metadata["host_id"] = JsonPrimitive(it) }
 
         val alertPriority = hostAlertPriorityOverride(alert)
         val alertLifecycleEvent =
@@ -762,15 +776,8 @@ class MonitorAlertService(
                 source = AlertSource.HOST_ALERT,
                 deduplicationKey = hostAlertDedupKey(alert),
                 organizationId = organizationId,
-                metadata =
-                mapOf(
-                    "host_id" to JsonPrimitive(alert.hostId.toString()),
-                    "host_name" to JsonPrimitive(hostName),
-                    "metric" to JsonPrimitive(alert.metric),
-                    "current_value" to JsonPrimitive(formattedValue),
-                    "threshold" to JsonPrimitive(formattedThreshold)
-                ),
-                moneatUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
+                metadata = metadata,
+                moneatUrl = dashboardUrl
             )
 
         suspendRunCatching {
@@ -888,7 +895,13 @@ class MonitorAlertService(
             }
 
         suspendRunCatching {
-            val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
+            val dashboardUrl = hostDashboardUrl(hostId, organizationId)
+            val metadata =
+                mutableMapOf(
+                    "host_name" to JsonPrimitive(hostName),
+                    "last_seen" to JsonPrimitive(lastSeenText)
+                )
+            hostResourceId(hostId, organizationId)?.let { metadata["host_id"] = JsonPrimitive(it) }
             val alertLifecycleEvent =
                 AlertLifecycleEvent(
                     title = "Host Down: $hostName",
@@ -898,13 +911,8 @@ class MonitorAlertService(
                     source = AlertSource.HOST_DOWN,
                     deduplicationKey = hostDownDedupKey(hostId),
                     organizationId = organizationId,
-                    metadata =
-                    mapOf(
-                        "host_id" to JsonPrimitive(hostId.toString()),
-                        "host_name" to JsonPrimitive(hostName),
-                        "last_seen" to JsonPrimitive(lastSeenText)
-                    ),
-                    moneatUrl = "$frontendUrl/monitoring/hosts/$hostId"
+                    metadata = metadata,
+                    moneatUrl = dashboardUrl
                 )
             incidentService.fireAlert(alertLifecycleEvent)
         }.getOrElse { e ->
@@ -918,7 +926,7 @@ class MonitorAlertService(
         organizationId: Int
     ): Boolean =
         suspendRunCatching {
-            val hostUrl = "${config.property(EMAIL_FRONTEND_URL_CONFIG).getString()}/monitoring/hosts/$hostId"
+            val hostUrl = hostDashboardUrl(hostId, organizationId)
             incidentService.autoResolveAlert(
                 organizationId = organizationId,
                 source = AlertSource.HOST_DOWN,
@@ -1032,21 +1040,25 @@ class MonitorAlertService(
 
     fun listSilencePeriods(organizationId: Int): List<SilencePeriodResponse> {
         return transaction {
-            AlertSilencePeriods
+            val rows = AlertSilencePeriods
                 .selectAll()
                 .where {
                     AlertSilencePeriods.organization_id eq organizationId
-                }.map { row ->
-                    SilencePeriodResponse(
-                        id = row[AlertSilencePeriods.id],
-                        organizationId = row[AlertSilencePeriods.organization_id],
-                        reason = row[AlertSilencePeriods.reason],
-                        startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
-                        endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
-                        createdBy = row[AlertSilencePeriods.created_by],
-                        createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
-                    )
                 }
+                .toList()
+            val orgResourceId = organizationResourceId(organizationId)
+            val userResourceIds = userResourceIds(rows.map { row -> row[AlertSilencePeriods.created_by] })
+            rows.map { row ->
+                SilencePeriodResponse(
+                    id = row[AlertSilencePeriods.resource_id].toString(),
+                    organizationId = orgResourceId,
+                    reason = row[AlertSilencePeriods.reason],
+                    startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
+                    endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
+                    createdBy = userResourceIds.requireResourceId(row[AlertSilencePeriods.created_by], "user"),
+                    createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
+                )
+            }
         }
     }
 
@@ -1060,7 +1072,7 @@ class MonitorAlertService(
         val now = Clock.System.now()
 
         return transaction {
-            val id =
+            val resourceId =
                 AlertSilencePeriods.insert {
                     it[AlertSilencePeriods.organization_id] = organizationId
                     it[AlertSilencePeriods.reason] = request.reason
@@ -1068,31 +1080,63 @@ class MonitorAlertService(
                     it[AlertSilencePeriods.ends_at] = endsAt
                     it[AlertSilencePeriods.created_by] = userId
                     it[AlertSilencePeriods.created_at] = now
-                } get AlertSilencePeriods.id
+                } get AlertSilencePeriods.resource_id
 
             SilencePeriodResponse(
-                id = id,
-                organizationId = organizationId,
+                id = resourceId.toString(),
+                organizationId = organizationResourceId(organizationId),
                 reason = request.reason,
                 startsAt = startsAt.toEpochMilliseconds(),
                 endsAt = endsAt.toEpochMilliseconds(),
-                createdBy = userId,
+                createdBy = userResourceId(userId),
                 createdAt = now.toEpochMilliseconds()
             )
         }
     }
 
     fun deleteSilencePeriod(
-        id: Int,
+        id: String,
+        organizationId: Int
+    ): Boolean =
+        id.toUuidOrNull()
+            ?.let { resourceId -> deleteSilencePeriodByResourceId(resourceId, organizationId) }
+            ?: false
+
+    fun deleteSilencePeriodByResourceId(
+        resourceId: Uuid,
         organizationId: Int
     ): Boolean {
         return transaction {
             AlertSilencePeriods.deleteWhere {
-                (AlertSilencePeriods.id eq id) and
+                (AlertSilencePeriods.resource_id eq resourceId) and
                     (AlertSilencePeriods.organization_id eq organizationId)
             } > 0
         }
     }
+
+    private fun hostDashboardUrl(hostId: Int, organizationId: Int): String {
+        val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
+        val hostResourceId = hostResourceId(hostId, organizationId)
+
+        return if (hostResourceId == null) {
+            "$frontendUrl/monitoring/hosts"
+        } else {
+            "$frontendUrl/monitoring/hosts/$hostResourceId"
+        }
+    }
+
+    private fun hostResourceId(hostId: Int, organizationId: Int): String? =
+        transaction {
+            Hosts
+                .selectAll()
+                .where {
+                    (Hosts.id eq hostId) and
+                        (Hosts.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Hosts.resource_id)
+                ?.toString()
+        }
 
     private fun cleanupExpiredSilencePeriods() {
         val now = Clock.System.now()

@@ -54,6 +54,7 @@ import com.moneat.plugins.getDemoEpochMs
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
@@ -85,6 +86,7 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_RETENTION_DAYS = 90
 private const val MAX_QUERIES_PER_REQUEST = 10
+private const val INACCESSIBLE_PROJECT_ID = -2L
 
 private const val AUTH_JWT = "auth-jwt"
 private const val ERR_NO_ORGANIZATION = "No organization found"
@@ -156,12 +158,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDashboardRouteI
     dashboardService: CustomDashboardService,
     orgId: Long
 ): Long? {
-    val resourceId = call.parameters["id"]
-    if (!dashboardService.isValidResourceId(resourceId)) {
+    val resourceId = call.parameters["id"]?.takeIf(dashboardService::isValidResourceId)
+    if (resourceId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DASHBOARD_ID))
         return null
     }
-    val dashboardId = dashboardService.resolveDashboardId(resourceId.orEmpty(), orgId)
+    val dashboardId = dashboardService.resolveDashboardId(resourceId, orgId)
     if (dashboardId == null) {
         call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DASHBOARD_NOT_FOUND))
     }
@@ -172,12 +174,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveFolderRouteId(
     dashboardService: CustomDashboardService,
     orgId: Long
 ): Long? {
-    val resourceId = call.parameters["folderId"]
-    if (!dashboardService.isValidResourceId(resourceId)) {
+    val resourceId = call.parameters["folderId"]?.takeIf(dashboardService::isValidResourceId)
+    if (resourceId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_FOLDER_ID))
         return null
     }
-    val folderId = dashboardService.resolveFolderId(resourceId.orEmpty(), orgId)
+    val folderId = dashboardService.resolveFolderId(resourceId, orgId)
     if (folderId == null) {
         call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_FOLDER_NOT_FOUND))
     }
@@ -188,12 +190,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDataSourceRoute
     dataSourceService: CustomDataSourceService,
     orgId: Long
 ): Long? {
-    val resourceId = call.parameters["id"]
-    if (!dataSourceService.isValidResourceId(resourceId)) {
+    val resourceId = call.parameters["id"]?.takeIf(dataSourceService::isValidResourceId)
+    if (resourceId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_DATA_SOURCE_ID))
         return null
     }
-    val dataSourceId = dataSourceService.resolveDataSourceId(resourceId.orEmpty(), orgId)
+    val dataSourceId = dataSourceService.resolveDataSourceId(resourceId, orgId)
     if (dataSourceId == null) {
         call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_DATA_SOURCE_NOT_FOUND))
     }
@@ -205,12 +207,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveAlertRouteId(
     dashboardId: Long,
     orgId: Long
 ): Long? {
-    val resourceId = call.parameters["alertId"]
-    if (!dashboardAlertService.isValidResourceId(resourceId)) {
+    val resourceId = call.parameters["alertId"]?.takeIf(dashboardAlertService::isValidResourceId)
+    if (resourceId == null) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(ERR_INVALID_ALERT_ID))
         return null
     }
-    val alertId = dashboardAlertService.resolveAlertId(resourceId.orEmpty(), dashboardId, orgId)
+    val alertId = dashboardAlertService.resolveAlertId(resourceId, dashboardId, orgId)
     if (alertId == null) {
         call.respond(HttpStatusCode.NotFound, ErrorResponse(ERR_ALERT_NOT_FOUND))
     }
@@ -443,7 +445,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDashboardQueryC
     val dashboardScope = getDashboardScope(dashboardId, orgId)
         ?: return respondNotFound(ERR_DASHBOARD_NOT_FOUND)
     val demoEpochMs = call.getDemoEpochMs()
-    val projectId = resolveQueryProjectId(demoEpochMs != null, dependencies.projectIdResolver) ?: return null
+    val projectId = resolveQueryProjectId(orgId, demoEpochMs != null, dependencies.projectIdResolver) ?: return null
     if (!validateQueryProjectScope(orgId, projectId, dashboardScope, demoEpochMs != null)) return null
     return DashboardQueryContext(
         orgId = orgId,
@@ -454,14 +456,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDashboardQueryC
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.resolveQueryProjectId(
+    orgId: Long,
     isDemoUser: Boolean,
     projectIdResolver: ProjectIdResolver,
 ): Long? {
     if (isDemoUser) return -1L
     val resourceId = call.request.queryParameters["projectId"]
         ?: return respondBadRequest("projectId query parameter required")
-    return projectIdResolver.resolve(resourceId)
-        ?: respondBadRequest("projectId query parameter required")
+    if (resourceId.toUuidOrNull() == null) {
+        return respondBadRequest("projectId query parameter required")
+    }
+    return projectIdResolver.resolve(resourceId, orgId)
+        ?: INACCESSIBLE_PROJECT_ID
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.validateQueryProjectScope(

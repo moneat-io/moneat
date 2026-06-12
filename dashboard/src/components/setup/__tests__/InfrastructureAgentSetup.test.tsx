@@ -5,6 +5,7 @@ import {PLACEHOLDER_AGENT_KEY} from '@/lib/agent-config'
 import {InfrastructureAgentSetup} from '../InfrastructureAgentSetup'
 
 const CREATED_AGENT_KEY = 'mna_new_value'
+const AGENT_KEY_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174302'
 
 const {mockApi, mockToast} = vi.hoisted(() => ({
   mockApi: {
@@ -28,7 +29,14 @@ describe('InfrastructureAgentSetup', () => {
     vi.clearAllMocks()
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.getAgentApiKeys.mockResolvedValue({
-      keys: [{id: 1, name: 'Existing agent', keyPrefix: 'mna_live', createdAt: '2026-06-07T12:00:00Z'}],
+      keys: [
+        {
+          id: AGENT_KEY_RESOURCE_ID,
+          name: 'Existing agent',
+          keyPrefix: 'mna_live',
+          createdAt: '2026-06-07T12:00:00Z',
+        },
+      ],
     })
     mockApi.createAgentApiKey.mockResolvedValue({key: CREATED_AGENT_KEY})
   })

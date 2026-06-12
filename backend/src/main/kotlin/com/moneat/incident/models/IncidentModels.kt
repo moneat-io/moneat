@@ -20,6 +20,7 @@ import com.moneat.shared.models.Organizations
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 // Provider config data class
 data class ProviderConfig(
@@ -34,6 +35,7 @@ data class ProviderConfig(
 
 // Exposed table objects
 object IncidentProviderConfigs : IntIdTable("incident_provider_configs") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val providerType = varchar("provider_type", 50)
     val name = varchar("name", 255)
@@ -45,6 +47,7 @@ object IncidentProviderConfigs : IntIdTable("incident_provider_configs") {
 }
 
 object IncidentRoutingRules : IntIdTable("incident_routing_rules") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val providerConfigId = integer("provider_config_id").references(IncidentProviderConfigs.id)
     val alertSource = varchar("alert_source", 50)
     val alertType = varchar("alert_type", 100).nullable()
@@ -54,6 +57,7 @@ object IncidentRoutingRules : IntIdTable("incident_routing_rules") {
 }
 
 object IncidentEventLog : IntIdTable("incident_event_log") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val providerConfigId = integer("provider_config_id").references(IncidentProviderConfigs.id)
     val alertSource = varchar("alert_source", 50)

@@ -21,6 +21,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class AuthTokenServiceTest {
     private val service = AuthTokenService()
@@ -183,7 +184,7 @@ class AuthTokenServiceTest {
             transaction {
                 AuthTokens
                     .selectAll()
-                    .where { AuthTokens.id eq created.id }
+                    .where { AuthTokens.resource_id eq Uuid.parse(created.id) }
                     .first()
             }
         assertNotNull(tokenRow[AuthTokens.last_used_at])
@@ -217,7 +218,7 @@ class AuthTokenServiceTest {
         seedOrgAndMembership(userId)
         val created = generateToken(userId, "to-revoke", listOf("project:read"))
 
-        assertTrue(service.revokeToken(userId, created.id))
+        assertTrue(service.revokeToken(userId, Uuid.parse(created.id)))
         assertTrue(service.listUserTokens(userId).isEmpty())
     }
 
@@ -228,13 +229,13 @@ class AuthTokenServiceTest {
         seedOrgAndMembership(userId)
         val created = generateToken(userId, "token", listOf("project:read"))
 
-        assertFalse(service.revokeToken(otherUser, created.id))
+        assertFalse(service.revokeToken(otherUser, Uuid.parse(created.id)))
     }
 
     @Test
     fun `revokeToken returns false for non-existent token`() {
         val userId = seedUser()
-        assertFalse(service.revokeToken(userId, 99999))
+        assertFalse(service.revokeToken(userId, Uuid.parse("00000000-0000-0000-0000-000000099999")))
     }
 
     // ──── updateToken ────
@@ -245,7 +246,7 @@ class AuthTokenServiceTest {
         seedOrgAndMembership(userId)
         val created = generateToken(userId, "old-name", listOf("project:read"))
 
-        assertTrue(service.updateToken(userId, created.id, "new-name", null))
+        assertTrue(service.updateToken(userId, Uuid.parse(created.id), "new-name", null))
         val tokens = service.listUserTokens(userId)
         assertEquals("new-name", tokens.first().name)
     }
@@ -256,7 +257,7 @@ class AuthTokenServiceTest {
         seedOrgAndMembership(userId)
         val created = generateToken(userId, "token", listOf("project:read"))
 
-        assertTrue(service.updateToken(userId, created.id, null, listOf("project:read", "org:read")))
+        assertTrue(service.updateToken(userId, Uuid.parse(created.id), null, listOf("project:read", "org:read")))
         val tokens = service.listUserTokens(userId)
         assertEquals(listOf("project:read", "org:read"), tokens.first().scopes)
     }
@@ -268,7 +269,7 @@ class AuthTokenServiceTest {
         val created = generateToken(userId, "token", listOf("project:read"))
 
         assertFailsWith<IllegalArgumentException> {
-            service.updateToken(userId, created.id, null, listOf("bad:scope"))
+            service.updateToken(userId, Uuid.parse(created.id), null, listOf("bad:scope"))
         }
     }
 
@@ -279,7 +280,7 @@ class AuthTokenServiceTest {
         seedOrgAndMembership(userId)
         val created = generateToken(userId, "token", listOf("project:read"))
 
-        assertFalse(service.updateToken(otherUser, created.id, "renamed", null))
+        assertFalse(service.updateToken(otherUser, Uuid.parse(created.id), "renamed", null))
     }
 
     // ──── VALID_SCOPES ────

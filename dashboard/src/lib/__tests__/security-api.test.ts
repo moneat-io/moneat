@@ -65,7 +65,7 @@ describe('security api module', () => {
         return HttpResponse.json({id: 5, status: 'archived'})
       })
     )
-    await api.triageSignal(5, {status: 'archived', reason: 'benign'})
+    await api.triageSignal('5', {status: 'archived', reason: 'benign'})
     expect(body).toEqual({status: 'archived', reason: 'benign'})
   })
 
@@ -94,7 +94,7 @@ describe('security api module', () => {
         return new HttpResponse(null, {status: 204})
       })
     )
-    await api.deleteDetectionRule(9)
+    await api.deleteDetectionRule('9')
     expect(called).toBe(true)
   })
 

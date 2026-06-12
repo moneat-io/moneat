@@ -428,7 +428,7 @@ class IncidentServiceExtendedTest {
                 deduplicationKey = any(),
                 metadata = any()
             )
-        } returns 42
+        } returns "77777777-7777-4777-8777-777777777777"
 
         // Insert escalation policy for the org
         transaction {

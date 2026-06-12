@@ -20,6 +20,7 @@ import com.moneat.mcp.models.CreateMcpApiKeyResponse
 import com.moneat.mcp.models.McpApiKeyResponse
 import com.moneat.mcp.models.McpApiKeyValidationResult
 import com.moneat.shared.models.McpApiKeys
+import com.moneat.shared.services.toUuidOrNull
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -32,12 +33,20 @@ import java.security.SecureRandom
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private const val KEY_PREFIX = "mmcp_"
 private const val KEY_RANDOM_BYTES = 32
 private const val DISPLAY_PREFIX_LENGTH = 12
 private const val SECONDS_PER_DAY = 86_400
 private const val KEY_NAME_MAX_LENGTH = 255
+
+data class McpApiKeyUpdate(
+    val name: String?,
+    val enabledTools: List<String>?,
+    val enabledResources: List<String>?,
+    val expiresInDays: Int? = null,
+)
 
 class McpApiKeyService {
 
@@ -59,7 +68,7 @@ class McpApiKeyService {
         val now = Clock.System.now()
         val expiresAt = calculateExpiresAt(expiresInDays)
 
-        val id = transaction {
+        val resourceId = transaction {
             McpApiKeys.insert {
                 it[McpApiKeys.organization_id] = organizationId
                 it[McpApiKeys.name] = name.trim()
@@ -71,11 +80,11 @@ class McpApiKeyService {
                 it[McpApiKeys.created_at] = now
                 it[McpApiKeys.expires_at] = expiresAt
                 it[McpApiKeys.is_active] = true
-            }[McpApiKeys.id]
+            }[McpApiKeys.resource_id]
         }
 
         return CreateMcpApiKeyResponse(
-            id = id,
+            id = resourceId.toString(),
             name = name.trim(),
             keyPrefix = keyPrefix,
             key = rawKey,
@@ -97,7 +106,7 @@ class McpApiKeyService {
                 .orderBy(McpApiKeys.created_at, SortOrder.DESC)
                 .map { row ->
                     McpApiKeyResponse(
-                        id = row[McpApiKeys.id],
+                        id = row[McpApiKeys.resource_id].toString(),
                         name = row[McpApiKeys.name],
                         keyPrefix = row[McpApiKeys.key_prefix],
                         enabledTools = row[McpApiKeys.enabled_tools],
@@ -112,26 +121,23 @@ class McpApiKeyService {
 
     fun updateKey(
         organizationId: Int,
-        keyId: Int,
-        name: String?,
-        enabledTools: List<String>?,
-        enabledResources: List<String>?,
-        expiresInDays: Int? = null,
+        keyId: Uuid,
+        update: McpApiKeyUpdate,
     ): Boolean {
-        name?.let { validateName(it) }
-        val expiresAt = expiresInDays?.let { calculateExpiresAt(it) }
+        update.name?.let { validateName(it) }
+        val expiresAt = update.expiresInDays?.let { calculateExpiresAt(it) }
 
         return transaction {
             val updated = McpApiKeys.update({
-                (McpApiKeys.id eq keyId) and
+                (McpApiKeys.resource_id eq keyId) and
                     (McpApiKeys.organization_id eq organizationId) and
                     (McpApiKeys.is_active eq true)
             }) {
-                name?.let { value -> it[McpApiKeys.name] = value.trim() }
-                enabledTools?.let { tools ->
+                update.name?.let { value -> it[McpApiKeys.name] = value.trim() }
+                update.enabledTools?.let { tools ->
                     it[McpApiKeys.enabled_tools] = tools.distinct().sorted()
                 }
-                enabledResources?.let { resources ->
+                update.enabledResources?.let { resources ->
                     it[McpApiKeys.enabled_resources] = resources.distinct().sorted()
                 }
                 expiresAt?.let { value -> it[McpApiKeys.expires_at] = value }
@@ -140,16 +146,30 @@ class McpApiKeyService {
         }
     }
 
-    fun revokeKey(organizationId: Int, keyId: Int): Boolean {
+    fun updateKey(
+        organizationId: Int,
+        keyId: String,
+        update: McpApiKeyUpdate,
+    ): Boolean {
+        val resourceId = parseResourceId(keyId) ?: return false
+        return updateKey(organizationId, resourceId, update)
+    }
+
+    fun revokeKey(organizationId: Int, keyId: Uuid): Boolean {
         return transaction {
             val updated = McpApiKeys.update({
-                (McpApiKeys.id eq keyId) and
+                (McpApiKeys.resource_id eq keyId) and
                     (McpApiKeys.organization_id eq organizationId)
             }) {
                 it[McpApiKeys.is_active] = false
             }
             updated > 0
         }
+    }
+
+    fun revokeKey(organizationId: Int, keyId: String): Boolean {
+        val resourceId = parseResourceId(keyId) ?: return false
+        return revokeKey(organizationId, resourceId)
     }
 
     fun validateKey(key: String): McpApiKeyValidationResult? {
@@ -206,6 +226,9 @@ class McpApiKeyService {
         require(expiresInDays > 0) { "Expiration must be at least one day" }
         return Clock.System.now().plus(expiresInDays * SECONDS_PER_DAY, DateTimeUnit.SECOND)
     }
+
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
 
     private fun generateKey(): String {
         val random = SecureRandom()

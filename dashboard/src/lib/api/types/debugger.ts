@@ -24,7 +24,7 @@ export type DebuggerMetricKind = 'count' | 'gauge' | 'histogram'
 
 export interface DebuggerProbe {
   id: string
-  organizationId: number
+  organizationId: string
   probeType: DebuggerProbeType
   service: string
   environment: string
@@ -40,7 +40,7 @@ export interface DebuggerProbe {
   metricKind?: DebuggerMetricKind | null
   tags?: string | null
   captureConfig?: string | null
-  createdBy?: number | null
+  createdBy?: string | null
   createdAt: string
   updatedAt: string
 }

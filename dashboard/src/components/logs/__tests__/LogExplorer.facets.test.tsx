@@ -25,6 +25,10 @@ import {LogExplorer} from '@/components/logs/LogExplorer'
 const originalScrollIntoView = globalThis.HTMLElement.prototype.scrollIntoView
 const originalReleasePointerCapture = globalThis.HTMLElement.prototype.releasePointerCapture
 const originalHasPointerCapture = globalThis.HTMLElement.prototype.hasPointerCapture
+const LOG_METRIC_RULE_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174303'
+const LOG_MONITOR_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174304'
+const DEFAULT_DASHBOARD_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174305'
+const CREATED_DASHBOARD_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174306'
 
 beforeAll(() => {
   // The toolbar's "Export" actions live in a Radix dropdown; jsdom needs these.
@@ -217,7 +221,7 @@ describe('LogExplorer facets', () => {
     mockApi.getLogIndexUsage.mockResolvedValue({usage: []})
     mockApi.getLogMonitors.mockResolvedValue({monitors: []})
     mockApi.createLogMetricRule.mockResolvedValue({
-      id: 1,
+      id: LOG_METRIC_RULE_RESOURCE_ID,
       name: 'api_errors',
       query: 'service:api',
       levels: [],
@@ -228,7 +232,7 @@ describe('LogExplorer facets', () => {
       updated_at: '2026-06-03T00:00:00.000Z',
     })
     mockApi.createLogMonitor.mockResolvedValue({
-      id: 1,
+      id: LOG_MONITOR_RESOURCE_ID,
       name: 'api errors',
       query: 'service:api',
       levels: [],
@@ -243,9 +247,9 @@ describe('LogExplorer facets', () => {
     })
     mockApi.downloadLogExport.mockResolvedValue(undefined)
     mockApi.getProjects.mockResolvedValue([])
-    mockApi.getDashboards.mockResolvedValue([{id: 7, title: 'Default', widgets: []}])
-    mockApi.getDashboard.mockResolvedValue({id: 7, title: 'Default', widgets: []})
-    mockApi.createDashboard.mockResolvedValue({id: 99, title: 'Logs', widgets: []})
+    mockApi.getDashboards.mockResolvedValue([{id: DEFAULT_DASHBOARD_RESOURCE_ID, title: 'Default', widgets: []}])
+    mockApi.getDashboard.mockResolvedValue({id: DEFAULT_DASHBOARD_RESOURCE_ID, title: 'Default', widgets: []})
+    mockApi.createDashboard.mockResolvedValue({id: CREATED_DASHBOARD_RESOURCE_ID, title: 'Logs', widgets: []})
     mockApi.updateDashboard.mockResolvedValue({})
     mockApi.deleteDashboard.mockResolvedValue(undefined)
     mockApi.createLogTailStream.mockImplementation(createMockLogTailStream)

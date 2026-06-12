@@ -21,6 +21,10 @@ import { api } from '@/lib/api'
 import { clearAuthStorage } from '@/test/utils'
 import { LOGS_API_BASE, emptyLogsResponse } from './logs-test-helpers'
 
+const LOG_API_KEY_ID = '11111111-1111-4111-8111-111111111111'
+const LOG_API_KEY_CREATED_ID = '22222222-2222-4222-8222-222222222222'
+const LOG_API_KEY_DELETE_ID = '33333333-3333-4333-8333-333333333333'
+
 describe('Logs API', () => {
   beforeEach(() => {
     clearAuthStorage()
@@ -212,7 +216,7 @@ describe('Logs API', () => {
           return HttpResponse.json({
             keys: [
               {
-                id: 1,
+                id: LOG_API_KEY_ID,
                 name: 'my-key',
                 key_prefix: 'mk_abc',
                 created_at: '2024-01-01T00:00:00Z',
@@ -239,7 +243,7 @@ describe('Logs API', () => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.name).toBe('new-key')
           return HttpResponse.json({
-            id: 2,
+            id: LOG_API_KEY_CREATED_ID,
             name: 'new-key',
             key: 'mk_full_secret_key',
             keyPrefix: 'mk_ful',
@@ -257,12 +261,12 @@ describe('Logs API', () => {
   describe('deleteLogApiKey', () => {
     it('deletes a log API key by id', async () => {
       server.use(
-        http.delete(`${LOGS_API_BASE}/v1/logs/api-keys/5`, () => {
+        http.delete(`${LOGS_API_BASE}/v1/logs/api-keys/${LOG_API_KEY_DELETE_ID}`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      await api.deleteLogApiKey(5)
+      await api.deleteLogApiKey(LOG_API_KEY_DELETE_ID)
     })
   })
 

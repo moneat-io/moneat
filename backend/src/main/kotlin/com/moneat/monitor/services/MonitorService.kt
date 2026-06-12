@@ -40,6 +40,7 @@ import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostRepository
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -51,6 +52,7 @@ import kotlin.math.min
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -227,6 +229,12 @@ class MonitorService(
      */
     fun getHostById(hostId: Int): HostData? =
         hostRepository.getById(hostId)
+
+    fun getHostByResourceId(
+        resourceId: Uuid,
+        organizationIds: List<Int>
+    ): HostData? =
+        hostRepository.getByResourceId(resourceId, organizationIds)
 
     /**
      * Delete a host and all its metrics.
@@ -515,7 +523,7 @@ class MonitorService(
         ) {
             val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
                 systemId = "",
-                hostId = hostId,
+                hostId = null,
                 from = fromTimestamp,
                 to = toTimestamp,
                 intervalSeconds = intervalSeconds ?: 3600,
@@ -525,7 +533,7 @@ class MonitorService(
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
                     systemId = "",
-                    hostId = hostId,
+                    hostId = host.resourceId.toString(),
                     from = fromTimestamp,
                     to = toTimestamp,
                     intervalSeconds = intervalSeconds ?: 3600,
@@ -599,7 +607,7 @@ class MonitorService(
                     val data =
                         result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
                             systemId = "",
-                            hostId = hostId,
+                            hostId = host.resourceId.toString(),
                             from = effectiveFrom,
                             to = effectiveTo,
                             intervalSeconds = rollupInterval,
@@ -639,8 +647,8 @@ class MonitorService(
                 }
 
             HistoricalMetricsResponse(
-                systemId = "",
-                hostId = hostId,
+                systemId = host.resourceId.toString(),
+                hostId = host.resourceId.toString(),
                 from = effectiveFrom,
                 to = effectiveTo,
                 intervalSeconds = rollupInterval,
@@ -728,8 +736,8 @@ class MonitorService(
                 for (c in containers) {
                     allContainers.add(
                         ContainerWithSystem(
-                            systemId = host.id.toString(),
-                            hostId = host.id,
+                            systemId = host.resourceId.toString(),
+                            hostId = host.resourceId.toString(),
                             systemName = host.displayName ?: host.hostname,
                             name = c.name,
                             id = c.id,
@@ -963,6 +971,23 @@ class MonitorService(
         return listHostAlerts(hostId, organizationId)
     }
 
+    fun getAlertByInternalId(alertId: Int): AlertResponse? =
+        hostAlertRepository.findAlertById(alertId.toLong())?.let { row ->
+            AlertResponse(
+                id = row.resourceId.toString(),
+                hostId = hostRepository.getById(row.hostId)?.resourceId?.toString(),
+                scope = row.scope,
+                metric = row.metric,
+                condition = row.condition,
+                threshold = row.threshold,
+                durationSeconds = row.durationSeconds,
+                enabled = row.enabled,
+                alertPriority = row.alertPriority,
+                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                createdAt = row.createdAt.toEpochMilliseconds()
+            )
+        }
+
     fun getAlertConfig(
         hostId: Int,
         organizationId: Int
@@ -1012,7 +1037,7 @@ class MonitorService(
             ensureOrganizationAlertTemplates(organizationId)
             val now = Clock.System.now()
             val alertPriority = resolvedAlertPriority(request)
-            val alertId = hostAlertRepository.createAlert(
+            val alertResourceId = hostAlertRepository.createAlert(
                 CreateAlertData(
                     hostId = hostId,
                     organizationId = organizationId,
@@ -1026,8 +1051,8 @@ class MonitorService(
                 )
             )
             return AlertResponse(
-                id = alertId.toInt(),
-                hostId = hostId,
+                id = alertResourceId.toString(),
+                hostId = hostRepository.getById(hostId)?.resourceId?.toString(),
                 scope = ALERT_SCOPE_GLOBAL,
                 metric = request.metric,
                 condition = request.condition,
@@ -1043,7 +1068,7 @@ class MonitorService(
         ensureHostAlertsSeeded(hostId, organizationId)
         val now = Clock.System.now()
         val alertPriority = resolvedAlertPriority(request)
-        val alertId = hostAlertRepository.createAlert(
+        val alertResourceId = hostAlertRepository.createAlert(
             CreateAlertData(
                 hostId = hostId,
                 organizationId = organizationId,
@@ -1057,8 +1082,8 @@ class MonitorService(
             )
         )
         return AlertResponse(
-            id = alertId.toInt(),
-            hostId = hostId,
+            id = alertResourceId.toString(),
+            hostId = hostRepository.getById(hostId)?.resourceId?.toString(),
             scope = ALERT_SCOPE_HOST,
             metric = request.metric,
             condition = request.condition,
@@ -1074,6 +1099,18 @@ class MonitorService(
     /**
      * Update an alert.
      */
+    fun updateAlert(
+        alertId: String,
+        hostId: Int,
+        organizationId: Int,
+        request: UpdateAlertRequest,
+        scope: String = ALERT_SCOPE_HOST
+    ): Boolean {
+        val alertResourceId = parseResourceId(alertId) ?: return false
+        val internalAlertId = resolveAlertId(alertResourceId, hostId, organizationId, scope) ?: return false
+        return updateAlert(internalAlertId, hostId, organizationId, request, scope)
+    }
+
     fun updateAlert(
         alertId: Int,
         hostId: Int,
@@ -1100,12 +1137,34 @@ class MonitorService(
      * Delete an alert.
      */
     fun deleteAlert(
+        alertId: String,
+        hostId: Int,
+        organizationId: Int,
+        scope: String = ALERT_SCOPE_HOST
+    ): Boolean {
+        val alertResourceId = parseResourceId(alertId) ?: return false
+        val internalAlertId = resolveAlertId(alertResourceId, hostId, organizationId, scope) ?: return false
+        return deleteAlert(internalAlertId, hostId, organizationId, scope)
+    }
+
+    fun deleteAlert(
         alertId: Int,
         hostId: Int,
         organizationId: Int,
         scope: String = ALERT_SCOPE_HOST
     ): Boolean =
         hostAlertRepository.deleteAlert(alertId.toLong(), hostId, organizationId, scope)
+
+    fun resolveAlertId(
+        alertResourceId: Uuid,
+        hostId: Int,
+        organizationId: Int,
+        scope: String
+    ): Int? =
+        hostAlertRepository.resolveAlertId(alertResourceId, hostId, organizationId, scope)
+
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
 
     // Helper functions
 
@@ -1186,40 +1245,46 @@ class MonitorService(
     }
 
     private fun listHostAlerts(hostId: Int, organizationId: Int): List<AlertResponse> =
-        hostAlertRepository.listByHostAndOrg(hostId, organizationId).map { row ->
-            AlertResponse(
-                id = row.id,
-                hostId = hostId,
-                scope = ALERT_SCOPE_HOST,
-                metric = row.metric,
-                condition = row.condition,
-                threshold = row.threshold,
-                durationSeconds = row.durationSeconds,
-                enabled = row.enabled,
-                alertPriority = row.alertPriority,
-                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
-                createdAt = row.createdAt.toEpochMilliseconds()
-            )
+        hostAlertRepository.listByHostAndOrg(hostId, organizationId).let { rows ->
+            val hostResourceId = hostRepository.getById(hostId)?.resourceId?.toString()
+            rows.map { row ->
+                AlertResponse(
+                    id = row.resourceId.toString(),
+                    hostId = hostResourceId,
+                    scope = ALERT_SCOPE_HOST,
+                    metric = row.metric,
+                    condition = row.condition,
+                    threshold = row.threshold,
+                    durationSeconds = row.durationSeconds,
+                    enabled = row.enabled,
+                    alertPriority = row.alertPriority,
+                    lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                    createdAt = row.createdAt.toEpochMilliseconds()
+                )
+            }
         }
 
     private fun listGlobalAlertsForHost(
         hostId: Int,
         organizationId: Int
     ): List<AlertResponse> =
-        hostAlertRepository.listGlobalAlertsForHost(organizationId, hostId).map { row ->
-            AlertResponse(
-                id = row.id,
-                hostId = hostId,
-                scope = ALERT_SCOPE_GLOBAL,
-                metric = row.metric,
-                condition = row.condition,
-                threshold = row.threshold,
-                durationSeconds = row.durationSeconds,
-                enabled = row.enabled,
-                alertPriority = row.alertPriority,
-                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
-                createdAt = row.createdAt.toEpochMilliseconds()
-            )
+        hostAlertRepository.listGlobalAlertsForHost(organizationId, hostId).let { rows ->
+            val hostResourceId = hostRepository.getById(hostId)?.resourceId?.toString()
+            rows.map { row ->
+                AlertResponse(
+                    id = row.resourceId.toString(),
+                    hostId = hostResourceId,
+                    scope = ALERT_SCOPE_GLOBAL,
+                    metric = row.metric,
+                    condition = row.condition,
+                    threshold = row.threshold,
+                    durationSeconds = row.durationSeconds,
+                    enabled = row.enabled,
+                    alertPriority = row.alertPriority,
+                    lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                    createdAt = row.createdAt.toEpochMilliseconds()
+                )
+            }
         }
 
     private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {

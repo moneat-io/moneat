@@ -41,6 +41,7 @@ import org.postgresql.util.PGobject
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
@@ -121,6 +122,7 @@ private fun Table.stringJsonb(name: String): Column<String> =
 
 object DdHostsTable : Table("hosts") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val hostname = varchar("hostname", 512)
     val displayName = varchar("display_name", 255).nullable()
@@ -142,7 +144,8 @@ object DdHostsTable : Table("hosts") {
 }
 
 data class DdHostInfo(
-    val id: Int,
+    val id: String,
+    val internalId: Int,
     val organizationId: Int,
     val hostname: String,
     val os: String,
@@ -375,23 +378,23 @@ object DatadogHostService {
         }
     }
 
-    fun getHost(organizationId: Int, hostId: Int): DdHostInfo? {
+    fun getHost(organizationId: Int, hostResourceId: Uuid): DdHostInfo? {
         return transaction {
             DdHostsTable.selectAll()
                 .where {
                     (DdHostsTable.organizationId eq organizationId) and
-                        (DdHostsTable.id eq hostId)
+                        (DdHostsTable.resourceId eq hostResourceId)
                 }
                 .map { row -> rowToDdHostInfo(row) }
                 .firstOrNull()
         }
     }
 
-    fun deleteHost(organizationId: Int, hostId: Int): Boolean {
+    fun deleteHost(organizationId: Int, hostResourceId: Uuid): Boolean {
         return transaction {
             val deleted = DdHostsTable.deleteWhere {
                 (DdHostsTable.organizationId eq organizationId) and
-                    (DdHostsTable.id eq hostId)
+                    (DdHostsTable.resourceId eq hostResourceId)
             }
             deleted > 0
         }
@@ -407,7 +410,8 @@ object DatadogHostService {
         val lastSeenAt = row[DdHostsTable.lastSeenAt]
         val isOnline = (Clock.System.now() - lastSeenAt) < 5.minutes
         return DdHostInfo(
-            id = row[DdHostsTable.id],
+            id = row[DdHostsTable.resourceId].toString(),
+            internalId = row[DdHostsTable.id],
             organizationId = row[DdHostsTable.organizationId],
             hostname = row[DdHostsTable.hostname],
             os = row[DdHostsTable.os],

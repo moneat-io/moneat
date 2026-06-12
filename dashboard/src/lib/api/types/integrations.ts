@@ -19,7 +19,7 @@ import type {AlertPriority} from './dashboards'
 type RoutingAlertPriority = Exclude<AlertPriority, null>
 
 export interface OrganizationIntegration {
-  id: number
+  id: string
   integrationType: string
   teamName: string | null
   channelId: string | null
@@ -65,7 +65,7 @@ export interface TestIntegrationResponse {
 }
 
 export interface IncidentProviderConfig {
-  id: number
+  id: string
   providerType: string
   name: string
   configJson: Record<string, string>
@@ -89,7 +89,7 @@ export interface UpdateIncidentProviderRequest {
 }
 
 export interface IncidentRoutingRule {
-  id: number
+  id: string
   alertSource: string
   alertType?: string | null
   alertPriority: RoutingAlertPriority
@@ -102,7 +102,7 @@ export interface UpsertRoutingRuleRequest {
 }
 
 export interface IncidentEventLogEntry {
-  id: number
+  id: string
   alertSource: string
   deduplicationKey: string
   alertPriority: RoutingAlertPriority

@@ -49,7 +49,7 @@ data class UptimeMonitorSummary(
 
 @Serializable
 data class AlertSummaryItem(
-    val alertId: Int,
+    val alertId: String,
     val systemId: String?,
     val metric: String,
     val condition: String,
@@ -84,7 +84,7 @@ data class IssueSummaryItem(
     val issueId: String,
     val title: String,
     val eventCount: Long,
-    val projectId: Long
+    val projectId: String
 )
 
 @Serializable
@@ -157,7 +157,7 @@ data class HostResourceTrend(
 
 @Serializable
 data class IncidentContextResponse(
-    val incidentId: Long,
+    val incidentId: String,
     val triggeringAlert: AlertContextInfo?,
     val hostMetrics: HostMetricsWindow?,
     val relatedLogs: List<RelatedLogEntry>,
@@ -168,7 +168,7 @@ data class IncidentContextResponse(
 
 @Serializable
 data class AlertContextInfo(
-    val alertId: Int,
+    val alertId: String,
     val metric: String,
     val condition: String,
     val threshold: Double,
@@ -207,6 +207,6 @@ data class ErrorSpikeEntry(
 @Serializable
 data class DeploymentInfo(
     val version: String,
-    val projectId: Long,
+    val projectId: String,
     val createdAt: String
 )

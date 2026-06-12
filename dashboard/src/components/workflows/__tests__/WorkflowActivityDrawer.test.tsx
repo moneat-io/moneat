@@ -34,7 +34,7 @@ vi.mock('@/hooks/useToast', () => ({useToast: () => ({toast: mockToast})}))
 
 import {WorkflowActivityDrawer} from '../WorkflowActivityDrawer'
 
-const workflow = {id: 3, name: 'Pager'} as WorkflowResponse
+const workflow = {id: 'workflow-3', name: 'Pager'} as WorkflowResponse
 
 const exportData = {
   schema_version: 1,
@@ -73,7 +73,7 @@ describe('WorkflowActivityDrawer', () => {
     vi.clearAllMocks()
     mockApi.exportWorkflow.mockResolvedValue(exportData)
     mockApi.getWorkflowAuditForWorkflow.mockResolvedValue(audit)
-    mockApi.importWorkflow.mockResolvedValue({id: 4, name: 'Imported'})
+    mockApi.importWorkflow.mockResolvedValue({id: 'workflow-4', name: 'Imported'})
   })
 
   it('does not fetch while closed', () => {
@@ -85,7 +85,7 @@ describe('WorkflowActivityDrawer', () => {
   it('renders export output and the activity timeline when open', async () => {
     renderDrawer()
     await waitFor(() => {
-      expect(mockApi.getWorkflowAuditForWorkflow).toHaveBeenCalledWith(3, 20)
+      expect(mockApi.getWorkflowAuditForWorkflow).toHaveBeenCalledWith('workflow-3', 20)
     })
     expect(await screen.findByText(/moneat_workflow/)).toBeInTheDocument()
     expect(await screen.findByText('workflow.run')).toBeInTheDocument()

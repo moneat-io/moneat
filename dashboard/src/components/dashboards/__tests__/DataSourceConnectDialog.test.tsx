@@ -123,9 +123,16 @@ describe('DataSourceConnectDialog', () => {
 
   it('hydrates and updates an existing source in edit mode', async () => {
     const initial: CustomDataSourceResponse = {
-      id: '00000000-0000-0000-0000-000000000007', org_id: 1, name: 'Edge Prom', source_type: 'prometheus',
+      id: '00000000-0000-0000-0000-000000000007',
+      org_id: '11111111-1111-4111-8111-111111111111',
+      name: 'Edge Prom',
+      source_type: 'prometheus',
       host: 'prom.example.com', port: 9090, extra_config: {scheme: 'http'},
-      enabled: true, created_by: 1, created_at: '', updated_at: '', has_credentials: true,
+      enabled: true,
+      created_by: '22222222-2222-4222-8222-222222222222',
+      created_at: '',
+      updated_at: '',
+      has_credentials: true,
     }
     renderWithQueryClient(<DataSourceConnectDialog mode="edit" initial={initial} onClose={vi.fn()} />)
     expect((screen.getByLabelText('Host') as HTMLInputElement).value).toBe('prom.example.com')

@@ -230,25 +230,25 @@ function AdminOrgDetailPage() {
 
   const {data: org, isLoading} = useQuery({
     queryKey: ['admin-org', orgId],
-    queryFn: () => api.getAdminOrgDetail(Number(orgId)),
+    queryFn: () => api.getAdminOrgDetail(orgId),
     enabled: !!orgId,
   })
 
   const {data: usage} = useQuery({
     queryKey: ['admin-org-usage', orgId, usagePeriod],
-    queryFn: () => api.getAdminOrgUsage(Number(orgId), usagePeriod),
+    queryFn: () => api.getAdminOrgUsage(orgId, usagePeriod),
     enabled: !!orgId,
   })
 
   const {data: quotaUsage} = useQuery({
     queryKey: ['admin-org-quota-usage', orgId],
-    queryFn: () => api.getAdminOrgQuotaUsage(Number(orgId)),
+    queryFn: () => api.getAdminOrgQuotaUsage(orgId),
     enabled: !!orgId,
   })
 
   const quotaResetMutation = useMutation({
     mutationFn: (targetPercentValue: number) =>
-      api.resetAdminOrgQuotaUsage(Number(orgId), {
+      api.resetAdminOrgQuotaUsage(orgId, {
         quotaType,
         targetPercent: targetPercentValue,
       }),

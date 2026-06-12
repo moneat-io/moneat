@@ -40,7 +40,7 @@ import {formatRelativeTime} from '@/lib/utils'
 type HostAlertScope = 'global' | 'host'
 
 interface AlertsTabProps {
-  hostId: number
+  hostId: string
 }
 
 const METRIC_OPTIONS = [
@@ -63,7 +63,7 @@ const CONDITION_OPTIONS = [
   {value: '==', label: 'Equal to (==)'},
 ]
 
-const hostAlertConfigQueryKey = (hostId: number) => ['host-alert-config', hostId] as const
+const hostAlertConfigQueryKey = (hostId: string) => ['host-alert-config', hostId] as const
 
 function replaceAlert(alerts: HostAlert[], updatedAlert: HostAlert): HostAlert[] {
   return alerts.map((alert) =>
@@ -103,7 +103,7 @@ export function AlertsTab({hostId}: AlertsTabProps) {
   const alerts = useMemo(() => {
     if (!alertConfig) return []
     const baseAlerts = activeScope === 'global' ? alertConfig.globalAlerts : alertConfig.hostAlerts
-    return [...baseAlerts].sort((a, b) => a.id - b.id)
+    return [...baseAlerts].sort((a, b) => b.createdAt - a.createdAt || a.metric.localeCompare(b.metric))
   }, [alertConfig, activeScope])
 
   const scopeMutation = useMutation({

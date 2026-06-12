@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface OrganizationAccountSettings {
-  id: number
+  id: string
   name: string
   role: string
 }
@@ -32,7 +32,7 @@ export interface OrganizationDeletionValidation {
 }
 
 export interface OrgMember {
-  userId: number
+  userId: string
   email: string
   name?: string
   role: string
@@ -40,7 +40,7 @@ export interface OrgMember {
 }
 
 export interface OrgInvitation {
-  id: number
+  id: string
   email: string
   role: string
   status: string

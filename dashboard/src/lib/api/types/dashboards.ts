@@ -152,7 +152,7 @@ export interface BatchQueryResultMetadata {
 
 export interface CustomDashboard {
   id: string
-  org_id: number
+  org_id: string
   project_id?: string | null
   folder_id?: string | null
   title: string
@@ -161,8 +161,8 @@ export interface CustomDashboard {
   is_default: boolean
   is_favorited?: boolean
   variables?: DashboardVariable[]
-  created_by: number
   owner_name?: string | null
+  created_by: string
   created_at: string
   updated_at: string
   widgets: DashboardWidget[]
@@ -170,7 +170,7 @@ export interface CustomDashboard {
 
 export interface DashboardFolder {
   id: string
-  org_id: number
+  org_id: string
   name: string
   color?: string | null
   sort_order: number
@@ -282,7 +282,7 @@ export interface DataSourceInfo {
 
 export interface CustomDataSourceResponse {
   id: string
-  org_id: number
+  org_id: string
   name: string
   description?: string
   source_type: string
@@ -291,7 +291,7 @@ export interface CustomDataSourceResponse {
   database_name?: string
   extra_config: Record<string, string>
   enabled: boolean
-  created_by: number
+  created_by: string
   created_at: string
   updated_at: string
   has_credentials: boolean

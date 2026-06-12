@@ -47,12 +47,13 @@ interface DashboardRepository {
 
 data class DashboardWithFavoriteFlag(
     val id: Long,
-    val resourceId: String = id.toString(),
+    val resourceId: String,
     val orgId: Long,
+    val orgResourceId: String,
     val projectId: Long? = null,
-    val projectResourceId: String? = projectId?.toString(),
+    val projectResourceId: String? = null,
     val folderId: Long? = null,
-    val folderResourceId: String? = folderId?.toString(),
+    val folderResourceId: String? = null,
     val title: String,
     val description: String?,
     val layoutType: String,
@@ -60,6 +61,7 @@ data class DashboardWithFavoriteFlag(
     val isFavorited: Boolean,
     val variables: String,
     val createdBy: Long,
+    val createdByResourceId: String,
     val createdAt: String,
     val updatedAt: String,
     val ownerName: String? = null
@@ -67,18 +69,20 @@ data class DashboardWithFavoriteFlag(
 
 data class CreatedDashboardData(
     val id: Long,
-    val resourceId: String = id.toString(),
+    val resourceId: String,
     val orgId: Long,
+    val orgResourceId: String,
     val projectId: Long? = null,
-    val projectResourceId: String? = projectId?.toString(),
+    val projectResourceId: String? = null,
     val folderId: Long? = null,
-    val folderResourceId: String? = folderId?.toString(),
+    val folderResourceId: String? = null,
     val title: String,
     val description: String?,
     val layoutType: String,
     val isDefault: Boolean,
     val variables: String,
     val createdBy: Long,
+    val createdByResourceId: String,
     val createdAt: String,
     val updatedAt: String,
     val ownerName: String? = null

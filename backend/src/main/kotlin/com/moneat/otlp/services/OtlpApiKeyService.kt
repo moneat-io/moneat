@@ -29,6 +29,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.uuid.Uuid
 
 private const val NEW_KEY_PREFIX = "motlp_"
 private const val LEGACY_KEY_PREFIX = "mlog_"
@@ -48,7 +49,7 @@ class OtlpApiKeyService {
         val keyPrefix = rawKey.take(DISPLAY_PREFIX_LENGTH)
         val now = Clock.System.now()
 
-        val id =
+        val row =
             transaction {
                 OtlpApiKeys.insert {
                     it[OtlpApiKeys.organization_id] = organizationId
@@ -58,11 +59,11 @@ class OtlpApiKeyService {
                     it[OtlpApiKeys.created_by] = createdBy
                     it[OtlpApiKeys.created_at] = now
                     it[OtlpApiKeys.is_active] = true
-                }[OtlpApiKeys.id]
+                }
             }
 
         return CreateOtlpApiKeyResponse(
-            id = id,
+            id = row[OtlpApiKeys.resource_id].toString(),
             name = name,
             keyPrefix = keyPrefix,
             key = rawKey,
@@ -113,7 +114,7 @@ class OtlpApiKeyService {
                 }
                 .map { row ->
                     OtlpApiKeyResponse(
-                        id = row[OtlpApiKeys.id],
+                        id = row[OtlpApiKeys.resource_id].toString(),
                         name = row[OtlpApiKeys.name],
                         keyPrefix = row[OtlpApiKeys.key_prefix],
                         createdAt = row[OtlpApiKeys.created_at].toString(),
@@ -123,12 +124,12 @@ class OtlpApiKeyService {
         }
     }
 
-    fun deleteKey(organizationId: Int, keyId: Int): Boolean {
+    fun deleteKey(organizationId: Int, keyResourceId: Uuid): Boolean {
         return transaction {
             val updated =
                 OtlpApiKeys
                     .update({
-                        (OtlpApiKeys.id eq keyId) and
+                        (OtlpApiKeys.resource_id eq keyResourceId) and
                             (OtlpApiKeys.organization_id eq organizationId)
                     }) {
                         it[OtlpApiKeys.is_active] = false

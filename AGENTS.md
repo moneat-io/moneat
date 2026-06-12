@@ -1,376 +1,393 @@
 # AI Agent Instructions for Moneat
 
-Moneat is a Sentry-compatible, OpenTelemetry-compatible observability platform built with Kotlin/Ktor backend, React frontend, PostgreSQL for operational data, and ClickHouse for high-performance event analytics.
+Moneat is an open-source, self-hostable observability platform. It ingests
+Sentry-compatible, Datadog-compatible, and OpenTelemetry/OTLP traffic, then
+presents source-neutral Moneat telemetry workflows: errors, logs, traces,
+metrics, services, spans, dashboards, alerts, incidents, uptime, synthetics,
+security, workflows, and sources.
+
+Treat vendor protocols as ingestion and compatibility layers, not the core
+product model. Use vendor names in setup, migration, import/export,
+compatibility, and troubleshooting surfaces. In core product UI/API work,
+prefer telemetry concepts and source metadata over labels such as "Sentry
+errors" or "Datadog traces."
+
+## Agent Operating Defaults
+
+- Read the surrounding implementation before editing. Prefer existing helpers,
+  feature package boundaries, API clients, and tests over new abstractions.
+- Keep changes scoped to the requested behavior. Do not remove real
+  functionality to make a check pass.
+- Fix warnings, lint, Detekt, ESLint, Sonar, and compiler findings at the root
+  cause. Do not add suppressions, `NOSONAR`, or disable comments unless the rule
+  is truly wrong for that line or file forever and the reason is documented.
+- When asked to publish a PR/MR or green the pipeline, carry the work through
+  push, GitHub check status, Sonar quality gate, and unresolved review-thread
+  verification before calling it done.
+- Use `git diff --check` as a final hygiene gate for code changes.
+- New source files should include the existing AGPL header used by nearby
+  Kotlin/TypeScript files.
+
+## Local Environment
+
+Keep this file portable. Do not reference personal machine names, usernames,
+absolute local paths, private hostnames, or one developer's workstation-specific
+service layout.
+
+Use the public repo setup paths unless the current checkout already provides a
+local wrapper or generated environment file. Prefer `.env.example`, the README,
+and checked-in scripts as the public source of truth. Public self-hosting docs
+and release artifacts may describe Docker Compose or Helm; keep those
+instructions separate from any private workstation setup.
+
+## Repository Map
+
+- `backend/`: Kotlin/Ktor backend. Code is organized by feature package
+  (`events`, `logs`, `otlp`, `datadog`, `dashboards`, `monitor`, `workflows`,
+  `security`, `org`, `billing`, etc.), with shared infrastructure in `config`,
+  `plugins`, `di`, `shared`, `monitoring`, `mcp`, `utils`, and `logging`.
+- `ee/backend/`: enterprise modules that are always on the runtime classpath and
+  license-gated at runtime. Keep core/EE API and DTO contracts aligned.
+- `dashboard/`: React 19 + Vite app, TanStack Router file routes, shadcn-style
+  UI components, docs/blog/prerender pipeline, and typed API client modules.
+- `dashboard/src/lib/api/`: frontend API client, split into `modules/` and
+  `types/`. Update these with backend DTO or route contract changes.
+- `dashboard/src/docs/`: in-app docs MDX and sidebar. The old standalone
+  Docusaurus flow is not the current docs build path.
+- `emails/`: Maizzle email templates copied into backend resources when built.
+- `e2e/`: Android, KMP, and web test apps that send real telemetry to a running
+  Moneat instance.
+- `packages/analytics/`: browser analytics package.
+- `scripts/`: repo automation, screenshots, and migration-version checks.
+- `charts/moneat/`: Helm chart when present. Treat it as public self-hosting
+  packaging, not the local development path.
 
 ## Build, Test, and Lint
 
-### Backend (Kotlin/Ktor)
+CI uses Java 21 and Node 24. The backend Gradle build compiles Kotlin with a
+JVM toolchain of 17 and warnings as errors.
+
+Backend:
+
 ```bash
 cd backend
-./gradlew build          # Build and test
-./gradlew test           # Run tests only
-./gradlew run            # Run locally (uses port 8080)
-./gradlew shadowJar      # Build fat JAR for production
-./gradlew seedE2EData    # Seed E2E test data
+./gradlew test --no-daemon
+./gradlew test --tests com.moneat.services.EventServiceTest --no-daemon
+./gradlew detekt --no-daemon
+./gradlew build --no-daemon
+./gradlew integrationTest --no-daemon
+./gradlew seedE2EData
+./gradlew seedDemoData
 ```
 
-**Run single test class:**
-```bash
-./gradlew test --tests com.moneat.services.EventServiceTest
-```
+Notes:
 
-**Run single test method:**
-```bash
-./gradlew test --tests com.moneat.services.EventServiceTest.testEventIngestion
-```
+- `./gradlew build` depends on Detekt and installs `.githooks/`.
+- `./gradlew check` depends on `integrationTest`; integration tests use
+  Testcontainers and are heavier than normal unit/route tests.
+- If Gradle reports a corrupt backend jar such as `invalid CEN header`, remove
+  the stale jar and rerun backend/EE Gradle tasks sequentially rather than
+  changing product logic.
 
-### Dashboard (React/Vite)
+Dashboard:
+
 ```bash
 cd dashboard
-npm run dev              # Dev server (port 3000)
-npm run build            # Production build
-npm run lint             # ESLint
-npm run preview          # Preview production build
+npm ci
+npm run dev
+npm run lint
+npm run typecheck
+npm run test
+npm run test:coverage
+npm run build
 ```
 
-### Documentation (Docusaurus)
-```bash
-cd docs
-npm install
-npm run start            # Dev server (port 3000)
-npm run build            # Production build (output in docs/build/)
-npm run serve            # Serve built docs locally
-```
+`npm run build` runs lint, typecheck, Vite build, and the prerender step that
+writes SEO route HTML and `sitemap.xml`.
 
-The docs are built alongside the dashboard in the Docker image and served at `/docs/` by nginx.
+Email templates:
 
-### Email Templates (Maizzle)
 ```bash
 cd emails
-npm run dev              # Preview with live reload (port 3001)
-npm run build:production # Build for production
+npm run dev
+npm run build:production
 ```
 
-Built templates are in `emails/build/templates/email/` with `{{ variable }}` placeholders for Kotlin template engine.
+Helm chart, when touching `charts/moneat/`:
 
-### Infrastructure
-
-**IMPORTANT:**
-- **Database services** (PostgreSQL, ClickHouse, Redis) run via Docker (see `docker-compose.yml`)
-- **Backend** (Kotlin/Ktor) runs **locally** on port 8080 and connects to the database services
-- **Frontend** (React/Vite) runs **locally** on port 3000
-
-Start infrastructure with `docker-compose up -d`, then run the backend and frontend locally.
-
-Backend connects to services at (configurable via `.env`):
-- PostgreSQL: `localhost:5499`
-- ClickHouse: `localhost:8123` (HTTP), `localhost:9000` (native)
-- Redis: `localhost:6379`
-
-## Architecture Overview
-
-### Request Flow
-1. **Sentry ingestion**: Client → `/api/{projectId}/envelope/` → `IngestRoutes.kt` → `EventService.kt` → PostgreSQL + ClickHouse
-2. **OTLP ingestion**: Client → `/v1/{logs,traces,metrics}/otlp` → `OtlpTraceRoutes.kt` / `OtlpMetricsRoutes.kt` / `LogRoutes.kt` → ClickHouse (authenticated via `Authorization: Bearer <OTLP API key>`)
-3. **Dashboard API**: React → `/v1/*` → `ApiRoutes.kt` → `DashboardService.kt` → PostgreSQL/ClickHouse
-4. **Authentication**: All `/v1/*` endpoints require JWT (except `/auth/*` and OTLP ingestion endpoints which use OTLP API keys)
-
-### Data Storage Strategy
-- **PostgreSQL**: Users, organizations, projects, project_keys, subscriptions (relational data)
-- **ClickHouse**: Events, issues (materialized view), sessions, spans, logs (high-volume time-series)
-- **Redis**: Caching, rate limiting, background job queues
-
-### Backend Package Structure
-```
-com.moneat/
-├── Application.kt           # Entry point, configures plugins
-├── config/                  # Environment, Sentry, ClickHouse, Redis clients
-├── plugins/                 # Ktor plugins: Security, HTTP, Routing, Databases, etc.
-├── routes/                  # HTTP endpoints: IngestRoutes, ApiRoutes, AuthRoutes
-├── services/                # Business logic: EventService, DashboardService, AuthService
-├── models/                  # Data classes: SentryModels, ApiModels, database tables
-├── otlp/                    # OpenTelemetry (OTLP) ingestion: routes, services, auth, parsing
-│   ├── routes/              # OtlpTraceRoutes, OtlpMetricsRoutes
-│   ├── services/            # OtlpTraceService, OtlpMetricsService, OtlpApiKeyService
-│   └── models/              # OtlpApiKeyModels
-├── utils/                   # Shared utilities
-└── logging/                 # Custom logging configuration
-```
-
-### Frontend Structure
-```
-dashboard/src/
-├── routes/                  # TanStack Router file-based routes
-├── components/              # Reusable UI components (shadcn/ui)
-├── lib/api.ts               # API client with JWT auth
-├── hooks/                   # React hooks
-└── contexts/                # React contexts (auth, etc.)
-```
-
-### Dashboard: TypeScript & ESLint (Sonar-friendly)
-To avoid Sonar/ESLint code smells in `dashboard/`:
-
-**Exports & globals:**
-- ❌ **Don't export mutable `let`**: `export let x = null`
-- ✅ **Use `const` with object/ref**: `export const x = { current: null }` for test hooks, etc.
-- ✅ **Prefer `globalThis.window`** over `window` (SSR-safe)
-- ✅ **Prefer `globalThis.sessionStorage`** / `globalThis.localStorage` over bare globals
-
-**Assignments & operators:**
-- ✅ **Use nullish coalescing assignment** when assigning only if null: `x ??= value` instead of `if (!x) x = value`
-
-**Strings & DOM:**
-- ❌ **Avoid nested template literals**: `` `${base}/path${qs ? `?${qs}` : ''}` ``
-- ✅ **Use `urlWithQuery(path, qs)`** from `dashboard/src/lib/api/utils.ts` or string concat: `path + (qs ? '?' + qs : '')`
-- ✅ **Use `child.remove()`** instead of `parent.removeChild(child)`
-
-**Regex:**
-- ✅ **Use `RegExp.exec()`** instead of `string.match()` when you need capture groups
-
-**Functions & types:**
-- ✅ **Limit parameters to ≤7** – use an options object for functions with many params
-- ✅ **Use type aliases** for repeated union types: `type Status = 'a' | 'b' | 'c'`
-- ✅ **Re-export with `export { X } from './path'`** instead of import-then-export
-
-**Complexity:**
-- **Keep cognitive complexity ≤15** – extract helpers, use early returns, avoid deep nesting
-
-## Key Conventions
-
-### Testing Guidelines
-
-- ❌ **Do not call production private methods from new or touched tests** — avoid reflection helpers like
-  `getDeclaredMethod`, `declaredFunctions`, `isAccessible = true`, or equivalent access hacks for behavior coverage.
-- ✅ **Test observable behavior through public APIs, routes, or service methods** whenever practical.
-- ✅ **Extract complex private logic into a small collaborator** with an explicit `internal` or public API when direct
-  unit coverage is warranted.
-- ✅ **Test-local private helper methods are fine** — the rule is about reaching into production internals.
-
-### Warnings and lint fixes (suppress rarely)
-
-**CRITICAL:** When asked to fix a compiler warning, linter finding, or static analysis issue (Detekt, ESLint, Sonar, Kotlin compiler, etc.):
-
-- ❌ **Do not suppress to defer work** — do not use `@Suppress`, `eslint-disable`, `// NOSONAR`, `SuppressWarnings`, file- or line-level ignores, or similar because fixing the finding properly is too large or inconvenient right now. That is not a valid reason to silence the tool.
-- ✅ **Fix the root cause** — refactor, correct types, satisfy the rule, or extract helpers so the violation is resolved properly.
-- ✅ **Suppress only when it is appropriate forever** — e.g. a documented false positive, or a case where the rule genuinely does not apply on that line and a short comment explains why. **New feature code** should not ship with suppressions that are really “TODO fix later”; land the feature clean or fix the underlying issue before merge.
-- ✅ **When the rule genuinely does not fit the file** — e.g. a demo data seeder may trigger hundreds of “magic number” findings: those literals *are* the seed data, not something that should become hundreds of named constants in one file. Prefer **configuration** (exclude that file or path in `detekt.yml`, ESLint `overrides`, etc.) so the tool skips that context, rather than line-level suppressions or a wall of constants that add no clarity.
-
-If a rule is wrong for the whole project, **adjust the tool configuration** (e.g. `detekt.yml`, ESLint config) deliberately — do not mask individual violations with suppressions.
-
-### Detekt Code Style Guidelines
-**CRITICAL:** Follow detekt rules to maintain code quality. The project enforces these via CI:
-
-- ❌ **NEVER use wildcard imports**: `import com.moneat.models.*`
-- ✅ **ALWAYS use explicit imports**: `import com.moneat.models.User`
-
-- ❌ **NEVER exceed 120 characters per line**
-- ✅ **Keep lines under 120 characters** - break long lines appropriately
-
-- ❌ **Don't use magic numbers**: `if (count > 5)`
-- ✅ **Use named constants**: `const val MAX_RETRIES = 5`
-
-- **Run detekt before committing:**
-  ```bash
-  cd backend
-  ./gradlew detekt          # Check for issues
-  ./gradlew detektFormat    # Auto-fix formatting
-  ```
-
-- **SonarQube** runs in CI as the `sonarqube` job in `.github/workflows/test.yml` (after `backend-unit`). Follow the "Kotlin: Validation & Control Flow" and "Dashboard: TypeScript & ESLint" guidelines below to avoid common Sonar code smells.
-
-While some rules are currently disabled in `detekt.yml`, always follow best practices for new code:
-- Use explicit imports (no wildcards)
-- Keep lines ≤ 120 characters
-- Extract complex conditions into named variables
-- Limit function parameters (prefer data classes)
-- Use descriptive variable/function names
-
-### Frontend TypeScript Code Style Guidelines
-The dashboard code is checked by SonarCloud. Follow these rules when writing TypeScript/React code:
-
-- ❌ **Don't use `typeof x !== 'undefined'`** — compare directly: `x !== undefined`
-- ❌ **Don't duplicate module imports** — merge all imports from the same path into one statement
-- ❌ **Don't use nested template literals** — use a helper (e.g. `urlWithQuery`) or a variable instead
-- ❌ **Don't leave unused imports** — remove or convert to a re-export if needed
-- ❌ **Don't add unnecessary type assertions** — avoid `as SomeType` when TypeScript already narrows the type
-- ✅ **Extract repeated union types into a named type alias** — e.g. `type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null`
-- ✅ **Define helper functions at module scope** when they don't close over instance state — avoids the "move function to outer scope" smell
-
-### Kotlin: Validation & Control Flow (Sonar-friendly)
-To avoid Sonar code smells and keep code consistent:
-
-- ❌ **Don't use if-throw for validation**: `if (x !in valid) throw IllegalArgumentException("msg")`
-- ✅ **Use `require()` for internal argument preconditions**: `require(x in valid) { "Invalid value" }` — use only in internal helpers/library code, not Ktor handlers (throws `IllegalArgumentException` → HTTP 500 unless mapped by `StatusPages`)
-- ✅ **Use `check()` for internal state preconditions**: `check(existing == null) { "Already exists" }` — same caveat; use only where `IllegalStateException` is appropriate internally
-- ✅ **Replace if-throw with `check()` for response validation**: `check(!response.isError()) { "Error: ${body.take(500)}" }` instead of `if (response.isError()) throw IllegalStateException(...)` — Sonar prefers this pattern
-- ✅ **In Ktor route handlers**, throw `BadRequestException` (or domain-specific exceptions) for client validation errors, or explicitly map `IllegalArgumentException`/`IllegalStateException` to 4xx/409 via the `StatusPages` plugin — do not rely on `require()`/`check()` inside handlers unless `StatusPages` maps them
-
-- **Remove unused local variables** – delete any variable that is never read.
-
-- **Keep cognitive complexity low (≤15)** – extract helper functions when logic gets nested:
-  - Use `runCatching { }.getOrNull()` only in non-suspending, synchronous helpers (e.g., parsing/mapping functions). **Avoid in suspending/coroutine contexts**: `runCatching` swallows all `Throwable`s including `CancellationException`, which can break coroutine cancellation. In suspend functions, use `suspendRunCatching` from `com.moneat.utils` instead — it rethrows `CancellationException` automatically and composes with the `Result` API (`getOrElse`, `getOrNull`, `getOrDefault`, `onFailure`). Keep the manual `catch (e: CancellationException) { throw e }` pattern only when `Result` doesn't compose cleanly (e.g. the catch block mutates state and then rethrows).
-  - In Ktor route handlers, `coroutineScope`, `async`, workers, and other coroutine paths, wrap failures with
-    `suspendRunCatching { ... }` whenever the guarded call may suspend. Reserve plain `runCatching` for synchronous
-    parsing/formatting helpers.
-  - Extract complex parsing or mapping into private functions
-  - Prefer early returns over nested conditionals
-
-### Exposed DSL (Kotlin Database ORM)
-**CRITICAL:** Always use the current Exposed DSL syntax to avoid deprecation warnings:
-
-- ❌ **DEPRECATED**: `Table.select { condition }`
-- ✅ **CORRECT**: `Table.selectAll().where { condition }`
-
-**Examples:**
-```kotlin
-// BAD - deprecated
-Users.select { Users.id eq userId }
-Users.select { (Users.id eq userId) and (Users.active eq true) }
-
-// GOOD - current syntax
-Users.selectAll().where { Users.id eq userId }
-Users.selectAll().where { (Users.id eq userId) and (Users.active eq true) }
-```
-
-This applies to all tables and joins. The project uses `-Werror` (warnings as errors), so deprecated DSL will cause build failures.
-
-### Repository Layer
-When adding or extending the repository layer:
-
-- ❌ **NEVER put domain models in the same file as a repository interface**
-- ✅ **ALWAYS put domain models in separate files** — e.g. `ProjectRow` in `repositories/models/ProjectRow.kt` or `models/ProjectRow.kt`, not in `ProjectRepository.kt`
-- Repository interfaces live in `{domain}/repositories/{Entity}Repository.kt`
-- Implementations live in `{domain}/repositories/{Entity}RepositoryImpl.kt`
-- Domain models (data classes returned by repositories) live in their own files under `{domain}/repositories/models/` or `{domain}/models/`
-
-### Database Migrations
-- **PostgreSQL**: Uses Flyway; migrations in `backend/src/main/resources/db/migration/*.sql`
-- **ClickHouse**: Custom versioned migrations in `backend/src/main/resources/db/clickhouse_migration/V*__*.sql`
-- Migration naming: `V{number}__{description}.sql` (e.g., `V1__initial_schema.sql`)
-- Never modify existing migrations; always create new ones
-
-### Public Resource IDs
-Public Moneat-owned resources should use opaque UUID `resource_id` values at API boundaries. Keep numeric primary keys
-for internal joins, repository internals, ClickHouse joins, queue payloads, and auth claims unless those values are
-directly serialized to users.
-
-- Do not expose auto-increment database IDs in public JSON responses or accept them in public route params.
-- Public DTO `id` fields should usually remain named `id`, but their value should be the UUID `resource_id`; avoid
-  exposing both `id` and `resourceId` after cleanup.
-- Add `resource_id UUID NOT NULL DEFAULT gen_random_uuid()` to user-facing PostgreSQL tables that lack a public ID.
-  Mirror the column in Exposed with UUID types.
-- Add scoped uniqueness for new public IDs. Use `UNIQUE (organization_id, resource_id)` for organization-owned
-  resources, `UNIQUE (user_id, resource_id)` for user-owned resources, `UNIQUE (parent_id, resource_id)` when route
-  resolution is always parent-scoped, and `UNIQUE (resource_id)` only for truly global resources.
-- Resolver helpers should parse UUID route params, reject malformed IDs with 400, resolve the numeric primary key under
-  the caller's organization/user scope, and return 404 for unknown or inaccessible resources.
-- Update backend DTOs, route params, frontend API types, query keys, forms, and tests in the same branch so no numeric
-  public ID contract remains.
-- Add route or contract tests proving numeric path IDs are rejected, UUID path IDs resolve only within caller scope, and
-  serialized public responses do not include numeric DB IDs.
-- Do not migrate protocol-native or third-party IDs just because they look numeric or UUID-like. Leave trace IDs, span
-  IDs, event IDs, replay IDs, container IDs, PIDs, status codes, and externally supplied cloud/security `resource_id`
-  values in their native format unless Moneat owns that resource identity.
-
-### Event Fingerprinting
-Events are grouped into issues using fingerprints generated from:
-1. Exception type + message
-2. Stack trace (top 3 frames)
-3. Platform identifier
-
-Fingerprint logic is in `EventService.kt` - modify carefully as it affects grouping.
-
-### Environment Configuration
-- Development: `.env` file (not committed; see `.env.example`)
-- Production: Environment variables passed to Docker containers
-- **CRITICAL**: See `ESSENTIAL_ENV_VARS.md` for complete list of required variables
-- Required vars: `JWT_SECRET`, `DATA_SOURCE_ENCRYPTION_KEY`, `DATABASE_PASSWORD`, `CLICKHOUSE_PASSWORD`, `FRONTEND_URL`, `BACKEND_URL`
-- Application validates environment on startup and fails fast if critical variables are missing or unsafe
-- **NEVER use `System.getenv()` directly** - Always use `EnvConfig.get()` which handles both environment variables and `.env` files consistently
-
-### Production Safety Rules
-**IMPORTANT:** When writing code that uses environment variables or configurable URLs:
-
-1. **Never use localhost defaults for production-facing configurations**
-   - ❌ BAD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "http://localhost:3000")`
-   - ✅ GOOD: `val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io")`
-
-2. **Always use production URLs as defaults in code**
-   - Frontend URL should default to `https://moneat.io`
-   - Backend URL should default to `https://api.moneat.io`
-   - Localhost URLs should ONLY be in `.env.example` files for local development
-
-3. **Add validation for critical environment variables**
-   - Any new critical config (secrets, passwords, keys) must be added to `EnvironmentValidator.kt`
-   - Validation should fail fast on application startup if missing
-   - Reference: `backend/src/main/kotlin/com/moneat/config/EnvironmentValidator.kt`
-
-4. **Document new environment variables**
-   - Update `ESSENTIAL_ENV_VARS.md` with any new required variables
-   - Mark as CRITICAL if the application cannot run safely without it
-   - Mark as CONDITIONAL if only required when a feature is enabled
-
-5. **Local development should be explicit**
-   - Developers should explicitly set `FRONTEND_URL=http://localhost:3000` in their local `.env`
-   - Do not force localhost defaults in code just for convenience
-
-### Self-Monitoring
-Moneat can monitor itself using Sentry SDK:
-- Set `SENTRY_DSN` to point to a Moneat project (see `docs/SENTRY_SETUP.md`)
-- Backend errors auto-reported via `SentryConfig.kt`
-- Dashboard uses `@sentry/react` for frontend errors
-
-### Authentication Flow
-1. User signs up/logs in via `/auth/signup` or `/auth/login`
-2. Backend returns JWT token (stored in localStorage)
-3. Dashboard includes token in `Authorization: Bearer {token}` header
-4. Backend validates JWT in `Security.kt` plugin
-
-### Ingestion Authentication
-- **Sentry**: Uses DSN format: `http://{public_key}@{host}/api/{project_id}` with `X-Sentry-Auth` header containing `sentry_key={public_key}`. Public key validated against `project_keys` table in PostgreSQL.
-- **OTLP**: Uses `Authorization: Bearer <OTLP API key>` header. OTLP API keys are organization-level and shared across logs, traces, and metrics. Managed via `OtlpApiKeyService` and the Settings → OTLP API Keys UI.
-
-### E2E Testing
-The `e2e/` directory contains Android and KMP test apps:
 ```bash
-cd e2e
-./seed-data.sh           # Creates test users, projects, DSNs
-./run-android.sh         # Run Android test app
-./run-kmp.sh             # Run KMP test app
+helm lint --strict charts/moneat
+helm template charts/moneat
+helm template charts/moneat -f charts/moneat/examples/external-services.yaml
+helm template charts/moneat -f charts/moneat/examples/production-like.yaml
 ```
-These apps send real errors to the local Moneat instance for integration testing.
 
-## Common Patterns
+## CI Gates
 
-### Adding a New API Endpoint
-1. Define route in `routes/ApiRoutes.kt` or `IngestRoutes.kt`
-2. Add business logic to appropriate service in `services/`
-3. Create/update models in `models/ApiModels.kt`
-4. Add JWT auth with `authenticate("jwt-auth") { ... }` for protected endpoints
+The required PR workflow is `.github/workflows/test.yml`.
 
-### Adding a New ClickHouse Table
-1. Create migration in `backend/src/main/resources/db/clickhouse_migration/V{N}__*.sql`
-2. Update `ClickHouseClient.kt` if custom queries needed
-3. Add corresponding model in `models/`
-4. Increment version in `ClickHouseMigrations.kt`
+- `migration-versions` checks PostgreSQL and ClickHouse migration numbering
+  against the PR target branch.
+- `backend-unit` runs `./gradlew test --no-daemon` and JaCoCo reporting.
+- `backend-detekt` runs `./gradlew detekt --no-daemon`.
+- `frontend-unit` runs dashboard lint, typecheck, tests, and coverage.
+- `sonarqube` waits on backend/frontend jobs, compiles Kotlin bytecode, uploads
+  coverage/detekt data, and enforces the Sonar quality gate.
+- Coverage gates are hard by default: backend 65%, frontend 80%, global 60%.
+  Add focused tests with behavior changes, especially on new code.
+- Change classification may skip backend or frontend jobs. Workflow, env,
+  scripts, Docker/compose, and Sonar changes can force both sides.
 
-### Adding a Dashboard Route
-1. Create file in `dashboard/src/routes/{name}.tsx` (TanStack Router file-based routing)
-2. Define route component with `createFileRoute` export
-3. Add navigation link in `__root.tsx` if needed
-4. Use `useQuery` from TanStack Query for data fetching
+## Architecture Conventions
 
-## Deployment
+### Backend
 
-Production deployment uses blue/green strategy on DigitalOcean droplet:
-- See `DEPLOYMENT.md` for full setup
-- CI/CD via GitHub Actions (`.github/workflows/deploy.yml`)
-- Docker Compose with volumes for persistent data
-- Nginx reverse proxy with SSL (Let's Encrypt)
+- Add routes inside the feature package that owns the domain, not a flat global
+  route file unless that is the established path for the feature.
+- Keep business logic in services and persistence in repositories. Repository
+  interfaces live in `{domain}/repositories/`; implementations live beside
+  them; row/domain data classes returned by repositories live in separate model
+  files, not inside the repository interface file.
+- Register new services/repositories in `backend/src/main/kotlin/com/moneat/di`
+  or the relevant module hook.
+- Shared API/resource helpers belong in `com.moneat.shared`.
+- Enterprise-only behavior belongs in `ee/backend`; core can call through
+  module interfaces or bridge hooks when needed.
+- All dashboard `/v1/*` endpoints require JWT unless they are explicitly public
+  or use a separate ingestion/API-key auth path.
 
-## Testing Notes
+### Storage
 
-- Backend tests use H2 in-memory database (not PostgreSQL)
-- Test fixtures in `backend/src/test/kotlin/`
-- E2E tests require running infrastructure (`docker-compose up -d`)
-- Use `// ──── Label ────` (4 × `─` U+2500 on each side) to separate logical sections within a test file
+- PostgreSQL stores operational relational data: users, organizations, projects,
+  keys, subscriptions, dashboards, workflows, settings, and other user-owned
+  resources.
+- ClickHouse stores high-volume telemetry/time-series data: events, issues,
+  sessions, spans, logs, metrics, profiles, analytics, and similar records.
+- Redis is used for caching, rate limiting, background queues, and ingestion
+  buffers.
+- Temporal backs workflow execution. Keep trusted and egress-only worker
+  boundaries intact.
+
+### Ingestion
+
+- Sentry-compatible ingestion accepts DSN/project traffic under `/api/...` and
+  validates project keys.
+- OTLP ingestion uses `/v1/logs/otlp`, `/v1/traces/otlp`, and
+  `/v1/metrics/otlp` with `Authorization: Bearer <OTLP API key>`.
+- Datadog-compatible ingestion should translate into canonical Moneat telemetry
+  early while preserving raw/source-specific fields needed for fidelity,
+  debugging, and reprocessing.
+- New ingestion pipelines should have explicit queue keys, DLQ behavior,
+  operational metrics, and focused tests for enqueue/worker/failure paths.
+- If Redis Streams queue support is present, preserve list, streams, and dual
+  read modes for transition. Stream redelivery must remain idempotent for
+  ClickHouse inserts and usage accounting.
+- Process-role controls such as API-only, scheduler, ingestion worker, and
+  workflow egress must not accidentally start unrelated background jobs.
+
+## Public Resource IDs
+
+Public Moneat-owned resources use opaque UUID `resource_id` values at API
+boundaries. Numeric primary keys remain valid for internal joins, repositories,
+ClickHouse joins, queue payloads, auth claims, and protocol-native IDs, but they
+must not leak into public JSON or public route params for Moneat-owned
+resources.
+
+Rules:
+
+- Public DTO `id` fields should normally stay named `id`, but their value should
+  be the UUID resource ID string. Avoid exposing both `id` and `resourceId`
+  after cleanup unless a compatibility boundary explicitly requires it.
+- Do not accept auto-increment IDs in public route params. Malformed UUIDs are
+  `400`; unknown or inaccessible UUIDs are `404`.
+- Add `resource_id UUID NOT NULL DEFAULT gen_random_uuid()` to user-facing
+  PostgreSQL tables that lack a public ID, mirror it in Exposed with UUID types,
+  and add scoped uniqueness:
+  `UNIQUE (organization_id, resource_id)` for organization-owned resources,
+  `UNIQUE (user_id, resource_id)` for user-owned resources, or
+  `UNIQUE (parent_id, resource_id)` when parent scoped.
+- Prefer existing resolver/helper surfaces such as `ProjectIdResolver`,
+  `PublicUuidParsing`, `PublicResourceIds`, workflow/on-call resource ID
+  helpers, or the nearest domain-specific equivalent. Do not reparse UUIDs and
+  reimplement scope checks ad hoc.
+- Update backend DTOs, route params, repository mappings, frontend API types,
+  query keys, route params, forms, fixtures, and tests in the same change.
+- Add route or contract tests proving numeric path IDs are rejected, UUID path
+  IDs resolve only within caller scope, and serialized responses do not contain
+  numeric DB IDs.
+- Keep protocol-native and third-party identifiers in their native format:
+  trace IDs, span IDs, event IDs, replay IDs, container IDs, PIDs, HTTP status
+  codes, cloud resource IDs, and externally supplied `resource_id` fields are
+  not automatically Moneat public IDs.
+
+When touching public DTOs, run or update
+`backend/src/test/kotlin/com/moneat/contracts/PublicSerializableResourceIdsTest.kt`
+if it exists on the branch.
+
+## Dashboard and Product UX
+
+- Wire dashboard UI to real backend APIs. Do not leave inert buttons, mock data,
+  placeholder counts, or fake success paths when a real behavior exists.
+- User-facing text should describe the object or action in product terms. Avoid
+  raw implementation labels such as "dashboard alert" when an alert title,
+  issue title, monitor name, or human-readable description exists.
+- Counts and links must refer to the same concept. For example, alert episode
+  counts should link to alert episode views, not declared incidents.
+- Keep API types in `dashboard/src/lib/api/types` aligned with backend DTOs,
+  especially UUID string IDs.
+- Put frontend API calls in `dashboard/src/lib/api/modules`; do not scatter
+  `fetch` calls across components.
+- Route files live in `dashboard/src/routes` and export TanStack `Route`.
+  Components live in domain folders under `dashboard/src/components`.
+- Component filenames under `dashboard/src/components` are PascalCase except
+  shadcn primitives in `components/ui`; hook files are camelCase `useXxx`.
+- Prefer module-scope helpers for pure logic, and keep pure non-JSX logic in
+  `.ts` files when it is tested or shared.
+- Use existing shadcn/Radix primitives and `lucide-react` icons.
+- Browser-smoke visible dashboard changes when practical, especially navigation,
+  setup, dashboards, and docs pages.
+
+### Custom Dashboards and Data Sources
+
+- Preserve the handler pattern under `dashboards/services/handlers`: one
+  source type handler owns connection testing, schema, and query execution.
+- Non-secret connection behavior belongs in `extra_config` (scheme, base path,
+  auth method, TLS mode, timeouts, source-specific options). Secrets belong in
+  dedicated credential fields or encrypted storage.
+- Do not guess HTTP scheme/base path from a host string when the UI provides
+  explicit structured options. Keep host parsing, endpoint preview, payload
+  mapping, and backend effective-host logic aligned.
+- Test connection requests should mirror the saved payload's
+  connection-relevant fields.
+- Keep source setup copy source-neutral unless the screen is explicitly about a
+  specific vendor/source.
+
+## Kotlin and Backend Style
+
+- No wildcard imports.
+- Keep lines at or below 120 characters.
+- Avoid magic numbers in production code; use named constants. Tests and seed
+  data have targeted exceptions in Detekt config.
+- Use current Exposed DSL:
+
+```kotlin
+Users.selectAll().where { Users.id eq userId }
+```
+
+Do not use deprecated `Table.select { ... }`.
+
+- Keep Exposed queries inside transaction boundaries. If a helper may be called
+  both inside and outside a transaction, use the existing transaction-aware
+  pattern from nearby shared helpers.
+- In suspend/coroutine paths, use `suspendRunCatching` from `com.moneat.utils`
+  when catching failures into `Result`; plain `runCatching` can swallow
+  `CancellationException`. Plain `runCatching` is fine for synchronous parsing
+  helpers.
+- In Ktor handlers, throw `BadRequestException` or a mapped domain exception
+  for client validation. Do not rely on `require()`/`check()` producing a 4xx
+  unless `StatusPages` maps it.
+- For internal preconditions, use `require()` for bad arguments and `check()`
+  for invalid state.
+- Empty `catch` blocks are disallowed. If an exception is intentionally ignored,
+  make that clear with a minimal comment or log where appropriate.
+- Do not call production private methods from tests through reflection. Test
+  observable behavior through public APIs/routes/services, or extract complex
+  private logic into a small testable collaborator.
+
+## Frontend TypeScript Style
+
+- Use `globalThis.window`, `globalThis.localStorage`, and
+  `globalThis.sessionStorage` for SSR-safe browser globals when needed.
+- Avoid exported mutable `let`; use a `const` holder/ref for test hooks.
+- Avoid nested template literals. Use `urlWithQuery` from
+  `dashboard/src/lib/api/utils.ts` or simple string composition.
+- Use `RegExp.exec()` for capture groups.
+- Do not duplicate imports from the same module. Remove unused imports.
+- Avoid unnecessary type assertions; let TypeScript narrowing work.
+- Extract repeated union types into named aliases.
+- Keep functions to seven or fewer parameters; use an options object when a
+  call shape is growing.
+- Prefer `child.remove()` over `parent.removeChild(child)`.
+- Use nullish coalescing assignment (`x ??= value`) when assigning only for
+  null/undefined.
+- Keep cognitive complexity low with early returns and extracted helpers.
+
+## Database Migrations
+
+PostgreSQL migrations live in `backend/src/main/resources/db/migration/`.
+ClickHouse migrations live in
+`backend/src/main/resources/db/clickhouse_migration/`.
+
+- Never modify an existing migration. Add a new `V{number}__description.sql`.
+- Versions are numeric and sequential in both systems.
+- ClickHouse migrations should be idempotent where practical and preserve
+  checksum expectations.
+- Before opening or updating a PR with migrations, compare against the target
+  branch:
+
+```bash
+python3 scripts/check-migration-versions.py --base-ref origin/develop
+```
+
+- If the target branch advanced, renumber newly added migrations with:
+
+```bash
+python3 scripts/check-migration-versions.py --base-ref origin/develop --fix
+```
+
+The checker covers Flyway and ClickHouse migrations, duplicate versions, stale
+added versions, and rename/delete edits to existing migrations.
+
+## Environment and Secrets
+
+- Use `EnvConfig.get()` for runtime configuration. Do not call
+  `System.getenv()` directly outside configuration plumbing.
+- Add new critical or conditional runtime variables to
+  `EnvironmentValidator.kt` and `ESSENTIAL_ENV_VARS.md`.
+- Production-facing defaults in code must be production URLs, not localhost.
+  Localhost belongs in `.env.example` or local env files.
+- Required secrets must fail fast on startup if missing or unsafe.
+- Workflow secrets must remain distinct from `JWT_SECRET` and
+  `DATA_SOURCE_ENCRYPTION_KEY`.
+- Keep `DATA_SOURCE_ENCRYPTION_KEY` for dashboard data-source credentials; do
+  not reuse workflow encryption/signing keys.
+
+## Docs, Self-Hosting, and Release Packaging
+
+- Current docs are MDX pages under `dashboard/src/docs/pages` plus
+  `dashboard/src/docs/sidebar.ts`. Dashboard build/prerender validates the docs
+  route output.
+- Keep Docker Compose and Helm self-hosting instructions separate. Do not imply
+  Helm users must use the interactive Docker installer.
+- Helm charts should use release-pinned image tags, Kubernetes secrets for
+  sensitive values, and clear external-service examples.
+- If release workflow or chart packaging changes, validate both the workflow
+  syntax and Helm render paths.
+
+## Feature-Specific Notes
+
+- Event fingerprinting in `events/services/EventService.kt` affects issue
+  grouping. Change it only with focused tests and a clear migration/behavior
+  story.
+- Overview alerts and declared incidents are separate concepts. Do not populate
+  declared-incident counts from alert episodes.
+- MCP tools/resources should enforce the same auth, organization scoping, and
+  public resource ID rules as REST endpoints.
+- Security, workflow, on-call, dashboard, and custom-data-source changes often
+  span backend, EE, dashboard API types, and tests. Audit adjacent contract
+  surfaces before finishing.
+- Public docs/marketing/comparison pages may name competitors and protocols;
+  core app navigation and workflow copy should stay source-neutral.
+
+## PR Review Checklist
+
+Before handing work back:
+
+- Relevant focused tests pass.
+- Formatting/lint/static analysis for touched areas pass or any skipped command
+  is called out with the reason.
+- Public API changes are reflected in frontend API modules/types and fixtures.
+- New env vars are validated and documented.
+- Migrations pass the migration-version checker.
+- Dashboard visible changes have a browser smoke where practical.
+- `git diff --check` is clean.

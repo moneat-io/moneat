@@ -5,6 +5,7 @@
 package com.moneat.enterprise.oncall.services
 
 import com.moneat.alerts.models.AlertPriority
+import com.moneat.enterprise.oncall.organizationResourceId
 import com.moneat.enterprise.oncall.models.BusinessHours
 import com.moneat.enterprise.oncall.models.BusinessHoursConfig
 import com.moneat.enterprise.oncall.models.BusinessHoursWindow
@@ -47,13 +48,15 @@ class BusinessHoursService {
                     }
 
             BusinessHoursConfig(
-                id = bhRow[BusinessHours.id].value,
-                organizationId = bhRow[BusinessHours.organizationId],
+                id = bhRow[BusinessHours.resourceId].toString(),
+                organizationResourceId = organizationResourceId(organizationId),
                 timezone = bhRow[BusinessHours.timezone],
                 enabled = bhRow[BusinessHours.enabled],
                 windows = windows,
                 createdAt = bhRow[BusinessHours.createdAt].toString(),
                 updatedAt = bhRow[BusinessHours.updatedAt].toString(),
+                internalId = bhRow[BusinessHours.id].value,
+                organizationId = bhRow[BusinessHours.organizationId],
             )
         }
 

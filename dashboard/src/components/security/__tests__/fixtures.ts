@@ -18,7 +18,7 @@ import type {DetectionRuleResponse, SignalDetailResponse, SignalResponse} from '
 
 export function makeSignal(overrides: Partial<SignalResponse> = {}): SignalResponse {
   return {
-    id: 1,
+    id: 'signal-1',
     source: 'agent_runtime',
     rule_id: 'rule-1',
     rule_name: 'Repeated failed logins',
@@ -41,7 +41,7 @@ export function makeSignal(overrides: Partial<SignalResponse> = {}): SignalRespo
 export function makeSignalDetail(overrides: Partial<SignalDetailResponse> = {}): SignalDetailResponse {
   return {
     signal: makeSignal(overrides.signal),
-    evidence: [{id: 1, evidence_type: 'logs', reference: 'ref', created_at: '2026-05-30T00:00:00Z'}],
+    evidence: [{id: 'evidence-1', evidence_type: 'logs', reference: 'ref', created_at: '2026-05-30T00:00:00Z'}],
     audit: [],
     sample_events: [{message: 'login failed', user: 'alice'}],
     threat_intel: [],
@@ -51,7 +51,7 @@ export function makeSignalDetail(overrides: Partial<SignalDetailResponse> = {}):
 
 export function makeRule(overrides: Partial<DetectionRuleResponse> = {}): DetectionRuleResponse {
   return {
-    id: 1,
+    id: 'rule-1',
     name: 'Brute force',
     description: '',
     source: 'logs',

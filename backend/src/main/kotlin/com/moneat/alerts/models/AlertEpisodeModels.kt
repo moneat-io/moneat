@@ -23,8 +23,10 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 object AlertEpisodes : IntIdTable("alert_episodes") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val sourceName = varchar("source", 64)
     val deduplicationKey = text("deduplication_key")
@@ -50,8 +52,8 @@ object AlertEpisodes : IntIdTable("alert_episodes") {
 
 @Serializable
 data class AlertEpisodeResponse(
-    val id: Int,
-    @SerialName("organization_id") val organizationId: Int,
+    val id: String,
+    @SerialName("organization_id") val organizationId: String,
     val source: String,
     @SerialName("deduplication_key") val deduplicationKey: String,
     val title: String? = null,
@@ -66,7 +68,7 @@ data class AlertEpisodeResponse(
     @SerialName("last_notification_at") val lastNotificationAt: String? = null,
     @SerialName("notification_count") val notificationCount: Int,
     @SerialName("suppressed_at") val suppressedAt: String? = null,
-    @SerialName("suppressed_by_user_id") val suppressedByUserId: Int? = null,
+    @SerialName("suppressed_by_user_id") val suppressedByUserId: String? = null,
     @SerialName("suppress_reason") val suppressReason: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String

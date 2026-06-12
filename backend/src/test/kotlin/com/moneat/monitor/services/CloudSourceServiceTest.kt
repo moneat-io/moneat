@@ -42,6 +42,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class CloudSourceServiceTest {
     private val verifier = RecordingCloudSourceVerifier()
@@ -67,7 +68,7 @@ class CloudSourceServiceTest {
         const val CLOUD_SOURCE_STATUS_HEALTHY = "healthy"
         const val TEST_ORGANIZATION_ID = 1
         const val TEST_USER_ID = 2
-        const val MISSING_SOURCE_ID = 404
+        const val MISSING_SOURCE_RESOURCE_ID = "00000000-0000-0000-0000-000000000404"
         const val CATALOG_RESOURCE_ID = "aws:i-123"
         const val CATALOG_RESOURCE_NAME = "checkout-node"
     }
@@ -313,17 +314,21 @@ class CloudSourceServiceTest {
             userId = userId,
             request = createRequest()
         )
+        val sourceId = sourceInternalId(response.id)
 
-        val deleted = service.deleteSource(orgId, response.id)
+        val deleted = service.deleteSource(orgId, Uuid.parse(response.id))
 
         assertTrue(deleted)
-        assertEquals(listOf(orgId to response.id), writer.deletes)
+        assertEquals(listOf(orgId to sourceId), writer.deletes)
         assertEquals(0, countSources())
     }
 
     @Test
     fun `delete source returns false for missing sources and skips catalog cleanup`() = runBlocking {
-        val deleted = service.deleteSource(TEST_ORGANIZATION_ID, sourceId = MISSING_SOURCE_ID)
+        val deleted = service.deleteSource(
+            TEST_ORGANIZATION_ID,
+            sourceResourceId = Uuid.parse(MISSING_SOURCE_RESOURCE_ID)
+        )
 
         assertFalse(deleted)
         assertTrue(writer.deletes.isEmpty())
@@ -351,7 +356,7 @@ class CloudSourceServiceTest {
             )
         )
 
-        val synced = service.syncSource(orgId, response.id)
+        val synced = service.syncSource(orgId, Uuid.parse(response.id))
 
         assertEquals(DISPLAY_NAME, synced.displayName)
         assertEquals(CLOUD_SOURCE_STATUS_HEALTHY, synced.status)
@@ -367,7 +372,7 @@ class CloudSourceServiceTest {
         verifier.failure = RuntimeException("provider unavailable")
 
         val error = assertFailsWith<RuntimeException> {
-            service.syncSource(orgId, response.id)
+            service.syncSource(orgId, Uuid.parse(response.id))
         }
 
         assertEquals("provider unavailable", error.message)
@@ -428,13 +433,21 @@ class CloudSourceServiceTest {
             CloudSources.selectAll().count()
         }
 
-    private fun sourceStatusAndError(sourceId: Int): Pair<String, String?> =
+    private fun sourceStatusAndError(sourceResourceId: String): Pair<String, String?> =
         transaction {
             val row = CloudSources
                 .selectAll()
-                .where { CloudSources.id eq sourceId }
+                .where { CloudSources.resource_id eq Uuid.parse(sourceResourceId) }
                 .single()
             row[CloudSources.status] to row[CloudSources.last_error]
+        }
+
+    private fun sourceInternalId(sourceResourceId: String): Int =
+        transaction {
+            CloudSources
+                .selectAll()
+                .where { CloudSources.resource_id eq Uuid.parse(sourceResourceId) }
+                .single()[CloudSources.id]
         }
 
     private fun seedOrg(): Int =

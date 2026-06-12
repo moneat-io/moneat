@@ -21,6 +21,10 @@ import {api} from '@/lib/api'
 import {clearAuthStorage} from '@/test/utils'
 
 const API_BASE = 'http://localhost:8080'
+const MCP_KEY_ID_READONLY = '11111111-1111-4111-8111-111111111111'
+const MCP_KEY_ID_ALL_ACCESS = '22222222-2222-4222-8222-222222222222'
+const MCP_KEY_ID_DEFAULTS = '33333333-3333-4333-8333-333333333333'
+const MCP_KEY_ID_CREATED = '44444444-4444-4444-8444-444444444444'
 
 describe('MCP API', () => {
   beforeEach(() => {
@@ -118,7 +122,7 @@ describe('MCP API', () => {
         return HttpResponse.json({
           keys: [
             {
-              id: 1,
+              id: MCP_KEY_ID_READONLY,
               name: 'readonly',
               key_prefix: 'mmcp_abc123',
               enabled_tools: ['list_incidents', 42],
@@ -128,7 +132,7 @@ describe('MCP API', () => {
               expires_at: '2026-06-01T00:00:00Z',
             },
             {
-              id: 2,
+              id: MCP_KEY_ID_ALL_ACCESS,
               name: 'all-access',
               keyPrefix: 'mmcp_def456',
               enabledTools: ['get_logs'],
@@ -138,7 +142,7 @@ describe('MCP API', () => {
               expiresAt: '2026-06-03T00:00:00Z',
             },
             {
-              id: 3,
+              id: MCP_KEY_ID_DEFAULTS,
               name: 'defaults',
               key_prefix: 'mmcp_ghi789',
               created_at: '2026-05-05T00:00:00Z',
@@ -152,7 +156,7 @@ describe('MCP API', () => {
 
     expect(result.keys).toEqual([
       {
-        id: 1,
+        id: MCP_KEY_ID_READONLY,
         name: 'readonly',
         keyPrefix: 'mmcp_abc123',
         enabledTools: ['list_incidents'],
@@ -162,7 +166,7 @@ describe('MCP API', () => {
         expiresAt: '2026-06-01T00:00:00Z',
       },
       {
-        id: 2,
+        id: MCP_KEY_ID_ALL_ACCESS,
         name: 'all-access',
         keyPrefix: 'mmcp_def456',
         enabledTools: ['get_logs'],
@@ -172,7 +176,7 @@ describe('MCP API', () => {
         expiresAt: '2026-06-03T00:00:00Z',
       },
       {
-        id: 3,
+        id: MCP_KEY_ID_DEFAULTS,
         name: 'defaults',
         keyPrefix: 'mmcp_ghi789',
         enabledTools: [],
@@ -202,7 +206,7 @@ describe('MCP API', () => {
       http.post(`${API_BASE}/v1/mcp/api-keys`, async ({request}) => {
         capturedBody = (await request.json()) as Record<string, unknown>
         return HttpResponse.json({
-          id: 4,
+          id: MCP_KEY_ID_CREATED,
           name: 'ops',
           key: 'mmcp_secret',
           key_prefix: 'mmcp_sec',
@@ -231,21 +235,21 @@ describe('MCP API', () => {
   it('updates and deletes MCP keys', async () => {
     let capturedUpdate: Record<string, unknown> = {}
     server.use(
-      http.put(`${API_BASE}/v1/mcp/api-keys/4`, async ({request}) => {
+      http.put(`${API_BASE}/v1/mcp/api-keys/${MCP_KEY_ID_CREATED}`, async ({request}) => {
         capturedUpdate = (await request.json()) as Record<string, unknown>
         return new HttpResponse(null, {status: 204})
       }),
-      http.delete(`${API_BASE}/v1/mcp/api-keys/4`, () => {
+      http.delete(`${API_BASE}/v1/mcp/api-keys/${MCP_KEY_ID_CREATED}`, () => {
         return new HttpResponse(null, {status: 204})
       })
     )
 
-    await api.updateMcpApiKey(4, {
+    await api.updateMcpApiKey(MCP_KEY_ID_CREATED, {
       name: 'ops',
       enabledTools: ['get_logs'],
       enabledResources: ['moneat://projects'],
     })
-    await expect(api.deleteMcpApiKey(4)).resolves.toBeUndefined()
+    await expect(api.deleteMcpApiKey(MCP_KEY_ID_CREATED)).resolves.toBeUndefined()
 
     expect(capturedUpdate).toEqual({
       name: 'ops',

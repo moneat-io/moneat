@@ -33,13 +33,27 @@ class OrganizationRepositoryImpl : OrganizationRepository {
     override fun findById(id: Int): OrganizationRow? =
         transaction {
             Organizations.selectAll().where { Organizations.id eq id }.firstOrNull()
-                ?.let { OrganizationRow(it[Organizations.id], it[Organizations.name], it[Organizations.slug]) }
+                ?.let {
+                    OrganizationRow(
+                        id = it[Organizations.id],
+                        resourceId = it[Organizations.resource_id].toString(),
+                        name = it[Organizations.name],
+                        slug = it[Organizations.slug],
+                    )
+                }
         }
 
     override fun findBySlug(slug: String): OrganizationRow? =
         transaction {
             Organizations.selectAll().where { Organizations.slug eq slug }.firstOrNull()
-                ?.let { OrganizationRow(it[Organizations.id], it[Organizations.name], it[Organizations.slug]) }
+                ?.let {
+                    OrganizationRow(
+                        id = it[Organizations.id],
+                        resourceId = it[Organizations.resource_id].toString(),
+                        name = it[Organizations.name],
+                        slug = it[Organizations.slug],
+                    )
+                }
         }
 
     override fun updateOnboardingOrgAndMarkComplete(update: OrganizationRepository.OnboardingUpdate): String {

@@ -67,10 +67,10 @@ export function securityMethods(core: ApiClientCore) {
     listSignals: (params: SignalListParams = {}) =>
       core.request<SignalListResponse>(urlWithQuery(signals, signalsQuery(params))),
 
-    getSignal: (signalId: number) =>
+    getSignal: (signalId: string) =>
       core.request<SignalDetailResponse>(`${signals}/${signalId}`),
 
-    triageSignal: (signalId: number, request: TriageRequest) =>
+    triageSignal: (signalId: string, request: TriageRequest) =>
       core.request<SignalDetailResponse['signal']>(`${signals}/${signalId}`, {
         method: 'PATCH',
         body: JSON.stringify(request),
@@ -83,7 +83,7 @@ export function securityMethods(core: ApiClientCore) {
     getDetectionCoverage: () =>
       core.request<DetectionCoverageResponse>(`${base}/security/detection/coverage`),
 
-    getDetectionRule: (ruleId: number) =>
+    getDetectionRule: (ruleId: string) =>
       core.request<DetectionRuleResponse>(`${rules}/${ruleId}`),
 
     createDetectionRule: (request: CreateDetectionRuleRequest) =>
@@ -92,18 +92,18 @@ export function securityMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateDetectionRule: (ruleId: number, request: UpdateDetectionRuleRequest) =>
+    updateDetectionRule: (ruleId: string, request: UpdateDetectionRuleRequest) =>
       core.request<DetectionRuleResponse>(`${rules}/${ruleId}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteDetectionRule: (ruleId: number) =>
+    deleteDetectionRule: (ruleId: string) =>
       core.request<void>(`${rules}/${ruleId}`, {
         method: 'DELETE',
       }),
 
-    previewDetectionRule: (ruleId: number) =>
+    previewDetectionRule: (ruleId: string) =>
       core.request<DetectionPreviewResponse>(`${rules}/${ruleId}/preview`, {
         method: 'POST',
       }),

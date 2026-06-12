@@ -21,6 +21,11 @@ import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
 import com.moneat.security.detection.RuleQueryCompiler
 import com.moneat.security.threatintel.ThreatIntelService
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Users
+import com.moneat.shared.services.resolveScopedIntResourceId
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.shared.services.userResourceIds
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
@@ -43,6 +48,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -85,8 +91,10 @@ class SignalService(
                 .where(predicate)
                 .orderBy(SecuritySignals.lastSeen to SortOrder.DESC, SecuritySignals.id to SortOrder.DESC)
                 .limit(limit).offset(offset.toLong())
-                .map { it.toSignalResponse() }
-            SignalListResponse(signals = rows, totalCount = total)
+                .toList()
+            val assigneeResourceIds = userResourceIds(rows.mapNotNull { row -> row[SecuritySignals.assigneeUserId] })
+            val signals = rows.map { row -> row.toSignalResponse(assigneeResourceIds) }
+            SignalListResponse(signals = signals, totalCount = total)
         }
 
     /** Returns the signal with its evidence refs, audit trail, and a bounded sample of CH events. */
@@ -96,35 +104,39 @@ class SignalService(
                 .selectAll()
                 .where { (SecuritySignals.id eq signalId) and (SecuritySignals.organizationId eq orgId) }
                 .firstOrNull() ?: return@transaction null
-            val signal = row.toSignalResponse()
+            val signalUserResourceIds = userResourceIds(listOfNotNull(row[SecuritySignals.assigneeUserId]))
+            val signal = row.toSignalResponse(signalUserResourceIds)
             val evidence = SecuritySignalEvidence
                 .selectAll()
                 .where { SecuritySignalEvidence.signalId eq signalId }
                 .orderBy(SecuritySignalEvidence.id to SortOrder.ASC)
                 .map {
                     SignalEvidenceResponse(
-                        id = it[SecuritySignalEvidence.id].value,
+                        id = it[SecuritySignalEvidence.resourceId].toString(),
                         evidenceType = it[SecuritySignalEvidence.evidenceType],
                         reference = it[SecuritySignalEvidence.reference],
                         createdAt = it[SecuritySignalEvidence.createdAt].toString(),
                     )
                 }
-            val audit = SecuritySignalAudit
+            val auditRows = SecuritySignalAudit
                 .selectAll()
                 .where { SecuritySignalAudit.signalId eq signalId }
                 .orderBy(SecuritySignalAudit.id to SortOrder.DESC)
-                .map {
-                    SignalAuditResponse(
-                        id = it[SecuritySignalAudit.id].value,
-                        actorUserId = it[SecuritySignalAudit.actorUserId],
-                        action = it[SecuritySignalAudit.action],
-                        fromStatus = it[SecuritySignalAudit.fromStatus],
-                        toStatus = it[SecuritySignalAudit.toStatus],
-                        reason = it[SecuritySignalAudit.reason],
-                        note = it[SecuritySignalAudit.note],
-                        createdAt = it[SecuritySignalAudit.createdAt].toString(),
-                    )
-                }
+                .toList()
+            val auditActorResourceIds =
+                userResourceIds(auditRows.mapNotNull { row -> row[SecuritySignalAudit.actorUserId] })
+            val audit = auditRows.map {
+                SignalAuditResponse(
+                    id = it[SecuritySignalAudit.resourceId].toString(),
+                    actorUserId = it[SecuritySignalAudit.actorUserId]?.let(auditActorResourceIds::get),
+                    action = it[SecuritySignalAudit.action],
+                    fromStatus = it[SecuritySignalAudit.fromStatus],
+                    toStatus = it[SecuritySignalAudit.toStatus],
+                    reason = it[SecuritySignalAudit.reason],
+                    note = it[SecuritySignalAudit.note],
+                    createdAt = it[SecuritySignalAudit.createdAt].toString(),
+                )
+            }
             Triple(signal, evidence, audit)
         } ?: return null
 
@@ -161,7 +173,13 @@ class SignalService(
             }
 
             val now = Clock.System.now()
-            updateSignalTriage(signalId, request, target, now)
+            val assigneeUserId = if (request.assigneeUserId == null) {
+                null
+            } else {
+                resolvedAssigneeUserId(orgId, request.assigneeUserId)
+                    ?: return@transaction TriageResult.Invalid("Assignee not found")
+            }
+            updateSignalTriage(signalId, request, assigneeUserId, target, now)
 
             val audit = AuditContext(signalId, orgId, actorUserId, now)
             writeTriageAudit(audit, current, target, request)
@@ -170,13 +188,15 @@ class SignalService(
                 .selectAll()
                 .where { SecuritySignals.id eq signalId }
                 .first()
-                .toSignalResponse()
-            TriageResult.Ok(updated)
+            val updatedUserResourceIds = userResourceIds(listOfNotNull(updated[SecuritySignals.assigneeUserId]))
+            val updatedResponse = updated.toSignalResponse(updatedUserResourceIds)
+            TriageResult.Ok(updatedResponse)
         }
 
     private fun updateSignalTriage(
         signalId: Int,
         request: TriageRequest,
+        assigneeUserId: Int?,
         target: TransitionResult.Valid,
         now: kotlin.time.Instant,
     ) {
@@ -186,9 +206,9 @@ class SignalService(
                 it[archiveReason] = target.archiveReason?.wire
             }
             if (request.clearAssignee) {
-                it[assigneeUserId] = null
-            } else if (request.assigneeUserId != null) {
-                it[assigneeUserId] = request.assigneeUserId
+                it[SecuritySignals.assigneeUserId] = null
+            } else if (assigneeUserId != null) {
+                it[SecuritySignals.assigneeUserId] = assigneeUserId
             }
             it[updatedAt] = now
         }
@@ -257,9 +277,9 @@ class SignalService(
         }
     }
 
-    private fun ResultRow.toSignalResponse(): SignalResponse =
+    private fun ResultRow.toSignalResponse(usersById: Map<Int, String>): SignalResponse =
         SignalResponse(
-            id = this[SecuritySignals.id].value,
+            id = this[SecuritySignals.resourceId].toString(),
             source = this[SecuritySignals.signalSource],
             ruleId = this[SecuritySignals.ruleId],
             ruleName = this[SecuritySignals.ruleName],
@@ -269,13 +289,36 @@ class SignalService(
             dedupKey = this[SecuritySignals.dedupKey],
             entities = decodeStringMap(this[SecuritySignals.entities]),
             sampleCount = this[SecuritySignals.sampleCount],
-            assigneeUserId = this[SecuritySignals.assigneeUserId],
+            assigneeUserId = this[SecuritySignals.assigneeUserId]?.let(usersById::get),
             tags = decodeStringList(this[SecuritySignals.tags]),
             firstSeen = this[SecuritySignals.firstSeen].toString(),
             lastSeen = this[SecuritySignals.lastSeen].toString(),
             createdAt = this[SecuritySignals.createdAt].toString(),
             updatedAt = this[SecuritySignals.updatedAt].toString(),
         )
+
+    fun resolveSignalId(orgId: Int, signalResourceId: Uuid): Int? =
+        resolveScopedIntResourceId(
+            table = SecuritySignals,
+            resourceIdColumn = SecuritySignals.resourceId,
+            scopeColumn = SecuritySignals.organizationId,
+            scopeId = orgId,
+            resourceId = signalResourceId,
+        )
+
+    private fun resolvedAssigneeUserId(orgId: Int, rawAssigneeUserId: String?): Int? {
+        if (rawAssigneeUserId == null) return null
+        val assigneeResourceId = rawAssigneeUserId.toUuidOrNull() ?: return null
+        return Users
+            .innerJoin(Memberships)
+            .selectAll()
+            .where {
+                (Users.resource_id eq assigneeResourceId) and
+                    (Memberships.organization_id eq orgId)
+            }
+            .firstOrNull()
+            ?.get(Users.id)
+    }
 
     private fun decodeStringMap(raw: String): Map<String, String> =
         runCatching {

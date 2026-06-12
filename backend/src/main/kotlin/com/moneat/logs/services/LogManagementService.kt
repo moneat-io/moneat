@@ -42,6 +42,7 @@ import com.moneat.shared.models.LogMonitors
 import com.moneat.shared.models.LogPipelines
 import com.moneat.shared.models.LogSavedViews
 import com.moneat.shared.services.CacheService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
@@ -61,6 +62,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private val logManagementLogger = KotlinLogging.logger {}
 private val logManagementJson = Json { ignoreUnknownKeys = true }
@@ -190,6 +192,15 @@ class LogManagementService {
         return getPipeline(organizationId, pipelineId)
     }
 
+    fun updatePipeline(
+        organizationId: Int,
+        pipelineId: String,
+        request: UpdateLogPipelineRequest
+    ): LogPipelineResponse? {
+        val numericPipelineId = resolvePipelineId(organizationId, pipelineId) ?: return null
+        return updatePipeline(organizationId, numericPipelineId, request)
+    }
+
     fun deletePipeline(organizationId: Int, pipelineId: Int): Boolean {
         val deleted = transaction {
             LogPipelines.deleteWhere {
@@ -199,6 +210,11 @@ class LogManagementService {
         }
         if (deleted > 0) invalidatePipelineCache(organizationId)
         return deleted > 0
+    }
+
+    fun deletePipeline(organizationId: Int, pipelineId: String): Boolean {
+        val numericPipelineId = resolvePipelineId(organizationId, pipelineId) ?: return false
+        return deletePipeline(organizationId, numericPipelineId)
     }
 
     suspend fun getActivePipelinesCached(organizationId: Int): List<LogPipelineResponse> =
@@ -312,6 +328,16 @@ class LogManagementService {
         return getSavedView(organizationId, viewId, userId)
     }
 
+    fun updateSavedView(
+        organizationId: Int,
+        viewId: String,
+        userId: Int,
+        request: UpdateLogSavedViewRequest
+    ): LogSavedViewResponse? {
+        val numericViewId = resolveSavedViewId(organizationId, viewId, userId) ?: return null
+        return updateSavedView(organizationId, numericViewId, userId, request)
+    }
+
     fun deleteSavedView(
         organizationId: Int,
         viewId: Int,
@@ -322,6 +348,15 @@ class LogManagementService {
                 savedViewAccessCondition(organizationId, viewId, userId)
             }
         } > 0
+
+    fun deleteSavedView(
+        organizationId: Int,
+        viewId: String,
+        userId: Int
+    ): Boolean {
+        val numericViewId = resolveSavedViewId(organizationId, viewId, userId) ?: return false
+        return deleteSavedView(organizationId, numericViewId, userId)
+    }
 
     fun listMetricRules(organizationId: Int): List<LogMetricRuleResponse> =
         transaction {
@@ -400,6 +435,15 @@ class LogManagementService {
         return getMetricRule(organizationId, ruleId)
     }
 
+    fun updateMetricRule(
+        organizationId: Int,
+        ruleId: String,
+        request: UpdateLogMetricRuleRequest
+    ): LogMetricRuleResponse? {
+        val numericRuleId = resolveMetricRuleId(organizationId, ruleId) ?: return null
+        return updateMetricRule(organizationId, numericRuleId, request)
+    }
+
     fun deleteMetricRule(organizationId: Int, ruleId: Int): Boolean =
         transaction {
             LogMetricRules.deleteWhere {
@@ -407,6 +451,11 @@ class LogManagementService {
                     (LogMetricRules.organizationId eq organizationId)
             }
         } > 0
+
+    fun deleteMetricRule(organizationId: Int, ruleId: String): Boolean {
+        val numericRuleId = resolveMetricRuleId(organizationId, ruleId) ?: return false
+        return deleteMetricRule(organizationId, numericRuleId)
+    }
 
     fun listLogMonitors(organizationId: Int): List<LogMonitorResponse> =
         transaction {
@@ -506,6 +555,15 @@ class LogManagementService {
         return getLogMonitor(organizationId, monitorId)
     }
 
+    fun updateLogMonitor(
+        organizationId: Int,
+        monitorId: String,
+        request: UpdateLogMonitorRequest
+    ): LogMonitorResponse? {
+        val numericMonitorId = resolveLogMonitorId(organizationId, monitorId) ?: return null
+        return updateLogMonitor(organizationId, numericMonitorId, request)
+    }
+
     fun deleteLogMonitor(organizationId: Int, monitorId: Int): Boolean =
         transaction {
             LogMonitors.deleteWhere {
@@ -513,6 +571,11 @@ class LogManagementService {
                     (LogMonitors.organizationId eq organizationId)
             }
         } > 0
+
+    fun deleteLogMonitor(organizationId: Int, monitorId: String): Boolean {
+        val numericMonitorId = resolveLogMonitorId(organizationId, monitorId) ?: return false
+        return deleteLogMonitor(organizationId, numericMonitorId)
+    }
 
     suspend fun recordMetricPoints(
         organizationId: Long,
@@ -562,6 +625,14 @@ class LogManagementService {
                 .firstOrNull()
                 ?.let { toMetricRuleResponse(it) }
         }
+
+    fun getMetricRule(
+        organizationId: Int,
+        ruleId: String
+    ): LogMetricRuleResponse? {
+        val numericRuleId = resolveMetricRuleId(organizationId, ruleId) ?: return null
+        return getMetricRule(organizationId, numericRuleId)
+    }
 
     private fun getLogMonitor(
         organizationId: Int,
@@ -708,14 +779,14 @@ class LogManagementService {
         value: Long
     ): String {
         val groupKey = rule.groupBy ?: DEFAULT_METRIC_GROUP_KEY
-        return "($organizationId, '${escapeSql(rule.name)}', ${rule.id}, " +
+        return "($organizationId, '${escapeSql(rule.name)}', ${rule.numericId}, " +
             "parseDateTime64BestEffort('${escapeSql(timestamp)}'), " +
             "'${escapeSql(groupKey)}', '${escapeSql(groupValue)}', $value, '${escapeSql(rule.query)}')"
     }
 
     private fun toPipelineResponse(row: ResultRow): LogPipelineResponse =
         LogPipelineResponse(
-            id = row[LogPipelines.id],
+            id = row[LogPipelines.resource_id].toString(),
             name = row[LogPipelines.name],
             description = row[LogPipelines.description],
             steps = decodeSteps(row[LogPipelines.stepsJson]),
@@ -727,7 +798,7 @@ class LogManagementService {
 
     private fun toSavedViewResponse(row: ResultRow): LogSavedViewResponse =
         LogSavedViewResponse(
-            id = row[LogSavedViews.id],
+            id = row[LogSavedViews.resource_id].toString(),
             name = row[LogSavedViews.name],
             state = decodeViewState(row[LogSavedViews.viewStateJson]),
             isShared = row[LogSavedViews.isShared],
@@ -737,7 +808,7 @@ class LogManagementService {
 
     private fun toMetricRuleResponse(row: ResultRow): LogMetricRuleResponse =
         LogMetricRuleResponse(
-            id = row[LogMetricRules.id],
+            id = row[LogMetricRules.resource_id].toString(),
             name = row[LogMetricRules.name],
             query = row[LogMetricRules.query],
             levels = decodeLevels(row[LogMetricRules.levelsJson]),
@@ -745,12 +816,13 @@ class LogManagementService {
             interval = row[LogMetricRules.interval],
             isActive = row[LogMetricRules.isActive],
             createdAt = row[LogMetricRules.createdAt].toString(),
-            updatedAt = row[LogMetricRules.updatedAt].toString()
+            updatedAt = row[LogMetricRules.updatedAt].toString(),
+            numericId = row[LogMetricRules.id]
         )
 
     private fun toLogMonitorResponse(row: ResultRow): LogMonitorResponse =
         LogMonitorResponse(
-            id = row[LogMonitors.id],
+            id = row[LogMonitors.resource_id].toString(),
             name = row[LogMonitors.name],
             query = row[LogMonitors.query],
             levels = decodeLevels(row[LogMonitors.levelsJson]),
@@ -887,6 +959,70 @@ class LogManagementService {
         }
         require(!duplicate) { LOG_MONITOR_NAME_EXISTS_MESSAGE }
     }
+
+    private fun resolvePipelineId(organizationId: Int, pipelineId: String): Int? {
+        val resourceId = parseResourceId(pipelineId) ?: return null
+        return transaction {
+            LogPipelines
+                .selectAll()
+                .where {
+                    (LogPipelines.organizationId eq organizationId) and
+                        (LogPipelines.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(LogPipelines.id)
+        }
+    }
+
+    private fun resolveSavedViewId(
+        organizationId: Int,
+        viewId: String,
+        userId: Int
+    ): Int? {
+        val resourceId = parseResourceId(viewId) ?: return null
+        return transaction {
+            LogSavedViews
+                .selectAll()
+                .where {
+                    (LogSavedViews.organizationId eq organizationId) and
+                        (LogSavedViews.resource_id eq resourceId) and
+                        ((LogSavedViews.isShared eq true) or (LogSavedViews.createdBy eq userId))
+                }
+                .firstOrNull()
+                ?.get(LogSavedViews.id)
+        }
+    }
+
+    private fun resolveMetricRuleId(organizationId: Int, ruleId: String): Int? {
+        val resourceId = parseResourceId(ruleId) ?: return null
+        return transaction {
+            LogMetricRules
+                .selectAll()
+                .where {
+                    (LogMetricRules.organizationId eq organizationId) and
+                        (LogMetricRules.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(LogMetricRules.id)
+        }
+    }
+
+    private fun resolveLogMonitorId(organizationId: Int, monitorId: String): Int? {
+        val resourceId = parseResourceId(monitorId) ?: return null
+        return transaction {
+            LogMonitors
+                .selectAll()
+                .where {
+                    (LogMonitors.organizationId eq organizationId) and
+                        (LogMonitors.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(LogMonitors.id)
+        }
+    }
+
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
 
     private fun savedViewAccessCondition(
         organizationId: Int,

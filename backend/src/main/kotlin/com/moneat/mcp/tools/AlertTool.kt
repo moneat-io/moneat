@@ -25,7 +25,6 @@ import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorService
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 private val monitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 private val alertService = MonitorAlertService()
@@ -36,7 +35,7 @@ class ListAlertsTool : McpTool {
         "List monitoring alerts for a specific host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaInteger("Host ID (integer)"))
+            mapOf("host_id" to schemaResourceId("Host resource ID"))
         ),
         required = listOf("host_id")
     )
@@ -45,10 +44,9 @@ class ListAlertsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val hostIdRaw = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = hostIdRaw.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
+        val hostId = resolveHostIdArg(args, context.organizationId, monitorService).getOrElse { error ->
+            return errorResult(error.message ?: "Invalid host_id")
+        }
         val alerts = monitorService.listAlerts(hostId, context.organizationId)
         return jsonResult(alerts)
     }

@@ -38,6 +38,11 @@ import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.shared.models.LogMetricRules
+import com.moneat.shared.models.LogMonitors
+import com.moneat.shared.models.LogPipelines
+import com.moneat.shared.models.LogSavedViews
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
@@ -52,12 +57,18 @@ import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.put
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.uuid.Uuid
 
 private const val LOG_FORBIDDEN_MESSAGE = "Insufficient permissions"
 private const val PIPELINE_NOT_FOUND_MESSAGE = "Pipeline not found"
@@ -67,6 +78,13 @@ private const val LOG_MONITOR_NOT_FOUND_MESSAGE = "Log monitor not found"
 private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val DEFAULT_METRIC_ROLLUP_MINUTES = 5L
 private const val MAX_METRIC_ROLLUP_DAYS = 1L
+
+private enum class LogResourceKind {
+    PIPELINE,
+    SAVED_VIEW,
+    METRIC_RULE,
+    MONITOR,
+}
 
 data class LogManagementRouteDependencies(
     val logManagementService: LogManagementService = GlobalContext.get().get(),
@@ -133,14 +151,14 @@ private fun Route.registerLogPipelineManagementRoutes(
     put("/logs/pipelines/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@put
         val orgId = call.logOrgIdOrRespond() ?: return@put
-        val id = call.logPathId("id") ?: return@put
+        val id = call.logPathId("id", orgId, LogResourceKind.PIPELINE) ?: return@put
         val updated = logManagementService.updatePipeline(orgId, id, call.receive<UpdateLogPipelineRequest>())
         call.respondNullable(updated, PIPELINE_NOT_FOUND_MESSAGE)
     }
     delete("/logs/pipelines/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@delete
         val orgId = call.logOrgIdOrRespond() ?: return@delete
-        val id = call.logPathId("id") ?: return@delete
+        val id = call.logPathId("id", orgId, LogResourceKind.PIPELINE) ?: return@delete
         call.respondDeleted(logManagementService.deletePipeline(orgId, id), PIPELINE_NOT_FOUND_MESSAGE)
     }
     post("/logs/pipelines/preview") {
@@ -171,7 +189,7 @@ private fun Route.registerLogSavedViewManagementRoutes(
     put("/logs/saved-views/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@put
         val orgId = call.logOrgIdOrRespond() ?: return@put
-        val id = call.logPathId("id") ?: return@put
+        val id = call.logPathId("id", orgId, LogResourceKind.SAVED_VIEW, call.logUserId()) ?: return@put
         val updated = logManagementService.updateSavedView(
             orgId,
             id,
@@ -183,7 +201,7 @@ private fun Route.registerLogSavedViewManagementRoutes(
     delete("/logs/saved-views/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MANAGE)) return@delete
         val orgId = call.logOrgIdOrRespond() ?: return@delete
-        val id = call.logPathId("id") ?: return@delete
+        val id = call.logPathId("id", orgId, LogResourceKind.SAVED_VIEW, call.logUserId()) ?: return@delete
         call.respondDeleted(
             logManagementService.deleteSavedView(orgId, id, call.logUserId()),
             SAVED_VIEW_NOT_FOUND_MESSAGE
@@ -228,7 +246,7 @@ private suspend fun RoutingContext.handleUpdateMetricRule(
 ) {
     if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
     val orgId = call.logOrgIdOrRespond() ?: return
-    val id = call.logPathId("id") ?: return
+    val id = call.logPathId("id", orgId, LogResourceKind.METRIC_RULE) ?: return
     val updated = logManagementService.updateMetricRule(
         orgId,
         id,
@@ -243,7 +261,7 @@ private suspend fun RoutingContext.handleDeleteMetricRule(
 ) {
     if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
     val orgId = call.logOrgIdOrRespond() ?: return
-    val id = call.logPathId("id") ?: return
+    val id = call.logPathId("id", orgId, LogResourceKind.METRIC_RULE) ?: return
     call.respondDeleted(logManagementService.deleteMetricRule(orgId, id), METRIC_RULE_NOT_FOUND_MESSAGE)
 }
 
@@ -265,7 +283,7 @@ private suspend fun RoutingContext.handleRollupMetricRule(
 ) {
     if (!call.ensureLogAccess(membershipService, LogPermissions.METRICS)) return
     val orgId = call.logOrgIdOrRespond() ?: return
-    val id = call.logPathId("id") ?: return
+    val id = call.logPathId("id", orgId, LogResourceKind.METRIC_RULE) ?: return
     val rule = logManagementService.getMetricRule(orgId, id)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(METRIC_RULE_NOT_FOUND_MESSAGE))
     val aggregate = logService.aggregateForMetricPreview(orgId.toLong(), rule.toCreateRequest())
@@ -297,7 +315,7 @@ private fun Route.registerLogMonitorManagementRoutes(
     put("/logs/monitors/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@put
         val orgId = call.logOrgIdOrRespond() ?: return@put
-        val id = call.logPathId("id") ?: return@put
+        val id = call.logPathId("id", orgId, LogResourceKind.MONITOR) ?: return@put
         call.respondNullableOrBadRequest(LOG_MONITOR_NOT_FOUND_MESSAGE) {
             logManagementService.updateLogMonitor(
                 orgId,
@@ -309,7 +327,7 @@ private fun Route.registerLogMonitorManagementRoutes(
     delete("/logs/monitors/{id}") {
         if (!call.ensureLogAccess(membershipService, LogPermissions.MONITORS)) return@delete
         val orgId = call.logOrgIdOrRespond() ?: return@delete
-        val id = call.logPathId("id") ?: return@delete
+        val id = call.logPathId("id", orgId, LogResourceKind.MONITOR) ?: return@delete
         call.respondDeleted(logManagementService.deleteLogMonitor(orgId, id), LOG_MONITOR_NOT_FOUND_MESSAGE)
     }
     post("/logs/monitors/from-query") {
@@ -461,13 +479,83 @@ private suspend fun ApplicationCall.respondDeleted(
     }
 }
 
-private suspend fun ApplicationCall.logPathId(name: String): Int? {
-    val id = parameters[name]?.toIntOrNull()
-    if (id == null) {
+private suspend fun ApplicationCall.logPathId(
+    name: String,
+    organizationId: Int,
+    kind: LogResourceKind,
+    userId: Int? = null
+): Int? {
+    val resourceId = parameters[name]?.let(::parseLogResourceId)
+    if (resourceId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid ID"))
         return null
     }
+    val id = resolveLogResourceId(organizationId, resourceId, kind, userId)
+    if (id == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(logResourceNotFoundMessage(kind)))
+    }
     return id
+}
+
+private fun logResourceNotFoundMessage(kind: LogResourceKind): String =
+    when (kind) {
+        LogResourceKind.PIPELINE -> PIPELINE_NOT_FOUND_MESSAGE
+        LogResourceKind.SAVED_VIEW -> SAVED_VIEW_NOT_FOUND_MESSAGE
+        LogResourceKind.METRIC_RULE -> METRIC_RULE_NOT_FOUND_MESSAGE
+        LogResourceKind.MONITOR -> LOG_MONITOR_NOT_FOUND_MESSAGE
+    }
+
+private fun parseLogResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
+private fun resolveLogResourceId(
+    organizationId: Int,
+    resourceId: Uuid,
+    kind: LogResourceKind,
+    userId: Int?
+): Int? = transaction {
+    when (kind) {
+        LogResourceKind.PIPELINE ->
+            LogPipelines
+                .selectAll()
+                .where {
+                    (LogPipelines.organizationId eq organizationId) and
+                        (LogPipelines.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(LogPipelines.id)
+
+        LogResourceKind.SAVED_VIEW ->
+            LogSavedViews
+                .selectAll()
+                .where {
+                    (LogSavedViews.organizationId eq organizationId) and
+                        (LogSavedViews.resource_id eq resourceId) and
+                        ((LogSavedViews.isShared eq true) or (LogSavedViews.createdBy eq userId))
+                }
+                .firstOrNull()
+                ?.get(LogSavedViews.id)
+
+        LogResourceKind.METRIC_RULE ->
+            LogMetricRules
+                .selectAll()
+                .where {
+                    (LogMetricRules.organizationId eq organizationId) and
+                        (LogMetricRules.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(LogMetricRules.id)
+
+        LogResourceKind.MONITOR ->
+            LogMonitors
+                .selectAll()
+                .where {
+                    (LogMonitors.organizationId eq organizationId) and
+                        (LogMonitors.resource_id eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(LogMonitors.id)
+    }
 }
 
 private fun ApplicationCall.logUserId(): Int =

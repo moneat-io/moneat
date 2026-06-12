@@ -28,8 +28,10 @@ import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepositoryImpl
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.statuspage.models.CreateIncidentRequest
 import com.moneat.statuspage.models.UpdateStatusPageRequest
 import com.moneat.statuspage.services.StatusPageService
@@ -50,6 +52,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlin.uuid.Uuid
 
 private const val DEFAULT_LOG_LIMIT = 100
 private const val MAX_LOG_LIMIT = 1_000
@@ -145,9 +148,7 @@ class WorkflowTrustedActionExecutor(
         organizationId: Int,
         params: Map<String, String>
     ): Map<String, JsonElement> {
-        val hostId = params.requiredInt("host_id")
-        val host = monitorService.getHostById(hostId)
-        require(host?.organizationId == organizationId) { "Host not found for organization" }
+        val hostId = resolveHostId(organizationId, params.required("host_id"))
         val hours = intParam(params, "hours", DEFAULT_METRIC_HOURS, 1, MAX_METRIC_HOURS)
         val now = System.currentTimeMillis()
         return result(
@@ -160,8 +161,7 @@ class WorkflowTrustedActionExecutor(
         organizationId: Int,
         params: Map<String, String>
     ): Map<String, JsonElement> {
-        val projectId = params.requiredLong("project_id")
-        requireProjectAccess(organizationId, projectId)
+        val projectId = resolveProjectId(organizationId, params.required("project_id"))
         return result(
             "traces",
             dashboardService.getTransactions(
@@ -177,8 +177,7 @@ class WorkflowTrustedActionExecutor(
         organizationId: Int,
         params: Map<String, String>
     ): Map<String, JsonElement> {
-        val projectId = params.requiredLong("project_id")
-        requireProjectAccess(organizationId, projectId)
+        val projectId = resolveProjectId(organizationId, params.required("project_id"))
         val spanId = params.required("span_id")
         return result("span", dashboardService.getSpanDetails(projectId, spanId))
     }
@@ -187,8 +186,7 @@ class WorkflowTrustedActionExecutor(
         organizationId: Int,
         params: Map<String, String>
     ): Map<String, JsonElement> {
-        val projectId = params.requiredLong("project_id")
-        requireProjectAccess(organizationId, projectId)
+        val projectId = resolveProjectId(organizationId, params.required("project_id"))
         val page = intParam(params, "page", DEFAULT_ISSUE_PAGE, 1, Int.MAX_VALUE)
         val limit = intParam(params, "limit", DEFAULT_ISSUE_LIMIT, 1, MAX_ISSUE_LIMIT)
         return result("issues", dashboardService.getIssues(projectId, page, limit, params.optional("status")))
@@ -198,8 +196,7 @@ class WorkflowTrustedActionExecutor(
         organizationId: Int,
         params: Map<String, String>
     ): Map<String, JsonElement> {
-        val projectId = params.requiredLong("project_id")
-        requireProjectAccess(organizationId, projectId)
+        val projectId = resolveProjectId(organizationId, params.required("project_id"))
         return result("issue", dashboardService.getIssue(params.required("issue_id"), projectId = projectId))
     }
 
@@ -273,10 +270,13 @@ class WorkflowTrustedActionExecutor(
                 "requires_enterprise" to JsonPrimitive(true),
                 "message" to JsonPrimitive("On-call paging requires an enabled on-call bridge")
             )
+        val escalationPolicyId =
+            bridge.resolveEscalationPolicyId(organizationId, params.required("escalation_policy_id"))
+                ?: throw IllegalArgumentException("Escalation policy not found for organization")
         val alertId =
             bridge.triggerEscalation(
                 organizationId = organizationId,
-                escalationPolicyId = params.requiredInt("escalation_policy_id"),
+                escalationPolicyId = escalationPolicyId,
                 title = params.required("title"),
                 description = params.optional("description"),
                 priority = params.optional("alert_priority") ?: params.optional("priority_level") ?: "P2",
@@ -302,11 +302,15 @@ class WorkflowTrustedActionExecutor(
             )
         val severity = IncidentSeverity.wireValue(params.required("incident_severity"))
             ?: throw IllegalArgumentException("Parameter incident_severity must be SEV-0 through SEV-4")
+        val alertId = params.optional("alert_id")?.let { alertResourceId ->
+            bridge.resolveAlertId(organizationId, alertResourceId)
+                ?: throw IllegalArgumentException("On-call alert not found for organization")
+        }
         val incidentId =
             bridge.declareIncident(
                 organizationId = organizationId,
                 userId = actorUserId ?: workflowActorUserId(organizationId),
-                alertId = params.optionalInt("alert_id"),
+                alertId = alertId,
                 title = params.required("title"),
                 description = params.optional("description"),
                 severity = severity
@@ -328,20 +332,44 @@ class WorkflowTrustedActionExecutor(
         return bridge.executeConnectorAction(organizationId, stepName, params, actorUserId)
     }
 
-    private fun requireProjectAccess(
+    private fun resolveProjectId(
         organizationId: Int,
-        projectId: Long
-    ) {
-        val hasAccess =
-            transaction {
-                Projects
-                    .selectAll()
-                    .where {
-                        (Projects.id eq projectId) and (Projects.organization_id eq organizationId)
-                    }.count() > 0
-            }
-        require(hasAccess) { "Project not found for organization" }
+        projectResourceId: String
+    ): Long {
+        val parsedResourceId = parseResourceId(projectResourceId)
+            ?: throw IllegalArgumentException("Parameter project_id must be a UUID")
+        return transaction {
+            Projects
+                .selectAll()
+                .where {
+                    (Projects.resource_id eq parsedResourceId) and
+                        (Projects.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Projects.id)
+        } ?: throw IllegalArgumentException("Project not found for organization")
     }
+
+    private fun resolveHostId(
+        organizationId: Int,
+        hostResourceId: String
+    ): Int {
+        val parsedResourceId = parseResourceId(hostResourceId)
+            ?: throw IllegalArgumentException("Parameter host_id must be a UUID")
+        return transaction {
+            Hosts
+                .selectAll()
+                .where {
+                    (Hosts.resource_id eq parsedResourceId) and
+                        (Hosts.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Hosts.id)
+        } ?: throw IllegalArgumentException("Host not found for organization")
+    }
+
+    private fun parseResourceId(resourceId: String): Uuid? =
+        resourceId.toUuidOrNull()
 
     // Deterministic fallback for event-driven runs (alert/incident/security) that have no
     // human actor. Manual and API runs thread their real caller id in via [execute].
@@ -363,17 +391,6 @@ class WorkflowTrustedActionExecutor(
 
     private fun Map<String, String>.required(name: String): String =
         optional(name) ?: throw IllegalArgumentException("Missing required parameter $name")
-
-    private fun Map<String, String>.requiredInt(name: String): Int =
-        required(name).toIntOrNull() ?: throw IllegalArgumentException("Parameter $name must be an integer")
-
-    private fun Map<String, String>.optionalInt(name: String): Int? =
-        optional(name)?.let {
-            it.toIntOrNull() ?: throw IllegalArgumentException("Parameter $name must be an integer")
-        }
-
-    private fun Map<String, String>.requiredLong(name: String): Long =
-        required(name).toLongOrNull() ?: throw IllegalArgumentException("Parameter $name must be a number")
 
     private fun Map<String, String>.optional(name: String): String? =
         this[name]?.trim()?.takeIf { it.isNotEmpty() }

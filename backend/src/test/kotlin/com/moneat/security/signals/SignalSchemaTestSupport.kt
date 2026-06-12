@@ -16,7 +16,9 @@
 
 package com.moneat.security.signals
 
+import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -32,17 +34,20 @@ object SignalSchemaTestSupport {
 
     fun reset() {
         TestDatabaseHelper.dropAndPatchJsonb(
+            Users,
             Organizations,
+            Memberships,
             SecuritySignals,
             SecuritySignalEvidence,
             SecuritySignalAudit
         )
         transaction {
-            SchemaUtils.create(Organizations)
+            SchemaUtils.create(Users, Organizations, Memberships)
             exec(
                 """
                 CREATE TABLE security_signals (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     organization_id INT NOT NULL,
                     source VARCHAR(32) NOT NULL,
                     rule_id VARCHAR(255) NOT NULL,
@@ -78,6 +83,7 @@ object SignalSchemaTestSupport {
                 """
                 CREATE TABLE security_signal_evidence (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     signal_id INT NOT NULL,
                     evidence_type VARCHAR(32) NOT NULL,
                     reference TEXT NOT NULL,
@@ -95,6 +101,7 @@ object SignalSchemaTestSupport {
                 """
                 CREATE TABLE security_signal_audit (
                     id INT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL DEFAULT RANDOM_UUID(),
                     signal_id INT NOT NULL,
                     organization_id INT NOT NULL,
                     actor_user_id INT,

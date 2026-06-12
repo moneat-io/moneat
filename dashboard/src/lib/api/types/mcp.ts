@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface McpApiKey {
-  id: number
+  id: string
   name: string
   keyPrefix: string
   enabledTools: string[]

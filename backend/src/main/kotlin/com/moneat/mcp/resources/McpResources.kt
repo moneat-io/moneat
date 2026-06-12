@@ -122,7 +122,7 @@ class HostsStatusResource : McpResource {
             systems.forEach { sys ->
                 add(
                     buildJsonObject {
-                        put("id", sys.id.toString())
+                        put("id", sys.resourceId.toString())
                         put("name", sys.displayName ?: sys.hostname)
                     }
                 )

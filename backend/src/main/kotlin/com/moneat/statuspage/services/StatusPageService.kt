@@ -65,6 +65,7 @@ import java.util.UUID
 import javax.naming.NamingException
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
+import kotlin.uuid.Uuid
 import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
@@ -110,7 +111,7 @@ class StatusPageService(
                     .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
                     .map {
                         StatusPageMonitorResponse(
-                            id = it[StatusPageMonitors.id],
+                            id = it[StatusPageMonitors.resourceId].toString(),
                             monitorId = it[StatusPageMonitors.monitorId].toString(),
                             monitorName = it[UptimeMonitors.name],
                             displayName = it[StatusPageMonitors.displayName],
@@ -295,7 +296,7 @@ class StatusPageService(
                 .orderBy(StatusPageMonitors.sortOrder to SortOrder.ASC)
                 .map {
                     StatusPageMonitorResponse(
-                        id = it[StatusPageMonitors.id],
+                        id = it[StatusPageMonitors.resourceId].toString(),
                         monitorId = it[StatusPageMonitors.monitorId].toString(),
                         monitorName = it[UptimeMonitors.name],
                         displayName = it[StatusPageMonitors.displayName],
@@ -520,17 +521,20 @@ class StatusPageService(
             val verificationToken = generateVerificationToken()
             val now = Clock.System.now()
 
-            val domainId =
+            val domain =
                 StatusPageCustomDomains.insert {
                     it[statusPageId] = pageId
                     it[domain] = request.domain
                     it[StatusPageCustomDomains.verificationToken] = verificationToken
                     it[createdAt] = now
-                } get StatusPageCustomDomains.id
+                }
 
             StatusPageCustomDomains
                 .selectAll()
-                .where { StatusPageCustomDomains.id eq domainId }
+                .where {
+                    (StatusPageCustomDomains.resourceId eq domain[StatusPageCustomDomains.resourceId]) and
+                        (StatusPageCustomDomains.statusPageId eq pageId)
+                }
                 .first()
                 .toCustomDomainResponse()
         }
@@ -539,7 +543,7 @@ class StatusPageService(
     fun verifyCustomDomain(
         pageId: UUID,
         organizationId: Int,
-        domainId: Int
+        domainResourceId: Uuid
     ): CustomDomainResponse? {
         return transaction {
             // Verify page belongs to org
@@ -553,7 +557,8 @@ class StatusPageService(
                 StatusPageCustomDomains
                     .selectAll()
                     .where {
-                        (StatusPageCustomDomains.id eq domainId) and (StatusPageCustomDomains.statusPageId eq pageId)
+                        (StatusPageCustomDomains.resourceId eq domainResourceId) and
+                            (StatusPageCustomDomains.statusPageId eq pageId)
                     }.firstOrNull() ?: return@transaction null
 
             val domainName = domain[StatusPageCustomDomains.domain]
@@ -563,7 +568,12 @@ class StatusPageService(
             val verified = verifyDnsTxtRecord(domainName, expectedToken)
 
             if (verified) {
-                StatusPageCustomDomains.update({ StatusPageCustomDomains.id eq domainId }) {
+                StatusPageCustomDomains.update(
+                    {
+                        (StatusPageCustomDomains.resourceId eq domainResourceId) and
+                            (StatusPageCustomDomains.statusPageId eq pageId)
+                    }
+                ) {
                     it[StatusPageCustomDomains.verified] = true
                     it[verifiedAt] = Clock.System.now()
                 }
@@ -571,7 +581,10 @@ class StatusPageService(
 
             StatusPageCustomDomains
                 .selectAll()
-                .where { StatusPageCustomDomains.id eq domainId }
+                .where {
+                    (StatusPageCustomDomains.resourceId eq domainResourceId) and
+                        (StatusPageCustomDomains.statusPageId eq pageId)
+                }
                 .first()
                 .toCustomDomainResponse()
         }
@@ -580,7 +593,7 @@ class StatusPageService(
     fun removeCustomDomain(
         pageId: UUID,
         organizationId: Int,
-        domainId: Int
+        domainResourceId: Uuid
     ): Boolean {
         return transaction {
             // Verify page belongs to org
@@ -592,7 +605,7 @@ class StatusPageService(
 
             val deleted =
                 StatusPageCustomDomains.deleteWhere {
-                    (id eq domainId) and (statusPageId eq pageId)
+                    (resourceId eq domainResourceId) and (statusPageId eq pageId)
                 }
             deleted > 0
         }
@@ -917,7 +930,7 @@ class StatusPageService(
 
     private fun ResultRow.toCustomDomainResponse() =
         CustomDomainResponse(
-            id = this[StatusPageCustomDomains.id],
+            id = this[StatusPageCustomDomains.resourceId].toString(),
             domain = this[StatusPageCustomDomains.domain],
             verificationToken = this[StatusPageCustomDomains.verificationToken],
             verified = this[StatusPageCustomDomains.verified],

@@ -55,7 +55,7 @@ object DebuggerProbes : Table("debugger_probes") {
 @Serializable
 data class DebuggerProbe(
     val id: String,
-    val organizationId: Int,
+    val organizationId: String,
     val probeType: String,
     val service: String,
     val environment: String,
@@ -71,7 +71,7 @@ data class DebuggerProbe(
     val metricKind: String? = null,
     val tags: String? = null,
     val captureConfig: String? = null,
-    val createdBy: Int? = null,
+    val createdBy: String? = null,
     val createdAt: String,
     val updatedAt: String,
 )

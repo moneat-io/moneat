@@ -20,6 +20,9 @@ import com.moneat.alerts.models.AlertEpisodeResponse
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertSource
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.userResourceId
+import com.moneat.shared.services.userResourceIds
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -31,6 +34,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 private const val FIRING_STATUS = "FIRING"
 private const val RESOLVED_STATUS = "RESOLVED"
@@ -236,7 +240,13 @@ class AlertEpisodeService {
             query
                 .orderBy(AlertEpisodes.lastSeenAt to SortOrder.DESC)
                 .limit(limit.coerceIn(MIN_LIST_LIMIT, MAX_LIST_LIMIT))
-                .map { it.toResponse() }
+                .toList()
+                .let { rows ->
+                    val orgResourceId = organizationResourceId(organizationId)
+                    val userResourceIds =
+                        userResourceIds(rows.mapNotNull { row -> row[AlertEpisodes.suppressedByUserId] })
+                    rows.map { row -> row.toResponse(orgResourceId, userResourceIds) }
+                }
         }
 
     private fun recordFiring(
@@ -470,6 +480,7 @@ class AlertEpisodeService {
     private fun ResultRow.toContext(): AlertEpisodeContext =
         AlertEpisodeContext(
             id = this[AlertEpisodes.id].value,
+            resourceId = this[AlertEpisodes.resourceId],
             organizationId = this[AlertEpisodes.organizationId],
             source = this[AlertEpisodes.sourceName],
             deduplicationKey = this[AlertEpisodes.deduplicationKey],
@@ -491,9 +502,21 @@ class AlertEpisodeService {
 
     private fun ResultRow.toResponse(): AlertEpisodeResponse {
         val context = toContext()
+        return toResponse(
+            orgResourceId = organizationResourceId(context.organizationId),
+            userResourceIds = context.suppressedByUserId?.let { mapOf(it to userResourceId(it)) }
+                .orEmpty()
+        )
+    }
+
+    private fun ResultRow.toResponse(
+        orgResourceId: String,
+        userResourceIds: Map<Int, String>
+    ): AlertEpisodeResponse {
+        val context = toContext()
         return AlertEpisodeResponse(
-            id = context.id,
-            organizationId = context.organizationId,
+            id = this[AlertEpisodes.resourceId].toString(),
+            organizationId = orgResourceId,
             source = context.source,
             deduplicationKey = context.deduplicationKey,
             title = context.title,
@@ -508,7 +531,7 @@ class AlertEpisodeService {
             lastNotificationAt = context.lastNotificationAt?.toString(),
             notificationCount = context.notificationCount,
             suppressedAt = context.suppressedAt?.toString(),
-            suppressedByUserId = context.suppressedByUserId,
+            suppressedByUserId = context.suppressedByUserId?.let(userResourceIds::get),
             suppressReason = context.suppressReason,
             createdAt = this[AlertEpisodes.createdAt].toString(),
             updatedAt = this[AlertEpisodes.updatedAt].toString()
@@ -525,6 +548,7 @@ class AlertEpisodeService {
 
 data class AlertEpisodeContext(
     val id: Int,
+    val resourceId: Uuid,
     val organizationId: Int,
     val source: String,
     val deduplicationKey: String,

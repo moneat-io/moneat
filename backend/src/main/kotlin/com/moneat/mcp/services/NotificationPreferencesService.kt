@@ -100,8 +100,7 @@ class NotificationPreferencesService {
     }
 
     private fun projectResourceId(row: ResultRow): String {
-        val resourceId = row[Projects.resource_id].toString()
-        return resourceId.takeUnless { it == "null" } ?: row[Projects.id].toString()
+        return row[Projects.resource_id].toString()
     }
 
     fun updatePreferences(

@@ -31,6 +31,7 @@ export interface LogEntry {
   spanId: string
   tags: Record<string, string>
   resourceAttributes: Record<string, string>
+  hostId?: string | null
 }
 
 export interface LogQueryResponse {
@@ -132,7 +133,7 @@ export interface RawLogPatternResponse {
 }
 
 export interface OtlpApiKey {
-  id: number
+  id: string
   name: string
   keyPrefix: string
   createdAt: string
@@ -143,7 +144,7 @@ export interface OtlpApiKey {
 export type LogApiKey = OtlpApiKey
 
 export interface CreateOtlpApiKeyResponse {
-  id: number
+  id: string
   name: string
   keyPrefix: string
   key: string
@@ -151,8 +152,8 @@ export interface CreateOtlpApiKeyResponse {
 }
 
 export interface OtlpObservedService {
-  id: number
-  mappingId?: number | null
+  id: string
+  mappingId?: string | null
   serviceNamespace: string
   serviceName: string
   projectId?: string | null
@@ -167,7 +168,7 @@ export interface OtlpObservedService {
 }
 
 export interface OtlpServiceMapping {
-  id: number
+  id: string
   serviceNamespace: string
   serviceName: string
   projectId: string
@@ -179,7 +180,7 @@ export interface OtlpServiceMapping {
 export type CreateLogApiKeyResponse = CreateOtlpApiKeyResponse
 
 export interface LogIndex {
-  id: number
+  id: string
   name: string
   filter_query: string
   retention_days: number
@@ -236,7 +237,7 @@ export interface LogPipelineStep {
 }
 
 export interface LogPipeline {
-  id: number
+  id: string
   name: string
   description: string
   steps: LogPipelineStep[]
@@ -286,7 +287,7 @@ export interface LogSavedViewState {
 }
 
 export interface LogSavedView {
-  id: number
+  id: string
   name: string
   state: LogSavedViewState
   is_shared: boolean
@@ -307,7 +308,7 @@ export interface UpdateLogSavedViewRequest {
 }
 
 export interface LogMetricRule {
-  id: number
+  id: string
   name: string
   query: string
   levels: string[]
@@ -338,8 +339,8 @@ export interface LogMonitorDraftRequest {
   threshold: number
   warning_threshold?: number | null
   duration_seconds?: number
-  dashboard_id?: number | null
-  widget_id?: number | null
+  dashboard_id?: string | null
+  widget_id?: string | null
 }
 
 export interface LogMonitorDraft {
@@ -351,7 +352,7 @@ export interface LogMonitorDraft {
   threshold: number
   warning_threshold?: number | null
   dashboard_alert_created: boolean
-  dashboard_alert_id?: number | null
+  dashboard_alert_id?: string | null
 }
 
 export type LogMonitorCondition = '>' | '>=' | '<' | '<=' | '=='
@@ -359,7 +360,7 @@ export type LogMonitorCondition = '>' | '>=' | '<' | '<=' | '=='
 /** A standalone log monitor: a saved query + threshold the backend evaluates on
  * a schedule and raises alerts from, independent of any dashboard widget. */
 export interface LogMonitor {
-  id: number
+  id: string
   name: string
   query: string
   levels: string[]

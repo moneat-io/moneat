@@ -70,7 +70,7 @@ export function TeamSettings() {
   })
 
   const updateRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: number; role: string }) => 
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.updateMemberRole(userId, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
@@ -79,7 +79,7 @@ export function TeamSettings() {
   })
 
   const removeMutation = useMutation({
-    mutationFn: (userId: number) => api.removeMember(userId),
+    mutationFn: (userId: string) => api.removeMember(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
       setMemberToRemove(null)
@@ -87,14 +87,14 @@ export function TeamSettings() {
   })
 
   const revokeInviteMutation = useMutation({
-    mutationFn: (invitationId: number) => api.revokeInvitation(invitationId),
+    mutationFn: (invitationId: string) => api.revokeInvitation(invitationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
     },
   })
 
   const resendInviteMutation = useMutation({
-    mutationFn: (invitationId: number) => api.resendInvitation(invitationId),
+    mutationFn: (invitationId: string) => api.resendInvitation(invitationId),
   })
 
   const handleInvite = () => {

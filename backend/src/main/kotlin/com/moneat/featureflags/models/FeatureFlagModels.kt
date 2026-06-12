@@ -17,6 +17,8 @@
 package com.moneat.featureflags.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -35,7 +37,7 @@ enum class FeatureFlagValueType {
 
 @Serializable
 data class FeatureFlagEnvironmentResponse(
-    val id: Int,
+    val id: String,
     val key: String,
     val name: String,
     val description: String? = null,
@@ -53,7 +55,7 @@ data class FeatureFlagVariantRequest(
 
 @Serializable
 data class FeatureFlagVariantResponse(
-    val id: Int,
+    val id: String,
     val key: String,
     val name: String,
     val value: JsonElement,
@@ -74,7 +76,7 @@ data class FeatureFlagConfigResponse(
 
 @Serializable
 data class FeatureFlagResponse(
-    val id: Int,
+    val id: String,
     val key: String,
     val name: String,
     val description: String? = null,
@@ -140,7 +142,7 @@ data class FeatureFlagSegmentRequest(
 
 @Serializable
 data class FeatureFlagSegmentResponse(
-    val id: Int,
+    val id: String,
     val key: String,
     val name: String,
     val description: String? = null,
@@ -158,7 +160,7 @@ data class FeatureFlagSdkKeyRequest(
 
 @Serializable
 data class FeatureFlagSdkKeyResponse(
-    val id: Int,
+    val id: String,
     val environmentKey: String,
     val name: String,
     val keyType: String,
@@ -169,7 +171,7 @@ data class FeatureFlagSdkKeyResponse(
 
 @Serializable
 data class CreateFeatureFlagSdkKeyResponse(
-    val id: Int,
+    val id: String,
     val environmentKey: String,
     val name: String,
     val keyType: String,
@@ -180,10 +182,10 @@ data class CreateFeatureFlagSdkKeyResponse(
 
 @Serializable
 data class FeatureFlagAuditEventResponse(
-    val id: Int,
+    val id: String,
     val environmentKey: String? = null,
     val flagKey: String? = null,
-    val actorUserId: Int? = null,
+    val actorUserId: String? = null,
     val eventType: String,
     val before: JsonElement? = null,
     val after: JsonElement? = null,
@@ -252,10 +254,11 @@ data class OfrepTrackRequest(
 
 @Serializable
 data class FeatureFlagEnvironmentSnapshot(
-    val id: Int,
+    val id: String,
     val key: String,
     val name: String,
     val version: Int,
+    @Transient val internalId: Int = 0,
 )
 
 @Serializable
@@ -277,12 +280,13 @@ data class FeatureFlagConfigSnapshot(
 
 @Serializable
 data class FeatureFlagSnapshotFlag(
-    val id: Int,
+    val id: String,
     val key: String,
     val valueType: FeatureFlagValueType,
     val clientVisible: Boolean,
     val variants: List<FeatureFlagVariantSnapshot>,
     val config: FeatureFlagConfigSnapshot,
+    @Transient val internalId: Int = 0,
 )
 
 @Serializable
@@ -293,11 +297,12 @@ data class FeatureFlagSegmentSnapshot(
 
 @Serializable
 data class FeatureFlagEnvironmentConfigSnapshot(
-    val organizationId: Int,
+    @SerialName("organizationId") val organizationResourceId: String,
     val environment: FeatureFlagEnvironmentSnapshot,
     val etag: String,
     val flags: List<FeatureFlagSnapshotFlag>,
     val segments: List<FeatureFlagSegmentSnapshot>,
+    @Transient val organizationId: Int = 0,
 )
 
 data class FeatureFlagSdkKeyPrincipal(

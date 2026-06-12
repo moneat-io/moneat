@@ -18,7 +18,7 @@ import type {AlertPriority} from './dashboards'
 
 export interface UptimeMonitor {
   id: string
-  organizationId: number
+  organizationId: string
   name: string
   type: string
   active: boolean

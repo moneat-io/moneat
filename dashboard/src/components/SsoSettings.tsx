@@ -46,7 +46,7 @@ const certificatePlaceholder =
   '&#10;-----END CERTIFICATE-----'
 const existingClientSecretPlaceholder = '••••••••••••••••'
 type SsoTabProps = Readonly<{
-  organizationId?: number
+  organizationId?: string
   hasSamlModule?: boolean
   canConfigure?: boolean
 }>

@@ -59,6 +59,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -75,8 +76,8 @@ class DatadogQueryRoutesTest {
         mockkObject(ProfileStorageService)
 
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
-        every { DatadogHostService.getHost(any<Int>(), any<Int>()) } returns null
-        every { DatadogHostService.deleteHost(any<Int>(), any<Int>()) } returns false
+        every { DatadogHostService.getHost(any<Int>(), any<Uuid>()) } returns null
+        every { DatadogHostService.deleteHost(any<Int>(), any<Uuid>()) } returns false
         coEvery { TraceIngestionService.listResourceStats(any(), any<DdResourceStatsQuery>(), any()) } returns
             DdResourceStatsResponse(emptyList(), 0L)
         coEvery {
@@ -280,7 +281,7 @@ class DatadogQueryRoutesTest {
     fun `hosts detail returns not found for unknown host`() = testApplication {
         installHostRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
-        val resp = client.get("/v1/hosts/999") { withAuth(token) }
+        val resp = client.get("/v1/hosts/11111111-1111-4111-8111-111111111111") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
     }
 
@@ -288,7 +289,7 @@ class DatadogQueryRoutesTest {
     fun `hosts delete returns not found for unknown host`() = testApplication {
         installHostRoutes()()
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
-        val resp = client.delete("/v1/hosts/999") { withAuth(token) }
+        val resp = client.delete("/v1/hosts/11111111-1111-4111-8111-111111111111") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
     }
 

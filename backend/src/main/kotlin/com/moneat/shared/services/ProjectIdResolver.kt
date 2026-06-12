@@ -17,6 +17,7 @@
 package com.moneat.shared.services
 
 import com.moneat.shared.models.Projects
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -26,11 +27,14 @@ import kotlin.uuid.Uuid
 class ProjectIdResolver(
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val lookupProjectIdByResourceId: (Uuid) -> Long? = ::lookupProjectIdByResourceId,
+    private val lookupProjectIdByResourceIdForOrg: (Uuid, Int) -> Long? = ::lookupProjectIdByResourceIdForOrg,
     private val lookupResourceIdByProjectId: (Long) -> Uuid? = ::lookupResourceIdByProjectId,
 ) {
     private data class CachedEntry<T : Any>(val value: T, val expiresAt: Long)
+    private data class ScopedProjectKey(val resourceId: Uuid, val organizationId: Int)
 
     private val projectIdByResourceId = ConcurrentHashMap<Uuid, CachedEntry<Long>>()
+    private val scopedProjectIdByResourceId = ConcurrentHashMap<ScopedProjectKey, CachedEntry<Long>>()
     private val resourceIdByProjectId = ConcurrentHashMap<Long, CachedEntry<Uuid>>()
 
     fun resolve(param: String): Long? {
@@ -45,6 +49,28 @@ class ProjectIdResolver(
         projectIdByResourceId[resourceId] = CachedEntry(projectId, now + CACHE_TTL_MS)
         resourceIdByProjectId[projectId] = CachedEntry(resourceId, now + CACHE_TTL_MS)
         return projectId
+    }
+
+    fun resolve(param: String, organizationId: Int): Long? {
+        val normalized = param.trim().takeIf { it.isNotBlank() } ?: return null
+        val resourceId = parseUuid(normalized) ?: return null
+        val scopedKey = ScopedProjectKey(resourceId, organizationId)
+        val now = nowMs()
+        scopedProjectIdByResourceId[scopedKey]?.let { entry ->
+            if (entry.expiresAt > now) return entry.value
+        }
+
+        val projectId = lookupProjectIdByResourceIdForOrg(resourceId, organizationId) ?: return null
+        val expiresAt = now + CACHE_TTL_MS
+        scopedProjectIdByResourceId[scopedKey] = CachedEntry(projectId, expiresAt)
+        projectIdByResourceId[resourceId] = CachedEntry(projectId, expiresAt)
+        resourceIdByProjectId[projectId] = CachedEntry(resourceId, expiresAt)
+        return projectId
+    }
+
+    fun resolve(param: String, organizationId: Long): Long? {
+        if (organizationId !in Int.MIN_VALUE..Int.MAX_VALUE) return null
+        return resolve(param, organizationId.toInt())
     }
 
     fun resolveProtocolId(param: String): Long? =
@@ -63,7 +89,7 @@ class ProjectIdResolver(
     }
 
     private fun parseUuid(value: String): Uuid? =
-        runCatching { Uuid.parse(value) }.getOrNull()
+        value.toUuidOrNull()
 
     companion object {
         private const val MINUTES_PER_HALF_HOUR = 30
@@ -78,6 +104,18 @@ private fun lookupProjectIdByResourceId(resourceId: Uuid): Long? =
         Projects
             .selectAll()
             .where { Projects.resource_id eq resourceId }
+            .firstOrNull()
+            ?.get(Projects.id)
+    }
+
+private fun lookupProjectIdByResourceIdForOrg(resourceId: Uuid, organizationId: Int): Long? =
+    transaction {
+        Projects
+            .selectAll()
+            .where {
+                (Projects.resource_id eq resourceId) and
+                    (Projects.organization_id eq organizationId)
+            }
             .firstOrNull()
             ?.get(Projects.id)
     }

@@ -805,8 +805,17 @@ class BillingServicesExtendedTest {
         val usage = billingQuotaService.getUsageForOrganization(testOrgId)
         assertEquals("pro", usage.plan)
         assertEquals("active", usage.status)
-        assertEquals(testOrgId, usage.organizationId)
+        assertEquals(organizationResourceId(testOrgId), usage.organizationId)
     }
+
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
 
     // ──── BillingQuotaService: reserveUnits ingestion overage tracking ────
 
