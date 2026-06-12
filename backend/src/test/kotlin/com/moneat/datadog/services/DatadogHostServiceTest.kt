@@ -22,11 +22,14 @@ import com.moneat.datadog.models.DatadogIntakeMeta
 import com.moneat.datadog.models.DatadogIntakePayload
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 
 class DatadogHostServiceTest {
 
@@ -73,6 +76,36 @@ class DatadogHostServiceTest {
         assertEquals(8000000, hosts[0].memoryTotalKb)
         assertEquals("7.50.0", hosts[0].agentVersion)
         assertEquals("prod", hosts[0].tags["env"])
+    }
+
+    @Test
+    fun `resolveHostIds rejects duplicate hostnames`() {
+        val now = Clock.System.now()
+        transaction {
+            repeat(2) {
+                DdHostsTable.insert {
+                    it[organizationId] = 1
+                    it[hostname] = "web-01"
+                    it[displayName] = "web-01"
+                    it[status] = "up"
+                    it[os] = "linux"
+                    it[platform] = "ubuntu"
+                    it[processor] = "x86_64"
+                    it[cpuCores] = 4
+                    it[memoryTotalKb] = 8000000
+                    it[agentVersion] = "7.50.0"
+                    it[gohai] = "{}"
+                    it[tags] = "{}"
+                    it[firstSeenAt] = now
+                    it[lastSeenAt] = now
+                }
+            }
+        }
+
+        val error = assertFailsWith<IllegalStateException> {
+            DatadogHostService.resolveHostIds(1, setOf("web-01"))
+        }
+        assertTrue(error.message.orEmpty().contains("Duplicate Datadog host rows"))
     }
 
     @Test

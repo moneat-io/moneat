@@ -23,7 +23,7 @@ import {OverviewDataProvider} from '../OverviewDataProvider'
 import {SystemStatusWidget} from '../widgets/SystemStatusWidget'
 import {KpiWidget} from '../widgets/KpiWidget'
 import {ServiceHealthWidget} from '../widgets/ServiceHealthWidget'
-import {TelemetryWidget} from '../widgets/TelemetryWidget'
+import {DeployLabel, TelemetryWidget} from '../widgets/TelemetryWidget'
 import {TriageWidget} from '../widgets/TriageWidget'
 import {InfraSummaryWidget} from '../widgets/InfraSummaryWidget'
 import {UptimeSummaryWidget} from '../widgets/UptimeSummaryWidget'
@@ -84,6 +84,29 @@ describe('TelemetryWidget', () => {
     expect(screen.getByText('error rate')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Logs'))
     expect(screen.getByText('log volume')).toBeInTheDocument()
+  })
+
+  it('keeps deploy labels inside chart edges', () => {
+    const {rerender} = render(
+      <svg>
+        <DeployLabel viewBox={{x: 90, y: 4}} text="v2.4.1" alignRight />
+      </svg>,
+    )
+
+    const rightLabel = screen.getByText('v2.4.1')
+    expect(rightLabel).toHaveAttribute('x', '85')
+    expect(rightLabel).toHaveAttribute('y', '15')
+    expect(rightLabel).toHaveAttribute('text-anchor', 'end')
+
+    rerender(
+      <svg>
+        <DeployLabel viewBox={{x: 12, y: 4}} text="v2.4.2" alignRight={false} />
+      </svg>,
+    )
+
+    const leftLabel = screen.getByText('v2.4.2')
+    expect(leftLabel).toHaveAttribute('x', '17')
+    expect(leftLabel).toHaveAttribute('text-anchor', 'start')
   })
 })
 

@@ -457,6 +457,49 @@ class DatadogMetricServiceTest {
     }
 
     @Test
+    fun `insertMetricBatch normalizes host tags before raw and rollup writes`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        mockkObject(DatadogHostService)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            every { DatadogHostService.resolveHostIds(42, setOf("web-01")) } returns mapOf("web-01" to 7)
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "system.cpu.user",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 23.5,
+                            host = "",
+                            tags = mapOf("host" to "web-01", "host_id" to ""),
+                            unit = "%",
+                        )
+                    )
+                )
+            )
+
+            val rawRow = jsonRows(queries.single { it.contains("INSERT INTO `test_db`.metrics ") }).single()
+            assertEquals("web-01", rawRow["host"]?.jsonPrimitive?.content)
+            assertEquals("7", rawRow["tags"]?.jsonObject?.get("host_id")?.jsonPrimitive?.content)
+
+            val latestRollup = queries.single { it.contains("metrics_latest_by_host") }
+            assertTrue(latestRollup.contains("'system.cpu.user'"))
+            assertTrue(latestRollup.contains("'web-01'"))
+            assertTrue(latestRollup.contains("'host_id', '7'"))
+        } finally {
+            unmockkObject(DatadogHostService)
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `insertMetricBatch preserves raw insert success when rollup setup fails`() = runBlocking {
         val queries = mutableListOf<String>()
         val response = mockk<HttpResponse>()

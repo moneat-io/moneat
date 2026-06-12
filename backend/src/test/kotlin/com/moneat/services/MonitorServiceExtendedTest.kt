@@ -456,6 +456,24 @@ class MonitorServiceExtendedTest {
     }
 
     @Test
+    fun `getHistoricalMetrics prefers Datadog percent metrics over derived ratios`() = runBlocking {
+        every { hostRepo.getById(1) } returns testHost
+        coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
+        val queries = mutableListOf<String>()
+        val nowEpoch = Clock.System.now().epochSeconds
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            DATA_EMPTY_JSON
+        }
+
+        service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 120)
+
+        val query = queries.single()
+        assertTrue(query.indexOf("system.mem.pct_usable") < query.indexOf("system.mem.available"))
+        assertTrue(query.indexOf("system.disk.in_use") < query.indexOf("system.disk.used"))
+    }
+
+    @Test
     fun `getHistoricalMetrics parses data points`() = runBlocking {
         every { hostRepo.getById(1) } returns testHost
         coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7

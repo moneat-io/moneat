@@ -97,11 +97,17 @@ export function KindIcon({kind, className}: {readonly kind: ResourceKind; readon
   return <Icon className={cn('h-4 w-4 text-muted-foreground', className)} />
 }
 
-/** Health pill with a leading dot, in the shared status language. */
+/**
+ * Health pill in the shared status language. Soft variants get a leading status
+ * dot; solid variants encode the status in their fill, so the dot is dropped to
+ * keep the label centered (a same-tone dot would just vanish into the fill).
+ */
 export function HealthBadge({health}: {readonly health: Health}) {
+  const variant = HEALTH_BADGE[health]
+  const solid = variant.endsWith('Solid')
   return (
-    <Badge variant={HEALTH_BADGE[health]} className="gap-1 px-1.5 py-0 text-[10px] leading-4">
-      <StatusDot tone={HEALTH_TONE[health]} size="sm" />
+    <Badge variant={variant} className="gap-1 px-1.5 py-0 text-[10px] leading-4">
+      {!solid && <StatusDot tone={HEALTH_TONE[health]} size="sm" />}
       {HEALTH_LABEL[health]}
     </Badge>
   )

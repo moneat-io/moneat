@@ -29,6 +29,7 @@ import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -387,6 +388,32 @@ object DatadogHostService {
                 }
                 .map { row -> rowToDdHostInfo(row) }
                 .firstOrNull()
+        }
+    }
+
+    fun resolveHostIds(organizationId: Int, hostnames: Set<String>): Map<String, Int> {
+        if (hostnames.isEmpty()) return emptyMap()
+        return transaction {
+            val rows = DdHostsTable.selectAll()
+                .where {
+                    (DdHostsTable.organizationId eq organizationId) and
+                        (DdHostsTable.hostname inList hostnames)
+                }
+                .map { row ->
+                    row[DdHostsTable.hostname] to row[DdHostsTable.id]
+                }
+            val duplicateHostnames = rows
+                .groupingBy { (hostname, _) -> hostname }
+                .eachCount()
+                .filterValues { count -> count > 1 }
+                .keys
+            // Keep this guard until the table has a database-level uniqueness
+            // constraint for organization_id + hostname.
+            check(duplicateHostnames.isEmpty()) {
+                "Duplicate Datadog host rows for organization $organizationId: " +
+                    duplicateHostnames.sorted().joinToString(", ")
+            }
+            rows.toMap()
         }
     }
 

@@ -432,14 +432,14 @@ function IndexPage() {
     />
   )
 
-  return (
-    <div className="h-[calc(100vh-var(--app-header-h,0px))] overflow-hidden">
-      {activeTab === 'issues' ? (
-        <DashboardPage tabs={viewTabs} />
-      ) : (
-        <ApmErrorsTab isActive tabs={viewTabs} />
-      )}
-    </div>
+  // Render the active explorer directly so it inherits the height of the app
+  // shell's fixed content region (see __root.tsx) and scrolls within it. A
+  // per-page `100vh` + `overflow-hidden` wrapper clipped long lists instead of
+  // letting them scroll.
+  return activeTab === 'issues' ? (
+    <DashboardPage tabs={viewTabs} />
+  ) : (
+    <ApmErrorsTab isActive tabs={viewTabs} />
   )
 }
 
@@ -1460,13 +1460,14 @@ function ApmErrorRow({error}: Readonly<{error: ApmErrorGroup}>) {
 
   return (
     <div className="hover:bg-accent/40 transition border-l-[3px] border-l-red-500">
-      <div className="grid grid-cols-[auto_1fr_auto] md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
+      <div className="grid grid-cols-[7rem_1fr_auto] md:grid-cols-[8rem_1fr_4rem_6rem_4rem] items-center gap-2 sm:gap-3 py-2 sm:py-2.5 px-2 sm:px-4">
         <Badge
           variant="outline"
-          className="shrink-0 text-[11px] px-1.5 py-0 gap-1 w-fit"
+          title={error.service}
+          className="min-w-0 max-w-full w-fit text-[11px] px-1.5 py-0 gap-1"
         >
-          <Server className="h-3 w-3" />
-          {error.service}
+          <Server className="h-3 w-3 shrink-0" />
+          <span className="min-w-0 truncate">{error.service}</span>
         </Badge>
         <div className="min-w-0">
           <div className="font-semibold truncate text-sm">

@@ -16,6 +16,8 @@
 
 package com.moneat.monitor.models
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -58,11 +60,15 @@ data class CatalogCostItem(
 )
 
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 data class CatalogResourceTelemetry(
     val cpuPct: Int? = null,
     val memPct: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val latencyMs: Int? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val errorRatePct: Double? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val throughput: String? = null
 )
 
