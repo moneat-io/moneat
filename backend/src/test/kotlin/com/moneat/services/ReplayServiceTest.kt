@@ -275,9 +275,18 @@ class ReplayServiceTest {
     @Test
     fun `getReplays uses recording window and native mobile metadata`() = runBlocking {
         val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
-        val replayRow = """
-{"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:02:00.000Z","started_ms":"1767225600000","finished_ms":"1767225720000","duration_ms":"0","recording_segment_count":2,"urls":[],"error_count":0,"user_id":"u-1","user_email":"","user_username":"","browser_name":"","browser_version":"","os_name":"","os_version":"","platform":"android","sdk_name":"sentry.java.android","device_name":"","device_family":"","activity":0}
-        """.trimIndent()
+        val replayRow =
+            listOf(
+                """{"replay_id":"$REPLAY_UUID","project_id":1,""",
+                """"started_at":"2026-01-01T00:00:00.000Z",""",
+                """"finished_at":"2026-01-01T00:02:00.000Z",""",
+                """"started_ms":"1767225600000","finished_ms":"1767225720000",""",
+                """"duration_ms":"0","recording_segment_count":2,"urls":[],"error_count":0,""",
+                """"user_id":"u-1","user_email":"","user_username":"",""",
+                """"browser_name":"","browser_version":"","os_name":"","os_version":"",""",
+                """"platform":"android","sdk_name":"sentry.java.android",""",
+                """"device_name":"","device_family":"","activity":0}"""
+            ).joinToString("")
 
         withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
@@ -610,13 +619,23 @@ class ReplayServiceTest {
     }
 
     @Test
-    fun `getReplaysForIssue returns replay list items with entry url and signals`() = runBlocking {
-        val replayRow = """
-{"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","duration_ms":"300000","urls":["","https://app.example.com/issue"],"error_count":1,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":0}
-        """.trimIndent()
+    fun `getReplaysForIssue returns mobile replay list items with entry url and signals`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val replayRow =
+            listOf(
+                """{"replay_id":"$REPLAY_UUID","project_id":1,""",
+                """"started_at":"2026-01-01T00:00:00.000Z",""",
+                """"finished_at":"2026-01-01T00:05:00.000Z","duration_ms":"0",""",
+                """"recording_segment_count":2,"urls":["","https://app.example.com/issue"],""",
+                """"error_count":1,"user_id":"u-1","user_email":"test@test.com",""",
+                """"user_username":"tester","browser_name":"","browser_version":"",""",
+                """"os_name":"","os_version":"","platform":"android","sdk_name":"sentry.java.android",""",
+                """"device_name":"","device_family":"","activity":0}"""
+            ).joinToString("")
 
         withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
+            queries += query
             when {
                 query.contains("issues FINAL") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
@@ -629,8 +648,11 @@ class ReplayServiceTest {
             val result = service.getReplaysForIssue("issue-1")
             assertEquals(1, result.size)
             assertEquals("https://app.example.com/issue", result.first().entryUrl)
+            assertEquals(10000.0, result.first().durationMs)
+            assertEquals("Android", result.first().osName)
             assertTrue("error" in result.first().signals)
-            assertTrue("dead_click" in result.first().signals)
+            assertTrue("dead_click" !in result.first().signals)
+            assertTrue(queries.any { it.contains("replay_segments") })
         }
     }
 }

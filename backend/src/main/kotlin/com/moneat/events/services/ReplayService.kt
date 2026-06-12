@@ -243,7 +243,9 @@ class ReplayService(
     private fun isNativeMobileReplay(obj: JsonObject): Boolean =
         mobileOsLabelFromHints(
             stringValue(obj, "platform"),
-            stringValue(obj, "sdk_name")
+            stringValue(obj, "sdk_name"),
+            stringValue(obj, "device_name"),
+            stringValue(obj, "device_family")
         ) != null
 
     private fun replayDurationMs(obj: JsonObject, nativeMobileReplay: Boolean): Double {
@@ -1701,8 +1703,16 @@ class ReplayService(
                 toString(r.replay_id) as replay_id,
                 r.project_id,
                 formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
-                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
-                dateDiff('millisecond', min(r.replay_start_timestamp), max(r.timestamp)) as duration_ms,
+                formatDateTime(
+                    max(greatest(r.timestamp, ifNull(s.last_segment_timestamp, r.timestamp))),
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
+                ) as finished_at,
+                dateDiff(
+                    'millisecond',
+                    min(r.replay_start_timestamp),
+                    max(greatest(r.timestamp, ifNull(s.last_segment_timestamp, r.timestamp)))
+                ) as duration_ms,
                 arrayFlatten(groupArray(r.urls)) as urls,
                 length(arrayDistinct(arrayFlatten(groupArray(r.error_ids)))) as error_count,
                 argMax(r.user_id, r.timestamp) as user_id,
@@ -1712,6 +1722,11 @@ class ReplayService(
                 argMax(r.browser_version, r.timestamp) as browser_version,
                 argMax(r.os_name, r.timestamp) as os_name,
                 argMax(r.os_version, r.timestamp) as os_version,
+                argMax(r.platform, r.timestamp) as platform,
+                argMax(r.sdk_name, r.timestamp) as sdk_name,
+                argMax(r.device_name, r.timestamp) as device_name,
+                argMax(r.device_family, r.timestamp) as device_family,
+                max(ifNull(s.recording_segment_count, 0)) as recording_segment_count,
                 argMax(r.activity, r.timestamp) as activity
             FROM `$clickhouseDb`.replay_events r
             ARRAY JOIN arrayDistinct(r.error_ids) AS error_id
@@ -1721,10 +1736,21 @@ class ReplayService(
                 AND e.project_id = $projectId
                 AND e.event_type = 'error'
                 AND $retentionClause
+            LEFT JOIN (
+                SELECT
+                    replay_id,
+                    project_id,
+                    max(timestamp) AS last_segment_timestamp,
+                    count() AS recording_segment_count
+                FROM `$clickhouseDb`.replay_segments
+                WHERE project_id = $projectId
+                    AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+                GROUP BY replay_id, project_id
+            ) s ON s.replay_id = r.replay_id AND s.project_id = r.project_id
             WHERE r.project_id = $projectId
                 AND r.timestamp >= now64(3) - INTERVAL $retentionDays DAY
             GROUP BY r.replay_id, r.project_id
-            ORDER BY max(r.timestamp) DESC
+            ORDER BY max(greatest(r.timestamp, ifNull(s.last_segment_timestamp, r.timestamp))) DESC
             LIMIT $limit
             FORMAT JSONEachRow
             """.trimIndent()
