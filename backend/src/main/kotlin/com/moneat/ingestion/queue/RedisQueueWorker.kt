@@ -282,6 +282,17 @@ class RedisQueueWorker(
         OperationalMetrics.registerWorkerQueues(spec.pipeline.workerName, spec.queueKey, spec.dlqKey)
         if (usesStreams()) {
             OperationalMetrics.registerWorkerQueues(spec.pipeline.workerName, spec.streamKey, spec.dlqStreamKey)
+            OperationalMetrics.registerWorkerStream(
+                workerName = spec.pipeline.workerName,
+                streamKey = spec.streamKey,
+                streamType = "primary",
+                consumerGroup = spec.consumerGroup,
+            )
+            OperationalMetrics.registerWorkerStream(
+                workerName = spec.pipeline.workerName,
+                streamKey = spec.dlqStreamKey,
+                streamType = "dlq",
+            )
         }
     }
 

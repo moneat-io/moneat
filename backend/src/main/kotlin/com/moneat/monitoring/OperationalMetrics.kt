@@ -17,7 +17,10 @@
 package com.moneat.monitoring
 
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionQueueSettings
 import io.ktor.client.plugins.HttpRequestTimeoutException
+import io.lettuce.core.Limit
+import io.lettuce.core.Range
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Gauge
@@ -47,6 +50,7 @@ object OperationalMetrics {
     private val registeredDlqs = ConcurrentHashMap<String, String>()
     private val registeredDlqMeters = ConcurrentHashMap<String, Unit>()
     private val registeredQueueMeters = ConcurrentHashMap<String, Unit>()
+    private val registeredStreamMeters = ConcurrentHashMap<String, Unit>()
     private val workerLastSuccessSeconds = ConcurrentHashMap<String, AtomicLong>()
     private val workerLastSuccessMeters = ConcurrentHashMap<String, Unit>()
     private val dependencyHealthValues = ConcurrentHashMap<String, AtomicLong>()
@@ -55,6 +59,7 @@ object OperationalMetrics {
     private val backgroundJobLastSuccessSeconds = ConcurrentHashMap<String, AtomicLong>()
     private val backgroundJobLastSuccessMeters = ConcurrentHashMap<String, Unit>()
     private val systemMetricsBound = AtomicBoolean(false)
+    private val queueModeMetricsBound = AtomicBoolean(false)
     private val closeableBinders = CopyOnWriteArrayList<AutoCloseable>()
 
     val registry: PrometheusMeterRegistry
@@ -78,6 +83,8 @@ object OperationalMetrics {
                 binder.bindTo(registry)
                 closeableBinders.add(binder)
             }
+
+        bindIngestionQueueModeMetrics()
     }
 
     fun recordWorkerProcessingFailure(workerName: String, workerId: Int, cause: Throwable) {
@@ -114,6 +121,46 @@ object OperationalMetrics {
         registerQueue(workerName, queueKey, "primary")
         registerQueue(workerName, dlqKey, "dlq")
         registerDlq(workerName, dlqKey)
+    }
+
+    fun registerWorkerStream(
+        workerName: String,
+        streamKey: String,
+        streamType: String,
+        consumerGroup: String? = null,
+    ) {
+        val normalizedWorkerName = workerName.normalizedLabelValue()
+        val normalizedStreamType = streamType.normalizedLabelValue()
+        val baseKey = "$normalizedWorkerName|$streamKey|${consumerGroup.orEmpty()}|$normalizedStreamType"
+        registeredStreamMeters.computeIfAbsent(baseKey) {
+            Gauge.builder(WORKER_STREAM_OLDEST_MESSAGE_AGE_SECONDS, streamKey) { key ->
+                readStreamOldestMessageAgeSeconds(key)
+            }
+                .description("Age in seconds of the oldest Redis stream entry for registered ingestion streams.")
+                .tags(
+                    tags(
+                        "worker" to normalizedWorkerName,
+                        "stream_key" to streamKey,
+                        "stream_type" to normalizedStreamType
+                    )
+                )
+                .register(registry)
+            if (consumerGroup != null) {
+                Gauge.builder(WORKER_STREAM_PENDING_MESSAGES, streamKey) { key ->
+                    readStreamPendingMessages(key, consumerGroup)
+                }
+                    .description("Pending Redis stream messages in the configured ingestion consumer group.")
+                    .tags(
+                        tags(
+                            "worker" to normalizedWorkerName,
+                            "stream_key" to streamKey,
+                            "consumer_group" to consumerGroup
+                        )
+                    )
+                    .register(registry)
+            }
+            Unit
+        }
     }
 
     fun registerDlq(workerName: String, dlqKey: String) {
@@ -403,6 +450,7 @@ object OperationalMetrics {
         registeredDlqs.clear()
         registeredDlqMeters.clear()
         registeredQueueMeters.clear()
+        registeredStreamMeters.clear()
         workerLastSuccessSeconds.clear()
         workerLastSuccessMeters.clear()
         dependencyHealthValues.clear()
@@ -410,6 +458,7 @@ object OperationalMetrics {
         dependencyHealthMeters.clear()
         backgroundJobLastSuccessSeconds.clear()
         backgroundJobLastSuccessMeters.clear()
+        queueModeMetricsBound.set(false)
     }
 
     private fun bindMeter(binder: MeterBinder) {
@@ -611,11 +660,44 @@ object OperationalMetrics {
             .tags(tags("trigger" to trigger.normalizedLabelValue()))
             .register(registry)
 
+    private fun bindIngestionQueueModeMetrics() {
+        if (!queueModeMetricsBound.compareAndSet(false, true)) return
+        val backend = IngestionQueueSettings.backend().name.lowercase()
+        val readMode = IngestionQueueSettings.readMode().name.lowercase()
+        Gauge.builder(INGESTION_QUEUE_MODE, Unit) { 1.0 }
+            .description("Current ingestion queue backend and worker read mode for this process.")
+            .tags(tags("backend" to backend, "read_mode" to readMode))
+            .register(registry)
+    }
+
     private fun readQueueDepth(queueKey: String): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
         return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
             .recoverCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
             .getOrElse { Double.NaN }
+    }
+
+    private fun readStreamPendingMessages(streamKey: String, consumerGroup: String): Double {
+        if (!RedisConfig.isConnected()) return Double.NaN
+        return runCatching { RedisConfig.sync().xpending(streamKey, consumerGroup).count.toDouble() }
+            .getOrElse { Double.NaN }
+    }
+
+    private fun readStreamOldestMessageAgeSeconds(streamKey: String): Double {
+        if (!RedisConfig.isConnected()) return Double.NaN
+        return runCatching {
+            val first = RedisConfig.sync()
+                .xrange(streamKey, Range.create("-", "+"), Limit.from(1))
+                .firstOrNull()
+                ?: return 0.0
+            streamIdAgeSeconds(first.id)
+        }.getOrElse { Double.NaN }
+    }
+
+    private fun streamIdAgeSeconds(id: String): Double {
+        val createdAtMs = id.substringBefore('-').toLongOrNull() ?: return Double.NaN
+        val ageMs = System.currentTimeMillis() - createdAtMs
+        return ageMs.coerceAtLeast(0L).toDouble() / MILLIS_PER_SECOND
     }
 
     private fun tags(vararg pairs: Pair<String, String>): Iterable<Tag> =
@@ -661,6 +743,10 @@ object OperationalMetrics {
     private const val WORKER_DLQ_PUSHES = "moneat_worker_dlq_pushes"
     private const val WORKER_DLQ_DEPTH = "moneat_worker_dlq_depth"
     private const val WORKER_QUEUE_DEPTH = "moneat_worker_queue_depth"
+    private const val WORKER_STREAM_PENDING_MESSAGES = "moneat_worker_stream_pending_messages"
+    private const val WORKER_STREAM_OLDEST_MESSAGE_AGE_SECONDS =
+        "moneat_worker_stream_oldest_message_age_seconds"
+    private const val INGESTION_QUEUE_MODE = "moneat_ingestion_queue_mode"
     private const val DD_METRIC_PAYLOADS_QUEUED = "moneat_datadog_metric_payloads_queued"
     private const val DD_METRIC_POINTS_QUEUED = "moneat_datadog_metric_points_queued"
     private const val DD_METRIC_INSERT_CHUNKS = "moneat_datadog_metric_insert_chunks"
