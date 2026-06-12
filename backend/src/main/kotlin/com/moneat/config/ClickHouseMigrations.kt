@@ -46,7 +46,7 @@ object ClickHouseMigrations {
     private val optionalAlterTableIfExistsPattern =
         Regex(
             pattern = """^ALTER\s+TABLE\s+IF\s+EXISTS\s+([A-Za-z0-9_`.]+)\s+(MODIFY\s+SETTING\s+.+?)\s*;?$""",
-            option = RegexOption.IGNORE_CASE
+            options = setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
         )
 
     data class Migration(

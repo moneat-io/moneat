@@ -50,7 +50,7 @@ class ClickHouseInsertDeduplicationTest {
             ).readText()
 
         assertFalse(migrationSql.contains("ndm_paths"), "NDM paths table is named network_paths")
-        assertTrue(migrationSql.contains("ALTER TABLE network_paths MODIFY SETTING"))
+        assertTrue(migrationSql.contains("ALTER TABLE IF EXISTS network_paths MODIFY SETTING"))
     }
 
     @Test
