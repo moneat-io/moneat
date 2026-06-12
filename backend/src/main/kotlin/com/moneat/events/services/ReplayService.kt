@@ -1156,7 +1156,7 @@ class ReplayService(
             ) s ON s.replay_id = e.replay_id AND s.project_id = e.project_id
             WHERE toString(e.replay_id) = '$normalizedReplayId'
                 AND $replayProjectIdClause
-                AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+                AND ${queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays, demoEpochMs)}
             GROUP BY e.replay_id, e.project_id
             LIMIT 1
             FORMAT JSONEachRow
@@ -1222,7 +1222,7 @@ class ReplayService(
         WHERE e.project_id = $projectId
             AND e.event_type = 'error'
             AND toString(e.event_id) IN ($inClause)
-            AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+            AND ${queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
         """.trimIndent()
 
@@ -1246,7 +1246,7 @@ class ReplayService(
         WHERE e.project_id = $projectId
             AND e.event_type = 'transaction'
             AND ($traceConditions)
-            AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+            AND ${queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
         """.trimIndent()
 
@@ -1695,7 +1695,7 @@ class ReplayService(
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val escapedIssueId = escapeSql(issueId)
-        val retentionClause = queryHelper.timestampRetentionClause("e.timestamp", retentionDays)
+        val retentionClause = queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays)
 
         val query =
             """
@@ -1782,6 +1782,7 @@ class ReplayService(
         private const val DEFAULT_MOBILE_SEGMENT_DURATION_MS = 5000
         private const val MILLISECONDS_PER_SECOND = 1000.0
         private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+        private const val EVENT_TIMESTAMP_COLUMN = "e.timestamp"
         private const val PERIOD_24H_MS = MILLIS_PER_DAY
         private const val PERIOD_7D_MS = 7 * MILLIS_PER_DAY
         private const val PERIOD_30D_MS = 30 * MILLIS_PER_DAY
