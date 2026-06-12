@@ -119,6 +119,14 @@ class DashboardAlertServiceTest {
             DashboardWidgets,
             DashboardWidgetAlerts
         )
+        every {
+            queryEngine.resolveTemplateDataSource(any(), any(), any(), any())
+        } answers {
+            firstArg()
+        }
+        every { queryEngine.isTemplateDataSourceMarker(any()) } answers {
+            firstArg<String>().startsWith("__")
+        }
         transaction {
             exec(
                 """
@@ -1247,6 +1255,17 @@ class DashboardAlertServiceTest {
         runBlocking {
             val source = customDataSource(id = 11)
             every { dataSourceService.listDataSources(ORG_ID) } returns listOf(source)
+            every { dataSourceService.getDataSource(source.id, ORG_ID) } returns source
+            every {
+                queryEngine.resolveTemplateDataSource(
+                    match { it.dataSource == "__prometheus" },
+                    ORG_ID,
+                    dataSourceService,
+                    false,
+                )
+            } answers {
+                firstArg<QueryDsl>().copy(dataSource = "custom:${source.id}")
+            }
             every { dataSourceService.getDecryptedCredentials(11, ORG_ID) } returns null
             coEvery {
                 dataSourceExecutor.executeQuery(
@@ -1272,6 +1291,52 @@ class DashboardAlertServiceTest {
             )
 
             assertEquals(0.25, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
+        }
+
+    @Test
+    fun `executeQueryForAlert resolves non prometheus template alias to custom datasource`() =
+        runBlocking {
+            val source = customDataSource(
+                id = 13,
+                sourceType = CustomDataSourceType.LOKI.name.lowercase(),
+            )
+            every { dataSourceService.listDataSources(ORG_ID) } returns listOf(source)
+            every { dataSourceService.getDataSource(source.id, ORG_ID) } returns source
+            every {
+                queryEngine.resolveTemplateDataSource(
+                    match { it.dataSource == "__loki" },
+                    ORG_ID,
+                    dataSourceService,
+                    false,
+                )
+            } answers {
+                firstArg<QueryDsl>().copy(dataSource = "custom:${source.id}")
+            }
+            every { dataSourceService.getDecryptedCredentials(13, ORG_ID) } returns null
+            coEvery {
+                dataSourceExecutor.executeQuery(
+                    sourceId = 13,
+                    sourceType = CustomDataSourceType.LOKI,
+                    host = source.host,
+                    port = source.port,
+                    databaseName = source.databaseName,
+                    credentials = any(),
+                    query = """{app="api"}""",
+                    limit = any(),
+                    timeRange = any(),
+                )
+            } returns listOf(mapOf("value" to JsonPrimitive(2.0)))
+
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = DEFAULT_PROJECT_ID,
+                queryDsl = QueryDsl(
+                    dataSource = "__loki",
+                    rawQuery = """{app="api"}""",
+                ),
+            )
+
+            assertEquals(2.0, result.single()["value"]?.jsonPrimitive?.content?.toDouble())
         }
 
     @Test
@@ -1311,18 +1376,34 @@ class DashboardAlertServiceTest {
         }
 
     @Test
-    fun `executeQueryForAlert rejects prometheus alias without enabled source`() =
+    fun `executeQueryForAlert skips unresolved template alias without enabled source`() =
         runBlocking {
             every { dataSourceService.listDataSources(ORG_ID) } returns emptyList()
 
-            assertFailsWith<IllegalStateException> {
-                service.executeQueryForAlert(
-                    orgId = ORG_ID,
-                    projectId = null,
-                    queryDsl = QueryDsl(
-                        dataSource = "__prometheus",
-                        rawQuery = "up",
-                    ),
+            val result = service.executeQueryForAlert(
+                orgId = ORG_ID,
+                projectId = DEFAULT_PROJECT_ID,
+                queryDsl = QueryDsl(
+                    dataSource = "__prometheus",
+                    rawQuery = "up",
+                ),
+            )
+
+            assertTrue(result.isEmpty())
+            coVerify(exactly = 0) {
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
+            }
+            coVerify(exactly = 0) {
+                dataSourceExecutor.executeQuery(
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
                 )
             }
         }
@@ -1341,6 +1422,17 @@ class DashboardAlertServiceTest {
                 postgres,
                 prometheus,
             )
+            every { dataSourceService.getDataSource(prometheus.id, ORG_ID) } returns prometheus
+            every {
+                queryEngine.resolveTemplateDataSource(
+                    match { it.dataSource == "__prometheus" },
+                    ORG_ID,
+                    dataSourceService,
+                    false,
+                )
+            } answers {
+                firstArg<QueryDsl>().copy(dataSource = "custom:${prometheus.id}")
+            }
             every { dataSourceService.getDecryptedCredentials(12, ORG_ID) } returns null
             coEvery {
                 dataSourceExecutor.executeQuery(

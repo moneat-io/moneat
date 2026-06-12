@@ -413,7 +413,16 @@ class DashboardAlertService(
         val queryDsl = queryConfigs.getOrNull(queryIndex) ?: return null
 
         val results = suspendRunCatching {
-            executeQueryForAlert(alert.orgId, alert.projectId, queryDsl)
+            executeQueryForAlert(
+                orgId = alert.orgId,
+                projectId = alert.projectId,
+                queryDsl = queryDsl,
+                logContext = AlertQueryLogContext(
+                    alertId = alert.alertId,
+                    dashboardId = alert.dashboardId,
+                    widgetId = alert.widgetId,
+                ),
+            )
         }.getOrElse { e ->
             logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
             return null
@@ -558,35 +567,55 @@ class DashboardAlertService(
         sendAlertNotification(alert, currentValue, trigger)
     }
 
+    private data class AlertQueryLogContext(
+        val alertId: Long,
+        val dashboardId: Long,
+        val widgetId: Long,
+    )
+
     internal suspend fun executeQueryForAlert(
         orgId: Long,
         projectId: Long?,
         queryDsl: QueryDsl
+    ): List<Map<String, JsonElement>> =
+        executeQueryForAlert(orgId, projectId, queryDsl, logContext = null)
+
+    private suspend fun executeQueryForAlert(
+        orgId: Long,
+        projectId: Long?,
+        queryDsl: QueryDsl,
+        logContext: AlertQueryLogContext?,
     ): List<Map<String, JsonElement>> {
-        val customDataSource = resolveCustomDataSource(orgId, queryDsl.dataSource)
+        val effectiveQueryDsl = queryEngine.resolveTemplateDataSource(
+            dsl = queryDsl,
+            orgId = orgId,
+            dataSourceService = dataSourceService,
+            logMissing = false,
+        )
+        if (queryEngine.isTemplateDataSourceMarker(effectiveQueryDsl.dataSource)) {
+            logger.warn {
+                "Skipping dashboard alert ${logContext?.alertId ?: "unknown"} query because template data source " +
+                    "${effectiveQueryDsl.dataSource} is unresolved for org $orgId, " +
+                    "dashboard ${logContext?.dashboardId ?: "unknown"}, widget ${logContext?.widgetId ?: "unknown"}"
+            }
+            return emptyList()
+        }
+
+        val customDataSource = resolveCustomDataSource(orgId, effectiveQueryDsl.dataSource)
         if (customDataSource != null) {
-            return executeCustomDataSourceQuery(orgId, customDataSource, queryDsl)
+            return executeCustomDataSourceQuery(orgId, customDataSource, effectiveQueryDsl)
         }
 
         val builtInProjectId = projectId ?: return emptyList()
         val retentionDays =
             retentionPolicyService.getRetentionDaysForProject(builtInProjectId) ?: DEFAULT_RETENTION_DAYS
-        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays, orgId)
+        return queryEngine.executeQuery(effectiveQueryDsl, builtInProjectId, null, retentionDays, orgId)
     }
 
     private fun resolveCustomDataSource(
         orgId: Long,
         dataSource: String
     ): CustomDataSourceResponse? {
-        if (dataSource == "__prometheus") {
-            return checkNotNull(
-                dataSourceService.listDataSources(orgId)
-                    .firstOrNull { source ->
-                        source.enabled &&
-                            CustomDataSourceType.fromString(source.sourceType) == CustomDataSourceType.PROMETHEUS
-                    }
-            ) { "No enabled Prometheus data source configured" }
-        }
         if (!dataSource.startsWith("custom:")) return null
 
         val sourceId = dataSource.removePrefix("custom:")

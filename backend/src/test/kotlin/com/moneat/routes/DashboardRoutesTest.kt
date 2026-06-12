@@ -951,7 +951,7 @@ class DashboardRoutesTest {
             coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
             every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
             every {
-                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
             } answers { firstArg() }
             every { mockQueryEngine.isCustomDataSource("events") } returns false
             coEvery {
@@ -990,7 +990,7 @@ class DashboardRoutesTest {
             coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
             every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
             every {
-                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
             } answers { firstArg() }
             every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
             every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
@@ -1037,7 +1037,7 @@ class DashboardRoutesTest {
             coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
             every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
             every {
-                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
             } answers { firstArg() }
             every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
             every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
@@ -1077,7 +1077,7 @@ class DashboardRoutesTest {
             coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
             every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
             every {
-                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
             } answers { firstArg() }
             every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
             every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
@@ -1121,7 +1121,7 @@ class DashboardRoutesTest {
             coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
             every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
             every {
-                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
             } answers { firstArg() }
             every { mockQueryEngine.isCustomDataSource("events") } returns false
             coEvery {
@@ -1172,7 +1172,7 @@ class DashboardRoutesTest {
             coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
             every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
             every {
-                mockQueryEngine.resolvePrometheusDataSource(any(), orgId.toLong(), any())
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
             } answers { firstArg() }
             every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
             every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns MISSING_DATA_SOURCE_RESOURCE_ID
