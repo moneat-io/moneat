@@ -614,6 +614,7 @@ object OperationalMetrics {
     private fun readQueueDepth(queueKey: String): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
         return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
+            .recoverCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
             .getOrElse { Double.NaN }
     }
 

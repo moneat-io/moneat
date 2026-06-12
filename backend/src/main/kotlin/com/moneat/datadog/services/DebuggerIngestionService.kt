@@ -17,9 +17,10 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdDebuggerDiagnostic
 import com.moneat.datadog.models.DdDebuggerInput
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
@@ -137,7 +138,7 @@ object DebuggerIngestionService {
     ): Int {
         val batch = mapDebuggerLogs(organizationId, entries)
         if (batch.logs.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_DEBUGGER, queueKey, json.encodeToString(batch))
         return batch.logs.size
     }
 
@@ -148,7 +149,7 @@ object DebuggerIngestionService {
     ): Int {
         val batch = mapDiagnostics(organizationId, entries)
         if (batch.diagnostics.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_DEBUGGER, queueKey, json.encodeToString(batch))
         return batch.diagnostics.size
     }
 

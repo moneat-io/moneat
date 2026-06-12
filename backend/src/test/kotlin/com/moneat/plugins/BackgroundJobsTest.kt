@@ -16,6 +16,7 @@
 
 package com.moneat.plugins
 
+import com.moneat.runtime.MoneatProcessRole
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -44,5 +45,23 @@ class BackgroundJobsTest {
 
         assertTrue(error.message.orEmpty().contains("EGRES"))
         assertTrue(error.message.orEmpty().contains("trusted"))
+    }
+
+    @Test
+    fun `process role parser accepts deployable roles`() {
+        assertEquals(MoneatProcessRole.ALL, MoneatProcessRole.from(null))
+        assertEquals(MoneatProcessRole.API, MoneatProcessRole.from("api-only"))
+        assertEquals(MoneatProcessRole.SCHEDULER, MoneatProcessRole.from("schedulers"))
+        assertEquals(MoneatProcessRole.INGESTION_WORKER, MoneatProcessRole.from("ingestion-worker"))
+        assertEquals(MoneatProcessRole.WORKFLOW_EGRESS, MoneatProcessRole.from("egress"))
+    }
+
+    @Test
+    fun `process role parser rejects invalid values`() {
+        val error = assertFailsWith<IllegalArgumentException> {
+            MoneatProcessRole.from("web")
+        }
+
+        assertTrue(error.message.orEmpty().contains("MONEAT_PROCESS_ROLE"))
     }
 }

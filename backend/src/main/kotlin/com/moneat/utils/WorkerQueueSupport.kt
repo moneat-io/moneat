@@ -17,9 +17,32 @@
 package com.moneat.utils
 
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionDlqRequest
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueBackend
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.monitoring.OperationalMetrics
 import kotlinx.coroutines.delay
 import mu.KLogger
+
+private val WORKER_PIPELINES =
+    mapOf(
+        "Event" to IngestionPipeline.EVENTS,
+        "Log" to IngestionPipeline.LOGS,
+        "LLM" to IngestionPipeline.LLM,
+        "Analytics" to IngestionPipeline.ANALYTICS,
+        "Trace" to IngestionPipeline.DD_TRACES,
+        "DD metric" to IngestionPipeline.DD_METRICS,
+        "DD event" to IngestionPipeline.DD_EVENTS,
+        "DD infra" to IngestionPipeline.DD_INFRA,
+        "Orchestrator" to IngestionPipeline.DD_ORCHESTRATOR,
+        "DBM" to IngestionPipeline.DD_DBM,
+        "Debugger" to IngestionPipeline.DD_DEBUGGER,
+        "Misc" to IngestionPipeline.DD_MISC,
+        "NDM" to IngestionPipeline.DD_NDM,
+        "Security" to IngestionPipeline.DD_SECURITY,
+    )
 
 /**
  * Logs a Redis BRPOP loop failure and backs off. Use after [catch] for
@@ -50,6 +73,26 @@ fun pushToDlq(
     workerName: String,
     cause: Throwable,
 ): Boolean {
+    if (IngestionQueueSettings.backend() == IngestionQueueBackend.REDIS_STREAMS) {
+        val pipeline = workerName.toIngestionPipeline()
+        if (pipeline != null) {
+            val spec = IngestionQueueSettings.spec(
+                pipeline = pipeline,
+                queueKey = queueKeyForDlq(dlqKey),
+                dlqKey = dlqKey,
+                workerCount = 1,
+            )
+            return IngestionQueueClient.pushToDlq(
+                logger = logger,
+                request = IngestionDlqRequest(
+                    spec = spec,
+                    payload = payload,
+                    workerId = workerId,
+                    cause = cause,
+                ),
+            )
+        }
+    }
     logger.error(cause) {
         "$workerName worker $workerId failed, pushing to DLQ"
     }
@@ -65,3 +108,13 @@ fun pushToDlq(
         }
     }.isSuccess
 }
+
+private fun String.toIngestionPipeline(): IngestionPipeline? =
+    WORKER_PIPELINES[this]
+
+private fun queueKeyForDlq(dlqKey: String): String =
+    when {
+        dlqKey.endsWith(":dlq") -> dlqKey.removeSuffix(":dlq") + ":queue"
+        dlqKey.endsWith(":dead-letter") -> dlqKey.removeSuffix(":dead-letter") + ":queue"
+        else -> "$dlqKey:queue"
+    }

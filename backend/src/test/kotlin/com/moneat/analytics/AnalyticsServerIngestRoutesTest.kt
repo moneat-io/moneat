@@ -179,7 +179,7 @@ class AnalyticsServerIngestRoutesTest {
         }
 
         assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
-        verify(exactly = 1) {
+        verify(exactly = 2) {
             mockRedis.lpush(AnalyticsIngestionWorker.QUEUE_KEY, *anyVararg())
         }
     }

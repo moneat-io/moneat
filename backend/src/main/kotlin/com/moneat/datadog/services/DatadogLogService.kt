@@ -16,8 +16,9 @@
 
 package com.moneat.datadog.services
 
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogLogEntry
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.logs.services.LogLineClassification
 import com.moneat.logs.services.LogLineClassifier
 import com.moneat.logs.models.QueuedLogBatch
@@ -95,7 +96,7 @@ object DatadogLogService {
         if (batch.logs.isEmpty()) return 0
 
         val message = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, message)
+        IngestionQueueClient.enqueue(IngestionPipeline.LOGS, queueKey, message)
         logger.debug {
             "Enqueued ${batch.logs.size} DD logs for org $organizationId"
         }

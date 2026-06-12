@@ -20,7 +20,8 @@ import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.apm.services.ApmServiceMapRollups
 import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.otlp.ResourceContext
@@ -320,7 +321,7 @@ class OtlpTraceService(
             spans = withOrg
         )
         val encoded = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, encoded)
+        IngestionQueueClient.enqueue(IngestionPipeline.OTLP_TRACES, queueKey, encoded)
         return withOrg.size
     }
 

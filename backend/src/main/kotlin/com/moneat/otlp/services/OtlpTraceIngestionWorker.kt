@@ -17,6 +17,7 @@
 package com.moneat.otlp.services
 
 import com.moneat.events.services.EventService
+import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
@@ -33,6 +34,7 @@ class OtlpTraceIngestionWorker(
     queueKey,
     dlqKey,
     workerCount,
+    IngestionPipeline.OTLP_TRACES,
     "OtlpTraceIngestionWorker",
     "trace",
 ) {

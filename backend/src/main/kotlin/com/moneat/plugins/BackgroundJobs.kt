@@ -24,6 +24,8 @@ import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
@@ -63,6 +65,7 @@ import kotlin.time.Duration.Companion.hours
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
+private const val DEFAULT_PULSE_INTERVAL_HOURS = 4
 private const val WORKFLOW_WORKER_SHUTDOWN_TIMEOUT_SECONDS = 30L
 private const val WORKFLOW_WORKER_MODE_CONFIG = "workflows.workerMode"
 
@@ -107,96 +110,160 @@ fun Application.configureEgressWorkflowWorker() {
     }
 }
 
-fun Application.configureBackgroundJobs() {
-    val backgroundJobsEnabled =
-        environment.config
-            .propertyOrNull("backgroundJobs.enabled")
-            ?.getString()
-            ?.toBooleanStrictOrNull() ?: true
-
-    if (!backgroundJobsEnabled) {
+fun Application.configureBackgroundJobs(
+    startSchedulers: Boolean = true,
+    startIngestionWorkers: Boolean = true,
+) {
+    if (!backgroundJobsEnabled()) {
         logger.info { "All background jobs disabled via BACKGROUND_JOBS_ENABLED=false (API-only mode)" }
         return
     }
 
-    val database = attributes[ExposedDatabaseKey]
-    TaskLock.initialize(ExposedLockProvider(database))
+    if (startSchedulers) {
+        initializeTaskLock()
+    }
 
-    val koin = GlobalContext.get()
-    val monitorAlertService = koin.get<MonitorAlertService>()
-    val dashboardAlertService = koin.get<DashboardAlertService>()
-    val billingBackgroundService = koin.get<BillingBackgroundService>()
-    val retentionBackgroundService = koin.get<RetentionBackgroundService>()
-    val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
-    val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
-    val artifactCleanupService = koin.get<ArtifactCleanupService>()
-    val uptimeScheduler = koin.get<UptimeScheduler>()
-    val detectionScheduler = koin.get<DetectionScheduler>()
-    val vulnerabilityAdvisorySyncJob = koin.get<VulnerabilityAdvisorySyncJob>()
-    val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
-    val queueKey = environment.config.property("ingest.queueKey").getString()
-    val dlqKey = environment.config.property("ingest.dlqKey").getString()
-    val workerCount =
-        environment.config
-            .property("ingest.workerCount")
-            .getString()
-            .toInt()
-    val ingestionWorker = IngestionWorker(queueKey, dlqKey, workerCount, eventService = koin.get())
-    val logQueueKey = environment.config.propertyOrNull("logs.queueKey")?.getString() ?: "moneat:logs:queue"
-    val logDlqKey = environment.config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq"
-    val logWorkerCount =
-        environment.config
-            .propertyOrNull("logs.workerCount")
-            ?.getString()
-            ?.toIntOrNull() ?: 2
-    val logIngestionWorker = LogIngestionWorker(
-        logQueueKey,
-        logDlqKey,
-        logWorkerCount,
+    val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    val schedulerJobs = SchedulerBackgroundJobs()
+    val coreWorkers = CoreIngestionWorkers(this)
+    val workflowWorkers = if (startSchedulers) initializeWorkflowWorkers() else WorkflowWorkers()
+
+    logger.info { "Starting background jobs" }
+    if (startSchedulers) {
+        schedulerJobs.start(jobScope)
+        workflowWorkers.factory?.start()
+    }
+    coreWorkers.startSelected(startIngestionWorkers)
+
+    FeatureRegistry.startBackgroundJobs(this, startSchedulers, startIngestionWorkers)
+    val pulseService = startPulseIfEnabled(startSchedulers, jobScope)
+    registerBackgroundShutdown(schedulerJobs, coreWorkers, workflowWorkers, pulseService)
+}
+
+private fun Application.backgroundJobsEnabled(): Boolean =
+    environment.config
+        .propertyOrNull("backgroundJobs.enabled")
+        ?.getString()
+        ?.toBooleanStrictOrNull() ?: true
+
+private fun Application.initializeTaskLock() {
+    TaskLock.initialize(ExposedLockProvider(attributes[ExposedDatabaseKey]))
+}
+
+private class SchedulerBackgroundJobs {
+    private val koin = GlobalContext.get()
+    private val monitorAlertService = koin.get<MonitorAlertService>()
+    private val dashboardAlertService = koin.get<DashboardAlertService>()
+    private val billingBackgroundService = koin.get<BillingBackgroundService>()
+    private val retentionBackgroundService = koin.get<RetentionBackgroundService>()
+    private val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
+    private val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
+    private val artifactCleanupService = koin.get<ArtifactCleanupService>()
+    private val uptimeScheduler = koin.get<UptimeScheduler>()
+    private val detectionScheduler = koin.get<DetectionScheduler>()
+    private val vulnerabilityAdvisorySyncJob = koin.get<VulnerabilityAdvisorySyncJob>()
+    private val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
+
+    fun start(jobScope: CoroutineScope) {
+        monitorAlertService.start(jobScope)
+        dashboardAlertService.start(jobScope)
+        billingBackgroundService.start(jobScope)
+        retentionBackgroundService.start(jobScope)
+        traceFinalizerBackgroundService.start(jobScope)
+        refreshTokenCleanupService.start(jobScope)
+        artifactCleanupService.start(jobScope)
+        uptimeScheduler.start()
+        detectionScheduler.start(jobScope)
+        vulnerabilityAdvisorySyncJob.start(jobScope)
+        demoLivenessBackgroundService.start(jobScope)
+    }
+
+    fun stop() {
+        monitorAlertService.stop()
+        dashboardAlertService.stop()
+        billingBackgroundService.stop()
+        retentionBackgroundService.stop()
+        traceFinalizerBackgroundService.stop()
+        refreshTokenCleanupService.stop()
+        artifactCleanupService.stop()
+        uptimeScheduler.stop()
+        detectionScheduler.stop()
+        vulnerabilityAdvisorySyncJob.stop()
+        demoLivenessBackgroundService.stop()
+    }
+}
+
+private class CoreIngestionWorkers(application: Application) {
+    private val koin = GlobalContext.get()
+    private val config = application.environment.config
+    private val ingestionWorker = IngestionWorker(
+        config.property("ingest.queueKey").getString(),
+        config.property("ingest.dlqKey").getString(),
+        config.property("ingest.workerCount").getString().toInt(),
+        eventService = koin.get(),
+    )
+    private val logIngestionWorker = LogIngestionWorker(
+        config.propertyOrNull("logs.queueKey")?.getString() ?: "moneat:logs:queue",
+        config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq",
+        config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull() ?: 2,
         logService = koin.get(),
         logIndexService = koin.get(),
     )
-    val llmQueueKey = environment.config.propertyOrNull("llm.queueKey")?.getString() ?: "moneat:llm:queue"
-    val llmDlqKey = environment.config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq"
-    val llmWorkerCount =
-        environment.config
-            .propertyOrNull("llm.workerCount")
-            ?.getString()
-            ?.toIntOrNull() ?: 2
-    val llmIngestionWorker = LlmIngestionWorker(llmQueueKey, llmDlqKey, llmWorkerCount)
-
-    val otlpTracesQueueKey = environment.config.propertyOrNull("otlp.tracesQueueKey")
-        ?.getString() ?: "moneat:otlp-traces:queue"
-    val otlpTracesDlqKey = environment.config.propertyOrNull("otlp.tracesDlqKey")
-        ?.getString() ?: "moneat:otlp-traces:dlq"
-    val otlpTracesWorkerCount = environment.config.propertyOrNull("otlp.tracesWorkerCount")
-        ?.getString()?.toIntOrNull() ?: 2
-    val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
-        otlpTracesQueueKey,
-        otlpTracesDlqKey,
-        otlpTracesWorkerCount,
-        eventService = koin.get<EventService>()
+    private val llmIngestionWorker = LlmIngestionWorker(
+        config.propertyOrNull("llm.queueKey")?.getString() ?: "moneat:llm:queue",
+        config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq",
+        config.propertyOrNull("llm.workerCount")?.getString()?.toIntOrNull() ?: 2,
+    )
+    private val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
+        config.propertyOrNull("otlp.tracesQueueKey")?.getString() ?: "moneat:otlp-traces:queue",
+        config.propertyOrNull("otlp.tracesDlqKey")?.getString() ?: "moneat:otlp-traces:dlq",
+        config.propertyOrNull("otlp.tracesWorkerCount")?.getString()?.toIntOrNull() ?: 2,
+        eventService = koin.get<EventService>(),
+    )
+    private val otlpMetricsIngestionWorker = OtlpMetricsIngestionWorker(
+        config.propertyOrNull("otlp.metricsQueueKey")?.getString() ?: "moneat:otlp-metrics:queue",
+        config.propertyOrNull("otlp.metricsDlqKey")?.getString() ?: "moneat:otlp-metrics:dlq",
+        config.propertyOrNull("otlp.metricsWorkerCount")?.getString()?.toIntOrNull() ?: 2,
     )
 
-    val otlpMetricsQueueKey = environment.config.propertyOrNull("otlp.metricsQueueKey")
-        ?.getString() ?: "moneat:otlp-metrics:queue"
-    val otlpMetricsDlqKey = environment.config.propertyOrNull("otlp.metricsDlqKey")
-        ?.getString() ?: "moneat:otlp-metrics:dlq"
-    val otlpMetricsWorkerCount = environment.config.propertyOrNull("otlp.metricsWorkerCount")
-        ?.getString()?.toIntOrNull() ?: 2
-    val otlpMetricsIngestionWorker = OtlpMetricsIngestionWorker(
-        otlpMetricsQueueKey,
-        otlpMetricsDlqKey,
-        otlpMetricsWorkerCount
-    )
-    // Temporal worker initialization must not take down the whole backend: if the
-    // Temporal cluster is unreachable or a worker/activity fails to register, log it
-    // and continue serving (workflow execution is disabled on this instance) rather
-    // than aborting application startup.
+    fun startSelected(startIngestionWorkers: Boolean) {
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.EVENTS)) {
+            ingestionWorker.start()
+        }
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.LOGS)) {
+            logIngestionWorker.start()
+        }
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.LLM)) {
+            llmIngestionWorker.start()
+        }
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.OTLP_TRACES)) {
+            otlpTraceIngestionWorker.start()
+        }
+        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.OTLP_METRICS)) {
+            otlpMetricsIngestionWorker.start()
+        }
+    }
+
+    fun stop() {
+        ingestionWorker.stop()
+        logIngestionWorker.stop()
+        llmIngestionWorker.stop()
+        runBlocking {
+            otlpTraceIngestionWorker.stop()
+            otlpMetricsIngestionWorker.stop()
+        }
+    }
+}
+
+private data class WorkflowWorkers(
+    val provider: TemporalClientProvider? = null,
+    val factory: WorkerFactory? = null,
+)
+
+private fun Application.initializeWorkflowWorkers(): WorkflowWorkers {
+    val koin = GlobalContext.get()
     val workflowWorkerMode = workflowWorkerMode()
-    var temporalClientProvider: TemporalClientProvider? = null
-    var workflowWorkerFactory: WorkerFactory? = null
-    try {
+    return try {
         val provider = koin.get<TemporalClientProvider>()
         val factory = provider.newWorkerFactory()
         if (workflowWorkerMode == WorkflowWorkerMode.ALL || workflowWorkerMode == WorkflowWorkerMode.TRUSTED) {
@@ -213,98 +280,71 @@ fun Application.configureBackgroundJobs() {
                 .newWorker(WORKFLOW_EGRESS_TASK_QUEUE)
                 .registerActivitiesImplementations(koin.get<ExecuteEgressActionActivityImpl>())
         }
-        temporalClientProvider = provider
-        workflowWorkerFactory = factory
+        WorkflowWorkers(provider, factory)
     } catch (e: Throwable) {
         logger.error(e) {
             "Temporal workflow worker initialization failed; workflow execution disabled on this instance"
         }
+        WorkflowWorkers()
     }
+}
 
-    // Create a coroutine scope for background jobs
-    val jobScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-
-    // Start core background jobs
-    logger.info { "Starting background jobs" }
-    monitorAlertService.start(jobScope)
-    dashboardAlertService.start(jobScope)
-    billingBackgroundService.start(jobScope)
-    retentionBackgroundService.start(jobScope)
-    traceFinalizerBackgroundService.start(jobScope)
-    refreshTokenCleanupService.start(jobScope)
-    artifactCleanupService.start(jobScope)
-    uptimeScheduler.start()
-    detectionScheduler.start(jobScope)
-    vulnerabilityAdvisorySyncJob.start(jobScope)
-    ingestionWorker.start()
-    logIngestionWorker.start()
-    llmIngestionWorker.start()
-    otlpTraceIngestionWorker.start()
-    otlpMetricsIngestionWorker.start()
-    workflowWorkerFactory?.start()
-    demoLivenessBackgroundService.start(jobScope)
-
-    // Start enterprise background jobs (SSO, On-Call, etc.) if modules are present
-    FeatureRegistry.startBackgroundJobs(this)
-
-    // Start telemetry pulse for self-hosted deployments (opt-out via TELEMETRY_ENABLED=false)
-    val pulseService = if (PulseService.isEnabled()) {
-        val telemetryIntervalHours =
-            environment.config
-                .propertyOrNull("pulse.intervalHours")
-                ?.getString()
-                ?.toIntOrNull()
-                ?.takeIf { it > 0 } ?: DEFAULT_WORKER_THREADS
-        PulseService(interval = telemetryIntervalHours.hours).also {
-            logger.info { "Telemetry pulse enabled for self-hosted deployment" }
-            it.start(jobScope)
-        }
-    } else {
-        null
+private fun Application.startPulseIfEnabled(
+    startSchedulers: Boolean,
+    jobScope: CoroutineScope,
+): PulseService? {
+    if (!startSchedulers || !PulseService.isEnabled()) return null
+    val telemetryIntervalHours =
+        environment.config
+            .propertyOrNull("pulse.intervalHours")
+            ?.getString()
+            ?.toIntOrNull()
+            ?.takeIf { it > 0 } ?: DEFAULT_PULSE_INTERVAL_HOURS
+    return PulseService(interval = telemetryIntervalHours.hours).also {
+        logger.info { "Telemetry pulse enabled for self-hosted deployment" }
+        it.start(jobScope)
     }
+}
 
-    // Register shutdown hook
+private fun Application.registerBackgroundShutdown(
+    schedulerJobs: SchedulerBackgroundJobs,
+    coreWorkers: CoreIngestionWorkers,
+    workflowWorkers: WorkflowWorkers,
+    pulseService: PulseService?,
+) {
     monitor.subscribe(ApplicationStopping) {
-        // Flush buffered usage data before stopping to prevent data loss
-        suspendRunCatching {
-            UsageTrackingService.instance.flushBuffer()
-            logger.info { "Flushed usage tracking buffer on shutdown" }
-        }.getOrElse { e ->
-            logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
-        }
-        monitorAlertService.stop()
-        dashboardAlertService.stop()
-        billingBackgroundService.stop()
-        retentionBackgroundService.stop()
-        traceFinalizerBackgroundService.stop()
-        refreshTokenCleanupService.stop()
-        artifactCleanupService.stop()
-        uptimeScheduler.stop()
-        detectionScheduler.stop()
-        vulnerabilityAdvisorySyncJob.stop()
-        ingestionWorker.stop()
-        logIngestionWorker.stop()
-        llmIngestionWorker.stop()
-        runBlocking {
-            otlpTraceIngestionWorker.stop()
-            otlpMetricsIngestionWorker.stop()
-        }
-        val factoryToStop = workflowWorkerFactory
-        val providerToStop = temporalClientProvider
-        if (factoryToStop != null && providerToStop != null) {
-            shutdownWorkflowWorker(factoryToStop, providerToStop)
-        }
-        demoLivenessBackgroundService.stop()
+        flushUsageOnShutdown()
+        schedulerJobs.stop()
+        coreWorkers.stop()
+        stopWorkflowWorkers(workflowWorkers)
         pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
-
-        // Close infrastructure connections AFTER all workers have stopped
-        // to prevent NPEs from workers trying to use closed connections
-        logger.info { "Closing infrastructure connections..." }
-        RedisConfig.close()
-        ClickHouseClient.close()
-        logger.info { "Infrastructure connections closed" }
+        closeInfrastructureConnections()
     }
+}
+
+private fun flushUsageOnShutdown() {
+    suspendRunCatching {
+        UsageTrackingService.instance.flushBuffer()
+        logger.info { "Flushed usage tracking buffer on shutdown" }
+    }.getOrElse { e ->
+        logger.error(e) { "Failed to flush usage tracking buffer on shutdown" }
+    }
+}
+
+private fun stopWorkflowWorkers(workflowWorkers: WorkflowWorkers) {
+    val factoryToStop = workflowWorkers.factory
+    val providerToStop = workflowWorkers.provider
+    if (factoryToStop != null && providerToStop != null) {
+        shutdownWorkflowWorker(factoryToStop, providerToStop)
+    }
+}
+
+private fun closeInfrastructureConnections() {
+    logger.info { "Closing infrastructure connections..." }
+    RedisConfig.close()
+    ClickHouseClient.close()
+    logger.info { "Infrastructure connections closed" }
 }
 
 private fun shutdownWorkflowWorker(
@@ -329,3 +369,9 @@ private fun shutdownWorkflowWorker(
         temporalClientProvider.close()
     }
 }
+
+private fun shouldStartIngestionPipeline(
+    startIngestionWorkers: Boolean,
+    pipeline: IngestionPipeline,
+): Boolean =
+    startIngestionWorkers && IngestionQueueSettings.isSelected(pipeline)

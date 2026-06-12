@@ -17,9 +17,10 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdManifestPayload
 import com.moneat.datadog.models.DdOrchestratorPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.http.isSuccess
@@ -131,7 +132,7 @@ object OrchestratorIngestionService {
     ): Int {
         val batch = mapResources(organizationId, payload)
         if (batch.resources.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_ORCHESTRATOR, queueKey, json.encodeToString(batch))
         return batch.resources.size
     }
 
@@ -142,7 +143,7 @@ object OrchestratorIngestionService {
     ): Int {
         val batch = mapManifests(organizationId, payload)
         if (batch.manifests.isEmpty()) return 0
-        RedisConfig.sync().lpush(queueKey, json.encodeToString(batch))
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_ORCHESTRATOR, queueKey, json.encodeToString(batch))
         return batch.manifests.size
     }
 

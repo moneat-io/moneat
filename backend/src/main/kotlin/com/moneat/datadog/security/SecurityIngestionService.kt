@@ -17,10 +17,11 @@
 package com.moneat.datadog.security
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdActivityDumpPayload
 import com.moneat.datadog.models.DdCompliancePayload
 import com.moneat.datadog.models.DdSecurityEventPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.security.posture.ComplianceFindingInput
 import com.moneat.security.posture.PostureRegressionAnalyzer
 import com.moneat.security.signals.RuntimeSecurityEventInput
@@ -111,7 +112,7 @@ object SecurityIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedSecurityBatch(orgId, "events", events = entries)
-        RedisConfig.sync().lpush(SECURITY_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -133,7 +134,7 @@ object SecurityIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedSecurityBatch(orgId, "dumps", dumps = entries)
-        RedisConfig.sync().lpush(SECURITY_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -154,7 +155,7 @@ object SecurityIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedSecurityBatch(orgId, "findings", findings = entries)
-        RedisConfig.sync().lpush(SECURITY_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -171,6 +172,10 @@ object SecurityIngestionService {
             "findings" -> insertComplianceFindings(batch)
         }
         return deriveSignals(batch)
+    }
+
+    private fun enqueueBatch(batch: QueuedSecurityBatch) {
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_SECURITY, SECURITY_QUEUE_KEY, json.encodeToString(batch))
     }
 
     /**

@@ -21,6 +21,8 @@ import com.moneat.analytics.routes.analyticsRoutes
 import com.moneat.analytics.routes.analyticsServerIngestRoutes
 import com.moneat.analytics.services.AnalyticsIngestionWorker
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.runtime.RuntimeMode
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
@@ -45,6 +47,18 @@ class AnalyticsModule : EnterpriseModule {
     }
 
     override fun startBackgroundJobs(application: Application) {
+        startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)
+    }
+
+    override fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (!startIngestionWorkers || !RuntimeMode.shouldStartPipeline(IngestionPipeline.ANALYTICS)) {
+            logger.info { "Skipping analytics ingestion worker for this process role" }
+            return
+        }
         logger.info { "Starting analytics enterprise background jobs" }
         ingestionWorker = AnalyticsIngestionWorker()
         ingestionWorker.start()
@@ -52,6 +66,6 @@ class AnalyticsModule : EnterpriseModule {
 
     override fun stopBackgroundJobs() {
         logger.info { "Stopping analytics enterprise background jobs" }
-        ingestionWorker.stop()
+        if (::ingestionWorker.isInitialized) ingestionWorker.stop()
     }
 }

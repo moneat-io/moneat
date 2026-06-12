@@ -18,7 +18,8 @@ package com.moneat.otlp.services
 
 import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.monitor.services.InfraMetricRollupRow
 import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
@@ -643,7 +644,7 @@ class OtlpMetricsService(
             metrics = withOrg
         )
         val encoded = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, encoded)
+        IngestionQueueClient.enqueue(IngestionPipeline.OTLP_METRICS, queueKey, encoded)
         return withOrg.size
     }
 

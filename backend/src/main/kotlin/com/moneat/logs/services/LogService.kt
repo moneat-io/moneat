@@ -23,6 +23,8 @@ import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.logs.models.AgentLogEntry
 import com.moneat.logs.models.LogAggregateBucket
 import com.moneat.logs.models.LogAggregateResponse
@@ -1251,7 +1253,7 @@ class LogService(private val logRepository: LogRepository) {
                 )
             )
 
-        RedisConfig.sync().lpush(queueKey, message)
+        IngestionQueueClient.enqueue(IngestionPipeline.LOGS, queueKey, message)
         return logs.size
     }
 

@@ -47,6 +47,7 @@ class UptimeExtendedTest {
     companion object {
         private const val JSON_PATH_STATUS = "$.status"
         private const val LOCALHOST = "127.0.0.1"
+        private const val UNREACHABLE_TCP_PORT = 1
     }
 
     private val executor = UptimeCheckExecutor()
@@ -529,10 +530,8 @@ class UptimeExtendedTest {
     @Test
     fun `tcp check fails on unreachable port`() = runBlocking {
         withSelfHosted("true") {
-            // Use a port from a closed server socket
-            val port = ServerSocket(0).use { it.localPort }
             val result = executor.executeCheck(
-                monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = port, timeoutSeconds = 2))
+                monitor(MonitorParams(type = "tcp", hostname = LOCALHOST, port = UNREACHABLE_TCP_PORT))
             )
             assertEquals(0, result.status)
             assertTrue(result.message.contains("TCP connection failed"))

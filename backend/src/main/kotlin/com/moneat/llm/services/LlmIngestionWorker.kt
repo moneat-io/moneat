@@ -16,30 +16,24 @@
 
 package com.moneat.llm.services
 
-import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionDlqRequest
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.ingestion.queue.QueuedIngestionMessage
+import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.llm.models.LlmGenerationIngest
 import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
-import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import io.lettuce.core.RedisException
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -48,7 +42,6 @@ import java.util.UUID
 
 private val logger = KotlinLogging.logger {}
 
-private const val BRPOP_BACKOFF_DELAY_MS = 1000L
 private const val ERROR_BODY_PREVIEW_CHARS = 600
 private const val PROJECT_ID_HEADER_SIZE = 8
 
@@ -60,44 +53,34 @@ class LlmIngestionWorker(
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
     private val usageTracker = UsageTrackingService.instance
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
+    private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
         logger.info { "Starting LlmIngestionWorker with $workerCount workers, queue=$queueKey" }
-        OperationalMetrics.registerWorkerQueues("LLM", queueKey, dlqKey)
-        jobs =
-            (1..workerCount).map { id ->
-                scope.launch { runWorker(id) }
-            }
+        val spec = IngestionQueueSettings.spec(IngestionPipeline.LLM, queueKey, dlqKey, workerCount)
+        queueWorker = RedisQueueWorker(
+            spec = spec,
+            logger = logger,
+            processMessage = { workerId, payload ->
+                processMessageForTest(workerId, payload) { message ->
+                    IngestionQueueClient.pushToDlq(
+                        logger = logger,
+                        request = IngestionDlqRequest(
+                            spec = spec,
+                            payload = message,
+                            workerId = workerId,
+                            cause = IllegalStateException("LLM processing failed"),
+                        ),
+                    )
+                }
+            },
+            processBatch = ::processBatch,
+        ).also { it.start() }
     }
 
     fun stop() {
-        jobs.forEach { it.cancel() }
-        scope.cancel()
+        queueWorker?.stop()
         logger.info { "LlmIngestionWorker stopped" }
-    }
-
-    private suspend fun runWorker(workerId: Int) {
-        val conn = RedisConfig.newBlockingConnection()
-        try {
-            val redis = conn.sync()
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(BRPOP_TIMEOUT_SECONDS, queueKey)
-                    val value = result?.value ?: continue
-                    processMessageForTest(workerId, value)
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: RedisException) {
-                    brpopLoopBackoff(logger, workerId, "LLM", BRPOP_BACKOFF_DELAY_MS, e)
-                } catch (e: IOException) {
-                    brpopLoopBackoff(logger, workerId, "LLM", BRPOP_BACKOFF_DELAY_MS, e)
-                }
-            }
-        } finally {
-            RedisConfig.closeBlockingConnection(conn)
-        }
     }
 
     internal suspend fun processMessageForTest(
@@ -132,6 +115,35 @@ class LlmIngestionWorker(
             OperationalMetrics.recordDlqPush("LLM", dlqKey, "failure")
             logger.error(dlqErr) { "Failed to push LLM message to DLQ" }
         }.getOrThrow()
+    }
+
+    private suspend fun processBatch(
+        workerId: Int,
+        messages: List<QueuedIngestionMessage>,
+    ) {
+        val decodedMessages =
+            messages.map { message ->
+                val (projectId, payloadBytes) = decodeMessage(message.payload)
+                DecodedLlmMessage(
+                    projectId = projectId,
+                    payloadBytes = payloadBytes,
+                    payload = json.decodeFromString<LlmIngestPayload>(payloadBytes.decodeToString()),
+                )
+            }
+
+        decodedMessages
+            .groupBy { message -> message.projectId }
+            .forEach { (projectId, messagesForProject) ->
+                insertGenerations(
+                    projectId = projectId,
+                    generations = messagesForProject.flatMap { message -> message.payload.generations },
+                )
+            }
+
+        decodedMessages.forEach { message ->
+            usageTracker.recordUsage(message.projectId, "llm", message.payloadBytes.size)
+            OperationalMetrics.recordWorkerMessageProcessed("LLM", workerId)
+        }
     }
 
     suspend fun insertGenerations(
@@ -250,6 +262,12 @@ class LlmIngestionWorker(
         if (tags.isNullOrEmpty()) return "{}"
         return "{${tags.entries.joinToString(",") { "'${esc(it.key)}':'${esc(it.value)}'" }}}"
     }
+
+    private class DecodedLlmMessage(
+        val projectId: Long,
+        val payloadBytes: ByteArray,
+        val payload: LlmIngestPayload,
+    )
 
     companion object {
         fun decodeMessage(encoded: String): Pair<Long, ByteArray> {

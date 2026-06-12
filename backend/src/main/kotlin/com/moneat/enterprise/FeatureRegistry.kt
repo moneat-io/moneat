@@ -52,6 +52,20 @@ interface EnterpriseModule {
     /** Start enterprise background jobs during application startup. */
     fun startBackgroundJobs(application: Application)
 
+    /**
+     * Start enterprise background jobs for the active process role. Modules that only have scheduler-like
+     * background work should rely on the default; ingestion modules can override this to honor pipeline roles.
+     */
+    fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (startSchedulers) {
+            startBackgroundJobs(application)
+        }
+    }
+
     /** Stop enterprise background jobs during application shutdown. */
     fun stopBackgroundJobs()
 }
@@ -128,9 +142,13 @@ object FeatureRegistry {
         }
     }
 
-    fun startBackgroundJobs(application: Application) {
+    fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean = true,
+        startIngestionWorkers: Boolean = true,
+    ) {
         for (module in modules) {
-            module.startBackgroundJobs(application)
+            module.startBackgroundJobs(application, startSchedulers, startIngestionWorkers)
         }
     }
 

@@ -321,6 +321,34 @@ fun Application.configureRouting() {
     }
 }
 
+fun Application.configureHealthRouting() {
+    routing {
+        get("/") {
+            call.respondText("Moneat worker")
+        }
+
+        get("/health/live") {
+            call.respond(mapOf("status" to "ok"))
+        }
+
+        get("/health/ready") {
+            respondWithFullHealth(call)
+        }
+
+        get("/health") {
+            respondWithFullHealth(call)
+        }
+
+        get("/metrics") {
+            respondWithOperationalMetrics(call)
+        }
+
+        get("/metrics/") {
+            respondWithOperationalMetrics(call)
+        }
+    }
+}
+
 private suspend fun respondWithOperationalMetrics(call: io.ktor.server.application.ApplicationCall) {
     val scrapeToken = call.application.environment.config.propertyOrNull(METRICS_SCRAPE_TOKEN)?.getString()
     if (!scrapeToken.isNullOrBlank()) {

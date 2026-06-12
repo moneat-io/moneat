@@ -332,7 +332,10 @@ val jacocoBackendMainExcludes =
         "**/Application*", // entry point
         "**/di/**", // Koin module assembly — pure wiring, no business logic
         "**/monitoring/MonitoringModule*", // enterprise monitoring module hook — framework wiring only
-        "**/workflows/services/WorkflowExecutionWorker*", // Redis BRPOP worker loop — exercised by integration/runtime checks
+        "**/analytics/AnalyticsModule*", // analytics route/worker module assembly
+        "**/datadog/DatadogModule*", // datadog route/worker module assembly
+        "**/ingestion/queue/RedisQueueWorker*", // blocking Redis worker loop; covered by queue client tests
+        "**/workflows/services/WorkflowExecutionWorker*", // Redis worker loop; covered by runtime checks
     )
 
 tasks.jacocoTestReport {

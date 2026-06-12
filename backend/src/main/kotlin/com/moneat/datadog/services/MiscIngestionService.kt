@@ -17,7 +17,6 @@
 package com.moneat.datadog.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DdContainerImagePayload
 import com.moneat.datadog.models.DdDataLineagePayload
 import com.moneat.datadog.models.DdDataStreamsPayload
@@ -25,6 +24,8 @@ import com.moneat.datadog.models.DdPipelineStatsPayload
 import com.moneat.datadog.models.DdSbomPayload
 import com.moneat.datadog.models.DdSymbolDbPayload
 import com.moneat.datadog.models.DdSyntheticsPayload
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.isSuccess
 import kotlinx.serialization.SerialName
@@ -153,7 +154,7 @@ object MiscIngestionService {
             timestampMs = System.currentTimeMillis(),
         )
         val batch = QueuedMiscBatch(orgId, "symbol_db", symbolDb = listOf(entry))
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
     }
 
     fun enqueuePipelineStats(orgId: Int, payload: DdPipelineStatsPayload): Int {
@@ -172,7 +173,7 @@ object MiscIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedMiscBatch(orgId, "pipeline_stats", pipelineStats = entries)
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -188,7 +189,7 @@ object MiscIngestionService {
             timestampMs = System.currentTimeMillis(),
         )
         val batch = QueuedMiscBatch(orgId, "data_lineage", dataLineage = listOf(entry))
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
     }
 
     fun enqueueDataStreams(orgId: Int, payload: DdDataStreamsPayload): Int {
@@ -207,7 +208,7 @@ object MiscIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedMiscBatch(orgId, "data_streams", dataStreams = entries)
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -226,7 +227,7 @@ object MiscIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedMiscBatch(orgId, "synthetics", synthetics = entries)
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -252,7 +253,7 @@ object MiscIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedMiscBatch(orgId, "container_images", containerImages = entries)
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -270,7 +271,7 @@ object MiscIngestionService {
         }
         if (entries.isEmpty()) return 0
         val batch = QueuedMiscBatch(orgId, "sbom_packages", sbomPackages = entries)
-        RedisConfig.sync().lpush(MISC_QUEUE_KEY, json.encodeToString(batch))
+        enqueueBatch(batch)
         return entries.size
     }
 
@@ -285,6 +286,10 @@ object MiscIngestionService {
             "container_images" -> insertContainerImages(batch)
             "sbom_packages" -> insertSbomPackages(batch)
         }
+    }
+
+    private fun enqueueBatch(batch: QueuedMiscBatch) {
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_MISC, MISC_QUEUE_KEY, json.encodeToString(batch))
     }
 
     private suspend fun insertSymbolDb(batch: QueuedMiscBatch) {

@@ -155,7 +155,8 @@ object ClickHouseClient {
         try {
             val response = client.post(baseUrl) {
                 parameter("database", database)
-                if (operation == "execute" && isReadQuery(query)) {
+                val isReadQuery = operation == "execute" && isReadQuery(query)
+                if (isReadQuery) {
                     parameter("max_execution_time", READ_QUERY_MAX_EXECUTION_SECONDS)
                     parameter("timeout_overflow_mode", "throw")
                     parameter("timeout_before_checking_execution_speed", "0")
@@ -163,6 +164,12 @@ object ClickHouseClient {
                 queryParameters.forEach { (name, value) ->
                     require(isClickHouseParameterName(name)) { "Invalid ClickHouse parameter name: $name" }
                     parameter("param_$name", value)
+                }
+                if (!isReadQuery) {
+                    ClickHouseInsertDeduplication.tokenForQuery(query)?.let { token ->
+                        parameter("insert_deduplicate", "1")
+                        parameter("insert_deduplication_token", token)
+                    }
                 }
                 defaultFormat?.let { format -> parameter("default_format", format) }
                 header("X-ClickHouse-User", user)
