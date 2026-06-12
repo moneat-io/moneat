@@ -147,11 +147,12 @@ class ReplayService(
     private fun buildReplaySignals(
         errorCount: Int,
         activity: Int,
-        hasRage: Boolean
+        hasRage: Boolean,
+        suppressDeadClick: Boolean = false
     ): List<String> =
         buildList {
             if (errorCount > 0) add("error")
-            if (activity == 0) add("dead_click")
+            if (activity == 0 && !suppressDeadClick) add("dead_click")
             if (hasRage) add("rage_click")
         }
 
@@ -213,6 +214,48 @@ class ReplayService(
     private fun firstStringValue(obj: JsonObject, vararg keys: String): String? =
         keys.firstNotNullOfOrNull { key -> stringValue(obj, key) }
 
+    private fun mobileOsLabelFromHints(vararg hints: String?): String? {
+        val lowerHints =
+            hints.mapNotNull { hint ->
+                hint?.takeIf { value -> value.isNotBlank() }?.lowercase()
+            }
+        return when {
+            lowerHints.any { it.contains("android") } -> "Android"
+            lowerHints.any { hint ->
+                hint.contains("ios") ||
+                    hint.contains("iphone") ||
+                    hint.contains("ipad") ||
+                    hint.contains("cocoa")
+            } -> "iOS"
+            else -> null
+        }
+    }
+
+    private fun replayOsName(obj: JsonObject): String? =
+        stringValue(obj, "os_name")
+            ?: mobileOsLabelFromHints(
+                stringValue(obj, "platform"),
+                stringValue(obj, "sdk_name"),
+                stringValue(obj, "device_name"),
+                stringValue(obj, "device_family")
+            )
+
+    private fun isNativeMobileReplay(obj: JsonObject): Boolean =
+        mobileOsLabelFromHints(
+            stringValue(obj, "platform"),
+            stringValue(obj, "sdk_name"),
+            stringValue(obj, "device_name"),
+            stringValue(obj, "device_family")
+        ) != null
+
+    private fun replayDurationMs(obj: JsonObject, nativeMobileReplay: Boolean): Double {
+        val durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0
+        if (durationMs > 0 || !nativeMobileReplay) return durationMs
+
+        val segmentCount = intValue(obj, "recording_segment_count") ?: 0
+        return (segmentCount * DEFAULT_MOBILE_SEGMENT_DURATION_MS).toDouble()
+    }
+
     private fun statusCodeFromJson(obj: JsonObject, vararg keys: String): Int? =
         keys.firstNotNullOfOrNull { key -> intValue(obj, key) }
 
@@ -251,21 +294,27 @@ class ReplayService(
         val objProjectId = obj["project_id"]?.jsonPrimitive?.long ?: projectId
         val urls = parseStringArray(obj["urls"])
         val activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
+        val nativeMobileReplay = isNativeMobileReplay(obj)
         return ReplayListItem(
             replayId = replayId,
             projectId = projectResourceId(objProjectId),
             startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
             finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
-            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+            durationMs = replayDurationMs(obj, nativeMobileReplay),
             urls = urls,
             errorCount = errorCount,
             user = queryHelper.extractUserInfo(obj),
             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            osName = replayOsName(obj),
             osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             activity = activity,
-            signals = buildReplaySignals(errorCount, activity, hasRage),
+            signals = buildReplaySignals(
+                errorCount,
+                activity,
+                hasRage,
+                suppressDeadClick = nativeMobileReplay
+            ),
             entryUrl = firstEntryUrl(urls)
         )
     }
@@ -845,7 +894,8 @@ class ReplayService(
     private suspend fun getReplays(queryOptions: ReplayListQuery): List<ReplayListItem> {
         if (queryOptions.scope.serviceIds.isEmpty()) return emptyList()
         val offset = (queryOptions.page - 1) * queryOptions.limit
-        val projectIdClause = queryOptions.scope.projectIdClause()
+        val replayProjectIdClause = queryOptions.scope.projectIdClause("e.project_id")
+        val segmentProjectIdClause = queryOptions.scope.projectIdClause()
 
         val nowMs = queryOptions.demoEpochMs ?: System.currentTimeMillis()
         val periodMs =
@@ -860,7 +910,7 @@ class ReplayService(
 
         val envClause =
             if (queryOptions.environment != null && queryOptions.environment.isNotBlank()) {
-                "AND environment = '${escapeSql(queryOptions.environment)}'"
+                "AND e.environment = '${escapeSql(queryOptions.environment)}'"
             } else {
                 ""
             }
@@ -868,30 +918,56 @@ class ReplayService(
         val query =
             """
             SELECT
-                toString(replay_id) as replay_id,
-                toInt64(project_id) as project_id,
-                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
-                toUnixTimestamp64Milli(min(replay_start_timestamp)) as started_ms,
-                toUnixTimestamp64Milli(max(timestamp)) as finished_ms,
-                dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
-                arrayFlatten(groupArray(urls)) as urls,
-                length(arrayDistinct(arrayFlatten(groupArray(error_ids)))) as error_count,
-                argMax(user_id, timestamp) as user_id,
-                argMax(user_email, timestamp) as user_email,
-                argMax(user_username, timestamp) as user_username,
-                argMax(browser_name, timestamp) as browser_name,
-                argMax(browser_version, timestamp) as browser_version,
-                argMax(os_name, timestamp) as os_name,
-                argMax(os_version, timestamp) as os_version,
-                argMax(activity, timestamp) as activity
-            FROM `$clickhouseDb`.replay_events
-            WHERE $projectIdClause
-                AND replay_start_timestamp >= fromUnixTimestamp64Milli($periodStartMs)
-                AND timestamp >= fromUnixTimestamp64Milli($retentionStartMs)
+                toString(e.replay_id) as replay_id,
+                toInt64(e.project_id) as project_id,
+                formatDateTime(min(e.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
+                formatDateTime(
+                    max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp))),
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
+                ) as finished_at,
+                toUnixTimestamp64Milli(min(e.replay_start_timestamp)) as started_ms,
+                toUnixTimestamp64Milli(
+                    max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp)))
+                ) as finished_ms,
+                dateDiff(
+                    'millisecond',
+                    min(e.replay_start_timestamp),
+                    max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp)))
+                ) as duration_ms,
+                arrayFlatten(groupArray(e.urls)) as urls,
+                length(arrayDistinct(arrayFlatten(groupArray(e.error_ids)))) as error_count,
+                argMax(e.user_id, e.timestamp) as user_id,
+                argMax(e.user_email, e.timestamp) as user_email,
+                argMax(e.user_username, e.timestamp) as user_username,
+                argMax(e.browser_name, e.timestamp) as browser_name,
+                argMax(e.browser_version, e.timestamp) as browser_version,
+                argMax(e.os_name, e.timestamp) as os_name,
+                argMax(e.os_version, e.timestamp) as os_version,
+                argMax(e.platform, e.timestamp) as platform,
+                argMax(e.sdk_name, e.timestamp) as sdk_name,
+                argMax(e.device_name, e.timestamp) as device_name,
+                argMax(e.device_family, e.timestamp) as device_family,
+                max(ifNull(s.recording_segment_count, 0)) as recording_segment_count,
+                argMax(e.activity, e.timestamp) as activity
+            FROM `$clickhouseDb`.replay_events e
+            LEFT JOIN (
+                SELECT
+                    replay_id,
+                    project_id,
+                    max(timestamp) AS last_segment_timestamp,
+                    count() AS recording_segment_count
+                FROM `$clickhouseDb`.replay_segments
+                WHERE $segmentProjectIdClause
+                    AND timestamp >= fromUnixTimestamp64Milli($retentionStartMs)
+                GROUP BY replay_id, project_id
+            ) s ON s.replay_id = e.replay_id AND s.project_id = e.project_id
+            WHERE $replayProjectIdClause
+                AND e.replay_start_timestamp >= fromUnixTimestamp64Milli($periodStartMs)
+                AND e.timestamp >= fromUnixTimestamp64Milli($retentionStartMs)
                 $envClause
-            GROUP BY replay_id, project_id
-            ORDER BY max(timestamp) DESC
+            GROUP BY e.replay_id, e.project_id
+            ORDER BY max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp))) DESC
             LIMIT ${queryOptions.limit} OFFSET $offset
             FORMAT JSONEachRow
             """.trimIndent()
@@ -973,6 +1049,7 @@ class ReplayService(
         val fallbackErrorCount = fallbackReplayErrorCount(replayErrorIds, replayWindow)
         val contextEnrichment = contextEnrichmentForWindow(replayWindow)
         val activity = obj["activity"]?.jsonPrimitive?.intOrNull ?: 0
+        val nativeMobileReplay = isNativeMobileReplay(obj)
         val errorCount = maxOf(mergedErrorIds.size, fallbackErrorCount)
         val ipAddress = obj["user_ip_address"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
         val userSessionCount = userSessionCountForWindow(replayWindow)
@@ -982,7 +1059,7 @@ class ReplayService(
             numericProjectId = objProjectId,
             startedAt = obj["started_at"]?.jsonPrimitive?.content ?: "",
             finishedAt = obj["finished_at"]?.jsonPrimitive?.content ?: "",
-            durationMs = obj["duration_ms"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: 0.0,
+            durationMs = replayDurationMs(obj, nativeMobileReplay),
             urls = urls,
             errorCount = errorCount,
             errorIds = mergedErrorIds,
@@ -994,11 +1071,16 @@ class ReplayService(
             user = queryHelper.extractUserInfo(obj),
             browserName = obj["browser_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             browserVersion = obj["browser_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
-            osName = obj["os_name"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+            osName = replayOsName(obj),
             osVersion = obj["os_version"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
             activity = activity,
             tags = tagsMap,
-            signals = buildReplaySignals(errorCount, activity, contextEnrichment.hasRage),
+            signals = buildReplaySignals(
+                errorCount,
+                activity,
+                contextEnrichment.hasRage,
+                suppressDeadClick = nativeMobileReplay
+            ),
             entryUrl = firstEntryUrl(urls),
             ipAddress = ipAddress,
             geo = geoLabelForIp(ipAddress),
@@ -1015,40 +1097,67 @@ class ReplayService(
         val normalizedReplayId = queryHelper.normalizeUuid(replayId) ?: return null
         val projectId = getProjectIdForReplay(normalizedReplayId) ?: return null
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val replayProjectIdClause = ClickHouseQueryUtils.projectIdClause(projectId, "e.project_id")
+        val segmentProjectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
 
         val query =
             """
             SELECT
-                toString(replay_id) as replay_id,
-                toInt64(project_id) as project_id,
-                formatDateTime(min(replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
-                toUnixTimestamp64Milli(min(replay_start_timestamp)) as started_ms,
-                toUnixTimestamp64Milli(max(timestamp)) as finished_ms,
-                dateDiff('millisecond', min(replay_start_timestamp), max(timestamp)) as duration_ms,
-                arrayFlatten(groupArray(urls)) as urls,
-                arrayFlatten(groupArray(error_ids)) as error_ids,
-                arrayFlatten(groupArray(trace_ids)) as trace_ids,
+                toString(e.replay_id) as replay_id,
+                toInt64(e.project_id) as project_id,
+                formatDateTime(min(e.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
+                formatDateTime(
+                    max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp))),
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
+                ) as finished_at,
+                toUnixTimestamp64Milli(min(e.replay_start_timestamp)) as started_ms,
+                toUnixTimestamp64Milli(
+                    max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp)))
+                ) as finished_ms,
+                dateDiff(
+                    'millisecond',
+                    min(e.replay_start_timestamp),
+                    max(greatest(e.timestamp, ifNull(s.last_segment_timestamp, e.timestamp)))
+                ) as duration_ms,
+                arrayFlatten(groupArray(e.urls)) as urls,
+                arrayFlatten(groupArray(e.error_ids)) as error_ids,
+                arrayFlatten(groupArray(e.trace_ids)) as trace_ids,
                 count() as segment_count,
-                argMax(environment, timestamp) as environment,
-                argMax(release, timestamp) as release,
-                argMax(platform, timestamp) as platform,
-                argMax(user_id, timestamp) as user_id,
-                argMax(user_email, timestamp) as user_email,
-                argMax(user_username, timestamp) as user_username,
-                argMax(user_ip_address, timestamp) as user_ip_address,
-                argMax(browser_name, timestamp) as browser_name,
-                argMax(browser_version, timestamp) as browser_version,
-                argMax(os_name, timestamp) as os_name,
-                argMax(os_version, timestamp) as os_version,
-                argMax(activity, timestamp) as activity,
-                argMax(tags, timestamp) as tags
-            FROM `$clickhouseDb`.replay_events
-            WHERE toString(replay_id) = '$normalizedReplayId'
-                AND $projectIdClause
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
-            GROUP BY replay_id, project_id
+                argMax(e.environment, e.timestamp) as environment,
+                argMax(e.release, e.timestamp) as release,
+                argMax(e.platform, e.timestamp) as platform,
+                argMax(e.user_id, e.timestamp) as user_id,
+                argMax(e.user_email, e.timestamp) as user_email,
+                argMax(e.user_username, e.timestamp) as user_username,
+                argMax(e.user_ip_address, e.timestamp) as user_ip_address,
+                argMax(e.browser_name, e.timestamp) as browser_name,
+                argMax(e.browser_version, e.timestamp) as browser_version,
+                argMax(e.os_name, e.timestamp) as os_name,
+                argMax(e.os_version, e.timestamp) as os_version,
+                argMax(e.sdk_name, e.timestamp) as sdk_name,
+                argMax(e.device_name, e.timestamp) as device_name,
+                argMax(e.device_family, e.timestamp) as device_family,
+                max(ifNull(s.recording_segment_count, 0)) as recording_segment_count,
+                argMax(e.activity, e.timestamp) as activity,
+                argMax(e.tags, e.timestamp) as tags
+            FROM `$clickhouseDb`.replay_events e
+            LEFT JOIN (
+                SELECT
+                    replay_id,
+                    project_id,
+                    max(timestamp) AS last_segment_timestamp,
+                    count() AS recording_segment_count
+                FROM `$clickhouseDb`.replay_segments
+                WHERE toString(replay_id) = '$normalizedReplayId'
+                    AND $segmentProjectIdClause
+                    AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays, demoEpochMs)}
+                GROUP BY replay_id, project_id
+            ) s ON s.replay_id = e.replay_id AND s.project_id = e.project_id
+            WHERE toString(e.replay_id) = '$normalizedReplayId'
+                AND $replayProjectIdClause
+                AND ${queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays, demoEpochMs)}
+            GROUP BY e.replay_id, e.project_id
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
@@ -1113,7 +1222,7 @@ class ReplayService(
         WHERE e.project_id = $projectId
             AND e.event_type = 'error'
             AND toString(e.event_id) IN ($inClause)
-            AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+            AND ${queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
         """.trimIndent()
 
@@ -1137,7 +1246,7 @@ class ReplayService(
         WHERE e.project_id = $projectId
             AND e.event_type = 'transaction'
             AND ($traceConditions)
-            AND ${queryHelper.timestampRetentionClause("e.timestamp", retentionDays, demoEpochMs)}
+            AND ${queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays, demoEpochMs)}
         FORMAT JSONEachRow
         """.trimIndent()
 
@@ -1586,7 +1695,7 @@ class ReplayService(
         val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
         val escapedIssueId = escapeSql(issueId)
-        val retentionClause = queryHelper.timestampRetentionClause("e.timestamp", retentionDays)
+        val retentionClause = queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays)
 
         val query =
             """
@@ -1594,8 +1703,16 @@ class ReplayService(
                 toString(r.replay_id) as replay_id,
                 r.project_id,
                 formatDateTime(min(r.replay_start_timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as started_at,
-                formatDateTime(max(r.timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as finished_at,
-                dateDiff('millisecond', min(r.replay_start_timestamp), max(r.timestamp)) as duration_ms,
+                formatDateTime(
+                    max(greatest(r.timestamp, ifNull(s.last_segment_timestamp, r.timestamp))),
+                    '%Y-%m-%dT%H:%i:%S.000Z',
+                    'UTC'
+                ) as finished_at,
+                dateDiff(
+                    'millisecond',
+                    min(r.replay_start_timestamp),
+                    max(greatest(r.timestamp, ifNull(s.last_segment_timestamp, r.timestamp)))
+                ) as duration_ms,
                 arrayFlatten(groupArray(r.urls)) as urls,
                 length(arrayDistinct(arrayFlatten(groupArray(r.error_ids)))) as error_count,
                 argMax(r.user_id, r.timestamp) as user_id,
@@ -1605,6 +1722,11 @@ class ReplayService(
                 argMax(r.browser_version, r.timestamp) as browser_version,
                 argMax(r.os_name, r.timestamp) as os_name,
                 argMax(r.os_version, r.timestamp) as os_version,
+                argMax(r.platform, r.timestamp) as platform,
+                argMax(r.sdk_name, r.timestamp) as sdk_name,
+                argMax(r.device_name, r.timestamp) as device_name,
+                argMax(r.device_family, r.timestamp) as device_family,
+                max(ifNull(s.recording_segment_count, 0)) as recording_segment_count,
                 argMax(r.activity, r.timestamp) as activity
             FROM `$clickhouseDb`.replay_events r
             ARRAY JOIN arrayDistinct(r.error_ids) AS error_id
@@ -1614,10 +1736,21 @@ class ReplayService(
                 AND e.project_id = $projectId
                 AND e.event_type = 'error'
                 AND $retentionClause
+            LEFT JOIN (
+                SELECT
+                    replay_id,
+                    project_id,
+                    max(timestamp) AS last_segment_timestamp,
+                    count() AS recording_segment_count
+                FROM `$clickhouseDb`.replay_segments
+                WHERE project_id = $projectId
+                    AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+                GROUP BY replay_id, project_id
+            ) s ON s.replay_id = r.replay_id AND s.project_id = r.project_id
             WHERE r.project_id = $projectId
                 AND r.timestamp >= now64(3) - INTERVAL $retentionDays DAY
             GROUP BY r.replay_id, r.project_id
-            ORDER BY max(r.timestamp) DESC
+            ORDER BY max(greatest(r.timestamp, ifNull(s.last_segment_timestamp, r.timestamp))) DESC
             LIMIT $limit
             FORMAT JSONEachRow
             """.trimIndent()
@@ -1646,8 +1779,10 @@ class ReplayService(
         private const val LOG_BODY_PREVIEW_LENGTH = 400
         private const val MP4_HEADER_MIN_BYTES = 8
         private const val MP4_BOX_TYPE_OFFSET = 4
+        private const val DEFAULT_MOBILE_SEGMENT_DURATION_MS = 5000
         private const val MILLISECONDS_PER_SECOND = 1000.0
         private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
+        private const val EVENT_TIMESTAMP_COLUMN = "e.timestamp"
         private const val PERIOD_24H_MS = MILLIS_PER_DAY
         private const val PERIOD_7D_MS = 7 * MILLIS_PER_DAY
         private const val PERIOD_30D_MS = 30 * MILLIS_PER_DAY
