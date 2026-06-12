@@ -112,10 +112,9 @@ function attentionIconClass(status?: DerivedStatus): string {
   return 'border-warning-border bg-warning-bg text-warning-fg'
 }
 
-function attentionDescription(status: DerivedStatus | undefined, failingLocations: number | undefined): string {
+function attentionDescription(status: DerivedStatus | undefined, failingLocations = 1): string {
   if (status !== 'failing') return 'Recent failures · degraded'
-  const count = failingLocations || 1
-  return `Failing from ${count} location${count > 1 ? 's' : ''}`
+  return `Failing from ${failingLocations} location${failingLocations > 1 ? 's' : ''}`
 }
 
 function statusText(status?: DerivedStatus): string {

@@ -30,6 +30,7 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.UUID
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
@@ -99,10 +100,8 @@ internal suspend fun purgeSyntheticsDemoData() {
     }.onFailure { logger.warn { "Purge demo synthetic_tests failed (non-fatal): ${it.message}" } }
 }
 
-private fun insertDemoSyntheticTests() {
-    val now = Clock.System.now()
-    val locationsJson = Json.encodeToString(DEMO_LOCATIONS)
-    val alertJson = Json.encodeToString(
+private fun alertConfigJson(): String =
+    Json.encodeToString(
         AlertConfig(
             consecutiveChecks = 3,
             minLocations = 2,
@@ -110,7 +109,9 @@ private fun insertDemoSyntheticTests() {
             retestCount = 1
         )
     )
-    val browserStepsJson = Json.encodeToString(
+
+private fun browserStepsJson(): String =
+    Json.encodeToString(
         listOf(
             BrowserStep("navigate", "Navigate to acme.com", value = "https://acme.com"),
             BrowserStep("click", "Click Sign in", selector = "text=Sign in"),
@@ -124,34 +125,48 @@ private fun insertDemoSyntheticTests() {
             BrowserStep("assert", "Dashboard visible", value = "Dashboard", assertType = "text_visible"),
         )
     )
+
+private fun insertDemoSyntheticTest(
+    test: DemoSyntheticTest,
+    now: Instant,
+    locationsJson: String,
+    alertJson: String,
+    browserStepsJson: String,
+) {
+    SyntheticTests.insert {
+        it[id] = UUID.fromString(test.id)
+        it[organizationId] = DEMO_ORG
+        it[name] = test.name
+        it[testType] = test.type
+        it[active] = true
+        it[intervalSeconds] = if (test.type == "browser") 300 else 60
+        it[timeoutSeconds] = 30
+        it[url] = if (test.type == "browser") "https://acme.com" else "https://api.acme.com/v1/${test.service}"
+        it[method] = if (test.name == "Payments webhook") "POST" else "GET"
+        it[assertions] = Json.encodeToString(
+            listOf(SyntheticAssertion(type = "status_code", operator = "equals", value = "200"))
+        )
+        it[status] = if (test.failing) "failed" else "passed"
+        it[lastRunAt] = now
+        it[lastStatus] = if (test.failing) "failed" else "passed"
+        it[tags] = Json.encodeToString(listOf("team:${test.service}", "tier:critical"))
+        it[service] = test.service
+        it[environment] = "production"
+        it[locations] = locationsJson
+        it[alertConfig] = if (test.failing) alertJson else null
+        it[browserSteps] = if (test.type == "browser") browserStepsJson else null
+        it[createdAt] = now
+        it[updatedAt] = now
+    }
+}
+
+private fun insertDemoSyntheticTests() {
+    val now = Clock.System.now()
+    val locationsJson = Json.encodeToString(DEMO_LOCATIONS)
+    val alertJson = alertConfigJson()
+    val browserStepsJson = browserStepsJson()
     transaction {
-        DEMO_TESTS.forEach { t ->
-            SyntheticTests.insert {
-                it[id] = UUID.fromString(t.id)
-                it[organizationId] = DEMO_ORG
-                it[name] = t.name
-                it[testType] = t.type
-                it[active] = true
-                it[intervalSeconds] = if (t.type == "browser") 300 else 60
-                it[timeoutSeconds] = 30
-                it[url] = if (t.type == "browser") "https://acme.com" else "https://api.acme.com/v1/${t.service}"
-                it[method] = if (t.name == "Payments webhook") "POST" else "GET"
-                it[assertions] = Json.encodeToString(
-                    listOf(SyntheticAssertion(type = "status_code", operator = "equals", value = "200"))
-                )
-                it[status] = if (t.failing) "failed" else "passed"
-                it[lastRunAt] = now
-                it[lastStatus] = if (t.failing) "failed" else "passed"
-                it[tags] = Json.encodeToString(listOf("team:${t.service}", "tier:critical"))
-                it[service] = t.service
-                it[environment] = "production"
-                it[locations] = locationsJson
-                it[alertConfig] = if (t.failing) alertJson else null
-                it[browserSteps] = if (t.type == "browser") browserStepsJson else null
-                it[createdAt] = now
-                it[updatedAt] = now
-            }
-        }
+        DEMO_TESTS.forEach { test -> insertDemoSyntheticTest(test, now, locationsJson, alertJson, browserStepsJson) }
     }
 }
 

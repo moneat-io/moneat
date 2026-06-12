@@ -58,6 +58,7 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
 private const val NO_ORGANIZATION_ERROR = "No organization"
+private const val INVALID_ID_ERROR = "Invalid ID"
 
 private fun getOrgIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
     principal
@@ -269,7 +270,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -303,7 +304,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -368,7 +369,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -402,7 +403,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -475,7 +476,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@get
                 }
@@ -549,7 +550,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@put
                 }
@@ -585,7 +586,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@delete
                 }
@@ -619,7 +620,7 @@ fun Route.syntheticsRoutes() {
                 if (testId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@post
                 }
@@ -696,7 +697,7 @@ fun Route.syntheticsRoutes() {
                 if (varId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@put
                 }
@@ -732,7 +733,7 @@ fun Route.syntheticsRoutes() {
                 if (varId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@delete
                 }
@@ -806,7 +807,7 @@ fun Route.syntheticsRoutes() {
                 if (locId == null) {
                     call.respond(
                         HttpStatusCode.BadRequest,
-                        mapOf("error" to "Invalid ID")
+                        mapOf("error" to INVALID_ID_ERROR)
                     )
                     return@delete
                 }
