@@ -1028,7 +1028,7 @@ function ownerAvatar(dashboard: CustomDashboard): Owner {
 }
 
 function stableStringSeed(value: string): number {
-  return Array.from(value).reduce((seed, character) => seed + character.charCodeAt(0), 0)
+  return Array.from(value).reduce((seed, character) => seed + (character.codePointAt(0) ?? 0), 0)
 }
 
 function initialsFromName(name: string): string {
