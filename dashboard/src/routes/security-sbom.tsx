@@ -41,7 +41,7 @@ function SbomHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(16,185,129,0.22),rgba(16,185,129,0.04)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · sbom" live className="relative">
+      <WindowFrame title="moneat · sbom" className="relative">
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3">
             <span className="font-brandmono text-[12px] text-slate-200">

@@ -86,7 +86,7 @@ function StatusPageHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(16,185,129,0.22),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · status" live className="relative">
+      <WindowFrame title="moneat · status" className="relative">
         <div className="grid gap-3">
           {/* Banner */}
           <div className="flex items-center justify-between gap-3 rounded-md border border-white/[0.07] bg-white/[0.02] px-3 py-2">

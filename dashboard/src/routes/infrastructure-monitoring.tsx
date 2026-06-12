@@ -65,11 +65,10 @@ function InfrastructureMonitoringHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(124,92,246,0.28),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · hosts" live className="relative">
+      <WindowFrame title="moneat · hosts" className="relative">
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3">
             <span className="font-brandmono text-[11px] text-slate-500">128 hosts · 6 shown</span>
-            <span className="font-brandmono text-[11px] text-slate-500">live</span>
           </div>
           <div className="overflow-hidden rounded-md border border-white/[0.07]">
             {/* header */}

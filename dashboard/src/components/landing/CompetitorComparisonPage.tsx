@@ -791,24 +791,6 @@ export function CompareHubPage() {
           </div>
         </section>
 
-        {/* Why alternative URLs */}
-        <section className="px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[0.8fr_1fr] lg:items-center">
-            <div>
-              <h2 className="text-3xl font-bold tracking-[-0.03em] text-white sm:text-4xl">
-                Why these pages use alternative URLs
-              </h2>
-              <p className="mt-4 text-base leading-7 text-slate-400">
-                People search for direct alternatives when they feel pricing pressure, migration pressure,
-                or workflow friction. Each canonical page is named for that intent.
-              </p>
-            </div>
-            <div className="rounded-lg border border-white/[0.08] bg-[#0c0e16] p-6 text-sm leading-6 text-slate-400">
-              Canonical pages: /datadog-alternative, /sentry-alternative, /better-stack-alternative,
-              and /signoz-alternative. The hub stays at /compare.
-            </div>
-          </div>
-        </section>
       </main>
       <LandingFooter tone="dark" />
     </article>

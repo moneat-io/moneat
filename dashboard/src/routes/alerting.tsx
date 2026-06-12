@@ -36,7 +36,7 @@ function AlertingHero() {
         aria-hidden
         className="pointer-events-none absolute -inset-x-10 -bottom-12 top-8 bg-[radial-gradient(closest-side,rgba(244,63,94,0.22),rgba(34,211,238,0.04)_60%,transparent)] blur-2xl"
       />
-      <WindowFrame title="moneat · alerts" live className="relative">
+      <WindowFrame title="moneat · alerts" className="relative">
         <div className="grid gap-3">
           {/* Chart panel with threshold overlay */}
           <div className="overflow-hidden rounded-md border border-white/[0.07] bg-white/[0.02] px-3 pb-2 pt-2">

@@ -122,7 +122,7 @@ function AuthShowcase({headline, lede}: {readonly headline: ReactNode; readonly 
           aria-hidden
           className="pointer-events-none absolute -inset-x-8 -bottom-10 top-6 bg-[radial-gradient(closest-side,rgba(124,92,246,0.3),rgba(34,211,238,0.05)_60%,transparent)] blur-2xl"
         />
-        <WindowFrame title="moneat · api-prod" live className="relative">
+        <WindowFrame title="moneat · api-prod" className="relative">
           <div className="grid gap-3">
             <div className="flex items-center justify-between">
               <span className="font-brandmono text-[11px] uppercase tracking-[0.12em] text-slate-500">
