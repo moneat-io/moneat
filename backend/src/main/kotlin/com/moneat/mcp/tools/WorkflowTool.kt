@@ -61,6 +61,8 @@ private const val LIMIT_FIELD = "limit"
 private const val WORKFLOW_ID_DESCRIPTION = "Workflow resource ID"
 private const val RUN_ID_DESCRIPTION = "Workflow run resource ID"
 private const val INVALID_WORKFLOW_ARGUMENTS_MESSAGE = "Invalid workflow arguments"
+private const val WORKFLOW_NOT_FOUND_MESSAGE = "Workflow not found"
+private const val WORKFLOW_RUN_NOT_FOUND_MESSAGE = "Workflow run not found"
 private const val DEFAULT_WORKFLOW_AUDIT_LIMIT = 100
 private const val DEFAULT_WORKFLOW_RUN_LIMIT = 50
 private const val MAX_WORKFLOW_AUDIT_LIMIT = 500
@@ -99,7 +101,7 @@ class GetWorkflowTool(
     ): ToolCallResult {
         val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val workflow = service.getWorkflow(context.organizationId, workflowId)
-            ?: return errorResult("Workflow not found")
+            ?: return errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
         return jsonResult(workflow)
     }
 }
@@ -183,7 +185,7 @@ class UpdateWorkflowTool(
         }
         return try {
             val workflow = service.updateWorkflow(context.organizationId, workflowId, request)
-                ?: return errorResult("Workflow not found")
+                ?: return errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
             jsonResult(workflow)
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: INVALID_WORKFLOW_ARGUMENTS_MESSAGE)
@@ -211,7 +213,7 @@ class DeleteWorkflowTool(
             if (service.deleteWorkflow(context.organizationId, workflowId)) {
                 textResult("Workflow deleted")
             } else {
-                errorResult("Workflow not found")
+                errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
             }
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: INVALID_WORKFLOW_ARGUMENTS_MESSAGE)
@@ -321,7 +323,7 @@ class CancelWorkflowRunTool(
         val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val runId = args.requiredRunId(context, service, workflowId) { message -> return errorResult(message) }
         val canceled = service.cancelRun(context.organizationId, workflowId, runId)
-            ?: return errorResult("Workflow run not found")
+            ?: return errorResult(WORKFLOW_RUN_NOT_FOUND_MESSAGE)
         return jsonResult(canceled)
     }
 }
@@ -366,7 +368,7 @@ class GetWorkflowRunTool(
         val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
         val runId = args.requiredRunId(context, service, workflowId) { message -> return errorResult(message) }
         val run = service.getRun(context.organizationId, workflowId, runId)
-            ?: return errorResult("Workflow run not found")
+            ?: return errorResult(WORKFLOW_RUN_NOT_FOUND_MESSAGE)
         return jsonResult(run)
     }
 }
@@ -482,7 +484,7 @@ private fun publishStateResult(
 ): ToolCallResult {
     val workflowId = args.requiredWorkflowId(context, service) { message -> return errorResult(message) }
     val workflow = operation(context.organizationId, workflowId)
-        ?: return errorResult("Workflow not found")
+        ?: return errorResult(WORKFLOW_NOT_FOUND_MESSAGE)
     return jsonResult(
         buildJsonObject {
             put("status", state)
@@ -703,7 +705,7 @@ private inline fun JsonObject.requiredWorkflowId(
     val resourceId = parseResourceId(raw)
         ?: onFailure("$WORKFLOW_ID_FIELD must be a valid workflow resource ID")
     return service.resolveWorkflowId(context.organizationId, resourceId)
-        ?: onFailure("Workflow not found")
+        ?: onFailure(WORKFLOW_NOT_FOUND_MESSAGE)
 }
 
 private fun JsonObject.optionalWorkflowId(
@@ -726,7 +728,7 @@ private inline fun JsonObject.requiredRunId(
     val resourceId = parseResourceId(raw)
         ?: onFailure("$RUN_ID_FIELD must be a valid workflow run resource ID")
     return service.resolveRunId(context.organizationId, workflowId, resourceId)
-        ?: onFailure("Workflow run not found")
+        ?: onFailure(WORKFLOW_RUN_NOT_FOUND_MESSAGE)
 }
 
 private inline fun JsonObject.requiredIntArg(

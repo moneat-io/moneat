@@ -34,6 +34,9 @@ import kotlinx.serialization.json.jsonPrimitive
 private val alertMonitorService = MonitorService(HostRepositoryImpl(), HostAlertRepositoryImpl())
 private val silenceAlertService = MonitorAlertService()
 
+private const val HOST_RESOURCE_ID_DESCRIPTION = "Host resource ID"
+private const val INVALID_HOST_ID_MESSAGE = "Invalid host_id"
+
 class CreateAlertTool : McpTool {
     override val name = "create_alert"
     override val description = "Create a monitoring alert for a host"
@@ -41,7 +44,7 @@ class CreateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaResourceId("Host resource ID"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "metric" to schemaEnum(
                     "Metric to monitor",
                     listOf(
@@ -68,7 +71,7 @@ class CreateAlertTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
         val metric = args["metric"]?.jsonPrimitive?.content
             ?: return errorResult("metric is required")
@@ -105,7 +108,7 @@ class UpdateAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaResourceId("Host resource ID"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "alert_id" to schemaResourceId("Alert resource ID"),
                 "condition" to schemaEnum(
                     "Alert condition",
@@ -124,7 +127,7 @@ class UpdateAlertTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
         val alertResourceId = args.stringContent("alert_id")?.let(::parseResourceId)
             ?: return errorResult("Invalid alert_id format; expected alert resource ID")
@@ -166,7 +169,7 @@ class DeleteAlertTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaResourceId("Host resource ID"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "alert_id" to schemaResourceId("Alert resource ID")
             )
         ),
@@ -178,7 +181,7 @@ class DeleteAlertTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
         val alertResourceId = args.stringContent("alert_id")?.let(::parseResourceId)
             ?: return errorResult("Invalid alert_id format; expected alert resource ID")
@@ -284,7 +287,7 @@ class DeleteHostTool : McpTool {
     override val readOnly = false
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaResourceId("Host resource ID"))
+            mapOf("host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION))
         ),
         required = listOf("host_id")
     )
@@ -294,7 +297,7 @@ class DeleteHostTool : McpTool {
         context: McpContext
     ): ToolCallResult {
         val hostId = resolveHostIdArg(args, context.organizationId, alertMonitorService).getOrElse { error ->
-            return errorResult(error.message ?: "Invalid host_id")
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
         }
 
         val deleted = alertMonitorService.deleteHost(

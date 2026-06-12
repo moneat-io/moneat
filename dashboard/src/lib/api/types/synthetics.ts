@@ -123,6 +123,7 @@ export interface UpdateSyntheticTestPayload {
 
 export interface SyntheticTestResponse {
   id: string
+  organizationId: string
   name: string
   testType: string
   active: boolean
@@ -157,6 +158,7 @@ export interface SyntheticTestResponse {
 
 export interface SyntheticResultResponse {
   resultId: string
+  organizationId: string
   testId: string
   testName: string
   testType: string
@@ -190,6 +192,7 @@ export interface SyntheticTestSummary {
 
 export interface SyntheticVariableResponse {
   id: string
+  organizationId: string
   name: string
   value: string
   isSecret: boolean

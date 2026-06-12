@@ -40,6 +40,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
@@ -189,6 +190,22 @@ class MonitorServiceAlertTest {
         val request = CreateAlertRequest(metric = "load_1", condition = ">", threshold = 2.0)
         val alert = service.createAlert(hostId, orgId, request, ALERT_SCOPE_SYSTEM)
         assertEquals(alert.id, Uuid.parse(alert.id).toString())
+    }
+
+    @Test
+    fun `getAlertByInternalId returns public alert and host resource IDs`() {
+        val orgId = seedOrg()
+        seedFreeTier()
+        val hostId = seedHost(orgId)
+        val created = service.createAlert(hostId, orgId, CreateAlertRequest("cpu_percent", ">", 90.0))
+        val internalId = service.resolveAlertId(Uuid.parse(created.id), hostId, orgId, ALERT_SCOPE_SYSTEM)
+
+        assertNotNull(internalId)
+        val alert = service.getAlertByInternalId(internalId)
+
+        assertNotNull(alert)
+        assertEquals(created.id, alert.id)
+        assertEquals(Uuid.parse(alert.hostId!!).toString(), alert.hostId)
     }
 
     // ──── listAlerts ────
@@ -362,6 +379,19 @@ class MonitorServiceAlertTest {
         assertEquals(90.0, alerts.first().threshold)
     }
 
+    @Test
+    fun `updateAlert returns false for malformed or unknown resource IDs`() {
+        val orgId = seedOrg()
+        seedFreeTier()
+        val hostId = seedHost(orgId)
+
+        val malformed = service.updateAlert("123", hostId, orgId, UpdateAlertRequest(threshold = 75.0))
+        val unknown = service.updateAlert(Uuid.random().toString(), hostId, orgId, UpdateAlertRequest(enabled = false))
+
+        assertFalse(malformed)
+        assertFalse(unknown)
+    }
+
     // ──── deleteAlert ────
 
     @Test
@@ -401,6 +431,19 @@ class MonitorServiceAlertTest {
 
         // Original alert should still exist (verify by looking for the specific ID)
         assertTrue(service.listAlerts(hostId, org1).any { it.id == created.id })
+    }
+
+    @Test
+    fun `deleteAlert returns false for malformed or unknown resource IDs`() {
+        val orgId = seedOrg()
+        seedFreeTier()
+        val hostId = seedHost(orgId)
+
+        val malformed = service.deleteAlert("123", hostId, orgId)
+        val unknown = service.deleteAlert(Uuid.random().toString(), hostId, orgId)
+
+        assertFalse(malformed)
+        assertFalse(unknown)
     }
 
     @Test

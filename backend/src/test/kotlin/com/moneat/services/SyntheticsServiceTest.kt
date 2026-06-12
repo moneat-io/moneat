@@ -41,9 +41,11 @@ import com.moneat.workflows.services.WorkflowService
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import org.jetbrains.exposed.v1.core.eq
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -60,6 +62,8 @@ class SyntheticsServiceTest {
     companion object {
         private var db: Database? = null
         private const val TEST_ORG_ID = 1
+
+        private fun resourceId(value: String): Uuid = Uuid.parse(value)
     }
 
     @BeforeTest
@@ -157,6 +161,15 @@ class SyntheticsServiceTest {
             override suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult = result
         }
 
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
     // ──── CRUD: Create ────
 
     @Test
@@ -166,7 +179,7 @@ class SyntheticsServiceTest {
         assertEquals("API Health Check", response.name)
         assertEquals("api", response.testType)
         assertTrue(response.active)
-        assertEquals(TEST_ORG_ID, response.organizationId)
+        assertEquals(organizationResourceId(TEST_ORG_ID), response.organizationId)
         assertEquals("pending", response.status)
     }
 

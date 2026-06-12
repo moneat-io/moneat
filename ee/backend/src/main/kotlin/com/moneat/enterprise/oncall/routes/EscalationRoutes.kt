@@ -31,6 +31,8 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
 
+private const val POLICY_NOT_FOUND_MESSAGE = "Policy not found"
+
 @Serializable
 data class CreatePolicyRequest(
     val name: String,
@@ -137,7 +139,7 @@ fun Route.escalationRoutes() {
                 if (policy != null && policy.organizationId == organizationId) {
                     call.respond(policy)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                 }
             }
 
@@ -155,7 +157,7 @@ fun Route.escalationRoutes() {
 
                 val existingPolicy = policyService.getPolicy(policyId)
                 if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -190,7 +192,7 @@ fun Route.escalationRoutes() {
                     if (policy != null) {
                         call.respond(policy)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                     }
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -211,7 +213,7 @@ fun Route.escalationRoutes() {
 
                 val existingPolicy = policyService.getPolicy(policyId)
                 if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -219,7 +221,7 @@ fun Route.escalationRoutes() {
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                 }
             }
         }
@@ -249,7 +251,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.resolvePolicyId(
                 ?.value
         }
     if (policyId == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
     }
     return policyId
 }

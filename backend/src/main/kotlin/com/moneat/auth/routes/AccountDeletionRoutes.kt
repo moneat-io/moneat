@@ -42,6 +42,8 @@ import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
+private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
+
 @Serializable
 data class DeleteAccountRequest(
     val confirmation: String
@@ -106,7 +108,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletio
         }
 
     if (orgWithRole == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ORGANIZATION_NOT_FOUND_MESSAGE))
         return
     }
 
@@ -199,7 +201,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
         }
 
     if (orgName == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ORGANIZATION_NOT_FOUND_MESSAGE))
         return
     }
 
@@ -268,7 +270,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveOrganizationIdF
             ?.get(Organizations.id)
     }
     if (orgId == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse("Organization not found"))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ORGANIZATION_NOT_FOUND_MESSAGE))
     }
     return orgId
 }

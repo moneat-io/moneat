@@ -187,6 +187,7 @@ private const val INVALID_ORGANIZATION_ID_MESSAGE = "Invalid organization ID"
 private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
 private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val INVALID_REQUEST_MESSAGE = "Invalid request"
+private const val TEST_HOST_RESOURCE_ID = "00000000-0000-4000-8000-000000000001"
 
 @Serializable
 private data class AdminImpersonationTokenResponse(
@@ -524,7 +525,7 @@ fun Route.adminRoutes() {
                                     emailService.sendHostUpEmail(
                                         userEmail,
                                         "[TEST] Production API",
-                                        "$frontendUrl/monitoring/hosts/00000000-0000-4000-8000-000000000001"
+                                        "$frontendUrl/monitoring/hosts/$TEST_HOST_RESOURCE_ID"
                                     )
                                     emailSent = true
                                 }
@@ -534,7 +535,7 @@ fun Route.adminRoutes() {
                                         userEmail,
                                         "[TEST] Production API",
                                         "2 minutes ago",
-                                        "$frontendUrl/monitoring/hosts/00000000-0000-4000-8000-000000000001"
+                                        "$frontendUrl/monitoring/hosts/$TEST_HOST_RESOURCE_ID"
                                     )
                                     emailSent = true
                                 }
@@ -583,7 +584,7 @@ fun Route.adminRoutes() {
                                             slackService.sendHostUp(
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
-                                                hostResourceId = "00000000-0000-4000-8000-000000000001",
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -594,7 +595,7 @@ fun Route.adminRoutes() {
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
                                                 lastSeen = "2 minutes ago",
-                                                hostResourceId = "00000000-0000-4000-8000-000000000001",
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -655,7 +656,7 @@ fun Route.adminRoutes() {
                                             discordService.sendHostUp(
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
-                                                hostResourceId = "00000000-0000-4000-8000-000000000001",
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -666,7 +667,7 @@ fun Route.adminRoutes() {
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
                                                 lastSeen = "2 minutes ago",
-                                                hostResourceId = "00000000-0000-4000-8000-000000000001",
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }

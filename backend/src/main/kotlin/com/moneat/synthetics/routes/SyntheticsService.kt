@@ -25,6 +25,7 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.services.organizationResourceId
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
@@ -142,10 +143,17 @@ class SyntheticsService(
 
     fun listTests(organizationId: Int): List<SyntheticTestResponse> {
         return transaction {
-            SyntheticTests
+            val rows = SyntheticTests
                 .selectAll()
                 .where { SyntheticTests.organizationId eq organizationId }
-                .map { rowToResponse(it) }
+                .toList()
+            if (rows.isEmpty()) {
+                emptyList()
+            } else {
+                val organizationResourceId = organizationResourceId(organizationId)
+                rows
+                    .map { rowToResponse(it, organizationResourceId) }
+            }
         }
     }
 
@@ -155,7 +163,7 @@ class SyntheticsService(
                 .selectAll()
                 .where { (SyntheticTests.id eq testId) and (SyntheticTests.organizationId eq organizationId) }
                 .firstOrNull()
-                ?.let { rowToResponse(it) }
+                ?.let { rowToResponse(it, organizationResourceId(organizationId)) }
         }
     }
 
@@ -745,7 +753,7 @@ class SyntheticsService(
         )
     }
 
-    private fun rowToResponse(row: ResultRow): SyntheticTestResponse {
+    private fun rowToResponse(row: ResultRow, organizationResourceId: String): SyntheticTestResponse {
         val assertionsList: List<SyntheticAssertion> = suspendRunCatching {
             Json.decodeFromString<List<SyntheticAssertion>>(row[SyntheticTests.assertions])
         }.getOrElse { _ ->
@@ -785,7 +793,7 @@ class SyntheticsService(
 
         return SyntheticTestResponse(
             id = row[SyntheticTests.id].toString(),
-            organizationId = row[SyntheticTests.organizationId],
+            organizationId = organizationResourceId,
             name = row[SyntheticTests.name],
             testType = row[SyntheticTests.testType],
             active = row[SyntheticTests.active],
@@ -1169,12 +1177,19 @@ class SyntheticsService(
 
     fun listVariables(organizationId: Int): List<SyntheticVariableResponse> {
         return transaction {
-            SyntheticVariables
+            val rows = SyntheticVariables
                 .selectAll()
                 .where {
                     SyntheticVariables.organizationId eq organizationId
                 }
-                .map { variableRowToResponse(it) }
+                .toList()
+            if (rows.isEmpty()) {
+                emptyList()
+            } else {
+                val organizationResourceId = organizationResourceId(organizationId)
+                rows
+                    .map { variableRowToResponse(it, organizationResourceId) }
+            }
         }
     }
 
@@ -1207,7 +1222,7 @@ class SyntheticsService(
                         (SyntheticVariables.organizationId eq organizationId)
                 }
                 .firstOrNull()
-                ?.let { variableRowToResponse(it) }
+                ?.let { variableRowToResponse(it, organizationResourceId(organizationId)) }
         }
     }
 
@@ -1262,7 +1277,8 @@ class SyntheticsService(
     }
 
     private fun variableRowToResponse(
-        row: ResultRow
+        row: ResultRow,
+        organizationResourceId: String
     ): SyntheticVariableResponse {
         val maskedValue = if (row[SyntheticVariables.isSecret]) {
             "********"
@@ -1271,7 +1287,7 @@ class SyntheticsService(
         }
         return SyntheticVariableResponse(
             id = row[SyntheticVariables.resourceId].toString(),
-            organizationId = row[SyntheticVariables.organizationId],
+            organizationId = organizationResourceId,
             name = row[SyntheticVariables.name],
             value = maskedValue,
             isSecret = row[SyntheticVariables.isSecret],

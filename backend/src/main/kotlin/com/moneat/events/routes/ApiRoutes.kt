@@ -105,6 +105,7 @@ private const val DEMO_CHECKOUT_SERVICE_ID = -2L
 private const val DEMO_MOBILE_SERVICE_ID = -3L
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 private const val ERROR_INVALID_SERVICE_IDS = "Invalid serviceIds"
+private const val ERROR_ALERT_EPISODE_NOT_FOUND = "Alert episode not found"
 private val DEMO_SERVICE_IDS = listOf(DEMO_PRIMARY_SERVICE_ID, DEMO_CHECKOUT_SERVICE_ID, DEMO_MOBILE_SERVICE_ID)
 
 private data class ServiceReadContext(
@@ -1628,7 +1629,7 @@ private fun Route.alertLifecycleRoutes(alertEpisodeService: AlertEpisodeService)
         val episodeId = call.alertEpisodeId(orgId) ?: return@post
         val request = call.receive<SuppressAlertEpisodeRequest>()
         val episode = alertEpisodeService.suppressEpisode(orgId, episodeId, userId, request.reason)
-            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_ALERT_EPISODE_NOT_FOUND))
         call.respond(episode)
     }
 
@@ -1637,7 +1638,7 @@ private fun Route.alertLifecycleRoutes(alertEpisodeService: AlertEpisodeService)
         val orgId = call.resolveSubscriptionOrganizationId(userId) ?: return@post
         val episodeId = call.alertEpisodeId(orgId) ?: return@post
         val episode = alertEpisodeService.unsuppressEpisode(orgId, episodeId)
-            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+            ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_ALERT_EPISODE_NOT_FOUND))
         call.respond(episode)
     }
 }
@@ -1660,7 +1661,7 @@ private suspend fun ApplicationCall.alertEpisodeId(orgId: Int): Int? {
             ?.value
     }
     if (episodeId == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_ALERT_EPISODE_NOT_FOUND))
     }
     return episodeId
 }

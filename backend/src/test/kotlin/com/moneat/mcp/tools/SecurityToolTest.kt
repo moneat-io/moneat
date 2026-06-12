@@ -98,6 +98,17 @@ class SecurityToolTest {
     }
 
     @Test
+    fun `list security signals uses default pagination`() = runBlocking {
+        val gateway = RecordingSecurityGateway()
+        val result = ListSecuritySignalsTool(gateway).execute(JsonObject(emptyMap()), context)
+
+        assertFalse(result.isError)
+        assertEquals(50, gateway.signalLimit)
+        assertEquals(0, gateway.signalOffset)
+        assertEquals(SignalFilters(), gateway.filters)
+    }
+
+    @Test
     fun `triage security signal sends actor and triage request`() = runBlocking {
         val gateway = RecordingSecurityGateway()
         val result = TriageSecuritySignalTool(gateway).execute(
@@ -120,6 +131,23 @@ class SecurityToolTest {
         assertEquals(ASSIGNEE_RESOURCE_ID, gateway.triageRequest?.assigneeUserId)
         val body = toolJson.decodeFromString<SignalResponse>(result.content.single().text!!)
         assertEquals("under_review", body.status)
+    }
+
+    @Test
+    fun `triage security signal reports missing unresolved and not found resource IDs`() = runBlocking {
+        val missing = TriageSecuritySignalTool(RecordingSecurityGateway()).execute(JsonObject(emptyMap()), context)
+        val unresolved = TriageSecuritySignalTool(RecordingSecurityGateway()).execute(
+            JsonObject(mapOf("security_signal_id" to JsonPrimitive("missing-signal"))),
+            context,
+        )
+        val notFound = TriageSecuritySignalTool(NotFoundSecurityGateway()).execute(
+            JsonObject(mapOf("security_signal_id" to JsonPrimitive(SIGNAL_RESOURCE_ID))),
+            context,
+        )
+
+        listOf(missing, unresolved, notFound).forEach { result ->
+            assertTrue(result.isError, result.content.single().text)
+        }
     }
 
     @Test
@@ -184,6 +212,50 @@ class SecurityToolTest {
         assertEquals(77, gateway.lastRuleId)
         assertEquals("Updated rule", gateway.updatedRule?.name)
         assertTrue(delete.content.single().text!!.contains("deleted"))
+    }
+
+    @Test
+    fun `security tools report missing and unresolved resource ids`() = runBlocking {
+        val gateway = MissingSecurityGateway()
+        val emptyArgs = JsonObject(emptyMap())
+        val signalArgs = JsonObject(mapOf("security_signal_id" to JsonPrimitive(SIGNAL_RESOURCE_ID)))
+        val ruleArgs = JsonObject(mapOf("detection_rule_id" to JsonPrimitive(DETECTION_RULE_RESOURCE_ID)))
+
+        val missingSignal = GetSecuritySignalTool(gateway).execute(emptyArgs, context)
+        val unresolvedSignal = GetSecuritySignalTool(gateway).execute(
+            JsonObject(mapOf("security_signal_id" to JsonPrimitive("missing-signal"))),
+            context,
+        )
+        val signalNotFound = GetSecuritySignalTool(gateway).execute(signalArgs, context)
+        val triageInvalid = TriageSecuritySignalTool(gateway).execute(signalArgs, context)
+        val missingRule = GetDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val missingUpdate = UpdateDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val missingDelete = DeleteDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val missingPreview = PreviewDetectionRuleTool(gateway).execute(emptyArgs, context)
+        val unresolvedRule = GetDetectionRuleTool(gateway).execute(
+            JsonObject(mapOf("detection_rule_id" to JsonPrimitive("missing-rule"))),
+            context,
+        )
+        val ruleNotFound = GetDetectionRuleTool(gateway).execute(ruleArgs, context)
+        val updateNotFound = UpdateDetectionRuleTool(gateway).execute(ruleArgs, context)
+        val deleteNotFound = DeleteDetectionRuleTool(gateway).execute(ruleArgs, context)
+        val previewNotFound = PreviewDetectionRuleTool(gateway).execute(ruleArgs, context)
+
+        listOf(
+            missingSignal,
+            unresolvedSignal,
+            signalNotFound,
+            triageInvalid,
+            missingRule,
+            missingUpdate,
+            missingDelete,
+            missingPreview,
+            unresolvedRule,
+            ruleNotFound,
+            updateNotFound,
+            deleteNotFound,
+            previewNotFound,
+        ).forEach { result -> assertTrue(result.isError, result.content.single().text) }
     }
 
     @Test
@@ -505,6 +577,38 @@ private class RecordingSecurityGateway : TestSecurityGateway() {
         complianceFilters = filters
         return JsonObject(mapOf("findings" to JsonArray(listOf(JsonPrimitive("finding-1")))))
     }
+}
+
+private class MissingSecurityGateway : TestSecurityGateway() {
+    override suspend fun getSignal(organizationId: Int, signalId: Int): SignalDetailResponse? = null
+
+    override suspend fun triageSignal(
+        organizationId: Int,
+        signalId: Int,
+        actorUserId: Int,
+        request: TriageRequest,
+    ): TriageResult = TriageResult.Invalid("invalid triage")
+
+    override suspend fun getDetectionRule(organizationId: Int, ruleId: Int): DetectionRuleResponse? = null
+
+    override suspend fun updateDetectionRule(
+        organizationId: Int,
+        ruleId: Int,
+        request: UpdateDetectionRuleRequest,
+    ): DetectionRuleResponse? = null
+
+    override suspend fun deleteDetectionRule(organizationId: Int, ruleId: Int): Boolean = false
+
+    override suspend fun previewDetectionRule(organizationId: Int, ruleId: Int): DetectionPreviewResponse? = null
+}
+
+private class NotFoundSecurityGateway : TestSecurityGateway() {
+    override suspend fun triageSignal(
+        organizationId: Int,
+        signalId: Int,
+        actorUserId: Int,
+        request: TriageRequest,
+    ): TriageResult = TriageResult.NotFound
 }
 
 private abstract class TestSecurityGateway : SecurityMcpGateway {

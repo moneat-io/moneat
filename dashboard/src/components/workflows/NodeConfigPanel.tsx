@@ -246,11 +246,11 @@ function ConnectionParamField({
   value,
   actionName,
   onChange,
-}: {
+}: Readonly<{
   value: unknown
   actionName?: string
   onChange: (connectionId: string) => void
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const selectedConnectionId = stringParamValue(value)
   const connectionType = connectionTypeForAction(actionName)
@@ -353,11 +353,11 @@ function ConnectionGroupParamField({
   value,
   actionName,
   onChange,
-}: {
+}: Readonly<{
   value: unknown
   actionName?: string
   onChange: (groupId: string) => void
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const selectedGroupId = stringParamValue(value)
   const connectionType = connectionTypeForAction(actionName)
@@ -461,10 +461,10 @@ function ConnectionGroupItem({
 function EscalationPolicyParamField({
   value,
   onChange,
-}: {
+}: Readonly<{
   value: unknown
   onChange: (policyId: string) => void
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const selectedPolicyId = stringParamValue(value)
   const {data: policies = [], isLoading} = useQuery({

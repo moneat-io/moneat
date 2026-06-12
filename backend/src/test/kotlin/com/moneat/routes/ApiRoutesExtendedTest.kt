@@ -16,6 +16,7 @@
 
 package com.moneat.routes
 
+import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.events.routes.apiRoutes
 import com.moneat.shared.models.IssueStatuses
@@ -53,6 +54,8 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 /**
  * Exercises authenticated `/v1` API routes (JWT + rate limit) beyond [ApiRoutesTest].
@@ -82,7 +85,8 @@ class ApiRoutesExtendedTest {
             Projects,
             IssueStatuses,
             Subscriptions,
-            PricingTierConfigs
+            PricingTierConfigs,
+            AlertEpisodes
         )
     }
 
@@ -111,6 +115,51 @@ class ApiRoutesExtendedTest {
                 .toString()
         }
     }
+
+    private fun seedUserMembership(email: String): Pair<Int, Int> =
+        transaction {
+            val userId =
+                Users.insert {
+                    it[Users.email] = email
+                    it[password_hash] = "hash"
+                    it[email_verified] = true
+                } get Users.id
+            val orgId =
+                Organizations.insert {
+                    it[name] = "API Route Org"
+                    it[slug] = "api-route-org-${System.nanoTime()}"
+                } get Organizations.id
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = orgId
+                it[role] = "owner"
+            }
+            userId to orgId
+        }
+
+    private fun seedAlertEpisode(orgId: Int): String =
+        transaction {
+            val now = Clock.System.now()
+            val resourceId = Uuid.random()
+            AlertEpisodes.insert {
+                it[AlertEpisodes.resourceId] = resourceId
+                it[organizationId] = orgId
+                it[sourceName] = "host"
+                it[deduplicationKey] = "host-1"
+                it[title] = "CPU saturation"
+                it[description] = "CPU has crossed the threshold"
+                it[priority] = "P0"
+                it[episodeSeq] = 1
+                it[episodeKey] = "host-1#1"
+                it[status] = "FIRING"
+                it[openedAt] = now
+                it[lastSeenAt] = now
+                it[notificationCount] = 1
+                it[createdAt] = now
+                it[updatedAt] = now
+            }
+            resourceId.toString()
+        }
 
     @Test
     fun `GET user returns 401 without auth`() = testApplication {
@@ -239,6 +288,60 @@ class ApiRoutesExtendedTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("FREE"))
+    }
+
+    @Test
+    fun `alert lifecycle routes reject malformed and unknown resource IDs`() = testApplication {
+        val (userId, orgId) = seedUserMembership("alert-lifecycle-missing@test.com")
+
+        application {
+            installJwtAuth()
+            installApiRouteRateLimits("api-routes-extended")
+            routing { apiRoutes(includePublicContactRoutes = false) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val malformed =
+            client.post("/v1/alerts/lifecycles/123/ignore") {
+                withAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody("""{"reason":"investigating"}""")
+            }
+        val unknown =
+            client.post("/v1/alerts/lifecycles/${Uuid.random()}/unignore") {
+                withAuth(token)
+            }
+
+        assertEquals(HttpStatusCode.BadRequest, malformed.status)
+        assertEquals(HttpStatusCode.NotFound, unknown.status)
+    }
+
+    @Test
+    fun `alert lifecycle routes suppress and unsuppress by resource ID`() = testApplication {
+        val (userId, orgId) = seedUserMembership("alert-lifecycle-success@test.com")
+        val episodeId = seedAlertEpisode(orgId)
+
+        application {
+            installJwtAuth()
+            installApiRouteRateLimits("api-routes-extended")
+            routing { apiRoutes(includePublicContactRoutes = false) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = userId, orgId = orgId)
+        val ignored =
+            client.post("/v1/alerts/lifecycles/$episodeId/ignore") {
+                withAuth(token)
+                contentType(ContentType.Application.Json)
+                setBody("""{"reason":"investigating"}""")
+            }
+        val unignored =
+            client.post("/v1/alerts/lifecycles/$episodeId/unignore") {
+                withAuth(token)
+            }
+
+        assertEquals(HttpStatusCode.OK, ignored.status)
+        assertEquals(HttpStatusCode.OK, unignored.status)
+        assertTrue(ignored.bodyAsText().contains("investigating"))
     }
 
     @Test

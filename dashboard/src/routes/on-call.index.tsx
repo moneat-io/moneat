@@ -76,7 +76,7 @@ const avatarColors = [
 function colorIndexForId(id: string | null | undefined): number {
   if (!id) return 0
   let hash = 0
-  for (const char of id) hash = (hash + char.charCodeAt(0)) % avatarColors.length
+  for (const char of id) hash = (hash + (char.codePointAt(0) ?? 0)) % avatarColors.length
   return hash
 }
 

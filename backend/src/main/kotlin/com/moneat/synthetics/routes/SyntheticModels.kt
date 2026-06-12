@@ -18,7 +18,6 @@ package com.moneat.synthetics.routes
 
 import com.moneat.shared.models.Organizations
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
@@ -226,7 +225,7 @@ data class UpdateSyntheticTestRequest(
 @Serializable
 data class SyntheticTestResponse(
     val id: String,
-    @Transient val organizationId: Int = 0,
+    val organizationId: String,
     val name: String,
     val testType: String,
     val active: Boolean,
@@ -316,7 +315,7 @@ data class SyntheticVariableRequest(
 @Serializable
 data class SyntheticVariableResponse(
     val id: String,
-    @Transient val organizationId: Int = 0,
+    val organizationId: String,
     val name: String,
     val value: String,
     val isSecret: Boolean,

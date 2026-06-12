@@ -35,10 +35,6 @@ import {confirmAiAction, streamAiAssistant, type AssistantStreamEvent} from '@/l
 
 const EXPIRY_MS = 60 * 60 * 1000 // 1 hour
 
-function createSnapshotId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
-
 function loadInitialActiveChat() {
   return loadActiveChat()
 }
@@ -120,7 +116,7 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
 
   const buildSnapshot = useCallback(
     (): ChatSnapshot => ({
-      id: createSnapshotId(),
+      id: globalThis.crypto?.randomUUID?.() ?? `chat-${Date.now()}`,
       conversationId,
       messages: aiMessages,
       toolInvocations,

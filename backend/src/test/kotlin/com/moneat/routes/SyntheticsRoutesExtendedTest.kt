@@ -167,7 +167,7 @@ class SyntheticsRoutesExtendedTest {
 
     private fun sampleTestResponse(orgId: Int) = SyntheticTestResponse(
         id = TEST_UUID,
-        organizationId = orgId,
+        organizationId = organizationResourceId(orgId),
         name = MY_API_TEST,
         testType = "api",
         active = true,
@@ -196,7 +196,7 @@ class SyntheticsRoutesExtendedTest {
 
     private fun sampleVariableResponse(orgId: Int) = SyntheticVariableResponse(
         id = VARIABLE_UUID,
-        organizationId = orgId,
+        organizationId = organizationResourceId(orgId),
         name = "API_KEY",
         value = "test-key-123",
         isSecret = false,
@@ -222,6 +222,9 @@ class SyntheticsRoutesExtendedTest {
 
     private fun resourceUuid(value: String): Uuid = Uuid.parse(value)
 
+    private fun organizationResourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
+
     private fun stubSyntheticResultRows(body: String, totalCount: String = "1") {
         val rowsResponse = mockk<HttpResponse>()
         every { rowsResponse.status } returns HttpStatusCode.OK
@@ -243,9 +246,9 @@ class SyntheticsRoutesExtendedTest {
             """"timestamp":"2026-06-11 19:28:56.652","location_code":"aws-us-east-1","attempt":1,""" +
             """"status_code":200,"assertions_total":0,"assertions_failed":0,"resolved_ip":""}"""
 
-    private fun assertNoPublicOrganizationId(body: String) {
-        assertFalse(body.contains("organizationId"))
-        assertFalse(body.contains("organization_id"))
+    private fun assertNoInternalOrganizationId(body: String, orgId: Int) {
+        assertFalse(body.contains(""""organizationId":$orgId"""))
+        assertFalse(body.contains(""""organization_id":$orgId"""))
     }
 
     // ──── Auth ────
@@ -519,7 +522,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains(MY_API_TEST))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -536,7 +539,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains(""""resultId":"22222222-2222-4222-8222-222222222222""""))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -553,7 +556,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains(""""testId":"$TEST_UUID""""))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -572,7 +575,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains(MY_API_TEST))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -609,7 +612,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.Created, r.status)
             assertTrue(body.contains(MY_API_TEST))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -650,7 +653,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains("Updated Test"))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -865,7 +868,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains("API_KEY"))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -890,7 +893,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.Created, r.status)
             assertTrue(body.contains("API_KEY"))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test
@@ -918,7 +921,7 @@ class SyntheticsRoutesExtendedTest {
 
             assertEquals(HttpStatusCode.OK, r.status)
             assertTrue(body.contains("updated-key"))
-            assertNoPublicOrganizationId(body)
+            assertNoInternalOrganizationId(body, orgId)
         }
 
     @Test

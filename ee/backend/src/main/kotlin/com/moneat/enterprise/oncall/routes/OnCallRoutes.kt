@@ -53,6 +53,8 @@ import kotlin.time.Instant
 import kotlin.uuid.Uuid
 
 private const val WEEKLY_ROTATION_DAYS = 7L
+private const val SCHEDULE_NOT_FOUND_MESSAGE = "Schedule not found"
+private const val OVERRIDE_NOT_FOUND_MESSAGE = "Override not found"
 
 @Serializable
 data class ScheduleTimelineEntry(
@@ -191,7 +193,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@get
                 }
 
@@ -199,7 +201,7 @@ fun Route.onCallRoutes(
                 if (schedule != null) {
                     call.respond(schedule)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                 }
             }
 
@@ -218,7 +220,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -243,7 +245,7 @@ fun Route.onCallRoutes(
                     if (schedule != null) {
                         call.respond(schedule)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     }
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -265,7 +267,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -273,7 +275,7 @@ fun Route.onCallRoutes(
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                 }
             }
 
@@ -292,7 +294,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@get
                 }
 
@@ -319,7 +321,7 @@ fun Route.onCallRoutes(
                     return@get
                 }
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@get
                 }
 
@@ -338,7 +340,7 @@ fun Route.onCallRoutes(
 
                 val timeline = buildScheduleTimeline(scheduleId, rangeStart, rangeEnd)
                 if (timeline == null) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                 } else {
                     call.respond(timeline)
                 }
@@ -365,7 +367,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@post
                 }
 
@@ -421,7 +423,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isOverrideInOrganization(overrideId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(OVERRIDE_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -429,7 +431,7 @@ fun Route.onCallRoutes(
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(OVERRIDE_NOT_FOUND_MESSAGE))
                 }
             }
         }
@@ -454,7 +456,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -520,7 +522,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -731,7 +733,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.resolveScheduleId
                 ?.value
         }
     if (scheduleId == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
     }
     return scheduleId
 }
@@ -757,7 +759,7 @@ private suspend fun io.ktor.server.application.ApplicationCall.resolveOverrideId
                 ?.value
         }
     if (overrideId == null) {
-        respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
+        respond(HttpStatusCode.NotFound, ErrorResponse(OVERRIDE_NOT_FOUND_MESSAGE))
     }
     return overrideId
 }
