@@ -563,30 +563,34 @@ class DashboardAlertService(
         projectId: Long?,
         queryDsl: QueryDsl
     ): List<Map<String, JsonElement>> {
-        val customDataSource = resolveCustomDataSource(orgId, queryDsl.dataSource)
+        val effectiveQueryDsl = queryEngine.resolveTemplateDataSource(
+            dsl = queryDsl,
+            orgId = orgId,
+            dataSourceService = dataSourceService,
+            logMissing = false,
+        )
+        if (queryEngine.isTemplateDataSourceMarker(effectiveQueryDsl.dataSource)) {
+            logger.debug {
+                "Skipping dashboard alert query for unresolved template data source ${effectiveQueryDsl.dataSource}"
+            }
+            return emptyList()
+        }
+
+        val customDataSource = resolveCustomDataSource(orgId, effectiveQueryDsl.dataSource)
         if (customDataSource != null) {
-            return executeCustomDataSourceQuery(orgId, customDataSource, queryDsl)
+            return executeCustomDataSourceQuery(orgId, customDataSource, effectiveQueryDsl)
         }
 
         val builtInProjectId = projectId ?: return emptyList()
         val retentionDays =
             retentionPolicyService.getRetentionDaysForProject(builtInProjectId) ?: DEFAULT_RETENTION_DAYS
-        return queryEngine.executeQuery(queryDsl, builtInProjectId, null, retentionDays, orgId)
+        return queryEngine.executeQuery(effectiveQueryDsl, builtInProjectId, null, retentionDays, orgId)
     }
 
     private fun resolveCustomDataSource(
         orgId: Long,
         dataSource: String
     ): CustomDataSourceResponse? {
-        if (dataSource == "__prometheus") {
-            return checkNotNull(
-                dataSourceService.listDataSources(orgId)
-                    .firstOrNull { source ->
-                        source.enabled &&
-                            CustomDataSourceType.fromString(source.sourceType) == CustomDataSourceType.PROMETHEUS
-                    }
-            ) { "No enabled Prometheus data source configured" }
-        }
         if (!dataSource.startsWith("custom:")) return null
 
         val sourceId = dataSource.removePrefix("custom:")

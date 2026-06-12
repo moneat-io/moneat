@@ -419,7 +419,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
     } else {
         request.queryConfig
     }
-    val effectiveQuery = dependencies.queryEngine.resolvePrometheusDataSource(
+    val effectiveQuery = dependencies.queryEngine.resolveTemplateDataSource(
         dependencies.queryEngine.applyVariables(withTimeRange, request.variables),
         queryContext.orgId,
         dependencies.dataSourceService
@@ -613,7 +613,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         } else {
             query
         }
-        val effectiveQuery = dependencies.queryEngine.resolvePrometheusDataSource(
+        val effectiveQuery = dependencies.queryEngine.resolveTemplateDataSource(
             dependencies.queryEngine.applyVariables(withTimeRange, request.variables),
             queryContext.orgId,
             dependencies.dataSourceService

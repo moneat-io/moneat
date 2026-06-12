@@ -223,23 +223,29 @@ class DashboardQueryEngine {
         }
     }
 
+    fun isTemplateDataSourceMarker(dataSource: String): Boolean =
+        dataSource in TEMPLATE_DATA_SOURCE_MARKERS
+
     fun resolveTemplateDataSource(
         dsl: QueryDsl,
         orgId: Long,
         dataSourceService: CustomDataSourceService,
+        logMissing: Boolean = true,
     ): QueryDsl {
         val sourceType = TEMPLATE_DATA_SOURCE_MARKERS[dsl.dataSource] ?: return dsl
         val sources = dataSourceService.listDataSources(orgId)
         val matchingSource = sources.firstOrNull {
             it.enabled && it.sourceType.equals(sourceType, ignoreCase = true)
         }
-        if (matchingSource == null) {
+        if (matchingSource == null && logMissing) {
             logger.warn {
                 val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
                 val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
                 "No enabled $sourceType datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
                     "cannot resolve ${dsl.dataSource} for rawQuery=$shortQuery"
             }
+        }
+        if (matchingSource == null) {
             return dsl
         }
         val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
@@ -248,12 +254,6 @@ class DashboardQueryEngine {
         }
         return dsl.copy(dataSource = "custom:${matchingSource.id}")
     }
-
-    fun resolvePrometheusDataSource(
-        dsl: QueryDsl,
-        orgId: Long,
-        dataSourceService: CustomDataSourceService,
-    ): QueryDsl = resolveTemplateDataSource(dsl, orgId, dataSourceService)
 
     fun buildQuery(
         dsl: QueryDsl,

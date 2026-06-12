@@ -462,7 +462,7 @@ class PreviewDashboardWidgetQueryTool : McpTool {
         val withTimeRange = previewArgs.timeRange?.let {
             previewArgs.queryConfig.copy(timeRange = it)
         } ?: previewArgs.queryConfig
-        val effectiveQuery = dashboardWidgetQueryEngine.resolvePrometheusDataSource(
+        val effectiveQuery = dashboardWidgetQueryEngine.resolveTemplateDataSource(
             dashboardWidgetQueryEngine.applyVariables(withTimeRange, previewArgs.variables),
             orgId,
             dashboardWidgetDataSourceService
