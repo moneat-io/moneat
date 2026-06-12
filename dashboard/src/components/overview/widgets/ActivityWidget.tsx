@@ -32,8 +32,9 @@ const KIND: Record<ActivityKind, ActivityStyle> = {
   feedback: {icon: MessageSquare, cls: 'bg-muted text-muted-foreground'},
 }
 
-// Activity kinds come from the backend as a free-form string, so render any
-// value we don't recognize with a neutral style rather than crashing the panel.
+// `OverviewActivityKind` is a typed union, but the backend serializes `kind` as a
+// plain string and may emit values outside that union at runtime, so render any
+// unrecognized kind with a neutral style rather than crashing the panel.
 const FALLBACK_KIND: ActivityStyle = {icon: Activity, cls: 'bg-muted text-muted-foreground'}
 
 /** Recent activity feed across the workspace. */
