@@ -47,6 +47,26 @@ vi.mock('@tanstack/react-router', () => ({
     component: options.component,
     useParams: () => routeParams,
   }),
+  Link: ({
+    to,
+    params,
+    children,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    to: string
+    params?: Record<string, string>
+    children: React.ReactNode
+  }) => {
+    const href = Object.entries(params ?? {}).reduce(
+      (path, [key, value]) => path.replace(`$${key}`, value),
+      to
+    )
+    return (
+      <a href={href} {...props}>
+        {children}
+      </a>
+    )
+  },
   useNavigate: () => mockNavigate,
 }))
 

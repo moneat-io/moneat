@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, useNavigate} from '@tanstack/react-router'
+import {Link, createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {useMemo} from 'react'
 import {
@@ -319,22 +319,20 @@ function SyntheticTestDetail() {
                     return (
                       <tr
                         key={r.resultId}
-                        role="link"
-                        tabIndex={0}
-                        className="cursor-pointer transition-colors hover:bg-muted/40"
-                        onClick={() => navigate({to: '/synthetics/$testId/results/$resultId', params: {testId, resultId: r.resultId}})}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            navigate({to: '/synthetics/$testId/results/$resultId', params: {testId, resultId: r.resultId}})
-                          }
-                        }}
+                        className="transition-colors hover:bg-muted/40"
                       >
                         <td className="px-3.5 py-1.5">
-                          <span className={cn('inline-flex items-center gap-1.5 text-xs font-semibold', passed ? 'text-success-fg' : 'text-danger-fg')}>
+                          <Link
+                            to="/synthetics/$testId/results/$resultId"
+                            params={{testId, resultId: r.resultId}}
+                            className={cn(
+                              'inline-flex items-center gap-1.5 rounded-sm text-xs font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                              passed ? 'text-success-fg' : 'text-danger-fg'
+                            )}
+                          >
                             <span className={cn('h-2 w-2 rounded-full', passed ? 'bg-success-solid' : 'bg-danger-solid')} />
                             {passed ? 'Passed' : 'Failed'}
-                          </span>
+                          </Link>
                         </td>
                         <td className="px-3.5 py-1.5">
                           <span className="inline-flex items-center gap-1.5">

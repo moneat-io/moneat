@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, useNavigate} from '@tanstack/react-router'
+import {Link, createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {useMemo, useState} from 'react'
 import {
@@ -623,22 +623,17 @@ function SyntheticsOverview() {
                   return (
                     <tr
                       key={t.id}
-                      role="link"
-                      tabIndex={0}
-                      className="group cursor-pointer transition-colors hover:bg-muted/40"
-                      onClick={() => navigate({to: '/synthetics/$testId', params: {testId: t.id}})}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate({to: '/synthetics/$testId', params: {testId: t.id}})
-                        }
-                      }}
+                      className="group transition-colors hover:bg-muted/40"
                     >
                       <td className="px-2 py-1.5" onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={selected.has(t.id)} onCheckedChange={() => toggleSelect(t.id)} aria-label={t.name} />
                       </td>
                       <td className="px-2 py-1.5">
-                        <div className="flex items-center gap-2">
+                        <Link
+                          to="/synthetics/$testId"
+                          params={{testId: t.id}}
+                          className="flex items-center gap-2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
                           <span className="grid h-6 w-6 shrink-0 place-items-center rounded border bg-muted/50 text-muted-foreground">
                             <Icon className="h-3.5 w-3.5" />
                           </span>
@@ -651,7 +646,7 @@ function SyntheticsOverview() {
                               {[t.service, t.environment].filter(Boolean).join(' · ') || t.testType}
                             </span>
                           </span>
-                        </div>
+                        </Link>
                       </td>
                       <td className="px-2 py-1.5">
                         <Badge variant={TYPE_BADGE[t.testType] ?? 'neutral'} size="sm" className="uppercase">
