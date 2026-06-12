@@ -1113,6 +1113,50 @@ class SyntheticsServiceTest {
         }
 
     @Test
+    fun `recordProbeResult aggregates only current test locations`() =
+        runBlocking {
+            val test = service.createTest(
+                TEST_ORG_ID,
+                createRequest {
+                    locations = listOf("private-us-east")
+                }
+            )
+            val queries = mutableListOf<String>()
+            val server = MockHttpServer(
+                queryBasedClickHouseHandler(
+                    "argMax(status, timestamp)" to
+                        """{"location_code":"private-us-east","status":"passed"}""",
+                    captureQueries = queries
+                )
+            )
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            try {
+                val accepted = service.recordProbeResult(
+                    organizationId = TEST_ORG_ID,
+                    locationCode = "private-us-east",
+                    submission = ProbeResultSubmission(
+                        testId = test.id,
+                        status = "passed",
+                        durationMs = 100L
+                    )
+                )
+
+                assertTrue(accepted)
+                assertTrue(
+                    queries.any { it.contains("location_code IN ('private-us-east')") },
+                    "Expected aggregate query to filter to current locations: $queries"
+                )
+                val fetched = service.getTest(java.util.UUID.fromString(test.id), TEST_ORG_ID)
+                assertNotNull(fetched)
+                assertEquals("passed", fetched.lastStatus)
+            } finally {
+                ClickHouseClient.close()
+                server.close()
+            }
+        }
+
+    @Test
     fun `getProbeWork returns resolved work for assigned private location`() =
         runBlocking {
             service.createVariable(
@@ -1405,7 +1449,7 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             createRequest { intervalSeconds = 300 }
         )
-        service.updateTestStatus(java.util.UUID.fromString(created.id), "passed", "passed")
+        service.updateTestStatus(java.util.UUID.fromString(created.id), "active", "passed")
 
         val due = service.getTestsDueForRun()
 

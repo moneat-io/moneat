@@ -1168,12 +1168,15 @@ class SyntheticsService(
     }
 
     private suspend fun aggregateProbeStatus(test: SyntheticTestData, fallbackStatus: String): String {
+        if (test.locations.isEmpty()) return fallbackStatus
+        val locationList = test.locations.joinToString(",") { "'${escapeSql(it)}'" }
         val rows = executeChRows(
             """
             SELECT location_code, argMax(status, timestamp) AS status
             FROM synthetic_results
             WHERE test_id = '${test.id}'
               AND organization_id = toUInt64(${test.organizationId})
+              AND location_code IN ($locationList)
             GROUP BY location_code
             FORMAT JSONEachRow
             """.trimIndent()
