@@ -17,18 +17,24 @@
 package com.moneat.dashboards
 
 import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.SchemaUtils
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.uuid.Uuid
 
 class CustomDataSourceServiceTest {
     private lateinit var service: CustomDataSourceService
 
     companion object {
         private const val ORG_ID = 1L
+        private const val CREATED_BY_ID = 100L
         private var db: Database? = null
     }
 
@@ -44,6 +50,8 @@ class CustomDataSourceServiceTest {
         TransactionManager.defaultDatabase = db
         transaction {
             exec("DROP ALL OBJECTS")
+            SchemaUtils.create(Users, Organizations)
+            seedPrincipals()
             exec(CREATE_CUSTOM_DATA_SOURCES)
             exec(CREATE_DASHBOARDS)
             exec(CREATE_DASHBOARD_WIDGETS)
@@ -109,7 +117,7 @@ class CustomDataSourceServiceTest {
                     encrypted_credentials, extra_config, enabled, created_by, created_at, updated_at
                 ) VALUES (
                     $id, '${resourceId(id)}', $ORG_ID, '$name', NULL, '$sourceType', 'localhost', 9090, NULL,
-                    'encrypted', '{}', $enabled, 100, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    'encrypted', '{}', $enabled, $CREATED_BY_ID, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """.trimIndent()
             )
@@ -153,6 +161,22 @@ class CustomDataSourceServiceTest {
     private fun queryConfigs(dataSource: String): String =
         """[{"dataSource":"$dataSource","metrics":[],"groupBy":[],"filters":[],"limit":100,""" +
             """"timeRange":{"from":"now-1h","to":"now"}}]"""
+
+    private fun seedPrincipals() {
+        Users.insert {
+            it[id] = CREATED_BY_ID.toInt()
+            it[resource_id] = Uuid.parse(resourceId(CREATED_BY_ID))
+            it[email] = "user@example.com"
+            it[password_hash] = "hash"
+            it[name] = "Dashboard User"
+        }
+        Organizations.insert {
+            it[id] = ORG_ID.toInt()
+            it[resource_id] = Uuid.parse(resourceId(ORG_ID))
+            it[name] = "Dashboard Org"
+            it[slug] = "dashboard-org"
+        }
+    }
 
     private fun resourceId(id: Long): String =
         "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
