@@ -19,6 +19,12 @@ import {cn} from '@/lib/utils'
 import type {SyntheticLocationResponse} from '@/lib/api'
 import {PHASE_COLORS, PHASE_ORDER, locationMeta} from '@/components/synthetics/syntheticsHelpers'
 
+function uptimeStatusClass(status: string): string {
+  if (status === 'failed') return 'bg-danger-solid'
+  if (status === 'degraded') return 'bg-warning-solid'
+  return 'bg-success-solid/90'
+}
+
 /** Overlapping circular location markers, like the overview/detail pins. */
 export function LocationPins({
   codes,
@@ -62,10 +68,10 @@ export function UptimeStrip({
     <div className={cn('flex h-4 items-stretch gap-px', className)}>
       {statuses.map((s, i) => (
         <span
-          key={i}
+          key={`${s}-${i}`}
           className={cn(
             'min-w-[2px] flex-1 rounded-[1px]',
-            s === 'failed' ? 'bg-danger-solid' : s === 'degraded' ? 'bg-warning-solid' : 'bg-success-solid/90'
+            uptimeStatusClass(s)
           )}
         />
       ))}

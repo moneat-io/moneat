@@ -153,6 +153,38 @@ const inputClass =
   'h-8 w-full rounded-md border border-input bg-background px-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 const labelClass = 'mb-1.5 block text-xs font-semibold text-foreground'
 
+function rowKey(prefix: string, index: number, ...parts: Array<string | number | null | undefined>): string {
+  const body = parts.map((part) => String(part ?? '').trim()).filter(Boolean).join('-')
+  return `${prefix}-${body || 'blank'}-${index}`
+}
+
+function stepIndicatorClass(index: number, currentIndex: number, active: boolean): string {
+  if (index < currentIndex) {
+    return 'border-transparent bg-success-solid text-white'
+  }
+  if (active) {
+    return 'border-transparent bg-accent text-accent-foreground'
+  }
+  return 'border-input bg-muted text-muted-foreground'
+}
+
+function browserValuePlaceholder(action: string): string {
+  if (action === 'navigate') return 'url'
+  if (action === 'wait') return 'ms'
+  return 'value'
+}
+
+function previewStatusLabel(run: SyntheticRunResponse, passed: boolean): string | number {
+  if (run.statusCode > 0) return run.statusCode
+  return passed ? 'Passed' : 'Failed'
+}
+
+function previewStepIcon(status: string) {
+  if (status === 'passed') return <Check className="h-3 w-3 text-success-fg" />
+  if (status === 'failed') return <X className="h-3 w-3 text-danger-fg" />
+  return <ChevronRight className="h-3 w-3 text-muted-foreground" />
+}
+
 export function SyntheticBuilder({
   mode,
   initial,
@@ -245,11 +277,7 @@ export function SyntheticBuilder({
               <span
                 className={cn(
                   'grid h-4.5 w-4.5 place-items-center rounded-full border text-[10px] font-bold',
-                  i < stepIdx
-                    ? 'border-transparent bg-success-solid text-white'
-                    : step === s.value
-                      ? 'border-transparent bg-accent text-accent-foreground'
-                      : 'border-input bg-muted text-muted-foreground'
+                  stepIndicatorClass(i, stepIdx, step === s.value)
                 )}
               >
                 {i < stepIdx ? <Check className="h-2.5 w-2.5" /> : i + 1}
@@ -314,6 +342,15 @@ function RequestStep({
   isNet,
   variables,
 }: Readonly<{draft: Draft; patch: (p: Partial<Draft>) => void; isBrowser: boolean; isNet: boolean; variables: string[]}>) {
+  let editor: React.ReactNode
+  if (isBrowser) {
+    editor = <BrowserStepsEditor draft={draft} patch={patch} />
+  } else if (isNet) {
+    editor = <NetEditor draft={draft} patch={patch} />
+  } else {
+    editor = <ApiEditor draft={draft} patch={patch} variables={variables} />
+  }
+
   return (
     <div>
       {/* Type selector */}
@@ -336,13 +373,7 @@ function RequestStep({
         ))}
       </div>
 
-      {isBrowser ? (
-        <BrowserStepsEditor draft={draft} patch={patch} />
-      ) : isNet ? (
-        <NetEditor draft={draft} patch={patch} />
-      ) : (
-        <ApiEditor draft={draft} patch={patch} variables={variables} />
-      )}
+      {editor}
     </div>
   )
 }
@@ -353,7 +384,10 @@ function ApiEditor({
   variables,
 }: Readonly<{draft: Draft; patch: (p: Partial<Draft>) => void; variables: string[]}>) {
   const setHeader = (i: number, idx: 0 | 1, value: string) => {
-    const next = draft.headers.map((h, j) => (j === i ? (idx === 0 ? [value, h[1]] : [h[0], value]) : h)) as Array<[string, string]>
+    const next: Array<[string, string]> = draft.headers.map(([name, headerValue], j) => {
+      if (j !== i) return [name, headerValue]
+      return idx === 0 ? [value, headerValue] : [name, value]
+    })
     patch({headers: next})
   }
   return (
@@ -363,20 +397,20 @@ function ApiEditor({
         The HTTP request this test sends. Reference variables with <code className="font-mono text-accent-subtle-fg">{'{{NAME}}'}</code>.
       </p>
       <div className="mb-4">
-        <label className={labelClass}>Endpoint</label>
+        <label htmlFor="synthetic-url" className={labelClass}>Endpoint</label>
         <div className="flex gap-2">
-          <select value={draft.method} onChange={(e) => patch({method: e.target.value})} className={cn(inputClass, 'w-28 font-semibold text-accent-subtle-fg')}>
+          <select id="synthetic-method" value={draft.method} onChange={(e) => patch({method: e.target.value})} className={cn(inputClass, 'w-28 font-semibold text-accent-subtle-fg')}>
             {['GET', 'POST', 'PUT', 'DELETE', 'HEAD', 'PATCH'].map((m) => (
               <option key={m}>{m}</option>
             ))}
           </select>
-          <input value={draft.url} onChange={(e) => patch({url: e.target.value})} placeholder="https://api.example.com/health" className={cn(inputClass, 'flex-1 font-mono text-xs')} />
+          <input id="synthetic-url" value={draft.url} onChange={(e) => patch({url: e.target.value})} placeholder="https://api.example.com/health" className={cn(inputClass, 'flex-1 font-mono text-xs')} />
         </div>
       </div>
       <div className="mb-2">
-        <label className={labelClass}>Headers</label>
+        <div className={labelClass}>Headers</div>
         {draft.headers.map((h, i) => (
-          <div key={i} className="mb-1.5 grid grid-cols-[1fr_1fr_auto] gap-2">
+          <div key={rowKey('header', i, h[0], h[1])} className="mb-1.5 grid grid-cols-[1fr_1fr_auto] gap-2">
             <input value={h[0]} onChange={(e) => setHeader(i, 0, e.target.value)} placeholder="Header" className={cn(inputClass, 'font-mono text-xs')} />
             <input value={h[1]} onChange={(e) => setHeader(i, 1, e.target.value)} placeholder="Value" className={cn(inputClass, 'font-mono text-xs')} />
             <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => patch({headers: draft.headers.filter((_, j) => j !== i)})}>
@@ -399,8 +433,9 @@ function ApiEditor({
       )}
       {(draft.method === 'POST' || draft.method === 'PUT' || draft.method === 'PATCH') && (
         <div className="mt-4">
-          <label className={labelClass}>Request body</label>
+          <label htmlFor="synthetic-request-body" className={labelClass}>Request body</label>
           <textarea
+            id="synthetic-request-body"
             value={draft.body}
             onChange={(e) => patch({body: e.target.value})}
             rows={4}
@@ -419,8 +454,8 @@ function NetEditor({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial<Dr
       <p className="mb-4 text-xs text-muted-foreground">Low-level network check run from each selected location.</p>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={labelClass}>Hostname</label>
-          <input value={draft.url} onChange={(e) => patch({url: e.target.value})} placeholder="api.example.com" className={cn(inputClass, 'font-mono text-xs')} />
+          <label htmlFor="synthetic-hostname" className={labelClass}>Hostname</label>
+          <input id="synthetic-hostname" value={draft.url} onChange={(e) => patch({url: e.target.value})} placeholder="api.example.com" className={cn(inputClass, 'font-mono text-xs')} />
         </div>
       </div>
     </div>
@@ -442,12 +477,12 @@ function BrowserStepsEditor({draft, patch}: Readonly<{draft: Draft; patch: (p: P
       <h3 className="mb-1 text-base font-semibold">User journey</h3>
       <p className="mb-4 text-xs text-muted-foreground">Browser actions replayed from a real Chromium at each location. Add assertions between steps.</p>
       <div className="mb-3">
-        <label className={labelClass}>Starting URL</label>
-        <input value={draft.url} onChange={(e) => patch({url: e.target.value})} placeholder="https://example.com" className={cn(inputClass, 'font-mono text-xs')} />
+        <label htmlFor="synthetic-start-url" className={labelClass}>Starting URL</label>
+        <input id="synthetic-start-url" value={draft.url} onChange={(e) => patch({url: e.target.value})} placeholder="https://example.com" className={cn(inputClass, 'font-mono text-xs')} />
       </div>
       <div className="flex flex-col gap-1.5">
         {draft.browserSteps.map((s, i) => (
-          <div key={i} className="flex items-center gap-2 rounded-md border bg-card p-2">
+          <div key={rowKey('browser-step', i, s.action, s.selector, s.value)} className="flex items-center gap-2 rounded-md border bg-card p-2">
             <span className="w-4 text-right text-[10px] tabular-nums text-muted-foreground">{i + 1}</span>
             <select value={s.action} onChange={(e) => update(i, {action: e.target.value})} className={cn(inputClass, 'h-7 w-24')}>
               {BROWSER_ACTIONS.map((a) => (
@@ -457,7 +492,7 @@ function BrowserStepsEditor({draft, patch}: Readonly<{draft: Draft; patch: (p: P
             {s.action !== 'wait' && s.action !== 'navigate' && (
               <input value={s.selector ?? ''} onChange={(e) => update(i, {selector: e.target.value})} placeholder="selector" className={cn(inputClass, 'h-7 flex-1 font-mono text-xs')} />
             )}
-            <input value={s.value ?? ''} onChange={(e) => update(i, {value: e.target.value})} placeholder={s.action === 'navigate' ? 'url' : s.action === 'wait' ? 'ms' : 'value'} className={cn(inputClass, 'h-7 flex-1 font-mono text-xs')} />
+            <input value={s.value ?? ''} onChange={(e) => update(i, {value: e.target.value})} placeholder={browserValuePlaceholder(s.action)} className={cn(inputClass, 'h-7 flex-1 font-mono text-xs')} />
             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => patch({browserSteps: draft.browserSteps.filter((_, j) => j !== i)})}>
               <X className="h-3.5 w-3.5" />
             </Button>
@@ -500,7 +535,7 @@ function AssertionsStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Parti
       <p className="mb-4 text-xs text-muted-foreground">The test passes only when every assertion holds, at every location.</p>
       <div className="flex flex-col gap-2">
         {draft.assertions.map((a, i) => (
-          <div key={i} className="grid grid-cols-[1.2fr_1fr_1fr_auto] items-center gap-2 rounded-md border bg-card p-2">
+          <div key={rowKey('assertion', i, a.type, a.operator, a.target, a.value)} className="grid grid-cols-[1.2fr_1fr_1fr_auto] items-center gap-2 rounded-md border bg-card p-2">
             <select value={a.type} onChange={(e) => update(i, {type: e.target.value})} className={cn(inputClass, 'h-7')}>
               {ASSERTION_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
@@ -627,7 +662,7 @@ function AlertingStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial
       <div className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Recipients</div>
       <div className="flex flex-col gap-1.5">
         {draft.alertRecipients.map((r, i) => (
-          <div key={i} className="flex items-center gap-2.5 rounded-md border bg-card p-2.5">
+          <div key={rowKey('recipient', i, r.type, r.target)} className="flex items-center gap-2.5 rounded-md border bg-card p-2.5">
             <Bell className="h-3.5 w-3.5 text-muted-foreground" />
             <input value={r.target} onChange={(e) => patch({alertRecipients: draft.alertRecipients.map((x, j) => (j === i ? {...x, target: e.target.value} : x))})} placeholder="#channel or email" className={cn(inputClass, 'h-7 flex-1')} />
             <select value={r.type} onChange={(e) => patch({alertRecipients: draft.alertRecipients.map((x, j) => (j === i ? {...x, type: e.target.value} : x))})} className={cn(inputClass, 'h-7 w-28')}>
@@ -686,35 +721,35 @@ function ScheduleStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial
       <p className="mb-4 text-xs text-muted-foreground">How often the test runs, and how it&apos;s organized.</p>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={labelClass}>Run every</label>
-          <select value={draft.intervalSeconds} onChange={(e) => patch({intervalSeconds: Number(e.target.value)})} className={inputClass}>
+          <label htmlFor="synthetic-interval" className={labelClass}>Run every</label>
+          <select id="synthetic-interval" value={draft.intervalSeconds} onChange={(e) => patch({intervalSeconds: Number(e.target.value)})} className={inputClass}>
             {INTERVALS.map((iv) => (
               <option key={iv.value} value={iv.value}>{iv.label}</option>
             ))}
           </select>
         </div>
         <div>
-          <label className={labelClass}>Timeout</label>
-          <select value={draft.timeoutSeconds} onChange={(e) => patch({timeoutSeconds: Number(e.target.value)})} className={inputClass}>
+          <label htmlFor="synthetic-timeout" className={labelClass}>Timeout</label>
+          <select id="synthetic-timeout" value={draft.timeoutSeconds} onChange={(e) => patch({timeoutSeconds: Number(e.target.value)})} className={inputClass}>
             {[10, 30, 60, 120].map((t) => (
               <option key={t} value={t}>{t} seconds</option>
             ))}
           </select>
         </div>
         <div>
-          <label className={labelClass}>Service</label>
-          <input value={draft.service} onChange={(e) => patch({service: e.target.value})} placeholder="payments" className={inputClass} />
+          <label htmlFor="synthetic-service" className={labelClass}>Service</label>
+          <input id="synthetic-service" value={draft.service} onChange={(e) => patch({service: e.target.value})} placeholder="payments" className={inputClass} />
         </div>
         <div>
-          <label className={labelClass}>Environment</label>
-          <input value={draft.environment} onChange={(e) => patch({environment: e.target.value})} placeholder="production" className={inputClass} />
+          <label htmlFor="synthetic-environment" className={labelClass}>Environment</label>
+          <input id="synthetic-environment" value={draft.environment} onChange={(e) => patch({environment: e.target.value})} placeholder="production" className={inputClass} />
         </div>
       </div>
       <div className="mt-4">
-        <label className={labelClass}>Tags</label>
+        <label htmlFor="synthetic-tag-input" className={labelClass}>Tags</label>
         <div className="flex flex-wrap items-center gap-1.5">
           {draft.tags.map((t, i) => (
-            <span key={i} className="inline-flex items-center gap-1 rounded border bg-muted/50 px-2 py-0.5 text-[11px]">
+            <span key={rowKey('tag', i, t)} className="inline-flex items-center gap-1 rounded border bg-muted/50 px-2 py-0.5 text-[11px]">
               {t}
               <button type="button" onClick={() => patch({tags: draft.tags.filter((_, j) => j !== i)})}>
                 <X className="h-2.5 w-2.5" />
@@ -722,6 +757,7 @@ function ScheduleStep({draft, patch}: Readonly<{draft: Draft; patch: (p: Partial
             </span>
           ))}
           <input
+            id="synthetic-tag-input"
             placeholder="Add tag…"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.currentTarget.value.trim()) {
@@ -756,7 +792,7 @@ function PreviewPane({run, pending, isBrowser}: Readonly<{run: SyntheticRunRespo
       <div className="flex items-center gap-2.5 border-b px-3.5 py-2.5">
         <span className={cn('inline-flex items-center gap-1.5 font-bold', passed ? 'text-success-fg' : 'text-danger-fg')}>
           {passed ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-          {run.statusCode > 0 ? run.statusCode : passed ? 'Passed' : 'Failed'}
+          {previewStatusLabel(run, passed)}
         </span>
         <Badge variant={passed ? 'success' : 'danger'} size="sm">
           {passed ? 'Passed' : 'Failed'}
@@ -781,7 +817,7 @@ function PreviewPane({run, pending, isBrowser}: Readonly<{run: SyntheticRunRespo
             Assertions · {detail.assertions.filter((a) => a.passed).length}/{detail.assertions.length}
           </div>
           {detail.assertions.map((a, i) => (
-            <div key={i} className="flex items-center gap-2 border-b border-border/40 py-1.5 text-xs last:border-b-0">
+            <div key={rowKey('preview-assertion', i, a.label, a.expected, a.actual)} className="flex items-center gap-2 border-b border-border/40 py-1.5 text-xs last:border-b-0">
               {a.passed ? <CheckCircle2 className="h-3.5 w-3.5 text-success-fg" /> : <XCircle className="h-3.5 w-3.5 text-danger-fg" />}
               <span className="flex-1">{a.label}</span>
               <span className="font-mono text-[11px] text-muted-foreground">{a.actual}</span>
@@ -797,8 +833,8 @@ function PreviewPane({run, pending, isBrowser}: Readonly<{run: SyntheticRunRespo
             Steps
           </div>
           {detail.browser.steps.map((s, i) => (
-            <div key={i} className="flex items-center gap-2 py-1 text-xs">
-              {s.status === 'passed' ? <Check className="h-3 w-3 text-success-fg" /> : s.status === 'failed' ? <X className="h-3 w-3 text-danger-fg" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
+            <div key={rowKey('preview-step', i, s.action, s.label, s.status)} className="flex items-center gap-2 py-1 text-xs">
+              {previewStepIcon(s.status)}
               <span className="flex-1 capitalize">{s.label || s.action}</span>
               <span className="font-mono text-[11px] text-muted-foreground">{s.durationMs ? `${s.durationMs}ms` : ''}</span>
             </div>

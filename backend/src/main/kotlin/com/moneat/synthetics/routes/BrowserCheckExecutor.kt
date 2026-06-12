@@ -156,30 +156,8 @@ object BrowserCheckExecutor {
                 page.navigate(startUrl)
             }
 
-            var failed = false
-            var failedStep: Int? = null
-            for ((index, step) in steps.withIndex()) {
-                if (failed) {
-                    stepResults.add(skippedStep(step))
-                    continue
-                }
-                val outcome = runStep(page, step, test)
-                val screenshotKey = captureScreenshot(page, test.organizationId, runId, index + 1)
-                stepResults.add(
-                    BrowserStepResult(
-                        action = step.action,
-                        label = stepLabel(step),
-                        status = if (outcome.first) "passed" else "failed",
-                        durationMs = outcome.third,
-                        screenshotKey = screenshotKey,
-                        errorMessage = if (outcome.first) "" else outcome.second
-                    )
-                )
-                if (!outcome.first) {
-                    failed = true
-                    failedStep = index + 1
-                }
-            }
+            val failedStep = executeSteps(page, test, steps, runId, stepResults)
+            val failed = failedStep != null
 
             val totalMs = System.currentTimeMillis() - start
             val assertionResults = stepResults
@@ -219,6 +197,39 @@ object BrowserCheckExecutor {
         } finally {
             suspendRunCatching { context?.close() }
         }
+    }
+
+    private fun executeSteps(
+        page: Page,
+        test: SyntheticTestData,
+        steps: List<BrowserStep>,
+        runId: UUID,
+        stepResults: MutableList<BrowserStepResult>
+    ): Int? {
+        var failedStep: Int? = null
+        for ((index, step) in steps.withIndex()) {
+            if (failedStep != null) {
+                stepResults.add(skippedStep(step))
+                continue
+            }
+            val outcome = runStep(page, step, test)
+            val passed = outcome.first
+            val screenshotKey = captureScreenshot(page, test.organizationId, runId, index + 1)
+            stepResults.add(
+                BrowserStepResult(
+                    action = step.action,
+                    label = stepLabel(step),
+                    status = if (passed) "passed" else "failed",
+                    durationMs = outcome.third,
+                    screenshotKey = screenshotKey,
+                    errorMessage = if (passed) "" else outcome.second
+                )
+            )
+            if (!passed) {
+                failedStep = index + 1
+            }
+        }
+        return failedStep
     }
 
     /** Returns (passed, errorMessage, durationMs) for one step. */
@@ -266,7 +277,7 @@ object BrowserCheckExecutor {
             "url_contains" -> page.url().contains(step.value)
             "text_visible" -> page.isVisible("text=${step.value}")
             "selector_visible" -> page.isVisible(step.selector)
-            else -> if (step.selector.isNotBlank()) page.isVisible(step.selector) else true
+            else -> step.selector.isBlank() || page.isVisible(step.selector)
         }
 
     private fun captureScreenshot(

@@ -45,6 +45,20 @@ export const Route = createFileRoute('/synthetics/$testId/')({
   component: SyntheticTestDetail,
 })
 
+function testStatusVariant(isFailing: boolean, active: boolean): 'danger' | 'success' | 'neutral' {
+  if (isFailing) return 'danger'
+  return active ? 'success' : 'neutral'
+}
+
+function testStatusLabel(isFailing: boolean, active: boolean): string {
+  if (isFailing) return 'Failing'
+  return active ? 'Passing' : 'Paused'
+}
+
+function recipientKey(target: string, type: string, index: number): string {
+  return `${type}-${target || 'blank'}-${index}`
+}
+
 function StatBlock({
   label,
   value,
@@ -147,11 +161,11 @@ function SyntheticTestDetail() {
         <Button size="icon" variant="outline" className="mt-0.5 h-7 w-7" onClick={() => navigate({to: '/synthetics'})}>
           <ArrowLeft className="h-3.5 w-3.5" />
         </Button>
-        <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
-            {test.name}
-            <Badge variant={isFailing ? 'danger' : test.active ? 'success' : 'neutral'} size="sm">
-              {isFailing ? 'Failing' : test.active ? 'Passing' : 'Paused'}
+          <div className="min-w-0">
+            <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
+              {test.name}
+            <Badge variant={testStatusVariant(isFailing, test.active)} size="sm">
+              {testStatusLabel(isFailing, test.active)}
             </Badge>
           </h1>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
@@ -393,7 +407,7 @@ function SyntheticTestDetail() {
               {recipients.length > 0 && (
                 <div className="mt-3 flex flex-col gap-1.5">
                   {recipients.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 border-b border-border/40 py-1.5 text-sm last:border-b-0">
+                    <div key={recipientKey(r.target, r.type, i)} className="flex items-center gap-2 border-b border-border/40 py-1.5 text-sm last:border-b-0">
                       <Bell className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="flex-1 font-medium">{r.target}</span>
                       <Badge variant="neutral" size="sm" className="capitalize">

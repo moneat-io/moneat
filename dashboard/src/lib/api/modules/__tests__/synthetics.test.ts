@@ -84,8 +84,10 @@ describe('Synthetics API', () => {
   // ──── deleteSyntheticTest ────
 
   it('deletes a synthetic test', async () => {
+    expect.assertions(1)
     server.use(
-      http.delete(`${API_BASE}/v1/synthetics/tests/${SYNTHETIC_TEST_ID}`, () => {
+      http.delete(`${API_BASE}/v1/synthetics/tests/${SYNTHETIC_TEST_ID}`, ({request}) => {
+        expect(request.method).toBe('DELETE')
         return new HttpResponse(null, { status: 204 })
       })
     )
@@ -96,8 +98,10 @@ describe('Synthetics API', () => {
   // ──── runSyntheticTest ────
 
   it('runs a synthetic test', async () => {
+    expect.assertions(1)
     server.use(
-      http.post(`${API_BASE}/v1/synthetics/tests/${SYNTHETIC_TEST_ID}/run`, () => {
+      http.post(`${API_BASE}/v1/synthetics/tests/${SYNTHETIC_TEST_ID}/run`, ({request}) => {
+        expect(request.method).toBe('POST')
         return new HttpResponse(null, { status: 204 })
       })
     )
@@ -293,8 +297,10 @@ describe('Synthetics API', () => {
   })
 
   it('deletes a synthetic location', async () => {
+    expect.assertions(1)
     server.use(
-      http.delete(`${API_BASE}/v1/synthetics/locations/loc-2`, () => {
+      http.delete(`${API_BASE}/v1/synthetics/locations/loc-2`, ({request}) => {
+        expect(request.method).toBe('DELETE')
         return new HttpResponse(null, { status: 204 })
       })
     )
@@ -367,8 +373,10 @@ describe('Synthetics API', () => {
   // ──── deleteSyntheticVariable ────
 
   it('deletes a synthetic variable', async () => {
+    expect.assertions(1)
     server.use(
-      http.delete(`${API_BASE}/v1/synthetics/variables/${SYNTHETIC_VARIABLE_ID}`, () => {
+      http.delete(`${API_BASE}/v1/synthetics/variables/${SYNTHETIC_VARIABLE_ID}`, ({request}) => {
+        expect(request.method).toBe('DELETE')
         return new HttpResponse(null, { status: 204 })
       })
     )

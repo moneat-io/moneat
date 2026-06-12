@@ -57,6 +57,7 @@ private val json = Json { ignoreUnknownKeys = true }
 
 private const val DEFAULT_LIMIT = 100
 private const val MAX_LIMIT = 500
+private const val NO_ORGANIZATION_ERROR = "No organization"
 
 private fun getOrgIdsForUser(userId: Int, principal: JWTPrincipal?): List<Int> =
     principal
@@ -244,7 +245,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -260,7 +261,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -359,7 +360,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -393,7 +394,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -434,7 +435,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -466,7 +467,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -490,7 +491,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -512,7 +513,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -540,7 +541,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@put
                 }
@@ -576,7 +577,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@delete
                 }
@@ -610,7 +611,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -649,7 +650,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -667,7 +668,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -687,7 +688,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@put
                 }
@@ -723,7 +724,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@delete
                 }
@@ -759,7 +760,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@get
                 }
@@ -777,7 +778,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@post
                 }
@@ -797,7 +798,7 @@ fun Route.syntheticsRoutes() {
                 if (orgIds.isEmpty()) {
                     call.respond(
                         HttpStatusCode.Forbidden,
-                        mapOf("error" to "No organization")
+                        mapOf("error" to NO_ORGANIZATION_ERROR)
                     )
                     return@delete
                 }

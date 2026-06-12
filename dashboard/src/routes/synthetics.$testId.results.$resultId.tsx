@@ -43,6 +43,74 @@ export const Route = createFileRoute('/synthetics/$testId/results/$resultId')({
   component: SyntheticRunDrillIn,
 })
 
+function rowKey(prefix: string, index: number, ...parts: Array<string | number | null | undefined>): string {
+  const body = parts.map((part) => String(part ?? '').trim()).filter(Boolean).join('-')
+  return `${prefix}-${body || 'blank'}-${index}`
+}
+
+function runStatusLabel(passed: boolean, isBrowser: boolean, failedStep?: number | null): string {
+  if (passed) return 'Passed'
+  if (isBrowser && failedStep) return `Failed at step ${failedStep}`
+  return 'Failed'
+}
+
+function httpStatusIcon(statusCode: number) {
+  if (statusCode >= 400) return <XCircle className="h-4 w-4 text-danger-fg" />
+  return <CheckCircle2 className="h-4 w-4 text-success-fg" />
+}
+
+function stepFrameClass(status: string, active: boolean): string {
+  const border = status === 'failed' ? 'border-danger-border' : 'border-border'
+  return cn('relative h-14 overflow-hidden rounded border', border, active && 'ring-2 ring-danger-solid/40')
+}
+
+function stepBadgeClass(status: string): string {
+  if (status === 'passed') return 'bg-success-solid'
+  if (status === 'failed') return 'bg-danger-solid'
+  return 'bg-muted-foreground'
+}
+
+function stepStatusClass(status: string): string {
+  if (status === 'passed') return 'border-success-border bg-success-bg text-success-fg'
+  if (status === 'failed') return 'border-transparent bg-danger-solid text-white'
+  return 'bg-muted text-muted-foreground'
+}
+
+function stepIcon(status: string) {
+  if (status === 'passed') return <Check className="h-3 w-3" />
+  if (status === 'failed') return <X className="h-3 w-3" />
+  return <Check className="h-3 w-3" />
+}
+
+function compactStepIcon(status: string) {
+  if (status === 'passed') return <Check className="h-2 w-2" />
+  if (status === 'failed') return <X className="h-2 w-2" />
+  return null
+}
+
+function stepRowClass(status: string): string {
+  if (status === 'failed') return 'border-danger-border bg-danger-bg'
+  if (status === 'skipped') return 'opacity-50'
+  return 'bg-card'
+}
+
+function stepDurationLabel(status: string, durationMs?: number | null): string {
+  if (status === 'skipped') return 'skipped'
+  if (!durationMs) return ''
+  return `${(durationMs / 1000).toFixed(1)}s`
+}
+
+function consoleLevelClass(level: string): string {
+  if (level === 'error') return 'text-danger-fg'
+  if (level === 'warning' || level === 'warn') return 'text-warning-fg'
+  return 'text-muted-foreground'
+}
+
+function screenshotFallbackBackground(status: string): string {
+  if (status === 'failed') return 'linear-gradient(135deg,#3a1620,#1c0e12)'
+  return 'linear-gradient(135deg,#13283a,#0e1c2b)'
+}
+
 function SyntheticRunDrillIn() {
   const {testId, resultId} = Route.useParams()
   const navigate = useNavigate()
@@ -110,7 +178,7 @@ function SyntheticRunDrillIn() {
           </>
         )}
         <Badge variant={passed ? 'success' : 'danger'} size="sm" className="ml-1">
-          {passed ? 'Passed' : isBrowser && detail?.browser?.failedStep ? `Failed at step ${detail.browser.failedStep}` : 'Failed'}
+          {runStatusLabel(passed, isBrowser, detail?.browser?.failedStep)}
         </Badge>
       </div>
 
@@ -124,7 +192,7 @@ function SyntheticRunDrillIn() {
         </div>
       )}
 
-      {isBrowser ? <BrowserResult detail={detail} testId={testId} resultId={resultId} /> : <HttpResult detail={detail} run={run} />}
+      {isBrowser ? <BrowserResult detail={detail} /> : <HttpResult detail={detail} run={run} />}
     </div>
   )
 }
@@ -174,7 +242,7 @@ function HttpResult({detail, run}: Readonly<{detail?: SyntheticRunDetail | null;
             {tab === 'response' ? (
               <div>
                 <div className="mb-2 inline-flex items-center gap-1.5 font-mono text-sm font-bold text-foreground">
-                  {run.statusCode >= 400 ? <XCircle className="h-4 w-4 text-danger-fg" /> : <CheckCircle2 className="h-4 w-4 text-success-fg" />}
+                  {httpStatusIcon(run.statusCode)}
                   {run.statusCode || '—'}
                 </div>
                 <HeaderList headers={detail?.response?.headers} />
@@ -207,7 +275,7 @@ function HttpResult({detail, run}: Readonly<{detail?: SyntheticRunDetail | null;
           <div className="p-2.5">
             {assertions.length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">No assertions.</div>}
             {assertions.map((a, i) => (
-              <div key={i} className={cn('flex items-start gap-2 rounded-md p-2 text-xs', !a.passed && 'bg-danger-bg')}>
+              <div key={rowKey('assertion', i, a.label, a.expected, a.actual)} className={cn('flex items-start gap-2 rounded-md p-2 text-xs', !a.passed && 'bg-danger-bg')}>
                 {a.passed ? <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success-fg" /> : <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-danger-fg" />}
                 <span className="flex-1">
                   {a.label}
@@ -255,9 +323,7 @@ function CodeBlock({body}: Readonly<{body?: string}>) {
   return <pre className="max-h-72 overflow-auto rounded-md border bg-[#0c0f15] p-3 font-mono text-xs text-[#d7e1ec]">{body.slice(0, 6000)}</pre>
 }
 
-function BrowserResult({detail, testId, resultId}: Readonly<{detail?: SyntheticRunDetail | null; testId: string; resultId: string}>) {
-  void testId
-  void resultId
+function BrowserResult({detail}: Readonly<{detail?: SyntheticRunDetail | null}>) {
   const browser = detail?.browser
   const steps = browser?.steps ?? []
   const failingStepIdx = steps.findIndex((s) => s.status === 'failed')
@@ -272,11 +338,11 @@ function BrowserResult({detail, testId, resultId}: Readonly<{detail?: SyntheticR
         </div>
         <div className="flex gap-2.5 overflow-x-auto p-3.5">
           {steps.map((s, i) => (
-            <div key={i} className="w-24 shrink-0">
-              <div className={cn('relative h-14 overflow-hidden rounded border', s.status === 'failed' ? 'border-danger-border' : 'border-border', i === failingStepIdx && 'ring-2 ring-danger-solid/40')}>
+            <div key={rowKey('screenshot-step', i, s.action, s.label, s.status)} className="w-24 shrink-0">
+              <div className={stepFrameClass(s.status, i === failingStepIdx)}>
                 <Screenshot screenshotKey={s.screenshotKey} status={s.status} />
-                <span className={cn('absolute bottom-1 left-1 grid h-3.5 w-3.5 place-items-center rounded-full text-white', s.status === 'passed' ? 'bg-success-solid' : s.status === 'failed' ? 'bg-danger-solid' : 'bg-muted-foreground')}>
-                  {s.status === 'passed' ? <Check className="h-2 w-2" /> : s.status === 'failed' ? <X className="h-2 w-2" /> : null}
+                <span className={cn('absolute bottom-1 left-1 grid h-3.5 w-3.5 place-items-center rounded-full text-white', stepBadgeClass(s.status))}>
+                  {compactStepIcon(s.status)}
                 </span>
               </div>
               <div className={cn('mt-1 truncate text-center text-[10px]', s.status === 'failed' ? 'text-danger-fg' : 'text-muted-foreground')}>
@@ -298,22 +364,22 @@ function BrowserResult({detail, testId, resultId}: Readonly<{detail?: SyntheticR
           <div className="flex flex-col gap-1.5 p-3.5">
             {steps.map((s, i) => (
               <div
-                key={i}
+                key={rowKey('browser-step', i, s.action, s.label, s.status)}
                 className={cn(
                   'flex items-center gap-2.5 rounded-md border p-2',
-                  s.status === 'failed' ? 'border-danger-border bg-danger-bg' : s.status === 'skipped' ? 'opacity-50' : 'bg-card'
+                  stepRowClass(s.status)
                 )}
               >
                 <span className="w-4 text-right text-[10px] tabular-nums text-muted-foreground">{i + 1}</span>
-                <span className={cn('grid h-6 w-6 place-items-center rounded border', s.status === 'passed' ? 'border-success-border bg-success-bg text-success-fg' : s.status === 'failed' ? 'border-transparent bg-danger-solid text-white' : 'bg-muted text-muted-foreground')}>
-                  {s.status === 'passed' ? <Check className="h-3 w-3" /> : s.status === 'failed' ? <X className="h-3 w-3" /> : <Check className="h-3 w-3" />}
+                <span className={cn('grid h-6 w-6 place-items-center rounded border', stepStatusClass(s.status))}>
+                  {stepIcon(s.status)}
                 </span>
                 <span className="flex-1 text-sm">
                   <span className="font-semibold capitalize">{s.label || s.action}</span>
                   {s.errorMessage && <span className="mt-0.5 block font-mono text-[11px] text-danger-fg">{s.errorMessage}</span>}
                 </span>
                 <span className={cn('font-mono text-[11px]', s.status === 'failed' ? 'font-semibold text-danger-fg' : 'text-muted-foreground')}>
-                  {s.status === 'skipped' ? 'skipped' : s.durationMs ? `${(s.durationMs / 1000).toFixed(1)}s` : ''}
+                  {stepDurationLabel(s.status, s.durationMs)}
                 </span>
               </div>
             ))}
@@ -335,8 +401,8 @@ function BrowserResult({detail, testId, resultId}: Readonly<{detail?: SyntheticR
             <div className="p-2.5">
               {(browser?.console ?? []).length === 0 && <div className="px-1 py-2 text-xs text-muted-foreground">No console output.</div>}
               {(browser?.console ?? []).slice(0, 20).map((c, i) => (
-                <div key={i} className="flex gap-2 border-b border-border/40 py-1.5 font-mono text-[11px] last:border-b-0">
-                  <span className={cn('shrink-0 font-bold uppercase', c.level === 'error' ? 'text-danger-fg' : c.level === 'warning' || c.level === 'warn' ? 'text-warning-fg' : 'text-muted-foreground')}>{c.level}</span>
+                <div key={rowKey('console', i, c.level, c.text)} className="flex gap-2 border-b border-border/40 py-1.5 font-mono text-[11px] last:border-b-0">
+                  <span className={cn('shrink-0 font-bold uppercase', consoleLevelClass(c.level))}>{c.level}</span>
                   <span className="min-w-0 flex-1 break-all">{c.text}</span>
                 </div>
               ))}
@@ -351,7 +417,7 @@ function BrowserResult({detail, testId, resultId}: Readonly<{detail?: SyntheticR
               <table className="w-full text-xs">
                 <tbody>
                   {(browser?.network ?? []).slice(0, 20).map((n, i) => (
-                    <tr key={i} className="border-b border-border/40 last:border-b-0">
+                    <tr key={rowKey('network', i, n.method, n.url, n.status)} className="border-b border-border/40 last:border-b-0">
                       <td className="px-3 py-1.5">
                         <Badge variant={(n.status ?? 0) >= 400 ? 'danger' : 'success'} size="sm">
                           {n.status}
@@ -396,7 +462,7 @@ function Screenshot({screenshotKey, status}: Readonly<{screenshotKey?: string; s
     return (
       <div
         className="h-full w-full"
-        style={{background: status === 'failed' ? 'linear-gradient(135deg,#3a1620,#1c0e12)' : 'linear-gradient(135deg,#13283a,#0e1c2b)'}}
+        style={{background: screenshotFallbackBackground(status)}}
       />
     )
   }

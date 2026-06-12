@@ -45,7 +45,7 @@ export function locationMeta(
   const loc = locations?.find((l) => l.code === code)
   const name = loc?.name ?? code
   return {
-    abbr: name.replace(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'PR',
+    abbr: name.replaceAll(/[^a-zA-Z]/g, '').slice(0, 2).toUpperCase() || 'PR',
     color: '#6b7280',
     name,
     isPrivate: loc?.type === 'private',

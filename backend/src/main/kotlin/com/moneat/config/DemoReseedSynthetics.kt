@@ -172,17 +172,19 @@ private fun buildSyntheticResultsInsertSql(): String {
             arrayElement([$names], number % 6 + 1) AS tname,
             arrayElement([$types], number % 6 + 1) AS ttype,
             arrayElement([$locs], number % 4 + 1) AS loc,
-            if(tid = '$failingId' AND loc = 'aws-eu-central-1', 'failed', if(number % 41 = 7, 'failed', 'passed')) AS st
+            multiIf(tid = '$failingId' AND loc = 'aws-eu-central-1', 'failed',
+                number % 41 = 7, 'failed',
+                'passed') AS st
         SELECT
             generateUUIDv4(), toUInt64(-1), tid, tname, ttype, st, loc, loc,
-            toUInt64(if(ttype = 'browser', 1500 + number % 1500, 60 + number % 400)),
-            if(st = 'failed', 'Assertion failed: status code is 200', ''),
+            toUInt64(multiIf(ttype = 'browser', 1500 + number % 1500, 60 + number % 400)),
+            multiIf(st = 'failed', 'Assertion failed: status code is 200', ''),
             map('dns', toFloat64(5 + number % 15), 'tcp', toFloat64(8 + number % 20),
                 'tls', toFloat64(20 + number % 40), 'ttfb', toFloat64(40 + number % 120),
                 'download', toFloat64(10 + number % 30)),
             map('env', 'production'),
-            if(st = 'failed', toUInt16(503), toUInt16(200)),
-            toUInt16(4), if(st = 'failed', toUInt16(1), toUInt16(0)),
+            multiIf(st = 'failed', toUInt16(503), toUInt16(200)),
+            toUInt16(4), multiIf(st = 'failed', toUInt16(1), toUInt16(0)),
             concat('3.122.', toString(number % 250), '.', toString(number % 99)),
             now() - INTERVAL (number * 5 % 1440) MINUTE
         FROM numbers(288)

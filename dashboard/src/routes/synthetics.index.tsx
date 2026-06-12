@@ -89,6 +89,56 @@ const STATUS_TABS: ReadonlyArray<{value: 'all' | 'failing' | 'degraded' | 'pause
   {value: 'paused', label: 'Paused'},
 ]
 
+function rowKey(prefix: string, index: number, ...parts: Array<string | number | null | undefined>): string {
+  const body = parts.map((part) => String(part ?? '').trim()).filter(Boolean).join('-')
+  return `${prefix}-${body || 'blank'}-${index}`
+}
+
+function p95Label(testType: string, p95Ms: number): string {
+  if (p95Ms <= 0) return '—'
+  if (testType === 'browser') return `${(p95Ms / 1000).toFixed(1)}s`
+  return `${Math.round(p95Ms)}ms`
+}
+
+function availabilityBucketClass(value: number): string {
+  if (value < 0) return 'bg-muted'
+  if (value >= 100) return 'bg-success-solid/90'
+  if (value === 0) return 'bg-danger-solid'
+  return 'bg-warning-solid'
+}
+
+function attentionIconClass(status?: DerivedStatus): string {
+  if (status === 'failing') return 'border-danger-border bg-danger-bg text-danger-fg'
+  return 'border-warning-border bg-warning-bg text-warning-fg'
+}
+
+function attentionDescription(status: DerivedStatus | undefined, failingLocations: number | undefined): string {
+  if (status !== 'failing') return 'Recent failures · degraded'
+  const count = failingLocations || 1
+  return `Failing from ${count} location${count > 1 ? 's' : ''}`
+}
+
+function statusText(status?: DerivedStatus): string {
+  if (status === 'failing') return 'Failing'
+  if (status === 'degraded') return 'Degraded'
+  if (status === 'paused') return 'Paused'
+  return 'Passing'
+}
+
+function statusTextClass(status?: DerivedStatus): string {
+  if (status === 'failing') return 'text-danger-fg'
+  if (status === 'degraded') return 'text-warning-fg'
+  if (status === 'passing') return 'text-success-fg'
+  return 'text-muted-foreground'
+}
+
+function statusDotClass(status?: DerivedStatus): string {
+  if (status === 'failing') return 'bg-danger-solid'
+  if (status === 'degraded') return 'bg-warning-solid'
+  if (status === 'passing') return 'bg-success-solid'
+  return 'bg-muted-foreground/50'
+}
+
 function facetValuesFor(test: SyntheticTestResponse, key: string): string[] {
   switch (key) {
     case 'service':
@@ -174,9 +224,7 @@ function deriveTest(test: SyntheticTestResponse, results: SyntheticResultRespons
 
   const durations = results.filter((r) => r.durationMs > 0).map((r) => r.durationMs)
   const p95Ms = p95(durations)
-  const p95Label = test.testType === 'browser'
-    ? p95Ms > 0 ? `${(p95Ms / 1000).toFixed(1)}s` : '—'
-    : p95Ms > 0 ? `${Math.round(p95Ms)}ms` : '—'
+  const latencyLabel = p95Label(test.testType, p95Ms)
 
   // Most-recent failing locations: latest result per location that failed.
   const latestByLoc = new Map<string, string>()
@@ -186,7 +234,7 @@ function deriveTest(test: SyntheticTestResponse, results: SyntheticResultRespons
   }
   const failingLocations = [...latestByLoc.values()].filter((s) => s === 'failed').length
 
-  return {status, uptimeStrip: recent.slice(0, 24).reverse().map((r) => r.status), p95Label, failingLocations}
+  return {status, uptimeStrip: recent.slice(0, 24).reverse().map((r) => r.status), p95Label: latencyLabel, failingLocations}
 }
 
 function formatRelative(timestamp: number | null | undefined): string {
@@ -428,11 +476,11 @@ function SyntheticsOverview() {
               <div className="flex h-11 items-stretch gap-px">
                 {buckets.map((v, i) => (
                   <span
-                    key={i}
+                    key={rowKey('availability', i, v)}
                     title={v < 0 ? 'No data' : `${v.toFixed(0)}% passing`}
                     className={cn(
                       'min-w-[2px] flex-1 rounded-[1px]',
-                      v < 0 ? 'bg-muted' : v >= 100 ? 'bg-success-solid/90' : v === 0 ? 'bg-danger-solid' : 'bg-warning-solid'
+                      availabilityBucketClass(v)
                     )}
                   />
                 ))}
@@ -468,9 +516,7 @@ function SyntheticsOverview() {
                   <span
                     className={cn(
                       'grid h-7 w-7 shrink-0 place-items-center rounded-md border',
-                      d?.status === 'failing'
-                        ? 'border-danger-border bg-danger-bg text-danger-fg'
-                        : 'border-warning-border bg-warning-bg text-warning-fg'
+                      attentionIconClass(d?.status)
                     )}
                   >
                     {d?.status === 'failing' ? <XCircle className="h-3.5 w-3.5" /> : <Activity className="h-3.5 w-3.5" />}
@@ -478,9 +524,7 @@ function SyntheticsOverview() {
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{test.name}</span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {d?.status === 'failing'
-                        ? `Failing from ${d.failingLocations || 1} location${(d.failingLocations || 1) > 1 ? 's' : ''}`
-                        : 'Recent failures — degraded'}
+                      {attentionDescription(d?.status, d?.failingLocations)}
                     </span>
                   </span>
                   <Badge variant={d?.status === 'failing' ? 'danger' : 'warning'} size="sm">
@@ -611,28 +655,16 @@ function SyntheticsOverview() {
                         <span
                           className={cn(
                             'inline-flex items-center gap-1.5 text-xs font-semibold',
-                            d?.status === 'failing' && 'text-danger-fg',
-                            d?.status === 'degraded' && 'text-warning-fg',
-                            d?.status === 'passing' && 'text-success-fg',
-                            d?.status === 'paused' && 'text-muted-foreground'
+                            statusTextClass(d?.status)
                           )}
                         >
                           <span
                             className={cn(
                               'h-2 w-2 rounded-full',
-                              d?.status === 'failing' && 'bg-danger-solid',
-                              d?.status === 'degraded' && 'bg-warning-solid',
-                              d?.status === 'passing' && 'bg-success-solid',
-                              d?.status === 'paused' && 'bg-muted-foreground/50'
+                              statusDotClass(d?.status)
                             )}
                           />
-                          {d?.status === 'failing'
-                            ? 'Failing'
-                            : d?.status === 'degraded'
-                              ? 'Degraded'
-                              : d?.status === 'paused'
-                                ? 'Paused'
-                                : 'Passing'}
+                          {statusText(d?.status)}
                         </span>
                       </td>
                       <td className="px-2 py-1.5">
