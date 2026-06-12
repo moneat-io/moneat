@@ -44,6 +44,12 @@ export interface ExplorerShellProps {
  * (title + search bar + actions) over a collapsible facet rail beside the
  * content, with a thin toolbar carrying the rail toggle. The standard compact
  * layout for result surfaces.
+ *
+ * The root is bound to the app shell's fixed content region height
+ * (`--header-height` is set on that region in `__root.tsx`), and the rail and
+ * content each scroll on their own (`min-h-0` down the flex chain). So the
+ * header and facet rail stay put while a long result list scrolls — the page
+ * must not wrap this in its own `100vh`/`overflow` box.
  */
 export function ExplorerShell({
   searchBar,
@@ -60,7 +66,7 @@ export function ExplorerShell({
   const [railOpen, setRailOpen] = useState(defaultRailOpen)
 
   return (
-    <div className={cn('flex min-h-[calc(100dvh-var(--header-height,0px))] flex-col', className)}>
+    <div className={cn('flex h-[calc(100dvh-var(--header-height,0px))] flex-col', className)}>
       {/* Header bar */}
       <div className="@container/header flex min-h-[var(--app-header-h)] items-center gap-2 border-b px-2 py-1 sm:px-3">
         {(icon || title) && (
@@ -87,7 +93,7 @@ export function ExplorerShell({
           </div>
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {(rail || toolbar) && (
             <div className="flex h-[var(--app-subheader-h)] shrink-0 items-center gap-1.5 border-b bg-card/30 px-2">
               {rail && (
@@ -104,7 +110,7 @@ export function ExplorerShell({
               {toolbar}
             </div>
           )}
-          <div className="flex-1 overflow-y-auto">{children}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         </div>
       </div>
     </div>

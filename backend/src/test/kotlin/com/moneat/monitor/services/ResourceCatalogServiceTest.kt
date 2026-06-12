@@ -16,6 +16,7 @@
 
 package com.moneat.monitor.services
 
+import com.moneat.monitor.models.CatalogResourceTelemetry
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
 import io.mockk.coEvery
@@ -28,11 +29,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Instant
 
 class ResourceCatalogServiceTest {
     private val json = Json { ignoreUnknownKeys = true }
+    private val productionJson = Json { encodeDefaults = true }
 
     private companion object {
         const val ORGANIZATION_ID = 7
@@ -108,6 +111,17 @@ class ResourceCatalogServiceTest {
         assertTrue(resource.tags.contains("region:sfo3"))
         assertTrue(resource.tags.contains("team:payments"))
         assertTrue(resource.metadata.any { it.label == "Agent" && it.value == "7.63.0" })
+    }
+
+    @Test
+    fun `telemetry serialization omits absent optional metrics with production defaults`() {
+        val encoded = productionJson.encodeToString(CatalogResourceTelemetry(cpuPct = null, memPct = null))
+
+        assertTrue(encoded.contains(""""cpuPct":null"""))
+        assertTrue(encoded.contains(""""memPct":null"""))
+        assertFalse(encoded.contains("latencyMs"))
+        assertFalse(encoded.contains("errorRatePct"))
+        assertFalse(encoded.contains("throughput"))
     }
 
     @Test

@@ -45,6 +45,35 @@ const TABS: TabDef[] = [
 
 const X_LABELS = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'now']
 
+interface DeployLabelProps {
+  // Injected by recharts when used as a ReferenceLine label.
+  readonly viewBox?: Readonly<{x?: number; y?: number}>
+  readonly text: string
+  readonly alignRight: boolean
+}
+
+/**
+ * Caption for the deploy marker, drawn just inside the top of the plot so it
+ * never clips at the chart edges. Anchors to the right of the line when the
+ * marker sits in the right portion of the chart (e.g. a deploy near "now").
+ */
+export function DeployLabel({viewBox, text, alignRight}: DeployLabelProps) {
+  const x = viewBox?.x
+  const y = viewBox?.y
+  if (x == null || y == null || !text) return null
+  return (
+    <text
+      x={alignRight ? x - 5 : x + 5}
+      y={y + 11}
+      textAnchor={alignRight ? 'end' : 'start'}
+      fontSize={10}
+      fill="hsl(var(--primary))"
+    >
+      {text}
+    </text>
+  )
+}
+
 /** Tabbed telemetry chart (errors / latency / throughput / logs). */
 export function TelemetryWidget() {
   const telem = useTelemetry()
@@ -55,6 +84,7 @@ export function TelemetryWidget() {
   const series = telem[activeKey]
   const data = series.map((value, i) => ({i, value}))
   const deployIndex = Math.round((telem.deployAtPct / 100) * (series.length - 1))
+  const deployLabelRight = telem.deployAtPct > 60
 
   return (
     <OverviewPanel
@@ -99,7 +129,7 @@ export function TelemetryWidget() {
                 x={deployIndex}
                 stroke="hsl(var(--primary))"
                 strokeDasharray="4 3"
-                label={{value: telem.deployLabel, position: 'top', fontSize: 10, fill: 'hsl(var(--primary))'}}
+                label={<DeployLabel text={telem.deployLabel} alignRight={deployLabelRight} />}
               />
               <Bar dataKey="value" fill={tab.color} radius={[1, 1, 0, 0]} />
             </BarChart>
@@ -125,7 +155,7 @@ export function TelemetryWidget() {
                 x={deployIndex}
                 stroke="hsl(var(--primary))"
                 strokeDasharray="4 3"
-                label={{value: telem.deployLabel, position: 'top', fontSize: 10, fill: 'hsl(var(--primary))'}}
+                label={<DeployLabel text={telem.deployLabel} alignRight={deployLabelRight} />}
               />
               <Area
                 type="monotone"

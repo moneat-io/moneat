@@ -3,6 +3,7 @@ import {screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {renderWithQueryClient} from '@/test/utils'
+import {HealthBadge} from '../CatalogPrimitives'
 import {ResourceCatalog} from '../ResourceCatalog'
 import {ResourceDetailPanel} from '../ResourceDetailPanel'
 import {MOCK_RESOURCES, type Resource} from '../resourceCatalogData'
@@ -143,5 +144,17 @@ describe('ResourceCatalog', () => {
     await user.click(screen.getByRole('tab', {name: 'Changes'}))
     expect(screen.getByText('No recent changes')).toBeInTheDocument()
     expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('uses a status dot only for soft health badge variants', () => {
+    const {container, rerender} = renderWithQueryClient(<HealthBadge health="critical" />)
+
+    expect(screen.getByText('Critical')).toBeInTheDocument()
+    expect(container.querySelector('span.relative.inline-flex')).toBeNull()
+
+    rerender(<HealthBadge health="warn" />)
+
+    expect(screen.getByText('Warning')).toBeInTheDocument()
+    expect(container.querySelector('span.relative.inline-flex')).not.toBeNull()
   })
 })

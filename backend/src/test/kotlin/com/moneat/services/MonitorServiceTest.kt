@@ -229,6 +229,34 @@ class MonitorServiceTest {
         assertFalse(querySlot.captured.contains("tags['host_id']"))
     }
 
+    @Test
+    fun `getLatestMetricsForHosts derives Datadog agent metric percentages`() = runBlocking {
+        val hostRepository = mockk<HostRepository>()
+        val hostAlertRepository = mockk<HostAlertRepository>(relaxed = true)
+        val querySlot = slot<String>()
+        coEvery { hostRepository.executeClickHouseQuery(capture(querySlot)) } returns
+            """
+            {
+              "data": [
+                [7, 23.5, 16000000, 0, 0, 0, 0, 123, 456, 1.2, null, null, null, 0.25, 0.4]
+              ]
+            }
+            """.trimIndent()
+
+        val result = MonitorService(hostRepository, hostAlertRepository)
+            .getLatestMetricsForHosts(listOf(7), 42)
+            .getValue(7)
+
+        assertNotNull(result)
+        assertTrue(querySlot.captured.contains("system.cpu.user"))
+        assertTrue(querySlot.captured.contains("system.mem.pct_usable"))
+        assertEquals(23.5f, result.cpuPercent)
+        assertEquals(75.0f, result.memPercent)
+        assertEquals(40.0f, result.diskPercent)
+        assertEquals(123L, result.netRecvBytes)
+        assertEquals(456L, result.netSentBytes)
+    }
+
     // ──── deleteHost ────
 
     @Test

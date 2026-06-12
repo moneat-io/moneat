@@ -200,15 +200,17 @@ object DatadogMetricService {
 
     suspend fun insertMetricBatch(batch: QueuedMetricBatch) {
         if (batch.metrics.isEmpty()) return
-        insertMetricRows(rowsForBatch(batch))
-        insertMetricRollupsBestEffort(batch)
+        val normalizedBatch = normalizeMetricBatchBestEffort(batch)
+        insertMetricRows(rowsForBatch(normalizedBatch))
+        insertMetricRollupsBestEffort(normalizedBatch)
     }
 
     suspend fun insertMetricBatches(batches: List<QueuedMetricBatch>) {
         val nonEmptyBatches = batches.filter { it.metrics.isNotEmpty() }
         if (nonEmptyBatches.isEmpty()) return
-        insertMetricRows(nonEmptyBatches.flatMap(::rowsForBatch))
-        nonEmptyBatches.forEach { insertMetricRollupsBestEffort(it) }
+        val normalizedBatches = nonEmptyBatches.map { normalizeMetricBatchBestEffort(it) }
+        insertMetricRows(normalizedBatches.flatMap(::rowsForBatch))
+        normalizedBatches.forEach { insertMetricRollupsBestEffort(it) }
     }
 
     private suspend fun insertMetricRows(rows: List<MetricInsertRow>) {
@@ -340,6 +342,53 @@ object DatadogMetricService {
         }
     }
 
+    private fun QueuedMetricEntry.withNormalizedHost(): QueuedMetricEntry {
+        val hostName = hostLookupName()
+        val normalizedTags = if (tags["host_id"].isNullOrBlank()) tags - "host_id" else tags
+        return copy(host = host.ifBlank { hostName }, tags = normalizedTags)
+    }
+
+    private suspend fun normalizeMetricBatchBestEffort(batch: QueuedMetricBatch): QueuedMetricBatch {
+        try {
+            return batch.copy(metrics = enrichMetrics(batch))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn(e) {
+                "Failed to resolve Datadog host ids for org ${batch.organizationId} " +
+                    "(${batch.metrics.size} metrics); raw metrics will keep host names only"
+            }
+            return batch.copy(metrics = batch.metrics.map { it.withNormalizedHost() })
+        }
+    }
+
+    private suspend fun enrichMetrics(batch: QueuedMetricBatch): List<QueuedMetricEntry> {
+        val hostnamesNeedingIds = batch.metrics
+            .filter { it.tags["host_id"].isNullOrBlank() }
+            .map { it.hostLookupName() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        val hostIdsByName = if (hostnamesNeedingIds.isEmpty()) {
+            emptyMap()
+        } else {
+            DatadogHostService.resolveHostIds(batch.organizationId.toInt(), hostnamesNeedingIds)
+        }
+        return batch.metrics.map { metric ->
+            val hostName = metric.hostLookupName()
+            val existingHostId = metric.tags["host_id"]?.takeUnless { it.isBlank() }
+            val hostId = existingHostId ?: hostIdsByName[hostName]?.toString()
+            val tags = if (hostId != null) {
+                metric.tags + ("host_id" to hostId)
+            } else {
+                metric.tags - "host_id"
+            }
+            metric.copy(
+                host = metric.host.ifBlank { hostName },
+                tags = tags,
+            )
+        }
+    }
+
     private suspend fun insertMetricRollupsBestEffort(batch: QueuedMetricBatch) {
         try {
             InfraTelemetryRollups.insertMetricRollups(
@@ -365,4 +414,9 @@ object DatadogMetricService {
             }
         }
     }
+
+    private fun QueuedMetricEntry.hostLookupName(): String =
+        host.ifBlank {
+            tags["host"] ?: tags["host.name"] ?: tags["hostname"] ?: ""
+        }
 }

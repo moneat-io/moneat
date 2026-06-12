@@ -35,7 +35,10 @@ describe('ExplorerShell', () => {
     )
 
     const shell = container.firstElementChild as HTMLElement
-    expect(shell.className).toContain('min-h-[calc(100dvh-var(--header-height,0px))]')
+    // Bound to the fixed content region so the rail/header stay put and only the
+    // result list scrolls (see ExplorerShell layout contract).
+    expect(shell.className).toContain('h-[calc(100dvh-var(--header-height,0px))]')
+    expect(shell.className).not.toContain('min-h-[calc(100dvh-var(--header-height,0px))]')
     expect(screen.getByText('Issues')).toBeTruthy()
     expect(screen.getByTestId('icon')).toBeTruthy()
     expect(screen.getByRole('button', {name: 'Refresh'})).toBeTruthy()
