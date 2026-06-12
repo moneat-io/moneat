@@ -76,7 +76,7 @@ vi.mock('@/hooks/useEnterpriseFeatures', () => ({
 }))
 
 vi.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({user: {id: 5}}),
+  useAuth: () => ({user: {id: '123e4567-e89b-12d3-a456-000000000005'}}),
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -128,6 +128,25 @@ import {Route as OnCallOverviewRoute} from '../on-call.index'
 import {overviewTestData} from '../../components/overview/__tests__/overviewTestData'
 import type {OverviewResponse} from '@/lib/api/types'
 
+function resourceId(id: number): string {
+  return `123e4567-e89b-12d3-a456-${String(id).padStart(12, '0')}`
+}
+
+const USER_RESOURCE_ID = resourceId(5)
+const OTHER_USER_RESOURCE_ID = resourceId(7)
+const ORGANIZATION_RESOURCE_ID = resourceId(1)
+const ESCALATION_POLICY_RESOURCE_ID = resourceId(301)
+const ALERT_RESOURCE_ID = resourceId(101)
+const ACKNOWLEDGED_ALERT_RESOURCE_ID = resourceId(102)
+const RESOLVED_ALERT_RESOURCE_ID = resourceId(103)
+const DECLARED_INCIDENT_RESOURCE_ID = resourceId(501)
+const RESOLVED_DECLARED_INCIDENT_RESOURCE_ID = resourceId(502)
+const UNKNOWN_RESOURCE_ID = resourceId(404)
+const SCHEDULE_RESOURCE_ID = resourceId(701)
+const UPTIME_MONITOR_RESOURCE_ID = resourceId(801)
+const HOST_RESOURCE_ID = resourceId(901)
+const STATUS_PAGE_RESOURCE_ID = resourceId(1001)
+
 const project = {
   id: 'svc-api',
   name: 'API Service',
@@ -165,9 +184,9 @@ const issue = {
 }
 
 const alert = {
-  id: 101,
-  organizationId: 1,
-  escalationPolicyId: 1,
+  id: ALERT_RESOURCE_ID,
+  organizationId: ORGANIZATION_RESOURCE_ID,
+  escalationPolicyId: ESCALATION_POLICY_RESOURCE_ID,
   title: 'Payments outage',
   priority: 'P0',
   status: 'TRIGGERED',
@@ -177,16 +196,16 @@ const alert = {
 
 const alertTimeline = [
   {
-    id: 1,
-    incidentId: 101,
+    id: resourceId(111),
+    incidentId: ALERT_RESOURCE_ID,
     eventType: 'NOTIFICATION_SENT',
     actorUserName: 'Moneat',
     details: {toUserName: 'Ada Lovelace', channel: 'email'},
     createdAt: '2026-06-05T12:01:00.000Z',
   },
   {
-    id: 2,
-    incidentId: 101,
+    id: resourceId(112),
+    incidentId: ALERT_RESOURCE_ID,
     eventType: 'NOTE_ADDED',
     actorUserName: 'Ada Lovelace',
     details: {note: 'Investigating payment failures'},
@@ -195,25 +214,25 @@ const alertTimeline = [
 ]
 
 const declaredIncident = {
-  id: 501,
-  organizationId: 1,
+  id: DECLARED_INCIDENT_RESOURCE_ID,
+  organizationId: ORGANIZATION_RESOURCE_ID,
   title: 'Checkout incident',
   description: 'Customer checkout is unavailable',
   severity: 'SEV-1',
   status: 'OPEN',
-  declaredBy: 5,
+  declaredBy: USER_RESOURCE_ID,
   declaredByName: 'Ada Lovelace',
   declaredAt: '2026-06-05T12:03:00.000Z',
   alertCount: 1,
-  alerts: [{id: 101, title: 'Payments outage', status: 'TRIGGERED', priority: 'P0'}],
+  alerts: [{id: ALERT_RESOURCE_ID, title: 'Payments outage', status: 'TRIGGERED', priority: 'P0'}],
   createdAt: '2026-06-05T12:03:00.000Z',
   updatedAt: '2026-06-05T12:03:00.000Z',
 }
 
 const declaredIncidentTimeline = [
   {
-    id: 11,
-    incidentId: 501,
+    id: resourceId(121),
+    incidentId: DECLARED_INCIDENT_RESOURCE_ID,
     eventType: 'DECLARED',
     source: 'incident',
     actorName: 'Ada Lovelace',
@@ -221,8 +240,8 @@ const declaredIncidentTimeline = [
     createdAt: '2026-06-05T12:03:00.000Z',
   },
   {
-    id: 12,
-    incidentId: 501,
+    id: resourceId(122),
+    incidentId: DECLARED_INCIDENT_RESOURCE_ID,
     eventType: 'ALERT_LINKED',
     source: 'alert',
     alertTitle: 'Payments outage',
@@ -232,8 +251,8 @@ const declaredIncidentTimeline = [
 ]
 
 const schedule = {
-  id: 7,
-  organizationId: 1,
+  id: SCHEDULE_RESOURCE_ID,
+  organizationId: ORGANIZATION_RESOURCE_ID,
   name: 'API Rotation',
   rotationType: 'WEEKLY',
   handoffTime: '09:00',
@@ -242,12 +261,12 @@ const schedule = {
   updatedAt: '2026-06-01T00:00:00.000Z',
   participants: [],
   overrides: [],
-  currentOnCall: {userId: 5, userName: 'Ada Lovelace'},
+  currentOnCall: {userId: USER_RESOURCE_ID, userName: 'Ada Lovelace'},
 }
 
 const uptimeMonitor = {
-  id: 'uptime-1',
-  organizationId: 1,
+  id: UPTIME_MONITOR_RESOURCE_ID,
+  organizationId: ORGANIZATION_RESOURCE_ID,
   name: 'API availability',
   type: 'http',
   active: true,
@@ -265,7 +284,7 @@ const uptimeMonitor = {
 }
 
 const host = {
-  id: 77,
+  id: HOST_RESOURCE_ID,
   name: 'api-host-1',
   hostname: 'api-host-1',
   status: 'online',
@@ -286,8 +305,8 @@ const host = {
 }
 
 const statusPage = {
-  id: 'status-page-1',
-  organizationId: '1',
+  id: STATUS_PAGE_RESOURCE_ID,
+  organizationId: ORGANIZATION_RESOURCE_ID,
   name: 'Public Status',
   slug: 'public-status',
   description: 'Customer-facing status',
@@ -402,8 +421,8 @@ describe('overview alert and incident dashboard', () => {
     mockApi.getOnCallSchedules.mockResolvedValue([schedule])
     mockApi.getEscalationPolicies.mockResolvedValue([
       {
-        id: 1,
-        organizationId: 1,
+        id: ESCALATION_POLICY_RESOURCE_ID,
+        organizationId: ORGANIZATION_RESOURCE_ID,
         name: 'Primary escalation',
         repeatCount: 1,
         createdAt: '2026-06-01T00:00:00.000Z',
@@ -413,16 +432,31 @@ describe('overview alert and incident dashboard', () => {
     ])
     mockApi.getPriorities.mockResolvedValue([])
     mockApi.getBusinessHours.mockResolvedValue({
-      id: 1,
-      organizationId: 1,
+      id: resourceId(130),
+      organizationId: ORGANIZATION_RESOURCE_ID,
       enabled: true,
       timezone: 'America/New_York',
-      windows: [{id: 1, businessHoursId: 1, dayOfWeek: 5, startTime: '00:00', endTime: '23:59'}],
+      windows: [
+        {
+          id: resourceId(131),
+          businessHoursId: resourceId(130),
+          dayOfWeek: 5,
+          startTime: '00:00',
+          endTime: '23:59',
+        },
+      ],
     })
     mockApi.getStatusPages.mockResolvedValue([statusPage])
     mockApi.getStatusPage.mockResolvedValue({
       ...statusPage,
-      monitors: [{id: 1, monitorId: 'uptime-1', monitorName: 'API availability', sortOrder: 0}],
+      monitors: [
+        {
+          id: resourceId(132),
+          monitorId: UPTIME_MONITOR_RESOURCE_ID,
+          monitorName: 'API availability',
+          sortOrder: 0,
+        },
+      ],
       customDomains: [],
     })
     mockApi.getIncident.mockResolvedValue({...alert, description: 'Payments API is down'})
@@ -481,25 +515,35 @@ describe('overview alert and incident dashboard', () => {
   })
 
   it('renders non-page and empty on-call priority states', async () => {
-    mockApi.getOnCallSchedules.mockResolvedValue([{...schedule, id: 9, name: 'Backup Rotation', currentOnCall: null}])
+    mockApi.getOnCallSchedules.mockResolvedValue([
+      {...schedule, id: resourceId(702), name: 'Backup Rotation', currentOnCall: null},
+    ])
     mockApi.getIncidents.mockResolvedValue([
-      makeAlert({id: 201, title: 'Primary P0', priority: 'P0', status: 'TRIGGERED'}),
-      makeAlert({id: 202, title: 'Primary P1', priority: 'P1', status: 'ACKNOWLEDGED'}),
-      makeAlert({id: 203, title: 'Primary P2', priority: 'P2', status: 'TRIGGERED'}),
-      makeAlert({id: 204, title: 'Secondary P2', priority: 'P2', status: 'ACKNOWLEDGED'}),
-      makeAlert({id: 205, title: 'Tertiary P1', priority: 'P1', status: 'TRIGGERED'}),
-      makeAlert({id: 206, title: 'Overflow P0', priority: 'P0', status: 'TRIGGERED'}),
-      makeAlert({id: 207, title: 'Low P3', priority: 'P3', status: 'TRIGGERED'}),
-      makeAlert({id: 208, title: 'Low P4', priority: 'P4', status: 'ACKNOWLEDGED'}),
-      makeAlert({id: 209, title: 'Low P5', priority: 'P5', status: 'TRIGGERED'}),
-      makeAlert({id: 210, title: 'Low Overflow P5', priority: 'P5', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: resourceId(201), title: 'Primary P0', priority: 'P0', status: 'TRIGGERED'}),
+      makeAlert({id: resourceId(202), title: 'Primary P1', priority: 'P1', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: resourceId(203), title: 'Primary P2', priority: 'P2', status: 'TRIGGERED'}),
+      makeAlert({id: resourceId(204), title: 'Secondary P2', priority: 'P2', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: resourceId(205), title: 'Tertiary P1', priority: 'P1', status: 'TRIGGERED'}),
+      makeAlert({id: resourceId(206), title: 'Overflow P0', priority: 'P0', status: 'TRIGGERED'}),
+      makeAlert({id: resourceId(207), title: 'Low P3', priority: 'P3', status: 'TRIGGERED'}),
+      makeAlert({id: resourceId(208), title: 'Low P4', priority: 'P4', status: 'ACKNOWLEDGED'}),
+      makeAlert({id: resourceId(209), title: 'Low P5', priority: 'P5', status: 'TRIGGERED'}),
+      makeAlert({id: resourceId(210), title: 'Low Overflow P5', priority: 'P5', status: 'ACKNOWLEDGED'}),
     ])
     mockApi.getBusinessHours.mockResolvedValue({
-      id: 2,
-      organizationId: 1,
+      id: resourceId(133),
+      organizationId: ORGANIZATION_RESOURCE_ID,
       enabled: true,
       timezone: 'America/New_York',
-      windows: [{id: 2, businessHoursId: 2, dayOfWeek: 0, startTime: '00:00', endTime: '00:01'}],
+      windows: [
+        {
+          id: resourceId(134),
+          businessHoursId: resourceId(133),
+          dayOfWeek: 0,
+          startTime: '00:00',
+          endTime: '00:01',
+        },
+      ],
     })
 
     renderRoute(OnCallOverviewRoute)
@@ -516,8 +560,8 @@ describe('overview alert and incident dashboard', () => {
     mockApi.getOnCallSchedules.mockResolvedValue([])
     mockApi.getIncidents.mockResolvedValue([])
     mockApi.getBusinessHours.mockResolvedValue({
-      id: 3,
-      organizationId: 1,
+      id: resourceId(135),
+      organizationId: ORGANIZATION_RESOURCE_ID,
       enabled: false,
       timezone: 'America/New_York',
       windows: [],
@@ -541,14 +585,24 @@ describe('overview alert and incident dashboard', () => {
 
   it('renders plural on-call assignments and assignee fallbacks', async () => {
     mockApi.getOnCallSchedules.mockResolvedValue([
-      {...schedule, id: 11, name: 'Primary Rotation', currentOnCall: {userId: 5, userName: 'Ada Lovelace'}},
-      {...schedule, id: 12, name: 'Secondary Rotation', currentOnCall: {userId: 5, userName: 'Grace Hopper'}},
-      {...schedule, id: 13, name: 'Fallback Rotation', currentOnCall: {userName: 'Fallback User'}},
+      {
+        ...schedule,
+        id: resourceId(711),
+        name: 'Primary Rotation',
+        currentOnCall: {userId: USER_RESOURCE_ID, userName: 'Ada Lovelace'},
+      },
+      {
+        ...schedule,
+        id: resourceId(712),
+        name: 'Secondary Rotation',
+        currentOnCall: {userId: USER_RESOURCE_ID, userName: 'Grace Hopper'},
+      },
+      {...schedule, id: resourceId(713), name: 'Fallback Rotation', currentOnCall: {userName: 'Fallback User'}},
     ])
     mockApi.getIncidents.mockResolvedValue([])
     mockApi.getBusinessHours.mockResolvedValue({
-      id: 4,
-      organizationId: 1,
+      id: resourceId(136),
+      organizationId: ORGANIZATION_RESOURCE_ID,
       enabled: false,
       timezone: 'America/New_York',
       windows: [],
@@ -587,7 +641,7 @@ describe('overview alert and incident dashboard', () => {
     mockRoutePathname.current = '/on-call/alerts'
     mockApi.getIncidents.mockResolvedValue([
       makeAlert({
-        id: 401,
+        id: resourceId(401),
         title: 'Escalating payment alert',
         description: 'Payment latency is rising',
         priority: 'P2',
@@ -597,7 +651,7 @@ describe('overview alert and incident dashboard', () => {
         viewedByCurrentUser: true,
       }),
       makeAlert({
-        id: 402,
+        id: resourceId(402),
         title: 'Resolved analytics alert',
         priority: 'P5',
         status: 'RESOLVED',
@@ -623,7 +677,7 @@ describe('overview alert and incident dashboard', () => {
   })
 
   it('renders alert detail with timeline and incident declaration controls', async () => {
-    mockRouteParams.current = {alertId: '101'}
+    mockRouteParams.current = {alertId: ALERT_RESOURCE_ID}
 
     renderRoute(AlertDetailRoute)
 
@@ -635,21 +689,21 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('to Ada Lovelace via email')).toBeInTheDocument()
     expect(await screen.findByText('"Investigating payment failures"')).toBeInTheDocument()
     expect(await screen.findByText('Declare Incident')).toBeInTheDocument()
-    expect(mockApi.viewIncident).toHaveBeenCalledWith(101)
+    expect(mockApi.viewIncident).toHaveBeenCalledWith(ALERT_RESOURCE_ID)
 
     fireEvent.click(await screen.findByText('Acknowledge'))
-    await waitFor(() => expect(mockApi.acknowledgeIncident).toHaveBeenCalledWith(101))
+    await waitFor(() => expect(mockApi.acknowledgeIncident).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
     fireEvent.click(await screen.findByText('Resolve'))
-    await waitFor(() => expect(mockApi.resolveIncident).toHaveBeenCalledWith(101))
+    await waitFor(() => expect(mockApi.resolveIncident).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
     fireEvent.click(await screen.findByText("I'm not available"))
-    await waitFor(() => expect(mockApi.markUnavailable).toHaveBeenCalledWith(101))
+    await waitFor(() => expect(mockApi.markUnavailable).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
     fireEvent.change(screen.getByPlaceholderText('Enter your note...'), {target: {value: 'Adding context'}})
     clickLastText('Add note')
-    await waitFor(() => expect(mockApi.addIncidentNote).toHaveBeenCalledWith(101, 'Adding context'))
+    await waitFor(() => expect(mockApi.addIncidentNote).toHaveBeenCalledWith(ALERT_RESOURCE_ID, 'Adding context'))
   })
 
-  it('renders invalid alert identifiers without fetching alert data', async () => {
-    mockRouteParams.current = {alertId: 'not-a-number'}
+  it('rejects numeric alert identifiers without fetching alert data', async () => {
+    mockRouteParams.current = {alertId: '101'}
 
     renderRoute(AlertDetailRoute)
 
@@ -663,7 +717,7 @@ describe('overview alert and incident dashboard', () => {
       declaredIncident,
       {
         ...declaredIncident,
-        id: 502,
+        id: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
         title: 'Resolved deploy incident',
         severity: 'SEV-3',
         status: 'RESOLVED',
@@ -687,7 +741,7 @@ describe('overview alert and incident dashboard', () => {
   })
 
   it('renders declared incident detail with linked alerts and timeline', async () => {
-    mockRouteParams.current = {incidentId: '501'}
+    mockRouteParams.current = {incidentId: DECLARED_INCIDENT_RESOURCE_ID}
 
     renderRoute(IncidentDetailRoute)
 
@@ -696,21 +750,23 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('Severity')).toBeInTheDocument()
     expect((await screen.findAllByText('SEV-1')).length).toBeGreaterThan(0)
     expect(await screen.findByText('Linked alerts')).toBeInTheDocument()
-    expect(await screen.findByText('Alert #101 · TRIGGERED')).toBeInTheDocument()
+    expect(await screen.findByText(`Alert #${ALERT_RESOURCE_ID} · TRIGGERED`)).toBeInTheDocument()
     expect(await screen.findByText('from Payments outage')).toBeInTheDocument()
     expect(await screen.findByText('Resolve incident')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Enter your note...'), {target: {value: 'Incident update'}})
     clickLastText('Add note')
-    await waitFor(() => expect(mockApi.addOnCallIncidentNote).toHaveBeenCalledWith(501, 'Incident update'))
+    await waitFor(() => {
+      expect(mockApi.addOnCallIncidentNote).toHaveBeenCalledWith(DECLARED_INCIDENT_RESOURCE_ID, 'Incident update')
+    })
   })
 
   it('renders nested route outlets for alert and incident list shells', async () => {
-    mockRoutePathname.current = '/on-call/alerts/101'
+    mockRoutePathname.current = `/on-call/alerts/${ALERT_RESOURCE_ID}`
     renderRoute(AlertsRoute)
     expect(await screen.findByTestId('outlet')).toBeInTheDocument()
 
-    mockRoutePathname.current = '/on-call/incidents/501'
+    mockRoutePathname.current = `/on-call/incidents/${DECLARED_INCIDENT_RESOURCE_ID}`
     renderRoute(IncidentsRoute)
     expect((await screen.findAllByTestId('outlet')).length).toBeGreaterThan(1)
   })
@@ -732,40 +788,40 @@ describe('overview alert and incident dashboard', () => {
   })
 
   it('renders alert detail not-found, acknowledged, and resolved states', async () => {
-    mockRouteParams.current = {alertId: '404'}
+    mockRouteParams.current = {alertId: UNKNOWN_RESOURCE_ID}
     mockApi.getIncident.mockResolvedValueOnce(null)
     renderRoute(AlertDetailRoute)
     expect(await screen.findByText('Alert not found')).toBeInTheDocument()
 
-    mockRouteParams.current = {alertId: '102'}
+    mockRouteParams.current = {alertId: ACKNOWLEDGED_ALERT_RESOURCE_ID}
     mockApi.getIncident.mockResolvedValueOnce({
       ...alert,
-      id: 102,
+      id: ACKNOWLEDGED_ALERT_RESOURCE_ID,
       status: 'ACKNOWLEDGED',
       priority: 'P2',
-      acknowledgedBy: 5,
+      acknowledgedBy: USER_RESOURCE_ID,
       acknowledgedByName: 'Ada Lovelace',
       acknowledgedAt: '2026-06-05T12:05:00.000Z',
       description: '',
     })
     mockApi.getIncidentTimeline.mockResolvedValueOnce([
       {
-        id: 21,
-        incidentId: 102,
+        id: resourceId(141),
+        incidentId: ACKNOWLEDGED_ALERT_RESOURCE_ID,
         eventType: 'ESCALATED',
         details: {stepNumber: 1},
         createdAt: '2026-06-05T12:06:00.000Z',
       },
       {
-        id: 22,
-        incidentId: 102,
+        id: resourceId(142),
+        incidentId: ACKNOWLEDGED_ALERT_RESOURCE_ID,
         eventType: 'REASSIGNED',
         details: {reason: 'unavailable'},
         createdAt: '2026-06-05T12:07:00.000Z',
       },
       {
-        id: 23,
-        incidentId: 102,
+        id: resourceId(143),
+        incidentId: ACKNOWLEDGED_ALERT_RESOURCE_ID,
         eventType: 'UNKNOWN_EVENT',
         details: {},
         createdAt: '2026-06-05T12:08:00.000Z',
@@ -778,13 +834,13 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('user marked as unavailable')).toBeInTheDocument()
     expect(await screen.findByText('UNKNOWN EVENT')).toBeInTheDocument()
 
-    mockRouteParams.current = {alertId: '103'}
+    mockRouteParams.current = {alertId: RESOLVED_ALERT_RESOURCE_ID}
     mockApi.getIncident.mockResolvedValueOnce({
       ...alert,
-      id: 103,
+      id: RESOLVED_ALERT_RESOURCE_ID,
       status: 'RESOLVED',
       priority: 'P4',
-      resolvedBy: 7,
+      resolvedBy: OTHER_USER_RESOURCE_ID,
       resolvedByName: 'Grace Hopper',
       resolvedAt: '2026-06-05T12:09:00.000Z',
     })
@@ -795,28 +851,33 @@ describe('overview alert and incident dashboard', () => {
   })
 
   it('renders declared incident not-found and resolved detail states', async () => {
-    mockRouteParams.current = {incidentId: '404'}
+    mockRouteParams.current = {incidentId: '501'}
+    renderRoute(IncidentDetailRoute)
+    expect(await screen.findByText('Invalid incident ID')).toBeInTheDocument()
+    expect(mockApi.getOnCallIncident).not.toHaveBeenCalled()
+
+    mockRouteParams.current = {incidentId: UNKNOWN_RESOURCE_ID}
     mockApi.getOnCallIncident.mockResolvedValueOnce(null)
     renderRoute(IncidentDetailRoute)
     expect(await screen.findByText('Incident not found')).toBeInTheDocument()
 
-    mockRouteParams.current = {incidentId: '502'}
+    mockRouteParams.current = {incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID}
     mockApi.getOnCallIncident.mockResolvedValueOnce({
       ...declaredIncident,
-      id: 502,
+      id: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
       title: 'Resolved deploy incident',
       description: '',
       severity: 'SEV3',
       status: 'RESOLVED',
       alerts: [],
-      resolvedBy: 7,
+      resolvedBy: OTHER_USER_RESOURCE_ID,
       resolvedByName: 'Grace Hopper',
       resolvedAt: '2026-06-05T13:00:00.000Z',
     })
     mockApi.getOnCallIncidentTimeline.mockResolvedValueOnce([
       {
-        id: 31,
-        incidentId: 502,
+        id: resourceId(151),
+        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
         eventType: 'NOTIFICATION_SENT',
         actorUserName: 'Moneat',
         actorName: 'Moneat',
@@ -824,24 +885,24 @@ describe('overview alert and incident dashboard', () => {
         createdAt: '2026-06-05T12:10:00.000Z',
       },
       {
-        id: 32,
-        incidentId: 502,
+        id: resourceId(152),
+        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
         eventType: 'REASSIGNED',
         actorName: 'Ada Lovelace',
         details: {toUserName: 'Grace Hopper'},
         createdAt: '2026-06-05T12:11:00.000Z',
       },
       {
-        id: 33,
-        incidentId: 502,
+        id: resourceId(153),
+        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
         eventType: 'NOTE_ADDED',
         actorName: 'Grace Hopper',
         details: {note: 'Deployment rolled back'},
         createdAt: '2026-06-05T12:12:00.000Z',
       },
       {
-        id: 34,
-        incidentId: 502,
+        id: resourceId(154),
+        incidentId: RESOLVED_DECLARED_INCIDENT_RESOURCE_ID,
         eventType: 'CUSTOM_EVENT',
         source: 'alert',
         alertTitle: 'Deploy alert',

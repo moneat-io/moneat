@@ -30,7 +30,7 @@ class WorkflowExportTest {
 
     private fun workflow(name: String): WorkflowResponse =
         WorkflowResponse(
-            id = 1,
+            id = "00000000-0000-0000-0000-000000000001",
             name = name,
             triggerName = "alert.triggered",
             enabled = true,

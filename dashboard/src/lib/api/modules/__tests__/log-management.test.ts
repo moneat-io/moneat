@@ -20,6 +20,11 @@ import {server} from '@/test/mocks/server'
 import {api, type LogPipelineStep, type LogSavedViewState} from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const PIPELINE_ID = '11111111-1111-4111-8111-111111111111'
+const SAVED_VIEW_ID = '22222222-2222-4222-8222-222222222222'
+const METRIC_RULE_ID = '33333333-3333-4333-8333-333333333333'
+const DASHBOARD_ALERT_ID = '44444444-4444-4444-8444-444444444444'
+const LOG_MONITOR_ID = '55555555-5555-4555-8555-555555555555'
 
 const savedViewState: LogSavedViewState = {
   query: 'service:api',
@@ -83,7 +88,7 @@ describe('Log Management API', () => {
 
   it('creates, updates, previews, and deletes pipelines', async () => {
     const pipeline = {
-      id: 7,
+      id: PIPELINE_ID,
       name: 'Redact tokens',
       description: '',
       steps: [redactStep],
@@ -100,7 +105,7 @@ describe('Log Management API', () => {
         expect(body).toEqual({name: 'Redact tokens', steps: [redactStep], is_active: true})
         return HttpResponse.json(pipeline)
       }),
-      http.put(`${API_BASE}/v1/logs/pipelines/7`, async ({request}) => {
+      http.put(`${API_BASE}/v1/logs/pipelines/${PIPELINE_ID}`, async ({request}) => {
         const body = await request.json()
         expect(body).toEqual({is_active: false})
         return HttpResponse.json({...pipeline, is_active: false})
@@ -121,13 +126,13 @@ describe('Log Management API', () => {
           ],
         })
       }),
-      http.delete(`${API_BASE}/v1/logs/pipelines/7`, () => new HttpResponse(null, {status: 204}))
+      http.delete(`${API_BASE}/v1/logs/pipelines/${PIPELINE_ID}`, () => new HttpResponse(null, {status: 204}))
     )
 
     expect(await api.getLogPipelines()).toEqual({pipelines: [pipeline]})
     expect(await api.createLogPipeline({name: 'Redact tokens', steps: [redactStep], is_active: true}))
       .toEqual(pipeline)
-    expect(await api.updateLogPipeline(7, {is_active: false})).toEqual({...pipeline, is_active: false})
+    expect(await api.updateLogPipeline(PIPELINE_ID, {is_active: false})).toEqual({...pipeline, is_active: false})
     expect(await api.previewLogPipeline([redactStep], [{message: 'token=abc', level: 'error'}]))
       .toEqual({
         results: [
@@ -138,12 +143,12 @@ describe('Log Management API', () => {
           },
         ],
       })
-    await api.deleteLogPipeline(7)
+    await api.deleteLogPipeline(PIPELINE_ID)
   })
 
   it('creates, updates, and deletes saved views', async () => {
     const view = {
-      id: 3,
+      id: SAVED_VIEW_ID,
       name: 'Errors',
       state: savedViewState,
       is_shared: true,
@@ -158,24 +163,25 @@ describe('Log Management API', () => {
         expect(body).toEqual({name: 'Errors', state: savedViewState, is_shared: true})
         return HttpResponse.json(view)
       }),
-      http.put(`${API_BASE}/v1/logs/saved-views/3`, async ({request}) => {
+      http.put(`${API_BASE}/v1/logs/saved-views/${SAVED_VIEW_ID}`, async ({request}) => {
         const body = await request.json()
         expect(body).toEqual({name: 'Errors updated'})
         return HttpResponse.json({...view, name: 'Errors updated'})
       }),
-      http.delete(`${API_BASE}/v1/logs/saved-views/3`, () => new HttpResponse(null, {status: 204}))
+      http.delete(`${API_BASE}/v1/logs/saved-views/${SAVED_VIEW_ID}`, () => new HttpResponse(null, {status: 204}))
     )
 
     expect(await api.getLogSavedViews()).toEqual({views: [view]})
     expect(await api.createLogSavedView({name: 'Errors', state: savedViewState, is_shared: true}))
       .toEqual(view)
-    expect(await api.updateLogSavedView(3, {name: 'Errors updated'})).toEqual({...view, name: 'Errors updated'})
-    await api.deleteLogSavedView(3)
+    expect(await api.updateLogSavedView(SAVED_VIEW_ID, {name: 'Errors updated'}))
+      .toEqual({...view, name: 'Errors updated'})
+    await api.deleteLogSavedView(SAVED_VIEW_ID)
   })
 
   it('creates, updates, previews, rolls up, and deletes metric rules', async () => {
     const rule = {
-      id: 11,
+      id: METRIC_RULE_ID,
       name: 'error_logs',
       query: 'service:api',
       levels: ['error'],
@@ -199,7 +205,7 @@ describe('Log Management API', () => {
         expect(await req.json()).toEqual(request)
         return HttpResponse.json(rule)
       }),
-      http.put(`${API_BASE}/v1/logs/metrics/rules/11`, async ({request: req}) => {
+      http.put(`${API_BASE}/v1/logs/metrics/rules/${METRIC_RULE_ID}`, async ({request: req}) => {
         expect(await req.json()).toEqual({is_active: false})
         return HttpResponse.json({...rule, is_active: false})
       }),
@@ -207,18 +213,18 @@ describe('Log Management API', () => {
         expect(await req.json()).toEqual(request)
         return HttpResponse.json({buckets: [], totalCount: 0, interval: '5m'})
       }),
-      http.post(`${API_BASE}/v1/logs/metrics/rules/11/rollup`, () => {
+      http.post(`${API_BASE}/v1/logs/metrics/rules/${METRIC_RULE_ID}/rollup`, () => {
         return HttpResponse.json({points_inserted: 4})
       }),
-      http.delete(`${API_BASE}/v1/logs/metrics/rules/11`, () => new HttpResponse(null, {status: 204}))
+      http.delete(`${API_BASE}/v1/logs/metrics/rules/${METRIC_RULE_ID}`, () => new HttpResponse(null, {status: 204}))
     )
 
     expect(await api.getLogMetricRules()).toEqual({rules: [rule]})
     expect(await api.createLogMetricRule(request)).toEqual(rule)
-    expect(await api.updateLogMetricRule(11, {is_active: false})).toEqual({...rule, is_active: false})
+    expect(await api.updateLogMetricRule(METRIC_RULE_ID, {is_active: false})).toEqual({...rule, is_active: false})
     expect(await api.previewLogMetricRule(request)).toEqual({buckets: [], totalCount: 0, interval: '5m'})
-    expect(await api.rollupLogMetricRule(11)).toEqual({points_inserted: 4})
-    await api.deleteLogMetricRule(11)
+    expect(await api.rollupLogMetricRule(METRIC_RULE_ID)).toEqual({points_inserted: 4})
+    await api.deleteLogMetricRule(METRIC_RULE_ID)
   })
 
   it('creates monitor drafts from a log query', async () => {
@@ -234,7 +240,7 @@ describe('Log Management API', () => {
       ...request,
       group_by: null,
       dashboard_alert_created: true,
-      dashboard_alert_id: 42,
+      dashboard_alert_id: DASHBOARD_ALERT_ID,
     }
 
     server.use(
@@ -249,7 +255,7 @@ describe('Log Management API', () => {
 
   it('lists, creates, updates, and deletes standalone log monitors', async () => {
     const monitor = {
-      id: 9,
+      id: LOG_MONITOR_ID,
       name: 'High error logs',
       query: 'service:api',
       levels: ['error'],
@@ -278,16 +284,16 @@ describe('Log Management API', () => {
         expect(await req.json()).toEqual(request)
         return HttpResponse.json(monitor)
       }),
-      http.put(`${API_BASE}/v1/logs/monitors/9`, async ({request: req}) => {
+      http.put(`${API_BASE}/v1/logs/monitors/${LOG_MONITOR_ID}`, async ({request: req}) => {
         expect(await req.json()).toEqual({is_active: false})
         return HttpResponse.json({...monitor, is_active: false})
       }),
-      http.delete(`${API_BASE}/v1/logs/monitors/9`, () => new HttpResponse(null, {status: 204}))
+      http.delete(`${API_BASE}/v1/logs/monitors/${LOG_MONITOR_ID}`, () => new HttpResponse(null, {status: 204}))
     )
 
     expect(await api.getLogMonitors()).toEqual({monitors: [monitor]})
     expect(await api.createLogMonitor(request)).toEqual(monitor)
-    expect(await api.updateLogMonitor(9, {is_active: false})).toEqual({...monitor, is_active: false})
-    await api.deleteLogMonitor(9)
+    expect(await api.updateLogMonitor(LOG_MONITOR_ID, {is_active: false})).toEqual({...monitor, is_active: false})
+    await api.deleteLogMonitor(LOG_MONITOR_ID)
   })
 })

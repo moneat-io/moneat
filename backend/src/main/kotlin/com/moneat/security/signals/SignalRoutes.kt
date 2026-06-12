@@ -17,6 +17,7 @@
 package com.moneat.security.signals
 
 import com.moneat.auth.currentOrgIdOrNull
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -29,6 +30,7 @@ import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import io.ktor.server.routing.route
+import kotlin.uuid.Uuid
 
 private const val DEFAULT_LIMIT = 50
 private const val MAX_LIMIT = 200
@@ -69,8 +71,7 @@ private suspend fun RoutingContext.handleList(service: SignalService) {
 private suspend fun RoutingContext.handleDetail(service: SignalService) {
     val orgId = currentOrganizationId()
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
-    val signalId = signalIdFromPath()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_SIGNAL_ID_MESSAGE))
+    val signalId = signalIdFromPath(service, orgId) ?: return
     val detail = service.get(orgId, signalId)
         ?: return call.respond(HttpStatusCode.NotFound, ErrorResponse(SIGNAL_NOT_FOUND_MESSAGE))
     call.respond(detail)
@@ -79,8 +80,7 @@ private suspend fun RoutingContext.handleDetail(service: SignalService) {
 private suspend fun RoutingContext.handleTriage(service: SignalService) {
     val orgId = currentOrganizationId()
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_ORG_MESSAGE))
-    val signalId = signalIdFromPath()
-        ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_SIGNAL_ID_MESSAGE))
+    val signalId = signalIdFromPath(service, orgId) ?: return
     val userId = currentUserId()
         ?: return call.respond(HttpStatusCode.Forbidden, ErrorResponse(MISSING_USER_MESSAGE))
     val request = call.receive<TriageRequest>()
@@ -91,7 +91,21 @@ private suspend fun RoutingContext.handleTriage(service: SignalService) {
     }
 }
 
-private fun RoutingContext.signalIdFromPath(): Int? = call.parameters["signalId"]?.toIntOrNull()
+private suspend fun RoutingContext.signalIdFromPath(service: SignalService, orgId: Int): Int? {
+    val resourceId = call.parameters["signalId"]?.let(::parseSignalResourceId)
+    if (resourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_SIGNAL_ID_MESSAGE))
+        return null
+    }
+    val signalId = service.resolveSignalId(orgId, resourceId)
+    if (signalId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(SIGNAL_NOT_FOUND_MESSAGE))
+    }
+    return signalId
+}
+
+private fun parseSignalResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private fun RoutingContext.currentOrganizationId(): Int? =
     call.principal<JWTPrincipal>()?.currentOrgIdOrNull()

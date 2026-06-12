@@ -71,44 +71,44 @@ export function workflowsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateWorkflow: (id: number, request: WorkflowUpdateRequest) =>
+    updateWorkflow: (id: string, request: WorkflowUpdateRequest) =>
       core.request<WorkflowResponse>(`${base}/workflows/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    publishWorkflow: (id: number) =>
+    publishWorkflow: (id: string) =>
       core.request<WorkflowResponse>(`${base}/workflows/${id}/publish`, {
         method: 'POST',
       }),
 
-    unpublishWorkflow: (id: number) =>
+    unpublishWorkflow: (id: string) =>
       core.request<WorkflowResponse>(`${base}/workflows/${id}/unpublish`, {
         method: 'POST',
       }),
 
-    runWorkflow: (id: number, scope: Record<string, WorkflowJsonValue> = {}) =>
+    runWorkflow: (id: string, scope: Record<string, WorkflowJsonValue> = {}) =>
       core.request<WorkflowRunResponse>(`${base}/workflows/${id}/run`, {
         method: 'POST',
         body: JSON.stringify({scope}),
       }),
 
-    deleteWorkflow: (id: number) =>
+    deleteWorkflow: (id: string) =>
       core.request<void>(`${base}/workflows/${id}`, {
         method: 'DELETE',
       }),
 
-    getWorkflowRuns: (id: number) =>
+    getWorkflowRuns: (id: string) =>
       core.request<WorkflowRunResponse[]>(`${base}/workflows/${id}/runs`),
 
-    getWorkflowInstances: (id: number) =>
+    getWorkflowInstances: (id: string) =>
       core.request<WorkflowRunResponse[]>(`${base}/workflows/${id}/instances`),
 
-    getWorkflowRun: (id: number, runId: number) =>
+    getWorkflowRun: (id: string, runId: string) =>
       core.request<WorkflowRunResponse>(`${base}/workflows/${id}/instances/${runId}`),
 
     createWorkflowInstance: (
-      id: number,
+      id: string,
       request: WorkflowRunInstanceRequest = {scope: {}}
     ) =>
       core.request<WorkflowRunResponse>(`${base}/workflows/${id}/instances`, {
@@ -116,12 +116,12 @@ export function workflowsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    cancelWorkflowRun: (id: number, runId: number) =>
+    cancelWorkflowRun: (id: string, runId: string) =>
       core.request<WorkflowRunCancelResponse>(`${base}/workflows/${id}/instances/${runId}/cancel`, {
         method: 'PUT',
       }),
 
-    getWorkflowWebhookSigning: (id: number) =>
+    getWorkflowWebhookSigning: (id: string) =>
       core.request<WorkflowWebhookSigningResponse>(`${base}/workflows/${id}/webhook-signing`),
 
     getWorkflowBlueprints: () =>
@@ -152,12 +152,12 @@ export function workflowsMethods(core: ApiClientCore) {
         urlWithQuery(`${base}/workflows/audit`, auditQuery(limit))
       ),
 
-    getWorkflowAuditForWorkflow: (id: number, limit?: number) =>
+    getWorkflowAuditForWorkflow: (id: string, limit?: number) =>
       core.request<WorkflowAuditEntry[]>(
         urlWithQuery(`${base}/workflows/${id}/audit`, auditQuery(limit))
       ),
 
-    exportWorkflow: (id: number) =>
+    exportWorkflow: (id: string) =>
       core.request<WorkflowExportResponse>(`${base}/workflows/${id}/export`),
 
     importWorkflow: (request: WorkflowImportRequest) =>

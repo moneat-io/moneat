@@ -116,7 +116,7 @@ export function CommandPaletteProvider({children}: {readonly children: ReactNode
 
   const buildSnapshot = useCallback(
     (): ChatSnapshot => ({
-      id: `chat-${Date.now()}`,
+      id: globalThis.crypto?.randomUUID?.() ?? `chat-${Date.now()}`,
       conversationId,
       messages: aiMessages,
       toolInvocations,

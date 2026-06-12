@@ -32,6 +32,8 @@ private val metricsMonitorService = MonitorService(HostRepositoryImpl(), HostAle
 private const val DEFAULT_METRIC_HOURS = 24
 private const val MAX_METRIC_HOURS = 168
 private const val MILLIS_PER_HOUR = 3_600_000L
+private const val HOST_RESOURCE_ID_DESCRIPTION = "Host resource ID"
+private const val INVALID_HOST_ID_MESSAGE = "Invalid host_id"
 
 class GetHostMetricsTool : McpTool {
     override val name = "get_host_metrics"
@@ -40,7 +42,7 @@ class GetHostMetricsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaInteger("Host ID (integer)"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "hours" to schemaNumber(
                     "Hours of history (default 24, max 168)"
                 )
@@ -53,10 +55,9 @@ class GetHostMetricsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
+        val hostId = resolveHostIdArg(args, context.organizationId, metricsMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
+        }
         val hrs = args["hours"]?.jsonPrimitive?.intOrNull
             ?.coerceIn(1, MAX_METRIC_HOURS) ?: DEFAULT_METRIC_HOURS
 
@@ -79,7 +80,7 @@ class GetContainerMetricsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaInteger("Host ID (integer)"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "container_name" to schemaString("Container name")
             )
         ),
@@ -90,10 +91,9 @@ class GetContainerMetricsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
+        val hostId = resolveHostIdArg(args, context.organizationId, metricsMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
+        }
 
         val containers = metricsMonitorService
             .getLatestContainers(hostId)
@@ -117,7 +117,7 @@ class GetHostLogsTool : McpTool {
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                "host_id" to schemaInteger("Host ID (integer)"),
+                "host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION),
                 "hours" to schemaNumber(
                     "Hours of history (default 24)"
                 ),
@@ -151,7 +151,7 @@ class GetAlertConfigTool : McpTool {
         "Get current alert configuration for a host"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("host_id" to schemaInteger("Host ID (integer)"))
+            mapOf("host_id" to schemaResourceId(HOST_RESOURCE_ID_DESCRIPTION))
         ),
         required = listOf("host_id")
     )
@@ -160,10 +160,9 @@ class GetAlertConfigTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val systemId = args["host_id"]?.jsonPrimitive?.content
-            ?: return errorResult("host_id is required")
-        val hostId = systemId.toIntOrNull()
-            ?: return errorResult("Invalid host_id format")
+        val hostId = resolveHostIdArg(args, context.organizationId, metricsMonitorService).getOrElse { error ->
+            return errorResult(error.message ?: INVALID_HOST_ID_MESSAGE)
+        }
         val alerts = metricsMonitorService.listAlerts(hostId, context.organizationId)
         return jsonResult(alerts)
     }

@@ -54,6 +54,7 @@ class IncidentRoutesTest {
         private const val USER_ID = 1
         private const val ORG_ID = 1
         private const val NO_MEMBERSHIP_USER_ID = 99
+        private const val MISSING_PROVIDER_CONFIG_ID = "11111111-1111-4111-8111-111111111111"
     }
 
     private var db: Database? = null
@@ -252,7 +253,7 @@ class IncidentRoutesTest {
     fun `DELETE returns 404 for non-existent provider config`() = testApplication {
         installRoutes()()
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORG_ID)
-        val response = client.delete("/api/incident-providers/999") {
+        val response = client.delete("/api/incident-providers/$MISSING_PROVIDER_CONFIG_ID") {
             withAuth(token)
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -262,7 +263,7 @@ class IncidentRoutesTest {
     fun `POST test returns 404 for non-existent config`() = testApplication {
         installRoutes()()
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORG_ID)
-        val response = client.post("/api/incident-providers/999/test") {
+        val response = client.post("/api/incident-providers/$MISSING_PROVIDER_CONFIG_ID/test") {
             withAuth(token)
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -272,7 +273,7 @@ class IncidentRoutesTest {
     fun `GET rules returns 404 for non-existent config`() = testApplication {
         installRoutes()()
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORG_ID)
-        val response = client.get("/api/incident-providers/999/rules") {
+        val response = client.get("/api/incident-providers/$MISSING_PROVIDER_CONFIG_ID/rules") {
             withAuth(token)
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -282,7 +283,7 @@ class IncidentRoutesTest {
     fun `PUT rules returns 404 for non-existent config`() = testApplication {
         installRoutes()()
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORG_ID)
-        val response = client.put("/api/incident-providers/999/rules") {
+        val response = client.put("/api/incident-providers/$MISSING_PROVIDER_CONFIG_ID/rules") {
             withAuth(token)
             contentType(ContentType.Application.Json)
             setBody("[]")
@@ -294,7 +295,7 @@ class IncidentRoutesTest {
     fun `GET events returns 404 for non-existent config`() = testApplication {
         installRoutes()()
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORG_ID)
-        val response = client.get("/api/incident-providers/999/events") {
+        val response = client.get("/api/incident-providers/$MISSING_PROVIDER_CONFIG_ID/events") {
             withAuth(token)
         }
         assertEquals(HttpStatusCode.NotFound, response.status)
@@ -302,10 +303,10 @@ class IncidentRoutesTest {
 
     // ──── Authenticated With Provider Config ────
 
-    private fun insertProviderConfig(): Int {
+    private fun insertProviderConfig(): String {
         return transaction {
             val now = Clock.System.now()
-            IncidentProviderConfigs.insert {
+            val row = IncidentProviderConfigs.insert {
                 it[organizationId] = ORG_ID
                 it[providerType] = "pagerduty"
                 it[name] = "Test PD"
@@ -314,8 +315,9 @@ class IncidentRoutesTest {
                 it[enabled] = true
                 it[createdAt] = now
                 it[updatedAt] = now
-            } get IncidentProviderConfigs.id
-        }.value
+            }
+            row[IncidentProviderConfigs.resourceId].toString()
+        }
     }
 
     @Test

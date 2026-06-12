@@ -18,9 +18,11 @@ package com.moneat.billing.models
 
 import com.moneat.shared.models.Organizations
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 const val APM_SPAN_USAGE_DEBUG_DEFAULT_LIMIT = 20
 const val APM_SPAN_USAGE_DEBUG_MIN_LIMIT = 1
@@ -28,6 +30,7 @@ const val APM_SPAN_USAGE_DEBUG_MAX_LIMIT = 100
 
 object PricingTierConfigs : Table("pricing_tier_configs") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val tier_name = varchar("tier_name", 50)
     val version = integer("version").default(1)
     val monthly_unit_limit = long("monthly_unit_limit")
@@ -162,7 +165,7 @@ object StripeWebhookEvents : Table("stripe_webhook_events") {
 
 @Serializable
 data class PricingTierConfigResponse(
-    val id: Int,
+    val id: String,
     val tierName: String,
     val version: Int,
     val monthlyUnitLimit: Long,
@@ -228,7 +231,8 @@ data class PricingTierConfigResponse(
     val stripeYearlyOveragePriceId: String? = null,
     val stripeOncallPriceId: String? = null,
     val stripeOncallYearlyPriceId: String? = null,
-    val isCurrent: Boolean
+    val isCurrent: Boolean,
+    @Transient val numericId: Int = 0
 )
 
 @Serializable
@@ -246,7 +250,7 @@ data class BillingPlansListResponse(
 
 @Serializable
 data class BillingUsageResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val periodStart: String,
     val periodEnd: String,
     val retentionDays: Int,
@@ -330,7 +334,7 @@ data class AdminQuotaUsageResetRequest(
 
 @Serializable
 data class AdminQuotaUsageResetResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val quotaType: String,
     val periodStart: String,
     val periodEnd: String,
@@ -343,7 +347,7 @@ data class AdminQuotaUsageResetResponse(
 
 @Serializable
 data class ApmSpanUsageDebugResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val periodStart: String,
     val periodEnd: String,
     val totalSpans: Long,
@@ -361,7 +365,7 @@ data class ApmSpanUsageDebugGroup(
     val kind: String,
     val scopeName: String,
     val scopeVersion: String,
-    val projectId: Long?,
+    val projectId: String?,
     val projectName: String?,
     val projectSlug: String?,
     val spanCount: Long,
@@ -376,7 +380,7 @@ data class ApmSpanUsageDebugGroup(
 
 @Serializable
 data class BillingUsageInsightsResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val periodStart: String,
     val periodEnd: String,
     val generatedAt: String,
@@ -422,7 +426,7 @@ data class BillingContributor(
     val label: String,
     val kind: String,
     val eventType: String? = null,
-    val projectId: Int? = null,
+    val projectId: String? = null,
     val projectName: String? = null,
     val projectSlug: String? = null,
     val units: Long,
@@ -595,12 +599,12 @@ data class TierMigrationResponse(
 
 @Serializable
 data class AdminBillingSubscriptionResponse(
-    val subscriptionId: Int,
-    val organizationId: Int,
+    val subscriptionId: String,
+    val organizationId: String,
     val organizationName: String,
     val plan: String,
     val status: String,
-    val pricingTierConfigId: Int?,
+    val pricingTierConfigId: String?,
     val paygBudgetCents: Int,
     val paygUsedUnits: Long,
     val paygUsedMicros: Long,
@@ -618,7 +622,7 @@ data class GrantPromotionalCreditRequest(
 
 @Serializable
 data class GrantPromotionalCreditResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val bonusGbBytes: Long,
     val bonusUnits: Long,
     val bonusGb: Double, // Human-readable GB value
@@ -628,10 +632,10 @@ data class GrantPromotionalCreditResponse(
 
 @Serializable
 data class PromotionalCreditHistoryItem(
-    val id: Int,
-    val organizationId: Int,
+    val id: String,
+    val organizationId: String,
     val organizationName: String,
-    val grantedBy: Int,
+    val grantedBy: String,
     val grantedByEmail: String,
     val bonusGb: Double,
     val bonusUnits: Long,

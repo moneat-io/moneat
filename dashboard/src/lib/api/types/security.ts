@@ -22,7 +22,7 @@ export type SignalStatus = 'open' | 'under_review' | 'archived'
 export type ArchiveReason = 'true_positive' | 'false_positive' | 'benign'
 
 export interface SignalResponse {
-  id: number
+  id: string
   source: string
   rule_id: string
   rule_name: string
@@ -32,7 +32,7 @@ export interface SignalResponse {
   dedup_key: string
   entities: Record<string, string>
   sample_count: number
-  assignee_user_id?: number | null
+  assignee_user_id?: string | null
   tags: string[]
   first_seen: string
   last_seen: string
@@ -41,15 +41,15 @@ export interface SignalResponse {
 }
 
 export interface SignalEvidenceResponse {
-  id: number
+  id: string
   evidence_type: string
   reference: string
   created_at: string
 }
 
 export interface SignalAuditResponse {
-  id: number
-  actor_user_id?: number | null
+  id: string
+  actor_user_id?: string | null
   action: string
   from_status?: SignalStatus | null
   to_status?: SignalStatus | null
@@ -83,7 +83,7 @@ export interface SignalListParams {
 export interface TriageRequest {
   status?: SignalStatus
   reason?: ArchiveReason
-  assignee_user_id?: number | null
+  assignee_user_id?: string | null
   clear_assignee?: boolean
   note?: string
 }
@@ -103,7 +103,7 @@ export interface ThreatIntelEnrichmentResponse {
 export type DetectionRuleType = 'threshold' | 'new_value' | 'rate_anomaly'
 
 export interface DetectionRuleResponse {
-  id: number
+  id: string
   name: string
   description: string
   source: string
@@ -147,7 +147,7 @@ export interface MitreTechniqueCoverage {
 }
 
 export interface MitreCoveredRule {
-  id: number
+  id: string
   name: string
   enabled: boolean
 }
@@ -230,7 +230,7 @@ export interface VulnerabilityInventoryResponse {
 }
 
 export interface VulnerabilityFindingResponse {
-  signal_id: number
+  signal_id: string
   advisory_id: string
   cve_id?: string | null
   package_name: string

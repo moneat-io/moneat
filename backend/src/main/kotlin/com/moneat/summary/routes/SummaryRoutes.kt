@@ -17,6 +17,7 @@
 package com.moneat.summary.routes
 
 import com.moneat.auth.requireCurrentOrg
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.summary.services.SummaryService
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
@@ -31,6 +32,7 @@ import mu.KotlinLogging
 import org.koin.core.context.GlobalContext
 import java.time.DateTimeException
 import java.time.ZoneId
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -139,7 +141,7 @@ fun Route.summaryRoutes(
                     val orgId = call.requireCurrentOrg()?.orgId ?: return@runSummaryServiceCall
 
                     val incidentId = call.parameters["incident_id"]
-                        ?.toLongOrNull()
+                        ?.let(::parseSummaryResourceId)
                     if (incidentId == null) {
                         call.respond(
                             HttpStatusCode.BadRequest,
@@ -159,3 +161,6 @@ fun Route.summaryRoutes(
         }
     }
 }
+
+private fun parseSummaryResourceId(value: String): Uuid? =
+    value.toUuidOrNull()

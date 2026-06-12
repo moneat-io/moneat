@@ -680,7 +680,7 @@ class IngestRoutesEnvelopeTest {
 
     private fun emptyUsage(organizationId: Int): BillingUsageResponse {
         return BillingUsageResponse(
-            organizationId = organizationId,
+            organizationId = resourceId(organizationId),
             periodStart = "2026-01-01",
             periodEnd = "2026-01-31",
             retentionDays = 30,
@@ -707,6 +707,9 @@ class IngestRoutesEnvelopeTest {
             withinQuota = true
         )
     }
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     @AfterTest
     fun teardownKoin() {

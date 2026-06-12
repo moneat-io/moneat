@@ -176,7 +176,7 @@ class InfraRoutesTest {
         }
 
     private fun savedViewId(responseBody: String): String {
-        val match = Regex(""""id":(\d+)""").find(responseBody)
+        val match = Regex(""""id":"([^"]+)"""").find(responseBody)
         return match?.groupValues?.get(1) ?: error("expected saved view id in response: $responseBody")
     }
 
@@ -330,7 +330,7 @@ class InfraRoutesTest {
             }
             assertEquals(HttpStatusCode.BadRequest, invalidIdResponse.status)
 
-            val missingResponse = client.delete("$SAVED_VIEWS_PATH/99999") {
+            val missingResponse = client.delete("$SAVED_VIEWS_PATH/11111111-1111-4111-8111-111111111111") {
                 withAuth(token(userId, orgId))
             }
             assertEquals(HttpStatusCode.NotFound, missingResponse.status)

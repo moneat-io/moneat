@@ -20,6 +20,7 @@ import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
 import org.jetbrains.exposed.v1.core.ResultRow
+import java.util.UUID
 
 private const val PRO_MONTHLY_PRICE_CENTS = 2_900
 private const val TEAM_MONTHLY_PRICE_CENTS = 7_900
@@ -38,6 +39,7 @@ private const val LLM_OVERAGE_RATE_CENTS_PER_1K = 100
 private const val ANALYTICS_PAGEVIEW_OVERAGE_RATE_CENTS_PER_100K = 1_000
 private const val ONCALL_PER_USER_MONTHLY_CENTS = 500
 private const val ONCALL_PER_USER_YEARLY_CENTS = 5_000
+private const val FALLBACK_TIER_ID_NAMESPACE = "moneat-pricing-tier:"
 private const val FREE_ANALYTICS_SITE_LIMIT = 1
 private const val PRO_ANALYTICS_SITE_LIMIT = 5
 private const val TEAM_ANALYTICS_SITE_LIMIT = 10
@@ -61,7 +63,7 @@ private const val FREE_TIER_MAX_HOSTS = 3
 
 internal fun quotaTierFromRow(row: ResultRow): PricingTierConfigResponse {
     return PricingTierConfigResponse(
-        id = row[PricingTierConfigs.id],
+        id = row[PricingTierConfigs.resource_id].toString(),
         tierName = row[PricingTierConfigs.tier_name],
         version = row[PricingTierConfigs.version],
         monthlyUnitLimit = row[PricingTierConfigs.monthly_unit_limit],
@@ -129,14 +131,15 @@ internal fun quotaTierFromRow(row: ResultRow): PricingTierConfigResponse {
         dataStreamsEnabled = row[PricingTierConfigs.data_streams_enabled],
         sbomEnabled = row[PricingTierConfigs.sbom_enabled],
         syntheticsEnabled = row[PricingTierConfigs.synthetics_enabled],
-        isCurrent = row[PricingTierConfigs.is_current]
+        isCurrent = row[PricingTierConfigs.is_current],
+        numericId = row[PricingTierConfigs.id]
     )
 }
 
 internal fun quotaTierFromEnum(tierName: String): PricingTierConfigResponse {
     val tier = PricingTier.entries.find { it.name.equals(tierName, ignoreCase = true) } ?: PricingTier.FREE
     return PricingTierConfigResponse(
-        id = 0,
+        id = UUID.nameUUIDFromBytes("$FALLBACK_TIER_ID_NAMESPACE${tier.name}".toByteArray()).toString(),
         tierName = tier.name,
         version = 1,
         monthlyUnitLimit = tier.monthlyErrorLimit,
@@ -205,7 +208,8 @@ internal fun quotaTierFromEnum(tierName: String): PricingTierConfigResponse {
         dataStreamsEnabled = true,
         sbomEnabled = true,
         syntheticsEnabled = true,
-        isCurrent = true
+        isCurrent = true,
+        numericId = 0
     )
 }
 

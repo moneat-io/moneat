@@ -18,6 +18,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
+import kotlin.uuid.Uuid
 
 class OrgInvitationServiceTest {
     companion object {
@@ -33,6 +34,8 @@ class OrgInvitationServiceTest {
 
     private val orgId = 1
     private val adminId = 10
+    private val invitationResourceId = Uuid.parse("11111111-1111-1111-1111-111111111111")
+    private val secondInvitationResourceId = Uuid.parse("22222222-2222-2222-2222-222222222222")
     private val futureMs = Clock.System.now().plus(7.days).toEpochMilliseconds()
     private val pastMs = Clock.System.now().minus(1.days).toEpochMilliseconds()
 
@@ -41,7 +44,7 @@ class OrgInvitationServiceTest {
         every { membershipService.getMemberRole(orgId, adminId) } returns "admin"
     }
 
-    private fun stubInviteCreation(email: String, invitationId: Int = 1) {
+    private fun stubInviteCreation(email: String, invitationId: Uuid = invitationResourceId) {
         every { invitationRepository.expireStaleInvitations(orgId, email, any()) } returns 0
         every { invitationRepository.findUserByEmail(email) } returns null
         every { invitationRepository.existsPendingInvitation(orgId, email, any()) } returns false
@@ -111,7 +114,7 @@ class OrgInvitationServiceTest {
     fun `inviteMember allows owner to invite as owner`() {
         every { membershipService.requireRole(orgId, adminId, any()) } returns Unit
         every { membershipService.getMemberRole(orgId, adminId) } returns "owner"
-        stubInviteCreation("newowner@test.com", 2)
+        stubInviteCreation("newowner@test.com", secondInvitationResourceId)
 
         val result = service.inviteMember(orgId, "newowner@test.com", "owner", adminId)
         assertEquals("owner", result.role)
@@ -124,7 +127,7 @@ class OrgInvitationServiceTest {
         expiresAt: Long = futureMs,
         email: String = NEW_USER_EMAIL,
     ) = OrgInvitationRow(
-        id = 1, orgId = orgId, email = email, role = "member",
+        id = 1, resourceId = invitationResourceId, orgId = orgId, email = email, role = "member",
         invitedBy = adminId, token = "tok", status = status,
         expiresAt = expiresAt, createdAt = Clock.System.now(),
     )
@@ -179,11 +182,11 @@ class OrgInvitationServiceTest {
 
     @Test
     fun `revokeInvitation marks as revoked`() {
-        every { invitationRepository.findById(1) } returns makeInvite()
+        every { invitationRepository.findByResourceIdForUser(invitationResourceId, adminId) } returns makeInvite()
         every { membershipService.requireRole(orgId, adminId, any()) } returns Unit
         every { invitationRepository.updateStatus(1, "revoked") } returns 1
 
-        val result = service.revokeInvitation(1, adminId)
+        val result = service.revokeInvitation(invitationResourceId, adminId)
         assertTrue(result)
         verify { invitationRepository.updateStatus(1, "revoked") }
     }
@@ -191,11 +194,11 @@ class OrgInvitationServiceTest {
     @Test
     fun `revokeInvitation requires admin permission`() {
         val memberId = 30
-        every { invitationRepository.findById(1) } returns makeInvite()
+        every { invitationRepository.findByResourceIdForUser(invitationResourceId, memberId) } returns makeInvite()
         every { membershipService.requireRole(orgId, memberId, any()) } throws
             IllegalStateException("Insufficient permissions")
 
-        assertFailsWith<IllegalStateException> { service.revokeInvitation(1, memberId) }
+        assertFailsWith<IllegalStateException> { service.revokeInvitation(invitationResourceId, memberId) }
     }
 
     // ──── cleanupExpiredInvitations ────
@@ -220,10 +223,26 @@ class OrgInvitationServiceTest {
         every { invitationRepository.expireAllStaleForOrg(orgId, any()) } returns 0
         every { invitationRepository.findPendingInvitations(orgId, any()) } returns listOf(
             InvitationWithInviterRow(
-                1, "user1@test.com", "member", "pending", futureMs, Clock.System.now(), "Admin", "admin@test.com"
+                1,
+                invitationResourceId,
+                "user1@test.com",
+                "member",
+                "pending",
+                futureMs,
+                Clock.System.now(),
+                "Admin",
+                "admin@test.com"
             ),
             InvitationWithInviterRow(
-                2, "user2@test.com", "member", "pending", futureMs, Clock.System.now(), "Admin", "admin@test.com"
+                2,
+                secondInvitationResourceId,
+                "user2@test.com",
+                "member",
+                "pending",
+                futureMs,
+                Clock.System.now(),
+                "Admin",
+                "admin@test.com"
             ),
         )
 

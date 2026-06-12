@@ -70,8 +70,8 @@ data class SsoConfigRequest(
 
 @Serializable
 data class SsoConfigResponse(
-    val id: Int,
-    val organizationId: Int,
+    val id: String,
+    val organizationId: String,
     val providerType: String,
     val isEnabled: Boolean,
     // SAML fields

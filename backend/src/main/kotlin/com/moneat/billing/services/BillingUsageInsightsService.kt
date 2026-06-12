@@ -82,7 +82,7 @@ class BillingUsageInsightsService(
         val apmSpanDebug = loadApmSpanDebug(organizationId, periodStart, periodEnd)
 
         return BillingUsageInsightsResponse(
-            organizationId = organizationId,
+            organizationId = usage.organizationId,
             periodStart = usage.periodStart,
             periodEnd = usage.periodEnd,
             generatedAt = Clock.System.now().toString(),
@@ -427,13 +427,14 @@ class BillingUsageInsightsService(
                 val bytes = rows.sumOf { it.bytes }
                 val units = rows.sumOf { it.count }
                 val projectId = key.first
+                val projectResourceId = rows.firstOrNull()?.projectResourceId
                 val normalizedType = key.second
                 BillingContributor(
-                    key = listOf(projectId ?: "org", normalizedType).joinToString(":"),
+                    key = contributorKey(projectId, projectResourceId, normalizedType),
                     label = contributorLabel(projectId, rows.firstOrNull(), normalizedType),
                     kind = if (projectId == null) "source" else "project",
                     eventType = normalizedType,
-                    projectId = projectId,
+                    projectId = projectResourceId,
                     projectName = rows.firstOrNull()?.projectName,
                     projectSlug = rows.firstOrNull()?.projectSlug,
                     units = units,
@@ -445,6 +446,17 @@ class BillingUsageInsightsService(
             .sortedByDescending { if (useBytes) it.bytes else it.units }
             .take(CONTRIBUTOR_LIMIT)
     }
+
+    private fun contributorKey(
+        projectId: Int?,
+        projectResourceId: String?,
+        normalizedType: String
+    ): String =
+        when {
+            projectResourceId != null -> listOf("project", projectResourceId, normalizedType).joinToString(":")
+            projectId != null -> listOf("deleted_project", projectId.toString(), normalizedType).joinToString(":")
+            else -> listOf("org", normalizedType).joinToString(":")
+        }
 
     private fun dailyPoints(
         history: List<UsageHistoryRow>,
@@ -503,6 +515,7 @@ class BillingUsageInsightsService(
             UsageHistoryRow(
                 date = row.date,
                 projectId = row.projectId,
+                projectResourceId = label?.resourceId,
                 projectName = label?.name,
                 projectSlug = label?.slug,
                 normalizedType = normalizeEventType(row.eventType),
@@ -526,6 +539,7 @@ class BillingUsageInsightsService(
                 }
                 .associate { row ->
                     row[Projects.id].toInt() to ProjectLabel(
+                        resourceId = row[Projects.resource_id].toString(),
                         name = row[Projects.name],
                         slug = row[Projects.slug]
                     )
@@ -722,6 +736,7 @@ class BillingUsageInsightsService(
     private data class UsageHistoryRow(
         val date: LocalDate,
         val projectId: Int?,
+        val projectResourceId: String?,
         val projectName: String?,
         val projectSlug: String?,
         val normalizedType: String,
@@ -738,6 +753,7 @@ class BillingUsageInsightsService(
     )
 
     private data class ProjectLabel(
+        val resourceId: String,
         val name: String,
         val slug: String
     )

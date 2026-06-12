@@ -22,6 +22,7 @@ import com.moneat.org.repositories.models.OrgInvitationDetailsRow
 import com.moneat.org.repositories.models.OrgInvitationRow
 import com.moneat.org.repositories.models.OrgInvitationUserRow
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 /**
  * Repository for org invitation data access.
@@ -39,12 +40,13 @@ interface OrgInvitationRepository {
         token: String,
         expiresAt: Long,
         createdAt: Instant,
-    ): Int
+    ): Uuid
     fun findInviterAndOrg(invitedBy: Int, orgId: Int): InviterAndOrgRow?
     fun findPendingInvitations(orgId: Int, nowMs: Long): List<InvitationWithInviterRow>
     fun findInvitationDetails(token: String): OrgInvitationDetailsRow?
     fun findByToken(token: String): OrgInvitationRow?
     fun findById(id: Int): OrgInvitationRow?
+    fun findByResourceIdForUser(resourceId: Uuid, userId: Int): OrgInvitationRow?
     fun findUserById(userId: Int): OrgInvitationUserRow?
     fun updateStatus(id: Int, status: String): Int
     fun updateTokenAndExpiry(id: Int, newToken: String, newExpiresAt: Long): Int

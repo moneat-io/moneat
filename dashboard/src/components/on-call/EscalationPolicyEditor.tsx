@@ -58,7 +58,7 @@ export interface EscalationStep {
 export interface EscalationTarget {
   id: string
   targetType: 'USER' | 'ON_CALL_SCHEDULE'
-  targetId: number
+  targetId: string
   targetName: string
 }
 
@@ -70,12 +70,12 @@ export interface EscalationPolicyData {
 }
 
 interface EscalationUser {
-  id: number
+  id: string
   name: string
 }
 
 interface Schedule {
-  id: number
+  id: string
   name: string
 }
 
@@ -106,7 +106,7 @@ function SortableStep({ step, index, users, schedules, onUpdate, onRemove }: Sor
     transition,
   }
 
-  const addTarget = (type: 'USER' | 'ON_CALL_SCHEDULE', id: number) => {
+  const addTarget = (type: 'USER' | 'ON_CALL_SCHEDULE', id: string) => {
     const source = type === 'USER' ? users : schedules
     const target = source.find((item) => item.id === id)
     if (!target) return
@@ -189,7 +189,7 @@ function SortableStep({ step, index, users, schedules, onUpdate, onRemove }: Sor
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Select onValueChange={(value) => addTarget('USER', parseInt(value))}>
+            <Select onValueChange={(value) => addTarget('USER', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Add user" />
               </SelectTrigger>
@@ -202,7 +202,7 @@ function SortableStep({ step, index, users, schedules, onUpdate, onRemove }: Sor
               </SelectContent>
             </Select>
 
-            <Select onValueChange={(value) => addTarget('ON_CALL_SCHEDULE', parseInt(value))}>
+            <Select onValueChange={(value) => addTarget('ON_CALL_SCHEDULE', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Add schedule" />
               </SelectTrigger>

@@ -134,7 +134,7 @@ private suspend fun ApplicationCall.requestedLlmServices(
     projectIdResolver: ProjectIdResolver,
     organizationId: Int
 ): RequestedLlmServices? {
-    val serviceIds = resolveServiceIdsQuery(projectIdResolver)
+    val serviceIds = resolveServiceIdsQuery(projectIdResolver, organizationId)
     if (serviceIds == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse(ERROR_INVALID_SERVICE_IDS))
         return null
@@ -277,11 +277,14 @@ private fun normalizeRequestedServiceIds(serviceIds: List<Long>): List<Long> =
 private fun ApplicationCall.serviceNamesQuery(): List<String> =
     queryCsvValues("services") + queryCsvValues("service")
 
-private fun ApplicationCall.resolveServiceIdsQuery(projectIdResolver: ProjectIdResolver): List<Long>? {
+private fun ApplicationCall.resolveServiceIdsQuery(
+    projectIdResolver: ProjectIdResolver,
+    organizationId: Int,
+): List<Long>? {
     val rawServiceIds = queryCsvValues("projectId") + queryCsvValues("serviceIds") + queryCsvValues("serviceId")
     if (rawServiceIds.isEmpty()) return emptyList()
     return rawServiceIds.map { rawServiceId ->
-        projectIdResolver.resolve(rawServiceId) ?: return null
+        projectIdResolver.resolve(rawServiceId, organizationId) ?: return null
     }.distinct()
 }
 

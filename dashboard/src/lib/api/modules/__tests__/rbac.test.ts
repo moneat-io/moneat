@@ -20,6 +20,10 @@ import {api} from '@/lib/api'
 import {server} from '@/test/mocks/server'
 
 const API_BASE = 'http://localhost:8080'
+const ROLE_ID_OPERATOR = '22222222-2222-4222-8222-222222222222'
+const ROLE_ID_RESPONDER = '33333333-3333-4333-8333-333333333333'
+const ASSIGNMENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const USER_ID = '11111111-1111-4111-8111-111111111111'
 
 describe('RBAC API', () => {
   beforeEach(() => {
@@ -31,7 +35,7 @@ describe('RBAC API', () => {
   it('fetches RBAC roles', async () => {
     const roles = [
       {
-        id: 1,
+        id: ROLE_ID_OPERATOR,
         name: 'Workflow operator',
         permissions: ['workflows:read', 'workflows:run'],
         created_at: '2026-01-01T00:00:00Z',
@@ -55,7 +59,7 @@ describe('RBAC API', () => {
           permissions: ['workflows:read'],
         })
         return HttpResponse.json({
-          id: 2,
+          id: ROLE_ID_RESPONDER,
           name: 'Responder',
           permissions: ['workflows:read'],
           created_at: '2026-01-01T00:00:00Z',
@@ -65,57 +69,60 @@ describe('RBAC API', () => {
     )
 
     const role = await api.createRbacRole({name: 'Responder', permissions: ['workflows:read']})
-    expect(role.id).toBe(2)
+    expect(role.id).toBe(ROLE_ID_RESPONDER)
   })
 
   it('updates and deletes an RBAC role', async () => {
     server.use(
-      http.put(`${API_BASE}/v1/rbac/roles/2`, async ({request}) => {
+      http.put(`${API_BASE}/v1/rbac/roles/${ROLE_ID_RESPONDER}`, async ({request}) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body).toEqual({
           name: 'Responder',
           permissions: ['workflows:read', 'workflows:run'],
         })
         return HttpResponse.json({
-          id: 2,
+          id: ROLE_ID_RESPONDER,
           name: 'Responder',
           permissions: ['workflows:read', 'workflows:run'],
           created_at: '2026-01-01T00:00:00Z',
           updated_at: '2026-01-02T00:00:00Z',
         })
       }),
-      http.delete(`${API_BASE}/v1/rbac/roles/2`, () => new HttpResponse(null, {status: 204}))
+      http.delete(`${API_BASE}/v1/rbac/roles/${ROLE_ID_RESPONDER}`, () => new HttpResponse(null, {status: 204}))
     )
 
     await expect(
-      api.updateRbacRole(2, {
+      api.updateRbacRole(ROLE_ID_RESPONDER, {
         name: 'Responder',
         permissions: ['workflows:read', 'workflows:run'],
       })
-    ).resolves.toMatchObject({id: 2})
-    await expect(api.deleteRbacRole(2)).resolves.toBeUndefined()
+    ).resolves.toMatchObject({id: ROLE_ID_RESPONDER})
+    await expect(api.deleteRbacRole(ROLE_ID_RESPONDER)).resolves.toBeUndefined()
   })
 
   it('manages RBAC role assignments', async () => {
     const assignment = {
-      id: 10,
-      role_id: 2,
-      user_id: 42,
+      id: ASSIGNMENT_ID,
+      role_id: ROLE_ID_RESPONDER,
+      user_id: USER_ID,
       created_at: '2026-01-01T00:00:00Z',
     }
 
     server.use(
-      http.get(`${API_BASE}/v1/rbac/roles/2/assignments`, () => HttpResponse.json([assignment])),
-      http.post(`${API_BASE}/v1/rbac/roles/2/assignments`, async ({request}) => {
+      http.get(`${API_BASE}/v1/rbac/roles/${ROLE_ID_RESPONDER}/assignments`, () => HttpResponse.json([assignment])),
+      http.post(`${API_BASE}/v1/rbac/roles/${ROLE_ID_RESPONDER}/assignments`, async ({request}) => {
         const body = (await request.json()) as Record<string, unknown>
-        expect(body).toEqual({user_id: 42})
+        expect(body).toEqual({user_id: USER_ID})
         return HttpResponse.json(assignment)
       }),
-      http.delete(`${API_BASE}/v1/rbac/roles/2/assignments/42`, () => new HttpResponse(null, {status: 204}))
+      http.delete(
+        `${API_BASE}/v1/rbac/roles/${ROLE_ID_RESPONDER}/assignments/${USER_ID}`,
+        () => new HttpResponse(null, {status: 204})
+      )
     )
 
-    await expect(api.getRbacRoleAssignments(2)).resolves.toEqual([assignment])
-    await expect(api.assignRbacRole(2, 42)).resolves.toEqual(assignment)
-    await expect(api.unassignRbacRole(2, 42)).resolves.toBeUndefined()
+    await expect(api.getRbacRoleAssignments(ROLE_ID_RESPONDER)).resolves.toEqual([assignment])
+    await expect(api.assignRbacRole(ROLE_ID_RESPONDER, USER_ID)).resolves.toEqual(assignment)
+    await expect(api.unassignRbacRole(ROLE_ID_RESPONDER, USER_ID)).resolves.toBeUndefined()
   })
 })

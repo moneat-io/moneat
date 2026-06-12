@@ -34,8 +34,10 @@ import io.ktor.server.routing.routing
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -95,7 +97,9 @@ class SignalRoutesTest {
         setupApp()
         val created = SignalWriter.upsert(otherOrgId, spec("a"))
 
-        val response = client.get("/v1/security/signals/${created.signalId}") { withAuth(token(orgId)) }
+        val response = client.get("/v1/security/signals/${signalResourceId(created.signalId)}") {
+            withAuth(token(orgId))
+        }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
     }
@@ -105,7 +109,7 @@ class SignalRoutesTest {
         setupApp()
         val created = SignalWriter.upsert(orgId, spec("a"))
 
-        val response = client.patch("/v1/security/signals/${created.signalId}") {
+        val response = client.patch("/v1/security/signals/${signalResourceId(created.signalId)}") {
             withAuth(token(orgId))
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(TriageRequest(status = "under_review")))
@@ -120,7 +124,7 @@ class SignalRoutesTest {
         setupApp()
         val created = SignalWriter.upsert(otherOrgId, spec("a"))
 
-        val response = client.patch("/v1/security/signals/${created.signalId}") {
+        val response = client.patch("/v1/security/signals/${signalResourceId(created.signalId)}") {
             withAuth(token(orgId))
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(TriageRequest(status = "under_review")))
@@ -134,7 +138,7 @@ class SignalRoutesTest {
         setupApp()
         val created = SignalWriter.upsert(orgId, spec("a"))
 
-        val response = client.patch("/v1/security/signals/${created.signalId}") {
+        val response = client.patch("/v1/security/signals/${signalResourceId(created.signalId)}") {
             withAuth(token(orgId))
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(TriageRequest(status = "archived")))
@@ -148,7 +152,7 @@ class SignalRoutesTest {
         setupApp()
         val created = SignalWriter.upsert(orgId, spec("a"))
 
-        val response = client.patch("/v1/security/signals/${created.signalId}") {
+        val response = client.patch("/v1/security/signals/${signalResourceId(created.signalId)}") {
             withAuth(orgOnlyToken(orgId))
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(TriageRequest(status = "under_review")))
@@ -184,6 +188,15 @@ class SignalRoutesTest {
         evidenceReference = "table=security_events dedup=$ruleId",
         occurredAtMs = 1_700_000_000_000
     )
+
+    private fun signalResourceId(signalId: Int): String =
+        transaction {
+            SecuritySignals
+                .selectAll()
+                .where { SecuritySignals.id eq signalId }
+                .single()[SecuritySignals.resourceId]
+                .toString()
+        }
 
     private fun seedOrg(name: String): Int =
         transaction {

@@ -90,7 +90,7 @@ const catalog: WorkflowCatalogResponse = {
 
 function workflowResponse(overrides: Partial<WorkflowResponse> = {}): WorkflowResponse {
   return {
-    id: 1,
+    id: 'workflow-1',
     name: 'Workflow',
     trigger_name: 'alert.triggered',
     enabled: true,
@@ -277,7 +277,7 @@ describe('workflow graph conversion', () => {
     })
 
     expect(draftFromWorkflow(workflowResponse({name: 'Existing'}))).toMatchObject({
-      id: 1,
+      id: 'workflow-1',
       name: 'Existing',
       triggerName: 'alert.triggered',
     })

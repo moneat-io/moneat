@@ -27,9 +27,10 @@ import io.ktor.server.plugins.NotFoundException
 import org.slf4j.LoggerFactory
 import java.security.SecureRandom
 import java.util.Base64
+import com.moneat.utils.suspendRunCatching
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
-import com.moneat.utils.suspendRunCatching
+import kotlin.uuid.Uuid
 
 class OrgInvitationService(
     private val membershipService: OrgMembershipService,
@@ -87,7 +88,7 @@ class OrgInvitationService(
         val expiresAt = Clock.System.now().plus(7.days).toEpochMilliseconds()
         val createdAt = Clock.System.now()
 
-        val invitationId = invitationRepository.createInvitation(
+        val invitationResourceId = invitationRepository.createInvitation(
             orgId = orgId,
             email = normalizedEmail,
             role = role,
@@ -111,7 +112,7 @@ class OrgInvitationService(
         logger.info("User $invitedByUserId invited $normalizedEmail to org $orgId as $role")
 
         return InvitationResponse(
-            id = invitationId,
+            id = invitationResourceId.toString(),
             email = normalizedEmail,
             role = role,
             status = "pending",
@@ -149,7 +150,7 @@ class OrgInvitationService(
         invitationRepository.expireAllStaleForOrg(orgId, now)
         return invitationRepository.findPendingInvitations(orgId, now).map { row ->
             InvitationResponse(
-                id = row.id,
+                id = row.resourceId.toString(),
                 email = row.email,
                 role = row.role,
                 status = row.status,
@@ -209,24 +210,24 @@ class OrgInvitationService(
     }
 
     fun revokeInvitation(
-        invitationId: Int,
+        invitationResourceId: Uuid,
         requestingUserId: Int
     ): Boolean {
-        val invite = invitationRepository.findById(invitationId)
+        val invite = invitationRepository.findByResourceIdForUser(invitationResourceId, requestingUserId)
             ?: throw NotFoundException("Invitation not found")
 
         membershipService.requireRole(invite.orgId, requestingUserId, OrgRole.ADMIN)
 
-        val updated = invitationRepository.updateStatus(invitationId, "revoked")
-        logger.info("User $requestingUserId revoked invitation $invitationId")
+        val updated = invitationRepository.updateStatus(invite.id, "revoked")
+        logger.info("User $requestingUserId revoked invitation ${invite.id}")
         return updated > 0
     }
 
     fun resendInvitation(
-        invitationId: Int,
+        invitationResourceId: Uuid,
         requestingUserId: Int
     ): Boolean {
-        val invite = invitationRepository.findById(invitationId)
+        val invite = invitationRepository.findByResourceIdForUser(invitationResourceId, requestingUserId)
             ?: throw NotFoundException("Invitation not found")
 
         membershipService.requireRole(invite.orgId, requestingUserId, OrgRole.ADMIN)
@@ -237,9 +238,9 @@ class OrgInvitationService(
 
         val newToken = generateToken()
         val newExpiresAt = Clock.System.now().plus(7.days).toEpochMilliseconds()
-        invitationRepository.updateTokenAndExpiry(invitationId, newToken, newExpiresAt)
+        invitationRepository.updateTokenAndExpiry(invite.id, newToken, newExpiresAt)
 
-        val inviterAndOrg = invitationRepository.findInviterAndOrgForResend(invitationId)
+        val inviterAndOrg = invitationRepository.findInviterAndOrgForResend(invite.id)
         if (inviterAndOrg != null) {
             emailService.sendInvitationEmail(
                 toEmail = invite.email,
@@ -250,7 +251,7 @@ class OrgInvitationService(
             )
         }
 
-        logger.info("User $requestingUserId resent invitation $invitationId")
+        logger.info("User $requestingUserId resent invitation ${invite.id}")
         return true
     }
 

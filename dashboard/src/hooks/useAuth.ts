@@ -18,12 +18,12 @@ import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 
 interface User {
-  id: number
+  id: string
   email: string
   name?: string
   emailVerified: boolean
   onboardingCompleted: boolean
-  orgId?: number
+  orgId?: string
   orgRole?: string
 }
 

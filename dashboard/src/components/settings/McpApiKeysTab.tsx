@@ -112,7 +112,7 @@ export function McpApiKeysTab() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({id, request}: {id: number; request: Parameters<typeof api.updateMcpApiKey>[1]}) =>
+    mutationFn: ({id, request}: {id: string; request: Parameters<typeof api.updateMcpApiKey>[1]}) =>
       api.updateMcpApiKey(id, request),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['mcpApiKeys']})

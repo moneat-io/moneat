@@ -37,7 +37,7 @@ data class UpdateMcpApiKeyRequest(
 
 @Serializable
 data class CreateMcpApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val keyPrefix: String,
     val key: String,
@@ -49,7 +49,7 @@ data class CreateMcpApiKeyResponse(
 
 @Serializable
 data class McpApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val keyPrefix: String,
     val enabledTools: List<String>,

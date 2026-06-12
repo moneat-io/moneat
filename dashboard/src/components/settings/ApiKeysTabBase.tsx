@@ -36,7 +36,7 @@ import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil} from '@/lib/date-format'
 
 export interface ApiKeyRow {
-  id: number
+  id: string
   name: string
   keyPrefix: string
   createdAt: string
@@ -55,7 +55,7 @@ export interface ApiKeysTabConfig<T extends ApiKeyRow> {
   readonly queryFn: () => Promise<{keys: T[]}>
   readonly queryEnabled?: boolean
   readonly createMutationFn: (name: string) => Promise<{key: string; name: string}>
-  readonly deleteMutationFn: (id: number) => Promise<void>
+  readonly deleteMutationFn: (id: string) => Promise<void>
   readonly createSuccessToast: {title: string; description: string}
   readonly revokeSuccessToast: {title: string; description: string}
   readonly createDialogTitle: string

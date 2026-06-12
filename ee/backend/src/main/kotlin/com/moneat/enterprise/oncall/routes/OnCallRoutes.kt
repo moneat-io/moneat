@@ -5,12 +5,15 @@
 package com.moneat.enterprise.oncall.routes
 
 import com.moneat.auth.currentOrgIdOrNull
+import com.moneat.enterprise.oncall.overrideResourceId
 import com.moneat.enterprise.oncall.models.OnCallOverrides
 import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
+import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.MessageResponse
 import io.ktor.http.HttpStatusCode
@@ -47,22 +50,25 @@ import java.time.temporal.ChronoUnit
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 private const val WEEKLY_ROTATION_DAYS = 7L
+private const val SCHEDULE_NOT_FOUND_MESSAGE = "Schedule not found"
+private const val OVERRIDE_NOT_FOUND_MESSAGE = "Override not found"
 
 @Serializable
 data class ScheduleTimelineEntry(
-    val userId: Int,
+    val userId: String,
     val userName: String,
     val startAt: String,
     val endAt: String,
     val isOverride: Boolean,
-    val overrideId: Int? = null,
+    val overrideId: String? = null,
 )
 
 @Serializable
 data class ScheduleInfo(
-    val id: Int,
+    val id: String,
     val name: String,
     val rotationType: String,
     val timezone: String,
@@ -76,7 +82,7 @@ data class ScheduleTimelineResponse(
 
 @Serializable
 data class ScheduleParticipant(
-    val userId: Int,
+    val userId: String,
     val position: Int,
 )
 
@@ -100,9 +106,15 @@ data class UpdateScheduleRequest(
 
 @Serializable
 data class CreateOverrideRequest(
-    val userId: Int,
+    val userId: String,
     val startAt: String, // ISO 8601 timestamp
     val endAt: String, // ISO 8601 timestamp
+)
+
+private data class TimelineParticipant(
+    val userId: Int,
+    val userResourceId: String,
+    val userName: String,
 )
 
 @Serializable
@@ -150,7 +162,7 @@ fun Route.onCallRoutes(
                     val participantIds =
                         request.participants
                             .sortedBy { it.position }
-                            .map { it.userId }
+                            .map { resolveOnCallUserId(organizationId, it.userId) }
                     val schedule =
                         scheduleService.createSchedule(
                             organizationId = organizationId,
@@ -169,7 +181,7 @@ fun Route.onCallRoutes(
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -177,12 +189,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@get
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@get
                 }
 
@@ -190,14 +201,14 @@ fun Route.onCallRoutes(
                 if (schedule != null) {
                     call.respond(schedule)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                 }
             }
 
             put("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -205,12 +216,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@put
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -221,7 +231,7 @@ fun Route.onCallRoutes(
                     val participantIds =
                         request.participants
                             ?.sortedBy { it.position }
-                            ?.map { it.userId }
+                            ?.map { resolveOnCallUserId(organizationId, it.userId) }
                     val schedule =
                         scheduleService.updateSchedule(
                             scheduleId = scheduleId,
@@ -235,7 +245,7 @@ fun Route.onCallRoutes(
                     if (schedule != null) {
                         call.respond(schedule)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     }
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -245,7 +255,7 @@ fun Route.onCallRoutes(
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -253,12 +263,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@delete
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -266,14 +275,14 @@ fun Route.onCallRoutes(
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                 }
             }
 
             get("/{id}/current") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -281,12 +290,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@get
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@get
                 }
 
@@ -301,7 +309,7 @@ fun Route.onCallRoutes(
             get("/{id}/timeline") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
                 val startParam = call.request.queryParameters["start"]
                 val endParam = call.request.queryParameters["end"]
 
@@ -310,11 +318,10 @@ fun Route.onCallRoutes(
                     return@get
                 }
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@get
                 }
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@get
                 }
 
@@ -333,7 +340,7 @@ fun Route.onCallRoutes(
 
                 val timeline = buildScheduleTimeline(scheduleId, rangeStart, rangeEnd)
                 if (timeline == null) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                 } else {
                     call.respond(timeline)
                 }
@@ -343,7 +350,7 @@ fun Route.onCallRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -351,7 +358,6 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@post
                 }
 
@@ -361,7 +367,7 @@ fun Route.onCallRoutes(
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@post
                 }
 
@@ -370,11 +376,12 @@ fun Route.onCallRoutes(
                 try {
                     val startAt = Instant.parse(request.startAt)
                     val endAt = Instant.parse(request.endAt)
+                    val overrideUserId = resolveOnCallUserId(organizationId, request.userId)
 
                     val override =
                         scheduleService.createOverride(
                             scheduleId = scheduleId,
-                            userId = request.userId,
+                            userId = overrideUserId,
                             startAt = startAt,
                             endAt = endAt,
                             createdBy = userId,
@@ -386,7 +393,7 @@ fun Route.onCallRoutes(
                         val schedule = scheduleService.getSchedule(scheduleId)
                         if (schedule != null && pushNotificationService != null) {
                             CoroutineScope(Dispatchers.IO).launch {
-                                pushNotificationService.sendOnCallAssignmentAlert(request.userId, schedule.name)
+                                pushNotificationService.sendOnCallAssignmentAlert(overrideUserId, schedule.name)
                             }
                         }
                     }
@@ -404,7 +411,7 @@ fun Route.onCallRoutes(
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val overrideId = call.parameters["id"]?.toIntOrNull()
+                val overrideId = call.resolveOverrideId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -412,12 +419,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (overrideId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid override ID"))
                     return@delete
                 }
 
                 if (!scheduleService.isOverrideInOrganization(overrideId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(OVERRIDE_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -425,7 +431,7 @@ fun Route.onCallRoutes(
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Override not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(OVERRIDE_NOT_FOUND_MESSAGE))
                 }
             }
         }
@@ -438,7 +444,7 @@ fun Route.onCallRoutes(
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null || userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -446,12 +452,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@put
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -505,7 +510,7 @@ fun Route.onCallRoutes(
             delete {
                 val principal = call.principal<JWTPrincipal>()
                 val organizationId = principal?.currentOrgIdOrNull()
-                val scheduleId = call.parameters["id"]?.toIntOrNull()
+                val scheduleId = call.resolveScheduleId(organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -513,12 +518,11 @@ fun Route.onCallRoutes(
                 }
 
                 if (scheduleId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
                     return@delete
                 }
 
                 if (!scheduleService.isScheduleInOrganization(scheduleId, organizationId)) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Schedule not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -564,22 +568,31 @@ private fun buildScheduleTimeline(
     rangeStart: Instant,
     rangeEnd: Instant,
 ): ScheduleTimelineResponse? = transaction {
-    val scheduleRow = OnCallSchedules.selectAll()
-        .where { OnCallSchedules.id eq scheduleId }
-        .singleOrNull() ?: return@transaction null
+    val scheduleRow =
+        OnCallSchedules
+            .selectAll()
+            .where { OnCallSchedules.id eq scheduleId }
+            .singleOrNull() ?: return@transaction null
 
-    val participants = OnCallParticipants.innerJoin(Users)
-        .selectAll()
-        .where { OnCallParticipants.scheduleId eq scheduleId }
-        .orderBy(OnCallParticipants.position to SortOrder.ASC)
-        .map { row ->
-            row[OnCallParticipants.userId] to (row[Users.name] ?: row[Users.email])
-        }
+    val participants =
+        OnCallParticipants
+            .innerJoin(Users)
+            .selectAll()
+            .where { OnCallParticipants.scheduleId eq scheduleId }
+            .orderBy(OnCallParticipants.position to SortOrder.ASC)
+            .map { row ->
+                val userId = row[OnCallParticipants.userId]
+                TimelineParticipant(
+                    userId = userId,
+                    userResourceId = row[Users.resource_id].toString(),
+                    userName = row[Users.name] ?: row[Users.email],
+                )
+            }
 
     if (participants.isEmpty()) {
         return@transaction ScheduleTimelineResponse(
             schedule = ScheduleInfo(
-                id = scheduleRow[OnCallSchedules.id].value,
+                id = scheduleRow[OnCallSchedules.resourceId].toString(),
                 name = scheduleRow[OnCallSchedules.name],
                 rotationType = scheduleRow[OnCallSchedules.rotationType],
                 timezone = scheduleRow[OnCallSchedules.timezone],
@@ -597,19 +610,28 @@ private fun buildScheduleTimeline(
     val entries = mutableListOf<ScheduleTimelineEntry>()
 
     // Find rotation period containing rangeStart
-    val startZoned = java.time.Instant.ofEpochMilli(rangeStart.toEpochMilliseconds()).atZone(zoneId)
-    val startRotationDate = if (startZoned.toLocalTime().isBefore(handoffLocalTime)) {
-        startZoned.toLocalDate().minusDays(1)
-    } else {
-        startZoned.toLocalDate()
-    }
+    val startZoned =
+        java.time.Instant
+            .ofEpochMilli(rangeStart.toEpochMilliseconds())
+            .atZone(zoneId)
+    val startRotationDate =
+        if (startZoned.toLocalTime().isBefore(handoffLocalTime)) {
+            startZoned.toLocalDate().minusDays(1)
+        } else {
+            startZoned.toLocalDate()
+        }
     val startDaysSinceEpoch = ChronoUnit.DAYS.between(LocalDate.EPOCH, startRotationDate)
     var periodStartDays = (startDaysSinceEpoch / rotationDays) * rotationDays
 
     val endEpochMs = rangeEnd.toEpochMilliseconds()
 
     while (true) {
-        val periodStart = LocalDate.EPOCH.plusDays(periodStartDays).atTime(handoffLocalTime).atZone(zoneId).toInstant()
+        val periodStart =
+            LocalDate.EPOCH
+                .plusDays(periodStartDays)
+                .atTime(handoffLocalTime)
+                .atZone(zoneId)
+                .toInstant()
         if (periodStart.toEpochMilli() >= endEpochMs) break
 
         val periodEnd =
@@ -619,15 +641,15 @@ private fun buildScheduleTimeline(
                 .atZone(zoneId)
                 .toInstant()
         val rotationCycle = ((periodStartDays / rotationDays) % participants.size).toInt()
-        val (userId, userName) = participants[rotationCycle]
+        val participant = participants[rotationCycle]
 
         val entryStart = maxOf(periodStart, java.time.Instant.ofEpochMilli(rangeStart.toEpochMilliseconds()))
         val entryEnd = minOf(periodEnd, java.time.Instant.ofEpochMilli(endEpochMs))
 
         entries.add(
             ScheduleTimelineEntry(
-                userId = userId,
-                userName = userName,
+                userId = participant.userResourceId,
+                userName = participant.userName,
                 startAt = entryStart.toString(),
                 endAt = entryEnd.toString(),
                 isOverride = false,
@@ -637,25 +659,26 @@ private fun buildScheduleTimeline(
     }
 
     // Overlay overrides: remove rotation entries that overlap, insert override entries
-    val overrides = OnCallOverrides
-        .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
-        .selectAll()
-        .where {
-            (OnCallOverrides.scheduleId eq scheduleId) and
-                (OnCallOverrides.startAt less rangeEnd) and
-                (OnCallOverrides.endAt greater rangeStart)
-        }
-        .orderBy(OnCallOverrides.startAt to SortOrder.ASC)
-        .map { row ->
-            ScheduleTimelineEntry(
-                userId = row[OnCallOverrides.userId],
-                userName = row[Users.name] ?: row[Users.email],
-                startAt = row[OnCallOverrides.startAt].toString(),
-                endAt = row[OnCallOverrides.endAt].toString(),
-                isOverride = true,
-                overrideId = row[OnCallOverrides.id].value,
-            )
-        }
+    val overrides =
+        OnCallOverrides
+            .join(Users, JoinType.INNER, onColumn = OnCallOverrides.userId, otherColumn = Users.id)
+            .selectAll()
+            .where {
+                (OnCallOverrides.scheduleId eq scheduleId) and
+                    (OnCallOverrides.startAt less rangeEnd) and
+                    (OnCallOverrides.endAt greater rangeStart)
+            }
+            .orderBy(OnCallOverrides.startAt to SortOrder.ASC)
+            .map { row ->
+                ScheduleTimelineEntry(
+                    userId = row[Users.resource_id].toString(),
+                    userName = row[Users.name] ?: row[Users.email],
+                    startAt = row[OnCallOverrides.startAt].toString(),
+                    endAt = row[OnCallOverrides.endAt].toString(),
+                    isOverride = true,
+                    overrideId = overrideResourceId(row[OnCallOverrides.id].value),
+                )
+            }
 
     // Merge: split/trim rotation entries around overrides and add override entries
     val merged = mutableListOf<ScheduleTimelineEntry>()
@@ -681,11 +704,81 @@ private fun buildScheduleTimeline(
 
     ScheduleTimelineResponse(
         schedule = ScheduleInfo(
-            id = scheduleRow[OnCallSchedules.id].value,
+            id = scheduleRow[OnCallSchedules.resourceId].toString(),
             name = scheduleRow[OnCallSchedules.name],
             rotationType = scheduleRow[OnCallSchedules.rotationType],
             timezone = scheduleRow[OnCallSchedules.timezone],
         ),
         entries = merged,
     )
+}
+
+private suspend fun io.ktor.server.application.ApplicationCall.resolveScheduleId(organizationId: Int?): Int? {
+    if (organizationId == null) return null
+    val resourceId = parseOnCallResourceId(parameters["id"])
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid schedule ID"))
+        return null
+    }
+    val scheduleId =
+        transaction {
+            OnCallSchedules
+                .selectAll()
+                .where {
+                    (OnCallSchedules.organizationId eq organizationId) and
+                        (OnCallSchedules.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(OnCallSchedules.id)
+                ?.value
+        }
+    if (scheduleId == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(SCHEDULE_NOT_FOUND_MESSAGE))
+    }
+    return scheduleId
+}
+
+private suspend fun io.ktor.server.application.ApplicationCall.resolveOverrideId(organizationId: Int?): Int? {
+    if (organizationId == null) return null
+    val resourceId = parseOnCallResourceId(parameters["id"])
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid override ID"))
+        return null
+    }
+    val overrideId =
+        transaction {
+            OnCallOverrides
+                .innerJoin(OnCallSchedules)
+                .selectAll()
+                .where {
+                    (OnCallOverrides.resourceId eq resourceId) and
+                        (OnCallSchedules.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(OnCallOverrides.id)
+                ?.value
+        }
+    if (overrideId == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(OVERRIDE_NOT_FOUND_MESSAGE))
+    }
+    return overrideId
+}
+
+private fun parseOnCallResourceId(raw: String?): Uuid? =
+    raw?.toUuidOrNull()
+
+private fun resolveOnCallUserId(organizationId: Int, raw: String): Int {
+    val resourceId =
+        raw.toUuidOrNull() ?: throw IllegalArgumentException("Invalid user ID")
+    return transaction {
+        Users
+            .innerJoin(Memberships)
+            .selectAll()
+            .where {
+                (Users.resource_id eq resourceId) and
+                    (Memberships.organization_id eq organizationId)
+            }
+            .firstOrNull()
+            ?.get(Users.id)
+    } ?: throw IllegalArgumentException("User not found")
 }

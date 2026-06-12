@@ -481,7 +481,7 @@ object WorkflowCatalog {
             label = "Query host metrics",
             description = "Read historical host metrics for enrichment.",
             params = listOf(
-                WorkflowStepParamDefinition("host_id", "Host ID", "Number"),
+                WorkflowStepParamDefinition("host_id", "Host ID", "String"),
                 WorkflowStepParamDefinition("hours", "Hours", "Number", required = false)
             )
         ),
@@ -490,7 +490,7 @@ object WorkflowCatalog {
             label = "Search traces",
             description = "Read recent transaction and trace summaries for a project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "String"),
                 WorkflowStepParamDefinition("period", "Period", "String", "1h, 6h, 24h, 7d, or 30d", false),
                 WorkflowStepParamDefinition("environment", "Environment", "String", required = false),
                 WorkflowStepParamDefinition("operation", "Operation", "String", required = false)
@@ -501,7 +501,7 @@ object WorkflowCatalog {
             label = "Get span",
             description = "Read details for a single span in an organization project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "String"),
                 WorkflowStepParamDefinition("span_id", "Span ID", "String")
             )
         ),
@@ -510,7 +510,7 @@ object WorkflowCatalog {
             label = "List issues",
             description = "List issues in an organization project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "String"),
                 WorkflowStepParamDefinition("status", "Status", "String", required = false),
                 WorkflowStepParamDefinition("page", "Page", "Number", required = false),
                 WorkflowStepParamDefinition("limit", "Limit", "Number", required = false)
@@ -521,7 +521,7 @@ object WorkflowCatalog {
             label = "Get issue",
             description = "Read issue details in an organization project.",
             params = listOf(
-                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "Number"),
+                WorkflowStepParamDefinition("project_id", PROJECT_ID_LABEL, "String"),
                 WorkflowStepParamDefinition("issue_id", "Issue ID", "String")
             )
         ),
@@ -563,7 +563,7 @@ object WorkflowCatalog {
             label = "Page on-call",
             description = "Page responders through the on-call bridge when Enterprise on-call is enabled.",
             params = listOf(
-                WorkflowStepParamDefinition("escalation_policy_id", "Escalation policy ID", "Number"),
+                WorkflowStepParamDefinition("escalation_policy_id", "Escalation policy ID", "String"),
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
                 WorkflowStepParamDefinition("alert_priority", "Alert priority", "AlertPriority", required = false),
@@ -578,7 +578,7 @@ object WorkflowCatalog {
                 WorkflowStepParamDefinition("title", "Title", "String"),
                 WorkflowStepParamDefinition("description", "Description", "Text", required = false),
                 WorkflowStepParamDefinition("incident_severity", INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),
-                WorkflowStepParamDefinition("alert_id", "Alert ID", "Number", required = false)
+                WorkflowStepParamDefinition("alert_id", "Alert ID", "String", required = false)
             )
         ),
         WorkflowStepDefinition(
@@ -731,11 +731,11 @@ object WorkflowCatalog {
 
     private fun connectorParams(connectionType: String): List<WorkflowStepParamDefinition> =
         listOf(
-            WorkflowStepParamDefinition("connection_id", "$connectionType connection ID", "Number", required = false),
+            WorkflowStepParamDefinition("connection_id", "$connectionType connection ID", "String", required = false),
             WorkflowStepParamDefinition(
                 "connection_group_id",
                 "$connectionType connection group ID",
-                "Number",
+                "String",
                 required = false
             ),
             WorkflowStepParamDefinition("title", "Title", "String"),

@@ -52,12 +52,16 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 class SummaryServiceTest {
     companion object {
         private var db: Database? = null
         private const val ORG_ID = 1
         private const val PROJECT_ID = 1L
+        private val PROJECT_RESOURCE_ID = Uuid.parse("11111111-1111-1111-1111-111111111111")
+        private val INCIDENT_RESOURCE_ID = Uuid.parse("22222222-2222-2222-2222-222222222222")
+        private val UNKNOWN_INCIDENT_RESOURCE_ID = Uuid.parse("99999999-9999-9999-9999-999999999999")
         private const val TEST_ORG = "Test Org"
         private const val TEST_ORG_SLUG = "test-org"
         private const val DEDUP_KEY = "moneat-host-alert-42-id_7"
@@ -110,6 +114,7 @@ class SummaryServiceTest {
             }
             Projects.insert {
                 it[id] = PROJECT_ID
+                it[resource_id] = PROJECT_RESOURCE_ID
                 it[organization_id] = ORG_ID
                 it[name] = "Test Project"
                 it[slug] = "test-project"
@@ -119,6 +124,7 @@ class SummaryServiceTest {
 
     private fun seedIncidentLog(
         orgId: Int = ORG_ID,
+        resourceId: Uuid = INCIDENT_RESOURCE_ID,
         dedupKey: String = DEDUP_KEY,
         alertSource: String = "host_alert"
     ) {
@@ -134,6 +140,7 @@ class SummaryServiceTest {
                 it[updatedAt] = Clock.System.now()
             }
             IncidentEventLog.insert {
+                it[IncidentEventLog.resourceId] = resourceId
                 it[organizationId] = orgId
                 it[providerConfigId] = 1
                 it[this.alertSource] = alertSource
@@ -155,6 +162,7 @@ class SummaryServiceTest {
         lastSeenAt: kotlin.time.Instant? = Clock.System.now()
     ): HostData = HostData(
         id = id,
+        resourceId = hostResourceId(id),
         organizationId = orgId,
         hostname = "host-$id",
         displayName = displayName,
@@ -192,9 +200,9 @@ class SummaryServiceTest {
         threshold: Double = 90.0,
         lastTriggered: Long? = System.currentTimeMillis()
     ): AlertResponse = AlertResponse(
-        id = id,
-        systemId = hostId?.toString(),
-        hostId = hostId,
+        id = "alert-$id",
+        systemId = hostId?.let { hostResourceId(it).toString() },
+        hostId = hostId?.let { hostResourceId(it).toString() },
         metric = metric,
         condition = condition,
         threshold = threshold,
@@ -203,6 +211,9 @@ class SummaryServiceTest {
         lastTriggeredAt = lastTriggered,
         createdAt = System.currentTimeMillis()
     )
+
+    private fun hostResourceId(hostId: Int): Uuid =
+        Uuid.parse("00000000-0000-0000-0000-${hostId.toString().padStart(12, '0')}")
 
     private fun makeLatestMetrics(
         cpu: Float = 55.0f,
@@ -299,7 +310,7 @@ class SummaryServiceTest {
         val result = service.getInfrastructureSummary(ORG_ID, "24h")
 
         assertEquals(2, result.topAlerts.size)
-        assertEquals(2, result.topAlerts.first().alertId)
+        assertEquals("alert-2", result.topAlerts.first().alertId)
     }
 
     @Test
@@ -337,7 +348,7 @@ class SummaryServiceTest {
         val result = service.getInfrastructureSummary(ORG_ID, "7d")
 
         assertEquals(2, result.topErrorRateHosts.size)
-        assertEquals("1", result.topErrorRateHosts.first().systemId)
+        assertEquals(host1.resourceId.toString(), result.topErrorRateHosts.first().systemId)
         assertEquals(2, result.topErrorRateHosts.first().alertCount)
     }
 
@@ -826,15 +837,16 @@ class SummaryServiceTest {
             val alert = makeAlert(id = 7, hostId = 42)
             every { monitorService.listHosts(ORG_ID) } returns listOf(host)
             every { monitorService.listAlerts(42, ORG_ID) } returns listOf(alert)
+            every { monitorService.getAlertByInternalId(7) } returns alert
             coEvery { monitorService.getLatestMetrics(42) } returns makeLatestMetrics()
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 1L)
+            val result = service.getIncidentContext(ORG_ID, INCIDENT_RESOURCE_ID)
 
-            assertEquals(1L, result.incidentId)
+            assertEquals(INCIDENT_RESOURCE_ID.toString(), result.incidentId)
             assertNotNull(result.triggeringAlert)
-            assertEquals(7, result.triggeringAlert.alertId)
+            assertEquals("alert-7", result.triggeringAlert.alertId)
             assertEquals("cpu_percent", result.triggeringAlert.metric)
             assertNotNull(result.hostMetrics)
             assertEquals(1, result.errorSpikes.size)
@@ -868,10 +880,10 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertNotNull(result.triggeringAlert)
-            assertEquals(5, result.triggeringAlert.alertId)
+            assertEquals("alert-5", result.triggeringAlert.alertId)
             assertNotNull(result.hostMetrics)
         }
     }
@@ -896,7 +908,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertNull(result.triggeringAlert)
             assertNull(result.hostMetrics)
@@ -928,10 +940,10 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 1L)
+            val result = service.getIncidentContext(ORG_ID, INCIDENT_RESOURCE_ID)
 
             assertNotNull(result.triggeringAlert)
-            assertEquals("42", result.triggeringAlert.systemId)
+            assertEquals(hostResourceId(42).toString(), result.triggeringAlert.systemId)
         }
     }
 
@@ -956,7 +968,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 1L)
+            val result = service.getIncidentContext(ORG_ID, INCIDENT_RESOURCE_ID)
 
             assertNull(result.triggeringAlert)
         }
@@ -985,7 +997,7 @@ class SummaryServiceTest {
             )
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertEquals(1, result.affectedUptimeMonitors.size)
             assertEquals("m1", result.affectedUptimeMonitors.first().id)
@@ -1021,11 +1033,11 @@ class SummaryServiceTest {
                 }
             )
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertEquals(2, result.recentDeployments.size)
             assertEquals("v2.0.0", result.recentDeployments.first().version)
-            assertEquals(PROJECT_ID, result.recentDeployments.first().projectId)
+            assertEquals(PROJECT_RESOURCE_ID.toString(), result.recentDeployments.first().projectId)
         }
     }
 
@@ -1049,7 +1061,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, Long.MAX_VALUE)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertNull(result.triggeringAlert)
         }
@@ -1074,6 +1086,7 @@ class SummaryServiceTest {
 
             val host = makeHost(id = 42, status = "online")
             every { monitorService.listHosts(ORG_ID) } returns listOf(host)
+            every { monitorService.getAlertByInternalId(7) } returns makeAlert(id = 7, hostId = 42)
             every { monitorService.listAlerts(42, ORG_ID) } returns listOf(
                 makeAlert(id = 7, hostId = 42)
             )
@@ -1081,7 +1094,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 1L)
+            val result = service.getIncidentContext(ORG_ID, INCIDENT_RESOURCE_ID)
 
             assertNotNull(result.triggeringAlert)
             assertNull(result.hostMetrics)
@@ -1117,10 +1130,10 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 1L)
+            val result = service.getIncidentContext(ORG_ID, INCIDENT_RESOURCE_ID)
 
             assertNotNull(result.triggeringAlert)
-            assertEquals(10, result.triggeringAlert.alertId)
+            assertEquals("alert-10", result.triggeringAlert.alertId)
         }
     }
 
@@ -1186,7 +1199,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } throws RuntimeException("fail")
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertTrue(result.recentDeployments.isEmpty())
         }
@@ -1216,7 +1229,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertNull(result.triggeringAlert)
         }
@@ -1243,7 +1256,7 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 1L)
+            val result = service.getIncidentContext(ORG_ID, INCIDENT_RESOURCE_ID)
 
             assertNull(result.triggeringAlert)
             assertNull(result.hostMetrics)
@@ -1272,12 +1285,14 @@ class SummaryServiceTest {
                 }
                 Projects.insert {
                     it[id] = 1L
+                    it[resource_id] = Uuid.parse("11111111-1111-1111-1111-111111111111")
                     it[organization_id] = ORG_ID
                     it[name] = "Project 1"
                     it[slug] = "project-1"
                 }
                 Projects.insert {
                     it[id] = 2L
+                    it[resource_id] = Uuid.parse("22222222-1111-1111-1111-111111111111")
                     it[organization_id] = ORG_ID
                     it[name] = "Project 2"
                     it[slug] = "project-2"
@@ -1299,7 +1314,7 @@ class SummaryServiceTest {
                 }
             )
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertEquals(2, result.recentDeployments.size)
         }
@@ -1335,11 +1350,11 @@ class SummaryServiceTest {
             every { uptimeService.listMonitors(ORG_ID) } returns emptyList()
             every { releaseService.listReleases(PROJECT_ID) } returns emptyList()
 
-            val result = service.getIncidentContext(ORG_ID, 999L)
+            val result = service.getIncidentContext(ORG_ID, UNKNOWN_INCIDENT_RESOURCE_ID)
 
             assertNotNull(result.triggeringAlert)
-            assertEquals(2, result.triggeringAlert.alertId)
-            assertEquals("2", result.triggeringAlert.systemId)
+            assertEquals("alert-2", result.triggeringAlert.alertId)
+            assertEquals(hostResourceId(2).toString(), result.triggeringAlert.systemId)
         }
     }
 }

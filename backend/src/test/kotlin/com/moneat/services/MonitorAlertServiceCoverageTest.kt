@@ -78,16 +78,24 @@ private fun expectedResolvedWorkflowEvent(
     hostId: Int,
     deduplicationKey: String,
     hostName: String = "host-alert-workflow",
-): AlertResolvedWorkflowEvent =
-    AlertResolvedWorkflowEvent(
+): AlertResolvedWorkflowEvent {
+    val hostResourceId = transaction {
+        Hosts
+            .selectAll()
+            .where { Hosts.id eq hostId }
+            .single()[Hosts.resource_id]
+            .toString()
+    }
+    return AlertResolvedWorkflowEvent(
         organizationId = organizationId,
         source = AlertSource.HOST_ALERT.name,
         deduplicationKey = deduplicationKey,
         title = "$hostName - CPU Usage recovered",
         description = "The alert for CPU Usage is no longer active.",
-        moneatUrl = "https://moneat.io/monitoring/hosts/$hostId",
+        moneatUrl = "https://moneat.io/monitoring/hosts/$hostResourceId",
         priority = AlertPriority.P1,
     )
+}
 
 class MonitorAlertServiceCoverageTest {
 

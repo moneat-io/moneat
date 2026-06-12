@@ -19,6 +19,8 @@ import {OVERVIEW_WIDGETS} from './overviewWidgetTypes'
 
 /** Reserved id for the local default overview dashboard. */
 export const OVERVIEW_DASHBOARD_ID = 'overview-default'
+const OVERVIEW_ORG_ID = 'overview-default-org'
+const OVERVIEW_CREATED_BY_ID = 'overview-default-user'
 
 interface WidgetSpec {
   type: string
@@ -68,12 +70,12 @@ export function buildDefaultOverviewWidgets(): DashboardWidget[] {
 export function buildDefaultOverviewDashboard(): CustomDashboard {
   return {
     id: OVERVIEW_DASHBOARD_ID,
-    org_id: 0,
+    org_id: OVERVIEW_ORG_ID,
     title: 'Overview',
     description: 'Workspace overview',
     layout_type: 'grid',
     is_default: true,
-    created_by: 0,
+    created_by: OVERVIEW_CREATED_BY_ID,
     created_at: '',
     updated_at: '',
     widgets: buildDefaultOverviewWidgets(),

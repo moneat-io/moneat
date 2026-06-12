@@ -26,6 +26,7 @@ import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.models.UpdateLogIndexRequest
 import com.moneat.shared.models.LogIndexes
 import com.moneat.shared.services.CacheService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.suspendRunCatching
@@ -97,6 +98,14 @@ class LogIndexService {
 
     fun update(
         organizationId: Int,
+        indexId: String,
+        request: UpdateLogIndexRequest
+    ): LogIndexResponse? =
+        resolveIndexId(organizationId, indexId)
+            ?.let { resolvedId -> update(organizationId, resolvedId, request) }
+
+    fun update(
+        organizationId: Int,
         indexId: Int,
         request: UpdateLogIndexRequest
     ): LogIndexResponse? {
@@ -144,6 +153,10 @@ class LogIndexService {
         return getById(organizationId, indexId)
     }
 
+    fun delete(organizationId: Int, indexId: String): Boolean =
+        resolveIndexId(organizationId, indexId)
+            ?.let { resolvedId -> delete(organizationId, resolvedId) } ?: false
+
     fun delete(organizationId: Int, indexId: Int): Boolean {
         val deleted = transaction {
             LogIndexes.deleteWhere {
@@ -167,6 +180,13 @@ class LogIndexService {
 
     fun getById(
         organizationId: Int,
+        indexId: String
+    ): LogIndexResponse? =
+        resolveIndexId(organizationId, indexId)
+            ?.let { resolvedId -> getById(organizationId, resolvedId) }
+
+    fun getById(
+        organizationId: Int,
         indexId: Int
     ): LogIndexResponse? {
         return transaction {
@@ -178,6 +198,20 @@ class LogIndexService {
                 }
                 .firstOrNull()
                 ?.let { toResponse(it) }
+        }
+    }
+
+    private fun resolveIndexId(organizationId: Int, indexResourceId: String): Int? {
+        val resourceId = indexResourceId.toUuidOrNull() ?: return null
+        return transaction {
+            LogIndexes
+                .selectAll()
+                .where {
+                    (LogIndexes.resource_id eq resourceId) and
+                        (LogIndexes.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(LogIndexes.id)
         }
     }
 
@@ -452,7 +486,7 @@ class LogIndexService {
         row: org.jetbrains.exposed.v1.core.ResultRow
     ): LogIndexResponse {
         return LogIndexResponse(
-            id = row[LogIndexes.id],
+            id = row[LogIndexes.resource_id].toString(),
             name = row[LogIndexes.name],
             filterQuery = row[LogIndexes.filterQuery],
             retentionDays = row[LogIndexes.retentionDays],

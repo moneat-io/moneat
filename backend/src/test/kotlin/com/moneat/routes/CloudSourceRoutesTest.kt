@@ -43,6 +43,7 @@ import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 
 class CloudSourceRoutesTest {
     private val cloudSourceService = mockk<CloudSourceService>()
@@ -51,6 +52,8 @@ class CloudSourceRoutesTest {
         const val USER_ID = 41
         const val ORGANIZATION_ID = 73
         const val SOURCE_ID = 1
+        const val SOURCE_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+        const val MISSING_SOURCE_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
         const val PROVIDER_AWS = "aws"
         const val DISPLAY_NAME = "Production AWS"
         const val AWS_ACCOUNT_ID = "123456789012"
@@ -226,7 +229,9 @@ class CloudSourceRoutesTest {
 
     @Test
     fun `sync source validates id and returns refreshed source`() = testApplication {
-        coEvery { cloudSourceService.syncSource(ORGANIZATION_ID, SOURCE_ID) } returns sourceResponse()
+        coEvery {
+            cloudSourceService.syncSource(ORGANIZATION_ID, Uuid.parse(SOURCE_RESOURCE_ID))
+        } returns sourceResponse()
 
         application {
             installJwtAuth()
@@ -235,8 +240,8 @@ class CloudSourceRoutesTest {
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
-        val response = client.post("/v1/cloud-sources/$SOURCE_ID/sync") { withAuth(token) }
-        val invalid = client.post("/v1/cloud-sources/not-a-number/sync") { withAuth(token) }
+        val response = client.post("/v1/cloud-sources/$SOURCE_RESOURCE_ID/sync") { withAuth(token) }
+        val invalid = client.post("/v1/cloud-sources/not-a-uuid/sync") { withAuth(token) }
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains(EXTERNAL_ID))
@@ -245,8 +250,12 @@ class CloudSourceRoutesTest {
 
     @Test
     fun `delete source returns no content or not found`() = testApplication {
-        coEvery { cloudSourceService.deleteSource(ORGANIZATION_ID, SOURCE_ID) } returns true
-        coEvery { cloudSourceService.deleteSource(ORGANIZATION_ID, SOURCE_ID + 1) } returns false
+        coEvery {
+            cloudSourceService.deleteSource(ORGANIZATION_ID, Uuid.parse(SOURCE_RESOURCE_ID))
+        } returns true
+        coEvery {
+            cloudSourceService.deleteSource(ORGANIZATION_ID, Uuid.parse(MISSING_SOURCE_RESOURCE_ID))
+        } returns false
 
         application {
             installJwtAuth()
@@ -255,8 +264,8 @@ class CloudSourceRoutesTest {
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
-        val deleted = client.delete("/v1/cloud-sources/$SOURCE_ID") { withAuth(token) }
-        val missing = client.delete("/v1/cloud-sources/${SOURCE_ID + 1}") { withAuth(token) }
+        val deleted = client.delete("/v1/cloud-sources/$SOURCE_RESOURCE_ID") { withAuth(token) }
+        val missing = client.delete("/v1/cloud-sources/$MISSING_SOURCE_RESOURCE_ID") { withAuth(token) }
 
         assertEquals(HttpStatusCode.NoContent, deleted.status)
         assertEquals(HttpStatusCode.NotFound, missing.status)
@@ -270,7 +279,7 @@ class CloudSourceRoutesTest {
         ),
     ): CloudSourceResponse =
         CloudSourceResponse(
-            id = SOURCE_ID,
+            id = SOURCE_RESOURCE_ID,
             provider = PROVIDER_AWS,
             displayName = DISPLAY_NAME,
             status = STATUS_HEALTHY,

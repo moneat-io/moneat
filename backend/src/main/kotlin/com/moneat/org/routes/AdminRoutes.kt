@@ -34,8 +34,11 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.org.services.AdminOrgDetail
 import com.moneat.org.services.AdminOrgUsagePoint
 import com.moneat.org.services.AdminService
+import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.AttributionAnalyticsService
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.shared.services.userResourceId
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -69,6 +72,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
 import com.moneat.utils.suspendRunCatching
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private val adminJson = Json { ignoreUnknownKeys = true }
@@ -183,6 +187,7 @@ private const val INVALID_ORGANIZATION_ID_MESSAGE = "Invalid organization ID"
 private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
 private const val INVALID_TOKEN_MESSAGE = "Invalid token"
 private const val INVALID_REQUEST_MESSAGE = "Invalid request"
+private const val TEST_HOST_RESOURCE_ID = "00000000-0000-4000-8000-000000000001"
 
 @Serializable
 private data class AdminImpersonationTokenResponse(
@@ -259,11 +264,7 @@ fun Route.adminRoutes() {
             }
 
             get("/organizations/{orgId}") {
-                val orgId = call.parameters["orgId"]?.toIntOrNull()
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Invalid org ID")
-                    return@get
-                }
+                val orgId = call.organizationIdParameter() ?: return@get
                 val detail = adminService.getOrgDetail(orgId)
                 if (detail == null) {
                     call.respond(HttpStatusCode.NotFound, ORGANIZATION_NOT_FOUND_MESSAGE)
@@ -273,11 +274,7 @@ fun Route.adminRoutes() {
             }
 
             get("/organizations/{orgId}/usage") {
-                val orgId = call.parameters["orgId"]?.toIntOrNull()
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Invalid org ID")
-                    return@get
-                }
+                val orgId = call.organizationIdParameter() ?: return@get
                 val period = call.request.queryParameters["period"] ?: "7d"
                 val usage = adminService.getOrgUsage(orgId, period)
                 val response =
@@ -329,16 +326,15 @@ fun Route.adminRoutes() {
             }
 
             post("/impersonate/{userId}") {
-                val targetUserId =
-                    call.parameters["userId"]?.toIntOrNull()
-                        ?: return@post call.respond(
-                            HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse("Invalid user ID")
-                        )
+                val targetUserResourceId = call.parameters["userId"]?.let(::parseAdminResourceId)
+                if (targetUserResourceId == null) {
+                    call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid user ID"))
+                    return@post
+                }
 
                 val targetUser =
                     transaction {
-                        Users.selectAll().where { Users.id eq targetUserId }.firstOrNull()
+                        Users.selectAll().where { Users.resource_id eq targetUserResourceId }.firstOrNull()
                     } ?: return@post call.respond(
                         HttpStatusCode.NotFound,
                         com.moneat.utils.ErrorResponse("User not found")
@@ -411,7 +407,7 @@ fun Route.adminRoutes() {
                             deduplicationKey = "manual-trigger-${java.util.UUID.randomUUID()}",
                             organizationId = orgId,
                             moneatUrl = frontendUrl,
-                            metadata = mapOf("triggered_by" to JsonPrimitive(userId.toString()))
+                            metadata = mapOf("triggered_by" to JsonPrimitive(userResourceId(userId)))
                         )
 
                     incidentService.fireAlert(event)
@@ -529,7 +525,7 @@ fun Route.adminRoutes() {
                                     emailService.sendHostUpEmail(
                                         userEmail,
                                         "[TEST] Production API",
-                                        "$frontendUrl/monitoring/hosts/1"
+                                        "$frontendUrl/monitoring/hosts/$TEST_HOST_RESOURCE_ID"
                                     )
                                     emailSent = true
                                 }
@@ -539,7 +535,7 @@ fun Route.adminRoutes() {
                                         userEmail,
                                         "[TEST] Production API",
                                         "2 minutes ago",
-                                        "$frontendUrl/monitoring/hosts/1"
+                                        "$frontendUrl/monitoring/hosts/$TEST_HOST_RESOURCE_ID"
                                     )
                                     emailSent = true
                                 }
@@ -588,7 +584,7 @@ fun Route.adminRoutes() {
                                             slackService.sendHostUp(
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
-                                                hostId = 1,
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -599,7 +595,7 @@ fun Route.adminRoutes() {
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
                                                 lastSeen = "2 minutes ago",
-                                                hostId = 1,
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -660,7 +656,7 @@ fun Route.adminRoutes() {
                                             discordService.sendHostUp(
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
-                                                hostId = 1,
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -671,7 +667,7 @@ fun Route.adminRoutes() {
                                                 organizationId = orgId,
                                                 hostName = "[TEST] Production API",
                                                 lastSeen = "2 minutes ago",
-                                                hostId = 1,
+                                                hostResourceId = TEST_HOST_RESOURCE_ID,
                                                 baseUrl = frontendUrl
                                             )
                                     }
@@ -836,7 +832,7 @@ fun Route.adminRoutes() {
             }
 
             patch("/users/{userId}") {
-                val userId = call.parameters["userId"]?.toIntOrNull()
+                val userId = call.parameters["userId"]?.let(::parseAdminResourceId)
                 if (userId == null) {
                     call.respond(HttpStatusCode.BadRequest, com.moneat.utils.ErrorResponse("Invalid user ID"))
                     return@patch
@@ -961,14 +957,7 @@ fun Route.adminRoutes() {
                             return@post
                         }
 
-                    val orgId = call.parameters["orgId"]?.toIntOrNull()
-                    if (orgId == null) {
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(INVALID_ORGANIZATION_ID_MESSAGE)
-                        )
-                        return@post
-                    }
+                    val orgId = call.organizationIdParameter() ?: return@post
 
                     try {
                         val request = call.receive<com.moneat.billing.models.GrantPromotionalCreditRequest>()
@@ -995,14 +984,7 @@ fun Route.adminRoutes() {
                 }
 
                 get("/organizations/{orgId}/promotional-credits") {
-                    val orgId = call.parameters["orgId"]?.toIntOrNull()
-                    if (orgId == null) {
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(INVALID_ORGANIZATION_ID_MESSAGE)
-                        )
-                        return@get
-                    }
+                    val orgId = call.organizationIdParameter() ?: return@get
 
                     val history = adminBillingService.getPromotionalCreditHistory(orgId)
                     call.respond(history)
@@ -1025,14 +1007,7 @@ fun Route.adminRoutes() {
                             return@delete
                         }
 
-                    val orgId = call.parameters["orgId"]?.toIntOrNull()
-                    if (orgId == null) {
-                        call.respond(
-                            HttpStatusCode.BadRequest,
-                            com.moneat.utils.ErrorResponse(INVALID_ORGANIZATION_ID_MESSAGE)
-                        )
-                        return@delete
-                    }
+                    val orgId = call.organizationIdParameter() ?: return@delete
 
                     val success = adminBillingService.resetPromotionalCredits(orgId, adminUserId)
                     if (success) {
@@ -1106,12 +1081,27 @@ private suspend fun ApplicationCall.adminUserId(): Int? {
 }
 
 private suspend fun ApplicationCall.organizationIdParameter(): Int? {
-    val orgId = parameters["orgId"]?.toIntOrNull()
-    if (orgId == null) {
+    val orgResourceId = parameters["orgId"]?.let(::parseAdminResourceId)
+    if (orgResourceId == null) {
         respondAdminError(HttpStatusCode.BadRequest, INVALID_ORGANIZATION_ID_MESSAGE)
+        return null
+    }
+
+    val orgId = transaction {
+        Organizations
+            .selectAll()
+            .where { Organizations.resource_id eq orgResourceId }
+            .firstOrNull()
+            ?.get(Organizations.id)
+    }
+    if (orgId == null) {
+        respondAdminError(HttpStatusCode.NotFound, ORGANIZATION_NOT_FOUND_MESSAGE)
     }
     return orgId
 }
+
+private fun parseAdminResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private suspend fun ApplicationCall.respondAdminError(
     status: HttpStatusCode,

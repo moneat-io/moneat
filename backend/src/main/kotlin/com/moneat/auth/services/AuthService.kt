@@ -220,13 +220,16 @@ class AuthService(
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
-        val organizationSlug = organizationRepository.findById(orgId)?.slug
+        val user = userRepository.findById(userId)
+            ?: throw IllegalStateException("Created user could not be reloaded")
+        val organization = organizationRepository.findById(orgId)
+        val organizationSlug = organization?.slug
         return AuthResponse(
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
             user = UserResponse(
-                id = userId,
+                id = user.resourceId,
                 email = normalizedEmail,
                 name = request.name,
                 emailVerified = emailVerified,
@@ -234,6 +237,7 @@ class AuthService(
                 isAdmin = isAdmin,
                 organizationSlug = organizationSlug,
                 orgRole = orgRole,
+                orgId = organization?.resourceId,
             )
         )
     }
@@ -388,13 +392,14 @@ class AuthService(
         }
 
         val tokenPair = refreshTokenService.generateRefreshToken(user.id, user.email, orgId, orgRole)
-        val organizationSlug = organizationRepository.findById(orgId)?.slug
+        val organization = organizationRepository.findById(orgId)
+        val organizationSlug = organization?.slug
         return AuthResponse(
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
             user = UserResponse(
-                id = user.id,
+                id = user.resourceId,
                 email = user.email,
                 name = user.name,
                 emailVerified = user.emailVerified,
@@ -402,6 +407,7 @@ class AuthService(
                 isAdmin = user.isAdmin,
                 organizationSlug = organizationSlug,
                 orgRole = orgRole,
+                orgId = organization?.resourceId,
             )
         )
     }
@@ -557,17 +563,19 @@ class AuthService(
             emptyList()
         }
 
+        val organization = organizationRepository.findById(membership.organizationId)
         return UserResponse(
-            user.id,
-            user.email,
-            user.name,
-            user.emailVerified,
-            true,
-            user.isAdmin,
-            finalSlug,
-            membership.role,
-            null,
-            hiddenItems
+            id = user.resourceId,
+            email = user.email,
+            name = user.name,
+            emailVerified = user.emailVerified,
+            onboardingCompleted = true,
+            isAdmin = user.isAdmin,
+            organizationSlug = finalSlug,
+            orgRole = membership.role,
+            demoEpochMs = null,
+            sidebarHiddenItems = hiddenItems,
+            orgId = organization?.resourceId,
         )
     }
 
@@ -595,9 +603,10 @@ class AuthService(
 
         val user = run {
             val userRow = userRepository.findById(userId) ?: return null
-            val organizationSlug = orgId?.let { organizationRepository.findById(it)?.slug }
+            val organization = orgId?.let { organizationRepository.findById(it) }
+            val organizationSlug = organization?.slug
             UserResponse(
-                id = userId,
+                id = userRow.resourceId,
                 email = email,
                 name = userRow.name,
                 emailVerified = userRow.emailVerified,
@@ -605,6 +614,7 @@ class AuthService(
                 isAdmin = userRow.isAdmin,
                 organizationSlug = organizationSlug,
                 orgRole = orgRole,
+                orgId = organization?.resourceId,
             )
         }
 

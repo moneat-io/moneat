@@ -42,6 +42,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.update
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -188,6 +189,18 @@ class SsoRoutesTest {
         return Triple(orgId, ownerId, tierId)
     }
 
+    private fun ssoConfigUrl(orgId: Int): String =
+        "/v1/sso/config?organizationId=${organizationResourceId(orgId)}"
+
+    private fun organizationResourceId(orgId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq orgId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
     private fun <T> withFrontendUrl(block: () -> T): T {
         val key = "FRONTEND_URL"
         val previous = System.getProperty(key)
@@ -302,10 +315,29 @@ class SsoRoutesTest {
                 routing { ssoRoutes() }
 
                 val response =
-                    client.get("/v1/sso/config?organizationId=$orgId") {
+                    client.get(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     }
                 assertEquals(HttpStatusCode.NotFound, response.status)
+            }
+        }
+
+    @Test
+    fun `get v1 sso config rejects numeric organization id`() =
+        withFrontendUrl {
+            val (orgId, ownerId, _) = seedTeamOrgOwner()
+            testApplication {
+                application {
+                    installAuthAndJson()
+                }
+                routing { ssoRoutes() }
+
+                val response =
+                    client.get("/v1/sso/config?organizationId=$orgId") {
+                        header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
+                    }
+
+                assertEquals(HttpStatusCode.BadRequest, response.status)
             }
         }
 
@@ -320,7 +352,7 @@ class SsoRoutesTest {
                 routing { ssoRoutes() }
 
                 val putResponse =
-                    client.put("/v1/sso/config?organizationId=$orgId") {
+                    client.put(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                         header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                         setBody(
@@ -339,7 +371,7 @@ class SsoRoutesTest {
                 assertEquals(HttpStatusCode.OK, putResponse.status)
 
                 val getResponse =
-                    client.get("/v1/sso/config?organizationId=$orgId") {
+                    client.get(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     }
                 assertEquals(HttpStatusCode.OK, getResponse.status)
@@ -364,7 +396,7 @@ class SsoRoutesTest {
                 routing { ssoRoutes() }
 
                 val response =
-                    client.put("/v1/sso/config?organizationId=$orgId") {
+                    client.put(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                         header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                         setBody(
@@ -393,7 +425,7 @@ class SsoRoutesTest {
                 }
                 routing { ssoRoutes() }
 
-                client.put("/v1/sso/config?organizationId=$orgId") {
+                client.put(ssoConfigUrl(orgId)) {
                     header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                     setBody(
@@ -409,13 +441,13 @@ class SsoRoutesTest {
                 }
 
                 val del =
-                    client.delete("/v1/sso/config?organizationId=$orgId") {
+                    client.delete(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     }
                 assertEquals(HttpStatusCode.OK, del.status)
 
                 val get =
-                    client.get("/v1/sso/config?organizationId=$orgId") {
+                    client.get(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     }
                 assertEquals(HttpStatusCode.NotFound, get.status)
@@ -445,7 +477,7 @@ class SsoRoutesTest {
                 }
                 routing { ssoRoutes() }
 
-                client.put("/v1/sso/config?organizationId=$orgId") {
+                client.put(ssoConfigUrl(orgId)) {
                     header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                     header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                     setBody(
@@ -461,7 +493,7 @@ class SsoRoutesTest {
                 }
 
                 val response =
-                    client.delete("/v1/sso/config?organizationId=$orgId") {
+                    client.delete(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(memberId)}")
                     }
 
@@ -489,7 +521,7 @@ class SsoRoutesTest {
                 assertTrue(before.bodyAsText().contains("\"required\":false"))
 
                 val deniedRequireSso =
-                    client.put("/v1/sso/config?organizationId=$orgId") {
+                    client.put(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                         header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                         setBody(
@@ -508,7 +540,7 @@ class SsoRoutesTest {
                 assertEquals(HttpStatusCode.Forbidden, deniedRequireSso.status)
 
                 val allowed =
-                    client.put("/v1/sso/config?organizationId=$orgId") {
+                    client.put(ssoConfigUrl(orgId)) {
                         header(HttpHeaders.Authorization, "Bearer ${bearerForUser(ownerId)}")
                         header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
                         setBody(

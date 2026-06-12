@@ -21,8 +21,20 @@ class OrgMembershipServiceTest {
     @Test
     fun `getMembers returns all members of org`() {
         every { repository.getMembers(1) } returns listOf(
-            OrgMemberRow(userId = 1, email = "user1@test.com", name = "User One", role = "owner"),
-            OrgMemberRow(userId = 2, email = "user2@test.com", name = "User Two", role = "member")
+            OrgMemberRow(
+                userId = 1,
+                userResourceId = "00000000-0000-0000-0000-000000000001",
+                email = "user1@test.com",
+                name = "User One",
+                role = "owner"
+            ),
+            OrgMemberRow(
+                userId = 2,
+                userResourceId = "00000000-0000-0000-0000-000000000002",
+                email = "user2@test.com",
+                name = "User Two",
+                role = "member"
+            )
         )
         val members = service.getMembers(1)
         assertEquals(2, members.size)

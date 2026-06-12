@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface DdApiKey {
-  id: number
+  id: string
   name: string
   keyPrefix: string
   createdAt: string
@@ -23,7 +23,7 @@ export interface DdApiKey {
 }
 
 export interface CreateDdApiKeyResponse {
-  id: number
+  id: string
   name: string
   keyPrefix: string
   key: string

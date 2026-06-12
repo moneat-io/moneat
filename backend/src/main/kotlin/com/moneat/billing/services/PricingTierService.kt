@@ -601,12 +601,12 @@ class PricingTierService {
                 .limit(limit)
                 .map { row ->
                     AdminBillingSubscriptionResponse(
-                        subscriptionId = row[Subscriptions.id],
-                        organizationId = row[Subscriptions.organization_id],
+                        subscriptionId = row[Subscriptions.resource_id].toString(),
+                        organizationId = row[Organizations.resource_id].toString(),
                         organizationName = row[Organizations.name],
                         plan = row[Subscriptions.plan],
                         status = row[Subscriptions.status],
-                        pricingTierConfigId = row[Subscriptions.pricing_tier_config_id],
+                        pricingTierConfigId = pricingTierResourceId(row[Subscriptions.pricing_tier_config_id]),
                         paygBudgetCents = row[Subscriptions.payg_budget_cents],
                         paygUsedUnits = row[Subscriptions.payg_used_units],
                         paygUsedMicros = row[Subscriptions.payg_used_micros],
@@ -633,6 +633,16 @@ class PricingTierService {
     private fun rowToResponse(row: ResultRow): PricingTierConfigResponse {
         return quotaTierFromRow(row)
     }
+
+    private fun pricingTierResourceId(id: Int?): String? =
+        id?.let {
+            PricingTierConfigs
+                .selectAll()
+                .where { PricingTierConfigs.id eq it }
+                .firstOrNull()
+                ?.get(PricingTierConfigs.resource_id)
+                ?.toString()
+        }
 
     private fun Instant.toLocalDateUtc(): kotlinx.datetime.LocalDate {
         return toLocalDateTime(TimeZone.UTC).date

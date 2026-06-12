@@ -5,6 +5,7 @@
 package com.moneat.enterprise.oncall.services
 
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.oncall.alertResourceId
 import com.moneat.enterprise.oncall.models.TwilioNotificationsSent
 import com.moneat.shared.models.Users
 import io.ktor.client.HttpClient
@@ -108,7 +109,8 @@ class TwilioService {
             return
         }
 
-        val acknowledgeUrl = "$frontendUrl/on-call/alerts/$incidentId"
+        val incidentResourceId = transaction { alertResourceId(incidentId) }
+        val acknowledgeUrl = "$frontendUrl/on-call/alerts/$incidentResourceId"
         val body = "[$priority] $incidentTitle - Acknowledge alert: $acknowledgeUrl"
         val statusCallback = "$backendUrl/v1/webhooks/twilio/sms-status"
 
@@ -169,7 +171,8 @@ class TwilioService {
             return
         }
 
-        val gatherUrl = "$backendUrl/v1/webhooks/twilio/gather?incidentId=$incidentId"
+        val incidentResourceId = transaction { alertResourceId(incidentId) }
+        val gatherUrl = "$backendUrl/v1/webhooks/twilio/gather?incidentId=$incidentResourceId"
         val statusCallback = "$backendUrl/v1/webhooks/twilio/call-status"
 
         val safeTitle = incidentTitle.escapeXml()

@@ -146,10 +146,10 @@ class ReleaseService {
                     it[storage_path] = storageKey
                     it[file_type] = if (fileName.endsWith(".map")) "source_map" else "source_file"
                     it[ReleaseFiles.created_at] = createdAt
-                }[ReleaseFiles.id]
+                }[ReleaseFiles.resourceId]
 
             SourceMapFileResponse(
-                id = fileId,
+                id = fileId.toString(),
                 name = fileName,
                 dateCreated = formatTimestamp(createdAt)
             )
@@ -284,7 +284,7 @@ class ReleaseService {
                 .orderBy(ReleaseFiles.created_at, SortOrder.DESC)
                 .map { row ->
                     SourceMapFileResponse(
-                        id = row[ReleaseFiles.id],
+                        id = row[ReleaseFiles.resourceId].toString(),
                         name = row[ReleaseFiles.name],
                         dateCreated = formatTimestamp(row[ReleaseFiles.created_at])
                     )

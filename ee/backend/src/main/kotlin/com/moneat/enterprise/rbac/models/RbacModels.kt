@@ -9,6 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 // Foreign keys (organization_id, role_id, user_id, created_by) are declared in the Flyway
 // migration (V117__rbac_roles.sql), which is the authoritative schema in production. These
@@ -21,6 +22,7 @@ import org.jetbrains.exposed.v1.datetime.timestamp
  * this storage is deliberately generic so one role can carry keys from any domain.
  */
 object RbacRoles : IntIdTable("rbac_roles") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val name = varchar("name", 120)
 
@@ -38,6 +40,7 @@ object RbacRoles : IntIdTable("rbac_roles") {
 
 /** Assignment of a role to a user within an organization. */
 object RbacRoleAssignments : IntIdTable("rbac_role_assignments") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id")
     val roleId = integer("role_id")
     val userId = integer("user_id")
@@ -66,7 +69,7 @@ data class UpdateRoleRequest(
 
 @Serializable
 data class RoleResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     val permissions: List<String>,
     @SerialName("created_at") val createdAt: String,
@@ -75,13 +78,13 @@ data class RoleResponse(
 
 @Serializable
 data class AssignRoleRequest(
-    @SerialName("user_id") val userId: Int
+    @SerialName("user_id") val userId: String
 )
 
 @Serializable
 data class RoleAssignmentResponse(
-    val id: Int,
-    @SerialName("role_id") val roleId: Int,
-    @SerialName("user_id") val userId: Int,
+    val id: String,
+    @SerialName("role_id") val roleId: String,
+    @SerialName("user_id") val userId: String,
     @SerialName("created_at") val createdAt: String
 )

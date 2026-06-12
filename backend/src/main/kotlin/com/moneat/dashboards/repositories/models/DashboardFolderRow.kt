@@ -23,8 +23,9 @@ import kotlin.time.Instant
  */
 data class DashboardFolderRow(
     val id: Long,
-    val resourceId: String = id.toString(),
+    val resourceId: String,
     val orgId: Long,
+    val orgResourceId: String,
     val name: String,
     val color: String?,
     val sortOrder: Int,

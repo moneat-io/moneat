@@ -189,7 +189,7 @@ class WorkflowGovernanceServiceTest {
             governance.listAudit(orgId, workflowId = null, limit = MAX_AUDIT)
                 .firstOrNull { it.action == "deleted" }
         assertNotNull(deleted)
-        assertEquals(workflow.id.toString(), deleted.detail["workflow_id"])
+        assertEquals(workflow.id, deleted.detail["workflow_id"])
     }
 
     @Test
@@ -289,7 +289,7 @@ class WorkflowGovernanceServiceTest {
             service.publishAlertTriggered(alertEvent().copy(deduplicationKey = "rate-2"))
             assertEquals(1, service.listRuns(orgId, workflow.id).size)
 
-            assertTrue(WorkflowRateLimiter.isLimited(workflow.id, graph))
+            assertTrue(WorkflowRateLimiter.isLimited(internalWorkflowId(workflow.id), graph))
         }
 
     @Test
@@ -409,14 +409,14 @@ class WorkflowGovernanceServiceTest {
     }
 
     private fun seedUsage(
-        workflowId: Int?,
+        workflowId: String?,
         outcome: String,
         runKey: String
     ) {
         transaction {
             WorkflowUsageEvents.insert {
                 it[WorkflowUsageEvents.organizationId] = orgId
-                it[WorkflowUsageEvents.workflowId] = workflowId
+                it[WorkflowUsageEvents.workflowId] = workflowId?.let(::internalWorkflowId)
                 it[WorkflowUsageEvents.runId] = runKey.hashCode()
                 it[WorkflowUsageEvents.period] = usagePeriod
                 it[WorkflowUsageEvents.outcome] = outcome
@@ -427,17 +427,18 @@ class WorkflowGovernanceServiceTest {
 
     private fun seedCompletedRun(): Int {
         val workflow = service.createWorkflow(orgId, validRequest(name = "Completed run host", steps = emptyList()))
+        val workflowId = internalWorkflowId(workflow.id)
         val versionId =
             transaction {
                 WorkflowVersions
                     .selectAll()
-                    .where { WorkflowVersions.workflowId eq workflow.id }
+                    .where { WorkflowVersions.workflowId eq workflowId }
                     .first()[WorkflowVersions.id]
                     .value
             }
         return transaction {
             WorkflowRuns.insert {
-                it[WorkflowRuns.workflowId] = workflow.id
+                it[WorkflowRuns.workflowId] = workflowId
                 it[workflowVersionId] = versionId
                 it[organizationId] = orgId
                 it[triggerName] = "alert.triggered"
@@ -449,6 +450,10 @@ class WorkflowGovernanceServiceTest {
             } get WorkflowRuns.id
         }.value
     }
+
+    private fun internalWorkflowId(workflowId: String): Int =
+        service.resolveWorkflowId(orgId, workflowId)
+            ?: error("Workflow $workflowId not found")
 
     private fun seedOrganizationWithMember(): Int {
         val organizationId =
@@ -549,6 +554,7 @@ class WorkflowGovernanceServiceTest {
             """
             CREATE TABLE workflow_audit_events (
                 id INT AUTO_INCREMENT PRIMARY KEY,
+                resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                 organization_id INT NOT NULL,
                 workflow_id INT,
                 run_id INT,
@@ -590,6 +596,7 @@ class WorkflowGovernanceServiceTest {
             """
             CREATE TABLE workflow_versions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
+                resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                 workflow_id INT NOT NULL,
                 version INT NOT NULL,
                 conditions TEXT NOT NULL DEFAULT '[]',
@@ -615,6 +622,7 @@ class WorkflowGovernanceServiceTest {
             """
             CREATE TABLE workflow_runs (
                 id INT AUTO_INCREMENT PRIMARY KEY,
+                resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                 workflow_id INT NOT NULL,
                 workflow_version_id INT NOT NULL,
                 organization_id INT NOT NULL,
@@ -656,6 +664,7 @@ class WorkflowGovernanceServiceTest {
             """
             CREATE TABLE workflow_run_steps (
                 id INT AUTO_INCREMENT PRIMARY KEY,
+                resource_id UUID DEFAULT RANDOM_UUID() NOT NULL,
                 run_id INT NOT NULL,
                 node_id VARCHAR(120) NOT NULL,
                 type VARCHAR(64) NOT NULL,

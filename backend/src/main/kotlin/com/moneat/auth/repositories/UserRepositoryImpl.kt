@@ -163,6 +163,7 @@ class UserRepositoryImpl : UserRepository {
     private fun toUserRow(row: ResultRow): UserRow =
         UserRow(
             id = row[Users.id],
+            resourceId = row[Users.resource_id].toString(),
             email = row[Users.email],
             passwordHash = row[Users.password_hash],
             name = row[Users.name],

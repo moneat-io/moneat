@@ -45,8 +45,10 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -118,6 +120,15 @@ class AccountDeletionRoutesTest {
             } get Organizations.id
         }
 
+    private fun orgResourceId(orgId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq orgId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
     private fun seedMembership(
         userId: Int,
         orgId: Int,
@@ -169,7 +180,7 @@ class AccountDeletionRoutesTest {
             val userId = seedUser()
             val orgId = seedOrg()
             val response =
-                client.get("/organizations/$orgId") {
+                client.get("/organizations/${orgResourceId(orgId)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.NotFound, response.status)
@@ -193,7 +204,7 @@ class AccountDeletionRoutesTest {
             seedMembership(userId, orgId, "owner")
 
             val response =
-                client.get("/organizations/$orgId") {
+                client.get("/organizations/${orgResourceId(orgId)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -292,7 +303,7 @@ class AccountDeletionRoutesTest {
             seedMembership(userId, orgId, "member")
 
             val response =
-                client.get("/organizations/$orgId/deletion-validation") {
+                client.get("/organizations/${orgResourceId(orgId)}/deletion-validation") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -317,7 +328,7 @@ class AccountDeletionRoutesTest {
             seedMembership(userId, orgId, "owner")
 
             val response =
-                client.get("/organizations/$orgId/deletion-validation") {
+                client.get("/organizations/${orgResourceId(orgId)}/deletion-validation") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -413,8 +424,9 @@ class AccountDeletionRoutesTest {
 
             val userId = seedUser()
             val orgId = seedOrg()
+            seedMembership(userId, orgId, "owner")
             val response =
-                client.delete("/organizations/$orgId") {
+                client.delete("/organizations/${orgResourceId(orgId)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody("not valid json")
@@ -437,7 +449,7 @@ class AccountDeletionRoutesTest {
 
             val userId = seedUser()
             val response =
-                client.delete("/organizations/9999") {
+                client.delete("/organizations/11111111-1111-4111-8111-111111111111") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"confirmation":"Nonexistent"}""")
@@ -460,8 +472,9 @@ class AccountDeletionRoutesTest {
 
             val userId = seedUser()
             val orgId = seedOrg("My Company")
+            seedMembership(userId, orgId, "owner")
             val response =
-                client.delete("/organizations/$orgId") {
+                client.delete("/organizations/${orgResourceId(orgId)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"confirmation":"wrong name"}""")
@@ -488,7 +501,7 @@ class AccountDeletionRoutesTest {
             seedMembership(userId, orgId, "member")
 
             val response =
-                client.delete("/organizations/$orgId") {
+                client.delete("/organizations/${orgResourceId(orgId)}") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"confirmation":"Member Org"}""")

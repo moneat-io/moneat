@@ -34,7 +34,19 @@ interface OnCallBridge {
         priority: String
     ): Boolean
 
-    /** Trigger the escalation engine and return the on-call alert ID (or null). */
+    /** Resolve a public escalation policy resource ID to its internal ID within the organization. */
+    fun resolveEscalationPolicyId(
+        organizationId: Int,
+        escalationPolicyResourceId: String
+    ): Int?
+
+    /** Resolve a public on-call alert resource ID to its internal ID within the organization. */
+    fun resolveAlertId(
+        organizationId: Int,
+        alertResourceId: String
+    ): Int?
+
+    /** Trigger the escalation engine and return the on-call alert resource ID (or null). */
     suspend fun triggerEscalation(
         organizationId: Int,
         escalationPolicyId: Int,
@@ -44,9 +56,9 @@ interface OnCallBridge {
         alertSource: String,
         deduplicationKey: String?,
         metadata: String?
-    ): Int?
+    ): String?
 
-    /** Declare an operational incident and return the declared incident ID. */
+    /** Declare an operational incident and return the declared incident resource ID. */
     suspend fun declareIncident(
         organizationId: Int,
         userId: Int,
@@ -54,7 +66,7 @@ interface OnCallBridge {
         title: String,
         description: String?,
         severity: String
-    ): Int?
+    ): String?
 
     /** Get a declared incident by ID for a user. */
     fun getIncident(

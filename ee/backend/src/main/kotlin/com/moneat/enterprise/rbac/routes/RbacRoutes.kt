@@ -7,10 +7,13 @@ package com.moneat.enterprise.rbac.routes
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.rbac.models.AssignRoleRequest
 import com.moneat.enterprise.rbac.models.CreateRoleRequest
+import com.moneat.enterprise.rbac.models.RbacRoles
 import com.moneat.enterprise.rbac.models.UpdateRoleRequest
 import com.moneat.enterprise.rbac.services.RbacService
 import com.moneat.org.services.OrgRole
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
@@ -30,6 +33,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 
 private const val INVALID_ROLE_ID_MESSAGE = "Invalid role ID"
 private const val INVALID_USER_ID_MESSAGE = "Invalid user ID"
@@ -116,7 +120,8 @@ fun Route.rbacRoutes(service: RbacService) {
                 requireRbacAdmin(member) ?: return@post
                 val roleId = roleIdParam() ?: return@post
                 val request = call.receive<AssignRoleRequest>()
-                val assignment = service.assignRole(member.organizationId, roleId, request.userId)
+                val userId = userIdParam(request.userId) ?: return@post
+                val assignment = service.assignRole(member.organizationId, roleId, userId)
                     ?: return@post call.respond(HttpStatusCode.NotFound, ErrorResponse(ROLE_NOT_FOUND_MESSAGE))
                 call.respond(HttpStatusCode.Created, assignment)
             }
@@ -125,8 +130,7 @@ fun Route.rbacRoutes(service: RbacService) {
                 val member = requireMember() ?: return@delete
                 requireRbacAdmin(member) ?: return@delete
                 val roleId = roleIdParam() ?: return@delete
-                val userId = call.parameters["userId"]?.toIntOrNull()
-                    ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_USER_ID_MESSAGE))
+                val userId = userIdParam(call.parameters["userId"]) ?: return@delete
                 if (service.unassignRole(member.organizationId, roleId, userId)) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
@@ -144,12 +148,54 @@ private data class RbacMember(
 )
 
 private suspend fun RoutingContext.roleIdParam(): Int? {
-    val roleId = call.parameters["roleId"]?.toIntOrNull()
+    val resourceId = parseRbacResourceId(call.parameters["roleId"], INVALID_ROLE_ID_MESSAGE) ?: return null
+    val organizationId = currentOrganizationId() ?: return null
+    val roleId =
+        transaction {
+            RbacRoles
+                .selectAll()
+                .where {
+                    (RbacRoles.organizationId eq organizationId) and
+                        (RbacRoles.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(RbacRoles.id)
+                ?.value
+        }
     if (roleId == null) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_ROLE_ID_MESSAGE))
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ROLE_NOT_FOUND_MESSAGE))
         return null
     }
     return roleId
+}
+
+private suspend fun RoutingContext.userIdParam(raw: String?): Int? {
+    val resourceId = parseRbacResourceId(raw, INVALID_USER_ID_MESSAGE) ?: return null
+    val organizationId = currentOrganizationId() ?: return null
+    val userId =
+        transaction {
+            Users
+                .innerJoin(Memberships)
+                .selectAll()
+                .where {
+                    (Users.resource_id eq resourceId) and
+                        (Memberships.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Users.id)
+        }
+    if (userId == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ASSIGNMENT_NOT_FOUND_MESSAGE))
+    }
+    return userId
+}
+
+private suspend fun RoutingContext.parseRbacResourceId(raw: String?, invalidMessage: String): Uuid? {
+    val resourceId = raw?.toUuidOrNull()
+    if (resourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(invalidMessage))
+    }
+    return resourceId
 }
 
 private suspend fun RoutingContext.respondRbacError(error: Throwable) {

@@ -32,6 +32,10 @@ type MockServiceMapProps = Readonly<{
   facetFilters?: MockFacetFilter[]
 }>
 
+const HOST_ID_WEB = '11111111-1111-4111-8111-111111111111'
+const HOST_ID_DB = '22222222-2222-4222-8222-222222222222'
+const SAVED_VIEW_ID = '44444444-4444-4444-8444-444444444444'
+
 // Service-map topology has its own coverage; here it's a marker so we can assert
 // the chrome wires search/range/env/source/facets through to it.
 vi.mock('@/components/apm/ServiceMap', () => ({
@@ -161,7 +165,7 @@ describe('MonitoringMap', () => {
       onSave: async (request) => {
         savedPayload = (await request.json()) as Record<string, unknown>
         return HttpResponse.json({
-          id: 22,
+          id: SAVED_VIEW_ID,
           name: 'Prod hosts',
           resource_kind: 'hosts',
           group_by: 'status',
@@ -236,8 +240,8 @@ describe('MonitoringMap', () => {
       http.get(`${API_BASE}/v1/hosts`, () =>
         HttpResponse.json({
           hosts: [
-            {...hostFixture(1, 'web-1'), isOnline: true},
-            {...hostFixture(2, 'db-1'), isOnline: false},
+            {...hostFixture(HOST_ID_WEB, 'web-1'), isOnline: true},
+            {...hostFixture(HOST_ID_DB, 'db-1'), isOnline: false},
           ],
           totalCount: 2,
         }),
@@ -264,12 +268,12 @@ describe('MonitoringMap', () => {
     server.use(
       http.get(`${API_BASE}/v1/hosts`, () =>
         HttpResponse.json({
-          hosts: [{...hostFixture(1, 'web-1'), isOnline: true, tags: {env: 'prod', service: 'checkout'}}],
+          hosts: [{...hostFixture(HOST_ID_WEB, 'web-1'), isOnline: true, tags: {env: 'prod', service: 'checkout'}}],
           totalCount: 1,
         }),
       ),
       http.get(`${API_BASE}/v1/infra/map/saved-views`, () => HttpResponse.json({views: []})),
-      http.get(`${API_BASE}/v1/hosts/1/metrics`, () =>
+      http.get(`${API_BASE}/v1/hosts/${HOST_ID_WEB}/metrics`, () =>
         HttpResponse.json({
           data_points: [
             {timestamp: 1, cpu_percent: 42, mem_percent: 55, disk_percent: 20, net_recv_bytes: 1000, net_sent_bytes: 2000},
@@ -319,7 +323,7 @@ function processFixture(name: string, cpuPercent: number) {
   }
 }
 
-function hostFixture(id: number, hostname: string) {
+function hostFixture(id: string, hostname: string) {
   return {
     id,
     hostname,
@@ -377,7 +381,7 @@ function installInfrastructureHandlers({
       HttpResponse.json({
         hosts: [
           {
-            id: 10,
+            id: HOST_ID_WEB,
             hostname: 'web-1',
             os: 'linux',
             platform: 'ubuntu',

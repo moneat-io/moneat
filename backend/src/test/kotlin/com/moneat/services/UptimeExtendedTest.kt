@@ -89,6 +89,7 @@ class UptimeExtendedTest {
         return UptimeMonitorData(
             id = UUID.randomUUID(),
             organizationId = 1,
+            organizationResourceId = "11111111-1111-4111-8111-111111111111",
             name = "test-${p.type}",
             type = p.type,
             active = true,
@@ -722,6 +723,7 @@ class UptimeExtendedTest {
         val monitorData = UptimeMonitorData(
             id = UUID.randomUUID(),
             organizationId = 1,
+            organizationResourceId = "11111111-1111-4111-8111-111111111111",
             name = "Retry Monitor",
             type = "http",
             active = true,
@@ -777,6 +779,7 @@ class UptimeExtendedTest {
         val monitorData = UptimeMonitorData(
             id = UUID.randomUUID(),
             organizationId = 1,
+            organizationResourceId = "11111111-1111-4111-8111-111111111111",
             name = "No Retry Monitor",
             type = "http",
             active = true,

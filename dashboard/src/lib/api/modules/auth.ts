@@ -73,14 +73,14 @@ export function authMethods(core: ApiClientCore) {
       }),
 
     getSsoConfig: async (
-      organizationId: number
+      organizationId: string
     ): Promise<SsoConfig> =>
       core.request<SsoConfig>(
         `${base}/sso/config?organizationId=${organizationId}`
       ),
 
     configureSso: async (
-      organizationId: number,
+      organizationId: string,
       config: SsoConfig
     ): Promise<SsoConfig> =>
       core.request<SsoConfig>(
@@ -89,7 +89,7 @@ export function authMethods(core: ApiClientCore) {
       ),
 
     verifySsoDomain: async (
-      organizationId: number
+      organizationId: string
     ): Promise<SsoConfig> =>
       core.request<SsoConfig>(
         `${base}/sso/config/domain/verify?organizationId=${organizationId}`,
@@ -97,14 +97,14 @@ export function authMethods(core: ApiClientCore) {
       ),
 
     deleteSsoConfig: async (
-      organizationId: number
+      organizationId: string
     ): Promise<void> =>
       core.request(`${base}/sso/config?organizationId=${organizationId}`, {
         method: 'DELETE',
       }),
 
     impersonateUser: async (
-      userId: number
+      userId: string
     ): Promise<{ token: string }> =>
       core.request(`${base}/admin/impersonate/${userId}`, {
         method: 'POST',

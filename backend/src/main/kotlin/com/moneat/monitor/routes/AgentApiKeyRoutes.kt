@@ -19,6 +19,7 @@ package com.moneat.monitor.routes
 import com.moneat.auth.requireCurrentOrg
 import com.moneat.monitor.models.CreateAgentApiKeyRequest
 import com.moneat.monitor.services.AgentApiKeyService
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -30,6 +31,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 fun Route.agentApiKeyRoutes(
     agentApiKeyService: AgentApiKeyService = GlobalContext.get().get(),
@@ -65,13 +67,13 @@ fun Route.agentApiKeyRoutes(
             delete("/agent-api-keys/{id}") {
                 val orgId = call.requireCurrentOrg()?.orgId ?: return@delete
 
-                val id = call.parameters["id"]?.toIntOrNull()
+                val id = call.parameters["id"]?.let(::parseAgentApiKeyResourceId)
                 if (id == null) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
                     return@delete
                 }
 
-                val deleted = agentApiKeyService.deleteKey(organizationId = orgId, keyId = id)
+                val deleted = agentApiKeyService.deleteKey(organizationId = orgId, keyResourceId = id)
                 if (!deleted) {
                     call.respond(HttpStatusCode.NotFound, ErrorResponse("Key not found"))
                     return@delete
@@ -81,3 +83,6 @@ fun Route.agentApiKeyRoutes(
         }
     }
 }
+
+private fun parseAgentApiKeyResourceId(value: String): Uuid? =
+    value.toUuidOrNull()

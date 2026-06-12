@@ -36,6 +36,9 @@ const {mockApi} = vi.hoisted(() => ({
 }))
 
 const EMPTY_AGGREGATE = {buckets: [], totalCount: 0, interval: '5m'}
+const PAYMENTS_DASHBOARD_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174201'
+const NEW_LOGS_DASHBOARD_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174202'
+const LOG_MONITOR_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174203'
 
 vi.mock('@/lib/api', () => ({api: mockApi}))
 
@@ -82,9 +85,9 @@ describe('CreateLogMetricDialog', () => {
     vi.clearAllMocks()
     mockApi.getLogAggregate.mockResolvedValue(EMPTY_AGGREGATE)
     mockApi.getProjects.mockResolvedValue([])
-    mockApi.getDashboards.mockResolvedValue([{id: 'dashboard-7', title: 'Payments', widgets: []}])
-    mockApi.getDashboard.mockResolvedValue({id: 'dashboard-7', title: 'Payments', widgets: []})
-    mockApi.createDashboard.mockResolvedValue({id: 'dashboard-99', title: 'My logs', widgets: []})
+    mockApi.getDashboards.mockResolvedValue([{id: PAYMENTS_DASHBOARD_RESOURCE_ID, title: 'Payments', widgets: []}])
+    mockApi.getDashboard.mockResolvedValue({id: PAYMENTS_DASHBOARD_RESOURCE_ID, title: 'Payments', widgets: []})
+    mockApi.createDashboard.mockResolvedValue({id: NEW_LOGS_DASHBOARD_RESOURCE_ID, title: 'My logs', widgets: []})
     mockApi.updateDashboard.mockResolvedValue({})
     mockApi.deleteDashboard.mockResolvedValue(undefined)
     if (!HTMLElement.prototype.hasPointerCapture) {
@@ -105,7 +108,7 @@ describe('CreateLogMetricDialog', () => {
     fireEvent.click(continueButton)
 
     const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
-    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('dashboard-7')
+    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent(PAYMENTS_DASHBOARD_RESOURCE_ID)
     expect(within(editor).getByTestId('editor-datasource')).toHaveTextContent('logs')
     expect(within(editor).getByTestId('editor-filters')).toHaveTextContent('"field":"service"')
 
@@ -113,7 +116,7 @@ describe('CreateLogMetricDialog', () => {
 
     await waitFor(() => {
       expect(mockApi.updateDashboard).toHaveBeenCalledWith(
-        'dashboard-7',
+        PAYMENTS_DASHBOARD_RESOURCE_ID,
         expect.objectContaining({
           widgets: expect.arrayContaining([expect.objectContaining({widget_type: 'timeseries'})]),
         })
@@ -125,7 +128,7 @@ describe('CreateLogMetricDialog', () => {
 
   it('creates a new dashboard then saves the widget into it', async () => {
     mockApi.getDashboards.mockResolvedValue([])
-    mockApi.getDashboard.mockResolvedValue({id: 'dashboard-99', title: 'My logs', widgets: []})
+    mockApi.getDashboard.mockResolvedValue({id: NEW_LOGS_DASHBOARD_RESOURCE_ID, title: 'My logs', widgets: []})
     const onOpenChange = vi.fn()
     renderWithClient(<CreateLogMetricDialog open onOpenChange={onOpenChange} {...metricSeed} />)
 
@@ -138,10 +141,12 @@ describe('CreateLogMetricDialog', () => {
     )
 
     const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
-    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent('dashboard-99')
+    expect(within(editor).getByTestId('editor-dashboard')).toHaveTextContent(NEW_LOGS_DASHBOARD_RESOURCE_ID)
     fireEvent.click(within(editor).getByRole('button', {name: 'Save Widget'}))
 
-    await waitFor(() => expect(mockApi.updateDashboard).toHaveBeenCalledWith('dashboard-99', expect.anything()))
+    await waitFor(() => {
+      expect(mockApi.updateDashboard).toHaveBeenCalledWith(NEW_LOGS_DASHBOARD_RESOURCE_ID, expect.anything())
+    })
     expect(mockApi.deleteDashboard).not.toHaveBeenCalled()
   })
 
@@ -156,7 +161,7 @@ describe('CreateLogMetricDialog', () => {
     const editor = await screen.findByRole('dialog', {name: 'widget-editor'})
     fireEvent.click(within(editor).getByRole('button', {name: 'Editor Cancel'}))
 
-    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith('dashboard-99'))
+    await waitFor(() => expect(mockApi.deleteDashboard).toHaveBeenCalledWith(NEW_LOGS_DASHBOARD_RESOURCE_ID))
     expect(mockApi.updateDashboard).not.toHaveBeenCalled()
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
@@ -166,7 +171,7 @@ describe('CreateLogMonitorDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockApi.getLogAggregate.mockResolvedValue(EMPTY_AGGREGATE)
-    mockApi.createLogMonitor.mockResolvedValue({id: 1})
+    mockApi.createLogMonitor.mockResolvedValue({id: LOG_MONITOR_RESOURCE_ID})
   })
 
   it('creates a log monitor from the seeded query with the chosen threshold', async () => {

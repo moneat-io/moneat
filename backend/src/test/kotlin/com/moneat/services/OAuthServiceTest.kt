@@ -17,15 +17,29 @@
 package com.moneat.services
 
 import com.moneat.auth.services.OAuthService
+import com.moneat.auth.services.OAuthUserData
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class OAuthServiceTest {
+    companion object {
+        private var db: Database? = null
+    }
 
     @Test
     fun `generateGitHubAuthUrl uses configured base url and encoded redirect`() {
@@ -95,6 +109,87 @@ class OAuthServiceTest {
                 assertEquals("Octo Cat", user.name)
                 assertTrue(user.emailVerified)
             }
+        }
+    }
+
+    @Test
+    fun `findOrCreateOAuthUser logs in existing provider user with public ids`() {
+        setupOAuthDatabase()
+        val existing = seedOAuthUser(email = "existing@test.com", providerId = "provider-1")
+
+        withOAuthProperties {
+            val response = OAuthService().findOrCreateOAuthUser(
+                OAuthUserData(
+                    provider = "github",
+                    providerId = "provider-1",
+                    email = "existing@test.com",
+                    name = "Existing User",
+                    emailVerified = true,
+                )
+            )
+
+            assertTrue(response.token.isNotBlank())
+            assertEquals("existing@test.com", response.user.email)
+            assertEquals(existing.userResourceId, response.user.id)
+            assertEquals(existing.organizationResourceId, response.user.orgId)
+            assertTrue(response.user.id.contains("-"))
+            assertTrue(response.user.orgId.orEmpty().contains("-"))
+        }
+    }
+
+    @Test
+    fun `findOrCreateOAuthUser links existing password user to provider`() {
+        setupOAuthDatabase()
+        val existing = seedOAuthUser(
+            email = "link@test.com",
+            provider = null,
+            providerId = null,
+            emailVerified = false,
+        )
+
+        withOAuthProperties {
+            val response = OAuthService().findOrCreateOAuthUser(
+                OAuthUserData(
+                    provider = "github",
+                    providerId = "provider-2",
+                    email = "link@test.com",
+                    name = "Linked User",
+                    emailVerified = true,
+                )
+            )
+
+            assertEquals(existing.userResourceId, response.user.id)
+            transaction {
+                val linked = Users
+                    .selectAll()
+                    .where { Users.id eq existing.userId }
+                    .first()
+                assertEquals("github", linked[Users.oauth_provider])
+                assertEquals("provider-2", linked[Users.oauth_provider_id])
+                assertTrue(linked[Users.email_verified])
+            }
+        }
+    }
+
+    @Test
+    fun `findOrCreateOAuthUser rejects email registered with another provider`() {
+        setupOAuthDatabase()
+        seedOAuthUser(email = "conflict@test.com", provider = "google", providerId = "google-1")
+
+        withOAuthProperties {
+            val error = assertFailsWith<IllegalArgumentException> {
+                OAuthService().findOrCreateOAuthUser(
+                    OAuthUserData(
+                        provider = "github",
+                        providerId = "provider-3",
+                        email = "conflict@test.com",
+                        name = "Conflict User",
+                        emailVerified = true,
+                    )
+                )
+            }
+
+            assertTrue(error.message.orEmpty().contains("google"))
         }
     }
 
@@ -196,6 +291,67 @@ class OAuthServiceTest {
         }
     }
 
+    private fun setupOAuthDatabase() {
+        db = db ?: Database.connect(
+            url = "jdbc:h2:mem:moneat_oauth_service;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
+    }
+
+    private fun seedOAuthUser(
+        email: String,
+        provider: String? = "github",
+        providerId: String? = "provider-id",
+        emailVerified: Boolean = true,
+    ): OAuthFixture =
+        transaction {
+            val organizationId = Organizations.insert {
+                it[name] = "OAuth Org"
+                it[slug] = "oauth-org-${email.substringBefore('@')}"
+            } get Organizations.id
+            val organizationResourceId = Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .first()[Organizations.resource_id]
+                .toString()
+            val userId = Users.insert {
+                it[Users.email] = email
+                it[password_hash] = "password-hash"
+                it[name] = "OAuth User"
+                it[email_verified] = emailVerified
+                it[onboarding_completed] = true
+                it[oauth_provider] = provider
+                it[oauth_provider_id] = providerId
+            } get Users.id
+            val userResourceId = Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .first()[Users.resource_id]
+                .toString()
+            Memberships.insert {
+                it[user_id] = userId
+                it[organization_id] = organizationId
+                it[role] = "admin"
+            }
+
+            OAuthFixture(
+                userId = userId,
+                userResourceId = userResourceId,
+                organizationResourceId = organizationResourceId,
+            )
+        }
+
+    private fun <T> withOAuthProperties(block: () -> T): T =
+        withProperties(
+            mapOf(
+                "FRONTEND_URL" to "https://dashboard.test.local",
+                "BACKEND_URL" to "https://api.test.local",
+            ),
+            block,
+        )
+
     private fun <T> withProperties(
         properties: Map<String, String>,
         block: () -> T
@@ -214,4 +370,10 @@ class OAuthServiceTest {
             }
         }
     }
+
+    private data class OAuthFixture(
+        val userId: Int,
+        val userResourceId: String,
+        val organizationResourceId: String,
+    )
 }

@@ -80,7 +80,7 @@ class MitreCoverageService {
 
     private fun ResultRow.toCoverageRule(): CoverageRule =
         CoverageRule(
-            id = this[DetectionRules.id].value,
+            id = this[DetectionRules.resourceId].toString(),
             name = this[DetectionRules.name],
             enabled = this[DetectionRules.enabled],
             tags = decodeStringList(this[DetectionRules.tags]),
@@ -91,7 +91,7 @@ class MitreCoverageService {
 }
 
 data class CoverageRule(
-    val id: Int,
+    val id: String,
     val name: String,
     val enabled: Boolean,
     val tags: List<String>,

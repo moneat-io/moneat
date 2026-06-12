@@ -48,10 +48,12 @@ import com.moneat.logs.repositories.LogRepository
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.otlp.ResourceContext
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.suspendRunCatching
 import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest
 import io.opentelemetry.proto.logs.v1.LogRecord
 import io.opentelemetry.proto.logs.v1.ResourceLogs
@@ -66,9 +68,13 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.MessageDigest
 import java.time.Instant
-import com.moneat.utils.suspendRunCatching
 import java.util.Base64
 import java.util.UUID
 import kotlin.text.Charsets
@@ -84,7 +90,8 @@ private val topLevelFields =
 
 private data class LogWithCursor(
     val log: LogEntryResponse,
-    val timestampMs: Long
+    val timestampMs: Long,
+    val hostInternalId: Int?
 )
 
 private data class LogQueryWhere(
@@ -279,7 +286,11 @@ class LogService(private val logRepository: LogRepository) {
             logger.error { "organizationId $orgIdLong out of Int range, skipping usage recording" }
         }
 
-        return batch.logs.map { toResponse(it, batch.systemId, batch.hostId) }
+        val hostResourceId =
+            batch.hostId?.let { hostId ->
+                resolveHostResourceIds(batch.effectiveOrganizationId, setOf(hostId))[hostId]
+            }
+        return batch.logs.map { toResponse(it, batch.systemId, hostResourceId) }
     }
 
     suspend fun publishLiveLogs(
@@ -437,9 +448,16 @@ class LogService(private val logRepository: LogRepository) {
             pageRows.lastOrNull()?.let { row ->
                 if (hasMore) encodeCursor(row.timestampMs, row.log.logId) else null
             }
+        val hostResourceIds =
+            resolveHostResourceIds(
+                organizationId = organizationId,
+                hostIds = pageRows.mapNotNull { it.hostInternalId }.toSet()
+            )
 
         return LogQueryResponse(
-            logs = pageRows.map { it.log },
+            logs = pageRows.map { row ->
+                row.log.copy(hostId = row.hostInternalId?.let(hostResourceIds::get))
+            },
             nextCursor = nextCursor,
             hasMore = hasMore,
             totalCount = null
@@ -466,6 +484,22 @@ class LogService(private val logRepository: LogRepository) {
                 addLogCursorFilter(request.cursor)
             }
         return LogQueryWhere(conditions = conditions, parameters = parameters)
+    }
+
+    private fun resolveHostResourceIds(organizationId: Long, hostIds: Set<Int>): Map<Int, String> {
+        if (hostIds.isEmpty() || organizationId !in Int.MIN_VALUE..Int.MAX_VALUE) {
+            return emptyMap()
+        }
+
+        return transaction {
+            Hosts
+                .selectAll()
+                .where {
+                    (Hosts.organization_id eq organizationId.toInt()) and
+                        (Hosts.id inList hostIds)
+                }
+                .associate { row -> row[Hosts.id] to row[Hosts.resource_id].toString() }
+        }
     }
 
     private fun MutableList<String>.addLogTimeFilters(request: LogQueryRequest) {
@@ -1163,9 +1197,9 @@ class LogService(private val logRepository: LogRepository) {
                             tags = tagsMap,
                             resourceAttributes = parseMapField(obj["resource_attributes"]),
                             systemId = if (systemId == "00000000-0000-0000-0000-000000000000") null else systemId,
-                            hostId = hostIdFromTags
+                            hostId = null
                         )
-                    LogWithCursor(log = log, timestampMs = timestampMs)
+                    LogWithCursor(log = log, timestampMs = timestampMs, hostInternalId = hostIdFromTags)
                 }.getOrElse { e ->
                     logger.warn(e) { "Failed to parse log row" }
                     null
@@ -1292,7 +1326,7 @@ class LogService(private val logRepository: LogRepository) {
     private fun toResponse(
         entry: QueuedLogEntry,
         systemId: String?,
-        hostId: Int? = null
+        hostId: String? = null
     ): LogEntryResponse {
         return LogEntryResponse(
             logId = entry.logId,

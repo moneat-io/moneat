@@ -25,9 +25,11 @@ import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
@@ -124,7 +126,7 @@ class AlertEpisodeServiceTest {
 
         assertNotNull(suppressed)
         assertNotNull(suppressed.suppressedAt)
-        assertEquals(userId, suppressed.suppressedByUserId)
+        assertEquals(userResourceId(userId), suppressed.suppressedByUserId)
         assertNotNull(whileSuppressed)
         assertFalse(whileSuppressed.shouldPublish)
         assertNotNull(unsuppressed)
@@ -269,6 +271,15 @@ class AlertEpisodeServiceTest {
                 it[name] = "Episode Org"
                 it[slug] = "episode-org"
             } get Organizations.id
+        }
+
+    private fun userResourceId(id: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq id }
+                .single()[Users.resource_id]
+                .toString()
         }
 
     private fun alertEvent(

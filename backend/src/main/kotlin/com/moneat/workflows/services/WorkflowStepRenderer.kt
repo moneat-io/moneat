@@ -76,6 +76,11 @@ private const val ALERT_COLOR_RED = "#E01E5A"
 private const val ALERT_COLOR_GREEN = "#2EB67D"
 private const val ALERT_COLOR_YELLOW = "#ECB22E"
 private const val ALERT_COLOR_PURPLE = "#6366F1"
+private const val SAMPLE_ORGANIZATION_ID = "123e4567-e89b-12d3-a456-426614170001"
+private const val SAMPLE_USER_ID = "123e4567-e89b-12d3-a456-426614170002"
+private const val SAMPLE_ALERT_EPISODE_ID = "123e4567-e89b-12d3-a456-426614170003"
+private const val SAMPLE_INCIDENT_ID = "123e4567-e89b-12d3-a456-426614170004"
+private const val SAMPLE_SECURITY_RULE_ID = "123e4567-e89b-12d3-a456-426614170005"
 private val RESOLVED_ALERT_TRIGGERS =
     setOf(ALERT_RESOLVED_TRIGGER, "monitor.recovered", "uptime.up", "synthetic.passed")
 
@@ -114,7 +119,7 @@ class WorkflowStepRenderer {
             ALERT_STATUS_REFERENCE to status,
             ALERT_SOURCE_REFERENCE to "DASHBOARD_ALERT",
             ALERT_DEDUPLICATION_KEY_REFERENCE to "moneat-dashboard-alert-preview",
-            ALERT_EPISODE_ID_REFERENCE to "42",
+            ALERT_EPISODE_ID_REFERENCE to SAMPLE_ALERT_EPISODE_ID,
             ALERT_EPISODE_KEY_REFERENCE to "moneat-dashboard-alert-preview#3",
             ALERT_EPISODE_SEQ_REFERENCE to "3",
             ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
@@ -130,29 +135,29 @@ class WorkflowStepRenderer {
             ALERT_CHANNEL_EMAIL_REFERENCE to "true",
             ALERT_CHANNEL_SLACK_REFERENCE to "true",
             ALERT_CHANNEL_DISCORD_REFERENCE to "true",
-            ORGANIZATION_ID_REFERENCE to "1"
+            ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
     }
 
     private fun manualSampleScope(): Map<String, String> =
         mapOf(
-            "workflow.actor_id" to "1",
+            "workflow.actor_id" to SAMPLE_USER_ID,
             "workflow.input" to """{"reason":"Preview run"}""",
-            ORGANIZATION_ID_REFERENCE to "1"
+            ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
 
     private fun apiSampleScope(): Map<String, String> =
         mapOf(
-            "workflow.caller" to "1",
+            "workflow.caller" to SAMPLE_USER_ID,
             "workflow.input" to """{"service":"checkout"}""",
-            ORGANIZATION_ID_REFERENCE to "1"
+            ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
 
     private fun webhookSampleScope(): Map<String, String> =
         mapOf(
             "webhook.payload" to """{"event":"deploy.finished","service":"checkout"}""",
             "webhook.event_id" to "deploy-evt-123",
-            ORGANIZATION_ID_REFERENCE to "1"
+            ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
 
     private fun incidentSampleScope(triggerName: String): Map<String, String> {
@@ -161,29 +166,29 @@ class WorkflowStepRenderer {
             else -> "created"
         }
         return mapOf(
-            "incident.id" to "incident-123",
+            "incident.id" to SAMPLE_INCIDENT_ID,
             "incident.title" to "Checkout latency incident",
             "incident.status" to status,
             "incident.severity" to IncidentSeverity.SEV1.wire,
             ALERT_DEDUPLICATION_KEY_REFERENCE to "incident-checkout-latency",
-            ALERT_EPISODE_ID_REFERENCE to "42",
+            ALERT_EPISODE_ID_REFERENCE to SAMPLE_INCIDENT_ID,
             ALERT_EPISODE_KEY_REFERENCE to "incident-checkout-latency#3",
             ALERT_EPISODE_SEQ_REFERENCE to "3",
             ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
             ALERT_NOTIFICATION_KIND_REFERENCE to status,
             ALERT_OPENED_AT_REFERENCE to "2026-06-02T12:00:00Z",
             ALERT_LAST_SEEN_AT_REFERENCE to "2026-06-02T12:05:00Z",
-            ORGANIZATION_ID_REFERENCE to "1"
+            ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
     }
 
     private fun securitySampleScope(): Map<String, String> =
         mapOf(
-            "security.rule_id" to "runtime.file.modified",
+            "security.rule_id" to SAMPLE_SECURITY_RULE_ID,
             "security.rule_name" to "Sensitive file modified",
             "security.severity" to "high",
             "security.resource" to "/etc/app/config.yml",
-            ORGANIZATION_ID_REFERENCE to "1"
+            ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
 
     fun renderStepPreview(

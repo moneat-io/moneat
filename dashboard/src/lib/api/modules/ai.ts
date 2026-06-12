@@ -59,7 +59,7 @@ export function aiMethods(core: ApiClientCore) {
 
   return {
     sendChatMessage: (
-      conversationId: number | null,
+      conversationId: string | null,
       message: string,
       currentPage: string
     ) =>
@@ -69,7 +69,7 @@ export function aiMethods(core: ApiClientCore) {
       }),
 
     executeAiAction: (
-      conversationId: number,
+      conversationId: string,
       actionId: string,
       params: Record<string, string> = {}
     ) =>
@@ -81,17 +81,17 @@ export function aiMethods(core: ApiClientCore) {
     getAiConversations: () =>
       core.request<AiConversationSummary[]>(`${base}/ai/conversations`),
 
-    getAiConversation: (id: number) =>
-      core.request<AiConversationDetail>(`${base}/ai/conversations/${id}`),
+    getAiConversation: (id: string) =>
+      core.request<AiConversationDetail>(`${base}/ai/conversations/${encodeURIComponent(id)}`),
 
-    deleteAiConversation: (id: number) =>
-      core.request<void>(`${base}/ai/conversations/${id}`, {
+    deleteAiConversation: (id: string) =>
+      core.request<void>(`${base}/ai/conversations/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
 
     streamAiSearch: async (
       request: {
-        conversationId?: number | null
+        conversationId?: string | null
         message: string
         currentPage?: string
         timeRange?: string
@@ -113,7 +113,7 @@ export function aiMethods(core: ApiClientCore) {
     },
 
     streamAiConfirm: async (
-      snapshotId: number,
+      snapshotId: string,
       onEvent: (event: AiSseEvent) => void
     ) => {
       const response = await core.fetchWithAuth(`${base}/ai/chat/confirm`, {

@@ -42,6 +42,12 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class GrafanaTranslatorTest {
+    private companion object {
+        const val DASHBOARD_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+        const val WIDGET_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+        const val ORG_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+        const val USER_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+    }
 
     private val translator = GrafanaTranslator()
 
@@ -439,15 +445,15 @@ class GrafanaTranslatorTest {
     @Test
     fun `export generates valid Grafana JSON structure`() {
         val dashboard = DashboardResponse(
-            id = "dashboard-1",
-            orgId = 1,
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
             title = "Test",
-            createdBy = 1,
+            createdBy = USER_RESOURCE_ID,
             createdAt = "",
             updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = "widget-1", dashboardId = "dashboard-1", title = "CPU",
+                    id = WIDGET_RESOURCE_ID, dashboardId = DASHBOARD_RESOURCE_ID, title = "CPU",
                     widgetType = "timeseries",
                     gridX = 0, gridY = 0, gridW = 6, gridH = 4,
                     queryConfigs = listOf(
@@ -470,16 +476,16 @@ class GrafanaTranslatorTest {
     @Test
     fun `export scales 12-col grid to 24-col`() {
         val dashboard = DashboardResponse(
-            id = "dashboard-1",
-            orgId = 1,
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
             title = "Test",
-            createdBy = 1,
+            createdBy = USER_RESOURCE_ID,
             createdAt = "",
             updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = "widget-1",
-                    dashboardId = "dashboard-1",
+                    id = WIDGET_RESOURCE_ID,
+                    dashboardId = DASHBOARD_RESOURCE_ID,
                     widgetType = "stat",
                     gridX = 3,
                     gridY = 0,
@@ -498,16 +504,16 @@ class GrafanaTranslatorTest {
     @Test
     fun `export maps toplist to table in Grafana`() {
         val dashboard = DashboardResponse(
-            id = "dashboard-1",
-            orgId = 1,
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
             title = "Test",
-            createdBy = 1,
+            createdBy = USER_RESOURCE_ID,
             createdAt = "",
             updatedAt = "",
             widgets = listOf(
                 WidgetResponse(
-                    id = "widget-1",
-                    dashboardId = "dashboard-1",
+                    id = WIDGET_RESOURCE_ID,
+                    dashboardId = DASHBOARD_RESOURCE_ID,
                     widgetType = "toplist",
                     queryConfigs = listOf(QueryDsl(dataSource = "events")),
                 )
@@ -1074,10 +1080,10 @@ class GrafanaTranslatorTest {
     @Test
     fun `export includes variables in templating`() {
         val dashboard = DashboardResponse(
-            id = "dashboard-1",
-            orgId = 1,
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
             title = "Test",
-            createdBy = 1,
+            createdBy = USER_RESOURCE_ID,
             createdAt = "",
             updatedAt = "",
             variables = listOf(

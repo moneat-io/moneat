@@ -28,6 +28,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SsoConfigurations
 import com.moneat.shared.models.UserSsoLinks
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.organizationResourceId
 import com.moneat.sso.SsoForbiddenException
 import com.moneat.sso.models.SsoCallbackData
 import com.moneat.sso.models.SsoConfigRequest
@@ -537,8 +538,8 @@ open class SsoService {
                     val token = ensureDomainVerificationToken(row)
                     val emailDomain = row[SsoConfigurations.emailDomain]
                     SsoConfigResponse(
-                        id = row[SsoConfigurations.id],
-                        organizationId = row[SsoConfigurations.organizationId],
+                        id = row[SsoConfigurations.resourceId].toString(),
+                        organizationId = organizationResourceId(row[SsoConfigurations.organizationId]),
                         providerType = row[SsoConfigurations.providerType],
                         isEnabled = row[SsoConfigurations.isEnabled],
                         idpEntityId = row[SsoConfigurations.idpEntityId],

@@ -41,12 +41,12 @@ export interface AdminAttributionResponse {
 }
 
 export interface AdminBillingSubscription {
-  subscriptionId: number
-  organizationId: number
+  subscriptionId: string
+  organizationId: string
   organizationName: string
   plan: string
   status: string
-  pricingTierConfigId?: number | null
+  pricingTierConfigId?: string | null
   paygBudgetCents: number
   paygUsedUnits: number
   paygUsedMicros: number
@@ -62,7 +62,7 @@ export interface AdminQuotaUsageResetRequest {
 }
 
 export interface AdminQuotaUsageResetResponse {
-  organizationId: number
+  organizationId: string
   quotaType: string
   periodStart: string
   periodEnd: string

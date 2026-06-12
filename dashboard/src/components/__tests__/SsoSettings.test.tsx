@@ -49,8 +49,8 @@ afterAll(() => {
 })
 
 const baseConfig = {
-  id: 1,
-  organizationId: 7,
+  id: 'sso-config-1',
+  organizationId: 'org-7',
   providerType: 'oidc',
   isEnabled: true,
   idpEntityId: null,
@@ -78,7 +78,7 @@ function renderSsoTab(options: {canConfigure?: boolean; hasSamlModule?: boolean}
   return render(
     <QueryClientProvider client={queryClient}>
       <SsoTab
-        organizationId={7}
+        organizationId="org-7"
         canConfigure={options.canConfigure ?? true}
         hasSamlModule={options.hasSamlModule ?? true}
       />
@@ -105,7 +105,7 @@ describe('SsoSettings', () => {
 
     fireEvent.click(screen.getByRole('button', {name: /verify/i}))
 
-    await waitFor(() => expect(mockApi.verifySsoDomain).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(mockApi.verifySsoDomain).toHaveBeenCalledWith('org-7'))
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({title: 'SSO domain verified'}))
   })
 
@@ -123,7 +123,7 @@ describe('SsoSettings', () => {
 
     await waitFor(() =>
       expect(mockApi.configureSso).toHaveBeenCalledWith(
-        7,
+        'org-7',
         expect.objectContaining({
           providerType: 'oidc',
           oidcIssuerUrl: 'https://idp.example.com',
@@ -141,7 +141,7 @@ describe('SsoSettings', () => {
 
     fireEvent.click(await screen.findByRole('button', {name: /delete sso configuration/i}))
 
-    await waitFor(() => expect(mockApi.deleteSsoConfig).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(mockApi.deleteSsoConfig).toHaveBeenCalledWith('org-7'))
     expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({title: 'SSO configuration deleted'}))
   })
 

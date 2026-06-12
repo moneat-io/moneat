@@ -37,6 +37,7 @@ class OrgMembershipRepositoryImpl : OrgMembershipRepository {
                 .map { row ->
                     OrgMemberRow(
                         userId = row[Users.id],
+                        userResourceId = row[Users.resource_id].toString(),
                         email = row[Users.email],
                         name = row[Users.name],
                         role = row[Memberships.role]

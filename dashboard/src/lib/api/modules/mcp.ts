@@ -31,7 +31,7 @@ function readStringArray(value: unknown): string[] {
 
 function mapMcpApiKey(row: Record<string, unknown>): McpApiKey {
   return {
-    id: row.id as number,
+    id: row.id as string,
     name: row.name as string,
     keyPrefix: (row.keyPrefix ?? row.key_prefix) as string,
     enabledTools: readStringArray(row.enabledTools ?? row.enabled_tools),
@@ -106,13 +106,13 @@ export function mcpMethods(core: ApiClientCore) {
       return mapCreateMcpApiKey(response)
     },
 
-    updateMcpApiKey: (id: number, request: UpsertMcpApiKeyRequest) =>
-      core.request<void>(`${base}/mcp/api-keys/${id}`, {
+    updateMcpApiKey: (id: string, request: UpsertMcpApiKeyRequest) =>
+      core.request<void>(`${base}/mcp/api-keys/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteMcpApiKey: (id: number) =>
-      core.request<void>(`${base}/mcp/api-keys/${id}`, {method: 'DELETE'}),
+    deleteMcpApiKey: (id: string) =>
+      core.request<void>(`${base}/mcp/api-keys/${encodeURIComponent(id)}`, {method: 'DELETE'}),
   }
 }

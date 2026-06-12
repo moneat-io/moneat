@@ -68,6 +68,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -209,7 +210,7 @@ class SummaryService(
                 h.lastSeenAt.toEpochMilliseconds() <= windowEnd.toEpochMilli()
         }.map { h ->
             HostStatusChange(
-                systemId = h.id.toString(),
+                systemId = h.resourceId.toString(),
                 systemName = h.displayName ?: h.hostname,
                 previousStatus = STATUS_ONLINE,
                 currentStatus = h.status,
@@ -341,7 +342,7 @@ class SummaryService(
     @Suppress("LongMethod")
     suspend fun getIncidentContext(
         organizationId: Int,
-        incidentId: Long
+        incidentId: Uuid
     ): IncidentContextResponse = coroutineScope {
         val hosts = monitorService.listHosts(organizationId)
         val monitors = uptimeService.listMonitors(organizationId)
@@ -350,81 +351,13 @@ class SummaryService(
         val now = Instant.now()
         val windowStart = now.minusSeconds(METRICS_WINDOW_MINUTES * SECONDS_PER_MINUTE)
 
-        // Load the specific incident from IncidentEventLog by ID and org, then
-        // parse the deduplication key to find the exact triggering host/alert.
-        var alertContext: AlertContextInfo? = null
-        var hostMetrics: HostMetricsWindow? = null
-
-        val incidentLog = loadIncidentLog(organizationId, incidentId)
-        if (incidentLog != null) {
-            val hostId = parseHostIdFromDedupKey(incidentLog.deduplicationKey)
-            val alertId = parseAlertIdFromDedupKey(incidentLog.deduplicationKey)
-            val host = if (hostId != null) {
-                hosts.firstOrNull { it.id == hostId }
-            } else {
-                null
-            }
-            if (host != null) {
-                val alert = if (alertId != null) {
-                    monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.id == alertId }
-                } else {
-                    monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.lastTriggeredAt != null }
-                }
-                alertContext = AlertContextInfo(
-                    alertId = alert?.id ?: 0,
-                    metric = alert?.metric ?: "",
-                    condition = alert?.condition ?: "",
-                    threshold = alert?.threshold ?: 0.0,
-                    systemId = host.id.toString(),
-                    systemName = host.displayName ?: host.hostname
-                )
-                val metrics = runCatching { monitorService.getLatestMetrics(host.id) }.getOrNull()
-                if (metrics != null) {
-                    hostMetrics = HostMetricsWindow(
-                        systemId = host.id.toString(),
-                        systemName = host.displayName ?: host.hostname,
-                        avgCpu = metrics.cpuPercent.toDouble(),
-                        maxCpu = metrics.cpuPercent.toDouble(),
-                        avgMemory = metrics.memPercent.toDouble(),
-                        maxMemory = metrics.memPercent.toDouble(),
-                        windowStart = isoFormatter.format(windowStart),
-                        windowEnd = isoFormatter.format(now)
-                    )
-                }
-            }
-        } else {
-            // Fallback: use the most recently triggered alert across the org
-            // when the incident log entry cannot be found.
-            val mostRecent = hosts.flatMap { host ->
-                monitorService.listAlerts(host.id, host.organizationId)
-                    .filter { it.lastTriggeredAt != null }
-                    .map { alert -> alert to host }
-            }.maxByOrNull { it.first.lastTriggeredAt ?: 0 }
-            if (mostRecent != null) {
-                val (alert, host) = mostRecent
-                alertContext = AlertContextInfo(
-                    alertId = alert.id,
-                    metric = alert.metric,
-                    condition = alert.condition,
-                    threshold = alert.threshold,
-                    systemId = host.id.toString(),
-                    systemName = host.displayName ?: host.hostname
-                )
-                val metrics = runCatching { monitorService.getLatestMetrics(host.id) }.getOrNull()
-                if (metrics != null) {
-                    hostMetrics = HostMetricsWindow(
-                        systemId = host.id.toString(),
-                        systemName = host.displayName ?: host.hostname,
-                        avgCpu = metrics.cpuPercent.toDouble(),
-                        maxCpu = metrics.cpuPercent.toDouble(),
-                        avgMemory = metrics.memPercent.toDouble(),
-                        maxMemory = metrics.memPercent.toDouble(),
-                        windowStart = isoFormatter.format(windowStart),
-                        windowEnd = isoFormatter.format(now)
-                    )
-                }
-            }
-        }
+        val incidentHostContext = resolveIncidentHostContext(
+            organizationId = organizationId,
+            incidentId = incidentId,
+            hosts = hosts,
+            windowStart = windowStart,
+            windowEnd = now,
+        )
 
         val logsDeferred = async {
             getRecentLogErrors(organizationId, windowStart, now)
@@ -450,9 +383,9 @@ class SummaryService(
         }
 
         IncidentContextResponse(
-            incidentId = incidentId,
-            triggeringAlert = alertContext,
-            hostMetrics = hostMetrics,
+            incidentId = incidentId.toString(),
+            triggeringAlert = incidentHostContext.alertContext,
+            hostMetrics = incidentHostContext.hostMetrics,
             relatedLogs = logsDeferred.await(),
             errorSpikes = errorSpikesDeferred.await(),
             recentDeployments = deploymentsDeferred.await(),
@@ -467,23 +400,111 @@ class SummaryService(
      * organization for security. Returns null when no matching entry exists.
      */
     private data class IncidentLogEntry(
+        val resourceId: String,
         val deduplicationKey: String,
         val alertSource: String,
         val title: String
     )
 
-    private fun loadIncidentLog(organizationId: Int, incidentId: Long): IncidentLogEntry? {
-        if (incidentId !in Int.MIN_VALUE..Int.MAX_VALUE) return null
+    private data class IncidentHostContext(
+        val alertContext: AlertContextInfo?,
+        val hostMetrics: HostMetricsWindow?,
+    )
+
+    private suspend fun resolveIncidentHostContext(
+        organizationId: Int,
+        incidentId: Uuid,
+        hosts: List<com.moneat.monitor.models.HostData>,
+        windowStart: Instant,
+        windowEnd: Instant,
+    ): IncidentHostContext {
+        val incidentLog = loadIncidentLog(organizationId, incidentId)
+        if (incidentLog != null) {
+            val host = parseHostIdFromDedupKey(incidentLog.deduplicationKey)
+                ?.let { hostId -> hosts.firstOrNull { it.id == hostId } }
+                ?: return IncidentHostContext(null, null)
+            val alert = resolveIncidentAlert(host, parseAlertIdFromDedupKey(incidentLog.deduplicationKey))
+            return buildIncidentHostContext(host, alert, windowStart, windowEnd)
+        }
+
+        val mostRecent = hosts.flatMap { host ->
+            monitorService.listAlerts(host.id, host.organizationId)
+                .filter { it.lastTriggeredAt != null }
+                .map { alert -> alert to host }
+        }.maxByOrNull { it.first.lastTriggeredAt ?: 0 } ?: return IncidentHostContext(null, null)
+
+        return buildIncidentHostContext(
+            host = mostRecent.second,
+            alert = mostRecent.first,
+            windowStart = windowStart,
+            windowEnd = windowEnd,
+        )
+    }
+
+    private fun resolveIncidentAlert(
+        host: com.moneat.monitor.models.HostData,
+        alertId: Int?,
+    ) = if (alertId != null) {
+        monitorService
+            .getAlertByInternalId(alertId)
+            ?.takeIf { it.hostId == host.resourceId.toString() }
+    } else {
+        monitorService.listAlerts(host.id, host.organizationId).firstOrNull { it.lastTriggeredAt != null }
+    }
+
+    private suspend fun buildIncidentHostContext(
+        host: com.moneat.monitor.models.HostData,
+        alert: com.moneat.monitor.models.AlertResponse?,
+        windowStart: Instant,
+        windowEnd: Instant,
+    ): IncidentHostContext {
+        val systemId = host.resourceId.toString()
+        val systemName = host.displayName ?: host.hostname
+        return IncidentHostContext(
+            alertContext = AlertContextInfo(
+                alertId = alert?.id.orEmpty(),
+                metric = alert?.metric ?: "",
+                condition = alert?.condition ?: "",
+                threshold = alert?.threshold ?: 0.0,
+                systemId = systemId,
+                systemName = systemName,
+            ),
+            hostMetrics = buildHostMetricsWindow(host, systemId, systemName, windowStart, windowEnd),
+        )
+    }
+
+    private suspend fun buildHostMetricsWindow(
+        host: com.moneat.monitor.models.HostData,
+        systemId: String,
+        systemName: String,
+        windowStart: Instant,
+        windowEnd: Instant,
+    ): HostMetricsWindow? {
+        val metrics = runCatching { monitorService.getLatestMetrics(host.id) }.getOrNull() ?: return null
+        return HostMetricsWindow(
+            systemId = systemId,
+            systemName = systemName,
+            avgCpu = metrics.cpuPercent.toDouble(),
+            maxCpu = metrics.cpuPercent.toDouble(),
+            avgMemory = metrics.memPercent.toDouble(),
+            maxMemory = metrics.memPercent.toDouble(),
+            windowStart = isoFormatter.format(windowStart),
+            windowEnd = isoFormatter.format(windowEnd),
+        )
+    }
+
+    private fun loadIncidentLog(organizationId: Int, incidentId: Uuid): IncidentLogEntry? {
         return transaction {
             IncidentEventLog
                 .selectAll()
                 .where {
-                    (IncidentEventLog.id eq incidentId.toInt()) and
+                    (IncidentEventLog.resourceId eq incidentId) and
                         (IncidentEventLog.organizationId eq organizationId)
                 }
                 .firstOrNull()
                 ?.let { row ->
                     IncidentLogEntry(
+                        resourceId = row[IncidentEventLog.resourceId].toString(),
                         deduplicationKey = row[IncidentEventLog.deduplicationKey],
                         alertSource = row[IncidentEventLog.alertSource],
                         title = row[IncidentEventLog.title]
@@ -535,6 +556,16 @@ class SummaryService(
         }
     }
 
+    private fun projectResourceId(projectId: Long): String =
+        transaction {
+            Projects
+                .selectAll()
+                .where { Projects.id eq projectId }
+                .firstOrNull()
+                ?.get(Projects.resource_id)
+                ?.toString()
+        }.orEmpty()
+
     private fun getTopAlerts(
         organizationId: Int,
         period: String
@@ -546,7 +577,7 @@ class SummaryService(
             monitorService.listAlerts(host.id, organizationId).map { alert ->
                 AlertSummaryItem(
                     alertId = alert.id,
-                    systemId = alert.hostId?.toString() ?: alert.systemId,
+                    systemId = alert.hostId ?: alert.systemId,
                     metric = alert.metric,
                     condition = alert.condition,
                     threshold = alert.threshold,
@@ -576,7 +607,7 @@ class SummaryService(
                         alert.lastTriggeredAt >= cutoff
                 }
             HostErrorRate(
-                systemId = host.id.toString(),
+                systemId = host.resourceId.toString(),
                 systemName = host.displayName ?: host.hostname,
                 alertCount = alertCount
             )
@@ -775,7 +806,7 @@ class SummaryService(
                 releaseService.listReleases(pid).take(2).map { r ->
                     DeploymentInfo(
                         version = r.version,
-                        projectId = pid,
+                        projectId = projectResourceId(pid),
                         createdAt = r.dateCreated
                     )
                 }
@@ -814,7 +845,10 @@ class SummaryService(
                     eventCount = obj["event_count"]
                         ?.jsonPrimitive?.long ?: 0,
                     projectId = obj["pid"]
-                        ?.jsonPrimitive?.long ?: 0
+                        ?.jsonPrimitive
+                        ?.long
+                        ?.let(::projectResourceId)
+                        .orEmpty()
                 )
             }
         }

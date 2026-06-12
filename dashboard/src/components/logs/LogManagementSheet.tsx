@@ -390,11 +390,11 @@ function IndexesPanel({currentQuery}: IndexesPanelProps) {
     },
   })
   const updateIndex = useMutation({
-    mutationFn: ({id, is_active}: {id: number; is_active: boolean}) => api.updateLogIndex(id, {is_active}),
+    mutationFn: ({id, is_active}: {id: string; is_active: boolean}) => api.updateLogIndex(id, {is_active}),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['log-indexes']}),
   })
   const deleteIndex = useMutation({
-    mutationFn: (id: number) => api.deleteLogIndex(id),
+    mutationFn: (id: string) => api.deleteLogIndex(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['log-indexes']})
       queryClient.invalidateQueries({queryKey: ['log-index-usage']})
@@ -634,7 +634,7 @@ function PipelinesPanel({currentQuery, currentLogs}: PipelinesPanelProps) {
     },
   })
   const deletePipeline = useMutation({
-    mutationFn: (id: number) => api.deleteLogPipeline(id),
+    mutationFn: (id: string) => api.deleteLogPipeline(id),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['log-pipelines']}),
   })
 
@@ -892,7 +892,7 @@ function SavedViewsPanel({currentViewState, onApplySavedView}: SavedViewsPanelPr
     },
   })
   const deleteView = useMutation({
-    mutationFn: (id: number) => api.deleteLogSavedView(id),
+    mutationFn: (id: string) => api.deleteLogSavedView(id),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['log-saved-views']}),
   })
 
@@ -1012,7 +1012,7 @@ function MetricsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
     onSuccess: (result) => setPreview(result),
   })
   const rollupRule = useMutation({
-    mutationFn: (id: number) => api.rollupLogMetricRule(id),
+    mutationFn: (id: string) => api.rollupLogMetricRule(id),
     onSuccess: (result) => {
       toast({
         title: 'Metric rollup complete',
@@ -1177,7 +1177,7 @@ function MonitorsPanel({currentQuery, currentLevels}: QueryLevelsPanelProps) {
     },
   })
   const deleteMonitor = useMutation({
-    mutationFn: (id: number) => api.deleteLogMonitor(id),
+    mutationFn: (id: string) => api.deleteLogMonitor(id),
     onSuccess: () => queryClient.invalidateQueries({queryKey: ['log-monitors']}),
   })
 

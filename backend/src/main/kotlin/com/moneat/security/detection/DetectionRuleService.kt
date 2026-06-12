@@ -18,6 +18,8 @@ package com.moneat.security.detection
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.security.signals.SignalSeverity
+import com.moneat.shared.services.resolveScopedIntResourceId
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -31,6 +33,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
+import kotlin.uuid.Uuid
 
 private val ruleJson = Json {
     encodeDefaults = true
@@ -70,6 +73,20 @@ class DetectionRuleService(
             .firstOrNull()
             ?.toResponse()
     }
+
+    fun get(organizationId: Int, ruleId: String): DetectionRuleResponse? {
+        val numericRuleId = parseResourceId(ruleId)?.let { resolveRuleId(organizationId, it) } ?: return null
+        return get(organizationId, numericRuleId)
+    }
+
+    fun resolveRuleId(organizationId: Int, ruleResourceId: Uuid): Int? =
+        resolveScopedIntResourceId(
+            table = DetectionRules,
+            resourceIdColumn = DetectionRules.resourceId,
+            scopeColumn = DetectionRules.organizationId,
+            scopeId = organizationId,
+            resourceId = ruleResourceId,
+        )
 
     /** @throws DetectionCompileException (a DSL-level [IllegalArgumentException]) if the rule is invalid. */
     fun create(organizationId: Int, request: CreateDetectionRuleRequest): DetectionRuleResponse {
@@ -134,10 +151,20 @@ class DetectionRuleService(
         return get(organizationId, ruleId)
     }
 
+    fun update(organizationId: Int, ruleId: String, request: UpdateDetectionRuleRequest): DetectionRuleResponse? {
+        val numericRuleId = parseResourceId(ruleId)?.let { resolveRuleId(organizationId, it) } ?: return null
+        return update(organizationId, numericRuleId, request)
+    }
+
     fun delete(organizationId: Int, ruleId: Int): Boolean = transaction {
         DetectionRules.deleteWhere {
             (DetectionRules.id eq ruleId) and (DetectionRules.organizationId eq organizationId)
         } > 0
+    }
+
+    fun delete(organizationId: Int, ruleId: String): Boolean {
+        val numericRuleId = parseResourceId(ruleId)?.let { resolveRuleId(organizationId, it) } ?: return false
+        return delete(organizationId, numericRuleId)
     }
 
     /** All enabled rules across orgs, as records for the scheduler. The compiler still injects each
@@ -166,6 +193,11 @@ class DetectionRuleService(
                 ?.toRecord()
         } ?: return null
         return runPreview(organizationId, record, persistedRuleId = ruleId)
+    }
+
+    suspend fun preview(organizationId: Int, ruleId: String): DetectionPreviewResponse? {
+        val numericRuleId = parseResourceId(ruleId)?.let { resolveRuleId(organizationId, it) } ?: return null
+        return preview(organizationId, numericRuleId)
     }
 
     private suspend fun runPreview(
@@ -213,8 +245,11 @@ class DetectionRuleService(
         DetectionRuleType.fromWire(type)
             ?: throw DetectionCompileException("Unsupported rule type '${type.take(TYPE_PREVIEW_LEN)}'")
 
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
+
     private fun ResultRow.toResponse(): DetectionRuleResponse = DetectionRuleResponse(
-        id = this[DetectionRules.id].value,
+        id = this[DetectionRules.resourceId].toString(),
         name = this[DetectionRules.name],
         description = this[DetectionRules.description],
         source = this[DetectionRules.ruleSource],

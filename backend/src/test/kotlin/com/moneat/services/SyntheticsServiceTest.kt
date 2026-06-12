@@ -40,9 +40,11 @@ import com.moneat.workflows.services.WorkflowService
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import org.jetbrains.exposed.v1.core.eq
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -51,6 +53,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import java.util.UUID
+import kotlin.uuid.Uuid
 
 class SyntheticsServiceTest {
     private val service = SyntheticsService()
@@ -58,6 +62,8 @@ class SyntheticsServiceTest {
     companion object {
         private var db: Database? = null
         private const val TEST_ORG_ID = 1
+
+        private fun resourceId(value: String): Uuid = Uuid.parse(value)
     }
 
     @BeforeTest
@@ -146,6 +152,15 @@ class SyntheticsServiceTest {
             override suspend fun executeTest(test: SyntheticTestData): SyntheticCheckResult = result
         }
 
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
     // ──── CRUD: Create ────
 
     @Test
@@ -155,7 +170,7 @@ class SyntheticsServiceTest {
         assertEquals("API Health Check", response.name)
         assertEquals("api", response.testType)
         assertTrue(response.active)
-        assertEquals(TEST_ORG_ID, response.organizationId)
+        assertEquals(organizationResourceId(TEST_ORG_ID), response.organizationId)
         assertEquals("pending", response.status)
     }
 
@@ -592,7 +607,7 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "MY_VAR", value = "hello")
         )
-        val fetched = service.getVariable(created.id, TEST_ORG_ID)
+        val fetched = service.getVariable(resourceId(created.id), TEST_ORG_ID)
         assertNotNull(fetched)
         assertEquals("MY_VAR", fetched.name)
     }
@@ -603,7 +618,7 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "VAR", value = "val")
         )
-        val fetched = service.getVariable(created.id, 999)
+        val fetched = service.getVariable(resourceId(created.id), 999)
         assertNull(fetched)
     }
 
@@ -614,7 +629,7 @@ class SyntheticsServiceTest {
             SyntheticVariableRequest(name = "OLD", value = "oldval")
         )
         val updated = service.updateVariable(
-            created.id,
+            resourceId(created.id),
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "NEW", value = "newval")
         )
@@ -630,7 +645,7 @@ class SyntheticsServiceTest {
             SyntheticVariableRequest(name = "VAR", value = "val")
         )
         val result = service.updateVariable(
-            created.id,
+            resourceId(created.id),
             999,
             SyntheticVariableRequest(name = "X", value = "y")
         )
@@ -643,8 +658,8 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "DEL", value = "me")
         )
-        assertTrue(service.deleteVariable(created.id, TEST_ORG_ID))
-        assertNull(service.getVariable(created.id, TEST_ORG_ID))
+        assertTrue(service.deleteVariable(resourceId(created.id), TEST_ORG_ID))
+        assertNull(service.getVariable(resourceId(created.id), TEST_ORG_ID))
     }
 
     @Test
@@ -653,7 +668,7 @@ class SyntheticsServiceTest {
             TEST_ORG_ID,
             SyntheticVariableRequest(name = "VAR", value = "val")
         )
-        assertFalse(service.deleteVariable(created.id, 999))
+        assertFalse(service.deleteVariable(resourceId(created.id), 999))
     }
 
     @Test

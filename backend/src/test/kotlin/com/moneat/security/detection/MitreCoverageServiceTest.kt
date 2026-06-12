@@ -26,9 +26,9 @@ class MitreCoverageServiceTest {
     fun `coverage normalizes enabled rule technique and tactic tags`() {
         val response = MitreCoverageService().buildCoverage(
             listOf(
-                CoverageRule(1, "Command execution", enabled = true, tags = listOf("sigma:attack.t1059")),
-                CoverageRule(2, "Brute force", enabled = true, tags = listOf("mitre:T1110", "mitre:TA0006")),
-                CoverageRule(3, "No tag", enabled = true, tags = listOf("category:test")),
+                CoverageRule("rule-1", "Command execution", enabled = true, tags = listOf("sigma:attack.t1059")),
+                CoverageRule("rule-2", "Brute force", enabled = true, tags = listOf("mitre:T1110", "mitre:TA0006")),
+                CoverageRule("rule-3", "No tag", enabled = true, tags = listOf("category:test")),
             ),
         )
 

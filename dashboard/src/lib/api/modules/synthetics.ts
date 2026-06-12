@@ -88,19 +88,19 @@ export function syntheticsMethods(core: ApiClientCore) {
       }),
 
     updateSyntheticVariable: (
-      id: number,
+      id: string,
       request: SyntheticVariableRequest
     ) =>
       core.request<SyntheticVariableResponse>(
-        `${base}/synthetics/variables/${id}`,
+        `${base}/synthetics/variables/${encodeURIComponent(id)}`,
         {
           method: 'PUT',
           body: JSON.stringify(request),
         }
       ),
 
-    deleteSyntheticVariable: (id: number) =>
-      core.request<void>(`${base}/synthetics/variables/${id}`, {
+    deleteSyntheticVariable: (id: string) =>
+      core.request<void>(`${base}/synthetics/variables/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
   }

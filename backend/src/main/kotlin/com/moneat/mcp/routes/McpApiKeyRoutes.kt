@@ -22,10 +22,12 @@ import com.moneat.mcp.models.McpApiKeysResponse
 import com.moneat.mcp.models.UpdateMcpApiKeyRequest
 import com.moneat.mcp.protocol.McpResourceRegistry
 import com.moneat.mcp.protocol.McpToolRegistry
+import com.moneat.mcp.services.McpApiKeyUpdate
 import com.moneat.mcp.services.McpApiKeyService
 import com.moneat.mcp.services.McpToolCatalogService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -39,6 +41,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import org.koin.core.context.GlobalContext
+import kotlin.uuid.Uuid
 
 private const val INVALID_TOKEN_CLAIMS = "Invalid token claims"
 private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
@@ -169,10 +172,12 @@ private suspend fun ApplicationCall.updateMcpApiKey(
         val updated = mcpApiKeyService.updateKey(
             organizationId = claims.organizationId,
             keyId = keyId,
-            name = request.name,
-            enabledTools = request.enabledTools,
-            enabledResources = request.enabledResources,
-            expiresInDays = request.expiresInDays,
+            update = McpApiKeyUpdate(
+                name = request.name,
+                enabledTools = request.enabledTools,
+                enabledResources = request.enabledResources,
+                expiresInDays = request.expiresInDays,
+            ),
         )
         respondUpdateResult(updated)
     } catch (e: IllegalArgumentException) {
@@ -194,13 +199,16 @@ private suspend fun ApplicationCall.deleteMcpApiKey(
     }
 }
 
-private suspend fun ApplicationCall.callKeyId(): Int? {
-    val keyId = parameters["id"]?.toIntOrNull()
+private suspend fun ApplicationCall.callKeyId(): Uuid? {
+    val keyId = parameters["id"]?.let(::parseMcpKeyResourceId)
     if (keyId == null) {
         respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid key ID"))
     }
     return keyId
 }
+
+private fun parseMcpKeyResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
 
 private suspend fun ApplicationCall.respondUpdateResult(updated: Boolean) {
     if (updated) {

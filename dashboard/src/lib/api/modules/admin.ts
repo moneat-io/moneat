@@ -46,7 +46,7 @@ export function adminMethods(core: ApiClientCore) {
     getAdminOrganizations: (page = 1, limit = 25) =>
       core.request<
         Array<{
-          id: number
+          id: string
           name: string
           slug: string
           plan: string
@@ -58,9 +58,9 @@ export function adminMethods(core: ApiClientCore) {
         }>
       >(`${base}/admin/organizations?page=${page}&limit=${limit}`),
 
-    getAdminOrgDetail: (orgId: number) =>
+    getAdminOrgDetail: (orgId: string) =>
       core.request<{
-        id: number
+        id: string
         name: string
         slug: string
         companySize: string | null
@@ -71,11 +71,11 @@ export function adminMethods(core: ApiClientCore) {
         eventCountThisMonth: number
         bytesIngestedThisMonth: number
         quotaUsedPercent: number | null
-        members: Array<{ userId: number; email: string; name: string | null; role: string }>
-        projects: Array<{ id: number; name: string; slug: string; platform: string | null }>
-      }>(`${base}/admin/organizations/${orgId}`),
+        members: Array<{ userId: string; email: string; name: string | null; role: string }>
+        projects: Array<{ id: string; name: string; slug: string; platform: string | null }>
+      }>(`${base}/admin/organizations/${encodeURIComponent(orgId)}`),
 
-    getAdminOrgUsage: (orgId: number, period = '7d') =>
+    getAdminOrgUsage: (orgId: string, period = '7d') =>
       core.request<
         Array<{
           date: string
@@ -83,17 +83,17 @@ export function adminMethods(core: ApiClientCore) {
           eventCount: number
           bytesIngested: number
         }>
-      >(`${base}/admin/organizations/${orgId}/usage?period=${period}`),
+      >(`${base}/admin/organizations/${encodeURIComponent(orgId)}/usage?period=${period}`),
 
-    getAdminOrgQuotaUsage: (orgId: number) =>
-      core.request<BillingUsage>(`${base}/admin/organizations/${orgId}/quota-usage`),
+    getAdminOrgQuotaUsage: (orgId: string) =>
+      core.request<BillingUsage>(`${base}/admin/organizations/${encodeURIComponent(orgId)}/quota-usage`),
 
     resetAdminOrgQuotaUsage: (
-      orgId: number,
+      orgId: string,
       body: AdminQuotaUsageResetRequest
     ) =>
       core.request<AdminQuotaUsageResetResponse>(
-        `${base}/admin/organizations/${orgId}/quota-usage/reset`,
+        `${base}/admin/organizations/${encodeURIComponent(orgId)}/quota-usage/reset`,
         {
           method: 'POST',
           body: JSON.stringify(body),
@@ -139,7 +139,7 @@ export function adminMethods(core: ApiClientCore) {
     getAdminTopConsumers: (limit = 10) =>
       core.request<
         Array<{
-          orgId: number
+          orgId: string
           orgName: string
           orgSlug: string
           plan: string
@@ -162,7 +162,7 @@ export function adminMethods(core: ApiClientCore) {
       if (search) params.append('search', search)
       return core.request<{
         users: Array<{
-          id: number
+          id: string
           email: string
           name: string | null
           emailVerified: boolean
@@ -179,15 +179,15 @@ export function adminMethods(core: ApiClientCore) {
     },
 
     updateAdminUser: (
-      userId: number,
+      userId: string,
       updates: { isAdmin?: boolean; emailVerified?: boolean }
     ) =>
-      core.request<{ success: boolean }>(`${base}/admin/users/${userId}`, {
+      core.request<{ success: boolean }>(`${base}/admin/users/${encodeURIComponent(userId)}`, {
         method: 'PATCH',
         body: JSON.stringify(updates),
       }),
 
-    deleteAdminUsers: (userIds: number[]) =>
+    deleteAdminUsers: (userIds: string[]) =>
       core.request<{ success: boolean; deletedCount: number; errors: string[] }>(
         `${base}/admin/users`,
         {

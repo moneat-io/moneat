@@ -29,6 +29,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.services.organizationResourceId
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.SentryUtils
@@ -211,6 +212,7 @@ private data class RawApmSpanDebugGroup(
 )
 
 private data class ApmSpanProjectLabel(
+    val resourceId: String,
     val name: String,
     val slug: String
 )
@@ -280,7 +282,7 @@ class BillingQuotaService(
             )
 
             ApmSpanUsageDebugResponse(
-                organizationId = organizationId,
+                organizationId = organizationResourceId(organizationId),
                 periodStart = periodStart.toString(),
                 periodEnd = periodEnd.toString(),
                 totalSpans = totalSpans,
@@ -296,7 +298,7 @@ class BillingQuotaService(
                         kind = group.kind,
                         scopeName = group.scopeName,
                         scopeVersion = group.scopeVersion,
-                        projectId = group.projectId,
+                        projectId = project?.resourceId,
                         projectName = project?.name,
                         projectSlug = project?.slug,
                         spanCount = group.spanCount,
@@ -317,7 +319,7 @@ class BillingQuotaService(
         }.getOrElse { e ->
             logger.warn(e) { "Failed to query APM span usage debug for org $organizationId" }
             ApmSpanUsageDebugResponse(
-                organizationId = organizationId,
+                organizationId = organizationResourceId(organizationId),
                 periodStart = periodStart.toString(),
                 periodEnd = periodEnd.toString(),
                 totalSpans = 0,
@@ -581,7 +583,7 @@ class BillingQuotaService(
                     "from ${target.currentUsed} to ${target.targetUsed}"
             }
             AdminQuotaUsageResetResponse(
-                organizationId = organizationId,
+                organizationId = updatedUsage.organizationId,
                 quotaType = target.type.wireName,
                 periodStart = state.periodStart.toString(),
                 periodEnd = state.periodEnd.toString(),
@@ -971,6 +973,7 @@ class BillingQuotaService(
                 }
                 .associate { row ->
                     row[Projects.id] to ApmSpanProjectLabel(
+                        resourceId = row[Projects.resource_id].toString(),
                         name = row[Projects.name],
                         slug = row[Projects.slug]
                     )
@@ -1268,7 +1271,7 @@ class BillingQuotaService(
             infraMetricOverageCents
 
         return BillingUsageResponse(
-            organizationId = state.organizationId,
+            organizationId = organizationResourceId(state.organizationId),
             periodStart = state.periodStart.toString(),
             periodEnd = state.periodEnd.toString(),
             retentionDays = state.retentionDays,

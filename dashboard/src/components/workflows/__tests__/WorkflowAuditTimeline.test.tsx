@@ -29,16 +29,16 @@ describe('WorkflowAuditTimeline', () => {
     const entries: WorkflowAuditEntry[] = [
       {
         id: 'a1',
-        workflow_id: 3,
+        workflow_id: '33333333-3333-4333-8333-333333333333',
         action: 'workflow.published',
-        actor_user_id: 42,
+        actor_user_id: '44444444-4444-4444-8444-444444444444',
         detail: {version: '2', name: 'Pager'},
         created_at: '2026-05-01T00:00:00Z',
       },
     ]
     render(<WorkflowAuditTimeline entries={entries} />)
     expect(screen.getByText('workflow.published')).toBeInTheDocument()
-    expect(screen.getByText('User #42')).toBeInTheDocument()
+    expect(screen.getByText('User #44444444-4444-4444-8444-444444444444')).toBeInTheDocument()
     expect(screen.getByText('version')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
   })

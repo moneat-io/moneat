@@ -21,6 +21,10 @@ import com.moneat.datadog.models.CreateDebuggerProbeRequest
 import com.moneat.datadog.models.DebuggerProbe
 import com.moneat.datadog.models.DebuggerProbes
 import com.moneat.datadog.models.UpdateDebuggerProbeRequest
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.organizationResourceIds
+import com.moneat.shared.services.userResourceId
+import com.moneat.shared.services.userResourceIds
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
@@ -50,11 +54,14 @@ object DebuggerProbeService {
         if (organizationIds.isEmpty()) return emptyList()
 
         return transaction {
-            DebuggerProbes
+            val rows = DebuggerProbes
                 .selectAll()
                 .where { DebuggerProbes.organizationId inList organizationIds }
                 .orderBy(DebuggerProbes.updatedAt to SortOrder.DESC)
-                .map { it.toDebuggerProbe() }
+                .toList()
+            val organizationResources = organizationResourceIds(rows.map { it[DebuggerProbes.organizationId] })
+            val userResources = userResourceIds(rows.mapNotNull { it[DebuggerProbes.createdBy] })
+            rows.map { row -> row.toDebuggerProbe(organizationResources, userResources) }
         }
     }
 
@@ -310,10 +317,15 @@ object DebuggerProbeService {
         }
     }
 
-    private fun ResultRow.toDebuggerProbe(): DebuggerProbe =
-        DebuggerProbe(
+    private fun ResultRow.toDebuggerProbe(
+        organizationResources: Map<Int, String> = emptyMap(),
+        userResources: Map<Int, String> = emptyMap(),
+    ): DebuggerProbe {
+        val organizationId = this[DebuggerProbes.organizationId]
+        val createdBy = this[DebuggerProbes.createdBy]
+        return DebuggerProbe(
             id = this[DebuggerProbes.id].toString(),
-            organizationId = this[DebuggerProbes.organizationId],
+            organizationId = organizationResources[organizationId] ?: organizationResourceId(organizationId),
             probeType = this[DebuggerProbes.probeType],
             service = this[DebuggerProbes.service],
             environment = this[DebuggerProbes.environment],
@@ -329,10 +341,11 @@ object DebuggerProbeService {
             metricKind = this[DebuggerProbes.metricKind],
             tags = this[DebuggerProbes.tags],
             captureConfig = this[DebuggerProbes.captureConfig],
-            createdBy = this[DebuggerProbes.createdBy],
+            createdBy = createdBy?.let { userResources[it] ?: userResourceId(it) },
             createdAt = this[DebuggerProbes.createdAt].toString(),
             updatedAt = this[DebuggerProbes.updatedAt].toString(),
         )
+    }
 
     private fun ResultRow.toAgentDebuggerProbe(): AgentDebuggerProbeConfig =
         AgentDebuggerProbeConfig(

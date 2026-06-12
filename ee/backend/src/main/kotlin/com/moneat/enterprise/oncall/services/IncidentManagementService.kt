@@ -4,6 +4,12 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.enterprise.oncall.escalationPolicyResourceIds
+import com.moneat.enterprise.oncall.incidentResourceIds
+import com.moneat.enterprise.oncall.organizationResourceId
+import com.moneat.enterprise.oncall.requireValue
+import com.moneat.enterprise.oncall.userResourceIds
+import com.moneat.enterprise.oncall.userResourceIdOrNull
 import com.moneat.enterprise.oncall.models.OnCallAlert
 import com.moneat.enterprise.oncall.models.OnCallAlertTimeline
 import com.moneat.enterprise.oncall.models.OnCallAlerts
@@ -12,6 +18,7 @@ import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.Users
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -26,6 +33,29 @@ import kotlin.time.Clock
 class OnCallAlertService(
     private val escalationEngine: EscalationEngine,
 ) {
+    private data class AlertResponseResourceIds(
+        val organizationResourceId: String,
+        val incidents: Map<Int, String>,
+        val policies: Map<Int, String>,
+        val users: Map<Int, String>,
+    ) {
+        fun incident(id: Int?): String? =
+            id?.let { incidents.requireValue(it, "on-call incident") }
+
+        fun policy(id: Int?): String? =
+            id?.let { policies.requireValue(it, "escalation policy") }
+
+        fun user(id: Int?): String? =
+            id?.let { users.requireValue(it, "user") }
+    }
+
+    private data class TimelineResponseResourceIds(
+        val users: Map<Int, String>,
+    ) {
+        fun actor(id: Int?): String? =
+            id?.let { users.requireValue(it, "user") }
+    }
+
     fun getAlert(
         alertId: Int,
         currentUserId: Int? = null,
@@ -46,12 +76,13 @@ class OnCallAlertService(
                 } else {
                     false
                 }
+            val resourceIds = responseResourceIdsForAlerts(listOf(row))
 
             OnCallAlert(
-                id = row[OnCallAlerts.id].value,
-                organizationId = row[OnCallAlerts.organizationId],
-                declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
-                escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
+                id = row[OnCallAlerts.resourceId].toString(),
+                organizationResourceId = resourceIds.organizationResourceId,
+                declaredIncidentResourceId = resourceIds.incident(row[OnCallAlerts.declaredIncidentId]),
+                escalationPolicyResourceId = resourceIds.policy(row[OnCallAlerts.escalationPolicyId]),
                 escalationPolicyName = row.getOrNull(EscalationPolicies.name),
                 title = row[OnCallAlerts.title],
                 description = row[OnCallAlerts.description],
@@ -63,15 +94,21 @@ class OnCallAlertService(
                 repeatIteration = row[OnCallAlerts.repeatIteration],
                 triggeredAt = row[OnCallAlerts.triggeredAt].toString(),
                 acknowledgedAt = row[OnCallAlerts.acknowledgedAt]?.toString(),
-                acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
+                acknowledgedByResourceId = resourceIds.user(row[OnCallAlerts.acknowledgedBy]),
                 acknowledgedByName = row.getOrNull(Users.name),
                 resolvedAt = row[OnCallAlerts.resolvedAt]?.toString(),
-                resolvedBy = row[OnCallAlerts.resolvedBy],
+                resolvedByResourceId = resourceIds.user(row[OnCallAlerts.resolvedBy]),
                 metadata = row[OnCallAlerts.metadata],
                 nextEscalationAt = escalationTimes[row[OnCallAlerts.id].value],
                 viewedByCurrentUser = viewed,
                 createdAt = row[OnCallAlerts.createdAt].toString(),
                 updatedAt = row[OnCallAlerts.updatedAt].toString(),
+                internalId = row[OnCallAlerts.id].value,
+                organizationId = row[OnCallAlerts.organizationId],
+                declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
+                escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
+                acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
+                resolvedBy = row[OnCallAlerts.resolvedBy],
             )
         }
 
@@ -122,58 +159,76 @@ class OnCallAlertService(
                 query = query.andWhere { OnCallAlerts.priority eq priority }
             }
 
-            query
+            val rows = query
                 .orderBy(OnCallAlerts.triggeredAt to SortOrder.DESC)
                 .limit(limit)
                 .offset(offset.toLong())
-                .map { row ->
-                    val alertId = row[OnCallAlerts.id].value
-                    OnCallAlert(
-                        id = alertId,
-                        organizationId = row[OnCallAlerts.organizationId],
-                        declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
-                        escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
-                        escalationPolicyName = row.getOrNull(EscalationPolicies.name),
-                        title = row[OnCallAlerts.title],
-                        description = row[OnCallAlerts.description],
-                        priority = row[OnCallAlerts.priority],
-                        status = row[OnCallAlerts.status],
-                        alertSource = row[OnCallAlerts.alertSource],
-                        deduplicationKey = row[OnCallAlerts.deduplicationKey],
-                        currentStep = row[OnCallAlerts.currentStep],
-                        repeatIteration = row[OnCallAlerts.repeatIteration],
-                        triggeredAt = row[OnCallAlerts.triggeredAt].toString(),
-                        acknowledgedAt = row[OnCallAlerts.acknowledgedAt]?.toString(),
-                        acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
-                        resolvedAt = row[OnCallAlerts.resolvedAt]?.toString(),
-                        resolvedBy = row[OnCallAlerts.resolvedBy],
-                        metadata = row[OnCallAlerts.metadata],
-                        nextEscalationAt = escalationTimes[alertId],
-                        viewedByCurrentUser = alertId in viewedAlertIds,
-                        createdAt = row[OnCallAlerts.createdAt].toString(),
-                        updatedAt = row[OnCallAlerts.updatedAt].toString(),
-                    )
-                }
+                .toList()
+            if (rows.isEmpty()) return@transaction emptyList()
+
+            val resourceIds = responseResourceIdsForAlerts(rows, organizationId)
+            rows.map { row ->
+                val alertId = row[OnCallAlerts.id].value
+                OnCallAlert(
+                    id = row[OnCallAlerts.resourceId].toString(),
+                    organizationResourceId = resourceIds.organizationResourceId,
+                    declaredIncidentResourceId = resourceIds.incident(row[OnCallAlerts.declaredIncidentId]),
+                    escalationPolicyResourceId = resourceIds.policy(row[OnCallAlerts.escalationPolicyId]),
+                    escalationPolicyName = row.getOrNull(EscalationPolicies.name),
+                    title = row[OnCallAlerts.title],
+                    description = row[OnCallAlerts.description],
+                    priority = row[OnCallAlerts.priority],
+                    status = row[OnCallAlerts.status],
+                    alertSource = row[OnCallAlerts.alertSource],
+                    deduplicationKey = row[OnCallAlerts.deduplicationKey],
+                    currentStep = row[OnCallAlerts.currentStep],
+                    repeatIteration = row[OnCallAlerts.repeatIteration],
+                    triggeredAt = row[OnCallAlerts.triggeredAt].toString(),
+                    acknowledgedAt = row[OnCallAlerts.acknowledgedAt]?.toString(),
+                    acknowledgedByResourceId = resourceIds.user(row[OnCallAlerts.acknowledgedBy]),
+                    resolvedAt = row[OnCallAlerts.resolvedAt]?.toString(),
+                    resolvedByResourceId = resourceIds.user(row[OnCallAlerts.resolvedBy]),
+                    metadata = row[OnCallAlerts.metadata],
+                    nextEscalationAt = escalationTimes[alertId],
+                    viewedByCurrentUser = alertId in viewedAlertIds,
+                    createdAt = row[OnCallAlerts.createdAt].toString(),
+                    updatedAt = row[OnCallAlerts.updatedAt].toString(),
+                    internalId = alertId,
+                    organizationId = row[OnCallAlerts.organizationId],
+                    declaredIncidentId = row[OnCallAlerts.declaredIncidentId],
+                    escalationPolicyId = row[OnCallAlerts.escalationPolicyId],
+                    acknowledgedBy = row[OnCallAlerts.acknowledgedBy],
+                    resolvedBy = row[OnCallAlerts.resolvedBy],
+                )
+            }
         }
 
     fun getTimeline(alertId: Int): List<OnCallTimelineEvent> =
         transaction {
-            OnCallAlertTimeline
+            val rows = OnCallAlertTimeline
+                .innerJoin(OnCallAlerts)
                 .join(Users, JoinType.LEFT, OnCallAlertTimeline.actorUserId, Users.id)
                 .selectAll()
                 .where { OnCallAlertTimeline.alertId eq alertId }
                 .orderBy(OnCallAlertTimeline.createdAt to SortOrder.ASC)
-                .map { row ->
-                    OnCallTimelineEvent(
-                        id = row[OnCallAlertTimeline.id].value,
-                        targetId = row[OnCallAlertTimeline.alertId],
-                        eventType = row[OnCallAlertTimeline.eventType],
-                        actorUserId = row[OnCallAlertTimeline.actorUserId],
-                        actorName = row.getOrNull(Users.name),
-                        details = row[OnCallAlertTimeline.details],
-                        createdAt = row[OnCallAlertTimeline.createdAt].toString(),
-                    )
-                }
+                .toList()
+            if (rows.isEmpty()) return@transaction emptyList()
+
+            val resourceIds = timelineResponseResourceIds(rows)
+            rows.map { row ->
+                OnCallTimelineEvent(
+                    id = row[OnCallAlertTimeline.resourceId].toString(),
+                    targetResourceId = row[OnCallAlerts.resourceId].toString(),
+                    eventType = row[OnCallAlertTimeline.eventType],
+                    actorUserResourceId = resourceIds.actor(row[OnCallAlertTimeline.actorUserId]),
+                    actorName = row.getOrNull(Users.name),
+                    details = row[OnCallAlertTimeline.details],
+                    createdAt = row[OnCallAlertTimeline.createdAt].toString(),
+                    internalId = row[OnCallAlertTimeline.id].value,
+                    targetId = row[OnCallAlertTimeline.alertId],
+                    actorUserId = row[OnCallAlertTimeline.actorUserId],
+                )
+            }
         }
 
     fun acknowledge(
@@ -212,19 +267,23 @@ class OnCallAlertService(
 
             val row =
                 OnCallAlertTimeline
+                    .innerJoin(OnCallAlerts)
                     .join(Users, JoinType.LEFT, OnCallAlertTimeline.actorUserId, Users.id)
                     .selectAll()
                     .where { OnCallAlertTimeline.id eq eventId }
                     .single()
 
             OnCallTimelineEvent(
-                id = row[OnCallAlertTimeline.id].value,
-                targetId = row[OnCallAlertTimeline.alertId],
+                id = row[OnCallAlertTimeline.resourceId].toString(),
+                targetResourceId = row[OnCallAlerts.resourceId].toString(),
                 eventType = row[OnCallAlertTimeline.eventType],
-                actorUserId = row[OnCallAlertTimeline.actorUserId],
+                actorUserResourceId = userResourceIdOrNull(row[OnCallAlertTimeline.actorUserId]),
                 actorName = row.getOrNull(Users.name),
                 details = row[OnCallAlertTimeline.details],
                 createdAt = row[OnCallAlertTimeline.createdAt].toString(),
+                internalId = row[OnCallAlertTimeline.id].value,
+                targetId = row[OnCallAlertTimeline.alertId],
+                actorUserId = row[OnCallAlertTimeline.actorUserId],
             )
         }
 
@@ -269,4 +328,24 @@ class OnCallAlertService(
                     (OnCallAlertTimeline.eventType eq "VIEWED") and
                     (OnCallAlertTimeline.actorUserId eq userId)
             }.count() > 0
+
+    private fun responseResourceIdsForAlerts(
+        rows: List<ResultRow>,
+        organizationId: Int = rows.first()[OnCallAlerts.organizationId],
+    ): AlertResponseResourceIds =
+        AlertResponseResourceIds(
+            organizationResourceId = organizationResourceId(organizationId),
+            incidents = incidentResourceIds(rows.mapNotNull { row -> row[OnCallAlerts.declaredIncidentId] }),
+            policies = escalationPolicyResourceIds(rows.mapNotNull { row -> row[OnCallAlerts.escalationPolicyId] }),
+            users = userResourceIds(
+                rows.flatMap { row ->
+                    listOfNotNull(row[OnCallAlerts.acknowledgedBy], row[OnCallAlerts.resolvedBy])
+                }
+            ),
+        )
+
+    private fun timelineResponseResourceIds(rows: List<ResultRow>): TimelineResponseResourceIds =
+        TimelineResponseResourceIds(
+            users = userResourceIds(rows.mapNotNull { row -> row[OnCallAlertTimeline.actorUserId] }),
+        )
 }

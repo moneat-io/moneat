@@ -111,10 +111,11 @@ describe('AI API – branch coverage', () => {
     })
 
     it('sends optional conversationId and timeRange', async () => {
+      const conversationId = '55555555-5555-4555-8555-555555555555'
       server.use(
         http.post(`${API_BASE}/v1/ai/chat/stream`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
-          expect(body.conversationId).toBe(5)
+          expect(body.conversationId).toBe(conversationId)
           expect(body.timeRange).toBe('24h')
           return new HttpResponse(sseBody(['data: {"type":"done"}\n\n']), {
             headers: { 'Content-Type': 'text/event-stream' },
@@ -123,7 +124,7 @@ describe('AI API – branch coverage', () => {
       )
 
       await api.streamAiSearch(
-        { message: 'q', conversationId: 5, timeRange: '24h' },
+        { message: 'q', conversationId, timeRange: '24h' },
         () => {}
       )
     })
@@ -211,7 +212,7 @@ describe('AI API – branch coverage', () => {
         })
       )
 
-      await api.streamAiConfirm(42, (e) => events.push(e))
+      await api.streamAiConfirm('42', (e) => events.push(e))
       expect(events).toHaveLength(2)
       expect(events[0]).toEqual({ type: 'progress', percent: 50 })
     })
@@ -230,7 +231,7 @@ describe('AI API – branch coverage', () => {
         })
       )
 
-      await expect(api.streamAiConfirm(1, () => {})).rejects.toThrow(
+      await expect(api.streamAiConfirm('1', () => {})).rejects.toThrow(
         'Snapshot expired'
       )
     })
@@ -242,7 +243,7 @@ describe('AI API – branch coverage', () => {
         })
       )
 
-      await expect(api.streamAiConfirm(2, () => {})).rejects.toThrow(
+      await expect(api.streamAiConfirm('2', () => {})).rejects.toThrow(
         'Confirm error: 503'
       )
     })
@@ -257,7 +258,7 @@ describe('AI API – branch coverage', () => {
         })
       )
 
-      await expect(api.streamAiConfirm(3, () => {})).rejects.toThrow(
+      await expect(api.streamAiConfirm('3', () => {})).rejects.toThrow(
         'Confirm failed'
       )
     })
@@ -271,7 +272,7 @@ describe('AI API – branch coverage', () => {
       })
 
       try {
-        await expect(api.streamAiConfirm(4, () => {})).rejects.toThrow(
+        await expect(api.streamAiConfirm('4', () => {})).rejects.toThrow(
           'Confirm error'
         )
       } finally {

@@ -32,7 +32,7 @@ interface RuleListProps {
   onEdit: (rule: DetectionRuleResponse) => void
   onToggle: (rule: DetectionRuleResponse, enabled: boolean) => void
   onDelete: (rule: DetectionRuleResponse) => void
-  togglingId?: number
+  togglingId?: string
 }
 
 export function RuleList({rules, onEdit, onToggle, onDelete, togglingId}: RuleListProps) {

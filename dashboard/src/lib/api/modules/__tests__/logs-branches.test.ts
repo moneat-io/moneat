@@ -20,6 +20,7 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const LOG_API_KEY_ID = '11111111-1111-4111-8111-111111111111'
 
 describe('Logs API – branch coverage', () => {
   beforeEach(() => {
@@ -120,7 +121,7 @@ describe('Logs API – branch coverage', () => {
           return HttpResponse.json({
             keys: [
               {
-                id: 1,
+                id: LOG_API_KEY_ID,
                 name: 'key1',
                 keyPrefix: 'kp_cc',
                 createdAt: '2024-01-01T00:00:00Z',

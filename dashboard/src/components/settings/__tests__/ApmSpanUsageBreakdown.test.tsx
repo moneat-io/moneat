@@ -3,7 +3,7 @@ import {describe, expect, it} from 'vitest'
 import {ApmSpanUsageBreakdown} from '../ApmSpanUsageBreakdown'
 
 const apmSpanDebugResponse = {
-  organizationId: 1,
+  organizationId: 'org-1',
   periodStart: '2026-04-01',
   periodEnd: '2026-04-30',
   totalSpans: 2180,
@@ -40,7 +40,7 @@ const apmSpanDebugResponse = {
       kind: '',
       scopeName: '',
       scopeVersion: '',
-      projectId: 10,
+      projectId: 'project-10',
       projectName: 'Web App',
       projectSlug: 'web-app',
       spanCount: 980,

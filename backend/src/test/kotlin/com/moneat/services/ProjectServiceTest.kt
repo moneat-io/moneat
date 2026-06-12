@@ -83,7 +83,8 @@ class ProjectServiceTest {
             slug = " ",
             framework = null,
             keys = emptyList(),
-            dsn = ""
+            dsn = "",
+            resourceId = PROJECT_RESOURCE_ID
         )
         val idFallback = ProjectRow(
             projectId = 43L,
@@ -91,7 +92,8 @@ class ProjectServiceTest {
             slug = " ",
             framework = null,
             keys = emptyList(),
-            dsn = ""
+            dsn = "",
+            resourceId = PROJECT_RESOURCE_ID
         )
 
         assertEquals("Checkout", nameFallback.serviceName)

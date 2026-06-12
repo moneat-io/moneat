@@ -20,6 +20,14 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const SLACK_INTEGRATION_ID = '11111111-1111-4111-8111-111111111111'
+const DISCORD_INTEGRATION_ID = '22222222-2222-4222-8222-222222222222'
+const SCHEDULE_ID = '33333333-3333-4333-8333-333333333333'
+const INCIDENT_PROVIDER_ID = '44444444-4444-4444-8444-444444444444'
+const INCIDENT_PROVIDER_CREATED_ID = '55555555-5555-4555-8555-555555555555'
+const INCIDENT_PROVIDER_RULE_ID = '66666666-6666-4666-8666-666666666666'
+const INCIDENT_PROVIDER_EVENT_ID = '77777777-7777-4777-8777-777777777777'
+const INCIDENT_PROVIDER_FALLBACK_ID = '88888888-8888-4888-8888-888888888888'
 
 describe('Integrations API', () => {
   beforeEach(() => {
@@ -33,8 +41,24 @@ describe('Integrations API', () => {
   describe('getIntegrations', () => {
     it('fetches all integrations', async () => {
       const mockIntegrations = [
-        { id: 1, integrationType: 'slack', teamName: null, channelId: null, channelName: null, enabled: true, isConfigured: true },
-        { id: 2, integrationType: 'discord', teamName: null, channelId: null, channelName: null, enabled: false, isConfigured: false },
+        {
+          id: SLACK_INTEGRATION_ID,
+          integrationType: 'slack',
+          teamName: null,
+          channelId: null,
+          channelName: null,
+          enabled: true,
+          isConfigured: true,
+        },
+        {
+          id: DISCORD_INTEGRATION_ID,
+          integrationType: 'discord',
+          teamName: null,
+          channelId: null,
+          channelName: null,
+          enabled: false,
+          isConfigured: false,
+        },
       ]
 
       server.use(
@@ -158,7 +182,7 @@ describe('Integrations API', () => {
     it('sets Slack usergroup for a schedule', async () => {
       server.use(
         http.put(
-          `${API_BASE}/v1/on-call/schedules/10/slack-usergroup`,
+          `${API_BASE}/v1/on-call/schedules/${SCHEDULE_ID}/slack-usergroup`,
           async ({ request }) => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.usergroupId).toBe('S001')
@@ -168,19 +192,19 @@ describe('Integrations API', () => {
         )
       )
 
-      await api.setScheduleSlackUsergroup(10, 'S001', 'oncall-team')
+      await api.setScheduleSlackUsergroup(SCHEDULE_ID, 'S001', 'oncall-team')
     })
   })
 
   describe('removeScheduleSlackUsergroup', () => {
     it('removes Slack usergroup from a schedule', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/on-call/schedules/10/slack-usergroup`, () => {
+        http.delete(`${API_BASE}/v1/on-call/schedules/${SCHEDULE_ID}/slack-usergroup`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      await api.removeScheduleSlackUsergroup(10)
+      await api.removeScheduleSlackUsergroup(SCHEDULE_ID)
     })
   })
 
@@ -274,7 +298,7 @@ describe('Integrations API', () => {
   describe('getIncidentProviders', () => {
     it('fetches incident providers', async () => {
       const mockProviders = [
-        { id: 1, name: 'PagerDuty', type: 'pagerduty', enabled: true },
+        { id: INCIDENT_PROVIDER_ID, name: 'PagerDuty', type: 'pagerduty', enabled: true },
       ]
 
       server.use(
@@ -296,7 +320,7 @@ describe('Integrations API', () => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.name).toBe('OpsGenie')
           expect(body.type).toBe('opsgenie')
-          return HttpResponse.json({ id: 2 })
+          return HttpResponse.json({ id: INCIDENT_PROVIDER_CREATED_ID })
         })
       )
 
@@ -304,45 +328,45 @@ describe('Integrations API', () => {
         name: 'OpsGenie',
         type: 'opsgenie',
       } as never)
-      expect(result.id).toBe(2)
+      expect(result.id).toBe(INCIDENT_PROVIDER_CREATED_ID)
     })
   })
 
   describe('updateIncidentProvider', () => {
     it('updates an incident provider', async () => {
       server.use(
-        http.put(`${API_BASE}/api/incident-providers/1`, async ({ request }) => {
+        http.put(`${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_ID}`, async ({ request }) => {
           const body = (await request.json()) as Record<string, unknown>
           expect(body.name).toBe('Updated PagerDuty')
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      await api.updateIncidentProvider(1, { name: 'Updated PagerDuty' } as never)
+      await api.updateIncidentProvider(INCIDENT_PROVIDER_ID, { name: 'Updated PagerDuty' } as never)
     })
   })
 
   describe('deleteIncidentProvider', () => {
     it('deletes an incident provider', async () => {
       server.use(
-        http.delete(`${API_BASE}/api/incident-providers/1`, () => {
+        http.delete(`${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_ID}`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      await api.deleteIncidentProvider(1)
+      await api.deleteIncidentProvider(INCIDENT_PROVIDER_ID)
     })
   })
 
   describe('testIncidentProvider', () => {
     it('tests an incident provider', async () => {
       server.use(
-        http.post(`${API_BASE}/api/incident-providers/1/test`, () => {
+        http.post(`${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_ID}/test`, () => {
           return HttpResponse.json({ success: true })
         })
       )
 
-      const result = await api.testIncidentProvider(1)
+      const result = await api.testIncidentProvider(INCIDENT_PROVIDER_ID)
       expect(result.success).toBe(true)
     })
   })
@@ -350,16 +374,16 @@ describe('Integrations API', () => {
   describe('getIncidentProviderRules', () => {
     it('fetches routing rules for a provider', async () => {
       const mockRules = [
-        { id: 1, alertSource: 'severity == critical', alertPriority: 'P0' },
+        { id: INCIDENT_PROVIDER_RULE_ID, alertSource: 'severity == critical', alertPriority: 'P0' },
       ]
 
       server.use(
-        http.get(`${API_BASE}/api/incident-providers/1/rules`, () => {
+        http.get(`${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_ID}/rules`, () => {
           return HttpResponse.json(mockRules)
         })
       )
 
-      const result = await api.getIncidentProviderRules(1)
+      const result = await api.getIncidentProviderRules(INCIDENT_PROVIDER_ID)
       expect(result).toHaveLength(1)
       expect(result[0].alertSource).toBe('severity == critical')
     })
@@ -369,7 +393,7 @@ describe('Integrations API', () => {
     it('updates routing rules for a provider', async () => {
       server.use(
         http.put(
-          `${API_BASE}/api/incident-providers/1/rules`,
+          `${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_ID}/rules`,
           async ({ request }) => {
             const body = (await request.json()) as unknown[]
             expect(body).toHaveLength(1)
@@ -378,7 +402,7 @@ describe('Integrations API', () => {
         )
       )
 
-      await api.updateIncidentProviderRules(1, [
+      await api.updateIncidentProviderRules(INCIDENT_PROVIDER_ID, [
         { condition: 'severity == high', action: 'notify' } as never,
       ])
     })
@@ -389,7 +413,7 @@ describe('Integrations API', () => {
       const { integrationsMethods } = await import('../integrations')
       const mockRequest = async <T,>(endpoint: string): Promise<T> => {
         if (endpoint.includes('https://api.moneat.io/api/incident-providers')) {
-          return [{ id: 1, name: 'PagerDuty', type: 'pagerduty' }] as T
+          return [{ id: INCIDENT_PROVIDER_FALLBACK_ID, name: 'PagerDuty', type: 'pagerduty' }] as T
         }
         throw new Error(`Unexpected endpoint: ${endpoint}`)
       }
@@ -412,29 +436,29 @@ describe('Integrations API', () => {
   describe('getIncidentProviderEvents', () => {
     it('fetches event log for a provider with default limit', async () => {
       server.use(
-        http.get(`${API_BASE}/api/incident-providers/1/events`, ({ request }) => {
+        http.get(`${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_ID}/events`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('limit')).toBe('50')
           return HttpResponse.json([
-            { id: 1, type: 'alert_sent', createdAt: '2024-01-01T00:00:00Z' },
+            { id: INCIDENT_PROVIDER_EVENT_ID, type: 'alert_sent', createdAt: '2024-01-01T00:00:00Z' },
           ])
         })
       )
 
-      const result = await api.getIncidentProviderEvents(1)
+      const result = await api.getIncidentProviderEvents(INCIDENT_PROVIDER_ID)
       expect(result).toHaveLength(1)
     })
 
     it('passes custom limit', async () => {
       server.use(
-        http.get(`${API_BASE}/api/incident-providers/2/events`, ({ request }) => {
+        http.get(`${API_BASE}/api/incident-providers/${INCIDENT_PROVIDER_CREATED_ID}/events`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('limit')).toBe('10')
           return HttpResponse.json([])
         })
       )
 
-      const result = await api.getIncidentProviderEvents(2, 10)
+      const result = await api.getIncidentProviderEvents(INCIDENT_PROVIDER_CREATED_ID, 10)
       expect(result).toHaveLength(0)
     })
   })

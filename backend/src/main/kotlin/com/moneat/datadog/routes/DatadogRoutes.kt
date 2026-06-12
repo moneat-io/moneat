@@ -19,6 +19,7 @@ package com.moneat.datadog.routes
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.datadog.models.CreateDdApiKeyRequest
 import com.moneat.datadog.services.DatadogService
+import com.moneat.shared.services.toUuidOrNull
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.auth.authenticate
@@ -31,6 +32,7 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
+import kotlin.uuid.Uuid
 
 fun Application.datadogRoutes() {
     routing {
@@ -58,12 +60,19 @@ fun Application.datadogRoutes() {
                         .getClaim("userId").asInt()
                     val request = call.receive<CreateDdApiKeyRequest>()
 
-                    val response = DatadogService.createApiKey(
-                        organizationId = organizationId,
-                        name = request.name,
-                        userId = userId,
-                        projectId = request.projectId,
-                    )
+                    val response = try {
+                        DatadogService.createApiKey(
+                            organizationId = organizationId,
+                            name = request.name,
+                            userId = userId,
+                            projectId = request.projectId,
+                        )
+                    } catch (e: IllegalArgumentException) {
+                        return@post call.respond(
+                            HttpStatusCode.BadRequest,
+                            mapOf("error" to (e.message ?: "Invalid project ID"))
+                        )
+                    }
                     call.respond(HttpStatusCode.Created, response)
                 }
 
@@ -74,7 +83,7 @@ fun Application.datadogRoutes() {
                             HttpStatusCode.Unauthorized,
                             mapOf("error" to "Invalid token")
                         )
-                    val keyId = call.parameters["id"]?.toIntOrNull()
+                    val keyId = call.parameters["id"]?.let(::parseDdApiKeyResourceId)
                         ?: return@delete call.respond(
                             HttpStatusCode.BadRequest,
                             mapOf("error" to "Invalid key ID")
@@ -97,3 +106,6 @@ fun Application.datadogRoutes() {
         }
     }
 }
+
+private fun parseDdApiKeyResourceId(value: String): Uuid? =
+    value.toUuidOrNull()

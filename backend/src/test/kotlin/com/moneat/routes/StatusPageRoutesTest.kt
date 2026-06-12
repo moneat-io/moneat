@@ -815,7 +815,7 @@ class StatusPageRoutesTest {
             }
             assertEquals(HttpStatusCode.Created, addResp.status)
             val domainId = kotlinx.serialization.json.Json.parseToJsonElement(addResp.bodyAsText())
-                .jsonObject["id"]!!.jsonPrimitive.content.toInt()
+                .jsonObject["id"]!!.jsonPrimitive.content
 
             val response = client.delete("/v1/status-pages/$pageId/domains/$domainId") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
@@ -831,7 +831,7 @@ class StatusPageRoutesTest {
                 routing { statusPageRoutes() }
             }
             val userId = seedUser()
-            val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/domains/1") {
+            val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/domains/${UUID.randomUUID()}") {
                 header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
             }
             assertEquals(HttpStatusCode.Forbidden, response.status)

@@ -133,11 +133,11 @@ class GrafanaTranslator : DashboardTranslator {
 
         val dashboard = DashboardResponse(
             id = IMPORT_PLACEHOLDER_ID,
-            orgId = 0,
+            orgId = IMPORT_PLACEHOLDER_ID,
             title = title,
             description = description,
             layoutType = "grid",
-            createdBy = 0,
+            createdBy = IMPORT_PLACEHOLDER_ID,
             createdAt = "",
             updatedAt = "",
             widgets = widgets
