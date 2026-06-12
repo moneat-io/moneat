@@ -413,7 +413,16 @@ class DashboardAlertService(
         val queryDsl = queryConfigs.getOrNull(queryIndex) ?: return null
 
         val results = suspendRunCatching {
-            executeQueryForAlert(alert.orgId, alert.projectId, queryDsl)
+            executeQueryForAlert(
+                orgId = alert.orgId,
+                projectId = alert.projectId,
+                queryDsl = queryDsl,
+                logContext = AlertQueryLogContext(
+                    alertId = alert.alertId,
+                    dashboardId = alert.dashboardId,
+                    widgetId = alert.widgetId,
+                ),
+            )
         }.getOrElse { e ->
             logger.warn(e) { "Failed to execute query for dashboard alert ${alert.alertId}" }
             return null
@@ -558,10 +567,24 @@ class DashboardAlertService(
         sendAlertNotification(alert, currentValue, trigger)
     }
 
+    private data class AlertQueryLogContext(
+        val alertId: Long,
+        val dashboardId: Long,
+        val widgetId: Long,
+    )
+
     internal suspend fun executeQueryForAlert(
         orgId: Long,
         projectId: Long?,
         queryDsl: QueryDsl
+    ): List<Map<String, JsonElement>> =
+        executeQueryForAlert(orgId, projectId, queryDsl, logContext = null)
+
+    private suspend fun executeQueryForAlert(
+        orgId: Long,
+        projectId: Long?,
+        queryDsl: QueryDsl,
+        logContext: AlertQueryLogContext?,
     ): List<Map<String, JsonElement>> {
         val effectiveQueryDsl = queryEngine.resolveTemplateDataSource(
             dsl = queryDsl,
@@ -570,8 +593,10 @@ class DashboardAlertService(
             logMissing = false,
         )
         if (queryEngine.isTemplateDataSourceMarker(effectiveQueryDsl.dataSource)) {
-            logger.debug {
-                "Skipping dashboard alert query for unresolved template data source ${effectiveQueryDsl.dataSource}"
+            logger.warn {
+                "Skipping dashboard alert ${logContext?.alertId ?: "unknown"} query because template data source " +
+                    "${effectiveQueryDsl.dataSource} is unresolved for org $orgId, " +
+                    "dashboard ${logContext?.dashboardId ?: "unknown"}, widget ${logContext?.widgetId ?: "unknown"}"
             }
             return emptyList()
         }
