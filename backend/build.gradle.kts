@@ -230,6 +230,7 @@ dependencies {
     runtimeOnly(project(":features:analytics"))
     runtimeOnly(project(":features:contact"))
     runtimeOnly(project(":features:datadog"))
+    runtimeOnly(project(":features:featureflags"))
     runtimeOnly(project(":features:llm"))
     runtimeOnly(project(":features:mcp"))
     runtimeOnly(project(":features:monitoring"))
