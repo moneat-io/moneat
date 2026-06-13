@@ -25,7 +25,6 @@ import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.billing.routes.billingRoutes
 import com.moneat.billing.routes.publicBillingRoutes
 import com.moneat.billing.services.PricingTierService
-import com.moneat.contact.routes.contactRoutes
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
 import com.moneat.events.models.CreateProjectRequest
@@ -114,8 +113,9 @@ private data class ServiceReadContext(
     val demoEpochMs: Long?
 )
 
-@Suppress("kotlin:S3776")
-fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
+// Legacy route registrar; ownership is being reduced by feature extraction rather than by splitting here.
+@Suppress("CyclomaticComplexMethod", "kotlin:S3776")
+fun Route.apiRoutes() {
     val koin = GlobalContext.get()
     val alertEpisodeService = koin.get<AlertEpisodeService>()
     val dashboardService = koin.get<DashboardService>()
@@ -125,13 +125,6 @@ fun Route.apiRoutes(includePublicContactRoutes: Boolean = true) {
     route("/v1") {
         // Public billing plans endpoint
         publicBillingRoutes()
-
-        if (includePublicContactRoutes) {
-            // Public Enterprise sales-contact form (IP rate-limited; each request can send email)
-            rateLimit(RateLimitName("contact")) {
-                contactRoutes()
-            }
-        }
     }
 
     authenticate("auth-jwt") {

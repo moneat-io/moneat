@@ -149,7 +149,7 @@ class EventRoutesExtendedTest {
     private fun Application.installTestApp() {
         installJwtAuth()
         installApiRouteRateLimits("test-user")
-        routing { apiRoutes(includePublicContactRoutes = false) }
+        routing { apiRoutes() }
     }
 
     private fun token(userId: Int): String =

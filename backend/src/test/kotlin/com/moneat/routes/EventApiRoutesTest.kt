@@ -117,7 +117,7 @@ class EventApiRoutesTest {
     private fun Application.installTestApp() {
         installJwtAuth()
         installApiRouteRateLimits("test-user")
-        routing { apiRoutes(includePublicContactRoutes = false) }
+        routing { apiRoutes() }
     }
 
     private data class SeededProjectScope(

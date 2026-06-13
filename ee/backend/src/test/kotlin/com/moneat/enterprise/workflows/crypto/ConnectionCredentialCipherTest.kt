@@ -52,7 +52,9 @@ class ConnectionCredentialCipherTest {
     fun `tampered ciphertext is rejected`() {
         val subject = cipher()
         val envelope = subject.encrypt("secret", organizationId = 1)
-        val tampered = envelope.dropLast(2) + "AA"
+        val parts = envelope.split(":").toMutableList()
+        parts[5] = parts[5].replaceRange(0, 1, if (parts[5].first() == 'A') "B" else "A")
+        val tampered = parts.joinToString(":")
         assertFailsWith<AEADBadTagException> { subject.decrypt(tampered, organizationId = 1) }
     }
 
