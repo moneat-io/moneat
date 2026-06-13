@@ -28,7 +28,6 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.SerializationException
-import org.koin.core.context.GlobalContext
 
 private const val SUCCESS_MESSAGE = "Thanks — our sales team will be in touch shortly."
 private const val INVALID_BODY_MESSAGE = "Invalid request"
@@ -37,9 +36,7 @@ private const val INVALID_BODY_MESSAGE = "Invalid request"
  * Public, unauthenticated Enterprise sales-contact endpoint backing the pricing page form.
  * Mounted under the public `/v1` route group and rate-limited by IP at the registration site.
  */
-fun Route.contactRoutes(
-    contactService: ContactService = GlobalContext.get().get()
-) {
+fun Route.contactRoutes(contactService: ContactService) {
     route("/contact") {
         post("/sales") {
             val request =

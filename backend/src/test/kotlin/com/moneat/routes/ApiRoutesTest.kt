@@ -147,7 +147,7 @@ class ApiRoutesTest {
                         }
                     }
                     installApiRouteRateLimits("test-user")
-                    routing { apiRoutes(includePublicContactRoutes = false) }
+                    routing { apiRoutes() }
                 }
 
                 val response =
@@ -192,7 +192,7 @@ class ApiRoutesTest {
                         }
                     }
                     installApiRouteRateLimits("test-user")
-                    routing { apiRoutes(includePublicContactRoutes = false) }
+                    routing { apiRoutes() }
                 }
 
                 val response =
@@ -223,7 +223,7 @@ class ApiRoutesTest {
                     }
                 }
                 installApiRouteRateLimits("test-user")
-                routing { apiRoutes(includePublicContactRoutes = false) }
+                routing { apiRoutes() }
             }
 
             val response =
@@ -253,7 +253,7 @@ class ApiRoutesTest {
                     }
                 }
                 installApiRouteRateLimits("test-user")
-                routing { apiRoutes(includePublicContactRoutes = false) }
+                routing { apiRoutes() }
             }
 
             val response =
