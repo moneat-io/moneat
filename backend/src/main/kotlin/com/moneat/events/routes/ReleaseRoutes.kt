@@ -23,12 +23,16 @@ import com.moneat.auth.services.AuthTokenService
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.events.models.AssembleArtifactBundleRequest
+import com.moneat.events.models.AssembleDifEntry
+import com.moneat.events.models.AssembleDifResponseEntry
 import com.moneat.events.models.AssembleResponse
 import com.moneat.events.models.ChunkUploadParameters
 import com.moneat.events.models.CreateReleaseRequest
+import com.moneat.events.models.DifObject
 import com.moneat.events.models.SentryAuthDetails
 import com.moneat.events.models.SentryAuthInfoResponse
 import com.moneat.events.models.SentryAuthUser
+import com.moneat.events.services.AssembledDif
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
@@ -131,6 +135,16 @@ fun Route.releaseRoutes(
         // POST /api/0/organizations/{orgSlug}/artifactbundle/assemble/
         route("/api/0/organizations/{orgSlug}/artifactbundle") {
             post("/assemble/") { handleAssembleArtifactBundle(releaseService) }
+        }
+
+        // Debug information files (ProGuard mappings, dSYMs) for sentry-cli upload-proguard /
+        // the Sentry Android Gradle plugin's uploadSentryProguardMappings task.
+        route("/api/0/projects/{orgSlug}/{projectSlug}/files/difs") {
+            // GET .../files/difs/?checksums=...  (lets sentry-cli skip already-uploaded difs)
+            get("/") { handleListProjectDifs(releaseService) }
+
+            // POST .../files/difs/assemble/
+            post("/assemble/") { handleAssembleProjectDifs(releaseService) }
         }
     }
 }
@@ -753,3 +767,109 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
         )
     }
 }
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
+    releaseService: ReleaseService,
+) {
+    val principal =
+        call.principal<AuthTokenPrincipal>()
+            ?: run {
+                call.respond(HttpStatusCode.Unauthorized)
+                return
+            }
+
+    val orgSlug = call.parameters["orgSlug"] ?: return
+    val projectSlug = call.parameters["projectSlug"] ?: return
+
+    val projectId =
+        releaseService.getProjectBySlug(orgSlug, projectSlug)
+            ?: run {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                return
+            }
+
+    if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
+        call.respond(HttpStatusCode.Forbidden)
+        return
+    }
+
+    val checksums = call.request.queryParameters.getAll("checksums")?.toSet() ?: emptySet()
+    val debugIds = call.request.queryParameters.getAll("debug_id")?.toSet() ?: emptySet()
+
+    val difs = releaseService.listProjectDifs(projectId, checksums, debugIds)
+    call.respond(difs.map { it.toDifObject() })
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectDifs(
+    releaseService: ReleaseService,
+) {
+    val principal =
+        call.principal<AuthTokenPrincipal>()
+            ?: run {
+                call.respond(HttpStatusCode.Unauthorized)
+                return
+            }
+
+    val orgSlug = call.parameters["orgSlug"] ?: return
+    val projectSlug = call.parameters["projectSlug"] ?: return
+
+    val projectId =
+        releaseService.getProjectBySlug(orgSlug, projectSlug)
+            ?: run {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                return
+            }
+
+    if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
+        call.respond(HttpStatusCode.Forbidden)
+        return
+    }
+
+    // Body is a map keyed by each file's SHA-1 checksum: { "<sha1>": { name, debug_id?, chunks } }
+    val request = call.receive<Map<String, AssembleDifEntry>>()
+
+    val response =
+        request.mapValues { (checksum, entry) ->
+            assembleSingleDif(releaseService, projectId, checksum, entry)
+        }
+
+    call.respond(response)
+}
+
+private suspend fun assembleSingleDif(
+    releaseService: ReleaseService,
+    projectId: Long,
+    checksum: String,
+    entry: AssembleDifEntry,
+): AssembleDifResponseEntry {
+    val missing = releaseService.findMissingChunks(entry.chunks.toSet())
+    if (missing.isNotEmpty()) {
+        return AssembleDifResponseEntry(state = "not_found", missingChunks = missing)
+    }
+
+    return suspendRunCatching {
+        val dif =
+            releaseService.assembleProjectDif(
+                projectId = projectId,
+                checksum = checksum,
+                chunks = entry.chunks,
+                name = entry.name,
+                debugId = entry.debugId
+            )
+        AssembleDifResponseEntry(state = "ok", dif = dif.toDifObject())
+    }.getOrElse { e ->
+        logger.error(e) { "Failed to assemble debug file $checksum for project $projectId" }
+        AssembleDifResponseEntry(state = "error", detail = e.message)
+    }
+}
+
+private fun AssembledDif.toDifObject(): DifObject =
+    DifObject(
+        id = resourceId,
+        uuid = debugId,
+        debugId = debugId,
+        objectName = objectName,
+        size = size,
+        sha1 = checksum,
+        dateCreated = dateCreated
+    )

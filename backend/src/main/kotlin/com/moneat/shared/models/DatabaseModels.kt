@@ -500,6 +500,20 @@ object ArtifactBundles : Table("artifact_bundles") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object ProjectDebugFiles : Table("project_debug_files") {
+    val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val project_id = long("project_id").references(Projects.id)
+    val debug_id = varchar("debug_id", 64).nullable()
+    val checksum = varchar("checksum", 40)
+    val file_type = varchar("file_type", 32).default("proguard")
+    val object_name = varchar("object_name", 500).nullable()
+    val size = long("size").default(0)
+    val storage_path = varchar("storage_path", 500)
+    val created_at = long("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
 object UsageRecords : Table("usage_records") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id").references(Organizations.id)
