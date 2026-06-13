@@ -22,6 +22,7 @@ import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.events.models.SourceMapFileResponse
 import com.moneat.events.routes.releaseRoutes
+import com.moneat.events.services.AssembledDif
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
@@ -139,7 +140,7 @@ class ReleaseRoutesTest {
                         testSourceMapToken ->
                             AuthTokenPrincipal(
                                 userId = testUserId,
-                                scopes = listOf("sourcemaps:write"),
+                                scopes = listOf("sourcemaps:write", "sourcemaps:read"),
                                 tokenId = 2
                             )
 
@@ -383,6 +384,167 @@ class ReleaseRoutesTest {
 
             assertEquals(HttpStatusCode.InternalServerError, response.status, response.bodyAsText())
             verify { quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", "chunk content".length.toLong()) }
+        }
+
+    @Test
+    fun `POST difs assemble returns ok and records dif when chunks are present`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            every { releaseService.findMissingChunks(setOf("chunk-1")) } returns emptyList()
+            every {
+                releaseService.assembleProjectDif(
+                    TEST_PROJECT_ID,
+                    "sum-1",
+                    listOf("chunk-1"),
+                    "proguard/the-uuid.txt",
+                    null
+                )
+            } returns AssembledDif(
+                resourceId = resourceId(99),
+                debugId = "the-uuid",
+                objectName = "proguard/the-uuid.txt",
+                checksum = "sum-1",
+                size = 12L,
+                dateCreated = "2026-05-23T00:00:00Z"
+            )
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/difs/assemble/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"sum-1":{"name":"proguard/the-uuid.txt","chunks":["chunk-1"]}}""")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            val body = response.bodyAsText()
+            assertTrue(body.contains("\"state\":\"ok\""), body)
+            assertTrue(body.contains("the-uuid"), body)
+            verify {
+                releaseService.assembleProjectDif(
+                    TEST_PROJECT_ID,
+                    "sum-1",
+                    listOf("chunk-1"),
+                    "proguard/the-uuid.txt",
+                    null
+                )
+            }
+        }
+
+    @Test
+    fun `POST difs assemble returns not_found with missing chunks and does not assemble`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            every { releaseService.findMissingChunks(setOf("missing-chunk")) } returns listOf("missing-chunk")
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/difs/assemble/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"sum-2":{"name":"proguard/x.txt","chunks":["missing-chunk"]}}""")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            val body = response.bodyAsText()
+            assertTrue(body.contains("not_found"), body)
+            assertTrue(body.contains("missing-chunk"), body)
+            verify(exactly = 0) { releaseService.assembleProjectDif(any(), any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `POST difs assemble returns 404 when project not found`() =
+        testApplication {
+            val releaseService = mockk<ReleaseService>()
+            every { releaseService.getProjectBySlug("my-org", "missing") } returns null
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/missing/files/difs/assemble/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"sum-3":{"chunks":["c"]}}""")
+                }
+
+            assertEquals(HttpStatusCode.NotFound, response.status, response.bodyAsText())
+        }
+
+    @Test
+    fun `POST difs assemble returns 403 when sourcemaps write scope is missing`() =
+        testApplication {
+            val releaseService = mockk<ReleaseService>()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/difs/assemble/") {
+                    header(HttpHeaders.Authorization, "Bearer $testCombinedToken")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"sum-x":{"chunks":["c"]}}""")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("sourcemaps:write"), response.bodyAsText())
+        }
+
+    @Test
+    fun `GET difs returns stored difs for the project`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            every { releaseService.listProjectDifs(TEST_PROJECT_ID, emptySet(), emptySet()) } returns
+                listOf(
+                    AssembledDif(
+                        resourceId = resourceId(7),
+                        debugId = "the-uuid",
+                        objectName = "proguard/the-uuid.txt",
+                        checksum = "sum-1",
+                        size = 12L,
+                        dateCreated = "2026-05-23T00:00:00Z"
+                    )
+                )
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.get("/api/0/projects/my-org/my-project/files/difs/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("the-uuid"), response.bodyAsText())
         }
 
     private fun sourceMapReleaseService(): ReleaseService {

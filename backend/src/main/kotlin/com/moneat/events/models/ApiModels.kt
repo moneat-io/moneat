@@ -16,6 +16,7 @@
 
 package com.moneat.events.models
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonElement
@@ -420,6 +421,41 @@ data class AssembleResponse(
     val state: String,
     val detail: String? = null,
     val missingChunks: List<String> = emptyList()
+)
+
+/**
+ * One entry in a debug-files (DIF) assemble request. The request body maps each assembled
+ * file's SHA-1 checksum to an entry with its name, optional debug id, and chunk checksums.
+ * sentry-cli sends `name` like "proguard/<uuid>.txt"; `debug_id` may be omitted for ProGuard.
+ */
+@Serializable
+data class AssembleDifEntry(
+    val name: String? = null,
+    @SerialName("debug_id") val debugId: String? = null,
+    val chunks: List<String> = emptyList()
+)
+
+/**
+ * One entry in a DIF assemble response, keyed by the same checksum as the request.
+ * state is one of: not_found | created | ok | error. When chunks are missing, the client
+ * uploads `missingChunks` and retries; on `ok`/`created` the assembled `dif` is returned.
+ */
+@Serializable
+data class AssembleDifResponseEntry(
+    val state: String,
+    val missingChunks: List<String> = emptyList(),
+    val detail: String? = null,
+    val dif: DifObject? = null
+)
+
+@Serializable
+data class DifObject(
+    val id: String,
+    val debugId: String? = null,
+    val objectName: String,
+    val size: Long,
+    val sha1: String,
+    val dateCreated: String
 )
 
 @Serializable

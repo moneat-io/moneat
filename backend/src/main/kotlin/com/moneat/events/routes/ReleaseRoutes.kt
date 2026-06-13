@@ -23,12 +23,16 @@ import com.moneat.auth.services.AuthTokenService
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.events.models.AssembleArtifactBundleRequest
+import com.moneat.events.models.AssembleDifEntry
+import com.moneat.events.models.AssembleDifResponseEntry
 import com.moneat.events.models.AssembleResponse
 import com.moneat.events.models.ChunkUploadParameters
 import com.moneat.events.models.CreateReleaseRequest
+import com.moneat.events.models.DifObject
 import com.moneat.events.models.SentryAuthDetails
 import com.moneat.events.models.SentryAuthInfoResponse
 import com.moneat.events.models.SentryAuthUser
+import com.moneat.events.services.AssembledDif
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
@@ -59,6 +63,7 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
 private const val UPLOAD_FAILED = "Upload failed"
+private const val PROJECT_NOT_FOUND = "Project not found"
 
 private data class UploadedSourceMapChunk(
     val checksum: String,
@@ -131,6 +136,16 @@ fun Route.releaseRoutes(
         // POST /api/0/organizations/{orgSlug}/artifactbundle/assemble/
         route("/api/0/organizations/{orgSlug}/artifactbundle") {
             post("/assemble/") { handleAssembleArtifactBundle(releaseService) }
+        }
+
+        // Debug information files (ProGuard mappings, dSYMs) for sentry-cli upload-proguard /
+        // the Sentry Android Gradle plugin's uploadSentryProguardMappings task.
+        route("/api/0/projects/{orgSlug}/{projectSlug}/files/difs") {
+            // GET .../files/difs/?checksums=...  (lets sentry-cli skip already-uploaded difs)
+            get("/") { handleListProjectDifs(releaseService, authTokenService) }
+
+            // POST .../files/difs/assemble/
+            post("/assemble/") { handleAssembleProjectDifs(releaseService, authTokenService) }
         }
     }
 }
@@ -206,7 +221,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateOrgRelease
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -280,7 +295,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProjectRel
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -327,7 +342,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectRelea
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -368,7 +383,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -418,7 +433,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListReleaseFiles
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -753,3 +768,107 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
         )
     }
 }
+
+// Resolves and authorizes the {orgSlug}/{projectSlug} project for the DIF endpoints,
+// responding with the appropriate error (and returning null) when that fails.
+private suspend fun io.ktor.server.routing.RoutingContext.resolveDifProject(
+    releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
+    requiredScope: String,
+): Long? {
+    val principal =
+        call.principal<AuthTokenPrincipal>()
+            ?: run {
+                call.respond(HttpStatusCode.Unauthorized)
+                return null
+            }
+
+    if (!authTokenService.hasScope(principal.scopes, requiredScope)) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Missing required scope: $requiredScope"))
+        return null
+    }
+
+    val orgSlug = call.parameters["orgSlug"] ?: return null
+    val projectSlug = call.parameters["projectSlug"] ?: return null
+
+    val projectId =
+        releaseService.getProjectBySlug(orgSlug, projectSlug)
+            ?: run {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
+                return null
+            }
+
+    if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
+        call.respond(HttpStatusCode.Forbidden)
+        return null
+    }
+
+    return projectId
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
+    releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
+) {
+    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:read") ?: return
+
+    val checksums = call.request.queryParameters.getAll("checksums")?.toSet() ?: emptySet()
+    val debugIds = call.request.queryParameters.getAll("debug_id")?.toSet() ?: emptySet()
+
+    val difs = releaseService.listProjectDifs(projectId, checksums, debugIds)
+    call.respond(difs.map { it.toDifObject() })
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectDifs(
+    releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
+) {
+    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
+
+    // Body maps each assembled file's SHA-1 checksum to its name, optional debug id, and chunks.
+    val request = call.receive<Map<String, AssembleDifEntry>>()
+
+    val response =
+        request.mapValues { (checksum, entry) ->
+            assembleSingleDif(releaseService, projectId, checksum, entry)
+        }
+
+    call.respond(response)
+}
+
+private suspend fun assembleSingleDif(
+    releaseService: ReleaseService,
+    projectId: Long,
+    checksum: String,
+    entry: AssembleDifEntry,
+): AssembleDifResponseEntry {
+    val missing = releaseService.findMissingChunks(entry.chunks.toSet())
+    if (missing.isNotEmpty()) {
+        return AssembleDifResponseEntry(state = "not_found", missingChunks = missing)
+    }
+
+    return suspendRunCatching {
+        val dif =
+            releaseService.assembleProjectDif(
+                projectId = projectId,
+                checksum = checksum,
+                chunks = entry.chunks,
+                name = entry.name,
+                debugId = entry.debugId
+            )
+        AssembleDifResponseEntry(state = "ok", dif = dif.toDifObject())
+    }.getOrElse { e ->
+        logger.error(e) { "Failed to assemble debug file $checksum for project $projectId" }
+        AssembleDifResponseEntry(state = "error", detail = e.message)
+    }
+}
+
+private fun AssembledDif.toDifObject(): DifObject =
+    DifObject(
+        id = resourceId,
+        debugId = debugId,
+        objectName = objectName,
+        size = size,
+        sha1 = checksum,
+        dateCreated = dateCreated
+    )
