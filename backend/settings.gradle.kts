@@ -8,6 +8,7 @@ include(":features:datadog")
 include(":features:llm")
 include(":features:mcp")
 include(":features:monitoring")
+include(":features:overview")
 include(":features:sso")
 include(":features:summary")
 
