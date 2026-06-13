@@ -29,7 +29,6 @@ import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
-import com.moneat.featureflags.routes.featureFlagRoutes
 import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
@@ -210,9 +209,6 @@ fun Application.configureRouting() {
 
         // Dashboard API endpoints
         apiRoutes()
-
-        // OpenFeature-compatible feature flag management and OFREP runtime endpoints
-        featureFlagRoutes()
 
         // Authentication endpoints
         authRoutes()
