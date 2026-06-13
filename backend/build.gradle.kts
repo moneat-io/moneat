@@ -234,6 +234,7 @@ dependencies {
     runtimeOnly(project(":features:mcp"))
     runtimeOnly(project(":features:monitoring"))
     runtimeOnly(project(":features:sso"))
+    runtimeOnly(project(":features:summary"))
 }
 
 // Task to copy email templates into resources

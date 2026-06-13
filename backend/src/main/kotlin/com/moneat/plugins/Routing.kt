@@ -48,7 +48,6 @@ import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import com.moneat.statuspage.routes.statusPageRoutes
-import com.moneat.summary.routes.summaryRoutes
 import com.moneat.uptime.routes.uptimeRoutes
 import com.moneat.workflows.routes.workflowRoutes
 import io.ktor.http.ContentType
@@ -257,9 +256,6 @@ fun Application.configureRouting() {
 
         // Status page endpoints
         statusPageRoutes()
-
-        // Summary and report endpoints
-        summaryRoutes()
 
         // Incident provider integration endpoints
         incidentProviderRoutes()
