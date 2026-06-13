@@ -56,8 +56,8 @@ private val DEMO_SERVICE_IDS =
     listOf(DEMO_PRIMARY_SERVICE_ID, DEMO_SECONDARY_SERVICE_ID, DEMO_TERTIARY_SERVICE_ID)
 
 fun Route.llmRoutes(
+    llmService: LlmDashboardService,
     dashboardService: DashboardService = GlobalContext.get().get(),
-    llmService: LlmDashboardService = GlobalContext.get().get(),
     projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
     authenticate("auth-jwt") {

@@ -60,7 +60,6 @@ import com.moneat.featureflags.services.FeatureFlagEvaluator
 import com.moneat.featureflags.services.FeatureFlagEventService
 import com.moneat.featureflags.services.FeatureFlagService
 import com.moneat.incident.services.IncidentService
-import com.moneat.llm.services.LlmDashboardService
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.services.LogIndexService
@@ -330,11 +329,6 @@ val summaryModule = module {
     single { SummaryService(get(), get(), get(), get(), get()) }
 }
 
-/** LLM observability. */
-val llmModule = module {
-    single { LlmDashboardService() }
-}
-
 /** OpenFeature-compatible feature flags. */
 val featureFlagsModule = module {
     single { FeatureFlagEvaluator() }
@@ -362,7 +356,6 @@ fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
         uptimeModule(frontendBaseUrl),
         dashboardsModule,
         summaryModule,
-        llmModule,
         featureFlagsModule,
         aiModule,
     )

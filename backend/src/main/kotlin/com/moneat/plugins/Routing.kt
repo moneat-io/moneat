@@ -31,8 +31,6 @@ import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.featureflags.routes.featureFlagRoutes
 import com.moneat.incident.routes.incidentProviderRoutes
-import com.moneat.llm.routes.llmIngestRoutes
-import com.moneat.llm.routes.llmRoutes
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
 import com.moneat.monitor.routes.cloudSourceRoutes
@@ -201,7 +199,6 @@ fun Application.configureRouting() {
         // Sentry-compatible ingestion endpoints (rate limited per project key)
         rateLimit(RateLimitName("ingestion")) {
             ingestRoutes()
-            llmIngestRoutes()
         }
         routingLogger.info { "Ingestion routes registered" }
 
@@ -221,9 +218,6 @@ fun Application.configureRouting() {
 
         // OpenFeature-compatible feature flag management and OFREP runtime endpoints
         featureFlagRoutes()
-
-        // LLM observability API endpoints
-        llmRoutes()
 
         // Authentication endpoints
         authRoutes()

@@ -229,6 +229,7 @@ dependencies {
     runtimeOnly(project(":ee"))
     runtimeOnly(project(":features:analytics"))
     runtimeOnly(project(":features:datadog"))
+    runtimeOnly(project(":features:llm"))
     runtimeOnly(project(":features:mcp"))
     runtimeOnly(project(":features:monitoring"))
     runtimeOnly(project(":features:sso"))
