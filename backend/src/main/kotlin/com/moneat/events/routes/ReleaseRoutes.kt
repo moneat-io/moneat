@@ -63,6 +63,7 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
 private const val UPLOAD_FAILED = "Upload failed"
+private const val PROJECT_NOT_FOUND = "Project not found"
 
 private data class UploadedSourceMapChunk(
     val checksum: String,
@@ -220,7 +221,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateOrgRelease
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -294,7 +295,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProjectRel
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -341,7 +342,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectRelea
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -382,7 +383,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -432,7 +433,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListReleaseFiles
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return
             }
 
@@ -793,7 +794,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDifProject(
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
+                call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_NOT_FOUND))
                 return null
             }
 
