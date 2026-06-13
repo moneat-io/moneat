@@ -168,6 +168,13 @@ jobs:
           name: backend-unit-test-results
           path: backend/build/test-results/test/
 
+      - name: Upload Analytics feature test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-analytics-test-results
+          path: backend/features/analytics/build/test-results/test/
+
       - name: Upload Datadog feature test results
         if: always()
         uses: actions/upload-artifact@v7
@@ -181,6 +188,13 @@ jobs:
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
+
+      - name: Upload Analytics feature coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-analytics-coverage-report
+          path: backend/features/analytics/build/reports/jacoco/test/
 
       - name: Upload Datadog feature coverage report
         if: always()
@@ -238,6 +252,13 @@ jobs:
         with:
           name: backend-ingest-common-detekt-report
           path: backend/ingest-common/build/reports/detekt/
+
+      - name: Upload Analytics feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-analytics-detekt-report
+          path: backend/features/analytics/build/reports/detekt/
 
       - name: Upload Datadog feature detekt report (Sonar)
         if: success()
@@ -311,6 +332,13 @@ jobs:
           path: backend/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Analytics feature coverage (JaCoCo)
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-analytics-coverage-report
+          path: backend/features/analytics/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download Datadog feature coverage (JaCoCo)
         uses: actions/download-artifact@v8
         with:
@@ -337,6 +365,13 @@ jobs:
         with:
           name: backend-ingest-common-detekt-report
           path: backend/ingest-common/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Analytics feature detekt report
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-analytics-detekt-report
+          path: backend/features/analytics/build/reports/detekt/
         continue-on-error: true
 
       - name: Download Datadog feature detekt report

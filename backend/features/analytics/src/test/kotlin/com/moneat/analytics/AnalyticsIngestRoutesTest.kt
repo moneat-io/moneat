@@ -21,7 +21,6 @@ import com.moneat.analytics.routes.AnalyticsIngestRouteDependencies
 import com.moneat.analytics.routes.extractAnalyticsPublicKey
 import com.moneat.analytics.routes.extractPathname
 import com.moneat.analytics.routes.extractUtmParams
-import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.SessionHashService
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.models.OrgUsageCounters
@@ -33,6 +32,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
+import com.moneat.shared.services.GeoIpService
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin

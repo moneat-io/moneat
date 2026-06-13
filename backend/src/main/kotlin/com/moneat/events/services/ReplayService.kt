@@ -16,7 +16,6 @@
 
 package com.moneat.events.services
 
-import com.moneat.analytics.services.GeoIpService
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ReplayDetailResponse
 import com.moneat.events.models.ReplayListItem
@@ -24,6 +23,7 @@ import com.moneat.events.models.ReplayRecordingResponse
 import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.GeoIpService
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql

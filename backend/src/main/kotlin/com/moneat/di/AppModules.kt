@@ -18,9 +18,6 @@ package com.moneat.di
 
 import com.moneat.ai.AiChatService
 import com.moneat.alerts.services.AlertEpisodeService
-import com.moneat.analytics.services.AnalyticsService
-import com.moneat.analytics.services.GeoIpService
-import com.moneat.analytics.services.SessionHashService
 import com.moneat.auth.repositories.UserRepository
 import com.moneat.auth.repositories.UserRepositoryImpl
 import com.moneat.auth.services.AccountDeletionService
@@ -106,6 +103,7 @@ import com.moneat.shared.repositories.OrganizationRepositoryImpl
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.AttributionAnalyticsService
 import com.moneat.shared.services.DemoLivenessBackgroundService
+import com.moneat.shared.services.GeoIpService
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
@@ -176,6 +174,7 @@ val sharedModule = module {
 
     single { AttributionAnalyticsService() }
     single { DemoLivenessBackgroundService() }
+    single { GeoIpService() }
 }
 
 /** Authentication, token management, and account lifecycle. */
@@ -336,13 +335,6 @@ val llmModule = module {
     single { LlmDashboardService() }
 }
 
-/** Product analytics (cookie-free web analytics). */
-val analyticsModule = module {
-    single { AnalyticsService() }
-    single { SessionHashService() }
-    single { GeoIpService() }
-}
-
 /** OpenFeature-compatible feature flags. */
 val featureFlagsModule = module {
     single { FeatureFlagEvaluator() }
@@ -371,7 +363,6 @@ fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
         dashboardsModule,
         summaryModule,
         llmModule,
-        analyticsModule,
         featureFlagsModule,
         aiModule,
     )
