@@ -362,7 +362,7 @@ class McpRoutesTest {
                 }
             }
             routing {
-                McpModule.registerRoutes(this)
+                McpModule().registerRoutes(this)
             }
         }
     }

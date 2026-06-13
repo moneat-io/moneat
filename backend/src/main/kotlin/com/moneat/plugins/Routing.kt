@@ -39,7 +39,6 @@ import com.moneat.monitor.routes.cloudSourceRoutes
 import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.monitor.routes.resourceCatalogRoutes
-import com.moneat.mcp.McpModule
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
@@ -294,14 +293,10 @@ fun Application.configureRouting() {
             vulnerabilityRoutes()
         }
 
-        routingLogger.info { "Registering enterprise routes..." }
-        // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
+        routingLogger.info { "Registering feature routes..." }
+        // Feature modules (SSO, MCP, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
-        routingLogger.info { "Enterprise routes registered" }
-
-        routingLogger.info { "Registering MCP routes..." }
-        McpModule.registerRoutes(this)
-        routingLogger.info { "MCP routes registered" }
+        routingLogger.info { "Feature routes registered" }
 
         aiChatRoutes()
 

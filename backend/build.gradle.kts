@@ -101,9 +101,6 @@ dependencies {
     implementation(libs.ktor.server.status.pages)
     implementation(libs.ktor.server.metrics.micrometer)
 
-    // MCP SDK
-    implementation(libs.mcp.kotlin.sdk.server)
-
     // Ktor Client (for ClickHouse HTTP API)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
@@ -232,6 +229,7 @@ dependencies {
     runtimeOnly(project(":ee"))
     runtimeOnly(project(":features:analytics"))
     runtimeOnly(project(":features:datadog"))
+    runtimeOnly(project(":features:mcp"))
     runtimeOnly(project(":features:monitoring"))
     runtimeOnly(project(":features:sso"))
 }

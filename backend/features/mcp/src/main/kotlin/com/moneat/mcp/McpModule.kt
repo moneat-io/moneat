@@ -16,6 +16,7 @@
 
 package com.moneat.mcp
 
+import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.mcp.protocol.McpResourceRegistry
 import com.moneat.mcp.protocol.McpToolRegistry
@@ -35,6 +36,7 @@ import com.moneat.mcp.resources.WorkflowsOverviewResource
 import com.moneat.mcp.resources.WorkflowsUsageResource
 import com.moneat.mcp.routes.mcpApiKeyRoutes
 import com.moneat.mcp.routes.mcpRoutes
+import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
 
@@ -48,7 +50,9 @@ fun interface McpToolContributor {
  * Core MCP module. Licensed modules may contribute tools through [McpToolContributor],
  * but the public MCP endpoint itself is part of the OSS backend.
  */
-object McpModule {
+class McpModule : EnterpriseModule {
+    override val name: String = "MCP"
+
     private val toolRegistry: McpToolRegistry by lazy {
         McpToolRegistry().also { registry ->
             McpToolRegistrar.registerAll(registry)
@@ -79,8 +83,18 @@ object McpModule {
         }
     }
 
-    fun registerRoutes(route: Route) {
+    override fun registerRoutes(route: Route) {
+        logger.info { "Registering MCP routes..." }
         route.mcpApiKeyRoutes(toolRegistry, resourceRegistry)
         route.mcpRoutes(toolRegistry, resourceRegistry)
+        logger.info { "MCP routes registered" }
+    }
+
+    override fun startBackgroundJobs(application: Application) {
+        // No-op
+    }
+
+    override fun stopBackgroundJobs() {
+        // No-op
     }
 }
