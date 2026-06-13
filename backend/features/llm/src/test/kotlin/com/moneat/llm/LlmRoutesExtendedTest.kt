@@ -17,6 +17,7 @@
 package com.moneat.llm
 
 import com.moneat.llm.routes.llmRoutes
+import com.moneat.llm.services.LlmDashboardService
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
@@ -58,7 +59,7 @@ class LlmRoutesExtendedTest {
                     rateLimiter(limit = 100, refillPeriod = 1.seconds)
                 }
             }
-            routing { llmRoutes() }
+            routing { llmRoutes(llmService = LlmDashboardService()) }
         }
     }
 

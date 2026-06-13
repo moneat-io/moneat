@@ -184,6 +184,13 @@ jobs:
           name: backend-datadog-test-results
           path: backend/features/datadog/build/test-results/test/
 
+      - name: Upload LLM feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-llm-test-results
+          path: backend/features/llm/build/test-results/test/
+
       - name: Upload MCP feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -225,6 +232,13 @@ jobs:
         with:
           name: backend-datadog-coverage-report
           path: backend/features/datadog/build/reports/jacoco/test/
+
+      - name: Upload LLM feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-llm-coverage-report
+          path: backend/features/llm/build/reports/jacoco/test/
 
       - name: Upload MCP feature coverage report
         if: always()
@@ -312,6 +326,13 @@ jobs:
         with:
           name: backend-datadog-detekt-report
           path: backend/features/datadog/build/reports/detekt/
+
+      - name: Upload LLM feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-llm-detekt-report
+          path: backend/features/llm/build/reports/detekt/
 
       - name: Upload MCP feature detekt report (Sonar)
         if: success()
@@ -414,6 +435,13 @@ jobs:
           path: backend/features/datadog/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download LLM feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-llm-coverage-report
+          path: backend/features/llm/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download MCP feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -468,6 +496,13 @@ jobs:
         with:
           name: backend-datadog-detekt-report
           path: backend/features/datadog/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download LLM feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-llm-detekt-report
+          path: backend/features/llm/build/reports/detekt/
         continue-on-error: true
 
       - name: Download MCP feature detekt report

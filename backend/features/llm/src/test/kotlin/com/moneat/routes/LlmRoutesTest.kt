@@ -19,6 +19,7 @@ package com.moneat.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.llm.routes.llmRoutes
+import com.moneat.llm.services.LlmDashboardService
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.get
@@ -74,7 +75,7 @@ class LlmRoutesTest {
                         rateLimiter(limit = 100, refillPeriod = 1.seconds)
                     }
                 }
-                routing { llmRoutes() }
+                routing { llmRoutes(llmService = LlmDashboardService()) }
             }
 
             val response =

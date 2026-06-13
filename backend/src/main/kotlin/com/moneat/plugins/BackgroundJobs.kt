@@ -26,7 +26,6 @@ import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
-import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
@@ -209,11 +208,6 @@ private class CoreIngestionWorkers(application: Application) {
         logService = koin.get(),
         logIndexService = koin.get(),
     )
-    private val llmIngestionWorker = LlmIngestionWorker(
-        config.propertyOrNull("llm.queueKey")?.getString() ?: "moneat:llm:queue",
-        config.propertyOrNull("llm.dlqKey")?.getString() ?: "moneat:llm:dlq",
-        config.propertyOrNull("llm.workerCount")?.getString()?.toIntOrNull() ?: 2,
-    )
     private val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
         config.propertyOrNull("otlp.tracesQueueKey")?.getString() ?: "moneat:otlp-traces:queue",
         config.propertyOrNull("otlp.tracesDlqKey")?.getString() ?: "moneat:otlp-traces:dlq",
@@ -233,9 +227,6 @@ private class CoreIngestionWorkers(application: Application) {
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.LOGS)) {
             logIngestionWorker.start()
         }
-        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.LLM)) {
-            llmIngestionWorker.start()
-        }
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.OTLP_TRACES)) {
             otlpTraceIngestionWorker.start()
         }
@@ -247,7 +238,6 @@ private class CoreIngestionWorkers(application: Application) {
     fun stop() {
         ingestionWorker.stop()
         logIngestionWorker.stop()
-        llmIngestionWorker.stop()
         runBlocking {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()
