@@ -424,8 +424,8 @@ data class AssembleResponse(
 )
 
 /**
- * One entry in a debug-files (DIF) assemble request. The request body is a map keyed by the
- * assembled file's SHA-1 checksum: { "<sha1>": { name, debug_id?, chunks } }.
+ * One entry in a debug-files (DIF) assemble request. The request body maps each assembled
+ * file's SHA-1 checksum to an entry with its name, optional debug id, and chunk checksums.
  * sentry-cli sends `name` like "proguard/<uuid>.txt"; `debug_id` may be omitted for ProGuard.
  */
 @Serializable

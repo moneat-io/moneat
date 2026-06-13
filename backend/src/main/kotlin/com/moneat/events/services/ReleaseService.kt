@@ -620,6 +620,7 @@ class ReleaseService {
             } catch (e: ExposedSQLException) {
                 // A concurrent request assembled the same (project, checksum) first; the unique
                 // index rejected this insert, so treat it as an idempotent success.
+                logger.debug(e) { "Concurrent DIF assemble for project $projectId; using existing row" }
                 return getProjectDif(projectId, checksum) ?: throw e
             }
 

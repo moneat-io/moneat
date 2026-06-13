@@ -824,7 +824,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectD
 ) {
     val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
 
-    // Body is a map keyed by each file's SHA-1 checksum: { "<sha1>": { name, debug_id?, chunks } }
+    // Body maps each assembled file's SHA-1 checksum to its name, optional debug id, and chunks.
     val request = call.receive<Map<String, AssembleDifEntry>>()
 
     val response =
