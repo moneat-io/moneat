@@ -141,10 +141,10 @@ fun Route.releaseRoutes(
         // the Sentry Android Gradle plugin's uploadSentryProguardMappings task.
         route("/api/0/projects/{orgSlug}/{projectSlug}/files/difs") {
             // GET .../files/difs/?checksums=...  (lets sentry-cli skip already-uploaded difs)
-            get("/") { handleListProjectDifs(releaseService) }
+            get("/") { handleListProjectDifs(releaseService, authTokenService) }
 
             // POST .../files/difs/assemble/
-            post("/assemble/") { handleAssembleProjectDifs(releaseService) }
+            post("/assemble/") { handleAssembleProjectDifs(releaseService, authTokenService) }
         }
     }
 }
@@ -772,6 +772,8 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
 // responding with the appropriate error (and returning null) when that fails.
 private suspend fun io.ktor.server.routing.RoutingContext.resolveDifProject(
     releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
+    requiredScope: String,
 ): Long? {
     val principal =
         call.principal<AuthTokenPrincipal>()
@@ -779,6 +781,11 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDifProject(
                 call.respond(HttpStatusCode.Unauthorized)
                 return null
             }
+
+    if (!authTokenService.hasScope(principal.scopes, requiredScope)) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse("Missing required scope: $requiredScope"))
+        return null
+    }
 
     val orgSlug = call.parameters["orgSlug"] ?: return null
     val projectSlug = call.parameters["projectSlug"] ?: return null
@@ -800,8 +807,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveDifProject(
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
     releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
 ) {
-    val projectId = resolveDifProject(releaseService) ?: return
+    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:read") ?: return
 
     val checksums = call.request.queryParameters.getAll("checksums")?.toSet() ?: emptySet()
     val debugIds = call.request.queryParameters.getAll("debug_id")?.toSet() ?: emptySet()
@@ -812,8 +820,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectDifs(
     releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
 ) {
-    val projectId = resolveDifProject(releaseService) ?: return
+    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
 
     // Body is a map keyed by each file's SHA-1 checksum: { "<sha1>": { name, debug_id?, chunks } }
     val request = call.receive<Map<String, AssembleDifEntry>>()

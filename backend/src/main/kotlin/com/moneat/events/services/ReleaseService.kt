@@ -38,6 +38,7 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.plus
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -603,17 +604,23 @@ class ReleaseService {
         val createdAt = System.currentTimeMillis()
 
         val resourceId =
-            transaction {
-                ProjectDebugFiles.insert {
-                    it[ProjectDebugFiles.project_id] = projectId
-                    it[ProjectDebugFiles.debug_id] = resolvedDebugId
-                    it[ProjectDebugFiles.checksum] = checksum
-                    it[ProjectDebugFiles.file_type] = PROGUARD_FILE_TYPE
-                    it[ProjectDebugFiles.object_name] = objectName
-                    it[ProjectDebugFiles.size] = size
-                    it[ProjectDebugFiles.storage_path] = storageKey
-                    it[ProjectDebugFiles.created_at] = createdAt
-                }[ProjectDebugFiles.resourceId]
+            try {
+                transaction {
+                    ProjectDebugFiles.insert {
+                        it[ProjectDebugFiles.project_id] = projectId
+                        it[ProjectDebugFiles.debug_id] = resolvedDebugId
+                        it[ProjectDebugFiles.checksum] = checksum
+                        it[ProjectDebugFiles.file_type] = PROGUARD_FILE_TYPE
+                        it[ProjectDebugFiles.object_name] = objectName
+                        it[ProjectDebugFiles.size] = size
+                        it[ProjectDebugFiles.storage_path] = storageKey
+                        it[ProjectDebugFiles.created_at] = createdAt
+                    }[ProjectDebugFiles.resourceId]
+                }
+            } catch (e: ExposedSQLException) {
+                // A concurrent request assembled the same (project, checksum) first; the unique
+                // index rejected this insert, so treat it as an idempotent success.
+                return getProjectDif(projectId, checksum) ?: throw e
             }
 
         return AssembledDif(

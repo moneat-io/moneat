@@ -140,7 +140,7 @@ class ReleaseRoutesTest {
                         testSourceMapToken ->
                             AuthTokenPrincipal(
                                 userId = testUserId,
-                                scopes = listOf("sourcemaps:write"),
+                                scopes = listOf("sourcemaps:write", "sourcemaps:read"),
                                 tokenId = 2
                             )
 
@@ -488,6 +488,30 @@ class ReleaseRoutesTest {
                 }
 
             assertEquals(HttpStatusCode.NotFound, response.status, response.bodyAsText())
+        }
+
+    @Test
+    fun `POST difs assemble returns 403 when sourcemaps write scope is missing`() =
+        testApplication {
+            val releaseService = mockk<ReleaseService>()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/difs/assemble/") {
+                    header(HttpHeaders.Authorization, "Bearer $testCombinedToken")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"sum-x":{"chunks":["c"]}}""")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("sourcemaps:write"), response.bodyAsText())
         }
 
     @Test
