@@ -16,7 +16,6 @@
 
 package com.moneat.events.services
 
-import com.moneat.analytics.services.GeoIpService
 import com.moneat.events.models.EventResponse
 import com.moneat.events.models.EventTraceResponse
 import com.moneat.events.models.FeedbackDetailResponse
@@ -43,6 +42,7 @@ import com.moneat.events.repositories.IssueRepository
 import com.moneat.events.repositories.IssueRepositoryImpl
 import com.moneat.events.repositories.ProjectRepository
 import com.moneat.events.repositories.ProjectRepositoryImpl
+import com.moneat.shared.services.GeoIpService
 import io.sentry.ISpan
 
 class DashboardService(

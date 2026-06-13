@@ -19,7 +19,6 @@ package com.moneat.analytics.routes
 import com.moneat.analytics.models.AnalyticsEventPayload
 import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.analytics.services.AnalyticsIngestionWorker
-import com.moneat.analytics.services.GeoIpService
 import com.moneat.analytics.services.ReferrerParser
 import com.moneat.analytics.services.SessionHashService
 import com.moneat.analytics.services.UserAgentService
@@ -33,6 +32,7 @@ import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.GeoIpService
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
@@ -68,8 +68,8 @@ private data class AnalyticsQuotaReservationResult(
 )
 
 class AnalyticsIngestRouteDependencies {
-    var sessionHashService: SessionHashService = GlobalContext.get().get()
-    var geoIpService: GeoIpService = GlobalContext.get().get()
+    var sessionHashService: SessionHashService = SessionHashService()
+    var geoIpService: GeoIpService = GeoIpService()
     var eventService: EventService = GlobalContext.get().get()
     var quotaService: BillingQuotaService = GlobalContext.get().get()
     var pricingTierService: PricingTierService = GlobalContext.get().get()

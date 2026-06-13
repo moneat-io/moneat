@@ -16,10 +16,10 @@
 
 package com.moneat.services
 
-import com.moneat.analytics.services.GeoIpService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.ReplayService
+import com.moneat.shared.services.GeoIpService
 import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.testsupport.OrgProjectTestFixtures

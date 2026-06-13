@@ -19,10 +19,14 @@ package com.moneat.analytics
 import com.moneat.analytics.routes.analyticsIngestRoutes
 import com.moneat.analytics.routes.analyticsRoutes
 import com.moneat.analytics.routes.analyticsServerIngestRoutes
+import com.moneat.analytics.routes.AnalyticsIngestRouteDependencies
 import com.moneat.analytics.services.AnalyticsIngestionWorker
+import com.moneat.analytics.services.AnalyticsService
+import com.moneat.analytics.services.SessionHashService
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.runtime.RuntimeMode
+import com.moneat.shared.services.GeoIpService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
@@ -35,14 +39,22 @@ private val logger = KotlinLogging.logger {}
  */
 class AnalyticsModule : EnterpriseModule {
     private lateinit var ingestionWorker: AnalyticsIngestionWorker
+    private val analyticsService = AnalyticsService()
+    private val sessionHashService = SessionHashService()
+    private val geoIpService = GeoIpService()
 
     override val name: String = "Analytics"
 
     override fun registerRoutes(route: Route) {
         route.apply {
-            analyticsIngestRoutes()
+            analyticsIngestRoutes(
+                AnalyticsIngestRouteDependencies().apply {
+                    sessionHashService = this@AnalyticsModule.sessionHashService
+                    geoIpService = this@AnalyticsModule.geoIpService
+                }
+            )
             analyticsServerIngestRoutes()
-            analyticsRoutes()
+            analyticsRoutes(analyticsService = analyticsService)
         }
     }
 

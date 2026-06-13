@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.analytics
+package com.moneat.shared.services
 
-import com.moneat.analytics.services.GeoIpService
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
