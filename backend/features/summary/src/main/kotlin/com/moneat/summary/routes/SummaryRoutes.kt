@@ -20,6 +20,7 @@ import com.moneat.auth.requireCurrentOrg
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.summary.services.SummaryService
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
@@ -27,9 +28,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
-import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
-import org.koin.core.context.GlobalContext
 import java.time.DateTimeException
 import java.time.ZoneId
 import kotlin.uuid.Uuid
@@ -56,9 +55,7 @@ private suspend fun runSummaryServiceCall(
     }
 }
 
-fun Route.summaryRoutes(
-    summaryService: SummaryService = GlobalContext.get().get(),
-) {
+fun Route.summaryRoutes(summaryService: SummaryService) {
     route("/v1/summary") {
         authenticate("auth-jwt") {
             get("/infrastructure") {

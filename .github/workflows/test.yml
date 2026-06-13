@@ -219,6 +219,13 @@ jobs:
           name: backend-sso-test-results
           path: backend/features/sso/build/test-results/test/
 
+      - name: Upload Summary feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-summary-test-results
+          path: backend/features/summary/build/test-results/test/
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -274,6 +281,13 @@ jobs:
         with:
           name: backend-sso-coverage-report
           path: backend/features/sso/build/reports/jacoco/test/
+
+      - name: Upload Summary feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-summary-coverage-report
+          path: backend/features/summary/build/reports/jacoco/test/
 
   backend-detekt:
     needs: changes
@@ -375,6 +389,13 @@ jobs:
         with:
           name: backend-sso-detekt-report
           path: backend/features/sso/build/reports/detekt/
+
+      - name: Upload Summary feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-summary-detekt-report
+          path: backend/features/summary/build/reports/detekt/
 
   # SonarQube: reuse backend and frontend artifacts, then scan Kotlin and dashboard sources
   sonarqube:
@@ -491,6 +512,13 @@ jobs:
           path: backend/features/sso/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Summary feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-summary-coverage-report
+          path: backend/features/summary/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download detekt report
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -559,6 +587,13 @@ jobs:
         with:
           name: backend-sso-detekt-report
           path: backend/features/sso/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Summary feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-summary-detekt-report
+          path: backend/features/summary/build/reports/detekt/
         continue-on-error: true
 
       - name: Download frontend coverage

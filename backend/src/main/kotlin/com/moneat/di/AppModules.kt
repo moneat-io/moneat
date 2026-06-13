@@ -107,7 +107,6 @@ import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.statuspage.services.StatusPageService
-import com.moneat.summary.services.SummaryService
 import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.uptime.repositories.UptimeMonitorRepository
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
@@ -322,11 +321,6 @@ val dashboardsModule = module {
     single { CustomDataSourceExecutor() }
 }
 
-/** Weekly/overnight summary reports. */
-val summaryModule = module {
-    single { SummaryService(get(), get(), get(), get(), get()) }
-}
-
 /** OpenFeature-compatible feature flags. */
 val featureFlagsModule = module {
     single { FeatureFlagEvaluator() }
@@ -353,7 +347,6 @@ fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
         logsModule,
         uptimeModule(frontendBaseUrl),
         dashboardsModule,
-        summaryModule,
         featureFlagsModule,
         aiModule,
     )

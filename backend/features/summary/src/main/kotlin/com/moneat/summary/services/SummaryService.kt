@@ -203,22 +203,23 @@ class SummaryService(
             0.0
         }
 
-        val hostChanges = hosts.filter { h ->
-            h.lastSeenAt != null &&
-                h.status == STATUS_OFFLINE &&
-                h.lastSeenAt.toEpochMilliseconds() >= windowStart.toEpochMilli() &&
-                h.lastSeenAt.toEpochMilliseconds() <= windowEnd.toEpochMilli()
-        }.map { h ->
+        val hostChanges = hosts.mapNotNull { h ->
+            val lastSeenAt = h.lastSeenAt ?: return@mapNotNull null
+            if (
+                h.status != STATUS_OFFLINE ||
+                lastSeenAt.toEpochMilliseconds() < windowStart.toEpochMilli() ||
+                lastSeenAt.toEpochMilliseconds() > windowEnd.toEpochMilli()
+            ) {
+                return@mapNotNull null
+            }
             HostStatusChange(
                 systemId = h.resourceId.toString(),
                 systemName = h.displayName ?: h.hostname,
                 previousStatus = STATUS_ONLINE,
                 currentStatus = h.status,
-                changedAt = h.lastSeenAt?.let {
-                    isoFormatter.format(
-                        Instant.ofEpochMilli(it.toEpochMilliseconds())
-                    )
-                } ?: ""
+                changedAt = isoFormatter.format(
+                    Instant.ofEpochMilli(lastSeenAt.toEpochMilliseconds())
+                )
             )
         }
 
@@ -587,10 +588,10 @@ class SummaryService(
         }
         return allAlerts
             .filter {
-                it.lastTriggeredAt != null &&
-                    it.lastTriggeredAt >= cutoff
+                val lastTriggeredAt = it.lastTriggeredAt
+                lastTriggeredAt != null && lastTriggeredAt >= cutoff
             }
-            .sortedByDescending { it.lastTriggeredAt }
+            .sortedByDescending { it.lastTriggeredAt ?: Long.MIN_VALUE }
             .take(MAX_TOP_ALERTS)
     }
 
@@ -603,8 +604,8 @@ class SummaryService(
         return hosts.map { host ->
             val alertCount = monitorService.listAlerts(host.id, host.organizationId)
                 .count { alert ->
-                    alert.lastTriggeredAt != null &&
-                        alert.lastTriggeredAt >= cutoff
+                    val lastTriggeredAt = alert.lastTriggeredAt
+                    lastTriggeredAt != null && lastTriggeredAt >= cutoff
                 }
             HostErrorRate(
                 systemId = host.resourceId.toString(),
