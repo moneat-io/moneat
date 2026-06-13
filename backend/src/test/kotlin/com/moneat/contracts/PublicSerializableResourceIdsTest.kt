@@ -71,6 +71,7 @@ class PublicSerializableResourceIdsTest {
 
         return listOf(
             SourceRoot("backend", repoRoot.resolve("backend/src/main/kotlin")),
+            SourceRoot("backend", repoRoot.resolve("backend/features/datadog/src/main/kotlin")),
             SourceRoot("ee", repoRoot.resolve("ee/backend/src/main/kotlin"))
         ).filter { it.path.exists() }
     }
@@ -400,7 +401,7 @@ class PublicSerializableResourceIdsTest {
                 )
                 addAll(
                     allow(
-                        "backend:com/moneat/datadog/security/SecurityIngestionService.kt",
+                        "backend:com/moneat/security/ingestion/SecurityIngestionService.kt",
                         "QueuedSecurityBatch",
                         "organizationId"
                     )

@@ -17,7 +17,6 @@
 package com.moneat.plugins
 
 import com.moneat.ai.aiChatRoutes
-import com.moneat.apm.routes.apmServiceDashboardRoutes
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
@@ -221,9 +220,6 @@ fun Application.configureRouting() {
         // Authenticated workspace overview aggregate
         overviewRoutes()
 
-        // APM service dashboard endpoints are source-neutral and must not depend on vendor modules.
-        apmServiceDashboardRoutes()
-
         // OpenFeature-compatible feature flag management and OFREP runtime endpoints
         featureFlagRoutes()
 
@@ -295,12 +291,7 @@ fun Application.configureRouting() {
 
         // Vulnerability/SBOM inventory and findings (OSS core)
         rateLimit(RateLimitName("api")) {
-            vulnerabilityRoutes(includeAgentRoutes = false)
-        }
-
-        // SBOM compatibility ingest is OSS core so direct package inventory works without EE.
-        rateLimit(RateLimitName("datadog-ingestion")) {
-            vulnerabilityRoutes(includeApiRoutes = false)
+            vulnerabilityRoutes()
         }
 
         routingLogger.info { "Registering enterprise routes..." }

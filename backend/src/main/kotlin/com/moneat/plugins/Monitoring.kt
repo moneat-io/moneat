@@ -169,7 +169,7 @@ private fun spanStatusFor(statusCode: Int): SpanStatus {
     }
 }
 
-internal fun Application.installErrorHandling() {
+fun Application.installErrorHandling() {
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
             handleBadRequest(call, cause)

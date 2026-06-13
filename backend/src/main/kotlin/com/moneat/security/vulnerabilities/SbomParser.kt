@@ -16,7 +16,6 @@
 
 package com.moneat.security.vulnerabilities
 
-import com.moneat.datadog.models.DdSbomPayload
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -65,34 +64,6 @@ object SbomParser {
             throw SbomValidationException("SBOM package count exceeds limit")
         }
         return parsed
-    }
-
-    fun parseAgentPayload(payload: DdSbomPayload): ParsedSbom {
-        if (payload.packages.size > MAX_PACKAGES) {
-            throw SbomValidationException("SBOM package count exceeds limit")
-        }
-        val packages = payload.packages.mapNotNull { pkg ->
-            val name = clean(pkg.name)
-            val version = clean(pkg.version)
-            if (name.isBlank() || version.isBlank()) {
-                null
-            } else {
-                SbomPackageRecord(
-                    name = name,
-                    version = version,
-                    packageType = clean(pkg.type),
-                    ecosystem = normalizeEcosystem(pkg.type),
-                )
-            }
-        }
-        if (packages.isEmpty()) {
-            throw SbomValidationException(SBOM_NO_USABLE_PACKAGES_MESSAGE)
-        }
-        return ParsedSbom(
-            format = SbomFormat.AGENT,
-            packages = packages,
-            targetName = clean(payload.imageName).ifBlank { clean(payload.host) },
-        )
     }
 
     private fun validateSize(rawBody: ByteArray) {

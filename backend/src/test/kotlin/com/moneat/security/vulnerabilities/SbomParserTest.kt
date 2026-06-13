@@ -16,8 +16,6 @@
 
 package com.moneat.security.vulnerabilities
 
-import com.moneat.datadog.models.DdSbomPackage
-import com.moneat.datadog.models.DdSbomPayload
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -175,25 +173,6 @@ class SbomParserTest {
     }
 
     @Test
-    fun `parses agent payload and drops incomplete package rows`() {
-        val parsed = SbomParser.parseAgentPayload(
-            DdSbomPayload(
-                host = "prod-web",
-                imageName = "registry/checkout:latest",
-                packages = listOf(
-                    DdSbomPackage(name = "requests", version = "2.32.0", type = "python"),
-                    DdSbomPackage(name = "ignored", version = "", type = "npm"),
-                ),
-            )
-        )
-
-        assertEquals(SbomFormat.AGENT, parsed.format)
-        assertEquals("registry/checkout:latest", parsed.targetName)
-        assertEquals("requests", parsed.packages.single().name)
-        assertEquals("pypi", parsed.packages.single().ecosystem)
-    }
-
-    @Test
     fun `parses SPDX licenses while dropping assertions and duplicates`() {
         val parsed = SbomParser.parse(
             """
@@ -265,19 +244,5 @@ class SbomParserTest {
                 SbomParser.parse("""["not-an-object"]""".encodeToByteArray())
             }.message,
         )
-    }
-
-    @Test
-    fun `rejects agent payloads without complete packages`() {
-        val error = assertFailsWith<SbomValidationException> {
-            SbomParser.parseAgentPayload(
-                DdSbomPayload(
-                    host = "prod-web",
-                    packages = listOf(DdSbomPackage(name = "requests", version = "")),
-                )
-            )
-        }
-
-        assertEquals("SBOM contains no packages with name and version", error.message)
     }
 }

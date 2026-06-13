@@ -440,7 +440,7 @@ object OperationalMetrics {
 
     fun scrape(): String = registry.scrape()
 
-    internal fun resetForTest() {
+    fun resetForTest() {
         closeableBinders.forEach { binder ->
             runCatching { binder.close() }
         }

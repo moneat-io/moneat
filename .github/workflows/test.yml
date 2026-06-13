@@ -168,12 +168,26 @@ jobs:
           name: backend-unit-test-results
           path: backend/build/test-results/test/
 
+      - name: Upload Datadog feature test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-datadog-test-results
+          path: backend/features/datadog/build/test-results/test/
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
+
+      - name: Upload Datadog feature coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-datadog-coverage-report
+          path: backend/features/datadog/build/reports/jacoco/test/
 
   backend-detekt:
     needs: changes
@@ -210,6 +224,27 @@ jobs:
         with:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
+
+      - name: Upload feature-spi detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-feature-spi-detekt-report
+          path: backend/feature-spi/build/reports/detekt/
+
+      - name: Upload ingest-common detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-ingest-common-detekt-report
+          path: backend/ingest-common/build/reports/detekt/
+
+      - name: Upload Datadog feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-datadog-detekt-report
+          path: backend/features/datadog/build/reports/detekt/
 
   # SonarQube: reuse backend and frontend artifacts, then scan Kotlin and dashboard sources
   sonarqube:
@@ -276,11 +311,39 @@ jobs:
           path: backend/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Datadog feature coverage (JaCoCo)
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-datadog-coverage-report
+          path: backend/features/datadog/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download detekt report
         uses: actions/download-artifact@v8
         with:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download feature-spi detekt report
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-feature-spi-detekt-report
+          path: backend/feature-spi/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download ingest-common detekt report
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-ingest-common-detekt-report
+          path: backend/ingest-common/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Datadog feature detekt report
+        uses: actions/download-artifact@v8
+        with:
+          name: backend-datadog-detekt-report
+          path: backend/features/datadog/build/reports/detekt/
         continue-on-error: true
 
       - name: Download frontend coverage

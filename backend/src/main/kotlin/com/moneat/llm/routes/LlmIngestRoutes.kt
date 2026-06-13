@@ -17,7 +17,7 @@
 package com.moneat.llm.routes
 
 import com.moneat.billing.services.BillingQuotaService
-import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.ingest.DecompressionService
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.ingestion.queue.IngestionPipeline

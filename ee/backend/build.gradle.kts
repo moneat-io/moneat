@@ -14,6 +14,8 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":feature-spi"))
+
     // Depend on the core Moneat backend
     implementation(project(":"))
 
