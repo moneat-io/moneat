@@ -136,7 +136,7 @@ export function MetricChart({
   formatYTick,
   noData = false,
 }: MetricChartProps) {
-  const gradientId = `cat-grad-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
+  const gradientId = `cat-grad-${useId().replaceAll(/[^a-zA-Z0-9]/g, '')}`
   const multi = series.length > 1
 
   const data = useMemo(() => {
