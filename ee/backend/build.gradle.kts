@@ -18,6 +18,7 @@ dependencies {
 
     // Depend on the core Moneat backend
     implementation(project(":"))
+    implementation(project(":features:sso"))
 
     // Core's implementation dependencies are not transitive — redeclare needed ones
     implementation(libs.ktor.server.core)

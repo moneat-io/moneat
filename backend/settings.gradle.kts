@@ -5,6 +5,7 @@ include(":ingest-common")
 include(":features:analytics")
 include(":features:datadog")
 include(":features:monitoring")
+include(":features:sso")
 
 // Enterprise modules (SSO, On-Call) — lives in ee/backend/ within the monorepo
 include(":ee")
