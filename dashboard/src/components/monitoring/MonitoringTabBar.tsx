@@ -67,6 +67,9 @@ type VisibleTabCountOptions = Readonly<{
 
 const TAB_BASE_CLASS = 'flex h-8 items-center gap-1.5 whitespace-nowrap px-2.5 text-xs font-medium'
 const OVERFLOW_FALLBACK_WIDTH = 80
+const DOCS_LINK_CLASS =
+  'inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground ' +
+  'hover:bg-muted/50 transition-colors'
 
 const MONITORING_TABS: readonly MonitoringTab[] = [
   {id: 'catalog', label: 'Resources', href: '/resources', icon: Boxes},
@@ -296,7 +299,7 @@ export function MonitoringTabBar() {
                     href={docsUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center justify-center p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                    className={DOCS_LINK_CLASS}
                     aria-label="View docs"
                   >
                     <HelpCircle className="h-4 w-4" />
