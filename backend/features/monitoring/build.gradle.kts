@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlin.logging)
+    implementation(libs.koin.ktor)
 
     detektPlugins(libs.detekt.formatting)
 
