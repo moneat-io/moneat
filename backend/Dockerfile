@@ -18,9 +18,17 @@ COPY ee/backend/build.gradle.kts \
      ee/backend/detekt-format.yml \
      ee/backend/license-header.txt \
      /ee/backend/
+# settings.gradle.kts also includes :feature-spi, :ingest-common and :features:datadog;
+# their project directories must exist before Gradle configures the build.
+COPY backend/feature-spi/build.gradle.kts ./feature-spi/
+COPY backend/ingest-common/build.gradle.kts ./ingest-common/
+COPY backend/features/datadog/build.gradle.kts ./features/datadog/
 RUN --mount=type=cache,target=/home/gradle/.gradle \
     gradle dependencies --no-daemon --build-cache || true
 COPY backend/src ./src
+COPY backend/feature-spi/src ./feature-spi/src
+COPY backend/ingest-common/src ./ingest-common/src
+COPY backend/features/datadog/src ./features/datadog/src
 # Copy built email templates from email-builder stage into src so they're processed as resources
 COPY --from=email-builder /emails/build/templates/email ./src/main/resources/email-templates/
 # Copy enterprise (ee/) backend sources
