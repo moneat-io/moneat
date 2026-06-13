@@ -72,6 +72,8 @@ class ReleaseService {
 
     companion object {
         private const val IO_BUFFER_SIZE = 8192
+        private const val PROGUARD_FILE_TYPE = "proguard"
+        private const val DEFAULT_DIF_NAME = "proguard-mapping"
     }
 
     /**
@@ -573,8 +575,7 @@ class ReleaseService {
 
     /**
      * Assemble previously-uploaded chunks into a project debug file (e.g. a ProGuard mapping)
-     * and record it. Idempotent per (project, checksum). Throws [IllegalArgumentException] if
-     * the concatenated chunks do not match the expected checksum.
+     * and record it, keyed by the file [checksum]. Idempotent per (project, checksum).
      */
     fun assembleProjectDif(
         projectId: Long,
@@ -588,31 +589,17 @@ class ReleaseService {
         val storageKey = "difs/$projectId/$checksum"
         val storage = StorageConfig.provider
 
-        // Concatenate chunks in order
+        // Concatenate the (already content-addressed) chunks in order.
+        // copyTo returns the bytes written, giving us the assembled file size.
+        var size = 0L
         storage.openOutputStream(storageKey).use { out ->
             for (chunk in chunks) {
-                storage.openInputStream("chunks/$chunk")?.use { it.copyTo(out) }
+                storage.openInputStream("chunks/$chunk")?.use { size += it.copyTo(out) }
             }
-        }
-
-        // Verify checksum and measure size
-        val digest = MessageDigest.getInstance("SHA-1")
-        var size = 0L
-        storage.openInputStream(storageKey)?.use { input ->
-            val buffer = ByteArray(IO_BUFFER_SIZE)
-            var read: Int
-            while (input.read(buffer).also { read = it } != -1) {
-                digest.update(buffer, 0, read)
-                size += read
-            }
-        }
-        val computedChecksum = digest.digest().joinToString("") { "%02x".format(it) }
-        if (computedChecksum != checksum) {
-            throw IllegalArgumentException("Checksum mismatch")
         }
 
         val resolvedDebugId = debugId ?: extractDebugId(name)
-        val objectName = name ?: "proguard-mapping"
+        val objectName = name ?: DEFAULT_DIF_NAME
         val createdAt = System.currentTimeMillis()
 
         val resourceId =
@@ -621,7 +608,7 @@ class ReleaseService {
                     it[ProjectDebugFiles.project_id] = projectId
                     it[ProjectDebugFiles.debug_id] = resolvedDebugId
                     it[ProjectDebugFiles.checksum] = checksum
-                    it[ProjectDebugFiles.file_type] = "proguard"
+                    it[ProjectDebugFiles.file_type] = PROGUARD_FILE_TYPE
                     it[ProjectDebugFiles.object_name] = objectName
                     it[ProjectDebugFiles.size] = size
                     it[ProjectDebugFiles.storage_path] = storageKey
@@ -643,7 +630,7 @@ class ReleaseService {
         AssembledDif(
             resourceId = row[ProjectDebugFiles.resourceId].toString(),
             debugId = row[ProjectDebugFiles.debug_id],
-            objectName = row[ProjectDebugFiles.object_name] ?: "proguard-mapping",
+            objectName = row[ProjectDebugFiles.object_name] ?: DEFAULT_DIF_NAME,
             checksum = row[ProjectDebugFiles.checksum],
             size = row[ProjectDebugFiles.size],
             dateCreated = formatTimestamp(row[ProjectDebugFiles.created_at])

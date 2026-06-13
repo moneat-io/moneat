@@ -1,15 +1,19 @@
 package com.moneat.services
 
+import com.moneat.config.LocalStorageProvider
+import com.moneat.config.StorageConfig
 import com.moneat.events.services.ReleaseService
 import com.moneat.shared.models.ArtifactBundles
 import com.moneat.shared.models.FileBlobs
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.ProjectDebugFiles
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -26,6 +30,7 @@ import kotlin.test.assertTrue
 
 class ReleaseServiceTest {
     private val service = ReleaseService()
+    private val difChunkBytes = "abc".toByteArray()
 
     companion object {
         private var db: org.jetbrains.exposed.v1.jdbc.Database? = null
@@ -50,7 +55,8 @@ class ReleaseServiceTest {
             Releases,
             ReleaseFiles,
             FileBlobs,
-            ArtifactBundles
+            ArtifactBundles,
+            ProjectDebugFiles
         )
     }
 
@@ -341,5 +347,99 @@ class ReleaseServiceTest {
         assertNotNull(result)
         assertEquals("ok", result.first)
         assertNull(result.second)
+    }
+
+    // ──── project debug files (DIFs) ────
+
+    private fun useTempStorage() {
+        val base = "${System.getProperty("java.io.tmpdir")}/moneat-dif-${System.nanoTime()}"
+        StorageConfig.initialize(LocalStorageProvider(base))
+    }
+
+    @Test
+    fun `assembleProjectDif concatenates chunks, derives debug id, and stores the dif`() {
+        val (_, projectId) = seedOrgAndProject()
+        useTempStorage()
+        val chunkA = "dif-a1"
+        val chunkB = "dif-a2"
+        service.storeChunk(chunkA, difChunkBytes)
+        service.storeChunk(chunkB, "defg".toByteArray())
+
+        val uuid = "11111111-2222-3333-4444-555555555555"
+        val dif = service.assembleProjectDif(projectId, "sum-1", listOf(chunkA, chunkB), "proguard/$uuid.txt", null)
+
+        assertEquals(uuid, dif.debugId)
+        assertEquals(7L, dif.size)
+        assertEquals("sum-1", dif.checksum)
+        assertNotNull(service.getProjectDif(projectId, "sum-1"))
+    }
+
+    @Test
+    fun `assembleProjectDif is idempotent per project and checksum`() {
+        val (_, projectId) = seedOrgAndProject()
+        useTempStorage()
+        val chunk = "dif-b"
+        service.storeChunk(chunk, difChunkBytes)
+
+        val sum = "sum-2"
+        val first = service.assembleProjectDif(projectId, sum, listOf(chunk), "proguard/x.txt", null)
+        val second = service.assembleProjectDif(projectId, sum, listOf(chunk), "proguard/x.txt", null)
+
+        assertEquals(first.resourceId, second.resourceId)
+        val count =
+            transaction {
+                ProjectDebugFiles
+                    .selectAll()
+                    .where {
+                        (ProjectDebugFiles.project_id eq projectId) and
+                            (ProjectDebugFiles.checksum eq sum)
+                    }
+                    .count()
+            }
+        assertEquals(1L, count)
+    }
+
+    @Test
+    fun `assembleProjectDif honors explicit debug id and falls back for non-uuid names`() {
+        val (_, projectId) = seedOrgAndProject()
+        useTempStorage()
+        val chunk = "dif-c"
+        service.storeChunk(chunk, difChunkBytes)
+
+        val plainName = "mapping.txt"
+        val explicitId = "abcd1234-0000-0000-0000-000000000000"
+        val explicit = service.assembleProjectDif(projectId, "sum-3", listOf(chunk), plainName, explicitId)
+        assertEquals(explicitId, explicit.debugId)
+
+        val noUuid = service.assembleProjectDif(projectId, "sum-4", listOf(chunk), plainName, null)
+        assertNull(noUuid.debugId)
+        assertEquals(plainName, noUuid.objectName)
+    }
+
+    @Test
+    fun `getProjectDif returns null when absent`() {
+        val (_, projectId) = seedOrgAndProject()
+        assertNull(service.getProjectDif(projectId, "missing"))
+    }
+
+    @Test
+    fun `listProjectDifs filters by checksum and debug id`() {
+        val (_, projectId) = seedOrgAndProject()
+        useTempStorage()
+        val chunk = "dif-e"
+        service.storeChunk(chunk, difChunkBytes)
+        val uuidB = "bbbbbbbb-0000-0000-0000-000000000000"
+        service.assembleProjectDif(
+            projectId,
+            "sum-a",
+            listOf(chunk),
+            "proguard/aaaaaaaa-0000-0000-0000-000000000000.txt",
+            null
+        )
+        service.assembleProjectDif(projectId, "sum-b", listOf(chunk), "proguard/$uuidB.txt", null)
+
+        assertEquals(2, service.listProjectDifs(projectId).size)
+        assertEquals(1, service.listProjectDifs(projectId, checksums = setOf("sum-a")).size)
+        assertEquals(1, service.listProjectDifs(projectId, debugIds = setOf(uuidB)).size)
     }
 }

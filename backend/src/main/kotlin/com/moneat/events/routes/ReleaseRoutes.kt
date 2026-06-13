@@ -768,30 +768,40 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifact
     }
 }
 
-private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
+// Resolves and authorizes the {orgSlug}/{projectSlug} project for the DIF endpoints,
+// responding with the appropriate error (and returning null) when that fails.
+private suspend fun io.ktor.server.routing.RoutingContext.resolveDifProject(
     releaseService: ReleaseService,
-) {
+): Long? {
     val principal =
         call.principal<AuthTokenPrincipal>()
             ?: run {
                 call.respond(HttpStatusCode.Unauthorized)
-                return
+                return null
             }
 
-    val orgSlug = call.parameters["orgSlug"] ?: return
-    val projectSlug = call.parameters["projectSlug"] ?: return
+    val orgSlug = call.parameters["orgSlug"] ?: return null
+    val projectSlug = call.parameters["projectSlug"] ?: return null
 
     val projectId =
         releaseService.getProjectBySlug(orgSlug, projectSlug)
             ?: run {
                 call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                return
+                return null
             }
 
     if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
         call.respond(HttpStatusCode.Forbidden)
-        return
+        return null
     }
+
+    return projectId
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
+    releaseService: ReleaseService,
+) {
+    val projectId = resolveDifProject(releaseService) ?: return
 
     val checksums = call.request.queryParameters.getAll("checksums")?.toSet() ?: emptySet()
     val debugIds = call.request.queryParameters.getAll("debug_id")?.toSet() ?: emptySet()
@@ -803,27 +813,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
 private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectDifs(
     releaseService: ReleaseService,
 ) {
-    val principal =
-        call.principal<AuthTokenPrincipal>()
-            ?: run {
-                call.respond(HttpStatusCode.Unauthorized)
-                return
-            }
-
-    val orgSlug = call.parameters["orgSlug"] ?: return
-    val projectSlug = call.parameters["projectSlug"] ?: return
-
-    val projectId =
-        releaseService.getProjectBySlug(orgSlug, projectSlug)
-            ?: run {
-                call.respond(HttpStatusCode.NotFound, ErrorResponse("Project not found"))
-                return
-            }
-
-    if (!releaseService.hasProjectAccess(principal.userId, projectId)) {
-        call.respond(HttpStatusCode.Forbidden)
-        return
-    }
+    val projectId = resolveDifProject(releaseService) ?: return
 
     // Body is a map keyed by each file's SHA-1 checksum: { "<sha1>": { name, debug_id?, chunks } }
     val request = call.receive<Map<String, AssembleDifEntry>>()
@@ -866,7 +856,6 @@ private suspend fun assembleSingleDif(
 private fun AssembledDif.toDifObject(): DifObject =
     DifObject(
         id = resourceId,
-        uuid = debugId,
         debugId = debugId,
         objectName = objectName,
         size = size,

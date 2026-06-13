@@ -490,6 +490,39 @@ class ReleaseRoutesTest {
             assertEquals(HttpStatusCode.NotFound, response.status, response.bodyAsText())
         }
 
+    @Test
+    fun `GET difs returns stored difs for the project`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            every { releaseService.listProjectDifs(TEST_PROJECT_ID, emptySet(), emptySet()) } returns
+                listOf(
+                    AssembledDif(
+                        resourceId = resourceId(7),
+                        debugId = "the-uuid",
+                        objectName = "proguard/the-uuid.txt",
+                        checksum = "sum-1",
+                        size = 12L,
+                        dateCreated = "2026-05-23T00:00:00Z"
+                    )
+                )
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), allowingQuotaService(), projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.get("/api/0/projects/my-org/my-project/files/difs/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("the-uuid"), response.bodyAsText())
+        }
+
     private fun sourceMapReleaseService(): ReleaseService {
         val releaseService = mockk<ReleaseService>()
         every { releaseService.getProjectBySlug("my-org", "my-project") } returns TEST_PROJECT_ID

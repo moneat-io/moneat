@@ -451,20 +451,11 @@ data class AssembleDifResponseEntry(
 @Serializable
 data class DifObject(
     val id: String,
-    val uuid: String? = null,
     val debugId: String? = null,
     val objectName: String,
-    val cpuName: String = "any",
-    val symbolType: String = "proguard",
     val size: Long,
     val sha1: String,
-    val dateCreated: String,
-    val data: DifData = DifData()
-)
-
-@Serializable
-data class DifData(
-    val features: List<String> = listOf("mapping")
+    val dateCreated: String
 )
 
 @Serializable
