@@ -16,11 +16,11 @@
 
 package com.moneat.config
 
-import com.moneat.datadog.security.QueuedActivityDumpEntry
-import com.moneat.datadog.security.QueuedComplianceEntry
-import com.moneat.datadog.security.QueuedSecurityBatch
-import com.moneat.datadog.security.QueuedSecurityEventEntry
-import com.moneat.datadog.security.SecurityIngestionService
+import com.moneat.security.ingestion.QueuedActivityDumpEntry
+import com.moneat.security.ingestion.QueuedComplianceEntry
+import com.moneat.security.ingestion.QueuedSecurityBatch
+import com.moneat.security.ingestion.QueuedSecurityEventEntry
+import com.moneat.security.ingestion.SecurityIngestionService
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import mu.KotlinLogging

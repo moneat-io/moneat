@@ -18,7 +18,7 @@ package com.moneat.otlp.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
-import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.ingest.DecompressionService
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService

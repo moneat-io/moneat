@@ -17,7 +17,7 @@
 package com.moneat.plugins
 
 import com.moneat.config.EnvConfig
-import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.otlp.OtlpAuth
@@ -170,14 +170,8 @@ fun Application.configureRateLimiting() {
         }
         register(RateLimitName("datadog-ingestion")) {
             requestKey { call ->
-                val apiKey = DatadogAuthMiddleware.extractApiKey(call)
-                if (apiKey != null) {
-                    DatadogAuthMiddleware.resolveOrgId(apiKey)
-                        ?.let { "org:$it" }
-                        ?: call.request.clientIp()
-                } else {
-                    call.request.clientIp()
-                }
+                FeatureRegistry.resolveIngestionRateLimitKey("datadog-ingestion", call)
+                    ?: call.request.clientIp()
             }
             rateLimiter(limit = INGEST_RATE_LIMIT, refillPeriod = INGEST_REFILL_SECONDS.seconds)
         }

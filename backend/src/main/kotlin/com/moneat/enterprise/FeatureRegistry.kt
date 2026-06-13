@@ -25,50 +25,12 @@ import com.moneat.workflows.WorkflowConnectionVault
 import com.moneat.workflows.WorkflowPremiumConnectorBridge
 import com.moneat.utils.suspendRunCatching
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
 import java.util.ServiceLoader
 
 private val logger = KotlinLogging.logger {}
-
-/**
- * Service Provider Interface for enterprise feature modules.
- * Enterprise modules implement this interface and register via
- * META-INF/services/com.moneat.enterprise.EnterpriseModule.
- */
-interface EnterpriseModule {
-    /** Human-readable name of the module (e.g., "SSO", "On-Call"). */
-    val name: String
-
-    /**
-     * The license feature name required to activate this module (e.g. "sso", "oncall").
-     * Null means the module is open-source and always loaded.
-     */
-    val licenseFeature: String? get() = null
-
-    /** Register enterprise routes into the core routing tree. */
-    fun registerRoutes(route: Route)
-
-    /** Start enterprise background jobs during application startup. */
-    fun startBackgroundJobs(application: Application)
-
-    /**
-     * Start enterprise background jobs for the active process role. Modules that only have scheduler-like
-     * background work should rely on the default; ingestion modules can override this to honor pipeline roles.
-     */
-    fun startBackgroundJobs(
-        application: Application,
-        startSchedulers: Boolean,
-        startIngestionWorkers: Boolean,
-    ) {
-        if (startSchedulers) {
-            startBackgroundJobs(application)
-        }
-    }
-
-    /** Stop enterprise background jobs during application shutdown. */
-    fun stopBackgroundJobs()
-}
 
 /**
  * Registry that discovers and manages enterprise modules at runtime.
@@ -186,7 +148,17 @@ object FeatureRegistry {
         return modules.filterIsInstance<PermissionBridge>().firstOrNull()
     }
 
+    fun resolveIngestionRateLimitKey(rateLimitName: String, call: ApplicationCall): String? =
+        modules
+            .filterIsInstance<IngestionRateLimitKeyResolver>()
+            .firstOrNull { it.rateLimitName == rateLimitName }
+            ?.resolveRateLimitKey(call)
+
     // For testing
+    fun resetForTest() {
+        reset()
+    }
+
     internal fun reset() {
         modules.clear()
         license = null

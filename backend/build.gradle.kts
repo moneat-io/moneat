@@ -85,6 +85,9 @@ tasks.named<ProcessResources>("processIntegrationTestResources") {
 }
 
 dependencies {
+    implementation(project(":feature-spi"))
+    implementation(project(":ingest-common"))
+
     // Ktor Server
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
@@ -221,7 +224,7 @@ dependencies {
     integrationTestImplementation(libs.testcontainers.clickhouse)
 
     // Zstandard decompression for DD agent payloads
-    implementation(libs.zstd.jni)
+    runtimeOnly(libs.zstd.jni)
 
     // Protobuf for decoding DD process-agent binary payloads
     implementation(libs.protobuf.java)
@@ -231,6 +234,7 @@ dependencies {
 
     // Enterprise modules (SSO, On-Call) — always included, license-gated at runtime
     runtimeOnly(project(":ee"))
+    runtimeOnly(project(":features:datadog"))
 }
 
 // Task to copy email templates into resources

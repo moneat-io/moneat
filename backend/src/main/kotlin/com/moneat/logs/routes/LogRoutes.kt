@@ -23,7 +23,7 @@ import java.io.Writer
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
-import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.ingest.DecompressionService
 import com.moneat.events.services.EventService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.logs.LogPermissions

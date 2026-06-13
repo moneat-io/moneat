@@ -18,7 +18,7 @@ package com.moneat.events.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaReservationResult
-import com.moneat.datadog.decompression.DecompressionService
+import com.moneat.ingest.DecompressionService
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.models.isFeedbackEventPayload
