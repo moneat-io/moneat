@@ -76,6 +76,16 @@ private val logger = KotlinLogging.logger {}
 
 private const val CURRENT_METRIC_LOOKBACK_MINUTES = 10
 private const val EMAIL_FRONTEND_URL_CONFIG = "email.frontendUrl"
+private const val LATEST_METRIC_VALUE_EXPR = "argMax(value, timestamp)"
+private const val DISK_ID_EXPRESSION = """
+    multiIf(
+        tags['device_name'] != '', tags['device_name'],
+        tags['device'] != '', tags['device'],
+        tags['mount_point'] != '', tags['mount_point'],
+        tags['filesystem'] != '', tags['filesystem'],
+        'default'
+    )
+"""
 
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
@@ -564,43 +574,12 @@ class MonitorAlertService(
     /**
      * Get the current value of a metric for a host from metrics table.
      */
-    private suspend fun getCurrentMetricValue(
+    internal suspend fun getCurrentMetricValue(
         hostId: Int,
         organizationId: Int,
         metric: String
     ): Double? {
-        val (selectExpr, metricFilter) =
-            when (metric) {
-                "cpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.cpu.percent'"
-                "mem_percent" ->
-                    "(1 - argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0)) * " +
-                        "100" to
-                        "metric_name IN ('system.mem.available','system.mem.total')"
-                "disk_percent" ->
-                    "argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp), 0) * " +
-                        "100" to
-                        "metric_name IN ('system.disk.used','system.disk.total')"
-                "load_1" -> "argMax(value, timestamp)" to "metric_name = 'system.load.1'"
-                "load_5" -> "argMax(value, timestamp)" to "metric_name = 'system.load.5'"
-                "load_15" -> "argMax(value, timestamp)" to "metric_name = 'system.load.15'"
-                "temp_max" -> "argMax(value, timestamp)" to "metric_name = 'system.temp.max'"
-                "gpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.gpu.percent'"
-                "battery_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.battery.percent'"
-                else -> return null
-            }
-
-        val query =
-            """
-            SELECT $selectExpr as value
-            FROM `$clickhouseDb`.metrics_latest_by_host
-            WHERE organization_id = $organizationId
-              AND host_id = $hostId
-              AND $metricFilter
-              AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
-            FORMAT JSONCompact
-            """.trimIndent()
+        val query = currentMetricValueQuery(hostId, organizationId, metric) ?: return null
 
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
@@ -623,6 +602,65 @@ class MonitorAlertService(
             null
         }
     }
+
+    internal fun currentMetricValueQuery(
+        hostId: Int,
+        organizationId: Int,
+        metric: String
+    ): String? {
+        if (metric == "disk_percent") {
+            return diskPercentCurrentMetricQuery(hostId, organizationId)
+        }
+
+        val (selectExpr, metricFilter) =
+            when (metric) {
+                "cpu_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.cpu.percent'"
+                "mem_percent" ->
+                    "(1 - argMaxIf(value, timestamp, metric_name='system.mem.available') / " +
+                        "nullIf(argMaxIf(value, timestamp, metric_name='system.mem.total'), 0)) * " +
+                        "100" to
+                        "metric_name IN ('system.mem.available','system.mem.total')"
+                "load_1" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.1'"
+                "load_5" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.5'"
+                "load_15" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.15'"
+                "temp_max" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.temp.max'"
+                "gpu_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.gpu.percent'"
+                "battery_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.battery.percent'"
+                else -> return null
+            }
+
+        return """
+            SELECT $selectExpr as value
+            FROM `$clickhouseDb`.metrics_latest_by_host
+            WHERE organization_id = $organizationId
+              AND host_id = $hostId
+              AND $metricFilter
+              AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
+
+    private fun diskPercentCurrentMetricQuery(
+        hostId: Int,
+        organizationId: Int
+    ): String =
+        """
+        SELECT
+            max(used / nullIf(total, 0) * 100) AS value
+        FROM (
+            SELECT
+                $DISK_ID_EXPRESSION AS disk_identity,
+                argMaxIf(value, timestamp, metric_name = 'system.disk.used') AS used,
+                argMaxIf(value, timestamp, metric_name = 'system.disk.total') AS total
+            FROM `$clickhouseDb`.metrics_latest_by_host
+            WHERE organization_id = $organizationId
+              AND host_id = $hostId
+              AND metric_name IN ('system.disk.used','system.disk.total')
+              AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
+            GROUP BY disk_identity
+        )
+        FORMAT JSONCompact
+        """.trimIndent()
 
     /**
      * Check if the alert condition has been sustained for the required duration.

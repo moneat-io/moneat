@@ -66,6 +66,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -245,7 +246,7 @@ class MonitorAlertServiceCoverageTest {
                 http
             }
 
-            val v = callPrivateSuspend("getCurrentMetricValue", 1, 99, "cpu_percent") as Double?
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
             assertEquals(42.25, v!!, 0.001)
             assertTrue(
                 queries.single().contains("timestamp >= now64(3) - INTERVAL 10 MINUTE")
@@ -255,9 +256,125 @@ class MonitorAlertServiceCoverageTest {
         }
 
     @Test
+    fun `currentMetricValueQuery calculates disk percent per disk identity`() {
+        val query = service.currentMetricValueQuery(153, 1, "disk_percent")
+
+        assertNotNull(query)
+        assertTrue(query.contains("metric_name IN ('system.disk.used','system.disk.total')"))
+        assertTrue(query.contains("GROUP BY disk_identity"))
+        assertTrue(query.contains("tags['device_name']"))
+        assertTrue(query.contains("max(used / nullIf(total, 0) * 100)"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.used')"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.total')"))
+        assertFalse(query.contains("system.disk.in_use"))
+        assertFalse(query.contains("CASE WHEN metric_name='system.disk.used'"))
+    }
+
+    @Test
+    fun `currentMetricValueQuery calculates memory percent from available and total`() {
+        val query = service.currentMetricValueQuery(153, 1, "mem_percent")
+
+        assertNotNull(query)
+        assertTrue(query.contains("system.mem.available"))
+        assertTrue(query.contains("system.mem.total"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name='system.mem.available')"))
+    }
+
+    @Test
+    fun `currentMetricValueQuery builds latest value queries for scalar metrics`() {
+        val metrics =
+            mapOf(
+                "cpu_percent" to "system.cpu.percent",
+                "load_1" to "system.load.1",
+                "load_5" to "system.load.5",
+                "load_15" to "system.load.15",
+                "temp_max" to "system.temp.max",
+                "gpu_percent" to "system.gpu.percent",
+                "battery_percent" to "system.battery.percent",
+            )
+
+        metrics.forEach { (metric, metricName) ->
+            val query = service.currentMetricValueQuery(153, 1, metric)
+
+            assertNotNull(query)
+            assertTrue(query.contains("argMax(value, timestamp)"))
+            assertTrue(query.contains("metric_name = '$metricName'"))
+        }
+    }
+
+    @Test
+    fun `getCurrentMetricValue parses disk_percent JSONCompact response`() =
+        runBlocking {
+            val body = """{"data":[["87.5"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+
+            val v = service.getCurrentMetricValue(153, 1, "disk_percent")
+
+            assertEquals(87.5, v!!, 0.001)
+            assertFalse(queries.single().contains("system.disk.in_use"))
+            assertTrue(queries.single().contains("GROUP BY disk_identity"))
+            assertTrue(queries.single().contains("max(used / nullIf(total, 0) * 100)"))
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null for unsuccessful ClickHouse response`() =
+        runBlocking {
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.InternalServerError
+            coEvery { ClickHouseClient.execute(any()) } returns http
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null when ClickHouse execution fails`() =
+        runBlocking {
+            coEvery { ClickHouseClient.execute(any()) } throws IllegalStateException("boom")
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null for blank ClickHouse body`() =
+        runBlocking {
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns ""
+            coEvery { ClickHouseClient.execute(any()) } returns http
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null for missing ClickHouse data`() =
+        runBlocking {
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns """{"data":[]}"""
+            coEvery { ClickHouseClient.execute(any()) } returns http
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
     fun `getCurrentMetricValue returns null for unknown metric`() =
         runBlocking {
-            val v = callPrivateSuspend("getCurrentMetricValue", 1, 1, "not_a_metric") as Double?
+            val v = service.getCurrentMetricValue(1, 1, "not_a_metric")
             assertNull(v)
         }
 
