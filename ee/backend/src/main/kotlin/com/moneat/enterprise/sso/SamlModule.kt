@@ -13,7 +13,7 @@ import io.ktor.server.routing.Route
  * Enterprise module for SAML 2.0 single sign-on and SSO enforcement.
  * Requires the "sso" license feature to activate.
  *
- * OIDC SSO is provided by the core SsoModule (no license required).
+ * OIDC SSO is provided by the SsoModule feature (no license required).
  */
 class SamlModule : EnterpriseModule {
     override val name: String = "SAML"

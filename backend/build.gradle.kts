@@ -154,10 +154,6 @@ dependencies {
     implementation(libs.jbcrypt)
     implementation(libs.commons.codec)
 
-    // SSO
-    implementation(libs.java.saml.core)
-    implementation(libs.oauth2.oidc.sdk)
-
     // Billing
     implementation(libs.stripe.java)
 
@@ -237,6 +233,7 @@ dependencies {
     runtimeOnly(project(":features:analytics"))
     runtimeOnly(project(":features:datadog"))
     runtimeOnly(project(":features:monitoring"))
+    runtimeOnly(project(":features:sso"))
 }
 
 // Task to copy email templates into resources
