@@ -6,7 +6,9 @@
 CREATE TABLE IF NOT EXISTS project_debug_files (
     id SERIAL PRIMARY KEY,
     resource_id UUID NOT NULL DEFAULT gen_random_uuid(),
-    project_id BIGINT NOT NULL REFERENCES projects(id),
+    -- FK targets the real table `services` (V125 renamed projects -> services and left
+    -- `projects` as a view; a foreign key cannot reference a view).
+    project_id BIGINT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     debug_id VARCHAR(64),
     checksum VARCHAR(40) NOT NULL,
     file_type VARCHAR(32) NOT NULL DEFAULT 'proguard',
