@@ -233,6 +233,7 @@ dependencies {
     runtimeOnly(project(":features:llm"))
     runtimeOnly(project(":features:mcp"))
     runtimeOnly(project(":features:monitoring"))
+    runtimeOnly(project(":features:overview"))
     runtimeOnly(project(":features:sso"))
     runtimeOnly(project(":features:summary"))
 }

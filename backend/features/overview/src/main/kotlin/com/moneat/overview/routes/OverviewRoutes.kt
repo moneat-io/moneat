@@ -31,9 +31,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-fun Route.overviewRoutes(
-    overviewService: OverviewService = OverviewService(),
-) {
+fun Route.overviewRoutes(overviewService: OverviewService) {
     route("/v1/overview") {
         authenticate("auth-jwt") {
             get {

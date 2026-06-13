@@ -43,7 +43,6 @@ import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
-import com.moneat.overview.routes.overviewRoutes
 import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
@@ -211,9 +210,6 @@ fun Application.configureRouting() {
 
         // Dashboard API endpoints
         apiRoutes()
-
-        // Authenticated workspace overview aggregate
-        overviewRoutes()
 
         // OpenFeature-compatible feature flag management and OFREP runtime endpoints
         featureFlagRoutes()
