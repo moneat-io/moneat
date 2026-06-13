@@ -45,5 +45,5 @@ internal fun TestConnectionRequest.toCredentials(): DataSourceCredentials = Data
  * parsed from a data source's extra_config, so the executor and handlers read auth
  * method, TLS mode, org/bucket, etc. from a single carrier.
  */
-internal fun DataSourceCredentials.withConnectionOptions(extraConfig: Map<String, String>): DataSourceCredentials =
+fun DataSourceCredentials.withConnectionOptions(extraConfig: Map<String, String>): DataSourceCredentials =
     copy(options = ConnectionOptions.from(extraConfig))
