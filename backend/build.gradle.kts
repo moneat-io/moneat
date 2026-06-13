@@ -236,6 +236,7 @@ dependencies {
     runtimeOnly(project(":features:monitoring"))
     runtimeOnly(project(":features:overview"))
     runtimeOnly(project(":features:sso"))
+    runtimeOnly(project(":features:statuspage"))
     runtimeOnly(project(":features:summary"))
 }
 

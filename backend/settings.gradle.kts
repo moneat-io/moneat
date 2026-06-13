@@ -11,6 +11,7 @@ include(":features:mcp")
 include(":features:monitoring")
 include(":features:overview")
 include(":features:sso")
+include(":features:statuspage")
 include(":features:summary")
 
 // Enterprise modules (SSO, On-Call) — lives in ee/backend/ within the monorepo
