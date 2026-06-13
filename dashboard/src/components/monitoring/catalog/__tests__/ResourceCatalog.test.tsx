@@ -10,11 +10,33 @@ import {MOCK_RESOURCES, type Resource} from '../resourceCatalogData'
 
 const mockApi = vi.hoisted(() => ({
   get: vi.fn(),
+  isAuthenticated: vi.fn(() => false),
+  getCurrentUser: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
   api: mockApi,
 }))
+
+// Telemetry charts render through recharts' ResponsiveContainer, which needs a
+// ResizeObserver this jsdom env does not provide. Stub the chart parts (chart
+// titles render outside them, so the assertions below still hold).
+vi.mock('recharts', () => {
+  const Pass = ({children}: {readonly children?: ReactNode}) => <div>{children}</div>
+  const Nothing = () => null
+  return {
+    Area: Nothing,
+    AreaChart: Pass,
+    CartesianGrid: Nothing,
+    Legend: Nothing,
+    Line: Nothing,
+    LineChart: Pass,
+    ResponsiveContainer: Pass,
+    Tooltip: Nothing,
+    XAxis: Nothing,
+    YAxis: Nothing,
+  }
+})
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()

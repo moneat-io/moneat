@@ -41,7 +41,10 @@ import com.moneat.monitor.repositories.HostRepository
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.toUuidOrNull
+import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
@@ -50,8 +53,6 @@ import mu.KotlinLogging
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
@@ -62,6 +63,9 @@ class MonitorService(
     private val pricingTierService: PricingTierService = PricingTierService(),
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
 ) {
+    private fun clickHouseOrgClause(organizationId: Int): String =
+        ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+
     private fun resolvedAlertPriority(request: CreateAlertRequest): String? =
         canonicalAlertPriority(
             request.alertPriority
@@ -251,23 +255,24 @@ class MonitorService(
         organizationId: Int
     ): Boolean {
         // Delete telemetry from ClickHouse before removing the host row
+        val orgClause = clickHouseOrgClause(organizationId)
         val metricsDelete =
-            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE $orgClause" +
                 " AND tags['host_id'] = '$hostId'"
         val containersDelete =
-            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE $orgClause" +
                 " AND tags['host_id'] = '$hostId'"
         val metricsLatestDelete =
-            "ALTER TABLE `$clickhouseDb`.metrics_latest_by_host DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.metrics_latest_by_host DELETE WHERE $orgClause" +
                 " AND host_id = $hostId"
         val metricsRollupDelete =
-            "ALTER TABLE `$clickhouseDb`.metrics_rollup_1m DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.metrics_rollup_1m DELETE WHERE $orgClause" +
                 " AND host_id = $hostId"
         val containersLatestDelete =
-            "ALTER TABLE `$clickhouseDb`.containers_latest_by_host DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.containers_latest_by_host DELETE WHERE $orgClause" +
                 " AND host_id = $hostId"
         val containersRollupDelete =
-            "ALTER TABLE `$clickhouseDb`.containers_rollup_1m DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.containers_rollup_1m DELETE WHERE $orgClause" +
                 " AND host_id = $hostId"
 
         if (!hostRepository.deleteClickHouseData(metricsDelete)) {
@@ -341,7 +346,7 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.mem.pct_usable' THEN value END, timestamp) as mem_pct_usable,
                 argMax(CASE WHEN metric_name='system.disk.in_use' THEN value END, timestamp) as disk_in_use
             FROM `$clickhouseDb`.metrics_latest_by_host
-            WHERE organization_id = ${host.organizationId}
+            WHERE ${clickHouseOrgClause(host.organizationId)}
               AND host_id = $hostId
               AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
               AND timestamp >= now64(3) - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
@@ -491,7 +496,7 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.mem.pct_usable' THEN value END, timestamp) as mem_pct_usable,
                 argMax(CASE WHEN metric_name='system.disk.in_use' THEN value END, timestamp) as disk_in_use
             FROM `$clickhouseDb`.metrics_latest_by_host
-            WHERE organization_id = $organizationId
+            WHERE ${clickHouseOrgClause(organizationId)}
               AND host_id IN ($hostIdList)
               AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
               AND timestamp >= $freshnessNow - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
@@ -716,7 +721,7 @@ class MonitorService(
                 sumIf(value_sum, metric_name='system.battery.percent') /
                     nullIf(sumIf(value_count, metric_name='system.battery.percent'), 0) as battery
             FROM `$clickhouseDb`.metrics_rollup_1m
-            WHERE organization_id = ${host.organizationId}
+            WHERE ${clickHouseOrgClause(host.organizationId)}
               AND host_id = $hostId
               AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
               AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
@@ -806,7 +811,7 @@ class MonitorService(
                 argMax(net_rx_bytes, timestamp) as net_rx_bytes,
                 argMax(net_tx_bytes, timestamp) as net_tx_bytes
             FROM `$clickhouseDb`.containers_latest_by_host
-            WHERE organization_id = ${host.organizationId}
+            WHERE ${clickHouseOrgClause(host.organizationId)}
               AND host_id = $hostId
               AND timestamp >= now64(3) - INTERVAL $freshnessWindowSeconds SECOND
             GROUP BY container_id
@@ -1021,7 +1026,7 @@ class MonitorService(
                 sum(net_rx_bytes_sum) as net_recv,
                 sum(net_tx_bytes_sum) as net_sent
             FROM `$clickhouseDb`.containers_rollup_1m
-            WHERE organization_id = ${host.organizationId}
+            WHERE ${clickHouseOrgClause(host.organizationId)}
               AND host_id = $hostId
               AND name = '$escapedName'
               AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})

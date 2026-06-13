@@ -32,10 +32,12 @@ import {
   ExternalLink,
   GitBranch,
   Hash,
+  HardDrive,
   LayoutDashboard,
   Lightbulb,
   MapPin,
   MemoryStick,
+  Network,
   Plus,
   ScrollText,
   Share2,
@@ -53,7 +55,9 @@ import {Button} from '@/components/ui/button'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {useTimezone} from '@/hooks/useTimezone'
 import {HealthBadge, KindIcon, Meter, TagChip, VulnBar} from './CatalogPrimitives'
+import {MetricChart, type MetricChartProps} from './CatalogCharts'
 import {
   CHANGE_ICON,
   CHANGE_TONE,
@@ -70,11 +74,13 @@ import {
   formatPct,
   formatUsd,
   formatUsdExact,
+  hostInfraSample,
   mockFindings,
   relTime,
   sparkline,
   totalVulns,
   utilTone,
+  type HostInfraSample,
   type Relationship,
   type Resource,
 } from './resourceCatalogData'
@@ -174,79 +180,263 @@ function MetricTile({
   )
 }
 
-function metricNumber(value: number | null | undefined): string {
-  return value === null || value === undefined ? 'No data' : String(value)
+// ── Over-time charts ─────────────────────────────────────────────────────────
+// Each metric defines a reusable chart spec (everything but the time range and
+// sizing), so the Overview highlights and the full Telemetry grid stay in sync.
+
+type MetricChartSpec = Pick<
+  MetricChartProps,
+  'title' | 'subtitle' | 'icon' | 'iconClass' | 'seed' | 'series' | 'yDomain' | 'formatValue' | 'formatYTick' | 'noData'
+>
+
+const PCT_DOMAIN = [0, 100] as const
+const formatPercentValue = (value: number) => `${value.toFixed(1)}%`
+const formatPercentTick = (value: number) => `${Math.round(value)}`
+const formatMsValue = (value: number) => `${Math.round(value)} ms`
+const formatRoundTick = (value: number) => `${Math.round(value)}`
+const formatLoadValue = (value: number) => value.toFixed(2)
+
+function formatBytesShort(bytes: number): string {
+  if (bytes <= 0) return '0'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)}${units[i]}`
+}
+const formatBytesRate = (value: number) => `${formatBytesShort(value)}/s`
+
+function cpuChartSpec(resource: Resource): MetricChartSpec {
+  return {
+    title: 'CPU utilization',
+    subtitle: 'Percentage',
+    icon: Cpu,
+    iconClass: 'text-chart-1',
+    seed: `${resource.id}-cpu`,
+    yDomain: PCT_DOMAIN,
+    formatValue: formatPercentValue,
+    formatYTick: formatPercentTick,
+    noData: resource.telemetry.cpuPct === null,
+    series: [{key: 'CPU', current: resource.telemetry.cpuPct ?? 0, max: 100}],
+  }
 }
 
-function metricUnit(value: number | null | undefined, unit: string): string | undefined {
-  return value === null || value === undefined ? undefined : unit
+function memChartSpec(resource: Resource): MetricChartSpec {
+  return {
+    title: 'Memory utilization',
+    subtitle: 'Percentage',
+    icon: MemoryStick,
+    iconClass: 'text-chart-2',
+    seed: `${resource.id}-mem`,
+    yDomain: PCT_DOMAIN,
+    formatValue: formatPercentValue,
+    formatYTick: formatPercentTick,
+    noData: resource.telemetry.memPct === null,
+    series: [{key: 'Memory', current: resource.telemetry.memPct ?? 0, max: 100}],
+  }
 }
 
-function OverviewTab({resource}: {readonly resource: Resource}) {
+function diskChartSpec(resource: Resource, infra: HostInfraSample): MetricChartSpec {
+  return {
+    title: 'Disk usage',
+    subtitle: 'Percentage',
+    icon: HardDrive,
+    iconClass: 'text-chart-3',
+    seed: `${resource.id}-disk`,
+    yDomain: PCT_DOMAIN,
+    formatValue: formatPercentValue,
+    formatYTick: formatPercentTick,
+    series: [{key: 'Disk', current: infra.diskPct, max: 100, spread: 0.12}],
+  }
+}
+
+function loadChartSpec(resource: Resource, infra: HostInfraSample): MetricChartSpec {
+  return {
+    title: 'Load average',
+    subtitle: '1m · 5m · 15m',
+    icon: Activity,
+    iconClass: 'text-chart-4',
+    seed: `${resource.id}-load`,
+    formatValue: formatLoadValue,
+    series: [
+      {key: '1 min', current: infra.load1},
+      {key: '5 min', current: infra.load5, spread: 0.25},
+      {key: '15 min', current: infra.load15, spread: 0.18},
+    ],
+  }
+}
+
+function networkChartSpec(resource: Resource, infra: HostInfraSample): MetricChartSpec {
+  return {
+    title: 'Network throughput',
+    subtitle: 'Received · sent',
+    icon: Network,
+    iconClass: 'text-chart-2',
+    seed: `${resource.id}-net`,
+    formatValue: formatBytesRate,
+    formatYTick: formatBytesShort,
+    series: [
+      {key: 'Received', current: infra.netRecvBytes},
+      {key: 'Sent', current: infra.netSentBytes, spread: 0.5},
+    ],
+  }
+}
+
+function latencyChartSpec(resource: Resource): MetricChartSpec {
+  return {
+    title: 'p99 latency',
+    subtitle: 'Milliseconds',
+    icon: Activity,
+    iconClass: 'text-chart-5',
+    seed: `${resource.id}-latency`,
+    formatValue: formatMsValue,
+    formatYTick: formatRoundTick,
+    series: [{key: 'p99', current: resource.telemetry.latencyMs ?? 0}],
+  }
+}
+
+function errorChartSpec(resource: Resource): MetricChartSpec {
+  return {
+    title: 'Error rate',
+    subtitle: 'Percentage',
+    icon: AlertTriangle,
+    iconClass: 'text-danger-fg',
+    seed: `${resource.id}-error`,
+    formatValue: formatPercentValue,
+    formatYTick: formatPercentTick,
+    series: [{key: 'Errors', current: resource.telemetry.errorRatePct ?? 0}],
+  }
+}
+
+/** All charts a resource can show — only metrics that actually have a value. */
+function buildTelemetryCharts(resource: Resource, infra: HostInfraSample | null): MetricChartSpec[] {
   const t = resource.telemetry
+  const specs: MetricChartSpec[] = []
+  if (t.cpuPct !== null) specs.push(cpuChartSpec(resource))
+  if (t.memPct !== null) specs.push(memChartSpec(resource))
+  if (infra) specs.push(diskChartSpec(resource, infra), loadChartSpec(resource, infra), networkChartSpec(resource, infra))
+  if (t.latencyMs !== undefined) specs.push(latencyChartSpec(resource))
+  if (t.errorRatePct !== undefined) specs.push(errorChartSpec(resource))
+  return specs
+}
+
+/**
+ * Overview trends: CPU and Memory always lead (shown as "No data" when a resource
+ * reports no infra metrics), then p99 latency / error rate when present.
+ */
+function buildOverviewCharts(resource: Resource): MetricChartSpec[] {
+  const t = resource.telemetry
+  const specs: MetricChartSpec[] = [cpuChartSpec(resource), memChartSpec(resource)]
+  if (t.latencyMs !== undefined) specs.push(latencyChartSpec(resource))
+  if (t.errorRatePct !== undefined) specs.push(errorChartSpec(resource))
+  return specs
+}
+
+const TELEMETRY_RANGES = [
+  {value: '1h', label: '1h', seconds: 3600},
+  {value: '6h', label: '6h', seconds: 21600},
+  {value: '24h', label: '24h', seconds: 86400},
+  {value: '7d', label: '7d', seconds: 604800},
+  {value: '30d', label: '30d', seconds: 2592000},
+] as const
+type TelemetryRange = (typeof TELEMETRY_RANGES)[number]['value']
+
+function RangeToggle({value, onChange}: {readonly value: TelemetryRange; readonly onChange: (value: TelemetryRange) => void}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-md border bg-background p-0.5">
+      {TELEMETRY_RANGES.map((range) => (
+        <button
+          key={range.value}
+          type="button"
+          onClick={() => onChange(range.value)}
+          aria-pressed={value === range.value}
+          className={cn(
+            'rounded px-2 py-0.5 text-[11px] font-medium transition-colors',
+            value === range.value ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {range.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function OverviewTab({resource, timezone}: {readonly resource: Resource; readonly timezone: string}) {
+  const t = resource.telemetry
+  const [range, setRange] = useState<TelemetryRange>('24h')
+  const infra = hostInfraSample(resource)
+  const charts = buildOverviewCharts(resource)
+  const rangeSeconds = TELEMETRY_RANGES.find((option) => option.value === range)?.seconds ?? 86_400
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <MetricTile
-          label="CPU"
-          value={metricNumber(t.cpuPct)}
-          unit={metricUnit(t.cpuPct, '%')}
-          icon={Cpu}
-          pct={t.cpuPct ?? undefined}
-          tone={t.cpuPct == null ? 'neutral' : utilTone(t.cpuPct)}
-        />
-        <MetricTile
-          label="Memory"
-          value={metricNumber(t.memPct)}
-          unit={metricUnit(t.memPct, '%')}
-          icon={MemoryStick}
-          pct={t.memPct ?? undefined}
-          tone={t.memPct == null ? 'neutral' : utilTone(t.memPct)}
-        />
-        {t.latencyMs !== undefined && (
-          <MetricTile label="p99 latency" value={`${t.latencyMs}`} unit="ms" icon={Activity} tone="info" />
-        )}
-        {t.errorRatePct !== undefined && (
-          <MetricTile
-            label="Error rate"
-            value={`${t.errorRatePct}`}
-            unit="%"
-            icon={AlertTriangle}
-            tone={errorRateTone(t.errorRatePct)}
+      {(infra || t.latencyMs !== undefined || t.errorRatePct !== undefined) && (
+        <div className="grid grid-cols-2 gap-2">
+          {infra ? (
+            <>
+              <MetricTile label="Disk" value={`${infra.diskPct}`} unit="%" icon={HardDrive} pct={infra.diskPct} tone={utilTone(infra.diskPct)} />
+              <MetricTile label="Load (1m)" value={infra.load1.toFixed(2)} icon={Activity} tone="info" />
+            </>
+          ) : (
+            <>
+              {t.latencyMs !== undefined && (
+                <MetricTile label="p99 latency" value={`${t.latencyMs}`} unit="ms" icon={Activity} tone="info" />
+              )}
+              {t.errorRatePct !== undefined && (
+                <MetricTile
+                  label="Error rate"
+                  value={`${t.errorRatePct}`}
+                  unit="%"
+                  icon={AlertTriangle}
+                  tone={errorRateTone(t.errorRatePct)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Performance</span>
+          <RangeToggle value={range} onChange={setRange} />
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {charts.map((spec) => (
+            <MetricChart key={spec.title} {...spec} rangeSeconds={rangeSeconds} timezone={timezone} height={150} />
+          ))}
+        </div>
+      </div>
+      <div className={cn('grid gap-3', resource.metadata.length > 0 && 'lg:grid-cols-2')}>
+        <PanelSection title="Identity">
+          <FieldRow label="Type" value={KIND_META[resource.kind].label} />
+          <FieldRow
+            label="Environment"
+            value={
+              <Badge variant={ENV_BADGE[resource.environment]} className="px-1.5 py-0 text-[10px] leading-4">
+                {ENV_LABEL[resource.environment]}
+              </Badge>
+            }
           />
+          <FieldRow
+            label="Region"
+            value={
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-muted-foreground" />
+                {resource.region}
+              </span>
+            }
+          />
+          <FieldRow label="Provider" value={CLOUD_LABEL[resource.cloud]} />
+          <FieldRow label="Owner" value={resource.owner ? resource.owner.team : <span className="text-warning-fg">Unowned</span>} />
+          <FieldRow label="First seen" value={relTime(resource.firstSeen)} />
+          <FieldRow label="Last change" value={relTime(resource.lastChange)} />
+        </PanelSection>
+        {resource.metadata.length > 0 && (
+          <PanelSection title="Metadata">
+            {resource.metadata.map((m) => (
+              <FieldRow key={m.label} label={m.label} value={m.value} />
+            ))}
+          </PanelSection>
         )}
       </div>
-      <PanelSection title="Identity">
-        <FieldRow label="Type" value={KIND_META[resource.kind].label} />
-        <FieldRow
-          label="Environment"
-          value={
-            <Badge variant={ENV_BADGE[resource.environment]} className="px-1.5 py-0 text-[10px] leading-4">
-              {ENV_LABEL[resource.environment]}
-            </Badge>
-          }
-        />
-        <FieldRow
-          label="Region"
-          value={
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-3 w-3 text-muted-foreground" />
-              {resource.region}
-            </span>
-          }
-        />
-        <FieldRow label="Provider" value={CLOUD_LABEL[resource.cloud]} />
-        <FieldRow label="Owner" value={resource.owner ? resource.owner.team : <span className="text-warning-fg">Unowned</span>} />
-        <FieldRow label="First seen" value={relTime(resource.firstSeen)} />
-        <FieldRow label="Last change" value={relTime(resource.lastChange)} />
-      </PanelSection>
-      {resource.metadata.length > 0 && (
-        <PanelSection title="Metadata">
-          {resource.metadata.map((m) => (
-            <FieldRow key={m.label} label={m.label} value={m.value} />
-          ))}
-        </PanelSection>
-      )}
       {resource.tags.length > 0 && (
         <PanelSection title="Tags">
           <div className="flex flex-wrap gap-1">
@@ -260,51 +450,18 @@ function OverviewTab({resource}: {readonly resource: Resource}) {
   )
 }
 
-function TelemetryChart({
-  label,
-  suffix,
-  current,
-  tone,
-}: {
-  readonly label: string
-  readonly suffix: string
-  readonly current: number | string | null | undefined
-  readonly tone: StatusTone
-}) {
-  const hasValue = current !== null && current !== undefined && current !== ''
-  return (
-    <div className="rounded-md border border-border/70 bg-background/40 p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className={cn('text-sm font-semibold tabular-nums', hasValue ? TONE_TEXT[tone] : 'text-muted-foreground')}>
-          {hasValue ? `${current}${suffix}` : 'No data'}
-        </span>
-      </div>
-      <div className="mt-2 flex h-12 items-center rounded bg-muted/30 px-3 text-xs text-muted-foreground">
-        {hasValue ? 'Current sample only' : 'No samples received'}
-      </div>
-    </div>
-  )
-}
-
-function hasTelemetryValue(value: number | string | null | undefined): boolean {
-  return value !== null && value !== undefined && value !== ''
-}
-
-function TelemetryTab({resource}: {readonly resource: Resource}) {
+function TelemetryTab({resource, timezone}: {readonly resource: Resource; readonly timezone: string}) {
   const t = resource.telemetry
+  const [range, setRange] = useState<TelemetryRange>('24h')
+  const rangeSeconds = TELEMETRY_RANGES.find((option) => option.value === range)?.seconds ?? 86_400
   const metricsHostId = getMetricsHostId(resource)
-  const hasAnyTelemetry = [
-    t.cpuPct,
-    t.memPct,
-    t.latencyMs,
-    t.errorRatePct,
-    t.throughput,
-  ].some(hasTelemetryValue)
+  const infra = hostInfraSample(resource)
+  const charts = buildTelemetryCharts(resource, infra)
+  const hasAnyTelemetry = charts.length > 0 || t.throughput !== undefined
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Last 1 hour · 1m resolution</p>
+      <div className="flex items-center justify-between gap-2">
+        <RangeToggle value={range} onChange={setRange} />
         {metricsHostId && (
           <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs" asChild>
             <Link to="/monitoring/hosts/$hostId" params={{hostId: metricsHostId}}>
@@ -314,34 +471,23 @@ function TelemetryTab({resource}: {readonly resource: Resource}) {
         )}
       </div>
       {hasAnyTelemetry ? (
-        <div className="grid grid-cols-1 gap-2">
-          <TelemetryChart
-            label="CPU utilization"
-            suffix="%"
-            current={t.cpuPct}
-            tone={t.cpuPct == null ? 'neutral' : utilTone(t.cpuPct)}
-          />
-          <TelemetryChart
-            label="Memory utilization"
-            suffix="%"
-            current={t.memPct}
-            tone={t.memPct == null ? 'neutral' : utilTone(t.memPct)}
-          />
-          {t.latencyMs !== undefined && (
-            <TelemetryChart label="p99 latency" suffix=" ms" current={t.latencyMs} tone="info" />
-          )}
-          {t.errorRatePct !== undefined && (
-            <TelemetryChart
-              label="Error rate"
-              suffix="%"
-              current={t.errorRatePct}
-              tone={t.errorRatePct >= 2 ? 'danger' : 'warning'}
-            />
+        <>
+          {charts.length > 0 && (
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {charts.map((spec) => (
+                <MetricChart key={spec.title} {...spec} rangeSeconds={rangeSeconds} timezone={timezone} />
+              ))}
+            </div>
           )}
           {t.throughput !== undefined && (
-            <TelemetryChart label="Throughput" suffix="" current={t.throughput} tone="accent" />
+            <div className="flex items-center justify-between rounded-md border border-border/70 bg-background/40 px-3 py-2.5">
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Activity className="h-3.5 w-3.5" /> Throughput
+              </span>
+              <span className="text-sm font-semibold tabular-nums">{t.throughput}</span>
+            </div>
           )}
-        </div>
+        </>
       ) : (
         <EmptyState
           icon={Activity}
@@ -670,6 +816,7 @@ export interface ResourceDetailPanelProps {
 /** Tabbed detail panel for a single resource — shared by the catalog and map. */
 export function ResourceDetailPanel({resource, onSelect, onClose, className}: ResourceDetailPanelProps) {
   const [tab, setTab] = useState<DetailTab>('overview')
+  const {timezone} = useTimezone()
   return (
     <section className={cn('flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card', className)}>
       <header className="border-b px-3 py-2.5">
@@ -718,10 +865,10 @@ export function ResourceDetailPanel({resource, onSelect, onClose, className}: Re
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           <TabsContent value="overview" className="mt-0">
-            <OverviewTab resource={resource} />
+            <OverviewTab resource={resource} timezone={timezone} />
           </TabsContent>
           <TabsContent value="telemetry" className="mt-0">
-            <TelemetryTab resource={resource} />
+            <TelemetryTab resource={resource} timezone={timezone} />
           </TabsContent>
           <TabsContent value="relationships" className="mt-0">
             <RelationshipsTab resource={resource} onSelect={onSelect} />

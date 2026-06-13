@@ -17,6 +17,7 @@
 package com.moneat.monitor.routes
 
 import com.moneat.monitor.services.ResourceCatalogService
+import com.moneat.plugins.getDemoEpochMs
 import com.moneat.utils.OrganizationContextMissingException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -40,12 +41,14 @@ fun Route.resourceCatalogRoutes(
             get("/resources") {
                 val organizationId = call.resolveResourceCatalogOrganizationId()
                 val limit = call.resolveResourceCatalogLimit()
+                val demoEpochMs = call.getDemoEpochMs()
                 val resources = if (limit == null) {
-                    resourceCatalogService.listResources(listOf(organizationId))
+                    resourceCatalogService.listResources(listOf(organizationId), demoEpochMs = demoEpochMs)
                 } else {
                     resourceCatalogService.listResources(
                         listOf(organizationId),
-                        limit
+                        limit,
+                        demoEpochMs
                     )
                 }
 
