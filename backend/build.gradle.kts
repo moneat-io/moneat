@@ -236,6 +236,7 @@ dependencies {
     runtimeOnly(project(":ee"))
     runtimeOnly(project(":features:analytics"))
     runtimeOnly(project(":features:datadog"))
+    runtimeOnly(project(":features:monitoring"))
 }
 
 // Task to copy email templates into resources
