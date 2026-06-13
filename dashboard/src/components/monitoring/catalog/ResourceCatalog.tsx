@@ -549,7 +549,12 @@ export function ResourceCatalog() {
     catalogContent = (
       <div className="flex h-full min-h-0 gap-3 p-3">
         <CompactList resources={sorted} selectedId={selectedId} onSelect={setSelectedId} />
-        <ResourceDetailPanel resource={selected} onSelect={setSelectedId} onClose={() => setSelectedId(null)} />
+        <ResourceDetailPanel
+          resource={selected}
+          onSelect={setSelectedId}
+          onClose={() => setSelectedId(null)}
+          className="flex-1 min-w-0"
+        />
       </div>
     )
   } else {

@@ -20,6 +20,8 @@ package com.moneat.config
 
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
+import java.util.Locale
+import kotlin.math.abs
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
@@ -47,6 +49,7 @@ internal suspend fun checkFreshDatadogCount(): Long {
                 Triple("profiles", "start_time", "organization_id"),
                 Triple("service_checks", "timestamp", "organization_id"),
                 Triple("containers", "timestamp", "organization_id"),
+                Triple("metrics_latest_by_host", "timestamp", "organization_id"),
             )
         var minCount = Long.MAX_VALUE
         for ((table, timeCol, orgCol) in tablesWithTimeCol) {
@@ -87,6 +90,7 @@ internal suspend fun purgeDatadogDemoData() {
             "processes",
             "containers",
             "network_connections",
+            "metrics_latest_by_host",
         )
     for (table in tables) {
         suspendRunCatching {
@@ -109,6 +113,7 @@ internal suspend fun purgeDatadogDemoData() {
 
 internal suspend fun reseedDatadogData() {
     reseedDatadogHostsPostgres()
+    reseedDatadogHostMetrics()
     reseedDatadogApmRootSpans()
     reseedDatadogApmChildSpans()
     reseedDatadogServiceMapRollups()
@@ -198,6 +203,106 @@ private suspend fun reseedDatadogHostsPostgres() {
             }
         }
     }.onFailure { logger.warn { "Reseed hosts failed (non-fatal): ${it.message}" } }
+}
+
+// Host system metrics for the demo fleet. The resource catalog + host views read the latest
+// CPU/memory (and disk/load/network) per host from `metrics_latest_by_host` keyed by the Postgres
+// host id — which only exists after reseedDatadogHostsPostgres has run, so this reads the freshly
+// inserted ids back. Latest snapshot only: the catalog synthesises history from the latest value.
+private const val DEMO_DISK_TOTAL_BYTES = 512L * 1024 * 1024 * 1024
+
+private data class DemoHostMetricRow(val id: Long, val hostname: String, val memTotalKb: Long)
+
+private data class HostMetricAnchors(
+    val cpuPct: Double,
+    val memPct: Double,
+    val diskPct: Double,
+    val load1: Double,
+    val netRecvBytes: Long,
+    val netSentBytes: Long,
+)
+
+/** Deterministic per-host metric values so the seeded fleet looks varied but stable across reseeds. */
+private fun hostMetricAnchors(hostname: String): HostMetricAnchors {
+    val h = abs(hostname.hashCode())
+    return HostMetricAnchors(
+        cpuPct = 25.0 + (h % 55),
+        memPct = 35.0 + (h / 7 % 50),
+        diskPct = 40.0 + (h / 13 % 50),
+        load1 = 0.5 + (h % 400) / 100.0,
+        netRecvBytes = (3L + h % 30) * 1024 * 1024,
+        netSentBytes = (1L + h / 11 % 12) * 1024 * 1024,
+    )
+}
+
+private fun readDemoHostMetricRows(): List<DemoHostMetricRow> =
+    suspendRunCatching {
+        transaction {
+            exec(
+                "SELECT id, hostname, memory_total_kb FROM hosts WHERE organization_id = -1 ORDER BY id"
+            ) { rs ->
+                buildList {
+                    while (rs.next()) {
+                        add(
+                            DemoHostMetricRow(
+                                rs.getLong("id"),
+                                rs.getString("hostname"),
+                                rs.getLong("memory_total_kb")
+                            )
+                        )
+                    }
+                }
+            } ?: emptyList()
+        }
+    }.getOrElse {
+        logger.warn { "Failed to read demo hosts for metric reseed (non-fatal): ${it.message}" }
+        emptyList()
+    }
+
+private fun hostMetricsLatestSql(hosts: List<DemoHostMetricRow>): String {
+    val rows = buildList {
+        for (host in hosts) {
+            val a = hostMetricAnchors(host.hostname)
+            val memTotalBytes = host.memTotalKb * 1024L
+            val memUsedBytes = (memTotalBytes * a.memPct / 100.0).toLong()
+            val diskUsedBytes = (DEMO_DISK_TOTAL_BYTES * a.diskPct / 100.0).toLong()
+            val metrics = listOf(
+                "system.cpu.percent" to fmtMetric(a.cpuPct),
+                "system.mem.total" to memTotalBytes.toString(),
+                "system.mem.used" to memUsedBytes.toString(),
+                "system.disk.total" to DEMO_DISK_TOTAL_BYTES.toString(),
+                "system.disk.used" to diskUsedBytes.toString(),
+                "system.load.1" to fmtMetric(a.load1),
+                "system.net.recv_bytes" to a.netRecvBytes.toString(),
+                "system.net.sent_bytes" to a.netSentBytes.toString(),
+            )
+            for ((name, value) in metrics) {
+                add("($ORG1, ${host.id}, '$name', now64(3), $value, '${host.hostname}', 'datadog')")
+            }
+        }
+    }
+    return """
+        INSERT INTO metrics_latest_by_host
+            (organization_id, host_id, metric_name, timestamp, value, host, source)
+        VALUES
+        ${rows.joinToString(",\n        ")}
+    """.trimIndent()
+}
+
+private fun fmtMetric(value: Double): String = String.format(Locale.US, "%.2f", value)
+
+private suspend fun reseedDatadogHostMetrics() {
+    val hosts = readDemoHostMetricRows()
+    if (hosts.isEmpty()) {
+        logger.warn { "No demo hosts found for host-metric reseed (non-fatal)" }
+        return
+    }
+    suspendRunCatching {
+        requireClickHouse2xx(
+            ClickHouseClient.execute(hostMetricsLatestSql(hosts)),
+            "Reseed host metrics latest"
+        )
+    }.onFailure { logger.warn { "Reseed host metrics latest failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogApmRootSpans() {

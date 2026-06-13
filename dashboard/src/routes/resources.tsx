@@ -16,7 +16,20 @@
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {MonitoringTabBar} from '@/components/monitoring/MonitoringTabBar'
 import {ResourceCatalog} from '@/components/monitoring/catalog/ResourceCatalog'
+
+// /resources sits outside the /monitoring layout, so it renders the shared
+// Infrastructure tab strip itself to stay in step with Map, Processes, etc.
+// The catalog already reserves the bar's 43px in its viewport height calc.
+function ResourcesPage() {
+  return (
+    <>
+      <MonitoringTabBar />
+      <ResourceCatalog />
+    </>
+  )
+}
 
 export const Route = createFileRoute('/resources')({
   beforeLoad: async () => {
@@ -25,5 +38,5 @@ export const Route = createFileRoute('/resources')({
       if (!hasSession) throw redirect({to: '/login'})
     }
   },
-  component: ResourceCatalog,
+  component: ResourcesPage,
 })

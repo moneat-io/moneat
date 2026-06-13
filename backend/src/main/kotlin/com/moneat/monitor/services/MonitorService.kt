@@ -491,7 +491,7 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.mem.pct_usable' THEN value END, timestamp) as mem_pct_usable,
                 argMax(CASE WHEN metric_name='system.disk.in_use' THEN value END, timestamp) as disk_in_use
             FROM `$clickhouseDb`.metrics_latest_by_host
-            WHERE organization_id = $organizationId
+            WHERE organization_id = toUInt64($organizationId)
               AND host_id IN ($hostIdList)
               AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
               AND timestamp >= $freshnessNow - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR

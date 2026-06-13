@@ -228,6 +228,61 @@ export function sparkline(seed: string, points = 18, base = 50, amplitude = 26):
   return out
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+/**
+ * Deterministic sample history for one metric. Values wander within a band around
+ * `current` and the final point is pinned to `current`, so an over-time chart always
+ * agrees with the headline number. Stable for a given seed — the catalog renders
+ * sample telemetry until live metric series are wired into these surfaces.
+ */
+export function metricSeriesValues(
+  seed: string,
+  current: number,
+  points: number,
+  options?: {readonly spread?: number; readonly min?: number; readonly max?: number},
+): number[] {
+  const spread = options?.spread ?? 0.4
+  const min = options?.min ?? 0
+  const max = options?.max ?? Number.POSITIVE_INFINITY
+  const shape = sparkline(seed, points, 50, 26)
+  const values = shape.map((point) => clampNumber(current * (1 + ((point - 50) / 50) * spread), min, max))
+  if (values.length > 0) values[values.length - 1] = clampNumber(current, min, max)
+  return values
+}
+
+export interface HostInfraSample {
+  readonly cores: number
+  readonly diskPct: number
+  readonly load1: number
+  readonly load5: number
+  readonly load15: number
+  readonly netRecvBytes: number
+  readonly netSentBytes: number
+}
+
+/**
+ * Synthesize current host infrastructure metrics (disk, load average, network
+ * throughput) derived deterministically from the host id and its CPU sample. These
+ * mirror the graphs the old per-host page exposed. Returns null for non-hosts and
+ * for hosts with no CPU signal (nothing to anchor to). Sample data only.
+ */
+export function hostInfraSample(resource: Resource): HostInfraSample | null {
+  const cpu = resource.telemetry.cpuPct
+  if (resource.kind !== 'host' || cpu === null) return null
+  const frac = (salt: string) => (hashSeed(`${resource.id}:${salt}`) % 1000) / 1000
+  const cores = [2, 4, 8, 16][Math.floor(frac('cores') * 4)]
+  const load1 = Math.round((cpu / 100) * cores * (0.7 + frac('l1') * 0.7) * 100) / 100
+  const load5 = Math.round(load1 * (0.82 + frac('l5') * 0.22) * 100) / 100
+  const load15 = Math.round(load5 * (0.8 + frac('l15') * 0.2) * 100) / 100
+  const diskPct = Math.round(clampNumber(40 + frac('disk') * 52, 6, 96))
+  const netRecvBytes = Math.round((2 + frac('rx') * 30) * 1024 * 1024)
+  const netSentBytes = Math.round((1 + frac('tx') * 12) * 1024 * 1024)
+  return {cores, diskPct, load1, load5, load15, netRecvBytes, netSentBytes}
+}
+
 export function totalVulns(v: VulnCounts): number {
   return v.critical + v.high + v.medium + v.low
 }

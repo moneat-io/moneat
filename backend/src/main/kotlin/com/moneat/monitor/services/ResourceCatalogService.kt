@@ -49,12 +49,13 @@ class ResourceCatalogService(
     suspend fun listResources(
         organizationIds: List<Int>,
         limit: Int = DEFAULT_CATALOG_LIMIT,
+        demoEpochMs: Long? = null,
     ): List<CatalogResource> {
         if (organizationIds.isEmpty()) return emptyList()
 
         val boundedLimit = limit.coerceIn(1, MAX_CATALOG_LIMIT)
         val hosts = organizationIds.flatMap { monitorService.listHosts(it) }
-        val metricsByHost = latestMetricsByHost(organizationIds, hosts)
+        val metricsByHost = latestMetricsByHost(organizationIds, hosts, demoEpochMs)
 
         return buildList {
             addAll(queryClient.listApmServices(organizationIds, boundedLimit).mapNotNull(::serviceResource))
@@ -69,6 +70,7 @@ class ResourceCatalogService(
     private suspend fun latestMetricsByHost(
         organizationIds: List<Int>,
         hosts: List<HostData>,
+        demoEpochMs: Long?,
     ): Map<Int, LatestMetrics?> =
         organizationIds
             .flatMap { organizationId ->
@@ -77,7 +79,7 @@ class ResourceCatalogService(
                     emptyList()
                 } else {
                     monitorService
-                        .getLatestMetricsForHosts(orgHosts.map { it.id }, organizationId)
+                        .getLatestMetricsForHosts(orgHosts.map { it.id }, organizationId, demoEpochMs)
                         .entries
                         .map { it.toPair() }
                 }
