@@ -31,6 +31,12 @@ private val resourceCatalogQueryJson = Json { ignoreUnknownKeys = true }
 
 private const val RECENT_WINDOW_HOURS = 24
 private const val NANOS_PER_MILLISECOND = 1_000_000
+private const val SECONDS_PER_HOUR = 3600L
+private const val MAX_TELEMETRY_HOURS = 24L * 31
+private const val MAX_TELEMETRY_BUCKETS = 800
+private const val MAX_EDGE_ROWS = 2000
+private const val CHANGES_WINDOW_DAYS = 30
+private const val MAX_CHANGE_ROWS = 2000
 
 interface ResourceCatalogQueryClient {
     suspend fun listApmServices(organizationIds: List<Int>, limit: Int): List<JsonObject>
@@ -38,6 +44,19 @@ interface ResourceCatalogQueryClient {
     suspend fun listKubernetesPods(organizationIds: List<Int>, limit: Int): List<JsonObject>
     suspend fun listNetworkDevices(organizationIds: List<Int>, limit: Int): List<JsonObject>
     suspend fun listCloudResources(organizationIds: List<Int>, limit: Int): List<JsonObject>
+
+    /** Hourly latency (avg ms), span count, and error count for one APM service over a range. */
+    suspend fun serviceTelemetrySeries(
+        organizationIds: List<Int>,
+        service: String,
+        rangeSeconds: Long,
+    ): List<JsonObject>
+
+    /** Caller -> callee service-map edges over the recent window. */
+    suspend fun serviceEdges(organizationIds: List<Int>): List<JsonObject>
+
+    /** Deploy events (service, version, deploy_at, deployer) derived from versioned spans over the recent window. */
+    suspend fun serviceDeployments(organizationIds: List<Int>): List<JsonObject>
 }
 
 class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
@@ -55,6 +74,25 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
 
     override suspend fun listCloudResources(organizationIds: List<Int>, limit: Int): List<JsonObject> =
         executeRows(cloudResourcesSql(organizationIds, limit))
+
+    override suspend fun serviceTelemetrySeries(
+        organizationIds: List<Int>,
+        service: String,
+        rangeSeconds: Long,
+    ): List<JsonObject> {
+        if (organizationIds.isEmpty() || service.isBlank()) return emptyList()
+        return executeRows(serviceTelemetrySeriesSql(organizationIds, service, rangeSeconds))
+    }
+
+    override suspend fun serviceEdges(organizationIds: List<Int>): List<JsonObject> {
+        if (organizationIds.isEmpty()) return emptyList()
+        return executeRows(serviceEdgesSql(organizationIds))
+    }
+
+    override suspend fun serviceDeployments(organizationIds: List<Int>): List<JsonObject> {
+        if (organizationIds.isEmpty()) return emptyList()
+        return executeRows(serviceDeploymentsSql(organizationIds))
+    }
 
     private suspend fun executeRows(sql: String): List<JsonObject> =
         suspendRunCatching {
@@ -216,8 +254,85 @@ class ClickHouseResourceCatalogQueryClient : ResourceCatalogQueryClient {
         """.trimIndent()
     }
 
+    private fun serviceTelemetrySeriesSql(
+        organizationIds: List<Int>,
+        service: String,
+        rangeSeconds: Long,
+    ): String {
+        val db = ClickHouseClient.getDatabase()
+        val orgClause = orgIdClause(organizationIds)
+        val hours = ((rangeSeconds + SECONDS_PER_HOUR - 1) / SECONDS_PER_HOUR).coerceIn(1, MAX_TELEMETRY_HOURS)
+        return """
+            SELECT
+                toUnixTimestamp(bucket_start) AS ts,
+                round(
+                    if(sum(duration_count) = 0, 0, sum(duration_sum) / sum(duration_count) / $NANOS_PER_MILLISECOND),
+                    3
+                ) AS latency_ms,
+                sum(span_count) AS span_count,
+                sum(error_count) AS error_count
+            FROM `$db`.apm_service_stats_hourly
+            WHERE organization_id IN ($orgClause)
+              AND service = '${escapeClickHouseLiteral(service)}'
+              AND bucket_start >= now() - INTERVAL $hours HOUR
+            GROUP BY bucket_start
+            ORDER BY bucket_start ASC
+            LIMIT $MAX_TELEMETRY_BUCKETS
+            FORMAT JSONEachRow
+        """.trimIndent()
+    }
+
+    private fun serviceEdgesSql(organizationIds: List<Int>): String {
+        val db = ClickHouseClient.getDatabase()
+        val orgClause = orgIdClause(organizationIds)
+        return """
+            SELECT
+                from_service,
+                to_service,
+                sum(call_count) AS call_count,
+                sum(error_count) AS error_count
+            FROM `$db`.apm_service_edges_hourly
+            WHERE organization_id IN ($orgClause)
+              AND bucket_start >= now() - INTERVAL $RECENT_WINDOW_HOURS HOUR
+              AND from_service != ''
+              AND to_service != ''
+            GROUP BY from_service, to_service
+            ORDER BY call_count DESC
+            LIMIT $MAX_EDGE_ROWS
+            FORMAT JSONEachRow
+        """.trimIndent()
+    }
+
+    private fun serviceDeploymentsSql(organizationIds: List<Int>): String {
+        val db = ClickHouseClient.getDatabase()
+        val orgClause = orgIdClause(organizationIds)
+        return """
+            SELECT
+                service,
+                version,
+                formatDateTime(min(start), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') AS deploy_at,
+                coalesce(
+                    nullIf(argMaxIf(meta['deployment.user'], start, meta['deployment.user'] != ''), ''),
+                    nullIf(argMaxIf(meta['git.commit.author.name'], start, meta['git.commit.author.name'] != ''), ''),
+                    ''
+                ) AS deployer
+            FROM `$db`.apm_spans
+            WHERE organization_id IN ($orgClause)
+              AND start >= now() - INTERVAL $CHANGES_WINDOW_DAYS DAY
+              AND service != ''
+              AND version != ''
+            GROUP BY service, version
+            ORDER BY min(start) DESC
+            LIMIT $MAX_CHANGE_ROWS
+            FORMAT JSONEachRow
+        """.trimIndent()
+    }
+
     private fun orgIdClause(organizationIds: List<Int>): String =
         organizationIds.joinToString(", ") { "toUInt64($it)" }
+
+    private fun escapeClickHouseLiteral(value: String): String =
+        value.replace("\\", "\\\\").replace("'", "\\'")
 }
 
 private fun parseJsonEachRow(body: String): List<JsonObject> =

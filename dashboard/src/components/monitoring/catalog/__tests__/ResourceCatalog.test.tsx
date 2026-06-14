@@ -6,7 +6,7 @@ import {renderWithQueryClient} from '@/test/utils'
 import {HealthBadge} from '../CatalogPrimitives'
 import {ResourceCatalog} from '../ResourceCatalog'
 import {ResourceDetailPanel} from '../ResourceDetailPanel'
-import {MOCK_RESOURCES, type Resource} from '../resourceCatalogData'
+import type {Resource} from '../resourceCatalogData'
 
 const mockApi = vi.hoisted(() => ({
   get: vi.fn(),
@@ -62,32 +62,81 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
   }
 })
 
-const checkout = MOCK_RESOURCES.find((resource) => resource.id === 'svc-checkout')
-if (!checkout) throw new Error('checkout fixture missing')
+function makeResource(overrides: Partial<Resource> & Pick<Resource, 'id' | 'name' | 'kind'>): Resource {
+  return {
+    health: 'healthy',
+    environment: 'prod',
+    region: 'us-east-1',
+    cloud: 'aws',
+    owner: null,
+    tags: [],
+    telemetry: {cpuPct: 20, memPct: 30},
+    vulns: {critical: 0, high: 0, medium: 0, low: 0},
+    sbomComponents: 0,
+    posture: [],
+    findings: [],
+    monthlyUsd: 0,
+    costTrendPct: 0,
+    costBreakdown: [],
+    relationships: [],
+    changes: [],
+    metadata: [],
+    firstSeen: '2026-01-04T00:00:00Z',
+    lastChange: '2026-06-07T12:00:00.000Z',
+    ...overrides,
+  }
+}
 
-const emptyResource: Resource = {
-  ...checkout,
+const checkout = makeResource({
+  id: 'svc-checkout',
+  name: 'checkout-api',
+  kind: 'service',
+  vulns: {critical: 1, high: 2, medium: 3, low: 4},
+  monthlyUsd: 1200,
+  metadata: [{label: 'Runtime', value: 'Go 1.23'}],
+  relationships: [
+    {relation: 'Depends on', name: 'payments-api', kind: 'service', health: 'healthy', targetId: 'svc-payments'},
+  ],
+  changes: [{ts: '2026-06-07T10:00:00.000Z', kind: 'deploy', summary: 'Deployed v2026.6.41', actor: 'theo'}],
+})
+
+const payments = makeResource({
+  id: 'svc-payments',
+  name: 'payments-api',
+  kind: 'service',
+  vulns: {critical: 0, high: 1, medium: 2, low: 3},
+  monthlyUsd: 800,
+  changes: [{ts: '2026-06-06T10:00:00.000Z', kind: 'deploy', summary: 'Deployed v9', actor: 'dana'}],
+})
+
+const RESOURCES: readonly Resource[] = [checkout, payments]
+
+const emptyResource = makeResource({
   id: 'host:1:42',
   name: 'empty-host',
   kind: 'host',
   health: 'unknown',
-  owner: null,
-  tags: [],
   telemetry: {cpuPct: null, memPct: null},
-  vulns: {critical: 0, high: 0, medium: 0, low: 0},
-  posture: [],
-  monthlyUsd: 0,
-  costTrendPct: 0,
-  costBreakdown: [],
-  relationships: [],
-  changes: [],
-  metadata: [],
+})
+
+const sampleTelemetry = {
+  kind: 'service',
+  rangeSeconds: 86_400,
+  intervalSeconds: 300,
+  metrics: [
+    {key: 'cpu', label: 'CPU utilization', unit: '%', lines: [{name: 'CPU', points: [{ts: 1, value: 12}]}]},
+    {key: 'errorRate', label: 'Error rate', unit: '%', lines: [{name: 'Errors', points: [{ts: 1, value: 1}]}]},
+  ],
 }
 
 describe('ResourceCatalog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApi.get.mockResolvedValue(MOCK_RESOURCES)
+    mockApi.get.mockImplementation((path: string) =>
+      path.startsWith('/monitoring/resources/telemetry')
+        ? Promise.resolve(sampleTelemetry)
+        : Promise.resolve(RESOURCES),
+    )
   })
 
   it('filters resources, opens setup links, and drills into the detail panel', async () => {
@@ -116,8 +165,8 @@ describe('ResourceCatalog', () => {
     expect(screen.getByRole('heading', {name: 'checkout-api'})).toBeInTheDocument()
     expect(screen.getByText('Go 1.23')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', {name: 'Telemetry'}))
-    expect(screen.getByText('CPU utilization')).toBeInTheDocument()
+    // Telemetry is now folded into the default Overview tab.
+    expect(await screen.findByText('CPU utilization')).toBeInTheDocument()
     expect(screen.getByText('Error rate')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Relationships'}))
@@ -141,27 +190,28 @@ describe('ResourceCatalog', () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
 
+    mockApi.get.mockResolvedValue({kind: 'host', rangeSeconds: 86_400, intervalSeconds: 300, metrics: []})
     renderWithQueryClient(<ResourceDetailPanel resource={emptyResource} onSelect={onSelect} />)
 
     expect(screen.getByRole('heading', {name: 'empty-host'})).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', {name: 'Telemetry'}))
+    // Overview is the default tab and carries the telemetry section + Open in Metrics.
     expect(screen.getByRole('link', {name: /Open in Metrics/})).toHaveAttribute('href', '/monitoring/hosts/$hostId')
-    expect(screen.getByText('No telemetry data')).toBeInTheDocument()
+    expect(await screen.findByText('No telemetry data')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Relationships'}))
     expect(screen.getByText('No mapped relationships')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Ownership & Tags'}))
     expect(screen.getByText('No owner assigned')).toBeInTheDocument()
-    expect(screen.getByRole('link', {name: /Claim ownership/})).toHaveAttribute('href', '/settings')
+    expect(screen.getByRole('button', {name: /Claim ownership/})).toBeInTheDocument()
     expect(screen.getByText('No tags.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Security'}))
     expect(screen.getByText('No open vulnerabilities')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Cost'}))
-    expect(screen.getByText('$0')).toBeInTheDocument()
+    expect(screen.getByText('No cost data')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Changes'}))
     expect(screen.getByText('No recent changes')).toBeInTheDocument()

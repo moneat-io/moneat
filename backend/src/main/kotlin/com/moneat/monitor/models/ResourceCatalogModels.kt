@@ -29,6 +29,15 @@ data class CatalogOwner(
 )
 
 @Serializable
+data class ResourceOwnershipClaim(
+    val resourceId: String,
+    val team: String,
+    val oncall: String = "",
+    val slack: String = "",
+    val repo: String = ""
+)
+
+@Serializable
 data class CatalogVulnerabilityCounts(
     val critical: Int = 0,
     val high: Int = 0,
@@ -85,6 +94,15 @@ data class CatalogPosture(
 )
 
 @Serializable
+data class CatalogSecurityFinding(
+    val id: String,
+    val severity: String,
+    val pkg: String,
+    val fixedVersion: String? = null,
+    val cvss: Double? = null
+)
+
+@Serializable
 data class CatalogResource(
     val id: String,
     val name: String,
@@ -99,6 +117,7 @@ data class CatalogResource(
     val vulns: CatalogVulnerabilityCounts,
     val sbomComponents: Int,
     val posture: List<CatalogPosture>,
+    val findings: List<CatalogSecurityFinding> = emptyList(),
     val monthlyUsd: Double,
     val costTrendPct: Double,
     val costBreakdown: List<CatalogCostItem>,

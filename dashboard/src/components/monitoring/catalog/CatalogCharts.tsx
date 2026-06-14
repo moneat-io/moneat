@@ -17,9 +17,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // MetricChart — a compact over-time chart for the resource detail panel. One
 // series renders as a gradient area; multiple series render as overlaid lines
-// with a legend (load average, network throughput). Series are deterministic
-// sample histories until live metrics are wired in. Shared by the catalog and
-// the (future) map dock so both surfaces show identical trend graphs.
+// with a legend (load average, network throughput). Every point is a real sample
+// fetched from the telemetry endpoint — no history is synthesized. Shared by the
+// catalog and the (future) map dock so both surfaces show identical trend graphs.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {useId, useMemo, type ComponentType} from 'react'
@@ -37,9 +37,7 @@ import {
 } from 'recharts'
 
 import {cn} from '@/lib/utils'
-import {getNowDate} from '@/lib/demo'
 import {formatHostMetricAxisTick, formatHostMetricTooltipLabel} from '@/lib/host-metrics-chart'
-import {metricSeriesValues} from './resourceCatalogData'
 
 // Categorical chart colors from the shared palette (style guide chart-1..6).
 const SERIES_COLORS = [
@@ -51,14 +49,16 @@ const SERIES_COLORS = [
   'hsl(var(--chart-6))',
 ]
 
-export interface ChartSeries {
+export interface MetricChartPoint {
+  /** Epoch milliseconds. */
+  readonly ts: number
+  readonly value: number | null
+}
+
+export interface MetricChartLine {
   /** dataKey and legend label. */
-  readonly key: string
-  /** Latest value the synthesized history is anchored to. */
-  readonly current: number
-  readonly min?: number
-  readonly max?: number
-  readonly spread?: number
+  readonly name: string
+  readonly points: readonly MetricChartPoint[]
 }
 
 export interface MetricChartProps {
@@ -66,17 +66,14 @@ export interface MetricChartProps {
   readonly subtitle?: string
   readonly icon: ComponentType<{className?: string}>
   readonly iconClass?: string
-  /** Stable seed so the synthesized history never flickers between renders. */
-  readonly seed: string
-  readonly series: readonly ChartSeries[]
+  readonly lines: readonly MetricChartLine[]
   readonly rangeSeconds: number
   readonly timezone: string
-  readonly points?: number
   readonly height?: number
   readonly yDomain?: readonly [number, number]
   readonly formatValue: (value: number) => string
   readonly formatYTick?: (value: number) => string
-  /** Render a "No data" placeholder at the chart's height instead of a series. */
+  /** Force a "No data" placeholder regardless of the series. */
   readonly noData?: boolean
 }
 
@@ -120,16 +117,16 @@ function ChartTooltip({
   )
 }
 
+type ChartRow = Record<string, number | null>
+
 export function MetricChart({
   title,
   subtitle,
   icon: Icon,
   iconClass,
-  seed,
-  series,
+  lines,
   rangeSeconds,
   timezone,
-  points = 48,
   height = 150,
   yDomain,
   formatValue,
@@ -137,26 +134,21 @@ export function MetricChart({
   noData = false,
 }: MetricChartProps) {
   const gradientId = `cat-grad-${useId().replaceAll(/[^a-zA-Z0-9]/g, '')}`
-  const multi = series.length > 1
+  const multi = lines.length > 1
 
-  const data = useMemo(() => {
-    const now = getNowDate().getTime()
-    const step = (rangeSeconds * 1000) / Math.max(1, points - 1)
-    const columns = series.map((s) =>
-      metricSeriesValues(`${seed}:${s.key}:${rangeSeconds}`, s.current, points, {
-        spread: s.spread,
-        min: s.min,
-        max: s.max,
-      }),
-    )
-    return Array.from({length: points}, (_, i) => {
-      const row: Record<string, number> = {timestamp: Math.round(now - (points - 1 - i) * step)}
-      series.forEach((s, si) => {
-        row[s.key] = columns[si][i]
-      })
-      return row
-    })
-  }, [seed, series, rangeSeconds, points])
+  const data = useMemo<ChartRow[]>(() => {
+    const byTs = new Map<number, ChartRow>()
+    for (const line of lines) {
+      for (const point of line.points) {
+        const row = byTs.get(point.ts) ?? {timestamp: point.ts}
+        row[line.name] = point.value
+        byTs.set(point.ts, row)
+      }
+    }
+    return [...byTs.values()].sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
+  }, [lines])
+
+  const hasData = lines.some((line) => line.points.some((point) => point.value !== null))
 
   const xAxis = {
     dataKey: 'timestamp',
@@ -194,7 +186,7 @@ export function MetricChart({
           {subtitle && <p className="truncate text-[10px] text-muted-foreground">{subtitle}</p>}
         </div>
       </div>
-      {noData ? (
+      {noData || !hasData ? (
         <div
           className="flex flex-col items-center justify-center gap-1 rounded bg-muted/20 text-muted-foreground"
           style={{height}}
@@ -203,53 +195,53 @@ export function MetricChart({
           <span className="text-[11px]">No data</span>
         </div>
       ) : (
-      <ResponsiveContainer width="100%" height={height}>
-        {multi ? (
-          <LineChart data={data} margin={{top: 4, right: 8, bottom: 0, left: 0}}>
-            <CartesianGrid {...grid} />
-            <XAxis {...xAxis} />
-            <YAxis {...yAxis} />
-            <Tooltip content={tooltip} />
-            <Legend iconType="circle" iconSize={7} wrapperStyle={{fontSize: '10px'}} />
-            {series.map((s, i) => (
-              <Line
-                key={s.key}
+        <ResponsiveContainer width="100%" height={height}>
+          {multi ? (
+            <LineChart data={data} margin={{top: 4, right: 8, bottom: 0, left: 0}}>
+              <CartesianGrid {...grid} />
+              <XAxis {...xAxis} />
+              <YAxis {...yAxis} />
+              <Tooltip content={tooltip} />
+              <Legend iconType="circle" iconSize={7} wrapperStyle={{fontSize: '10px'}} />
+              {lines.map((line, i) => (
+                <Line
+                  key={line.name}
+                  type="monotone"
+                  dataKey={line.name}
+                  stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
+                  strokeWidth={1.75}
+                  dot={false}
+                  activeDot={{r: 3, strokeWidth: 0}}
+                  connectNulls
+                  isAnimationActive={false}
+                />
+              ))}
+            </LineChart>
+          ) : (
+            <AreaChart data={data} margin={{top: 4, right: 8, bottom: 0, left: 0}}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={SERIES_COLORS[0]} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={SERIES_COLORS[0]} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid {...grid} />
+              <XAxis {...xAxis} />
+              <YAxis {...yAxis} />
+              <Tooltip content={tooltip} />
+              <Area
                 type="monotone"
-                dataKey={s.key}
-                stroke={SERIES_COLORS[i % SERIES_COLORS.length]}
-                strokeWidth={1.75}
-                dot={false}
-                activeDot={{r: 3, strokeWidth: 0}}
+                dataKey={lines[0].name}
+                stroke={SERIES_COLORS[0]}
+                strokeWidth={2}
+                fill={`url(#${gradientId})`}
+                fillOpacity={1}
                 connectNulls
                 isAnimationActive={false}
               />
-            ))}
-          </LineChart>
-        ) : (
-          <AreaChart data={data} margin={{top: 4, right: 8, bottom: 0, left: 0}}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={SERIES_COLORS[0]} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={SERIES_COLORS[0]} stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid {...grid} />
-            <XAxis {...xAxis} />
-            <YAxis {...yAxis} />
-            <Tooltip content={tooltip} />
-            <Area
-              type="monotone"
-              dataKey={series[0].key}
-              stroke={SERIES_COLORS[0]}
-              strokeWidth={2}
-              fill={`url(#${gradientId})`}
-              fillOpacity={1}
-              connectNulls
-              isAnimationActive={false}
-            />
-          </AreaChart>
-        )}
-      </ResponsiveContainer>
+            </AreaChart>
+          )}
+        </ResponsiveContainer>
       )}
     </div>
   )

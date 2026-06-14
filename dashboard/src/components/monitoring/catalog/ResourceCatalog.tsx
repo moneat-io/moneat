@@ -53,7 +53,7 @@ import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/c
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import type {FacetFilter} from '@/lib/filters/types'
-import {HealthBadge, KindIcon, Sparkline, TagChip} from './CatalogPrimitives'
+import {HealthBadge, KindIcon, TagChip} from './CatalogPrimitives'
 import {ResourceDetailPanel} from './ResourceDetailPanel'
 import {
   CATALOG_FACET_SCHEMA,
@@ -66,6 +66,7 @@ import {
   relTime,
   findResource,
   sortResources,
+  TONE_BAR,
   totalVulns,
   useResourceCatalog,
   utilTone,
@@ -404,7 +405,12 @@ function ResourceTable({
                     <span className="text-xs text-muted-foreground">—</span>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <Sparkline seed={`${r.id}-cpu`} tone={utilTone(r.telemetry.cpuPct)} className="h-5 w-14" />
+                      <span className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                        <span
+                          className={cn('block h-full rounded-full', TONE_BAR[utilTone(r.telemetry.cpuPct)])}
+                          style={{width: `${r.telemetry.cpuPct}%`}}
+                        />
+                      </span>
                       <span className="text-xs tabular-nums text-muted-foreground">{r.telemetry.cpuPct}%</span>
                     </div>
                   )}
@@ -511,7 +517,6 @@ export function ResourceCatalog() {
       <SummaryStat icon={Users} label="unowned" value={String(stats.unowned)} tone="text-warning-fg" />
       <SummaryStat icon={ShieldAlert} label="with vulns" value={String(stats.withVulns)} tone="text-danger-fg" />
       <SummaryStat icon={CircleDollarSign} label="/mo" value={formatUsdExact(stats.cost)} tone="text-primary" />
-      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground/70">sample data</span>
     </div>
   )
 
