@@ -28,7 +28,6 @@ import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
-import com.moneat.incident.routes.incidentProviderRoutes
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
 import com.moneat.monitor.routes.cloudSourceRoutes
@@ -243,9 +242,6 @@ fun Application.configureRouting() {
 
         // Uptime monitoring endpoints
         uptimeRoutes()
-
-        // Incident provider integration endpoints
-        incidentProviderRoutes()
 
         // Organization team management endpoints
         orgManagementRoutes()
