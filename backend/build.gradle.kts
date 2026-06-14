@@ -343,6 +343,36 @@ jacoco {
     toolVersion = "0.8.15"
 }
 
+val backendFeatureProjects =
+    listOf(
+        ":features:account-deletion",
+        ":features:ai",
+        ":features:analytics",
+        ":features:auth-tokens",
+        ":features:billing",
+        ":features:contact",
+        ":features:dashboards",
+        ":features:datadog",
+        ":features:featureflags",
+        ":features:incident",
+        ":features:llm",
+        ":features:logs",
+        ":features:mcp",
+        ":features:monitoring",
+        ":features:org",
+        ":features:otlp",
+        ":features:overview",
+        ":features:pulse",
+        ":features:releases",
+        ":features:security",
+        ":features:sso",
+        ":features:statuspage",
+        ":features:summary",
+        ":features:synthetics",
+        ":features:uptime",
+        ":features:workflows",
+    ).map(::project)
+
 val jacocoBackendMainExcludes =
     arrayOf(
         "**/models/**", // data classes — no logic to test
@@ -362,13 +392,16 @@ val jacocoBackendMainExcludes =
 
 tasks.jacocoTestReport {
     val eeProject = project(":ee")
+    val featureTestTasks = backendFeatureProjects.map { it.tasks.named("test") }
     dependsOn(tasks.test, eeProject.tasks.named("test"))
+    dependsOn(featureTestTasks)
 
-    // Unit tests only — merges core + enterprise SSO execution data. SSO sources live in :ee.
+    // Unit tests only. Feature-module tests still exercise root host code during the extraction.
     executionData.setFrom(
         files(
             layout.buildDirectory.file("jacoco/test.exec"),
             eeProject.layout.buildDirectory.file("jacoco/test.exec"),
+            backendFeatureProjects.map { it.layout.buildDirectory.file("jacoco/test.exec") },
         )
     )
 
@@ -400,6 +433,8 @@ tasks.jacocoTestReport {
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
+
+    executionData.setFrom(tasks.jacocoTestReport.get().executionData)
 
     violationRules {
         rule {
