@@ -21,7 +21,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.plus
 
-internal data class BillingPeriod(
+data class BillingPeriod(
     val start: LocalDate,
     val end: LocalDate,
 )
@@ -32,7 +32,7 @@ private const val MAX_DAY_OF_MONTH = 31
 private const val MONTHS_PER_YEAR = 12
 private const val MONTHS_PER_MONTH = 1
 
-internal fun resolveCurrentBillingPeriod(
+fun resolveCurrentBillingPeriod(
     storedStart: LocalDate?,
     storedEnd: LocalDate?,
     billingInterval: String?,
