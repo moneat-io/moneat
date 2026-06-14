@@ -22,13 +22,10 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.otlp.services.OtlpMetricsIngestionWorker
-import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.PulseService
@@ -52,7 +49,6 @@ import io.temporal.worker.WorkerFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
@@ -192,36 +188,15 @@ private class CoreIngestionWorkers(application: Application) {
         config.property("ingest.workerCount").getString().toInt(),
         eventService = koin.get(),
     )
-    private val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
-        config.propertyOrNull("otlp.tracesQueueKey")?.getString() ?: "moneat:otlp-traces:queue",
-        config.propertyOrNull("otlp.tracesDlqKey")?.getString() ?: "moneat:otlp-traces:dlq",
-        config.propertyOrNull("otlp.tracesWorkerCount")?.getString()?.toIntOrNull() ?: 2,
-        eventService = koin.get<EventService>(),
-    )
-    private val otlpMetricsIngestionWorker = OtlpMetricsIngestionWorker(
-        config.propertyOrNull("otlp.metricsQueueKey")?.getString() ?: "moneat:otlp-metrics:queue",
-        config.propertyOrNull("otlp.metricsDlqKey")?.getString() ?: "moneat:otlp-metrics:dlq",
-        config.propertyOrNull("otlp.metricsWorkerCount")?.getString()?.toIntOrNull() ?: 2,
-    )
 
     fun startSelected(startIngestionWorkers: Boolean) {
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.EVENTS)) {
             ingestionWorker.start()
         }
-        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.OTLP_TRACES)) {
-            otlpTraceIngestionWorker.start()
-        }
-        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.OTLP_METRICS)) {
-            otlpMetricsIngestionWorker.start()
-        }
     }
 
     fun stop() {
         ingestionWorker.stop()
-        runBlocking {
-            otlpTraceIngestionWorker.stop()
-            otlpMetricsIngestionWorker.stop()
-        }
     }
 }
 

@@ -31,7 +31,9 @@ dependencies {
     implementation(libs.ktor.server.rate.limit)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlin.logging)
+    implementation(libs.lettuce)
     implementation(libs.koin.ktor)
 
     detektPlugins(libs.detekt.formatting)
