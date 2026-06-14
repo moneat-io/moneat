@@ -14,41 +14,40 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.monitoring
+package com.moneat.synthetics
 
 import com.moneat.enterprise.EnterpriseModule
-import com.moneat.monitor.routes.agentApiKeyRoutes
-import com.moneat.monitor.routes.cloudSourceRoutes
-import com.moneat.monitor.routes.infraRoutes
-import com.moneat.monitor.routes.monitorRoutes
-import com.moneat.monitor.routes.resourceCatalogRoutes
+import com.moneat.synthetics.routes.SyntheticsScheduler
+import com.moneat.synthetics.routes.syntheticsRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
-import mu.KotlinLogging
 
-private val logger = KotlinLogging.logger {}
+class SyntheticsModule : EnterpriseModule {
+    override val name: String = "Synthetics"
 
-/**
- * Enterprise monitoring module that contributes monitor and resource APIs.
- */
-class MonitoringModule : EnterpriseModule {
-    override val name: String = "Monitoring"
+    private var scheduler: SyntheticsScheduler? = null
 
     override fun registerRoutes(route: Route) {
-        route.apply {
-            monitorRoutes()
-            resourceCatalogRoutes()
-            cloudSourceRoutes()
-            infraRoutes()
-            agentApiKeyRoutes()
-        }
+        route.syntheticsRoutes()
     }
 
     override fun startBackgroundJobs(application: Application) {
-        logger.info { "Starting monitoring enterprise background jobs" }
+        startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)
+    }
+
+    override fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (!startSchedulers || scheduler != null) {
+            return
+        }
+        scheduler = SyntheticsScheduler().also { it.start() }
     }
 
     override fun stopBackgroundJobs() {
-        logger.info { "Stopping monitoring enterprise background jobs" }
+        scheduler?.stop()
+        scheduler = null
     }
 }
