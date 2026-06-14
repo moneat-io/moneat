@@ -76,6 +76,7 @@ class PublicSerializableResourceIdsTest {
             SourceRoot("backend", repoRoot.resolve("backend/features/contact/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/datadog/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/llm/src/main/kotlin")),
+            SourceRoot("backend", repoRoot.resolve("backend/features/logs/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/mcp/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/monitoring/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/overview/src/main/kotlin")),

@@ -236,6 +236,7 @@ dependencies {
     runtimeOnly(project(":features:featureflags"))
     runtimeOnly(project(":features:incident"))
     runtimeOnly(project(":features:llm"))
+    runtimeOnly(project(":features:logs"))
     runtimeOnly(project(":features:mcp"))
     runtimeOnly(project(":features:monitoring"))
     runtimeOnly(project(":features:overview"))

@@ -26,8 +26,6 @@ import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
-import com.moneat.logs.routes.logIngestRoutes
-import com.moneat.logs.routes.logRoutes
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
@@ -208,12 +206,6 @@ fun Application.configureRouting() {
 
         // Admin dashboard endpoints
         adminRoutes()
-
-        // Logging ingestion and query endpoints
-        rateLimit(RateLimitName("log-ingestion")) {
-            logIngestRoutes()
-        }
-        logRoutes()
 
         // OTLP trace and metrics ingestion endpoints
         rateLimit(RateLimitName("otlp-ingestion")) {
