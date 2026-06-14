@@ -23,6 +23,8 @@ private const val DEFAULT_STREAM_BATCH_SIZE = 50
 private const val DEFAULT_CLAIM_IDLE_MS = 300_000L
 private const val DEFAULT_MAX_DELIVERIES = 5
 private const val DEFAULT_READ_TIMEOUT_MS = 5_000L
+private const val DEFAULT_STREAM_MAX_LEN = 250_000L
+private const val DEFAULT_DLQ_STREAM_MAX_LEN = 10_000L
 private const val MIN_STREAM_BATCH_SIZE = 1
 
 enum class IngestionQueueBackend {
@@ -66,6 +68,8 @@ data class IngestionQueueSpec(
     val claimIdleMs: Long,
     val maxDeliveries: Int,
     val readTimeoutMs: Long,
+    val streamMaxLen: Long,
+    val dlqStreamMaxLen: Long,
 )
 
 object IngestionQueueSettings {
@@ -97,6 +101,8 @@ object IngestionQueueSettings {
             claimIdleMs = positiveLong("INGESTION_${prefix}_CLAIM_IDLE_MS", DEFAULT_CLAIM_IDLE_MS),
             maxDeliveries = positiveInt("INGESTION_${prefix}_MAX_DELIVERIES", DEFAULT_MAX_DELIVERIES),
             readTimeoutMs = positiveLong("INGESTION_${prefix}_READ_TIMEOUT_MS", DEFAULT_READ_TIMEOUT_MS),
+            streamMaxLen = positiveLong("INGESTION_${prefix}_STREAM_MAXLEN", DEFAULT_STREAM_MAX_LEN),
+            dlqStreamMaxLen = positiveLong("INGESTION_${prefix}_DLQ_STREAM_MAXLEN", DEFAULT_DLQ_STREAM_MAX_LEN),
         )
     }
 

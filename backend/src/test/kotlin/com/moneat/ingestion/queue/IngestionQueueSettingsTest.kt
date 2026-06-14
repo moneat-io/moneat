@@ -125,6 +125,8 @@ class IngestionQueueSettingsTest {
         every { EnvConfig.get("INGESTION_LOGS_CLAIM_IDLE_MS") } returns "1234"
         every { EnvConfig.get("INGESTION_LOGS_MAX_DELIVERIES") } returns "9"
         every { EnvConfig.get("INGESTION_LOGS_READ_TIMEOUT_MS") } returns "321"
+        every { EnvConfig.get("INGESTION_LOGS_STREAM_MAXLEN") } returns "12345"
+        every { EnvConfig.get("INGESTION_LOGS_DLQ_STREAM_MAXLEN") } returns "5678"
 
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 0)
 
@@ -136,6 +138,8 @@ class IngestionQueueSettingsTest {
         assertEquals(1_234L, spec.claimIdleMs)
         assertEquals(9, spec.maxDeliveries)
         assertEquals(321L, spec.readTimeoutMs)
+        assertEquals(12_345L, spec.streamMaxLen)
+        assertEquals(5_678L, spec.dlqStreamMaxLen)
     }
 
     @Test
@@ -146,6 +150,8 @@ class IngestionQueueSettingsTest {
         every { EnvConfig.get("INGESTION_LOGS_CLAIM_IDLE_MS") } returns "-1"
         every { EnvConfig.get("INGESTION_LOGS_MAX_DELIVERIES") } returns "not-a-number"
         every { EnvConfig.get("INGESTION_LOGS_READ_TIMEOUT_MS") } returns "0"
+        every { EnvConfig.get("INGESTION_LOGS_STREAM_MAXLEN") } returns "-1"
+        every { EnvConfig.get("INGESTION_LOGS_DLQ_STREAM_MAXLEN") } returns "0"
 
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 2)
 
@@ -156,6 +162,8 @@ class IngestionQueueSettingsTest {
         assertEquals(300_000L, spec.claimIdleMs)
         assertEquals(5, spec.maxDeliveries)
         assertEquals(5_000L, spec.readTimeoutMs)
+        assertEquals(250_000L, spec.streamMaxLen)
+        assertEquals(10_000L, spec.dlqStreamMaxLen)
     }
 
     @Test
