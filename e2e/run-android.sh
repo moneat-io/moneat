@@ -30,7 +30,7 @@ echo "✅ Using Moneat DSN"
 if grep -q "^sentry.dsn=" local.properties; then
   sed -i '' "s|^sentry.dsn=.*|sentry.dsn=$SENTRY_DSN|" local.properties
 else
-  echo "sentry.dsn=$SENTRY_DSN" >> local.properties
+  echo "sentry.dsn=$SENTRY_DSN" >>local.properties
 fi
 
 echo "Building Android app..."

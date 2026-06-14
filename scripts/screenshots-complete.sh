@@ -11,20 +11,18 @@ echo ""
 
 # Check if we're in the scripts directory or project root
 if [ -d "scripts" ]; then
-    cd scripts
+  cd scripts
 elif [ ! -d "../dashboard" ]; then
-    echo "❌ Please run from project root or scripts directory"
-    exit 1
+  echo "❌ Please run from project root or scripts directory"
+  exit 1
 fi
 
 # Run screenshot script
 echo "Step 1/2: Taking screenshots..."
 echo "================================"
-./take-screenshots.sh
-
-if [ $? -ne 0 ]; then
-    echo "❌ Screenshot generation failed"
-    exit 1
+if ! ./take-screenshots.sh; then
+  echo "❌ Screenshot generation failed"
+  exit 1
 fi
 
 echo ""
