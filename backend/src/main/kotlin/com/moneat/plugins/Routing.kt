@@ -29,8 +29,6 @@ import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
-import com.moneat.security.detection.detectionRuleRoutes
-import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -205,16 +203,6 @@ fun Application.configureRouting() {
 
         // Organization team management endpoints
         orgManagementRoutes()
-
-        // Security signals triage surface (OSS core)
-        rateLimit(RateLimitName("api")) {
-            signalRoutes()
-        }
-
-        // Detection rules: scheduled, declarative rules over logs → signals (OSS core)
-        rateLimit(RateLimitName("api")) {
-            detectionRuleRoutes()
-        }
 
         // Vulnerability/SBOM inventory and findings (OSS core)
         rateLimit(RateLimitName("api")) {
