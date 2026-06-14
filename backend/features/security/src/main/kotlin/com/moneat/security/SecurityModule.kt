@@ -20,6 +20,8 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.security.detection.DetectionScheduler
 import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
+import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
+import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
@@ -33,12 +35,14 @@ class SecurityModule : EnterpriseModule {
     override val name: String = "Security"
 
     private var detectionScheduler: DetectionScheduler? = null
+    private var vulnerabilityAdvisorySyncJob: VulnerabilityAdvisorySyncJob? = null
     private var schedulerScope: CoroutineScope? = null
 
     override fun registerRoutes(route: Route) {
         route.rateLimit(RateLimitName("api")) {
             signalRoutes()
             detectionRuleRoutes()
+            vulnerabilityRoutes()
         }
     }
 
@@ -51,20 +55,25 @@ class SecurityModule : EnterpriseModule {
         startSchedulers: Boolean,
         startIngestionWorkers: Boolean,
     ) {
-        if (!startSchedulers || detectionScheduler != null) {
+        if (!startSchedulers || schedulerScope != null) {
             return
         }
         val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         val scheduler = DetectionScheduler()
+        val advisorySyncJob = VulnerabilityAdvisorySyncJob()
         schedulerScope = scope
         detectionScheduler = scheduler
+        vulnerabilityAdvisorySyncJob = advisorySyncJob
         try {
             scheduler.start(scope)
+            advisorySyncJob.start(scope)
         } catch (e: Exception) {
             scheduler.stop()
+            advisorySyncJob.stop()
             scope.cancel()
             schedulerScope = null
             detectionScheduler = null
+            vulnerabilityAdvisorySyncJob = null
             throw e
         }
     }
@@ -72,6 +81,8 @@ class SecurityModule : EnterpriseModule {
     override fun stopBackgroundJobs() {
         detectionScheduler?.stop()
         detectionScheduler = null
+        vulnerabilityAdvisorySyncJob?.stop()
+        vulnerabilityAdvisorySyncJob = null
         schedulerScope?.cancel()
         schedulerScope = null
     }

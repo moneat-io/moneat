@@ -24,7 +24,6 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.monitoring.OperationalMetrics
-import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -181,11 +180,6 @@ fun Application.configureRouting() {
 
         // Authentication endpoints
         authRoutes()
-
-        // Vulnerability/SBOM inventory and findings (OSS core)
-        rateLimit(RateLimitName("api")) {
-            vulnerabilityRoutes()
-        }
 
         routingLogger.info { "Registering feature routes..." }
         // Feature modules (SSO, MCP, On-Call, etc.) — registered via ServiceLoader

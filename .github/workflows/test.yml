@@ -282,6 +282,13 @@ jobs:
           name: backend-releases-test-results
           path: backend/features/releases/build/test-results/test/
 
+      - name: Upload Security feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-security-test-results
+          path: backend/features/security/build/test-results/test/
+
       - name: Upload SSO feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -428,6 +435,13 @@ jobs:
         with:
           name: backend-releases-coverage-report
           path: backend/features/releases/build/reports/jacoco/test/
+
+      - name: Upload Security feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-security-coverage-report
+          path: backend/features/security/build/reports/jacoco/test/
 
       - name: Upload SSO feature coverage report
         if: always()
@@ -620,6 +634,13 @@ jobs:
         with:
           name: backend-releases-detekt-report
           path: backend/features/releases/build/reports/detekt/
+
+      - name: Upload Security feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-security-detekt-report
+          path: backend/features/security/build/reports/detekt/
 
       - name: Upload SSO feature detekt report (Sonar)
         if: success()
@@ -827,6 +848,13 @@ jobs:
           path: backend/features/releases/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Security feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-security-coverage-report
+          path: backend/features/security/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download SSO feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -986,6 +1014,13 @@ jobs:
         with:
           name: backend-releases-detekt-report
           path: backend/features/releases/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Security feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-security-detekt-report
+          path: backend/features/security/build/reports/detekt/
         continue-on-error: true
 
       - name: Download SSO feature detekt report
