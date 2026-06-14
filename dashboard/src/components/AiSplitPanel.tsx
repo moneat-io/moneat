@@ -14,12 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useCallback, useMemo, useRef, type CSSProperties, type ReactNode} from 'react'
+import {useCallback, useRef, type CSSProperties, type ReactNode} from 'react'
 import {AiChatContent} from '@/components/command-palette/AiChatContent'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 
 const MIN_PANEL_PCT = 15
 const MAX_PANEL_PCT = 70
+const noopSetPanelSize = () => undefined
 
 interface AiSplitPanelProps {
   children: ReactNode
@@ -34,10 +35,7 @@ export function AiSplitPanel({children, style, className}: AiSplitPanelProps) {
 
   const orientation = palette?.aiPanelOrientation ?? 'vertical'
   const panelSize = palette?.aiPanelSize ?? 30
-  const setPanelSize = useMemo(
-    () => palette?.setAiPanelSize ?? (() => undefined),
-    [palette?.setAiPanelSize],
-  )
+  const setPanelSize = palette?.setAiPanelSize ?? noopSetPanelSize
 
   const isVertical = orientation === 'vertical'
 

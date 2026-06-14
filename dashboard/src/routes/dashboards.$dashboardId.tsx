@@ -52,7 +52,7 @@ export const Route = createFileRoute('/dashboards/$dashboardId')({
   }),
 })
 
-function DashboardViewPage() {
+export function DashboardViewPage() {
   const {dashboardId} = Route.useParams()
   const {edit, from, to, vars} = Route.useSearch()
   const queryClient = useQueryClient()
@@ -151,15 +151,13 @@ function DashboardViewPage() {
     }).catch(() => {})
   }, [dashboard?.variables, id, resolveKey, variableValues])
 
-  const updateMutation = useMutation({
+  const {mutate: updateDashboard} = useMutation({
     mutationFn: (data: Parameters<typeof api.updateDashboard>[1]) => api.updateDashboard(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['custom-dashboard', id]})
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
     },
   })
-  const {mutate: updateDashboard} = updateMutation
-
   const favoriteMutation = useMutation({
     mutationFn: () => api.toggleDashboardFavorite(id),
     onSuccess: () => {
