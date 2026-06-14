@@ -24,7 +24,6 @@ import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
-import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
@@ -194,9 +193,6 @@ fun Application.configureRouting() {
 
         // Auth token management endpoints
         authTokenRoutes()
-
-        // Release and source map endpoints
-        releaseRoutes()
 
         // Admin dashboard endpoints
         adminRoutes()
