@@ -202,6 +202,7 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
+    testImplementation(libs.konsist)
     testImplementation(libs.mockk)
     testImplementation(libs.temporal.testing)
     testImplementation(kotlin("reflect"))

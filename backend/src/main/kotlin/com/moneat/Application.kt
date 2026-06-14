@@ -42,18 +42,21 @@ import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.netty.EngineMain
+import mu.KotlinLogging
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 
 private const val STACK_TRACE_DEPTH = 20
 
+private val logger = KotlinLogging.logger {}
+
 fun main(args: Array<String>) {
     // Add JVM shutdown hook to log when shutdown is triggered
     Runtime.getRuntime().addShutdownHook(
         Thread {
-            System.err.println("=== JVM SHUTDOWN HOOK TRIGGERED ===")
+            logger.warn { "=== JVM SHUTDOWN HOOK TRIGGERED ===" }
             Thread.currentThread().stackTrace.forEach { frame ->
-                System.err.println("  at $frame")
+                logger.warn { "  at $frame" }
             }
         }
     )
