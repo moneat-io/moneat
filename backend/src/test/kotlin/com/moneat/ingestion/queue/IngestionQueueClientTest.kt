@@ -27,7 +27,6 @@ import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.slot
 import io.mockk.unmockkObject
-import io.mockk.verify
 import mu.KLogger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -59,18 +58,7 @@ class IngestionQueueClientTest {
     }
 
     @Test
-    fun `enqueue writes to redis list by default`() {
-        every { redis.lpush("logs:queue", "payload") } returns 1L
-
-        val streamId = IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "logs:queue", "payload")
-
-        assertNull(streamId)
-        verify(exactly = 1) { redis.lpush("logs:queue", "payload") }
-    }
-
-    @Test
     fun `enqueue writes structured body to redis stream`() {
-        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns "redis-streams"
         val bodySlot = slot<Map<String, String>>()
         val argsSlot = slot<XAddArgs>()
         every { redis.xadd("logs:queue:stream", capture(argsSlot), capture(bodySlot)) } returns "1-0"
@@ -86,23 +74,7 @@ class IngestionQueueClientTest {
     }
 
     @Test
-    fun `pushToDlq writes list payload and records success`() {
-        every { redis.rpush("logs:dlq", "payload") } returns 1L
-        val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:queue", "logs:dlq", workerCount = 1)
-
-        val pushed =
-            IngestionQueueClient.pushToDlq(
-                logger,
-                IngestionDlqRequest(spec, "payload", workerId = 3, cause = IllegalStateException("boom")),
-            )
-
-        assertTrue(pushed)
-        verify(exactly = 1) { redis.rpush("logs:dlq", "payload") }
-    }
-
-    @Test
     fun `pushToDlq writes stream metadata for redelivery failures`() {
-        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns "redis-streams"
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:queue", "logs:dlq", workerCount = 1)
         val bodySlot = slot<Map<String, String>>()
         val argsSlot = slot<XAddArgs>()
@@ -132,7 +104,8 @@ class IngestionQueueClientTest {
 
     @Test
     fun `pushToDlq returns false when redis write fails`() {
-        every { redis.rpush("logs:dlq", "payload") } throws RedisException("redis down")
+        every { redis.xadd("logs:dlq:stream", any<XAddArgs>(), any<Map<String, String>>()) } throws
+            RedisException("redis down")
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:queue", "logs:dlq", workerCount = 1)
 
         val pushed =

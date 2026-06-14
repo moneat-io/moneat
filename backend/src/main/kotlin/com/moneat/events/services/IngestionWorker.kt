@@ -16,18 +16,16 @@
 
 package com.moneat.events.services
 
-import com.moneat.config.RedisConfig
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.repositories.EventRepositoryImpl
-import com.moneat.ingestion.queue.IngestionDlqRequest
 import com.moneat.ingestion.queue.IngestionPipeline
-import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.pushToDlq
 import com.moneat.utils.suspendRunCatching
 import io.sentry.Sentry
 import mu.KotlinLogging
@@ -37,9 +35,9 @@ import java.util.Base64
 private val logger = KotlinLogging.logger {}
 
 /**
- * Background worker that drains the ingestion queue (Redis list),
+ * Background worker that drains the ingestion stream,
  * deserializes envelope messages, and processes them via EventService.
- * On failure, messages are pushed to a dead-letter queue.
+ * On failure, messages are pushed to a dead-letter stream.
  */
 class IngestionWorker(
     private val queueKey: String,
@@ -56,19 +54,7 @@ class IngestionWorker(
     fun start() {
         logger.info { "Starting IngestionWorker with $workerCount workers, queue=$queueKey" }
         val spec = IngestionQueueSettings.spec(IngestionPipeline.EVENTS, queueKey, dlqKey, workerCount)
-        queueWorker = RedisQueueWorker(spec, logger, processMessage = { workerId, payload ->
-            processMessageForTest(workerId, payload) { message ->
-                IngestionQueueClient.pushToDlq(
-                    logger = logger,
-                    request = IngestionDlqRequest(
-                        spec = spec,
-                        payload = message,
-                        workerId = workerId,
-                        cause = IllegalStateException("Event processing failed"),
-                    ),
-                )
-            }
-        }).also { it.start() }
+        queueWorker = RedisQueueWorker(spec, logger, processMessage = ::processMessageForTest).also { it.start() }
         SentryUtils.breadcrumb(
             "worker",
             "IngestionWorker starting",
@@ -92,7 +78,6 @@ class IngestionWorker(
     internal suspend fun processMessageForTest(
         workerId: Int,
         value: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
         suspendRunCatching {
             val (projectId, envelopeBytes) = decodeMessage(value)
@@ -111,15 +96,7 @@ class IngestionWorker(
             OperationalMetrics.recordWorkerMessageProcessed("Event", workerId)
         }.onFailure { e ->
             logger.error(e) { "Worker $workerId failed to process message, sending to DLQ" }
-            OperationalMetrics.recordWorkerProcessingFailure("Event", workerId, e)
-            suspendRunCatching {
-                onDlq(value)
-            }.onSuccess {
-                OperationalMetrics.recordDlqPush("Event", dlqKey, "success")
-            }.onFailure { dlqErr ->
-                OperationalMetrics.recordDlqPush("Event", dlqKey, "failure")
-                logger.error(dlqErr) { "Failed to push event message to DLQ" }
-            }.getOrThrow()
+            pushToDlq(logger, dlqKey, value, workerId, "Event", e)
             Sentry.captureException(e) { scope ->
                 scope.setTag("worker.operation", "process_message")
                 scope.setTag("worker.id", workerId.toString())

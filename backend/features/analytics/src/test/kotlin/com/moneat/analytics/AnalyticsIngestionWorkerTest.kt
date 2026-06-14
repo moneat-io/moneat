@@ -24,6 +24,7 @@ import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
 import com.moneat.testsupport.withClickHouseMockServer
 import com.moneat.utils.ClickHouseSqlUtils
+import io.lettuce.core.XAddArgs
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
 import io.mockk.mockk
@@ -46,7 +47,7 @@ class AnalyticsIngestionWorkerTest {
     fun setup() {
         mockkObject(RedisConfig)
         every { RedisConfig.sync() } returns mockRedis
-        every { mockRedis.rpush(any(), any<String>()) } returns 1L
+        every { mockRedis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
     }
 
     @AfterTest

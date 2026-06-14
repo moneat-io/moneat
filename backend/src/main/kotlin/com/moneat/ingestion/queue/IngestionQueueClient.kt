@@ -44,14 +44,7 @@ object IngestionQueueClient {
         payload: String,
     ): String? {
         val spec = IngestionQueueSettings.spec(pipeline, queueKey, "$queueKey:dlq", workerCount = 1)
-        return when (IngestionQueueSettings.backend()) {
-            IngestionQueueBackend.REDIS_LIST -> {
-                RedisConfig.sync().lpush(queueKey, payload)
-                null
-            }
-            IngestionQueueBackend.REDIS_STREAMS ->
-                RedisConfig.sync().xadd(spec.streamKey, streamAddArgs(spec.streamMaxLen), streamBody(pipeline, payload))
-        }
+        return RedisConfig.sync().xadd(spec.streamKey, streamAddArgs(spec.streamMaxLen), streamBody(pipeline, payload))
     }
 
     fun pushToDlq(
@@ -64,23 +57,18 @@ object IngestionQueueClient {
         }
         OperationalMetrics.recordWorkerProcessingFailure(spec.pipeline.workerName, request.workerId, request.cause)
         return runCatching {
-            when (IngestionQueueSettings.backend()) {
-                IngestionQueueBackend.REDIS_LIST -> RedisConfig.sync().rpush(spec.dlqKey, request.payload)
-                IngestionQueueBackend.REDIS_STREAMS -> {
-                    RedisConfig.sync().xadd(
-                        spec.dlqStreamKey,
-                        streamAddArgs(spec.dlqStreamMaxLen),
-                        streamDlqBody(spec.pipeline, request.payload, request.cause, request.streamId)
-                    )
-                    1L
-                }
-            }
+            RedisConfig.sync().xadd(
+                spec.dlqStreamKey,
+                streamAddArgs(spec.dlqStreamMaxLen),
+                streamDlqBody(spec.pipeline, request.payload, request.cause, request.streamId)
+            )
+            1L
         }.onSuccess {
-            OperationalMetrics.recordDlqPush(spec.pipeline.workerName, dlqMetricKey(spec), "success")
+            OperationalMetrics.recordDlqPush(spec.pipeline.workerName, spec.dlqStreamKey, "success")
         }.onFailure { dlqErr ->
-            OperationalMetrics.recordDlqPush(spec.pipeline.workerName, dlqMetricKey(spec), "failure")
+            OperationalMetrics.recordDlqPush(spec.pipeline.workerName, spec.dlqStreamKey, "failure")
             logger.error(dlqErr) {
-                "Failed to write to DLQ for worker ${request.workerId}, dlqKey=${dlqMetricKey(spec)}"
+                "Failed to write to DLQ for worker ${request.workerId}, dlqKey=${spec.dlqStreamKey}"
             }
         }.isSuccess
     }
@@ -115,12 +103,5 @@ object IngestionQueueClient {
             if (streamId != null) {
                 put(FIELD_ORIGINAL_STREAM_ID, streamId)
             }
-        }
-
-    private fun dlqMetricKey(spec: IngestionQueueSpec): String =
-        if (IngestionQueueSettings.backend() == IngestionQueueBackend.REDIS_STREAMS) {
-            spec.dlqStreamKey
-        } else {
-            spec.dlqKey
         }
 }

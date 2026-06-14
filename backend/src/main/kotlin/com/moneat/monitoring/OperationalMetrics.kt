@@ -17,7 +17,6 @@
 package com.moneat.monitoring
 
 import com.moneat.config.RedisConfig
-import com.moneat.ingestion.queue.IngestionQueueSettings
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.lettuce.core.Limit
 import io.lettuce.core.Range
@@ -105,10 +104,10 @@ object OperationalMetrics {
         workerLastSuccessGauge(workerName, workerId).set(currentEpochSeconds())
     }
 
-    fun recordWorkerBrpopFailure(workerName: String, workerId: Int, cause: Throwable) {
+    fun recordWorkerQueueLoopFailure(workerName: String, workerId: Int, cause: Throwable) {
         counter(
-            WORKER_BRPOP_FAILURES,
-            "Redis BRPOP loop failures in background ingestion workers.",
+            WORKER_QUEUE_LOOP_FAILURES,
+            "Redis queue loop failures in background ingestion workers.",
             tags(
                 "worker" to workerName.normalizedLabelValue(),
                 "worker_id" to workerId.toString(),
@@ -264,28 +263,6 @@ object OperationalMetrics {
             .record(payloadCount.coerceAtLeast(0).toDouble())
         datadogMetricInsertSummary(DD_METRIC_FALLBACK_ROWS, "rows", fallbackTags)
             .record(rowCount.coerceAtLeast(0).toDouble())
-    }
-
-    fun recordDatadogMetricPayloadAck(status: String) {
-        counter(
-            DD_METRIC_PAYLOAD_ACKS,
-            "Datadog metric processing queue acknowledgement attempts by result.",
-            tags("status" to status.normalizedLabelValue())
-        ).increment()
-    }
-
-    fun recordDatadogMetricProcessingRecovery(recoveredPayloads: Int, status: String, cause: Throwable? = null) {
-        val recoveryTags = tags(
-            "status" to status.normalizedLabelValue(),
-            "exception" to (cause?.metricExceptionName() ?: "none")
-        )
-        counter(
-            DD_METRIC_PROCESSING_RECOVERIES,
-            "Datadog metric processing queue recovery attempts by result.",
-            recoveryTags
-        ).increment()
-        datadogMetricInsertSummary(DD_METRIC_PROCESSING_RECOVERED_PAYLOADS, "payloads", recoveryTags)
-            .record(recoveredPayloads.coerceAtLeast(0).toDouble())
     }
 
     fun recordClickHouseRequest(operation: String, status: String, durationSeconds: Double) {
@@ -662,11 +639,9 @@ object OperationalMetrics {
 
     private fun bindIngestionQueueModeMetrics() {
         if (!queueModeMetricsBound.compareAndSet(false, true)) return
-        val backend = IngestionQueueSettings.backend().name.lowercase()
-        val readMode = IngestionQueueSettings.readMode().name.lowercase()
         Gauge.builder(INGESTION_QUEUE_MODE, Unit) { 1.0 }
-            .description("Current ingestion queue backend and worker read mode for this process.")
-            .tags(tags("backend" to backend, "read_mode" to readMode))
+            .description("Current ingestion queue mode for this process.")
+            .tags(tags("backend" to "redis_streams"))
             .register(registry)
     }
 
@@ -739,7 +714,7 @@ object OperationalMetrics {
     private const val WORKER_MESSAGES_PROCESSED = "moneat_worker_messages_processed"
     private const val WORKER_LAST_SUCCESS_TIMESTAMP_SECONDS = "moneat_worker_last_success_timestamp_seconds"
     private const val WORKER_PROCESSING_FAILURES = "moneat_worker_processing_failures"
-    private const val WORKER_BRPOP_FAILURES = "moneat_worker_brpop_failures"
+    private const val WORKER_QUEUE_LOOP_FAILURES = "moneat_worker_queue_loop_failures"
     private const val WORKER_DLQ_PUSHES = "moneat_worker_dlq_pushes"
     private const val WORKER_DLQ_DEPTH = "moneat_worker_dlq_depth"
     private const val WORKER_QUEUE_DEPTH = "moneat_worker_queue_depth"
@@ -756,10 +731,6 @@ object OperationalMetrics {
     private const val DD_METRIC_INSERT_FALLBACKS = "moneat_datadog_metric_insert_fallbacks"
     private const val DD_METRIC_FALLBACK_PAYLOADS = "moneat_datadog_metric_fallback_payloads"
     private const val DD_METRIC_FALLBACK_ROWS = "moneat_datadog_metric_fallback_rows"
-    private const val DD_METRIC_PAYLOAD_ACKS = "moneat_datadog_metric_payload_acks"
-    private const val DD_METRIC_PROCESSING_RECOVERIES = "moneat_datadog_metric_processing_recoveries"
-    private const val DD_METRIC_PROCESSING_RECOVERED_PAYLOADS =
-        "moneat_datadog_metric_processing_recovered_payloads"
     private const val CLICKHOUSE_REQUESTS = "moneat_clickhouse_requests"
     private const val CLICKHOUSE_REQUEST_TIMEOUTS = "moneat_clickhouse_request_timeouts"
     private const val CLICKHOUSE_REQUEST_DURATION = "moneat_clickhouse_request_duration"

@@ -29,6 +29,7 @@ import com.moneat.datadog.security.SecurityIngestionService
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import io.lettuce.core.XAddArgs
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
 import io.mockk.mockk
@@ -57,6 +58,9 @@ class SecurityServiceTest {
     fun setup() {
         mockkObject(RedisConfig)
         every { RedisConfig.sync() } returns mockRedisCommands
+        every {
+            mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+        } returns "1-0"
     }
 
     @AfterTest
@@ -220,14 +224,15 @@ class SecurityServiceTest {
         val count = SecurityIngestionService.enqueueSecurityEvents(1, payload)
 
         assertEquals(2, count)
-        val captured = slot<String>()
+        val captured = slot<Map<String, String>>()
         verify {
-            mockRedisCommands.lpush(
-                "moneat:dd:security:queue",
-                capture(captured)
+            mockRedisCommands.xadd(
+                "moneat:dd:security:queue:stream",
+                any<XAddArgs>(),
+                capture(captured),
             )
         }
-        val decoded = SecurityIngestionService.decodeBatch(captured.captured)
+        val decoded = SecurityIngestionService.decodeBatch(requireNotNull(captured.captured["payload"]))
         assertEquals("events", decoded.batchType)
         assertEquals(1, decoded.organizationId)
         assertEquals(2, decoded.events.size)
@@ -240,7 +245,9 @@ class SecurityServiceTest {
         val payload = DdSecurityEventPayload(events = emptyList())
         val count = SecurityIngestionService.enqueueSecurityEvents(1, payload)
         assertEquals(0, count)
-        verify(exactly = 0) { mockRedisCommands.lpush(any(), any<String>()) }
+        verify(exactly = 0) {
+            mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+        }
     }
 
     @Test
@@ -256,9 +263,9 @@ class SecurityServiceTest {
 
         SecurityIngestionService.enqueueSecurityEvents(5, payload)
 
-        val captured = slot<String>()
-        verify { mockRedisCommands.lpush(any(), capture(captured)) }
-        val decoded = SecurityIngestionService.decodeBatch(captured.captured)
+        val captured = slot<Map<String, String>>()
+        verify { mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), capture(captured)) }
+        val decoded = SecurityIngestionService.decodeBatch(requireNotNull(captured.captured["payload"]))
         val tags = decoded.events[0].tags
         assertEquals("staging", tags["env"])
         assertEquals("us-east-1", tags["region"])
@@ -284,9 +291,9 @@ class SecurityServiceTest {
         val count = SecurityIngestionService.enqueueActivityDumps(2, payload)
 
         assertEquals(1, count)
-        val captured = slot<String>()
-        verify { mockRedisCommands.lpush(any(), capture(captured)) }
-        val decoded = SecurityIngestionService.decodeBatch(captured.captured)
+        val captured = slot<Map<String, String>>()
+        verify { mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), capture(captured)) }
+        val decoded = SecurityIngestionService.decodeBatch(requireNotNull(captured.captured["payload"]))
         assertEquals("dumps", decoded.batchType)
         assertEquals(2, decoded.organizationId)
         assertEquals("exec", decoded.dumps[0].activityType)
@@ -298,7 +305,9 @@ class SecurityServiceTest {
         val payload = DdActivityDumpPayload(dumps = emptyList())
         val count = SecurityIngestionService.enqueueActivityDumps(2, payload)
         assertEquals(0, count)
-        verify(exactly = 0) { mockRedisCommands.lpush(any(), any<String>()) }
+        verify(exactly = 0) {
+            mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+        }
     }
 
     // ──── enqueueCompliance ────
@@ -329,9 +338,9 @@ class SecurityServiceTest {
         val count = SecurityIngestionService.enqueueCompliance(3, payload)
 
         assertEquals(2, count)
-        val captured = slot<String>()
-        verify { mockRedisCommands.lpush(any(), capture(captured)) }
-        val decoded = SecurityIngestionService.decodeBatch(captured.captured)
+        val captured = slot<Map<String, String>>()
+        verify { mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), capture(captured)) }
+        val decoded = SecurityIngestionService.decodeBatch(requireNotNull(captured.captured["payload"]))
         assertEquals("findings", decoded.batchType)
         assertEquals(3, decoded.organizationId)
         assertEquals(2, decoded.findings.size)
@@ -344,7 +353,9 @@ class SecurityServiceTest {
         val payload = DdCompliancePayload(findings = emptyList())
         val count = SecurityIngestionService.enqueueCompliance(3, payload)
         assertEquals(0, count)
-        verify(exactly = 0) { mockRedisCommands.lpush(any(), any<String>()) }
+        verify(exactly = 0) {
+            mockRedisCommands.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+        }
     }
 
     // ──── insertBatch ────

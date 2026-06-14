@@ -36,6 +36,7 @@ import com.moneat.testsupport.TestIpConstants
 import com.moneat.testsupport.TestOidConstants
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
+import io.lettuce.core.XAddArgs
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
 import io.mockk.mockkObject
@@ -73,7 +74,7 @@ class NetworkDevicesTest {
         @Suppress("UNCHECKED_CAST")
         mockRedis = io.mockk.mockk<RedisCommands<String, String>>()
         every { RedisConfig.sync() } returns mockRedis
-        every { mockRedis.lpush(any(), any<String>()) } returns 1L
+        every { mockRedis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
     }
 
     @AfterTest
@@ -151,9 +152,9 @@ class NetworkDevicesTest {
         val count = NdmIngestionService.enqueue(orgId, payload)
 
         assertEquals(1, count)
-        val pushed = slot<String>()
-        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
-        val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
+        val pushed = slot<Map<String, String>>()
+        verify { mockRedis.xadd("$MONET_NDM_QUEUE:stream", any<XAddArgs>(), capture(pushed)) }
+        val batch = json.decodeFromString<QueuedNdmBatch>(requireNotNull(pushed.captured["payload"]))
         assertEquals("devices", batch.batchType)
         assertEquals(orgId, batch.organizationId)
         assertEquals(1, batch.devices.size)
@@ -192,9 +193,9 @@ class NetworkDevicesTest {
         val count = NdmIngestionService.enqueue(orgId, payload)
 
         assertEquals(1, count)
-        val pushed = slot<String>()
-        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
-        val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
+        val pushed = slot<Map<String, String>>()
+        verify { mockRedis.xadd("$MONET_NDM_QUEUE:stream", any<XAddArgs>(), capture(pushed)) }
+        val batch = json.decodeFromString<QueuedNdmBatch>(requireNotNull(pushed.captured["payload"]))
         assertEquals("traps", batch.batchType)
         assertEquals(1, batch.traps.size)
         assertEquals(TestIpConstants.IP_1, batch.traps[0].deviceIp)
@@ -228,9 +229,9 @@ class NetworkDevicesTest {
         val count = NdmIngestionService.enqueue(orgId, payload)
 
         assertEquals(1, count)
-        val pushed = slot<String>()
-        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
-        val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
+        val pushed = slot<Map<String, String>>()
+        verify { mockRedis.xadd("$MONET_NDM_QUEUE:stream", any<XAddArgs>(), capture(pushed)) }
+        val batch = json.decodeFromString<QueuedNdmBatch>(requireNotNull(pushed.captured["payload"]))
         assertEquals("flows", batch.batchType)
         assertEquals(1, batch.flows.size)
         assertEquals(TestIpConstants.IP_10, batch.flows[0].srcIp)
@@ -261,9 +262,9 @@ class NetworkDevicesTest {
         val count = NdmIngestionService.enqueue(orgId, payload)
 
         assertEquals(1, count)
-        val pushed = slot<String>()
-        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
-        val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
+        val pushed = slot<Map<String, String>>()
+        verify { mockRedis.xadd("$MONET_NDM_QUEUE:stream", any<XAddArgs>(), capture(pushed)) }
+        val batch = json.decodeFromString<QueuedNdmBatch>(requireNotNull(pushed.captured["payload"]))
         assertEquals("paths", batch.batchType)
         assertEquals(1, batch.paths.size)
         assertEquals(TestIpConstants.IP_1, batch.paths[0].source)
@@ -292,9 +293,9 @@ class NetworkDevicesTest {
         val count = NdmIngestionService.enqueue(orgId, payload)
 
         assertEquals(1, count)
-        val pushed = slot<String>()
-        verify { mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed)) }
-        val batch = json.decodeFromString<QueuedNdmBatch>(pushed.captured)
+        val pushed = slot<Map<String, String>>()
+        verify { mockRedis.xadd("$MONET_NDM_QUEUE:stream", any<XAddArgs>(), capture(pushed)) }
+        val batch = json.decodeFromString<QueuedNdmBatch>(requireNotNull(pushed.captured["payload"]))
         assertEquals("configs", batch.batchType)
         assertEquals(1, batch.configs.size)
         assertEquals("dev1", batch.configs[0].deviceId)
@@ -986,10 +987,10 @@ class NetworkDevicesTest {
 
     @Test
     fun `full round-trip enqueue then decode and insert`() = runBlocking {
-        val pushed = slot<String>()
+        val pushed = slot<Map<String, String>>()
         every {
-            mockRedis.lpush(MONET_NDM_QUEUE, capture(pushed))
-        } returns 1L
+            mockRedis.xadd("$MONET_NDM_QUEUE:stream", any<XAddArgs>(), capture(pushed))
+        } returns "1-0"
 
         val payload = DdNdmPayload(
             type = "ndm",
@@ -1005,7 +1006,7 @@ class NetworkDevicesTest {
 
         NdmIngestionService.enqueue(orgId, payload)
 
-        val batch = NdmIngestionService.decodeBatch(pushed.captured)
+        val batch = NdmIngestionService.decodeBatch(requireNotNull(pushed.captured["payload"]))
         assertEquals("devices", batch.batchType)
         assertEquals(orgId, batch.organizationId)
         assertEquals(ROUNDTRIP_DEV, batch.devices[0].deviceId)

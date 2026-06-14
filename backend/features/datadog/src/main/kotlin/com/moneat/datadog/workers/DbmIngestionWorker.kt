@@ -16,37 +16,22 @@
 
 package com.moneat.datadog.workers
 
-import com.moneat.config.RedisConfig
 import com.moneat.datadog.services.DbmIngestionService
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
-import com.moneat.utils.brpopLoopBackoff
 import com.moneat.utils.pushToDlq
-import io.lettuce.core.RedisException
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.isActive
-import mu.KotlinLogging
-import java.io.IOException
 import com.moneat.utils.suspendRunCatching
+import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-
-private const val BRPOP_TIMEOUT_SECONDS = 5L
-private const val ERROR_DELAY_MS = 1000L
 
 class DbmIngestionWorker(
     private val queueKey: String = "moneat:dd:dbm:queue",
     private val dlqKey: String = "moneat:dd:dbm:dlq",
     private val workerCount: Int = 1,
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var jobs: List<Job> = emptyList()
     private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
@@ -62,42 +47,7 @@ class DbmIngestionWorker(
         queueWorker?.stop()
         logger.info { "DbmIngestionWorker stopped" }
     }
-    private suspend fun runWorker(workerId: Int) {
-        val conn = RedisConfig.newBlockingConnection()
-        try {
-            val redis = conn.sync()
-            while (scope.isActive) {
-                try {
-                    val result = redis.brpop(
-                        BRPOP_TIMEOUT_SECONDS,
-                        queueKey
-                    )
-                    val payload = result?.value ?: continue
-                    processMessage(workerId, payload)
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: RedisException) {
-                    brpopLoopBackoff(
-                        logger,
-                        workerId,
-                        "DBM",
-                        ERROR_DELAY_MS,
-                        e,
-                    )
-                } catch (e: IOException) {
-                    brpopLoopBackoff(
-                        logger,
-                        workerId,
-                        "DBM",
-                        ERROR_DELAY_MS,
-                        e,
-                    )
-                }
-            }
-        } finally {
-            RedisConfig.closeBlockingConnection(conn)
-        }
-    }
+
     internal suspend fun processMessage(
         workerId: Int,
         payload: String,
