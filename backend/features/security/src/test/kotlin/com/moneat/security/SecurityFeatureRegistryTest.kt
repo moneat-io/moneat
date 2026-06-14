@@ -20,11 +20,22 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
+import com.moneat.testsupport.RouteTestSupport.installJwtAuth
+import com.moneat.testsupport.startTestKoin
+import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.install
+import io.ktor.server.plugins.ratelimit.RateLimit
+import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -33,17 +44,21 @@ import java.util.ServiceLoader
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 class SecurityFeatureRegistryTest {
     @BeforeTest
     fun resetBefore() {
+        startTestKoin()
         FeatureRegistry.resetForTest()
     }
 
     @AfterTest
     fun resetAfter() {
         FeatureRegistry.resetForTest()
+        stopTestKoin()
     }
 
     @Test
@@ -75,6 +90,28 @@ class SecurityFeatureRegistryTest {
         assertTrue("Security" in response.modules)
     }
 
+    @Test
+    fun `ServiceLoader Security module registers vulnerability routes`() = testApplication {
+        val securityModule = ServiceLoader
+            .load(EnterpriseModule::class.java)
+            .first { module -> module.name == "Security" }
+
+        application {
+            installJwtAuth()
+            installFeatureRouteRateLimits()
+            routing {
+                securityModule.registerRoutes(this)
+            }
+        }
+
+        val response = client.post("/v1/security/vulnerabilities/sbom") {
+            contentType(ContentType.Application.Json)
+            setBody("{}")
+        }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
     private suspend fun ApplicationCall.respondFeatures() {
         respond(
             FeaturesResponse(
@@ -83,5 +120,31 @@ class SecurityFeatureRegistryTest {
                 selfHost = false,
             )
         )
+    }
+
+    private fun io.ktor.server.application.Application.installFeatureRouteRateLimits() {
+        install(RateLimit) {
+            FEATURE_ROUTE_RATE_LIMITS.forEach { name ->
+                register(RateLimitName(name)) {
+                    requestKey { "test-user" }
+                    rateLimiter(limit = TEST_RATE_LIMIT, refillPeriod = TEST_RATE_LIMIT_REFILL)
+                }
+            }
+        }
+    }
+
+    private companion object {
+        private val FEATURE_ROUTE_RATE_LIMITS = listOf(
+            "api",
+            "contact",
+            "datadog-ingestion",
+            "ingestion",
+            "log-ingestion",
+            "mcp",
+            "otlp-ingestion",
+            "telemetry",
+        )
+        private const val TEST_RATE_LIMIT = 1000
+        private val TEST_RATE_LIMIT_REFILL = 1.seconds
     }
 }

@@ -22,14 +22,14 @@ package com.moneat.security
  * empty values. Each key and value escapes those separators, while missing values use a sentinel that
  * escaping never emits.
  */
-internal fun encodeStableKeySegments(fields: List<String>, values: Map<String, String>): String =
+fun encodeStableKeySegments(fields: List<String>, values: Map<String, String>): String =
     fields.joinToString("|") { field ->
         val raw = values[field]
         val value = if (raw == null) MISSING_VALUE_SENTINEL else escapeStableKeySegment(raw)
         "${escapeStableKeySegment(field)}=$value"
     }
 
-internal fun encodeStableKeySegments(pairs: List<Pair<String, String?>>): String =
+fun encodeStableKeySegments(pairs: List<Pair<String, String?>>): String =
     pairs.joinToString("|") { (field, raw) ->
         val value = if (raw == null) MISSING_VALUE_SENTINEL else escapeStableKeySegment(raw)
         "${escapeStableKeySegment(field)}=$value"

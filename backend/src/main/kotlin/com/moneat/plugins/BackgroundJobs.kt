@@ -30,7 +30,6 @@ import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
-import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.PulseService
@@ -158,7 +157,6 @@ private class SchedulerBackgroundJobs {
     private val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
     private val artifactCleanupService = koin.get<ArtifactCleanupService>()
     private val uptimeScheduler = koin.get<UptimeScheduler>()
-    private val vulnerabilityAdvisorySyncJob = koin.get<VulnerabilityAdvisorySyncJob>()
     private val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
 
     fun start(jobScope: CoroutineScope) {
@@ -170,7 +168,6 @@ private class SchedulerBackgroundJobs {
         refreshTokenCleanupService.start(jobScope)
         artifactCleanupService.start(jobScope)
         uptimeScheduler.start()
-        vulnerabilityAdvisorySyncJob.start(jobScope)
         demoLivenessBackgroundService.start(jobScope)
     }
 
@@ -183,7 +180,6 @@ private class SchedulerBackgroundJobs {
         refreshTokenCleanupService.stop()
         artifactCleanupService.stop()
         uptimeScheduler.stop()
-        vulnerabilityAdvisorySyncJob.stop()
         demoLivenessBackgroundService.stop()
     }
 }

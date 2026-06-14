@@ -15,12 +15,18 @@ repositories {
     mavenCentral()
 }
 
+evaluationDependsOn(":features:security")
+
 val rootBackendProject = project(":")
 val rootBackendSourceSets = rootBackendProject.extensions.getByType<SourceSetContainer>()
 val rootBackendTestOutput = rootBackendSourceSets.named("test").get().output
+val securityFeatureProject = project(":features:security")
+val securityFeatureSourceSets = securityFeatureProject.extensions.getByType<SourceSetContainer>()
+val securityFeatureTestOutput = securityFeatureSourceSets.named("test").get().output
 
 dependencies {
     compileOnly(project(":"))
+    compileOnly(project(":features:security"))
     implementation(project(":feature-spi"))
     implementation(project(":ingest-common"))
 
@@ -51,8 +57,10 @@ dependencies {
     detektPlugins(libs.detekt.formatting)
 
     testImplementation(project(":"))
+    testImplementation(project(":features:security"))
     testImplementation(project(":ingest-common"))
     testImplementation(rootBackendTestOutput)
+    testImplementation(securityFeatureTestOutput)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.content.negotiation)
     testImplementation(libs.kotlin.test.junit5)
@@ -79,6 +87,7 @@ tasks.jacocoTestReport {
 
 tasks.test {
     dependsOn(rootBackendProject.tasks.named("testClasses"))
+    dependsOn(securityFeatureProject.tasks.named("testClasses"))
     useJUnitPlatform()
     finalizedBy(tasks.jacocoTestReport)
     maxParallelForks = (Runtime.getRuntime().availableProcessors() / 2).coerceAtLeast(1)
