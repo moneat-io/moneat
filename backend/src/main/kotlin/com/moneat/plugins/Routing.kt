@@ -24,8 +24,6 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.monitoring.OperationalMetrics
-import com.moneat.org.routes.adminRoutes
-import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -183,12 +181,6 @@ fun Application.configureRouting() {
 
         // Authentication endpoints
         authRoutes()
-
-        // Admin dashboard endpoints
-        adminRoutes()
-
-        // Organization team management endpoints
-        orgManagementRoutes()
 
         // Vulnerability/SBOM inventory and findings (OSS core)
         rateLimit(RateLimitName("api")) {
