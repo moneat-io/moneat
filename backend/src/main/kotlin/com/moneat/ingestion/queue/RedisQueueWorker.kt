@@ -30,6 +30,7 @@ import io.lettuce.core.XGroupCreateArgs
 import io.lettuce.core.XReadArgs
 import io.lettuce.core.XReadArgs.StreamOffset
 import io.lettuce.core.api.StatefulRedisConnection
+import io.lettuce.core.api.sync.RedisCommands
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,12 +45,92 @@ import java.time.Duration
 
 private const val ERROR_RETRY_DELAY_MS = 1_000L
 private const val REDIS_GROUP_EXISTS = "BUSYGROUP"
+private const val REDIS_GROUP_MISSING = "NOGROUP"
 
 data class QueuedIngestionMessage(
     val id: String?,
     val payload: String,
     val deliveryCount: Long = 1L,
 )
+
+internal object RedisStreamQueueOperations {
+    fun readMessages(
+        redis: RedisCommands<String, String>,
+        spec: IngestionQueueSpec,
+        consumer: Consumer<String>,
+        logger: KLogger,
+    ): List<StreamMessage<String, String>> =
+        try {
+            readMessagesOrThrow(redis, spec, consumer)
+        } catch (e: RedisCommandExecutionException) {
+            if (!isMissingConsumerGroup(e)) throw e
+            ensureConsumerGroup(redis, spec.streamKey, spec.consumerGroup)
+            logger.warn(e) {
+                "Recreated missing Redis stream consumer group ${spec.consumerGroup} for ${spec.streamKey}"
+            }
+            emptyList()
+        }
+
+    fun ensureConsumerGroup(
+        redis: RedisCommands<String, String>,
+        streamKey: String,
+        consumerGroup: String,
+    ) {
+        try {
+            redis.xgroupCreate(
+                StreamOffset.from(streamKey, "0-0"),
+                consumerGroup,
+                XGroupCreateArgs().mkstream(true),
+            )
+        } catch (e: RedisCommandExecutionException) {
+            if (!e.message.orEmpty().contains(REDIS_GROUP_EXISTS, ignoreCase = true)) {
+                throw e
+            }
+        }
+    }
+
+    fun acknowledge(
+        redis: RedisCommands<String, String>,
+        streamKey: String,
+        consumerGroup: String,
+        ids: Array<String>,
+        logger: KLogger,
+    ) {
+        if (ids.isEmpty()) return
+        redis.xack(streamKey, consumerGroup, *ids)
+        runCatching {
+            redis.xdel(streamKey, *ids)
+        }.onFailure { e ->
+            logger.warn(e) { "Failed to delete acknowledged Redis stream entries from $streamKey" }
+        }
+    }
+
+    private fun readMessagesOrThrow(
+        redis: RedisCommands<String, String>,
+        spec: IngestionQueueSpec,
+        consumer: Consumer<String>,
+    ): List<StreamMessage<String, String>> {
+        val claimed = redis.xautoclaim(
+            spec.streamKey,
+            XAutoClaimArgs<String>()
+                .consumer(consumer)
+                .minIdleTime(Duration.ofMillis(spec.claimIdleMs))
+                .startId("0-0")
+                .count(spec.batchSize.toLong())
+        ).messages
+        if (claimed.isNotEmpty()) return claimed
+        return redis.xreadgroup(
+            consumer,
+            XReadArgs()
+                .block(Duration.ofMillis(spec.readTimeoutMs))
+                .count(spec.batchSize.toLong()),
+            StreamOffset.lastConsumed(spec.streamKey),
+        )
+    }
+
+    private fun isMissingConsumerGroup(e: RedisCommandExecutionException): Boolean =
+        e.message.orEmpty().contains(REDIS_GROUP_MISSING, ignoreCase = true)
+}
 
 class RedisQueueWorker(
     private val spec: IngestionQueueSpec,
@@ -165,22 +246,7 @@ class RedisQueueWorker(
     ): List<StreamMessage<String, String>> {
         val redis = conn.sync()
         val consumer = Consumer.from(spec.consumerGroup, consumerName(workerId))
-        val claimed = redis.xautoclaim(
-            spec.streamKey,
-            XAutoClaimArgs<String>()
-                .consumer(consumer)
-                .minIdleTime(Duration.ofMillis(spec.claimIdleMs))
-                .startId("0-0")
-                .count(spec.batchSize.toLong())
-        ).messages
-        if (claimed.isNotEmpty()) return claimed
-        return redis.xreadgroup(
-            consumer,
-            XReadArgs()
-                .block(Duration.ofMillis(spec.readTimeoutMs))
-                .count(spec.batchSize.toLong()),
-            StreamOffset.lastConsumed(spec.streamKey),
-        )
+        return RedisStreamQueueOperations.readMessages(redis, spec, consumer, logger)
     }
 
     private suspend fun processStreamBatch(
@@ -250,9 +316,7 @@ class RedisQueueWorker(
         messages: List<QueuedIngestionMessage>,
     ) {
         val ids = messages.mapNotNull { it.id }.toTypedArray()
-        if (ids.isNotEmpty()) {
-            conn.sync().xack(spec.streamKey, spec.consumerGroup, *ids)
-        }
+        RedisStreamQueueOperations.acknowledge(conn.sync(), spec.streamKey, spec.consumerGroup, ids, logger)
     }
 
     private suspend fun onQueueLoopFailure(
@@ -265,17 +329,7 @@ class RedisQueueWorker(
     }
 
     private fun ensureConsumerGroup(conn: StatefulRedisConnection<String, String>) {
-        try {
-            conn.sync().xgroupCreate(
-                StreamOffset.from(spec.streamKey, "0-0"),
-                spec.consumerGroup,
-                XGroupCreateArgs().mkstream(true),
-            )
-        } catch (e: RedisCommandExecutionException) {
-            if (!e.message.orEmpty().contains(REDIS_GROUP_EXISTS, ignoreCase = true)) {
-                throw e
-            }
-        }
+        RedisStreamQueueOperations.ensureConsumerGroup(conn.sync(), spec.streamKey, spec.consumerGroup)
     }
 
     private fun registerQueues() {
