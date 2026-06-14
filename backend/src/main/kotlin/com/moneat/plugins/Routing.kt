@@ -43,7 +43,6 @@ import com.moneat.otlp.routes.otlpTraceRoutes
 import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
-import com.moneat.uptime.routes.uptimeRoutes
 import com.moneat.workflows.routes.workflowRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
@@ -239,9 +238,6 @@ fun Application.configureRouting() {
             otlpMetricsRoutes()
             otlpFeedbackRoutes()
         }
-
-        // Uptime monitoring endpoints
-        uptimeRoutes()
 
         // Organization team management endpoints
         orgManagementRoutes()

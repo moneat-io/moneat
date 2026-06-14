@@ -198,6 +198,13 @@ jobs:
           name: backend-incident-test-results
           path: backend/features/incident/build/test-results/test/
 
+      - name: Upload Uptime feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-uptime-test-results
+          path: backend/features/uptime/build/test-results/test/
+
       - name: Upload Datadog feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -295,6 +302,13 @@ jobs:
         with:
           name: backend-incident-coverage-report
           path: backend/features/incident/build/reports/jacoco/test/
+
+      - name: Upload Uptime feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-uptime-coverage-report
+          path: backend/features/uptime/build/reports/jacoco/test/
 
       - name: Upload Datadog feature coverage report
         if: always()
@@ -438,6 +452,13 @@ jobs:
         with:
           name: backend-incident-detekt-report
           path: backend/features/incident/build/reports/detekt/
+
+      - name: Upload Uptime feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-uptime-detekt-report
+          path: backend/features/uptime/build/reports/detekt/
 
       - name: Upload Datadog feature detekt report (Sonar)
         if: success()
@@ -596,6 +617,13 @@ jobs:
           path: backend/features/incident/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Uptime feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-uptime-coverage-report
+          path: backend/features/uptime/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download Datadog feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -706,6 +734,13 @@ jobs:
         with:
           name: backend-incident-detekt-report
           path: backend/features/incident/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Uptime feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-uptime-detekt-report
+          path: backend/features/uptime/build/reports/detekt/
         continue-on-error: true
 
       - name: Download Datadog feature detekt report
