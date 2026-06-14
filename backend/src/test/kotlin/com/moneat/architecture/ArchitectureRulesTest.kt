@@ -29,8 +29,7 @@ class ArchitectureRulesTest {
             productionFiles()
                 .filterNot { file ->
                     val normalizedPath = file.normalizedPath()
-                    normalizedPath.endsWith("/config/EnvConfig.kt") ||
-                        normalizedPath.endsWith("/logging/MoneatLogAppender.kt")
+                    normalizedPath.endsWith("/config/EnvConfig.kt")
                 }
                 .flatMap { file -> file.violatingLines(SYSTEM_GETENV_PATTERN) }
 
