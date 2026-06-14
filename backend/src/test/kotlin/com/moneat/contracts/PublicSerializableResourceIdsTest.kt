@@ -79,6 +79,7 @@ class PublicSerializableResourceIdsTest {
             SourceRoot("backend", repoRoot.resolve("backend/features/logs/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/mcp/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/monitoring/src/main/kotlin")),
+            SourceRoot("backend", repoRoot.resolve("backend/features/otlp/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/overview/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/sso/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/summary/src/main/kotlin")),

@@ -29,9 +29,6 @@ import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
-import com.moneat.otlp.routes.otlpMetricsRoutes
-import com.moneat.otlp.routes.otlpFeedbackRoutes
-import com.moneat.otlp.routes.otlpTraceRoutes
 import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
@@ -206,13 +203,6 @@ fun Application.configureRouting() {
 
         // Admin dashboard endpoints
         adminRoutes()
-
-        // OTLP trace and metrics ingestion endpoints
-        rateLimit(RateLimitName("otlp-ingestion")) {
-            otlpTraceRoutes()
-            otlpMetricsRoutes()
-            otlpFeedbackRoutes()
-        }
 
         // Organization team management endpoints
         orgManagementRoutes()
