@@ -16,14 +16,12 @@
 
 package com.moneat.logs.services
 
-import com.moneat.config.RedisConfig
-import com.moneat.ingestion.queue.IngestionDlqRequest
 import com.moneat.ingestion.queue.IngestionPipeline
-import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.monitoring.OperationalMetrics
+import com.moneat.utils.pushToDlq
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 import kotlin.random.Random
@@ -45,19 +43,7 @@ class LogIngestionWorker(
     fun start() {
         logger.info { "Starting LogIngestionWorker with $workerCount workers, queue=$queueKey" }
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, queueKey, dlqKey, workerCount)
-        queueWorker = RedisQueueWorker(spec, logger, processMessage = { workerId, payload ->
-            processMessageForTest(workerId, payload) { message ->
-                IngestionQueueClient.pushToDlq(
-                    logger = logger,
-                    request = IngestionDlqRequest(
-                        spec = spec,
-                        payload = message,
-                        workerId = workerId,
-                        cause = IllegalStateException("Log processing failed"),
-                    ),
-                )
-            }
-        }).also { it.start() }
+        queueWorker = RedisQueueWorker(spec, logger, processMessage = ::processMessageForTest).also { it.start() }
     }
 
     fun stop() {
@@ -68,7 +54,6 @@ class LogIngestionWorker(
     internal suspend fun processMessageForTest(
         workerId: Int,
         payload: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
         suspendRunCatching {
             val batch = logService.decodeQueueMessage(payload)
@@ -106,15 +91,7 @@ class LogIngestionWorker(
             OperationalMetrics.recordWorkerMessageProcessed("Log", workerId)
         }.getOrElse { e ->
             logger.error(e) { "Log worker $workerId failed to process message, pushing to DLQ" }
-            OperationalMetrics.recordWorkerProcessingFailure("Log", workerId, e)
-            suspendRunCatching {
-                onDlq(payload)
-            }.onSuccess {
-                OperationalMetrics.recordDlqPush("Log", dlqKey, "success")
-            }.onFailure { dlqErr ->
-                OperationalMetrics.recordDlqPush("Log", dlqKey, "failure")
-                logger.error(dlqErr) { "Failed to push log message to DLQ" }
-            }.getOrThrow()
+            pushToDlq(logger, dlqKey, payload, workerId, "Log", e)
         }
     }
 

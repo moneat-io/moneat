@@ -33,48 +33,6 @@ class IngestionQueueSettingsTest {
     }
 
     @Test
-    fun `queue backend defaults to redis lists`() {
-        assertEquals(IngestionQueueBackend.REDIS_LIST, IngestionQueueBackend.from(null))
-        assertEquals(IngestionQueueBackend.REDIS_LIST, IngestionQueueBackend.from(""))
-        assertEquals(IngestionQueueBackend.REDIS_LIST, IngestionQueueBackend.from("redis-list"))
-    }
-
-    @Test
-    fun `queue backend accepts redis stream aliases`() {
-        assertEquals(IngestionQueueBackend.REDIS_STREAMS, IngestionQueueBackend.from("redis-streams"))
-        assertEquals(IngestionQueueBackend.REDIS_STREAMS, IngestionQueueBackend.from("redis_streams"))
-        assertEquals(IngestionQueueBackend.REDIS_STREAMS, IngestionQueueBackend.from(" stream "))
-    }
-
-    @Test
-    fun `read mode follows backend when unset`() {
-        assertEquals(
-            IngestionQueueReadMode.LIST,
-            IngestionQueueReadMode.from(null, IngestionQueueBackend.REDIS_LIST)
-        )
-        assertEquals(
-            IngestionQueueReadMode.STREAMS,
-            IngestionQueueReadMode.from(null, IngestionQueueBackend.REDIS_STREAMS)
-        )
-    }
-
-    @Test
-    fun `read mode accepts explicit transition values`() {
-        assertEquals(
-            IngestionQueueReadMode.DUAL,
-            IngestionQueueReadMode.from("dual", IngestionQueueBackend.REDIS_LIST)
-        )
-        assertEquals(
-            IngestionQueueReadMode.STREAMS,
-            IngestionQueueReadMode.from("redis-streams", IngestionQueueBackend.REDIS_LIST)
-        )
-        assertEquals(
-            IngestionQueueReadMode.LIST,
-            IngestionQueueReadMode.from("redis-list", IngestionQueueBackend.REDIS_STREAMS)
-        )
-    }
-
-    @Test
     fun `pipeline parser accepts ids and enum names`() {
         assertEquals(IngestionPipeline.LOGS, IngestionPipeline.parse("logs"))
         assertEquals(IngestionPipeline.OTLP_TRACES, IngestionPipeline.parse("otlp-traces"))
@@ -82,39 +40,6 @@ class IngestionQueueSettingsTest {
         assertNull(IngestionPipeline.parse("unknown"))
     }
 
-    @Test
-    fun `backend reads primary backend env before legacy fallback`() {
-        mockkObject(EnvConfig)
-        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns "redis-streams"
-        every { EnvConfig.get("QUEUE_BACKEND") } returns "redis-list"
-
-        assertEquals(IngestionQueueBackend.REDIS_STREAMS, IngestionQueueSettings.backend())
-    }
-
-    @Test
-    fun `backend reads legacy queue backend when primary env is absent`() {
-        mockkObject(EnvConfig)
-        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns null
-        every { EnvConfig.get("QUEUE_BACKEND") } returns "streams"
-
-        assertEquals(IngestionQueueBackend.REDIS_STREAMS, IngestionQueueSettings.backend())
-    }
-
-    @Test
-    fun `read mode follows configured value and backend default`() {
-        mockkObject(EnvConfig)
-        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns "redis-streams"
-        every { EnvConfig.get("INGESTION_QUEUE_READ_MODE") } returns null
-        every { EnvConfig.get("QUEUE_BACKEND") } returns null
-
-        assertEquals(IngestionQueueReadMode.STREAMS, IngestionQueueSettings.readMode())
-
-        every { EnvConfig.get("INGESTION_QUEUE_READ_MODE") } returns "dual"
-
-        assertEquals(IngestionQueueReadMode.DUAL, IngestionQueueSettings.readMode())
-    }
-
-    @Test
     fun `spec applies env overrides and clamps worker count`() {
         mockkObject(EnvConfig)
         every { EnvConfig.get(any()) } returns null

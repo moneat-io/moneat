@@ -18,6 +18,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.services.AlertEpisodeContext
 import com.moneat.alerts.services.AlertEpisodeService
@@ -41,10 +42,14 @@ import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.testsupport.TestDatabaseHelper
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.NotFoundException
+import io.lettuce.core.XAddArgs
+import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
@@ -1043,15 +1048,28 @@ class EventServicesExtendedTest {
     }
 
     @Test
-    fun `worker DLQ callback invoked on parse failure`() = runBlocking {
+    fun `worker writes DLQ stream on parse failure`() = runBlocking {
         val worker = IngestionWorker("q:test", "q:test:dlq", 1)
-        val dlq = mutableListOf<String>()
+        val redis = mockDlqStream()
         val badPayload = IngestionWorker.encodeMessage(1L, "not-an-envelope".toByteArray())
 
-        worker.processMessageForTest(workerId = 1, value = badPayload) { dlq.add(it) }
+        try {
+            worker.processMessageForTest(workerId = 1, value = badPayload)
 
-        assertEquals(1, dlq.size)
-        assertEquals(badPayload, dlq[0])
+            verify(exactly = 1) {
+                redis.xadd("q:test:dlq:stream", any<XAddArgs>(), any<Map<String, String>>())
+            }
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    private fun mockDlqStream(): RedisCommands<String, String> {
+        val redis = mockk<RedisCommands<String, String>>()
+        mockkObject(RedisConfig)
+        every { RedisConfig.sync() } returns redis
+        every { redis.xadd("q:test:dlq:stream", any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
+        return redis
     }
 
     // ================================================================

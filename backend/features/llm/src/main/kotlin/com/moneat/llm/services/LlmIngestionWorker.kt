@@ -17,10 +17,7 @@
 package com.moneat.llm.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
-import com.moneat.ingestion.queue.IngestionDlqRequest
 import com.moneat.ingestion.queue.IngestionPipeline
-import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.QueuedIngestionMessage
 import com.moneat.ingestion.queue.RedisQueueWorker
@@ -29,6 +26,7 @@ import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.pushToDlq
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -61,19 +59,7 @@ class LlmIngestionWorker(
         queueWorker = RedisQueueWorker(
             spec = spec,
             logger = logger,
-            processMessage = { workerId, payload ->
-                processMessageForTest(workerId, payload) { message ->
-                    IngestionQueueClient.pushToDlq(
-                        logger = logger,
-                        request = IngestionDlqRequest(
-                            spec = spec,
-                            payload = message,
-                            workerId = workerId,
-                            cause = IllegalStateException("LLM processing failed"),
-                        ),
-                    )
-                }
-            },
+            processMessage = ::processMessageForTest,
             processBatch = ::processBatch,
         ).also { it.start() }
     }
@@ -86,7 +72,6 @@ class LlmIngestionWorker(
     internal suspend fun processMessageForTest(
         workerId: Int,
         value: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) }
     ) {
         suspendRunCatching {
             val (projectId, payloadBytes) = decodeMessage(value)
@@ -95,7 +80,7 @@ class LlmIngestionWorker(
             usageTracker.recordUsage(projectId, "llm", payloadBytes.size)
             OperationalMetrics.recordWorkerMessageProcessed("LLM", workerId)
         }.getOrElse { e ->
-            handleLlmDlq(workerId, value, e, onDlq)
+            handleLlmDlq(workerId, value, e)
         }
     }
 
@@ -103,18 +88,9 @@ class LlmIngestionWorker(
         workerId: Int,
         value: String,
         e: Throwable,
-        onDlq: (String) -> Unit,
     ) {
         logger.error(e) { "LLM worker $workerId failed to process message, sending to DLQ" }
-        OperationalMetrics.recordWorkerProcessingFailure("LLM", workerId, e)
-        suspendRunCatching {
-            onDlq(value)
-        }.onSuccess {
-            OperationalMetrics.recordDlqPush("LLM", dlqKey, "success")
-        }.onFailure { dlqErr ->
-            OperationalMetrics.recordDlqPush("LLM", dlqKey, "failure")
-            logger.error(dlqErr) { "Failed to push LLM message to DLQ" }
-        }.getOrThrow()
+        pushToDlq(logger, dlqKey, value, workerId, "LLM", e)
     }
 
     private suspend fun processBatch(

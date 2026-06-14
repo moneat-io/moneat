@@ -27,39 +27,8 @@ private const val DEFAULT_STREAM_MAX_LEN = 250_000L
 private const val DEFAULT_DLQ_STREAM_MAX_LEN = 10_000L
 private const val MIN_STREAM_BATCH_SIZE = 1
 
-enum class IngestionQueueBackend {
-    REDIS_LIST,
-    REDIS_STREAMS;
-
-    companion object {
-        fun from(raw: String?): IngestionQueueBackend =
-            when (raw?.trim()?.lowercase()) {
-                "redis-streams", "redis_streams", "streams", "stream" -> REDIS_STREAMS
-                else -> REDIS_LIST
-            }
-    }
-}
-
-enum class IngestionQueueReadMode {
-    LIST,
-    STREAMS,
-    DUAL;
-
-    companion object {
-        fun from(raw: String?, backend: IngestionQueueBackend): IngestionQueueReadMode =
-            when (raw?.trim()?.lowercase()) {
-                "streams", "stream", "redis-streams", "redis_streams" -> STREAMS
-                "dual" -> DUAL
-                "list", "redis-list", "redis_list" -> LIST
-                else -> if (backend == IngestionQueueBackend.REDIS_STREAMS) STREAMS else LIST
-            }
-    }
-}
-
 data class IngestionQueueSpec(
     val pipeline: IngestionPipeline,
-    val queueKey: String,
-    val dlqKey: String,
     val workerCount: Int,
     val streamKey: String,
     val dlqStreamKey: String,
@@ -73,15 +42,6 @@ data class IngestionQueueSpec(
 )
 
 object IngestionQueueSettings {
-    fun backend(): IngestionQueueBackend =
-        IngestionQueueBackend.from(
-            EnvConfig.get("INGESTION_QUEUE_BACKEND")
-                ?: EnvConfig.get("QUEUE_BACKEND")
-        )
-
-    fun readMode(): IngestionQueueReadMode =
-        IngestionQueueReadMode.from(EnvConfig.get("INGESTION_QUEUE_READ_MODE"), backend())
-
     fun spec(
         pipeline: IngestionPipeline,
         queueKey: String,
@@ -91,8 +51,6 @@ object IngestionQueueSettings {
         val prefix = pipeline.envKey
         return IngestionQueueSpec(
             pipeline = pipeline,
-            queueKey = queueKey,
-            dlqKey = dlqKey,
             workerCount = max(workerCount, 1),
             streamKey = EnvConfig.get("INGESTION_${prefix}_STREAM_KEY") ?: "$queueKey:stream",
             dlqStreamKey = EnvConfig.get("INGESTION_${prefix}_DLQ_STREAM_KEY") ?: "$dlqKey:stream",

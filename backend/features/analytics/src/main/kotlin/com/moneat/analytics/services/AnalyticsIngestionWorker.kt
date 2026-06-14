@@ -18,18 +18,15 @@ package com.moneat.analytics.services
 
 import com.moneat.analytics.models.EnrichedAnalyticsEvent
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
 import com.moneat.config.isClickHouseError
-import com.moneat.ingestion.queue.IngestionDlqRequest
 import com.moneat.ingestion.queue.IngestionPipeline
-import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.pushToDlq
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
-import io.lettuce.core.RedisException
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import java.io.IOException
@@ -51,19 +48,7 @@ class AnalyticsIngestionWorker(
     fun start() {
         logger.info { "Starting AnalyticsIngestionWorker with $workerCount workers, queue=$queueKey" }
         val spec = IngestionQueueSettings.spec(IngestionPipeline.ANALYTICS, queueKey, dlqKey, workerCount)
-        queueWorker = RedisQueueWorker(spec, logger, processMessage = { workerId, payload ->
-            processMessage(workerId, payload) { message ->
-                IngestionQueueClient.pushToDlq(
-                    logger = logger,
-                    request = IngestionDlqRequest(
-                        spec = spec,
-                        payload = message,
-                        workerId = workerId,
-                        cause = IllegalStateException("Analytics processing failed"),
-                    ),
-                )
-            }
-        }).also { it.start() }
+        queueWorker = RedisQueueWorker(spec, logger, processMessage = ::processMessage).also { it.start() }
     }
 
     fun stop() {
@@ -74,14 +59,13 @@ class AnalyticsIngestionWorker(
     internal suspend fun processMessage(
         workerId: Int,
         value: String,
-        onDlq: (String) -> Unit = { message -> RedisConfig.sync().rpush(dlqKey, message) },
     ) {
         suspendRunCatching {
             val event = json.decodeFromString<EnrichedAnalyticsEvent>(value)
             insertEvent(event)
             OperationalMetrics.recordWorkerMessageProcessed("Analytics", workerId)
         }.getOrElse { e ->
-            logProcessFailureAndDlq(workerId, value, e, onDlq)
+            logProcessFailureAndDlq(workerId, value, e)
         }
     }
 
@@ -89,25 +73,9 @@ class AnalyticsIngestionWorker(
         workerId: Int,
         value: String,
         e: Throwable,
-        onDlq: (String) -> Unit,
     ) {
         logger.error(e) { "Analytics worker $workerId failed to process message, sending to DLQ" }
-        OperationalMetrics.recordWorkerProcessingFailure("Analytics", workerId, e)
-        pushToAnalyticsDlq(workerId, value, onDlq)
-    }
-
-    private fun pushToAnalyticsDlq(
-        workerId: Int,
-        value: String,
-        onDlq: (String) -> Unit,
-    ) {
-        try {
-            onDlq(value)
-            OperationalMetrics.recordDlqPush("Analytics", dlqKey, "success")
-        } catch (e: RedisException) {
-            OperationalMetrics.recordDlqPush("Analytics", dlqKey, "failure")
-            logger.error(e) { "Failed to push to analytics DLQ (worker $workerId)" }
-        }
+        pushToDlq(logger, dlqKey, value, workerId, "Analytics", e)
     }
 
     private suspend fun insertEvent(event: EnrichedAnalyticsEvent) {

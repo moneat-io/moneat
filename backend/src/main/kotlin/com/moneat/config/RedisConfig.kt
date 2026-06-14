@@ -29,10 +29,10 @@ import io.lettuce.core.resource.ClientResources
 import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
 
-const val BRPOP_TIMEOUT_SECONDS = 5L
+private const val BLOCKING_COMMAND_TIMEOUT_SECONDS = 15L
 
-// Blocking command timeout — must exceed BRPOP wait time. Each worker gets its own connection.
-private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BRPOP_TIMEOUT_SECONDS + 10)
+// Blocking command timeout for workers using XREADGROUP BLOCK. Each worker gets its own connection.
+private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BLOCKING_COMMAND_TIMEOUT_SECONDS)
 
 object RedisConfig {
     @Volatile
