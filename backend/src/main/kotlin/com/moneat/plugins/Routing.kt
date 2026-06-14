@@ -22,7 +22,6 @@ import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
-import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
@@ -254,9 +253,6 @@ fun Application.configureRouting() {
         // Feature modules (SSO, MCP, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
         routingLogger.info { "Feature routes registered" }
-
-        // Custom dashboard builder endpoints
-        customDashboardRoutes()
 
         routingLogger.info { "All routes registered successfully" }
     }
