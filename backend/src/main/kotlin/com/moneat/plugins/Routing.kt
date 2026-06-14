@@ -24,7 +24,6 @@ import com.moneat.config.RedisConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
-import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
@@ -179,11 +178,6 @@ fun Application.configureRouting() {
             ingestRoutes()
         }
         routingLogger.info { "Ingestion routes registered" }
-
-        // Telemetry pulse receiver — rate-limited by IP (unauthenticated, anonymous heartbeats)
-        rateLimit(RateLimitName("telemetry")) {
-            telemetryIngestRoutes()
-        }
 
         // Dashboard API endpoints
         apiRoutes()

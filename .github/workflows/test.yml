@@ -247,6 +247,13 @@ jobs:
           name: backend-overview-test-results
           path: backend/features/overview/build/test-results/test/
 
+      - name: Upload Pulse feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-pulse-test-results
+          path: backend/features/pulse/build/test-results/test/
+
       - name: Upload Releases feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -365,6 +372,13 @@ jobs:
         with:
           name: backend-overview-coverage-report
           path: backend/features/overview/build/reports/jacoco/test/
+
+      - name: Upload Pulse feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-pulse-coverage-report
+          path: backend/features/pulse/build/reports/jacoco/test/
 
       - name: Upload Releases feature coverage report
         if: always()
@@ -529,6 +543,13 @@ jobs:
         with:
           name: backend-overview-detekt-report
           path: backend/features/overview/build/reports/detekt/
+
+      - name: Upload Pulse feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-pulse-detekt-report
+          path: backend/features/pulse/build/reports/detekt/
 
       - name: Upload Releases feature detekt report (Sonar)
         if: success()
@@ -708,6 +729,13 @@ jobs:
           path: backend/features/overview/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Pulse feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-pulse-coverage-report
+          path: backend/features/pulse/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download Releases feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -839,6 +867,13 @@ jobs:
         with:
           name: backend-overview-detekt-report
           path: backend/features/overview/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Pulse feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-pulse-detekt-report
+          path: backend/features/pulse/build/reports/detekt/
         continue-on-error: true
 
       - name: Download Releases feature detekt report

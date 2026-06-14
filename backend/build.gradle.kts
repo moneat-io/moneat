@@ -241,6 +241,7 @@ dependencies {
     runtimeOnly(project(":features:monitoring"))
     runtimeOnly(project(":features:otlp"))
     runtimeOnly(project(":features:overview"))
+    runtimeOnly(project(":features:pulse"))
     runtimeOnly(project(":features:releases"))
     runtimeOnly(project(":features:security"))
     runtimeOnly(project(":features:sso"))
