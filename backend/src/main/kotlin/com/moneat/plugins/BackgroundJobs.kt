@@ -26,7 +26,6 @@ import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
-import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
@@ -193,13 +192,6 @@ private class CoreIngestionWorkers(application: Application) {
         config.property("ingest.workerCount").getString().toInt(),
         eventService = koin.get(),
     )
-    private val logIngestionWorker = LogIngestionWorker(
-        config.propertyOrNull("logs.queueKey")?.getString() ?: "moneat:logs:queue",
-        config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq",
-        config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull() ?: 2,
-        logService = koin.get(),
-        logIndexService = koin.get(),
-    )
     private val otlpTraceIngestionWorker = OtlpTraceIngestionWorker(
         config.propertyOrNull("otlp.tracesQueueKey")?.getString() ?: "moneat:otlp-traces:queue",
         config.propertyOrNull("otlp.tracesDlqKey")?.getString() ?: "moneat:otlp-traces:dlq",
@@ -216,9 +208,6 @@ private class CoreIngestionWorkers(application: Application) {
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.EVENTS)) {
             ingestionWorker.start()
         }
-        if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.LOGS)) {
-            logIngestionWorker.start()
-        }
         if (shouldStartIngestionPipeline(startIngestionWorkers, IngestionPipeline.OTLP_TRACES)) {
             otlpTraceIngestionWorker.start()
         }
@@ -229,7 +218,6 @@ private class CoreIngestionWorkers(application: Application) {
 
     fun stop() {
         ingestionWorker.stop()
-        logIngestionWorker.stop()
         runBlocking {
             otlpTraceIngestionWorker.stop()
             otlpMetricsIngestionWorker.stop()

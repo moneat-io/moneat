@@ -17,15 +17,25 @@
 package com.moneat.logs
 
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
+import com.moneat.logs.services.LogIngestionWorker
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.routing.Route
+import org.koin.core.context.GlobalContext
+
+private const val DEFAULT_LOG_QUEUE_KEY = "moneat:logs:queue"
+private const val DEFAULT_LOG_DLQ_KEY = "moneat:logs:dlq"
+private const val DEFAULT_LOG_WORKER_COUNT = 2
 
 class LogsModule : EnterpriseModule {
     override val name: String = "Logs"
+
+    private var logIngestionWorker: LogIngestionWorker? = null
 
     override fun registerRoutes(route: Route) {
         route.rateLimit(RateLimitName("log-ingestion")) {
@@ -34,7 +44,48 @@ class LogsModule : EnterpriseModule {
         route.logRoutes()
     }
 
-    override fun startBackgroundJobs(application: Application) = Unit
+    override fun startBackgroundJobs(application: Application) {
+        startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)
+    }
 
-    override fun stopBackgroundJobs() = Unit
+    override fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (!startIngestionWorkers ||
+            !IngestionQueueSettings.isSelected(IngestionPipeline.LOGS) ||
+            logIngestionWorker != null
+        ) {
+            return
+        }
+
+        val config = application.environment.config
+        val koin = GlobalContext.get()
+        val queueKey = config.propertyOrNull("logs.queueKey")?.getString()?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LOG_QUEUE_KEY
+        val dlqKey = config.propertyOrNull("logs.dlqKey")?.getString()?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LOG_DLQ_KEY
+        val workerCount = config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull()
+            ?: DEFAULT_LOG_WORKER_COUNT
+
+        require(queueKey.isNotBlank()) { "logs.queueKey must not be blank" }
+        require(dlqKey.isNotBlank()) { "logs.dlqKey must not be blank" }
+        require(workerCount > 0) { "logs.workerCount must be greater than 0" }
+
+        logIngestionWorker = LogIngestionWorker(
+            queueKey = queueKey,
+            dlqKey = dlqKey,
+            workerCount = workerCount,
+            logService = koin.get(),
+            logIndexService = koin.get(),
+        ).also { worker ->
+            worker.start()
+        }
+    }
+
+    override fun stopBackgroundJobs() {
+        logIngestionWorker?.stop()
+        logIngestionWorker = null
+    }
 }
