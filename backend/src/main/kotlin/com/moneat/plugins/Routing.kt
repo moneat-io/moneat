@@ -32,7 +32,6 @@ import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.security.detection.detectionRuleRoutes
 import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
-import com.moneat.workflows.routes.workflowRoutes
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -206,11 +205,6 @@ fun Application.configureRouting() {
 
         // Organization team management endpoints
         orgManagementRoutes()
-
-        // Workflow automation endpoints
-        rateLimit(RateLimitName("api")) {
-            workflowRoutes()
-        }
 
         // Security signals triage surface (OSS core)
         rateLimit(RateLimitName("api")) {

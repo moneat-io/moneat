@@ -20,6 +20,7 @@ include(":features:sso")
 include(":features:statuspage")
 include(":features:summary")
 include(":features:uptime")
+include(":features:workflows")
 
 // Enterprise modules (SSO, On-Call) — lives in ee/backend/ within the monorepo
 include(":ee")

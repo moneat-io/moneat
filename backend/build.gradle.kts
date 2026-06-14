@@ -245,6 +245,7 @@ dependencies {
     runtimeOnly(project(":features:statuspage"))
     runtimeOnly(project(":features:summary"))
     runtimeOnly(project(":features:uptime"))
+    runtimeOnly(project(":features:workflows"))
 }
 
 // Task to copy email templates into resources
