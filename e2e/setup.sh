@@ -12,7 +12,7 @@ fi
 # Check for required tools
 echo "Checking for required tools..."
 
-if ! command -v java &> /dev/null; then
+if ! command -v java &>/dev/null; then
   echo "❌ Java not found. Please install Java 11 or later."
   exit 1
 fi
@@ -35,7 +35,7 @@ if [ ! -f "Android/local.properties" ]; then
   echo "Creating Android/local.properties..."
   cp Android/local.properties.example Android/local.properties
   if [ -n "$ANDROID_HOME" ]; then
-    echo "sdk.dir=$ANDROID_HOME" >> Android/local.properties
+    echo "sdk.dir=$ANDROID_HOME" >>Android/local.properties
   fi
   echo "✅ Created Android/local.properties (needs DSN configuration)"
 else
@@ -46,7 +46,7 @@ if [ ! -f "KMP/local.properties" ]; then
   echo "Creating KMP/local.properties..."
   cp KMP/local.properties.example KMP/local.properties
   if [ -n "$ANDROID_HOME" ]; then
-    echo "sdk.dir=$ANDROID_HOME" >> KMP/local.properties
+    echo "sdk.dir=$ANDROID_HOME" >>KMP/local.properties
   fi
   echo "✅ Created KMP/local.properties (needs DSN configuration)"
 else

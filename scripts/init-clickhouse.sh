@@ -5,14 +5,14 @@ set -e
 echo "🗄️  Initializing ClickHouse tables..."
 
 # Check if ClickHouse is running
-if ! docker exec moneat-clickhouse wget --spider -q localhost:8123/ping > /dev/null 2>&1; then
+if ! docker exec moneat-clickhouse wget --spider -q localhost:8123/ping >/dev/null 2>&1; then
   echo "❌ ClickHouse is not running. Please run 'docker-compose up -d' first."
   exit 1
 fi
 
 # Initialize tables
 echo "Creating ClickHouse tables..."
-docker exec -i moneat-clickhouse clickhouse-client --database moneat --multiquery < backend/src/main/resources/db/clickhouse_init.sql
+docker exec -i moneat-clickhouse clickhouse-client --database moneat --multiquery <backend/src/main/resources/db/clickhouse_init.sql
 
 # Verify tables were created
 echo ""
