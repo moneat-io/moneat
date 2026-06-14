@@ -170,8 +170,7 @@ class UptimeServiceTest {
             val monitor =
                 service.createMonitor(
                     organizationId = orgId,
-                    request =
-                    CreateUptimeMonitorRequest(
+                    request = CreateUptimeMonitorRequest(
                         name = "Push Health",
                         type = "push",
                         intervalSeconds = 60,
@@ -180,8 +179,8 @@ class UptimeServiceTest {
                 )
 
             assertEquals("push", monitor.type)
-            assertNotNull(monitor.pushToken)
-            assertEquals(64, monitor.pushToken.length)
+            val pushToken = assertNotNull(monitor.pushToken)
+            assertEquals(64, pushToken.length)
         }
 
     @Test
