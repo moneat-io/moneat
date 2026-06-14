@@ -414,8 +414,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
 ) {
     val queryContext = resolveDashboardQueryContext(dependencies) ?: return
     val request = call.receive<ExecuteQueryRequest>()
-    val withTimeRange = if (request.timeRange != null) {
-        request.queryConfig.copy(timeRange = request.timeRange)
+    val requestedTimeRange = request.timeRange
+    val withTimeRange = if (requestedTimeRange != null) {
+        request.queryConfig.copy(timeRange = requestedTimeRange)
     } else {
         request.queryConfig
     }
@@ -608,8 +609,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
         val refId = ('A' + index).toString()
         val originalRefId = query.refId
         metadata[refId] = BatchQueryResultMetadata(originalRefId = originalRefId, queryIndex = index)
-        val withTimeRange = if (request.timeRange != null) {
-            query.copy(timeRange = request.timeRange)
+        val requestedTimeRange = request.timeRange
+        val withTimeRange = if (requestedTimeRange != null) {
+            query.copy(timeRange = requestedTimeRange)
         } else {
             query
         }
