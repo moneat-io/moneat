@@ -78,7 +78,6 @@ import com.moneat.monitor.services.ManagedIdentityCloudSourceVerifier
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.services.ResourceCatalogService
-import com.moneat.security.detection.DetectionScheduler
 import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -256,7 +255,6 @@ val monitorModule = module {
     single { CloudSourceService(get(), get()) }
     single { AgentApiKeyService() }
     single { SyntheticsService(get(), get()) }
-    single { DetectionScheduler() }
     single { VulnerabilityAdvisorySyncJob() }
 }
 
