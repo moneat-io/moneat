@@ -18,6 +18,7 @@ package com.moneat.config
 
 import com.moneat.runtime.MoneatProcessRole
 import com.moneat.runtime.RuntimeMode
+import com.moneat.secrets.SecretVaultPurpose
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -44,6 +45,7 @@ class EnvironmentValidator {
         validateCriticalSecret("DATABASE_PASSWORD", errors)
         validateCriticalSecret("CLICKHOUSE_PASSWORD", errors)
         validateCriticalSecret("DATA_SOURCE_ENCRYPTION_KEY", errors)
+        validateSecretVaultConfig(errors)
 
         // CRITICAL: Production URLs must be set correctly (relaxed for self-host)
         if (!isSelfHost) {
@@ -184,7 +186,6 @@ class EnvironmentValidator {
         validateWorkflowSecret("WORKFLOWS_CONNECTION_KEK", errors)
         validateWorkflowSecret("WORKFLOWS_SIGNING_KEY", errors)
         validateWorkflowSecret("WORKFLOWS_TEMPORAL_PAYLOAD_KEY", errors)
-        validateWorkflowSecretsDistinct(errors)
     }
 
     private fun validateWorkflowSecret(
@@ -199,15 +200,51 @@ class EnvironmentValidator {
         }
     }
 
-    private fun validateWorkflowSecretsDistinct(errors: MutableList<String>) {
-        val keys =
+    private fun validateSecretVaultConfig(errors: MutableList<String>) {
+        SecretVaultPurpose.entries.forEach { purpose ->
+            validateOptionalSecret(purpose.activeSecretEnvVar, errors)
+            validateOptionalPreviousSecrets(purpose.previousSecretsEnvVar, errors)
+        }
+        validateApplicationSecretsDistinct(errors)
+    }
+
+    private fun validateOptionalSecret(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)
+        if (!value.isNullOrBlank() && value.length < MIN_JWT_SECRET_LENGTH) {
+            errors.add("REQUIRED: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for security.")
+        }
+    }
+
+    private fun validateOptionalPreviousSecrets(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)?.takeIf { it.isNotBlank() } ?: return
+        value.split(",").forEach { entry ->
+            val pair = entry.split("=", limit = 2)
+            if (pair.size != 2) {
+                errors.add("REQUIRED: $envVar entries must be 'keyId=secret'.")
+                return@forEach
+            }
+            val secret = pair[1].trim()
+            if (secret.isNotBlank() && secret.length < MIN_JWT_SECRET_LENGTH) {
+                errors.add("REQUIRED: $envVar secrets must be at least $MIN_JWT_SECRET_LENGTH characters.")
+            }
+        }
+    }
+
+    private fun validateApplicationSecretsDistinct(errors: MutableList<String>) {
+        val coreSecretKeys =
             listOf(
                 "JWT_SECRET",
                 "DATA_SOURCE_ENCRYPTION_KEY",
-                "WORKFLOWS_CONNECTION_KEK",
                 "WORKFLOWS_SIGNING_KEY",
                 "WORKFLOWS_TEMPORAL_PAYLOAD_KEY"
             )
+        val keys = (coreSecretKeys + SecretVaultPurpose.secretEnvVars).distinct()
         val values =
             keys.mapNotNull { key ->
                 getConfigValue(key)
@@ -220,7 +257,7 @@ class EnvironmentValidator {
             .values
             .forEach { duplicates ->
                 errors.add(
-                    "REQUIRED: Workflow secrets must be distinct; reused by " +
+                    "REQUIRED: Application secrets must be distinct; reused by " +
                         duplicates.joinToString(", ") { it.first } + "."
                 )
             }

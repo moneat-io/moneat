@@ -71,6 +71,27 @@ class EnvironmentValidatorTest {
     }
 
     @Test
+    fun `validate rejects reused connector vault secrets`() {
+        val reusedSecret = "connector-secret-value-aaaaaaaaaaaaaaaa"
+        withSystemProperties(
+            mapOf(
+                "DATA_IMPORT_CONNECTOR_KEK" to reusedSecret,
+                "NOTIFICATION_CONNECTOR_KEK" to reusedSecret
+            )
+        ) {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(
+                result.errors.any { error ->
+                    error.contains("Application secrets must be distinct") &&
+                        error.contains("DATA_IMPORT_CONNECTOR_KEK") &&
+                        error.contains("NOTIFICATION_CONNECTOR_KEK")
+                }
+            )
+        }
+    }
+
+    @Test
     fun `validate reports invalid process role`() {
         withSystemProperty("MONEAT_PROCESS_ROLE", "web") {
             val result = EnvironmentValidator().validate()
@@ -179,15 +200,24 @@ class EnvironmentValidatorTest {
         value: String,
         block: () -> Unit
     ) {
-        val previous = System.getProperty(key)
+        withSystemProperties(mapOf(key to value), block)
+    }
+
+    private fun withSystemProperties(
+        properties: Map<String, String>,
+        block: () -> Unit
+    ) {
+        val previous = properties.keys.associateWith { key -> System.getProperty(key) }
         try {
-            System.setProperty(key, value)
+            properties.forEach { (key, value) -> System.setProperty(key, value) }
             block()
         } finally {
-            if (previous == null) {
-                System.clearProperty(key)
-            } else {
-                System.setProperty(key, previous)
+            previous.forEach { (key, value) ->
+                if (value == null) {
+                    System.clearProperty(key)
+                } else {
+                    System.setProperty(key, value)
+                }
             }
         }
     }
