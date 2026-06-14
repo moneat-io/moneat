@@ -240,6 +240,7 @@ dependencies {
     runtimeOnly(project(":features:sso"))
     runtimeOnly(project(":features:statuspage"))
     runtimeOnly(project(":features:summary"))
+    runtimeOnly(project(":features:uptime"))
 }
 
 // Task to copy email templates into resources
