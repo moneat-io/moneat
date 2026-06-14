@@ -227,6 +227,7 @@ dependencies {
 
     // Enterprise modules (SSO, On-Call) — always included, license-gated at runtime
     runtimeOnly(project(":ee"))
+    runtimeOnly(project(":features:account-deletion"))
     runtimeOnly(project(":features:ai"))
     runtimeOnly(project(":features:analytics"))
     runtimeOnly(project(":features:auth-tokens"))

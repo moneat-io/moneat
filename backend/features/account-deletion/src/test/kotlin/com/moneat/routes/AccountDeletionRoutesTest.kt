@@ -165,6 +165,28 @@ class AccountDeletionRoutesTest {
         }
 
     @Test
+    fun `get org details returns 400 for numeric org id`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val orgId = seedOrg()
+            val response =
+                client.get("/organizations/$orgId") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+        }
+
+    @Test
     fun `get org details returns 404 when user has no membership`() =
         testApplication {
             application {
@@ -202,13 +224,17 @@ class AccountDeletionRoutesTest {
             val userId = seedUser()
             val orgId = seedOrg("Acme Corp")
             seedMembership(userId, orgId, "owner")
+            val resourceId = orgResourceId(orgId)
 
             val response =
-                client.get("/organizations/${orgResourceId(orgId)}") {
+                client.get("/organizations/$resourceId") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.OK, response.status)
-            assertTrue(response.bodyAsText().contains("Acme Corp"))
+            val body = response.bodyAsText()
+            assertTrue(body.contains("Acme Corp"))
+            assertTrue(body.contains(""""id":"$resourceId""""))
+            assertTrue(!body.contains(""""id":"$orgId""""))
         }
 
     // ──── GET /account/deletion-validation ────
@@ -280,6 +306,28 @@ class AccountDeletionRoutesTest {
             val userId = seedUser()
             val response =
                 client.get("/organizations/not-a-number/deletion-validation") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+        }
+
+    @Test
+    fun `org deletion validation returns 400 for numeric org id`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val orgId = seedOrg()
+            val response =
+                client.get("/organizations/$orgId/deletion-validation") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                 }
             assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -402,6 +450,30 @@ class AccountDeletionRoutesTest {
             val userId = seedUser()
             val response =
                 client.delete("/organizations/not-a-number") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"confirmation":"Org Name"}""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+        }
+
+    @Test
+    fun `delete organization returns 400 for numeric org id`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val orgId = seedOrg()
+            val response =
+                client.delete("/organizations/$orgId") {
                     header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
                     contentType(ContentType.Application.Json)
                     setBody("""{"confirmation":"Org Name"}""")

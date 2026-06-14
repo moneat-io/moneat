@@ -184,6 +184,13 @@ jobs:
           name: backend-analytics-test-results
           path: backend/features/analytics/build/test-results/test/
 
+      - name: Upload Account Deletion feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-account-deletion-test-results
+          path: backend/features/account-deletion/build/test-results/test/
+
       - name: Upload Auth Tokens feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -323,6 +330,13 @@ jobs:
         with:
           name: backend-analytics-coverage-report
           path: backend/features/analytics/build/reports/jacoco/test/
+
+      - name: Upload Account Deletion feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-account-deletion-coverage-report
+          path: backend/features/account-deletion/build/reports/jacoco/test/
 
       - name: Upload Auth Tokens feature coverage report
         if: always()
@@ -508,6 +522,13 @@ jobs:
         with:
           name: backend-analytics-detekt-report
           path: backend/features/analytics/build/reports/detekt/
+
+      - name: Upload Account Deletion feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-account-deletion-detekt-report
+          path: backend/features/account-deletion/build/reports/detekt/
 
       - name: Upload Auth Tokens feature detekt report (Sonar)
         if: success()
@@ -708,6 +729,13 @@ jobs:
           path: backend/features/analytics/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Account Deletion feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-account-deletion-coverage-report
+          path: backend/features/account-deletion/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download Auth Tokens feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -860,6 +888,13 @@ jobs:
         with:
           name: backend-analytics-detekt-report
           path: backend/features/analytics/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Account Deletion feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-account-deletion-detekt-report
+          path: backend/features/account-deletion/build/reports/detekt/
         continue-on-error: true
 
       - name: Download Auth Tokens feature detekt report

@@ -71,6 +71,7 @@ class PublicSerializableResourceIdsTest {
 
         return listOf(
             SourceRoot("backend", repoRoot.resolve("backend/src/main/kotlin")),
+            SourceRoot("backend", repoRoot.resolve("backend/features/account-deletion/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/analytics/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/billing/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/contact/src/main/kotlin")),
