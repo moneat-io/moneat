@@ -48,6 +48,8 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.h2)
     testImplementation(libs.mockk)
+    testImplementation(libs.protobuf.java)
+    testImplementation(libs.opentelemetry.proto)
     testImplementation(kotlin("reflect"))
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
