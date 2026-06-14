@@ -30,10 +30,6 @@ import com.moneat.events.routes.releaseRoutes
 import com.moneat.events.routes.telemetryIngestRoutes
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
-import com.moneat.monitor.routes.cloudSourceRoutes
-import com.moneat.monitor.routes.infraRoutes
-import com.moneat.monitor.routes.monitorRoutes
-import com.moneat.monitor.routes.resourceCatalogRoutes
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
@@ -217,14 +213,6 @@ fun Application.configureRouting() {
 
         // Admin dashboard endpoints
         adminRoutes()
-
-        // Server monitoring endpoints
-        monitorRoutes()
-        resourceCatalogRoutes()
-        cloudSourceRoutes()
-
-        // Infra endpoints (containers, processes — deduplicated)
-        infraRoutes()
 
         // Logging ingestion and query endpoints
         rateLimit(RateLimitName("log-ingestion")) {
