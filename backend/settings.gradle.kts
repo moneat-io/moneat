@@ -2,6 +2,7 @@ rootProject.name = "moneat-backend"
 
 include(":feature-spi")
 include(":ingest-common")
+include(":features:account-deletion")
 include(":features:ai")
 include(":features:analytics")
 include(":features:auth-tokens")

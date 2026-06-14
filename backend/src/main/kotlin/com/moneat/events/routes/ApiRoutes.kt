@@ -21,7 +21,6 @@ import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.auth.requireCurrentOrg
-import com.moneat.auth.routes.accountDeletionRoutes
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
@@ -1583,9 +1582,6 @@ fun Route.apiRoutes() {
 
                     call.respond(HttpStatusCode.NoContent)
                 }
-
-                // Account Deletion Routes
-                accountDeletionRoutes()
             }
         }
     }
