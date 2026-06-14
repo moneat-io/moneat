@@ -247,6 +247,13 @@ jobs:
           name: backend-monitoring-test-results
           path: backend/features/monitoring/build/test-results/test/
 
+      - name: Upload Organization feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-org-test-results
+          path: backend/features/org/build/test-results/test/
+
       - name: Upload Overview feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -379,6 +386,13 @@ jobs:
         with:
           name: backend-monitoring-coverage-report
           path: backend/features/monitoring/build/reports/jacoco/test/
+
+      - name: Upload Organization feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-org-coverage-report
+          path: backend/features/org/build/reports/jacoco/test/
 
       - name: Upload Overview feature coverage report
         if: always()
@@ -557,6 +571,13 @@ jobs:
         with:
           name: backend-monitoring-detekt-report
           path: backend/features/monitoring/build/reports/detekt/
+
+      - name: Upload Organization feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-org-detekt-report
+          path: backend/features/org/build/reports/detekt/
 
       - name: Upload Overview feature detekt report (Sonar)
         if: success()
@@ -750,6 +771,13 @@ jobs:
           path: backend/features/monitoring/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download Organization feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-org-coverage-report
+          path: backend/features/org/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download Overview feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -895,6 +923,13 @@ jobs:
         with:
           name: backend-monitoring-detekt-report
           path: backend/features/monitoring/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Organization feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-org-detekt-report
+          path: backend/features/org/build/reports/detekt/
         continue-on-error: true
 
       - name: Download Overview feature detekt report
