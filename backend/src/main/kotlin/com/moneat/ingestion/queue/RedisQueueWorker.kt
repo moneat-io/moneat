@@ -46,6 +46,7 @@ import java.time.Duration
 private const val ERROR_RETRY_DELAY_MS = 1_000L
 private const val REDIS_GROUP_EXISTS = "BUSYGROUP"
 private const val REDIS_GROUP_MISSING = "NOGROUP"
+private const val REDIS_STREAM_START_ID = "0-0"
 
 data class QueuedIngestionMessage(
     val id: String?,
@@ -54,6 +55,9 @@ data class QueuedIngestionMessage(
 )
 
 internal object RedisStreamQueueOperations {
+    /**
+     * Redis Streams consumer groups can disappear if Redis evicts or trims the stream key.
+     */
     fun readMessages(
         redis: RedisCommands<String, String>,
         spec: IngestionQueueSpec,
@@ -78,7 +82,7 @@ internal object RedisStreamQueueOperations {
     ) {
         try {
             redis.xgroupCreate(
-                StreamOffset.from(streamKey, "0-0"),
+                StreamOffset.from(streamKey, REDIS_STREAM_START_ID),
                 consumerGroup,
                 XGroupCreateArgs().mkstream(true),
             )
@@ -97,7 +101,15 @@ internal object RedisStreamQueueOperations {
         logger: KLogger,
     ) {
         if (ids.isEmpty()) return
-        redis.xack(streamKey, consumerGroup, *ids)
+        try {
+            redis.xack(streamKey, consumerGroup, *ids)
+        } catch (e: RedisCommandExecutionException) {
+            if (!isMissingConsumerGroup(e)) throw e
+            logger.warn(e) {
+                "Redis stream consumer group $consumerGroup disappeared before ack for $streamKey"
+            }
+            return
+        }
         runCatching {
             redis.xdel(streamKey, *ids)
         }.onFailure { e ->
@@ -115,7 +127,7 @@ internal object RedisStreamQueueOperations {
             XAutoClaimArgs<String>()
                 .consumer(consumer)
                 .minIdleTime(Duration.ofMillis(spec.claimIdleMs))
-                .startId("0-0")
+                .startId(REDIS_STREAM_START_ID)
                 .count(spec.batchSize.toLong())
         ).messages
         if (claimed.isNotEmpty()) return claimed

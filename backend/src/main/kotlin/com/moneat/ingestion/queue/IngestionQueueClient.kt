@@ -50,7 +50,7 @@ object IngestionQueueClient {
                 null
             }
             IngestionQueueBackend.REDIS_STREAMS ->
-                RedisConfig.sync().xadd(spec.streamKey, streamBody(pipeline, payload))
+                RedisConfig.sync().xadd(spec.streamKey, streamAddArgs(spec.streamMaxLen), streamBody(pipeline, payload))
         }
     }
 
@@ -69,7 +69,7 @@ object IngestionQueueClient {
                 IngestionQueueBackend.REDIS_STREAMS -> {
                     RedisConfig.sync().xadd(
                         spec.dlqStreamKey,
-                        XAddArgs(),
+                        streamAddArgs(spec.dlqStreamMaxLen),
                         streamDlqBody(spec.pipeline, request.payload, request.cause, request.streamId)
                     )
                     1L
@@ -96,6 +96,11 @@ object IngestionQueueClient {
             FIELD_PIPELINE to pipeline.id,
             FIELD_ENQUEUED_AT to System.currentTimeMillis().toString(),
         )
+
+    private fun streamAddArgs(maxLen: Long): XAddArgs =
+        XAddArgs()
+            .maxlen(maxLen)
+            .approximateTrimming()
 
     private fun streamDlqBody(
         pipeline: IngestionPipeline,

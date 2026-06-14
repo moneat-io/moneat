@@ -111,6 +111,26 @@ class RedisStreamQueueOperationsTest {
         verify(exactly = 1) { redis.xdel("moneat:logs:queue:stream", "1-0") }
     }
 
+    @Test
+    fun `acknowledge ignores missing consumer group during ack`() {
+        every {
+            redis.xack("moneat:logs:queue:stream", "moneat:logs:workers", "1-0")
+        } throws RedisCommandExecutionException(
+            "NOGROUP No such key 'moneat:logs:queue:stream' or consumer group 'moneat:logs:workers'",
+        )
+
+        RedisStreamQueueOperations.acknowledge(
+            redis,
+            streamKey = "moneat:logs:queue:stream",
+            consumerGroup = "moneat:logs:workers",
+            ids = arrayOf("1-0"),
+            logger = logger,
+        )
+
+        verify(exactly = 1) { redis.xack("moneat:logs:queue:stream", "moneat:logs:workers", "1-0") }
+        verify(exactly = 0) { redis.xdel("moneat:logs:queue:stream", "1-0") }
+    }
+
     private fun logQueueSpec(): IngestionQueueSpec =
         IngestionQueueSpec(
             pipeline = IngestionPipeline.LOGS,
@@ -124,5 +144,7 @@ class RedisStreamQueueOperationsTest {
             claimIdleMs = 300_000,
             maxDeliveries = 5,
             readTimeoutMs = 5_000,
+            streamMaxLen = 250_000,
+            dlqStreamMaxLen = 10_000,
         )
 }

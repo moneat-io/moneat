@@ -72,11 +72,14 @@ class IngestionQueueClientTest {
     fun `enqueue writes structured body to redis stream`() {
         every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns "redis-streams"
         val bodySlot = slot<Map<String, String>>()
-        every { redis.xadd("logs:queue:stream", capture(bodySlot)) } returns "1-0"
+        val argsSlot = slot<XAddArgs>()
+        every { redis.xadd("logs:queue:stream", capture(argsSlot), capture(bodySlot)) } returns "1-0"
 
         val streamId = IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "logs:queue", "payload")
 
         assertEquals("1-0", streamId)
+        assertEquals(250_000L, xaddMaxLen(argsSlot.captured))
+        assertTrue(xaddApproximateTrimming(argsSlot.captured))
         assertEquals("payload", bodySlot.captured["payload"])
         assertEquals("logs", bodySlot.captured["pipeline"])
         assertNotNull(bodySlot.captured["enqueued_at_ms"]?.toLongOrNull())
@@ -102,7 +105,8 @@ class IngestionQueueClientTest {
         every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns "redis-streams"
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:queue", "logs:dlq", workerCount = 1)
         val bodySlot = slot<Map<String, String>>()
-        every { redis.xadd("logs:dlq:stream", any<XAddArgs>(), capture(bodySlot)) } returns "2-0"
+        val argsSlot = slot<XAddArgs>()
+        every { redis.xadd("logs:dlq:stream", capture(argsSlot), capture(bodySlot)) } returns "2-0"
 
         val pushed =
             IngestionQueueClient.pushToDlq(
@@ -117,6 +121,8 @@ class IngestionQueueClientTest {
             )
 
         assertTrue(pushed)
+        assertEquals(10_000L, xaddMaxLen(argsSlot.captured))
+        assertTrue(xaddApproximateTrimming(argsSlot.captured))
         assertEquals("payload", bodySlot.captured["payload"])
         assertEquals("logs", bodySlot.captured["pipeline"])
         assertEquals("RedisException", bodySlot.captured["error_type"])
@@ -143,4 +149,14 @@ class IngestionQueueClientTest {
         assertEquals("payload", IngestionQueueClient.payloadField(mapOf("payload" to "payload")))
         assertNull(IngestionQueueClient.payloadField(mapOf("pipeline" to "logs")))
     }
+
+    private fun xaddMaxLen(args: XAddArgs): Long? =
+        args.javaClass.getDeclaredField("maxlen")
+            .also { field -> field.isAccessible = true }
+            .get(args) as? Long
+
+    private fun xaddApproximateTrimming(args: XAddArgs): Boolean =
+        args.javaClass.getDeclaredField("approximateTrimming")
+            .also { field -> field.isAccessible = true }
+            .getBoolean(args)
 }
