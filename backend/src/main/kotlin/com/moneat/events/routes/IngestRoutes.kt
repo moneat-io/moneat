@@ -133,7 +133,6 @@ private suspend fun RoutingContext.handleEnvelopeIngest(dependencies: IngestRout
         call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
     }.getOrElse { e ->
         logger.error(e) { "Failed to process envelope: ${e.message}" }
-        e.printStackTrace()
         call.respond(
             HttpStatusCode.BadRequest,
             DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error")

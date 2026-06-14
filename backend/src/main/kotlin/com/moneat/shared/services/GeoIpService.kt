@@ -16,6 +16,7 @@
 
 package com.moneat.shared.services
 
+import com.moneat.config.EnvConfig
 import mu.KotlinLogging
 import java.io.File
 import java.net.InetAddress
@@ -40,7 +41,7 @@ class GeoIpService {
     private val reader: Any? by lazy { initReader() }
     private var readerAvailable = false
     private fun initReader(): Any? {
-        val dbPath = System.getenv("GEOIP_DB_PATH")
+        val dbPath = EnvConfig.get("GEOIP_DB_PATH")
             ?: "/usr/share/GeoIP/GeoLite2-City.mmdb"
         val dbFile = File(dbPath)
         if (!dbFile.exists()) {

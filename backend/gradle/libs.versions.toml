@@ -8,6 +8,7 @@ kotlinx-datetime = "0.7.1-0.6.x-compat"
 junit = "6.0.3"
 testcontainers = "2.0.5"
 detekt = "1.23.8"
+konsist = "0.17.3"
 shadow = "9.4.2"
 jacoco = "0.8.14"
 opentelemetry = "1.60.1"
@@ -134,6 +135,7 @@ junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", vers
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }
 h2 = { module = "com.h2database:h2", version.ref = "h2" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
 testcontainers-clickhouse = { module = "org.testcontainers:testcontainers-clickhouse", version.ref = "testcontainers" }

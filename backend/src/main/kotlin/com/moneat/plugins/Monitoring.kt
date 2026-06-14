@@ -217,7 +217,6 @@ private fun captureClickHouseQueryException(call: ApplicationCall, cause: ClickH
 private suspend fun handleUnhandledException(call: ApplicationCall, cause: Throwable) {
     logger.error(cause) { "Unhandled exception: ${cause.message}" }
     captureUnhandledException(call, cause)
-    cause.printStackTrace()
     if (!call.response.isCommitted) {
         call.respond(
             HttpStatusCode.InternalServerError,
