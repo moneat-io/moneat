@@ -16,10 +16,8 @@
 
 package com.moneat.synthetics.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.shared.services.TaskLock
+import com.moneat.utils.suspendRunCatching
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,12 +25,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
+import java.io.IOException
 import java.util.Collections
 import java.util.UUID
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 

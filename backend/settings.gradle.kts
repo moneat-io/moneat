@@ -20,6 +20,7 @@ include(":features:security")
 include(":features:sso")
 include(":features:statuspage")
 include(":features:summary")
+include(":features:synthetics")
 include(":features:uptime")
 include(":features:workflows")
 

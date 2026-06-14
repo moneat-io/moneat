@@ -84,6 +84,7 @@ class PublicSerializableResourceIdsTest {
             SourceRoot("backend", repoRoot.resolve("backend/features/security/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/sso/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/summary/src/main/kotlin")),
+            SourceRoot("backend", repoRoot.resolve("backend/features/synthetics/src/main/kotlin")),
             SourceRoot("backend", repoRoot.resolve("backend/features/workflows/src/main/kotlin")),
             SourceRoot("ee", repoRoot.resolve("ee/backend/src/main/kotlin"))
         ).filter { it.path.exists() }

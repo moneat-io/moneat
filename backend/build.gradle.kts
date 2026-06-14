@@ -245,6 +245,7 @@ dependencies {
     runtimeOnly(project(":features:sso"))
     runtimeOnly(project(":features:statuspage"))
     runtimeOnly(project(":features:summary"))
+    runtimeOnly(project(":features:synthetics"))
     runtimeOnly(project(":features:uptime"))
     runtimeOnly(project(":features:workflows"))
 }
