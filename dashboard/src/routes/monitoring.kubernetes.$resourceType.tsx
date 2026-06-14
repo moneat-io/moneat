@@ -71,7 +71,7 @@ function KubernetesResourceList() {
     enabled: Boolean(k8sType),
   })
 
-  const resources: KubernetesResource[] = data?.resources ?? []
+  const resources: KubernetesResource[] = useMemo(() => data?.resources ?? [], [data?.resources])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return resources

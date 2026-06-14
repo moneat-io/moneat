@@ -305,7 +305,7 @@ function SyntheticsOverview() {
 
   const tests = useMemo(() => testsData ?? [], [testsData])
   const results = useMemo(() => resultsData?.results ?? [], [resultsData])
-  const locations = locationsData ?? []
+  const locations = useMemo(() => locationsData ?? [], [locationsData])
 
   const resultsByTest = useMemo(() => {
     const map = new Map<string, SyntheticResultResponse[]>()

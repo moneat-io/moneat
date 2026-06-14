@@ -158,6 +158,7 @@ function DashboardViewPage() {
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
     },
   })
+  const {mutate: updateDashboard} = updateMutation
 
   const favoriteMutation = useMutation({
     mutationFn: () => api.toggleDashboardFavorite(id),
@@ -221,16 +222,16 @@ function DashboardViewPage() {
         ...prePasteWidgetsRef.current,
         {...widget, sort_order: dashboard.widgets.length},
       ]
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
     },
-    [dashboard, updateMutation, toWidgetUpdateRequest]
+    [dashboard, updateDashboard, toWidgetUpdateRequest]
   )
 
   const handleUndoPaste = useCallback(() => {
     if (!prePasteWidgetsRef.current) return
-    updateMutation.mutate({widgets: prePasteWidgetsRef.current})
+    updateDashboard({widgets: prePasteWidgetsRef.current})
     prePasteWidgetsRef.current = null
-  }, [updateMutation])
+  }, [updateDashboard])
 
   const handleWidgetClick = useCallback(
     (widget: DashboardWidget) => {
@@ -258,23 +259,23 @@ function DashboardViewPage() {
 
   const handleLayoutChange = useCallback(
     (widgets: CreateWidgetRequest[]) => {
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
     },
-    [updateMutation]
+    [updateDashboard]
   )
 
   const handleTitleChange = useCallback(
     (title: string) => {
-      updateMutation.mutate({title})
+      updateDashboard({title})
     },
-    [updateMutation]
+    [updateDashboard]
   )
 
   const handleVariablesSave = useCallback(
     (variables: DashboardVariable[]) => {
-      updateMutation.mutate({variables})
+      updateDashboard({variables})
     },
-    [updateMutation]
+    [updateDashboard]
   )
 
   const handleAddWidget = useCallback(() => {
@@ -342,10 +343,10 @@ function DashboardViewPage() {
           },
         ]
       }
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
       setSelectedWidget(null)
     },
-    [dashboard, updateMutation, toWidgetUpdateRequest]
+    [dashboard, updateDashboard, toWidgetUpdateRequest]
   )
 
   const handleDeleteWidget = useCallback(
@@ -354,9 +355,9 @@ function DashboardViewPage() {
       const widgets = dashboard.widgets
         .filter((w) => w.id !== widgetId)
         .map((w) => toWidgetUpdateRequest(w))
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
     },
-    [dashboard, updateMutation, toWidgetUpdateRequest]
+    [dashboard, updateDashboard, toWidgetUpdateRequest]
   )
 
   if (isLoading) {

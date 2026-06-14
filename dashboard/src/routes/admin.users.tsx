@@ -74,7 +74,7 @@ function AdminUsersPage() {
   const limit = 25
 
   const {data, isLoading} = useQuery({
-    queryKey: ['admin-users', page, search],
+    queryKey: ['admin-users', page, limit, search],
     queryFn: () => api.getAdminUsers(page, limit, search || undefined),
   })
 

@@ -60,7 +60,7 @@ function SeededServiceExplorerPage({routeService}: Readonly<{routeService: strin
     queryFn: () => api.getProfileServices(),
     enabled: api.isAuthenticated(),
   })
-  const serviceSummaries = servicesData?.services ?? []
+  const serviceSummaries = useMemo(() => servicesData?.services ?? [], [servicesData?.services])
   const selectedService = routeService
   const selectedType = firstFacetValue(facetFilters, 'type')
   const selectedEnv = firstFacetValue(facetFilters, 'env')

@@ -40,7 +40,10 @@ function DatabaseMonitoring() {
     queryFn: () => api.get('/v1/infra/dbm/queries?limit=50'),
   })
 
-  const queries: DatabaseQuery[] = (data as {queries?: DatabaseQuery[]} | undefined)?.queries ?? []
+  const queries: DatabaseQuery[] = useMemo(
+    () => (data as {queries?: DatabaseQuery[]} | undefined)?.queries ?? [],
+    [data],
+  )
 
   const filtered = useMemo(() => {
     if (!searchQuery) return queries

@@ -89,7 +89,7 @@ export function NetworkConnections() {
     refetchInterval: 10000,
   })
 
-  const connections = data?.connections ?? []
+  const connections = useMemo(() => data?.connections ?? [], [data?.connections])
 
   const filtered = useMemo(() => {
     let result = connections

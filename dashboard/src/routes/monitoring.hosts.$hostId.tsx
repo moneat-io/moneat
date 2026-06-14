@@ -320,7 +320,7 @@ function HostDetailPage() {
   const to = Math.floor(now.getTime() / 1000).toString()
 
   const {data: metrics, isLoading: metricsLoading} = useQuery({
-    queryKey: ['host-metrics', hostId, effectiveTimeRange],
+    queryKey: ['host-metrics', hostId, effectiveTimeRange, from, to],
     queryFn: () => api.getHostMetrics(hostId, from, to),
     refetchInterval: 30000,
   })

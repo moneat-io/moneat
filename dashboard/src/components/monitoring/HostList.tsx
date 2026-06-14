@@ -55,7 +55,7 @@ export function HostList() {
     refetchInterval: 30000,
   })
 
-  const hosts = data?.hosts ?? []
+  const hosts = useMemo(() => data?.hosts ?? [], [data?.hosts])
 
   const maxMemory = useMemo(
     () => Math.max(...hosts.map((h) => h.memoryTotalKb), 1),

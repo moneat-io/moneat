@@ -57,7 +57,7 @@ export function ProfileServiceList({
     enabled: api.isAuthenticated(),
   })
 
-  const services = data?.services ?? []
+  const services = useMemo(() => data?.services ?? [], [data?.services])
   const selectedServices = useMemo(
     () => new Set(serviceFilters.map((service) => service.trim()).filter((service) => service !== '')),
     [serviceFilters],

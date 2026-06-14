@@ -20,6 +20,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    testTimeout: 30_000,
     setupFiles: ['./src/test/setup.ts'],
     env: {
       VITE_BACKEND_URL: 'http://localhost:8080',

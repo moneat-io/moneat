@@ -53,7 +53,7 @@ function NdmTraps() {
     queryFn: () => api.get<{traps?: NetworkTrap[]}>('/v1/network-devices/traps?limit=100'),
   })
 
-  const traps: NetworkTrap[] = data?.traps ?? []
+  const traps: NetworkTrap[] = useMemo(() => data?.traps ?? [], [data?.traps])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return traps

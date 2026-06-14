@@ -17,7 +17,7 @@
 import {render, screen, waitFor} from '@testing-library/react'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {afterEach, describe, expect, it, vi} from 'vitest'
-import type {ReactNode} from 'react'
+import {useState, type ReactNode} from 'react'
 import type {OverviewResponse} from '@/lib/api/types'
 import {api} from '@/lib/api'
 import {OverviewDataProvider} from '../OverviewDataProvider'
@@ -41,11 +41,11 @@ function Probe() {
 }
 
 function Wrapper({children}: {children: ReactNode}) {
-  const client = new QueryClient({
+  const [client] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {retry: false},
     },
-  })
+  }))
   return (
     <QueryClientProvider client={client}>
       <OverviewDataProvider>{children}</OverviewDataProvider>

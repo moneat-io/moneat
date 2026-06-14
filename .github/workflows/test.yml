@@ -1261,6 +1261,14 @@ jobs:
         working-directory: dashboard
         run: npm run lint
 
+      - name: Run dead code check
+        working-directory: dashboard
+        run: npm run lint:deadcode
+
+      - name: Run dependency boundary check
+        working-directory: dashboard
+        run: npm run lint:boundaries
+
       - name: Run TypeScript typecheck
         working-directory: dashboard
         run: npm run typecheck

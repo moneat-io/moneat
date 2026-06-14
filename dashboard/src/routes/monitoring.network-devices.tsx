@@ -52,7 +52,7 @@ function NetworkDevicesLayout() {
     enabled: isIndexPage,
   })
 
-  const devices: NetworkDevice[] = data?.devices ?? []
+  const devices: NetworkDevice[] = useMemo(() => data?.devices ?? [], [data?.devices])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return devices

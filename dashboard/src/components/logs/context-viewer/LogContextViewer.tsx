@@ -276,7 +276,7 @@ export function LogContextViewer({
     retry: false,
     staleTime: 60_000,
   })
-  const spans = traceQuery.data?.spans ?? []
+  const spans = useMemo(() => traceQuery.data?.spans ?? [], [traceQuery.data?.spans])
   const traceSummary = useMemo(() => summarizeTrace(spans), [spans])
   const traceHref = log.traceId ? `/performance/traces/${log.traceId}` : undefined
 

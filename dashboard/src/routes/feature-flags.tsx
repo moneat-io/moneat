@@ -311,7 +311,7 @@ function FeatureFlagsPage() {
   })
 
   const environments = flagsQuery.data?.environments ?? []
-  const flags = flagsQuery.data?.flags ?? []
+  const flags = useMemo(() => flagsQuery.data?.flags ?? [], [flagsQuery.data?.flags])
   const normalizedFlagSearch = flagSearch.trim().toLowerCase()
   const filteredFlags = useMemo(() => {
     return flags.filter((flag) => flagMatchesSearch(flag, selectedConfig(flag, environment), normalizedFlagSearch))

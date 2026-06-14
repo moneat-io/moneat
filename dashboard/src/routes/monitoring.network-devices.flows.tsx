@@ -41,7 +41,7 @@ function NdmFlows() {
     queryFn: () => api.get<{flows?: NetworkFlow[]}>('/v1/network-devices/flows?limit=100'),
   })
 
-  const flows: NetworkFlow[] = data?.flows ?? []
+  const flows: NetworkFlow[] = useMemo(() => data?.flows ?? [], [data?.flows])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return flows

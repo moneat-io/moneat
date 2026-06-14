@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useCallback, useRef, type CSSProperties, type ReactNode} from 'react'
+import {useCallback, useMemo, useRef, type CSSProperties, type ReactNode} from 'react'
 import {AiChatContent} from '@/components/command-palette/AiChatContent'
 import {useCommandPalette} from '@/hooks/useCommandPalette'
 
@@ -34,7 +34,10 @@ export function AiSplitPanel({children, style, className}: AiSplitPanelProps) {
 
   const orientation = palette?.aiPanelOrientation ?? 'vertical'
   const panelSize = palette?.aiPanelSize ?? 30
-  const setPanelSize = palette?.setAiPanelSize ?? (() => undefined)
+  const setPanelSize = useMemo(
+    () => palette?.setAiPanelSize ?? (() => undefined),
+    [palette?.setAiPanelSize],
+  )
 
   const isVertical = orientation === 'vertical'
 
