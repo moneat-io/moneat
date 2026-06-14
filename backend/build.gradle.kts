@@ -229,6 +229,7 @@ dependencies {
     runtimeOnly(project(":ee"))
     runtimeOnly(project(":features:ai"))
     runtimeOnly(project(":features:analytics"))
+    runtimeOnly(project(":features:auth-tokens"))
     runtimeOnly(project(":features:billing"))
     runtimeOnly(project(":features:contact"))
     runtimeOnly(project(":features:dashboards"))
