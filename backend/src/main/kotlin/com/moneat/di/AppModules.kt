@@ -16,7 +16,6 @@
 
 package com.moneat.di
 
-import com.moneat.ai.AiChatService
 import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.repositories.UserRepository
 import com.moneat.auth.repositories.UserRepositoryImpl
@@ -313,9 +312,7 @@ val dashboardsModule = module {
 }
 
 /** AI chat assistant. */
-val aiModule = module {
-    single { AiChatService() }
-}
+val aiModule = module {}
 
 /** All application modules combined in load order. */
 private const val DEFAULT_FRONTEND_BASE_URL = "https://moneat.io"

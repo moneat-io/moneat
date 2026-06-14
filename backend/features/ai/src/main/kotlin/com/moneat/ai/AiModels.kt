@@ -18,39 +18,6 @@ package com.moneat.ai
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import org.jetbrains.exposed.v1.core.Table
-import org.jetbrains.exposed.v1.datetime.timestamp
-import kotlin.uuid.Uuid
-
-// ── Exposed Tables ──────────────────────────────────────────────────────
-
-object AiConversations : Table("ai_conversations") {
-    val id = integer("id").autoIncrement()
-    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
-    val organization_id = integer("organization_id")
-    val user_id = integer("user_id")
-    val title = varchar("title", 255).nullable()
-    val created_at = timestamp("created_at")
-    val updated_at = timestamp("updated_at")
-    override val primaryKey = PrimaryKey(id)
-}
-
-object AiMessages : Table("ai_messages") {
-    val id = integer("id").autoIncrement()
-    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
-    val conversation_id = integer("conversation_id").references(AiConversations.id)
-    val role = varchar("role", 20)
-    val content = text("content")
-    val page_context = varchar("page_context", 255).nullable()
-    val model = varchar("model", 50).nullable()
-    val tokens_used = integer("tokens_used").nullable()
-    val input_tokens = integer("input_tokens").nullable()
-    val output_tokens = integer("output_tokens").nullable()
-    val cost_usd = decimal("cost_usd", 10, 6).nullable()
-    val provider = varchar("provider", 20).nullable()
-    val created_at = timestamp("created_at")
-    override val primaryKey = PrimaryKey(id)
-}
 
 // ── API Request / Response DTOs ─────────────────────────────────────────
 
