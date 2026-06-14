@@ -22,8 +22,6 @@ import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.auth.requireCurrentOrg
 import com.moneat.auth.routes.accountDeletionRoutes
-import com.moneat.billing.routes.billingRoutes
-import com.moneat.billing.routes.publicBillingRoutes
 import com.moneat.billing.services.PricingTierService
 import com.moneat.events.models.AddTargetRequest
 import com.moneat.events.models.AlertNotificationPreferencesResponse
@@ -121,18 +119,9 @@ fun Route.apiRoutes() {
     val dashboardService = koin.get<DashboardService>()
     val projectIdResolver = koin.get<ProjectIdResolver>()
 
-    // Public routes (no auth required)
-    route("/v1") {
-        // Public billing plans endpoint
-        publicBillingRoutes()
-    }
-
     authenticate("auth-jwt") {
         rateLimit(RateLimitName("api")) {
             route("/v1") {
-                // Protected billing routes
-                billingRoutes()
-
                 // Subscription tier (for SSO visibility, etc.)
                 get("/subscription") {
                     val principal = call.principal<JWTPrincipal>()

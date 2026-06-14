@@ -18,7 +18,6 @@ package com.moneat.plugins
 
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
-import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
@@ -194,9 +193,6 @@ fun Application.configureRouting() {
         rateLimit(RateLimitName("telemetry")) {
             telemetryIngestRoutes()
         }
-
-        // Stripe webhooks
-        stripeWebhookRoutes()
 
         // Dashboard API endpoints
         apiRoutes()
