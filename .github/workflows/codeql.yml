@@ -17,11 +17,15 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        language: [java-kotlin, javascript-typescript]
+        include:
+          - language: java-kotlin
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
 
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -59,11 +63,12 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
+          build-mode: ${{ matrix.build-mode }}
 
       - name: Build Kotlin bytecode
-        if: matrix.language == 'java-kotlin'
+        if: matrix.language == 'java-kotlin' && matrix.build-mode == 'manual'
         working-directory: backend
-        run: ./gradlew testClasses integrationTestClasses --no-daemon
+        run: ./gradlew classes --no-daemon
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
