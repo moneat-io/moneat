@@ -23,6 +23,7 @@ import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
+import com.moneat.otlp.services.OtlpIngestionWorkerBase
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import io.ktor.server.application.Application
@@ -30,6 +31,7 @@ import io.ktor.server.config.ApplicationConfig
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.routing.Route
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.koin.core.context.GlobalContext
 
@@ -62,6 +64,7 @@ class OtlpModule : EnterpriseModule {
         startSchedulers: Boolean,
         startIngestionWorkers: Boolean,
     ) {
+        // OTLP owns ingestion workers only; startSchedulers is part of the feature role contract.
         if (!startIngestionWorkers) {
             return
         }
@@ -95,13 +98,40 @@ class OtlpModule : EnterpriseModule {
     }
 
     override fun stopBackgroundJobs() {
-        runBlocking {
-            traceWorker?.stop()
-            metricsWorker?.stop()
-        }
+        val traceWorkerToStop = traceWorker
+        val metricsWorkerToStop = metricsWorker
         traceWorker = null
         metricsWorker = null
+
+        runBlocking {
+            val traceFailure = stopWorker(traceWorkerToStop)
+            val metricsFailure = stopWorker(metricsWorkerToStop)
+            throwFirstFailure(traceFailure, metricsFailure)
+        }
     }
+}
+
+private suspend fun stopWorker(worker: OtlpIngestionWorkerBase?): Throwable? =
+    try {
+        worker?.stop()
+        null
+    } catch (error: CancellationException) {
+        error
+    } catch (error: Exception) {
+        error
+    }
+
+private fun throwFirstFailure(
+    first: Throwable?,
+    second: Throwable?,
+) {
+    if (first == null) {
+        second?.let { throw it }
+        return
+    }
+
+    second?.let(first::addSuppressed)
+    throw first
 }
 
 private fun ApplicationConfig.nonBlankConfigValue(
