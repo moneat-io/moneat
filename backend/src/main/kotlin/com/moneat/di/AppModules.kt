@@ -56,9 +56,6 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
-import com.moneat.featureflags.services.FeatureFlagEvaluator
-import com.moneat.featureflags.services.FeatureFlagEventService
-import com.moneat.featureflags.services.FeatureFlagService
 import com.moneat.incident.services.IncidentService
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.repositories.LogRepositoryImpl
@@ -317,13 +314,6 @@ val dashboardsModule = module {
     single { CustomDataSourceExecutor() }
 }
 
-/** OpenFeature-compatible feature flags. */
-val featureFlagsModule = module {
-    single { FeatureFlagEvaluator() }
-    single { FeatureFlagService() }
-    single { FeatureFlagEventService() }
-}
-
 /** AI chat assistant. */
 val aiModule = module {
     single { AiChatService() }
@@ -343,7 +333,6 @@ fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
         logsModule,
         uptimeModule(frontendBaseUrl),
         dashboardsModule,
-        featureFlagsModule,
         aiModule,
     )
 
