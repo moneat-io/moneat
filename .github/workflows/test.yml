@@ -170,6 +170,13 @@ jobs:
           name: backend-unit-test-results
           path: backend/build/test-results/test/
 
+      - name: Upload AI feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ai-test-results
+          path: backend/features/ai/build/test-results/test/
+
       - name: Upload Analytics feature test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -253,6 +260,13 @@ jobs:
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
+
+      - name: Upload AI feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ai-coverage-report
+          path: backend/features/ai/build/reports/jacoco/test/
 
       - name: Upload Analytics feature coverage report
         if: always()
@@ -382,6 +396,13 @@ jobs:
         with:
           name: backend-ingest-common-detekt-report
           path: backend/ingest-common/build/reports/detekt/
+
+      - name: Upload AI feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ai-detekt-report
+          path: backend/features/ai/build/reports/detekt/
 
       - name: Upload Analytics feature detekt report (Sonar)
         if: success()
@@ -526,6 +547,13 @@ jobs:
           path: backend/build/reports/jacoco/test/
         continue-on-error: true
 
+      - name: Download AI feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-ai-coverage-report
+          path: backend/features/ai/build/reports/jacoco/test/
+        continue-on-error: true
+
       - name: Download Analytics feature coverage (JaCoCo)
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -622,6 +650,13 @@ jobs:
         with:
           name: backend-ingest-common-detekt-report
           path: backend/ingest-common/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download AI feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-ai-detekt-report
+          path: backend/features/ai/build/reports/detekt/
         continue-on-error: true
 
       - name: Download Analytics feature detekt report
