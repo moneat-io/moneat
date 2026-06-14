@@ -1,0 +1,4 @@
+# Accepted OSV Scanner vulnerability exceptions.
+# Each ignored vulnerability must include a package/advisory-specific reason,
+# an owner, and a review date in the reason text.
+
