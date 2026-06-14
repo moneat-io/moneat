@@ -23,6 +23,7 @@ dependencies {
     compileOnly(project(":"))
     compileOnly(project(":features:security"))
     implementation(project(":feature-spi"))
+    implementation(project(":features:featureflags"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.auth)

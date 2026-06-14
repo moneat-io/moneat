@@ -18,14 +18,25 @@ package com.moneat.featureflags
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.featureflags.routes.featureFlagRoutes
+import com.moneat.featureflags.services.FeatureFlagEvaluator
+import com.moneat.featureflags.services.FeatureFlagEventService
+import com.moneat.featureflags.services.FeatureFlagService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 
 class FeatureFlagsModule : EnterpriseModule {
     override val name: String = "Feature Flags"
 
+    private val featureFlagService = FeatureFlagService()
+    private val evaluator = FeatureFlagEvaluator()
+    private val eventService = FeatureFlagEventService()
+
     override fun registerRoutes(route: Route) {
-        route.featureFlagRoutes()
+        route.featureFlagRoutes(
+            featureFlagService = featureFlagService,
+            evaluator = evaluator,
+            eventService = eventService,
+        )
     }
 
     override fun startBackgroundJobs(application: Application) = Unit
