@@ -38,6 +38,8 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.security.SecureRandom
+import java.util.Base64
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -45,11 +47,16 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 
 class ConnectorRoutesTest {
-    private val jwtSecret = "test-secret-for-connector-routes"
+    private val jwtSecret =
+        ByteArray(JWT_SECRET_BYTES)
+            .also { secureRandom.nextBytes(it) }
+            .let { bytes -> Base64.getEncoder().encodeToString(bytes) }
 
     companion object {
         private var db: Database? = null
         private const val ORGANIZATION_ID = 2
+        private const val JWT_SECRET_BYTES = 32
+        private val secureRandom = SecureRandom()
     }
 
     @BeforeTest

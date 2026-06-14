@@ -46,6 +46,9 @@ enum class ConnectorSetupMode {
     @SerialName("api_key")
     API_KEY,
 
+    @SerialName("app_installation")
+    APP_INSTALLATION,
+
     @SerialName("webhook")
     WEBHOOK,
 
@@ -438,7 +441,7 @@ object ConnectorCatalog {
                         name = "Repository import",
                         family = ConnectorFamily.DATA_IMPORT,
                         availability = ConnectorAvailability.PLANNED,
-                        setupMode = ConnectorSetupMode.OAUTH,
+                        setupMode = ConnectorSetupMode.APP_INSTALLATION,
                         capabilities = listOf("repository_read", "issue_import", "pull_request_import"),
                         stateSource = CLOUD_SOURCES,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
@@ -456,7 +459,7 @@ object ConnectorCatalog {
                         name = "Workflow actions",
                         family = ConnectorFamily.WORKFLOW_EGRESS,
                         availability = ConnectorAvailability.ENTERPRISE,
-                        setupMode = ConnectorSetupMode.API_KEY,
+                        setupMode = ConnectorSetupMode.APP_INSTALLATION,
                         capabilities = listOf("workflow_action", "issue_create", "issue_update"),
                         stateSource = WORKFLOW_CONNECTIONS,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,

@@ -229,8 +229,16 @@ class EnvironmentValidator {
                 errors.add("REQUIRED: $envVar entries must be 'keyId=secret'.")
                 return@forEach
             }
+            val keyId = pair[0].trim()
             val secret = pair[1].trim()
-            if (secret.isNotBlank() && secret.length < MIN_JWT_SECRET_LENGTH) {
+            if (keyId.isBlank()) {
+                errors.add("REQUIRED: $envVar keyId must not be blank.")
+            }
+            if (secret.isBlank()) {
+                errors.add("REQUIRED: $envVar secret must not be blank.")
+                return@forEach
+            }
+            if (secret.length < MIN_JWT_SECRET_LENGTH) {
                 errors.add("REQUIRED: $envVar secrets must be at least $MIN_JWT_SECRET_LENGTH characters.")
             }
         }
@@ -244,24 +252,40 @@ class EnvironmentValidator {
                 "WORKFLOWS_SIGNING_KEY",
                 "WORKFLOWS_TEMPORAL_PAYLOAD_KEY"
             )
-        val keys = (coreSecretKeys + SecretVaultPurpose.secretEnvVars).distinct()
-        val values =
-            keys.mapNotNull { key ->
+        val directValues =
+            (coreSecretKeys + SecretVaultPurpose.secretEnvVars).distinct().mapNotNull { key ->
                 getConfigValue(key)
                     ?.takeIf { it.isNotBlank() }
-                    ?.let { value -> key to value }
+                    ?.let { value -> ConfigSecretValue(key, value) }
             }
+        val values = directValues + previousSecretValues()
         values
-            .groupBy { it.second }
+            .groupBy { it.value }
             .filterValues { entries -> entries.size > 1 }
             .values
             .forEach { duplicates ->
                 errors.add(
                     "REQUIRED: Application secrets must be distinct; reused by " +
-                        duplicates.joinToString(", ") { it.first } + "."
+                        duplicates.joinToString(", ") { it.name } + "."
                 )
             }
     }
+
+    private fun previousSecretValues(): List<ConfigSecretValue> =
+        SecretVaultPurpose.entries.flatMap { purpose ->
+            getConfigValue(purpose.previousSecretsEnvVar)
+                ?.takeIf { it.isNotBlank() }
+                ?.split(",")
+                .orEmpty()
+                .mapNotNull { entry ->
+                    val pair = entry.split("=", limit = 2)
+                    if (pair.size != 2) return@mapNotNull null
+                    val keyId = pair[0].trim()
+                    val secret = pair[1].trim()
+                    if (keyId.isBlank() || secret.isBlank()) return@mapNotNull null
+                    ConfigSecretValue("${purpose.previousSecretsEnvVar}[$keyId]", secret)
+                }
+        }
 
     private fun validateRequired(
         envVar: String,
@@ -278,6 +302,11 @@ class EnvironmentValidator {
         return EnvConfig.get(key)
             ?: System.getProperty(key)
     }
+
+    private data class ConfigSecretValue(
+        val name: String,
+        val value: String
+    )
 
     fun validateAndFailFast() {
         logger.info { "Validating environment variables..." }

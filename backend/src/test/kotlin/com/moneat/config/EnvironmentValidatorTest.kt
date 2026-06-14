@@ -92,6 +92,27 @@ class EnvironmentValidatorTest {
     }
 
     @Test
+    fun `validate rejects reused previous connector vault secrets`() {
+        val reusedSecret = "connector-secret-value-bbbbbbbbbbbbbbbb"
+        withSystemProperties(
+            mapOf(
+                "DATA_IMPORT_CONNECTOR_KEK_PREVIOUS" to "old=$reusedSecret",
+                "NOTIFICATION_CONNECTOR_KEK" to reusedSecret
+            )
+        ) {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(
+                result.errors.any { error ->
+                    error.contains("Application secrets must be distinct") &&
+                        error.contains("DATA_IMPORT_CONNECTOR_KEK_PREVIOUS[old]") &&
+                        error.contains("NOTIFICATION_CONNECTOR_KEK")
+                }
+            )
+        }
+    }
+
+    @Test
     fun `validate reports invalid process role`() {
         withSystemProperty("MONEAT_PROCESS_ROLE", "web") {
             val result = EnvironmentValidator().validate()

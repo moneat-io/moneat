@@ -49,6 +49,8 @@ class ConnectorCatalogTest {
         assertEquals("workflow_egress", workflowActions.secretPurpose)
         assertEquals(listOf("read_app_installation"), repositoryImport.allowedAuthProfileIds)
         assertEquals(listOf("workflow_app_installation"), workflowActions.allowedAuthProfileIds)
+        assertEquals(ConnectorSetupMode.APP_INSTALLATION, repositoryImport.setupMode)
+        assertEquals(ConnectorSetupMode.APP_INSTALLATION, workflowActions.setupMode)
         assertEquals(
             setOf("read_app_installation", "workflow_app_installation"),
             github.authProfiles.map { it.id }.toSet()

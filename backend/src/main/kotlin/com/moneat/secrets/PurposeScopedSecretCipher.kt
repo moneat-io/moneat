@@ -43,8 +43,10 @@ class PurposeScopedSecretCipher(
 
     init {
         require(activeKeyId.isNotBlank()) { "activeKeyId must not be blank" }
+        require(!activeKeyId.contains(SEPARATOR)) { "activeKeyId must not contain '$SEPARATOR'" }
         require(this.keksByKeyId.containsKey(activeKeyId)) { "No KEK material registered for the active keyId" }
         this.keksByKeyId.forEach { (id, kek) ->
+            require(!id.contains(SEPARATOR)) { "KEK keyId '$id' must not contain '$SEPARATOR'" }
             require(kek.size == KEY_LENGTH) { "KEK '$id' must be $KEY_LENGTH bytes" }
         }
     }
@@ -160,10 +162,13 @@ class PurposeScopedSecretCipher(
                     }
                     val id = pair[0].trim()
                     val secret = pair[1].trim()
-                    if (id.isNotBlank() && secret.isNotBlank() && id != activeKeyId) {
-                        validateSecret("${purpose.previousSecretsEnvVar}[$id]", secret)
-                        keks[id] = deriveKek(secret)
+                    require(id.isNotBlank()) { "${purpose.previousSecretsEnvVar} keyId must not be blank" }
+                    require(secret.isNotBlank()) { "${purpose.previousSecretsEnvVar} secret must not be blank" }
+                    require(id != activeKeyId) {
+                        "${purpose.previousSecretsEnvVar} must not redefine active keyId '$activeKeyId'"
                     }
+                    validateSecret("${purpose.previousSecretsEnvVar}[$id]", secret)
+                    keks[id] = deriveKek(secret)
                 }
             return PurposeScopedSecretCipher(purpose, activeKeyId, keks)
         }

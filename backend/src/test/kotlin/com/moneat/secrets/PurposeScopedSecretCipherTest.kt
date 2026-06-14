@@ -107,6 +107,17 @@ class PurposeScopedSecretCipherTest {
     }
 
     @Test
+    fun `rejects key ids containing envelope separator`() {
+        assertFailsWith<IllegalArgumentException> {
+            cipher(activeKeyId = "v1:bad", keks = mapOf("v1:bad" to "primary-kek-secret-aaaaaaaaaaaaaaaa"))
+        }
+
+        assertFailsWith<IllegalArgumentException> {
+            cipher(keks = mapOf("v1" to "primary-kek-secret-aaaaaaaaaaaaaaaa", "old:bad" to "old-secret-aaaaaaaaaa"))
+        }
+    }
+
+    @Test
     @ResourceLock(Resources.SYSTEM_PROPERTIES)
     fun `fromEnv rejects reusing reserved application secrets`() {
         val reusedSecret = "reserved-secret-value-aaaaaaaaaaaaaaaa"
@@ -114,6 +125,32 @@ class PurposeScopedSecretCipherTest {
             mapOf(
                 "DATA_IMPORT_CONNECTOR_KEK" to reusedSecret,
                 "JWT_SECRET" to reusedSecret
+            )
+        ) {
+            assertFailsWith<IllegalArgumentException> {
+                PurposeScopedSecretCipher.fromEnv(SecretVaultPurpose.DATA_IMPORT)
+            }
+        }
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    fun `fromEnv rejects malformed previous secrets`() {
+        withSystemProperties(
+            mapOf(
+                "DATA_IMPORT_CONNECTOR_KEK" to "primary-secret-value-aaaaaaaaaaaaaaaa",
+                "DATA_IMPORT_CONNECTOR_KEK_PREVIOUS" to "v1=previous-secret-value-aaaaaaaaaaaaa"
+            )
+        ) {
+            assertFailsWith<IllegalArgumentException> {
+                PurposeScopedSecretCipher.fromEnv(SecretVaultPurpose.DATA_IMPORT)
+            }
+        }
+
+        withSystemProperties(
+            mapOf(
+                "DATA_IMPORT_CONNECTOR_KEK" to "primary-secret-value-bbbbbbbbbbbbbbbb",
+                "DATA_IMPORT_CONNECTOR_KEK_PREVIOUS" to "=previous-secret-value-bbbbbbbbbbbbb"
             )
         ) {
             assertFailsWith<IllegalArgumentException> {
