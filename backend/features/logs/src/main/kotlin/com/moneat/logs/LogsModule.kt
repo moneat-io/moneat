@@ -28,6 +28,10 @@ import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.routing.Route
 import org.koin.core.context.GlobalContext
 
+private const val DEFAULT_LOG_QUEUE_KEY = "moneat:logs:queue"
+private const val DEFAULT_LOG_DLQ_KEY = "moneat:logs:dlq"
+private const val DEFAULT_LOG_WORKER_COUNT = 2
+
 class LogsModule : EnterpriseModule {
     override val name: String = "Logs"
 
@@ -58,10 +62,21 @@ class LogsModule : EnterpriseModule {
 
         val config = application.environment.config
         val koin = GlobalContext.get()
+        val queueKey = config.propertyOrNull("logs.queueKey")?.getString()?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LOG_QUEUE_KEY
+        val dlqKey = config.propertyOrNull("logs.dlqKey")?.getString()?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_LOG_DLQ_KEY
+        val workerCount = config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull()
+            ?: DEFAULT_LOG_WORKER_COUNT
+
+        require(queueKey.isNotBlank()) { "logs.queueKey must not be blank" }
+        require(dlqKey.isNotBlank()) { "logs.dlqKey must not be blank" }
+        require(workerCount > 0) { "logs.workerCount must be greater than 0" }
+
         logIngestionWorker = LogIngestionWorker(
-            config.propertyOrNull("logs.queueKey")?.getString() ?: "moneat:logs:queue",
-            config.propertyOrNull("logs.dlqKey")?.getString() ?: "moneat:logs:dlq",
-            config.propertyOrNull("logs.workerCount")?.getString()?.toIntOrNull() ?: 2,
+            queueKey = queueKey,
+            dlqKey = dlqKey,
+            workerCount = workerCount,
             logService = koin.get(),
             logIndexService = koin.get(),
         ).also { worker ->
