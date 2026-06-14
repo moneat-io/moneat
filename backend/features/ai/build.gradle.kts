@@ -28,6 +28,14 @@ dependencies {
     implementation(libs.ktor.server.auth.jwt)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlin.logging)
+    implementation(libs.sentry.kotlin)
 
     detektPlugins(libs.detekt.formatting)
 
