@@ -16,7 +16,6 @@
 
 package com.moneat.plugins
 
-import com.moneat.ai.aiChatRoutes
 import com.moneat.auth.routes.authRoutes
 import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.billing.routes.stripeWebhookRoutes
@@ -275,8 +274,6 @@ fun Application.configureRouting() {
         // Feature modules (SSO, MCP, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
         routingLogger.info { "Feature routes registered" }
-
-        aiChatRoutes()
 
         // Custom dashboard builder endpoints
         customDashboardRoutes()
