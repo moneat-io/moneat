@@ -17,7 +17,6 @@
 package com.moneat.plugins
 
 import com.moneat.auth.routes.authRoutes
-import com.moneat.auth.routes.authTokenRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
@@ -184,9 +183,6 @@ fun Application.configureRouting() {
 
         // Authentication endpoints
         authRoutes()
-
-        // Auth token management endpoints
-        authTokenRoutes()
 
         // Admin dashboard endpoints
         adminRoutes()
