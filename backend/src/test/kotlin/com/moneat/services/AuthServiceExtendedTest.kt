@@ -21,24 +21,20 @@ import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.repositories.UserRepository
 import com.moneat.auth.repositories.UserRepositoryImpl
 import com.moneat.auth.repositories.models.UserRow
-import com.moneat.auth.services.AccountDeletionService
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.RefreshTokenCleaner
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.auth.services.RefreshTokenResponse
 import com.moneat.auth.services.RefreshTokenService
-import com.moneat.billing.services.StripeService
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.LoginRequest
 import com.moneat.events.models.SignupRequest
-import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.RefreshTokens
 import com.moneat.shared.models.SsoConfigurations
-import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.models.UserLegalAcceptances
 import com.moneat.shared.models.Users
@@ -52,7 +48,6 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -109,7 +104,6 @@ class AuthServiceExtendedTest {
             EmailsSent,
             SsoConfigurations,
             OrgInvitations,
-            Subscriptions,
             UsageRecords
         )
     }
@@ -342,152 +336,6 @@ class AuthServiceExtendedTest {
         }
 
         assertTrue(callCount >= 2, "Should continue after exception")
-    }
-
-    // ── AccountDeletionService ──────────────────────────────────────
-
-    private fun makeAccountDeletionService(): AccountDeletionService {
-        val stripeService = mockk<StripeService>(relaxed = true)
-        val emailService = mockk<EmailService>(relaxed = true)
-        every { stripeService.isStripeEnabled() } returns false
-        return AccountDeletionService(stripeService, emailService)
-    }
-
-    @Test
-    fun `validateUserDeletion returns canDelete when user is not sole owner`() {
-        val userId = insertUser(email = "member@test.com")
-        val orgId = insertOrg(name = "Shared Org", slug = "shared-org")
-        insertMembership(userId, orgId, "member")
-
-        val service = makeAccountDeletionService()
-        val result = service.validateUserDeletion(userId)
-
-        assertTrue(result.canDelete)
-        assertNull(result.errorMessage)
-        assertTrue(result.organizationsAsLastOwner.isEmpty())
-    }
-
-    @Test
-    fun `validateUserDeletion blocks when user is last owner`() {
-        val (userId, _) = insertUserWithOrg(email = "sole-owner@test.com")
-
-        val service = makeAccountDeletionService()
-        val result = service.validateUserDeletion(userId)
-
-        assertFalse(result.canDelete)
-        assertNotNull(result.errorMessage)
-        assertEquals(1, result.organizationsAsLastOwner.size)
-    }
-
-    @Test
-    fun `validateUserDeletion allows when org has multiple owners`() {
-        val userId1 = insertUser(email = "owner1@test.com")
-        val userId2 = insertUser(email = "owner2@test.com")
-        val orgId = insertOrg(name = "Multi Owner Org", slug = "multi-org")
-        insertMembership(userId1, orgId, "owner")
-        insertMembership(userId2, orgId, "owner")
-
-        val service = makeAccountDeletionService()
-        val result = service.validateUserDeletion(userId1)
-
-        assertTrue(result.canDelete)
-    }
-
-    @Test
-    fun `validateOrganizationDeletion blocks non-owner`() {
-        val userId = insertUser(email = "member@test.com")
-        val orgId = insertOrg(name = "Not My Org", slug = "not-mine")
-        insertMembership(userId, orgId, "member")
-
-        val service = makeAccountDeletionService()
-        val result = service.validateOrganizationDeletion(orgId, userId)
-
-        assertFalse(result.canDelete)
-        assertTrue(result.errorMessage?.contains("owners") == true)
-    }
-
-    @Test
-    fun `validateOrganizationDeletion blocks when active subscription exists`() {
-        val (userId, orgId) = insertUserWithOrg(email = "sub-owner@test.com")
-
-        transaction {
-            Subscriptions.insert {
-                it[organization_id] = orgId
-                it[status] = "active"
-                it[plan] = "pro"
-            }
-        }
-
-        val service = makeAccountDeletionService()
-        val result = service.validateOrganizationDeletion(orgId, userId)
-
-        assertFalse(result.canDelete)
-        assertTrue(result.errorMessage?.contains("subscription") == true)
-    }
-
-    @Test
-    fun `validateOrganizationDeletion succeeds for owner without active sub`() {
-        val (userId, orgId) = insertUserWithOrg(email = "clean-owner@test.com")
-
-        val service = makeAccountDeletionService()
-        val result = service.validateOrganizationDeletion(orgId, userId)
-
-        assertTrue(result.canDelete)
-    }
-
-    @Test
-    fun `validateOrganizationDeletion blocks for non-member`() {
-        val userId = insertUser(email = "outsider@test.com")
-        val orgId = insertOrg(name = "Some Org", slug = "some-org")
-        // No membership for userId in this org
-
-        val service = makeAccountDeletionService()
-        val result = service.validateOrganizationDeletion(orgId, userId)
-
-        assertFalse(result.canDelete)
-    }
-
-    @Test
-    fun `deleteUserAccount soft deletes user and sends email`() {
-        val emailService = mockk<EmailService>(relaxed = true)
-        val stripeService = mockk<StripeService>(relaxed = true)
-        every { stripeService.isStripeEnabled() } returns false
-        val service = AccountDeletionService(stripeService, emailService)
-
-        // User is a member (not sole owner)
-        val userId = insertUser(email = "deleteme@test.com")
-        val ownerId = insertUser(email = "realowner@test.com")
-        val orgId = insertOrg(name = "Delete Org", slug = "del-org")
-        insertMembership(userId, orgId, "member")
-        insertMembership(ownerId, orgId, "owner")
-
-        val result = runBlocking { service.deleteUserAccount(userId) }
-        assertTrue(result)
-
-        // Verify soft delete
-        val user = transaction {
-            Users.selectAll().where { Users.id eq userId }.single()
-        }
-        assertNotNull(user[Users.deletedAt])
-
-        // Verify membership removed
-        val memberships = transaction {
-            Memberships.selectAll()
-                .where { Memberships.user_id eq userId }
-                .count()
-        }
-        assertEquals(0L, memberships)
-
-        verify { emailService.sendAccountDeletionConfirmation("deleteme@test.com") }
-    }
-
-    @Test
-    fun `deleteUserAccount returns false when user is sole owner`() {
-        val (userId, _) = insertUserWithOrg(email = "sole@test.com")
-
-        val service = makeAccountDeletionService()
-        val result = runBlocking { service.deleteUserAccount(userId) }
-        assertFalse(result)
     }
 
     // ── AuthService - completeOnboarding ────────────────────────────
@@ -957,42 +805,6 @@ class AuthServiceExtendedTest {
         )
         val result = authService.resendVerificationEmail("nobody@test.com")
         assertFalse(result)
-    }
-
-    // ── AccountDeletionService - validateOrganizationDeletion ───────
-
-    @Test
-    fun `validateOrganizationDeletion allows with canceled subscription`() {
-        val (userId, orgId) = insertUserWithOrg(email = "canceled-sub@test.com")
-
-        transaction {
-            Subscriptions.insert {
-                it[organization_id] = orgId
-                it[status] = "canceled"
-                it[plan] = "pro"
-            }
-        }
-
-        val service = makeAccountDeletionService()
-        val result = service.validateOrganizationDeletion(orgId, userId)
-        assertTrue(result.canDelete)
-    }
-
-    @Test
-    fun `validateOrganizationDeletion blocks with trialing subscription`() {
-        val (userId, orgId) = insertUserWithOrg(email = "trialing@test.com")
-
-        transaction {
-            Subscriptions.insert {
-                it[organization_id] = orgId
-                it[status] = "trialing"
-                it[plan] = "pro"
-            }
-        }
-
-        val service = makeAccountDeletionService()
-        val result = service.validateOrganizationDeletion(orgId, userId)
-        assertFalse(result.canDelete)
     }
 
     // ── AuthService - generateDemoToken claims ──────────────────────

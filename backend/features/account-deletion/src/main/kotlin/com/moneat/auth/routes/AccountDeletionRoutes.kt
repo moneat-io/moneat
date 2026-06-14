@@ -17,6 +17,8 @@
 package com.moneat.auth.routes
 
 import com.moneat.auth.services.AccountDeletionService
+import com.moneat.billing.services.StripeService
+import com.moneat.notifications.services.EmailService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.services.toUuidOrNull
@@ -71,7 +73,7 @@ data class OrgDeletionValidationResponse(val canDelete: Boolean, val error: Stri
 data class CannotDeleteUserResponse(val error: String?, val organizations: List<String>)
 
 fun Route.accountDeletionRoutes(
-    deletionService: AccountDeletionService = GlobalContext.get().get(),
+    deletionService: AccountDeletionService = defaultAccountDeletionService(),
 ) {
     // Get organization details for account deletion confirmation
     get("/organizations/{orgId}") { handleGetOrgForDeletion() }
@@ -83,6 +85,14 @@ fun Route.accountDeletionRoutes(
     get("/account/deletion-validation") { handleAccountDeletionValidation(deletionService) }
     // Validate organization deletion (check if user can delete)
     get("/organizations/{orgId}/deletion-validation") { handleOrgDeletionValidation(deletionService) }
+}
+
+private fun defaultAccountDeletionService(): AccountDeletionService {
+    val koin = GlobalContext.get()
+    return AccountDeletionService(
+        stripeService = koin.get<StripeService>(),
+        emailService = koin.get<EmailService>(),
+    )
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletion() {

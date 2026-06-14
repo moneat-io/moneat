@@ -20,7 +20,6 @@ import com.moneat.ai.AiChatService
 import com.moneat.alerts.services.AlertEpisodeService
 import com.moneat.auth.repositories.UserRepository
 import com.moneat.auth.repositories.UserRepositoryImpl
-import com.moneat.auth.services.AccountDeletionService
 import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.auth.services.OAuthService
@@ -186,7 +185,6 @@ val authModule = module {
             workflowService = get(),
         )
     }
-    single { AccountDeletionService(get(), get()) }
     single { ArtifactCleanupService(get(), get()) }
 }
 
