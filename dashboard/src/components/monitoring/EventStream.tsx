@@ -310,7 +310,7 @@ export function EventStream() {
     refetchInterval: 15000,
   })
 
-  const events = data?.events ?? []
+  const events = useMemo(() => data?.events ?? [], [data?.events])
 
   const filtered = useMemo(() => {
     let result = events

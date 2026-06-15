@@ -70,7 +70,7 @@ function GenerationsPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectList = projects ?? []
+  const projectList = useMemo(() => projects ?? [], [projects])
   const includedServices = useMemo(
     () => facetValues(facetFilters, 'service', false),
     [facetFilters]
@@ -107,7 +107,7 @@ function GenerationsPage() {
   })
 
   const { data: detail } = useQuery({
-    queryKey: ['llm-generation-detail', 'organization', scopeKey, selectedGenId],
+    queryKey: ['llm-generation-detail', 'organization', scopeKey, selectedGenId, serviceScopeParams],
     queryFn: () => api.getLlmGenerationDetail(selectedGenId!, serviceScopeParams),
     enabled: hasLlmScope && !!selectedGenId,
   })

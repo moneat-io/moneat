@@ -109,7 +109,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
     placeholderData: keepPreviousData,
   })
 
-  const traces = data?.traces ?? []
+  const traces = useMemo(() => data?.traces ?? [], [data?.traces])
 
   const serviceColorMap = useMemo(() => {
     const map = new Map<string, string>()

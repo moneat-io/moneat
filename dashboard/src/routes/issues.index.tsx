@@ -501,7 +501,7 @@ function DashboardPage({tabs}: DashboardPageProps) {
     isError: issuesError,
     error: issuesErrorObj,
   } = useQuery({
-    queryKey: ['issues', 'organization', selectedServices, statusParam],
+    queryKey: ['issues', 'organization', selectedServices, statusParam, serviceFiltersActive],
     queryFn: () => api.getOrganizationIssues({
       page: 1,
       limit: ISSUES_FETCH_LIMIT,

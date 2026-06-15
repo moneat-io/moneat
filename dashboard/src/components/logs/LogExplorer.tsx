@@ -1278,6 +1278,8 @@ export function LogExplorer({
       systemId,
       cursor,
       query,
+      hasCustomLevelFilter,
+      levels,
       levelsKey,
       timeRange.from,
       timeRange.to,
@@ -1429,7 +1431,7 @@ export function LogExplorer({
   const {data: aggregateData} = useQuery({
     queryKey: [
       'log-aggregate', systemId, timeRange.from, timeRange.to,
-      query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      query, hasCustomLevelFilter, levels, levelsKey, derivedFilters.service, derivedFilters.environment,
       derivedFilters.host, derivedFilters.traceId, derivedFilters.messagePattern,
       JSON.stringify(derivedFilters.tags), groupBy,
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,
@@ -1462,7 +1464,7 @@ export function LogExplorer({
   const {data: topData} = useQuery({
     queryKey: [
       'log-top', systemId, topField, timeRange.from, timeRange.to,
-      query, levelsKey, derivedFilters.service, derivedFilters.environment,
+      query, hasCustomLevelFilter, levels, levelsKey, derivedFilters.service, derivedFilters.environment,
       derivedFilters.host, derivedFilters.traceId, derivedFilters.messagePattern,
       JSON.stringify(derivedFilters.tags),
       derivedFilters.excludeService, derivedFilters.excludeEnvironment,

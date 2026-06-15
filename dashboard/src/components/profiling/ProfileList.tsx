@@ -91,7 +91,7 @@ export function ProfileList({
   const {data, isLoading} = useQuery({
     queryKey: embedded
       ? ['profiles', 'embedded', scope]
-      : ['profiles', serviceFilter, selectedServicesKey, typeFilter],
+      : ['profiles', serviceFilter, selectedServices, selectedServicesKey, typeFilter],
     queryFn: () =>
       api.getProfiles(
         embedded
@@ -113,7 +113,7 @@ export function ProfileList({
     enabled: api.isAuthenticated(),
   })
 
-  const profiles = data?.profiles ?? []
+  const profiles = useMemo(() => data?.profiles ?? [], [data?.profiles])
   const normalizedQuery = query.trim().toLowerCase()
   const visibleProfiles = useMemo(() => {
     if (!normalizedQuery) return profiles

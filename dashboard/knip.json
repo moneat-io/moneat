@@ -1,0 +1,61 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/main.tsx",
+    "src/routes/**/*.tsx",
+    "src/docs/pages/**/*.mdx",
+    "scripts/dev.mjs",
+    "scripts/prerender.mjs",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "src/docs/pages/**/*.mdx",
+    "scripts/**/*.mjs",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tailwind.config.js",
+    "postcss.config.js"
+  ],
+  "ignore": [
+    "src/components/apm/TraceList.tsx",
+    "src/components/AppTopBar.tsx",
+    "src/components/charts/DonutChart.tsx",
+    "src/components/CreateSyntheticTestDialog.tsx",
+    "src/components/dashboards/DataSourceTypePicker.tsx",
+    "src/components/dashboards/RawQueryEditor.tsx",
+    "src/components/landing/VariantB.tsx",
+    "src/components/landing/VariantC.tsx",
+    "src/components/logs/LogFilters.tsx",
+    "src/components/logs/LogSearchBar.tsx",
+    "src/components/logs/TagFacets.tsx",
+    "src/components/monitoring/HostList.tsx",
+    "src/components/on-call/IncidentTimeline.tsx",
+    "src/components/ui/combobox.tsx",
+    "src/lib/setup-docs.ts",
+    "src/prerender/render.tsx",
+    "src/routeTree.gen.ts",
+    "vite.config.ts.timestamp-*.mjs"
+  ],
+  "ignoreDependencies": [
+    "@highlight-run/nest",
+    "@highlight-run/node",
+    "@highlight-run/react",
+    "@highlight-run/remix",
+    "@radix-ui/react-label",
+    "@sentry/browser",
+    "@sentry/nestjs",
+    "@sentry/nextjs",
+    "@sentry/node",
+    "@sentry/remix",
+    "@tanstack/router-devtools",
+    "@types/react-grid-layout",
+    "geojson",
+    "highlight.run",
+    "mdast",
+    "rrweb",
+    "topojson-specification",
+    "unified"
+  ]
+}

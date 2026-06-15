@@ -152,7 +152,7 @@ export function ProcessExplorer() {
     refetchInterval: 10000,
   })
 
-  const processes = data?.processes ?? []
+  const processes = useMemo(() => data?.processes ?? [], [data?.processes])
 
   const maxRss = useMemo(
     () => Math.max(...processes.map((p) => p.memRss), 1),

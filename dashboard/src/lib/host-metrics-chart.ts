@@ -38,6 +38,15 @@ export function toHostMetricChartTimestamp(timestampSeconds: number): number {
   return timestampSeconds * MILLISECONDS_PER_SECOND
 }
 
+export function buildHostMetricQueryRange(rangeSeconds: number, now: Date): readonly [string, string] {
+  const toMs = now.getTime()
+  const fromMs = toMs - rangeSeconds * MILLISECONDS_PER_SECOND
+  return [
+    Math.floor(fromMs / MILLISECONDS_PER_SECOND).toString(),
+    Math.floor(toMs / MILLISECONDS_PER_SECOND).toString(),
+  ]
+}
+
 export function formatHostMetricAxisTick(
   value: string | number,
   rangeSeconds: number,

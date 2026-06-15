@@ -52,7 +52,17 @@ export const Route = createFileRoute('/dashboards/$dashboardId')({
   }),
 })
 
-function DashboardViewPage() {
+function resolvedOptionsMatch(
+  current: Readonly<Record<string, string[]>>,
+  resolved: Readonly<Record<string, string[]>>,
+) {
+  return (
+    Object.keys(current).length === Object.keys(resolved).length &&
+    Object.keys(resolved).every((key) => JSON.stringify(current[key]) === JSON.stringify(resolved[key]))
+  )
+}
+
+export function DashboardViewPage() {
   const {dashboardId} = Route.useParams()
   const {edit, from, to, vars} = Route.useSearch()
   const queryClient = useQueryClient()
@@ -144,21 +154,19 @@ function DashboardViewPage() {
     api.resolveVariableOptions(id, variableValues).then(resolved => {
       if (Object.keys(resolved).length > 0) {
         setResolvedOptions(prev => {
-          const same = Object.keys(resolved).every(k => JSON.stringify(prev[k]) === JSON.stringify(resolved[k]))
-          return same ? prev : resolved
+          return resolvedOptionsMatch(prev, resolved) ? prev : resolved
         })
       }
     }).catch(() => {})
   }, [dashboard?.variables, id, resolveKey, variableValues])
 
-  const updateMutation = useMutation({
+  const {mutate: updateDashboard} = useMutation({
     mutationFn: (data: Parameters<typeof api.updateDashboard>[1]) => api.updateDashboard(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['custom-dashboard', id]})
       queryClient.invalidateQueries({queryKey: ['custom-dashboards']})
     },
   })
-
   const favoriteMutation = useMutation({
     mutationFn: () => api.toggleDashboardFavorite(id),
     onSuccess: () => {
@@ -221,16 +229,16 @@ function DashboardViewPage() {
         ...prePasteWidgetsRef.current,
         {...widget, sort_order: dashboard.widgets.length},
       ]
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
     },
-    [dashboard, updateMutation, toWidgetUpdateRequest]
+    [dashboard, updateDashboard, toWidgetUpdateRequest]
   )
 
   const handleUndoPaste = useCallback(() => {
     if (!prePasteWidgetsRef.current) return
-    updateMutation.mutate({widgets: prePasteWidgetsRef.current})
+    updateDashboard({widgets: prePasteWidgetsRef.current})
     prePasteWidgetsRef.current = null
-  }, [updateMutation])
+  }, [updateDashboard])
 
   const handleWidgetClick = useCallback(
     (widget: DashboardWidget) => {
@@ -258,23 +266,23 @@ function DashboardViewPage() {
 
   const handleLayoutChange = useCallback(
     (widgets: CreateWidgetRequest[]) => {
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
     },
-    [updateMutation]
+    [updateDashboard]
   )
 
   const handleTitleChange = useCallback(
     (title: string) => {
-      updateMutation.mutate({title})
+      updateDashboard({title})
     },
-    [updateMutation]
+    [updateDashboard]
   )
 
   const handleVariablesSave = useCallback(
     (variables: DashboardVariable[]) => {
-      updateMutation.mutate({variables})
+      updateDashboard({variables})
     },
-    [updateMutation]
+    [updateDashboard]
   )
 
   const handleAddWidget = useCallback(() => {
@@ -342,10 +350,10 @@ function DashboardViewPage() {
           },
         ]
       }
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
       setSelectedWidget(null)
     },
-    [dashboard, updateMutation, toWidgetUpdateRequest]
+    [dashboard, updateDashboard, toWidgetUpdateRequest]
   )
 
   const handleDeleteWidget = useCallback(
@@ -354,9 +362,9 @@ function DashboardViewPage() {
       const widgets = dashboard.widgets
         .filter((w) => w.id !== widgetId)
         .map((w) => toWidgetUpdateRequest(w))
-      updateMutation.mutate({widgets})
+      updateDashboard({widgets})
     },
-    [dashboard, updateMutation, toWidgetUpdateRequest]
+    [dashboard, updateDashboard, toWidgetUpdateRequest]
   )
 
   if (isLoading) {

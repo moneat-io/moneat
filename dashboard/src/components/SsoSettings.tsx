@@ -66,14 +66,12 @@ function SsoTabContent({
   const { toast } = useToast()
   const [providerType, setProviderType] = useState<SsoProviderType>('oidc')
 
-  const requireOrganizationId = () => {
-    if (organizationId === undefined) throw new Error('No organization found')
-    return organizationId
-  }
-
   const { data: ssoConfig, isLoading: configLoading } = useQuery({
     queryKey: ['ssoConfig', organizationId],
-    queryFn: () => api.getSsoConfig(requireOrganizationId()),
+    queryFn: () => {
+      if (organizationId === undefined) throw new Error('No organization found')
+      return api.getSsoConfig(organizationId)
+    },
     enabled: hasOrganization,
     retry: false,
   })
@@ -105,9 +103,9 @@ function SsoTabContent({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const orgId = requireOrganizationId()
+      if (organizationId === undefined) throw new Error('No organization found')
 
-      return api.configureSso(orgId, {
+      return api.configureSso(organizationId, {
         providerType,
         ...formData,
       })
@@ -130,7 +128,8 @@ function SsoTabContent({
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      return api.deleteSsoConfig(requireOrganizationId())
+      if (organizationId === undefined) throw new Error('No organization found')
+      return api.deleteSsoConfig(organizationId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ssoConfig'] })
@@ -152,7 +151,8 @@ function SsoTabContent({
 
   const verifyDomainMutation = useMutation({
     mutationFn: async () => {
-      return api.verifySsoDomain(requireOrganizationId())
+      if (organizationId === undefined) throw new Error('No organization found')
+      return api.verifySsoDomain(organizationId)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ssoConfig'] })

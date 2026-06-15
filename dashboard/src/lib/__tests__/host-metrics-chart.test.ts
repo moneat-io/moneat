@@ -16,6 +16,7 @@
 
 import {describe, expect, it} from 'vitest'
 import {
+  buildHostMetricQueryRange,
   compactHostMetricChartData,
   formatHostMetricAxisTick,
   formatHostMetricTooltipLabel,
@@ -57,6 +58,12 @@ describe('host metric chart helpers', () => {
   it('passes through invalid labels', () => {
     expect(formatHostMetricAxisTick('not-a-time', THIRTY_DAYS_SECONDS, TZ)).toBe('not-a-time')
     expect(formatHostMetricTooltipLabel('not-a-time', TZ)).toBe('not-a-time')
+  })
+
+  it('builds host metric query ranges in Unix seconds', () => {
+    const now = new Date(Date.UTC(2026, 0, 15, 18, 30, 15, 500))
+
+    expect(buildHostMetricQueryRange(ONE_HOUR_SECONDS, now)).toEqual(['1768498215', '1768501815'])
   })
 
   it('keeps short ranges at raw resolution', () => {

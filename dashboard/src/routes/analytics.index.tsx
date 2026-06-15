@@ -219,7 +219,7 @@ function AnalyticsOverview() {
     queryFn: () => api.getProjects(),
   })
 
-  const serviceList = services ?? []
+  const serviceList = useMemo(() => services ?? [], [services])
   const includedServices = useMemo(
     () => facetValues(facetFilters, 'service', false),
     [facetFilters]
@@ -724,7 +724,7 @@ function getServicePublicKey(service?: Project): string {
 
 function ProductAnalyticsTab({scopeId, params}: Readonly<{scopeId: AnalyticsScopeId; params: AnalyticsParams}>) {
   const {data: productEvents, isLoading: productEventsLoading} = useQuery({
-    queryKey: ['analytics-product-events', 'organization', params],
+    queryKey: ['analytics-product-events', 'organization', scopeId, params],
     queryFn: () => api.getAnalyticsEvents(scopeId, params, {
       source: 'server',
       groupBy: 'user_id',
@@ -732,7 +732,7 @@ function ProductAnalyticsTab({scopeId, params}: Readonly<{scopeId: AnalyticsScop
   })
 
   const {data: retention, isLoading: retentionLoading} = useQuery({
-    queryKey: ['analytics-product-retention', 'organization', params],
+    queryKey: ['analytics-product-retention', 'organization', scopeId, params],
     queryFn: () => api.getAnalyticsRetention(scopeId, {
       ...params,
       startEvent: PRODUCT_RETENTION_START_EVENT,
@@ -762,7 +762,7 @@ function ProductFunnelPanel({scopeId, params}: Readonly<{scopeId: AnalyticsScope
   const [steps, setSteps] = useState(DEFAULT_PRODUCT_FUNNEL_STEPS)
   const validSteps = steps.map(step => step.trim()).filter(Boolean)
   const {data: funnel, isLoading} = useQuery({
-    queryKey: ['analytics-product-funnel', 'organization', params, validSteps],
+    queryKey: ['analytics-product-funnel', 'organization', scopeId, params, validSteps],
     queryFn: () => api.getAnalyticsFunnel(scopeId, validSteps, params, {
       source: 'server',
       groupBy: 'user_id',

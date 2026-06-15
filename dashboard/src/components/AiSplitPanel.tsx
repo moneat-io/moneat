@@ -20,6 +20,7 @@ import {useCommandPalette} from '@/hooks/useCommandPalette'
 
 const MIN_PANEL_PCT = 15
 const MAX_PANEL_PCT = 70
+const noopSetPanelSize = () => undefined
 
 interface AiSplitPanelProps {
   children: ReactNode
@@ -34,7 +35,7 @@ export function AiSplitPanel({children, style, className}: AiSplitPanelProps) {
 
   const orientation = palette?.aiPanelOrientation ?? 'vertical'
   const panelSize = palette?.aiPanelSize ?? 30
-  const setPanelSize = palette?.setAiPanelSize ?? (() => undefined)
+  const setPanelSize = palette?.setAiPanelSize ?? noopSetPanelSize
 
   const isVertical = orientation === 'vertical'
 
