@@ -235,6 +235,7 @@ dependencies {
     runtimeOnly(project(":features:auth-tokens"))
     runtimeOnly(project(":features:billing"))
     runtimeOnly(project(":features:contact"))
+    runtimeOnly(project(":features:connectors"))
     runtimeOnly(project(":features:dashboards"))
     runtimeOnly(project(":features:datadog"))
     runtimeOnly(project(":features:featureflags"))
@@ -354,6 +355,7 @@ val backendFeatureProjects =
         ":features:auth-tokens",
         ":features:billing",
         ":features:contact",
+        ":features:connectors",
         ":features:dashboards",
         ":features:datadog",
         ":features:featureflags",
