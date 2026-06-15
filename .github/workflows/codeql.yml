@@ -69,8 +69,12 @@ jobs:
         if: matrix.language == 'java-kotlin' && matrix.build-mode == 'manual'
         working-directory: backend
         env:
-          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx2g -Dkotlin.daemon.jvmargs=-Xmx10g -Dorg.gradle.workers.max=1
-        run: ./gradlew classes --no-daemon -Dkotlin.daemon.jvmargs=-Xmx10g -Dorg.gradle.jvmargs=-Xmx2g -Dorg.gradle.workers.max=1
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx12g -Dorg.gradle.workers.max=1 -Dkotlin.compiler.execution.strategy=in-process
+        run: |
+          ./gradlew classes --no-daemon \
+            -Dorg.gradle.jvmargs=-Xmx12g \
+            -Dorg.gradle.workers.max=1 \
+            -Dkotlin.compiler.execution.strategy=in-process
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
