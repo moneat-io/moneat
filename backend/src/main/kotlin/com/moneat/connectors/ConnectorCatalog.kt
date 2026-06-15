@@ -266,6 +266,12 @@ object ConnectorCatalog {
     private const val ORGANIZATION_INTEGRATIONS = "organization_integrations"
     private const val WORKFLOW_CONNECTIONS = "workflow_connections"
     private const val CLOUD_SOURCES = "cloud_sources"
+    private const val CLOUD_SOURCES_STATUS_ROUTE = "/v1/cloud-sources"
+    private const val WORKFLOW_ACTIONS_NAME = "Workflow actions"
+    private const val WORKFLOW_CONNECTIONS_STATUS_ROUTE = "/v1/workflows/connections"
+    private const val GITHUB_METADATA_READ_SCOPE = "metadata:read"
+    private const val JIRA_READ_SCOPE = "read:jira-work"
+    private const val SERVICENOW_TABLE_READ_SCOPE = "table.read"
 
     val providers: List<ConnectorProviderDefinition> =
         listOf(
@@ -391,14 +397,14 @@ object ConnectorCatalog {
                     ),
                     ConnectorUseDefinition(
                         id = "workflow_actions",
-                        name = "Workflow actions",
+                        name = WORKFLOW_ACTIONS_NAME,
                         family = ConnectorFamily.WORKFLOW_EGRESS,
                         availability = ConnectorAvailability.ENTERPRISE,
                         setupMode = ConnectorSetupMode.API_KEY,
                         capabilities = listOf("workflow_action", "incident_create", "incident_update"),
                         stateSource = WORKFLOW_CONNECTIONS,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = "/v1/workflows/connections",
+                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
                         description = "Let workflows create or update PagerDuty incidents through trusted egress.",
                         direction = ConnectorDirection.WRITE,
                         allowedAuthProfileIds = listOf("workflow_api_key"),
@@ -420,7 +426,12 @@ object ConnectorCatalog {
                         authKind = ConnectorAuthKind.APP_INSTALLATION,
                         subjectKinds = listOf(ConnectorSubjectKind.INSTALLATION),
                         tokenLifecycle = ConnectorTokenLifecycle.SHORT_LIVED,
-                        defaultScopes = listOf("metadata:read", "contents:read", "issues:read", "pull_requests:read"),
+                        defaultScopes = listOf(
+                            GITHUB_METADATA_READ_SCOPE,
+                            "contents:read",
+                            "issues:read",
+                            "pull_requests:read"
+                        ),
                         separateReconsentRequired = true,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id
                     ),
@@ -430,7 +441,7 @@ object ConnectorCatalog {
                         authKind = ConnectorAuthKind.APP_INSTALLATION,
                         subjectKinds = listOf(ConnectorSubjectKind.INSTALLATION),
                         tokenLifecycle = ConnectorTokenLifecycle.SHORT_LIVED,
-                        defaultScopes = listOf("metadata:read", "issues:write"),
+                        defaultScopes = listOf(GITHUB_METADATA_READ_SCOPE, "issues:write"),
                         separateReconsentRequired = true,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id
                     )
@@ -445,29 +456,34 @@ object ConnectorCatalog {
                         capabilities = listOf("repository_read", "issue_import", "pull_request_import"),
                         stateSource = CLOUD_SOURCES,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = "/v1/cloud-sources",
+                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
                         description = "Import repository, issue, and pull request metadata.",
                         direction = ConnectorDirection.READ,
                         allowedAuthProfileIds = listOf("read_app_installation"),
-                        requiredScopes = listOf("metadata:read", "contents:read", "issues:read", "pull_requests:read"),
+                        requiredScopes = listOf(
+                            GITHUB_METADATA_READ_SCOPE,
+                            "contents:read",
+                            "issues:read",
+                            "pull_requests:read"
+                        ),
                         resourceTypes = listOf("organization", "repository"),
                         stateKind = ConnectorStateKind.SYNC,
                         uiGroup = ConnectorUiGroup.IMPORT_DATA
                     ),
                     ConnectorUseDefinition(
                         id = "workflow_actions",
-                        name = "Workflow actions",
+                        name = WORKFLOW_ACTIONS_NAME,
                         family = ConnectorFamily.WORKFLOW_EGRESS,
                         availability = ConnectorAvailability.ENTERPRISE,
                         setupMode = ConnectorSetupMode.APP_INSTALLATION,
                         capabilities = listOf("workflow_action", "issue_create", "issue_update"),
                         stateSource = WORKFLOW_CONNECTIONS,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = "/v1/workflows/connections",
+                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
                         description = "Let workflows create and update GitHub issues through trusted egress.",
                         direction = ConnectorDirection.WRITE,
                         allowedAuthProfileIds = listOf("workflow_app_installation"),
-                        requiredScopes = listOf("metadata:read", "issues:write"),
+                        requiredScopes = listOf(GITHUB_METADATA_READ_SCOPE, "issues:write"),
                         resourceTypes = listOf("repository", "issue"),
                         stateKind = ConnectorStateKind.EXECUTION,
                         uiGroup = ConnectorUiGroup.SEND_ACTIONS
@@ -485,7 +501,7 @@ object ConnectorCatalog {
                         authKind = ConnectorAuthKind.OAUTH,
                         subjectKinds = listOf(ConnectorSubjectKind.USER, ConnectorSubjectKind.ORGANIZATION),
                         tokenLifecycle = ConnectorTokenLifecycle.REFRESHABLE,
-                        defaultScopes = listOf("read:jira-work"),
+                        defaultScopes = listOf(JIRA_READ_SCOPE),
                         separateReconsentRequired = true,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id
                     ),
@@ -495,7 +511,7 @@ object ConnectorCatalog {
                         authKind = ConnectorAuthKind.API_KEY,
                         subjectKinds = listOf(ConnectorSubjectKind.SERVICE_ACCOUNT),
                         tokenLifecycle = ConnectorTokenLifecycle.ROTATABLE,
-                        defaultScopes = listOf("read:jira-work", "write:jira-work"),
+                        defaultScopes = listOf(JIRA_READ_SCOPE, "write:jira-work"),
                         separateReconsentRequired = false,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id
                     )
@@ -510,25 +526,25 @@ object ConnectorCatalog {
                         capabilities = listOf("project_read", "issue_import"),
                         stateSource = CLOUD_SOURCES,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = "/v1/cloud-sources",
+                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
                         description = "Import Jira project and issue metadata.",
                         direction = ConnectorDirection.READ,
                         allowedAuthProfileIds = listOf("site_oauth"),
-                        requiredScopes = listOf("read:jira-work"),
+                        requiredScopes = listOf(JIRA_READ_SCOPE),
                         resourceTypes = listOf("site", "project", "issue"),
                         stateKind = ConnectorStateKind.SYNC,
                         uiGroup = ConnectorUiGroup.IMPORT_DATA
                     ),
                     ConnectorUseDefinition(
                         id = "workflow_actions",
-                        name = "Workflow actions",
+                        name = WORKFLOW_ACTIONS_NAME,
                         family = ConnectorFamily.WORKFLOW_EGRESS,
                         availability = ConnectorAvailability.ENTERPRISE,
                         setupMode = ConnectorSetupMode.API_KEY,
                         capabilities = listOf("workflow_action", "issue_create", "issue_update"),
                         stateSource = WORKFLOW_CONNECTIONS,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = "/v1/workflows/connections",
+                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
                         description = "Let workflows create and update Jira issues through trusted egress.",
                         direction = ConnectorDirection.WRITE,
                         allowedAuthProfileIds = listOf("workflow_api_token"),
@@ -550,7 +566,7 @@ object ConnectorCatalog {
                         authKind = ConnectorAuthKind.API_KEY,
                         subjectKinds = listOf(ConnectorSubjectKind.SERVICE_ACCOUNT),
                         tokenLifecycle = ConnectorTokenLifecycle.ROTATABLE,
-                        defaultScopes = listOf("table.read"),
+                        defaultScopes = listOf(SERVICENOW_TABLE_READ_SCOPE),
                         separateReconsentRequired = false,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id
                     ),
@@ -560,7 +576,7 @@ object ConnectorCatalog {
                         authKind = ConnectorAuthKind.API_KEY,
                         subjectKinds = listOf(ConnectorSubjectKind.SERVICE_ACCOUNT),
                         tokenLifecycle = ConnectorTokenLifecycle.ROTATABLE,
-                        defaultScopes = listOf("table.read", "table.write"),
+                        defaultScopes = listOf(SERVICENOW_TABLE_READ_SCOPE, "table.write"),
                         separateReconsentRequired = false,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id
                     )
@@ -575,25 +591,25 @@ object ConnectorCatalog {
                         capabilities = listOf("ticket_import", "cmdb_import"),
                         stateSource = CLOUD_SOURCES,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = "/v1/cloud-sources",
+                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
                         description = "Import ticket and CMDB metadata.",
                         direction = ConnectorDirection.READ,
                         allowedAuthProfileIds = listOf("instance_read_api_key"),
-                        requiredScopes = listOf("table.read"),
+                        requiredScopes = listOf(SERVICENOW_TABLE_READ_SCOPE),
                         resourceTypes = listOf("instance", "table"),
                         stateKind = ConnectorStateKind.SYNC,
                         uiGroup = ConnectorUiGroup.IMPORT_DATA
                     ),
                     ConnectorUseDefinition(
                         id = "workflow_actions",
-                        name = "Workflow actions",
+                        name = WORKFLOW_ACTIONS_NAME,
                         family = ConnectorFamily.WORKFLOW_EGRESS,
                         availability = ConnectorAvailability.ENTERPRISE,
                         setupMode = ConnectorSetupMode.API_KEY,
                         capabilities = listOf("workflow_action", "ticket_create", "ticket_update"),
                         stateSource = WORKFLOW_CONNECTIONS,
                         secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = "/v1/workflows/connections",
+                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
                         description = "Let workflows create and update ServiceNow tickets through trusted egress.",
                         direction = ConnectorDirection.WRITE,
                         allowedAuthProfileIds = listOf("workflow_api_key"),
@@ -630,7 +646,7 @@ object ConnectorCatalog {
                         capabilities = listOf("subscription_lifecycle_import", "revenue_import", "cohort_revenue"),
                         stateSource = CLOUD_SOURCES,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = "/v1/cloud-sources",
+                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
                         description = "Import subscription lifecycle and revenue events for cohort economics.",
                         direction = ConnectorDirection.READ,
                         allowedAuthProfileIds = listOf("project_api_key"),
@@ -667,7 +683,7 @@ object ConnectorCatalog {
                         capabilities = listOf("ad_spend_import", "campaign_metrics", "cohort_cost"),
                         stateSource = CLOUD_SOURCES,
                         secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = "/v1/cloud-sources",
+                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
                         description = "Import ad spend and campaign metrics for acquisition payback reporting.",
                         direction = ConnectorDirection.READ,
                         allowedAuthProfileIds = listOf("manager_oauth"),
