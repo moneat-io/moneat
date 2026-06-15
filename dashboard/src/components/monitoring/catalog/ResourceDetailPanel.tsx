@@ -21,7 +21,7 @@
 // security / cost / change views.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {useState, type ComponentType, type FormEvent, type ReactNode} from 'react'
+import {useState, type ComponentType, type ReactNode} from 'react'
 import {Link} from '@tanstack/react-router'
 import {
   Activity,
@@ -87,6 +87,15 @@ import {
 
 type DetailTab = 'overview' | 'relationships' | 'ownership' | 'security' | 'cost' | 'changes'
 
+type OwnershipSubmitEvent = {
+  readonly preventDefault: () => void
+}
+
+type OwnershipClaimError = {
+  readonly className: string
+  readonly message: string
+}
+
 const DETAIL_TABS: readonly {readonly id: DetailTab; readonly label: string}[] = [
   {id: 'overview', label: 'Overview'},
   {id: 'relationships', label: 'Relationships'},
@@ -102,6 +111,22 @@ function getMetricsHostId(resource: Resource): string | null {
   if (resource.kind !== 'host') return null
   const result = HOST_RESOURCE_ID_PATTERN.exec(resource.id)
   return result?.[1] ?? null
+}
+
+function getOwnershipClaimError(error: unknown, isError: boolean): OwnershipClaimError | null {
+  if (isOwnershipForbidden(error)) {
+    return {
+      className: 'text-[11px] text-warning-fg',
+      message: 'Resource ownership is available on paid plans.',
+    }
+  }
+  if (isError) {
+    return {
+      className: 'text-[11px] text-danger-fg',
+      message: 'Could not save ownership. Try again.',
+    }
+  }
+  return null
 }
 
 function FieldRow({label, value}: {readonly label: string; readonly value: ReactNode}) {
@@ -241,6 +266,40 @@ function OverviewTab({
   const metrics = telemetryQuery.data?.metrics ?? []
   const metricsHostId = getMetricsHostId(resource)
   const supportsTelemetry = TELEMETRY_KINDS.has(resource.kind)
+  let telemetryContent: ReactNode
+  if (telemetryQuery.isLoading) {
+    telemetryContent = (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {['a', 'b'].map((key) => (
+          <div key={key} className="h-[150px] animate-pulse rounded-md border border-border/70 bg-muted/20" />
+        ))}
+      </div>
+    )
+  } else if (metrics.length > 0) {
+    telemetryContent = (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {metrics.map((metric) => (
+          <MetricChart
+            key={metric.key}
+            {...metricChartProps(metric)}
+            rangeSeconds={rangeSeconds}
+            timezone={timezone}
+            height={150}
+          />
+        ))}
+      </div>
+    )
+  } else {
+    telemetryContent = (
+      <EmptyState
+        icon={Activity}
+        title="No telemetry data"
+        description="No samples have been received for this resource in the selected range."
+        className="py-8"
+      />
+    )
+  }
+
   return (
     <div className="space-y-3">
       {supportsTelemetry && (
@@ -258,32 +317,7 @@ function OverviewTab({
               <RangeToggle value={range} onChange={onRangeChange} />
             </div>
           </div>
-          {telemetryQuery.isLoading ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {['a', 'b'].map((key) => (
-                <div key={key} className="h-[150px] animate-pulse rounded-md border border-border/70 bg-muted/20" />
-              ))}
-            </div>
-          ) : metrics.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {metrics.map((metric) => (
-                <MetricChart
-                  key={metric.key}
-                  {...metricChartProps(metric)}
-                  rangeSeconds={rangeSeconds}
-                  timezone={timezone}
-                  height={150}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={Activity}
-              title="No telemetry data"
-              description="No samples have been received for this resource in the selected range."
-              className="py-8"
-            />
-          )}
+          {telemetryContent}
         </div>
       )}
       <div className={cn('grid gap-3', resource.metadata.length > 0 && 'lg:grid-cols-2')}>
@@ -422,7 +456,7 @@ function OwnershipTab({resource}: {readonly resource: Resource}) {
     setEditing(true)
   }
 
-  const submit = (event: FormEvent) => {
+  const submit = (event: OwnershipSubmitEvent) => {
     event.preventDefault()
     const team = form.team.trim()
     if (!team) return
@@ -432,86 +466,92 @@ function OwnershipTab({resource}: {readonly resource: Resource}) {
     )
   }
 
+  const claimError = getOwnershipClaimError(claim.error, claim.isError)
+  let ownershipContent: ReactNode
+  if (editing) {
+    ownershipContent = (
+      <PanelSection title={owner ? 'Edit ownership' : 'Claim ownership'}>
+        <form className="space-y-2" onSubmit={submit}>
+          <OwnerField label="Team" required value={form.team} placeholder="Payments" onChange={(v) => setForm((f) => ({...f, team: v}))} />
+          <OwnerField label="On-call" value={form.oncall} placeholder="Dana Whitfield" onChange={(v) => setForm((f) => ({...f, oncall: v}))} />
+          <OwnerField label="Slack" value={form.slack} placeholder="#payments-oncall" onChange={(v) => setForm((f) => ({...f, slack: v}))} />
+          <OwnerField label="Repository" value={form.repo} placeholder="moneat-io/payments" onChange={(v) => setForm((f) => ({...f, repo: v}))} />
+          {claimError && <p className={claimError.className}>{claimError.message}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" disabled={form.team.trim() === '' || claim.isPending}>
+              {claim.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        </form>
+      </PanelSection>
+    )
+  } else if (owner) {
+    ownershipContent = (
+      <PanelSection
+        title="Ownership"
+        action={
+          <Button type="button" size="sm" variant="ghost" onClick={startEdit}>
+            Edit
+          </Button>
+        }
+      >
+        <FieldRow label="Team" value={owner.team} />
+        {owner.oncall && (
+          <FieldRow
+            label="On-call"
+            value={
+              <span className="inline-flex items-center gap-1">
+                <Users className="h-3 w-3 text-muted-foreground" />
+                {owner.oncall}
+              </span>
+            }
+          />
+        )}
+        {owner.slack && (
+          <FieldRow
+            label="Slack"
+            value={
+              <span className="inline-flex items-center gap-1">
+                <Hash className="h-3 w-3 text-muted-foreground" />
+                {owner.slack.replace(/^#/, '')}
+              </span>
+            }
+          />
+        )}
+        {owner.repo && (
+          <FieldRow
+            label="Repository"
+            value={
+              <span className="inline-flex items-center gap-1">
+                <GitBranch className="h-3 w-3 text-muted-foreground" />
+                {owner.repo}
+              </span>
+            }
+          />
+        )}
+      </PanelSection>
+    )
+  } else {
+    ownershipContent = (
+      <EmptyState
+        icon={Users}
+        title="No owner assigned"
+        description="This resource has no team, on-call, or escalation path. Unowned resources are a common source of orphaned cost and slow incident response."
+        action={
+          <Button type="button" size="sm" className="gap-1" onClick={startEdit}>
+            <Plus className="h-3.5 w-3.5" /> Claim ownership
+          </Button>
+        }
+      />
+    )
+  }
+
   return (
     <div className="space-y-3">
-      {editing ? (
-        <PanelSection title={owner ? 'Edit ownership' : 'Claim ownership'}>
-          <form className="space-y-2" onSubmit={submit}>
-            <OwnerField label="Team" required value={form.team} placeholder="Payments" onChange={(v) => setForm((f) => ({...f, team: v}))} />
-            <OwnerField label="On-call" value={form.oncall} placeholder="Dana Whitfield" onChange={(v) => setForm((f) => ({...f, oncall: v}))} />
-            <OwnerField label="Slack" value={form.slack} placeholder="#payments-oncall" onChange={(v) => setForm((f) => ({...f, slack: v}))} />
-            <OwnerField label="Repository" value={form.repo} placeholder="moneat-io/payments" onChange={(v) => setForm((f) => ({...f, repo: v}))} />
-            {isOwnershipForbidden(claim.error) ? (
-              <p className="text-[11px] text-warning-fg">Resource ownership is available on paid plans.</p>
-            ) : claim.isError ? (
-              <p className="text-[11px] text-danger-fg">Could not save ownership. Try again.</p>
-            ) : null}
-            <div className="flex justify-end gap-2 pt-1">
-              <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" size="sm" disabled={form.team.trim() === '' || claim.isPending}>
-                {claim.isPending ? 'Saving…' : 'Save'}
-              </Button>
-            </div>
-          </form>
-        </PanelSection>
-      ) : owner ? (
-        <PanelSection
-          title="Ownership"
-          action={
-            <Button type="button" size="sm" variant="ghost" onClick={startEdit}>
-              Edit
-            </Button>
-          }
-        >
-          <FieldRow label="Team" value={owner.team} />
-          {owner.oncall && (
-            <FieldRow
-              label="On-call"
-              value={
-                <span className="inline-flex items-center gap-1">
-                  <Users className="h-3 w-3 text-muted-foreground" />
-                  {owner.oncall}
-                </span>
-              }
-            />
-          )}
-          {owner.slack && (
-            <FieldRow
-              label="Slack"
-              value={
-                <span className="inline-flex items-center gap-1">
-                  <Hash className="h-3 w-3 text-muted-foreground" />
-                  {owner.slack.replace(/^#/, '')}
-                </span>
-              }
-            />
-          )}
-          {owner.repo && (
-            <FieldRow
-              label="Repository"
-              value={
-                <span className="inline-flex items-center gap-1">
-                  <GitBranch className="h-3 w-3 text-muted-foreground" />
-                  {owner.repo}
-                </span>
-              }
-            />
-          )}
-        </PanelSection>
-      ) : (
-        <EmptyState
-          icon={Users}
-          title="No owner assigned"
-          description="This resource has no team, on-call, or escalation path. Unowned resources are a common source of orphaned cost and slow incident response."
-          action={
-            <Button type="button" size="sm" className="gap-1" onClick={startEdit}>
-              <Plus className="h-3.5 w-3.5" /> Claim ownership
-            </Button>
-          }
-        />
-      )}
+      {ownershipContent}
       <PanelSection title={`Tags (${resource.tags.length})`}>
         {resource.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
@@ -565,7 +605,7 @@ function SecurityTab({resource}: {readonly resource: Resource}) {
                   <span className="font-medium">{f.pkg}</span>
                   {f.fixedVersion ? <span className="text-muted-foreground"> · fix {f.fixedVersion}</span> : null}
                 </span>
-                {f.cvss != null ? (
+                {typeof f.cvss === 'number' ? (
                   <span className="shrink-0 tabular-nums text-[11px] text-muted-foreground">CVSS {f.cvss.toFixed(1)}</span>
                 ) : null}
                 <Badge variant={VULN_BADGE[f.severity]} className="shrink-0 px-1.5 py-0 text-[10px] leading-4">

@@ -94,7 +94,7 @@ data class ResourceSecuritySnapshot(
  * their severities from the signals store, SBOM component counts and compliance findings from the
  * evidence store. Every value is sourced; there is no synthesized security data.
  */
-interface ResourceSecurityReader {
+fun interface ResourceSecurityReader {
     suspend fun read(organizationIds: List<Int>): ResourceSecuritySnapshot
 }
 
@@ -150,7 +150,7 @@ class DefaultResourceSecurityReader : ResourceSecurityReader {
                         entities["image_name"]?.normalizedKey()?.let {
                             imageAcc.getOrPut(it) { VulnAccumulator() }.add(bucket, finding)
                         }
-                        if (entities["target_type"].equals("service", ignoreCase = true)) {
+                        if (entities["target_type"]?.lowercase() == "service") {
                             entities["target_name"]?.normalizedKey()?.let {
                                 serviceAcc.getOrPut(it) { VulnAccumulator() }.add(bucket, finding)
                             }

@@ -353,9 +353,11 @@ class ResourceCatalogService(
         for (edge in queryClient.serviceEdges(organizationIds)) {
             val from = edge.s("from_service") ?: continue
             val to = edge.s("to_service") ?: continue
-            if (from.equals(to, ignoreCase = true)) continue
-            downstreamByService.getOrPut(from.lowercase()) { mutableListOf() }.add(to)
-            upstreamByService.getOrPut(to.lowercase()) { mutableListOf() }.add(from)
+            val fromKey = from.lowercase()
+            val toKey = to.lowercase()
+            if (fromKey == toKey) continue
+            downstreamByService.getOrPut(fromKey) { mutableListOf() }.add(to)
+            upstreamByService.getOrPut(toKey) { mutableListOf() }.add(from)
         }
         return ServiceEdgeIndex(downstreamByService, upstreamByService)
     }
