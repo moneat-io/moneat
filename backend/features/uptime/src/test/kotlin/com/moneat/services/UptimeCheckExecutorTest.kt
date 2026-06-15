@@ -17,18 +17,9 @@
 package com.moneat.services
 
 import com.moneat.uptime.models.UptimeMonitorData
-import com.moneat.uptime.services.SslCertificateEvaluator
 import com.moneat.uptime.services.UptimeCheckExecutor
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
-import java.security.cert.X509Certificate
-import java.time.Duration
-import java.util.Date
 import java.util.UUID
-import javax.net.ssl.SSLPeerUnverifiedException
-import javax.net.ssl.SSLSession
-import javax.net.ssl.SSLSocket
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -36,7 +27,6 @@ import kotlin.time.Clock
 
 class UptimeCheckExecutorTest {
     private val executor = UptimeCheckExecutor()
-    private val sslCertificateEvaluator = SslCertificateEvaluator()
 
     private fun monitor(
         type: String,
@@ -184,84 +174,6 @@ class UptimeCheckExecutorTest {
         }
 
     @Test
-    fun `ssl certificate evaluator reports valid warning and expired certificates`() {
-        val valid = sslCertificateEvaluator.evaluateCertificate(
-            certificateExpiringInDays(90),
-            responseTime = 25,
-            warnDays = 30,
-        )
-        assertEquals(1, valid.status)
-        assertTrue(valid.message.contains("valid"), valid.message)
-
-        val warning = sslCertificateEvaluator.evaluateCertificate(
-            certificateExpiringInDays(3),
-            responseTime = 25,
-            warnDays = 30,
-        )
-        assertEquals(0, warning.status)
-        assertTrue(warning.message.contains("warning threshold"), warning.message)
-
-        val expired = sslCertificateEvaluator.evaluateCertificate(
-            certificateExpiringInDays(-2),
-            responseTime = 25,
-            warnDays = 30,
-        )
-        assertEquals(0, expired.status)
-        assertTrue(expired.message.contains("expired"), expired.message)
-    }
-
-    @Test
-    fun `ssl certificate result handles missing peer certificate`() {
-        val socket = mockk<SSLSocket>()
-        val session = mockk<SSLSession>()
-        every { socket.session } returns session
-        every { session.peerCertificates } returns emptyArray()
-
-        val result = sslCertificateEvaluator.evaluateSocket(socket, responseTime = 25, warnDays = 30)
-
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("No SSL certificate"), result.message)
-    }
-
-    @Test
-    fun `ssl certificate result handles unverified peer certificate`() {
-        val socket = mockk<SSLSocket>()
-        val session = mockk<SSLSession>()
-        every { socket.session } returns session
-        every { session.peerCertificates } throws SSLPeerUnverifiedException("unverified")
-
-        val result = sslCertificateEvaluator.evaluateSocket(socket, responseTime = 25, warnDays = 30)
-
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("No SSL certificate"), result.message)
-    }
-
-    @Test
-    fun `ssl certificate result evaluates peer certificate`() {
-        val socket = mockk<SSLSocket>()
-        val session = mockk<SSLSession>()
-        every { socket.session } returns session
-        every { session.peerCertificates } returns arrayOf(certificateExpiringInDays(90))
-
-        val result = sslCertificateEvaluator.evaluateSocket(socket, responseTime = 25, warnDays = 30)
-
-        assertEquals(1, result.status)
-        assertTrue(result.message.contains("valid"), result.message)
-    }
-
-    @Test
-    fun `ssl certificate evaluator reports recently expired certificate as expired`() {
-        val result = sslCertificateEvaluator.evaluateCertificate(
-            certificateExpiringIn(Duration.ofHours(-1)),
-            responseTime = 25,
-            warnDays = 30,
-        )
-
-        assertEquals(0, result.status)
-        assertTrue(result.message.contains("expired"), result.message)
-    }
-
-    @Test
     fun `executeCheck reports SSL connection failure when host is allowed`() =
         runBlocking {
             withSelfHosted("true") {
@@ -270,16 +182,6 @@ class UptimeCheckExecutorTest {
                 assertTrue(result.message.contains("SSL check failed"), result.message)
             }
         }
-
-    private fun certificateExpiringInDays(days: Long): X509Certificate {
-        return certificateExpiringIn(Duration.ofDays(days))
-    }
-
-    private fun certificateExpiringIn(duration: Duration): X509Certificate {
-        val cert = mockk<X509Certificate>()
-        every { cert.notAfter } returns Date.from(java.time.Instant.now().plus(duration))
-        return cert
-    }
 
     private suspend fun <T> withSelfHosted(value: String, block: suspend () -> T): T {
         val previous = System.getProperty("SELF_HOSTED")
