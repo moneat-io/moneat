@@ -1099,6 +1099,28 @@ class EventRoutesExtendedTest {
     }
 
     @Test
+    fun `PUT user preferences accepts dashboard date format values`() = testApplication {
+        val seeded = seedUserProject()
+
+        application { installTestApp() }
+        val isoResponse = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"dateFormat":"iso"}""")
+        }
+        assertEquals(HttpStatusCode.OK, isoResponse.status)
+        assertTrue(isoResponse.bodyAsText().contains("\"dateFormat\":\"iso\""))
+
+        val dmyResponse = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"dateFormat":"dmy"}""")
+        }
+        assertEquals(HttpStatusCode.OK, dmyResponse.status)
+        assertTrue(dmyResponse.bodyAsText().contains("\"dateFormat\":\"dmy\""))
+    }
+
+    @Test
     fun `GET user returns 401 without auth`() = testApplication {
         application { installTestApp() }
         val response = client.get("/v1/user")
@@ -1117,6 +1139,27 @@ class EventRoutesExtendedTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issueAlerts"))
+    }
+
+    @Test
+    fun `PUT notification-preferences persists delivery channel toggles`() = testApplication {
+        val (userId, _) = seedUserWithProject()
+
+        application { installTestApp() }
+        val update = client.put("/v1/notification-preferences") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.OK, update.status)
+
+        val response = client.get("/v1/notification-preferences") {
+            withAuth(token(userId))
+        }
+        val body = response.bodyAsText()
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(body.contains("\"emailEnabled\":false"))
+        assertTrue(body.contains("\"pushEnabled\":true"))
     }
 
     @Test

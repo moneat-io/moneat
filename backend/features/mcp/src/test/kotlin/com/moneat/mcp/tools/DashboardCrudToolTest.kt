@@ -101,6 +101,8 @@ class DashboardCrudToolTest {
                     oncall_phone_consent_user_agent TEXT,
                     oncall_phone_opted_out_at TIMESTAMP,
                     timezone VARCHAR(64),
+                    ui_density VARCHAR(20),
+                    date_format VARCHAR(20),
                     deleted_at TIMESTAMP
                 )
                 """.trimIndent()
@@ -118,6 +120,8 @@ class DashboardCrudToolTest {
                     resource_id UUID NOT NULL,
                     "name" VARCHAR(255) NOT NULL,
                     slug VARCHAR(255) NOT NULL,
+                    default_timezone VARCHAR(100) DEFAULT 'UTC' NOT NULL,
+                    data_region VARCHAR(32) DEFAULT 'us' NOT NULL,
                     company_size VARCHAR(50),
                     referral_source VARCHAR(100),
                     utm_source VARCHAR(255),
@@ -125,6 +129,8 @@ class DashboardCrudToolTest {
                     utm_campaign VARCHAR(255),
                     utm_content VARCHAR(255),
                     utm_term VARCHAR(255),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
                     deleted_at TIMESTAMP,
                     deleted_by INT
                 )

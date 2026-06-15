@@ -18,6 +18,12 @@ export interface OrganizationAccountSettings {
   id: string
   name: string
   role: string
+  // Identity/defaults surfaced on the redesigned General page. Optional so the
+  // UI degrades gracefully against backends that don't return them yet.
+  slug?: string | null
+  defaultTimezone?: string | null
+  dataRegion?: string | null
+  createdAt?: string | null
 }
 
 export interface AccountDeletionValidation {

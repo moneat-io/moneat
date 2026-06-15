@@ -20,9 +20,11 @@ import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 class JsonbColumnType : ColumnType<String>() {
@@ -126,6 +128,8 @@ object Users : Table("users") {
     val oncall_phone_consent_user_agent = text("oncall_phone_consent_user_agent").nullable()
     val oncall_phone_opted_out_at = timestamp("oncall_phone_opted_out_at").nullable()
     val timezone = varchar("timezone", 64).nullable()
+    val ui_density = varchar("ui_density", 20).nullable()
+    val date_format = varchar("date_format", 20).nullable()
     val deletedAt = timestamp("deleted_at").nullable()
     override val primaryKey = PrimaryKey(id)
 }
@@ -158,6 +162,8 @@ object Organizations : Table("organizations") {
     val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val name = varchar("name", 255)
     val slug = varchar("slug", 255)
+    val default_timezone = varchar("default_timezone", 100).default("UTC")
+    val data_region = varchar("data_region", 32).default("us")
     val company_size = varchar("company_size", 50).nullable()
     val referral_source = varchar("referral_source", 100).nullable()
     val utm_source = varchar("utm_source", 255).nullable()
@@ -165,6 +171,8 @@ object Organizations : Table("organizations") {
     val utm_campaign = varchar("utm_campaign", 255).nullable()
     val utm_content = varchar("utm_content", 255).nullable()
     val utm_term = varchar("utm_term", 255).nullable()
+    val created_at = timestamp("created_at").clientDefault { Clock.System.now() }
+    val updated_at = timestamp("updated_at").clientDefault { Clock.System.now() }
     val deletedAt = timestamp("deleted_at").nullable()
     val deletedBy = integer("deleted_by").references(Users.id).nullable()
     override val primaryKey = PrimaryKey(id)
@@ -590,6 +598,8 @@ object NotificationPreferences : Table("notification_preferences") {
     val error_alerts = bool("error_alerts").default(true)
     val weekly_summary = bool("weekly_summary").default(true)
     val alert_frequency_minutes = integer("alert_frequency_minutes").default(30)
+    val email_enabled = bool("email_enabled").default(true)
+    val push_enabled = bool("push_enabled").default(false)
     val created_at = timestamp("created_at").nullable()
     val updated_at = timestamp("updated_at").nullable()
     override val primaryKey = PrimaryKey(id)
@@ -616,6 +626,18 @@ object EmailsSent : Table("emails_sent") {
     val sent_at = timestamp("sent_at")
     val success = bool("success").default(true)
     override val primaryKey = PrimaryKey(id)
+}
+
+object UserDeviceTokens : IntIdTable("user_device_tokens") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val deviceToken = varchar("device_token", 500).uniqueIndex()
+    val platform = varchar("platform", 20)
+    val deviceName = varchar("device_name", 255).nullable()
+    val enabled = bool("enabled").default(true)
+    val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
+    val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
+    val lastUsedAt = timestamp("last_used_at").clientDefault { Clock.System.now() }
 }
 
 object PromotionalCreditGrants : Table("promotional_credit_grants") {

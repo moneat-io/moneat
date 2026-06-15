@@ -36,6 +36,7 @@ import { adminMethods } from './modules/admin'
 import { notificationsMethods } from './modules/notifications'
 import { uptimeMethods } from './modules/uptime'
 import { integrationsMethods } from './modules/integrations'
+import { connectorsMethods } from './modules/connectors'
 import { statusPagesMethods } from './modules/status-pages'
 import { onCallMethods } from './modules/on-call'
 import { aiMethods } from './modules/ai'
@@ -78,6 +79,7 @@ export const api = {
   ...notificationsMethods(core),
   ...uptimeMethods(core),
   ...integrationsMethods(core),
+  ...connectorsMethods(core),
   ...statusPagesMethods(core),
   ...onCallMethods(core),
   ...aiMethods(core),

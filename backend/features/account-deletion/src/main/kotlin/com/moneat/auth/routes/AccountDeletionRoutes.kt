@@ -32,19 +32,29 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import kotlinx.serialization.Serializable
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
+import java.time.ZoneId
+import java.util.Locale
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
 private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
+private const val MAX_ORGANIZATION_NAME_LENGTH = 255
+private const val MAX_ORGANIZATION_SLUG_LENGTH = 63
+private val organizationSlugPattern = Regex("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
 
 @Serializable
 data class DeleteAccountRequest(
@@ -57,7 +67,22 @@ data class DeleteOrganizationRequest(
 )
 
 @Serializable
-data class OrgDetailsResponse(val id: String, val name: String, val role: String)
+data class UpdateOrganizationSettingsRequest(
+    val name: String? = null,
+    val slug: String? = null,
+    val defaultTimezone: String? = null,
+)
+
+@Serializable
+data class OrgDetailsResponse(
+    val id: String,
+    val name: String,
+    val role: String,
+    val slug: String,
+    val defaultTimezone: String,
+    val dataRegion: String,
+    val createdAt: String,
+)
 
 @Serializable
 data class UserDeletionValidationResponse(
@@ -77,6 +102,8 @@ fun Route.accountDeletionRoutes(
 ) {
     // Get organization details for account deletion confirmation
     get("/organizations/{orgId}") { handleGetOrgForDeletion() }
+    // Update organization settings
+    patch("/organizations/{orgId}") { handleUpdateOrganizationSettings() }
     // Delete current user account
     delete("/account") { handleDeleteAccount(deletionService) }
     // Delete organization
@@ -99,36 +126,50 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleGetOrgForDeletio
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
 
-    val orgResourceId = call.parameters["orgId"]?.let(::parseOrganizationResourceId)
-    if (orgResourceId == null) {
-        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
-        return
-    }
+    val orgWithRole = resolveOrganizationRowFromPath(userId) ?: return
 
-    val orgWithRole =
-        transaction {
-            Memberships
-                .innerJoin(Organizations)
-                .selectAll()
-                .where {
-                    (Memberships.user_id eq userId) and
-                        (Organizations.resource_id eq orgResourceId) and
-                        (Organizations.deletedAt.isNull())
-                }.singleOrNull()
+    call.respond(orgDetailsResponse(orgWithRole))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateOrganizationSettings() {
+    val principal = call.principal<JWTPrincipal>()
+    val userId = principal!!.payload.getClaim("userId").asInt()
+
+    val request =
+        suspendRunCatching {
+            call.receive<UpdateOrganizationSettingsRequest>()
+        }.getOrElse { _ ->
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            return
         }
 
-    if (orgWithRole == null) {
-        call.respond(HttpStatusCode.NotFound, ErrorResponse(ORGANIZATION_NOT_FOUND_MESSAGE))
+    val orgWithRole = resolveOrganizationRowFromPath(userId) ?: return
+    if (orgWithRole[Memberships.role] !in setOf("owner", "admin")) {
+        call.respond(
+            HttpStatusCode.Forbidden,
+            ErrorResponse("Only organization admins can update organization settings")
+        )
         return
     }
 
-    call.respond(
-        OrgDetailsResponse(
-            id = orgWithRole[Organizations.resource_id].toString(),
-            name = orgWithRole[Organizations.name],
-            role = orgWithRole[Memberships.role]
-        )
-    )
+    val update = validatedOrganizationUpdate(request, orgWithRole) ?: return
+    if (!update.hasChanges()) {
+        call.respond(orgDetailsResponse(orgWithRole))
+        return
+    }
+
+    val now = Clock.System.now()
+    transaction {
+        Organizations.update({ Organizations.id eq orgWithRole[Organizations.id] }) {
+            update.name?.let { value -> it[name] = value }
+            update.slug?.let { value -> it[slug] = value }
+            update.defaultTimezone?.let { value -> it[default_timezone] = value }
+            it[updated_at] = now
+        }
+    }
+
+    val updated = resolveOrganizationRowFromPath(userId) ?: return
+    call.respond(orgDetailsResponse(updated))
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
@@ -284,6 +325,100 @@ private suspend fun io.ktor.server.routing.RoutingContext.resolveOrganizationIdF
     }
     return orgId
 }
+
+private suspend fun io.ktor.server.routing.RoutingContext.resolveOrganizationRowFromPath(userId: Int): ResultRow? {
+    val orgResourceId = call.parameters["orgId"]?.let(::parseOrganizationResourceId)
+    if (orgResourceId == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid organization ID"))
+        return null
+    }
+
+    val orgWithRole =
+        transaction {
+            Memberships
+                .innerJoin(Organizations)
+                .selectAll()
+                .where {
+                    (Memberships.user_id eq userId) and
+                        (Organizations.resource_id eq orgResourceId) and
+                        (Organizations.deletedAt.isNull())
+                }.singleOrNull()
+        }
+
+    if (orgWithRole == null) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse(ORGANIZATION_NOT_FOUND_MESSAGE))
+    }
+    return orgWithRole
+}
+
+private data class ValidatedOrganizationSettingsUpdate(
+    val name: String?,
+    val slug: String?,
+    val defaultTimezone: String?,
+) {
+    fun hasChanges(): Boolean =
+        name != null || slug != null || defaultTimezone != null
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.validatedOrganizationUpdate(
+    request: UpdateOrganizationSettingsRequest,
+    current: ResultRow,
+): ValidatedOrganizationSettingsUpdate? {
+    val name = request.name?.trim()
+    if (name != null && (name.isBlank() || name.length > MAX_ORGANIZATION_NAME_LENGTH)) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Organization name must be 1-255 characters"))
+        return null
+    }
+
+    val slug = request.slug?.trim()?.lowercase(Locale.US)
+    if (slug != null && !isValidOrganizationSlug(slug)) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            ErrorResponse("Slug must be 1-63 lowercase letters, numbers, or hyphens")
+        )
+        return null
+    }
+
+    if (slug != null && slug != current[Organizations.slug]) {
+        val slugTaken =
+            transaction {
+                Organizations
+                    .selectAll()
+                    .where { (Organizations.slug eq slug) and (Organizations.id neq current[Organizations.id]) }
+                    .firstOrNull() != null
+            }
+        if (slugTaken) {
+            call.respond(HttpStatusCode.Conflict, ErrorResponse("Organization slug is already in use"))
+            return null
+        }
+    }
+
+    val defaultTimezone = request.defaultTimezone?.trim()?.ifBlank { "UTC" }
+    if (defaultTimezone != null && defaultTimezone !in ZoneId.getAvailableZoneIds()) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid timezone identifier"))
+        return null
+    }
+
+    return ValidatedOrganizationSettingsUpdate(
+        name = name?.takeIf { it != current[Organizations.name] },
+        slug = slug?.takeIf { it != current[Organizations.slug] },
+        defaultTimezone = defaultTimezone?.takeIf { it != current[Organizations.default_timezone] },
+    )
+}
+
+private fun orgDetailsResponse(row: ResultRow): OrgDetailsResponse =
+    OrgDetailsResponse(
+        id = row[Organizations.resource_id].toString(),
+        name = row[Organizations.name],
+        role = row[Memberships.role],
+        slug = row[Organizations.slug],
+        defaultTimezone = row[Organizations.default_timezone],
+        dataRegion = row[Organizations.data_region],
+        createdAt = row[Organizations.created_at].toString(),
+    )
+
+private fun isValidOrganizationSlug(slug: String): Boolean =
+    slug.length <= MAX_ORGANIZATION_SLUG_LENGTH && organizationSlugPattern.matches(slug)
 
 private fun parseOrganizationResourceId(value: String): Uuid? =
     value.toUuidOrNull()

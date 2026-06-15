@@ -63,6 +63,8 @@ class NotificationPreferencesServiceTest {
         assertTrue(prefs.global.errorAlerts)
         assertTrue(prefs.global.weeklySummary)
         assertEquals(30, prefs.global.alertFrequencyMinutes)
+        assertTrue(prefs.global.emailEnabled)
+        assertFalse(prefs.global.pushEnabled)
         assertTrue(prefs.projects.isEmpty())
     }
 
@@ -86,9 +88,43 @@ class NotificationPreferencesServiceTest {
 
         assertFalse(inserted.issueAlerts)
         assertEquals(15, inserted.alertFrequencyMinutes)
+        assertTrue(inserted.emailEnabled)
+        assertFalse(inserted.pushEnabled)
         assertTrue(updated.issueAlerts)
         assertFalse(updated.errorAlerts)
         assertEquals(45, fetched.global.alertFrequencyMinutes)
+    }
+
+    @Test
+    fun `updatePreferences preserves delivery channel toggles`() {
+        val now = Clock.System.now()
+        transaction {
+            NotificationPreferences.insert {
+                it[user_id] = USER_ID
+                it[project_id] = null
+                it[issue_alerts] = false
+                it[error_alerts] = false
+                it[weekly_summary] = false
+                it[alert_frequency_minutes] = 10
+                it[email_enabled] = false
+                it[push_enabled] = true
+                it[created_at] = now
+                it[updated_at] = now
+            }
+        }
+
+        val updated = service.updatePreferences(
+            userId = USER_ID,
+            issueAlerts = true,
+            errorAlerts = true,
+            weeklySummary = true,
+            alertFrequencyMinutes = 20,
+        )
+
+        assertTrue(updated.issueAlerts)
+        assertEquals(20, updated.alertFrequencyMinutes)
+        assertFalse(updated.emailEnabled)
+        assertTrue(updated.pushEnabled)
     }
 
     @Test
@@ -103,6 +139,8 @@ class NotificationPreferencesServiceTest {
         assertFalse(prefs.projects.single().issueAlerts)
         assertFalse(prefs.projects.single().weeklySummary)
         assertEquals(5, prefs.projects.single().alertFrequencyMinutes)
+        assertTrue(prefs.projects.single().emailEnabled)
+        assertFalse(prefs.projects.single().pushEnabled)
     }
 
     @Test
@@ -147,6 +185,8 @@ class NotificationPreferencesServiceTest {
                 it[error_alerts] = true
                 it[weekly_summary] = false
                 it[alert_frequency_minutes] = 5
+                it[email_enabled] = true
+                it[push_enabled] = false
                 it[created_at] = now
                 it[updated_at] = now
             }

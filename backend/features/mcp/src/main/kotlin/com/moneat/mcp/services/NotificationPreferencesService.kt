@@ -37,6 +37,8 @@ class NotificationPreferencesService {
 
     companion object {
         private const val DEFAULT_ALERT_FREQUENCY_MINUTES = 30
+        private const val DEFAULT_EMAIL_ENABLED = true
+        private const val DEFAULT_PUSH_ENABLED = false
     }
 
     fun getPreferences(userId: Int): NotificationPreferencesResponse = transaction {
@@ -47,21 +49,7 @@ class NotificationPreferencesService {
                     NotificationPreferences.project_id.isNull()
             }.firstOrNull()
 
-        val globalPrefs = if (global != null) {
-            NotificationPreferencesData(
-                issueAlerts = global[NotificationPreferences.issue_alerts],
-                errorAlerts = global[NotificationPreferences.error_alerts],
-                weeklySummary = global[NotificationPreferences.weekly_summary],
-                alertFrequencyMinutes = global[NotificationPreferences.alert_frequency_minutes]
-            )
-        } else {
-            NotificationPreferencesData(
-                issueAlerts = true,
-                errorAlerts = true,
-                weeklySummary = true,
-                alertFrequencyMinutes = DEFAULT_ALERT_FREQUENCY_MINUTES
-            )
-        }
+        val globalPrefs = global?.let(::notificationPreferencesData) ?: defaultNotificationPreferencesData()
 
         // Batch-load all project names in one query to avoid N+1
         val projectPrefs = NotificationPreferences
@@ -92,7 +80,9 @@ class NotificationPreferencesService {
                 issueAlerts = pref[NotificationPreferences.issue_alerts],
                 errorAlerts = pref[NotificationPreferences.error_alerts],
                 weeklySummary = pref[NotificationPreferences.weekly_summary],
-                alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes]
+                alertFrequencyMinutes = pref[NotificationPreferences.alert_frequency_minutes],
+                emailEnabled = pref[NotificationPreferences.email_enabled],
+                pushEnabled = pref[NotificationPreferences.push_enabled],
             )
         }
 
@@ -136,32 +126,49 @@ class NotificationPreferencesService {
                     it[NotificationPreferences.error_alerts] = errorAlerts
                     it[NotificationPreferences.weekly_summary] = weeklySummary
                     it[NotificationPreferences.alert_frequency_minutes] = alertFrequencyMinutes
+                    it[email_enabled] = DEFAULT_EMAIL_ENABLED
+                    it[push_enabled] = DEFAULT_PUSH_ENABLED
                     it[created_at] = now
                     it[updated_at] = now
                 }
-                // Re-read the persisted row in case a concurrent transaction beat the insertIgnore
-                val persisted = NotificationPreferences
-                    .selectAll()
-                    .where {
-                        (NotificationPreferences.user_id eq userId) and
-                            NotificationPreferences.project_id.isNull()
-                    }.firstOrNull()
-                if (persisted != null) {
-                    return@transaction NotificationPreferencesData(
-                        issueAlerts = persisted[NotificationPreferences.issue_alerts],
-                        errorAlerts = persisted[NotificationPreferences.error_alerts],
-                        weeklySummary = persisted[NotificationPreferences.weekly_summary],
-                        alertFrequencyMinutes = persisted[NotificationPreferences.alert_frequency_minutes],
-                    )
-                }
             }
 
-            NotificationPreferencesData(
-                issueAlerts = issueAlerts,
-                errorAlerts = errorAlerts,
-                weeklySummary = weeklySummary,
-                alertFrequencyMinutes = alertFrequencyMinutes
-            )
+            NotificationPreferences
+                .selectAll()
+                .where {
+                    (NotificationPreferences.user_id eq userId) and
+                        NotificationPreferences.project_id.isNull()
+                }
+                .firstOrNull()
+                ?.let(::notificationPreferencesData)
+                ?: NotificationPreferencesData(
+                    issueAlerts = issueAlerts,
+                    errorAlerts = errorAlerts,
+                    weeklySummary = weeklySummary,
+                    alertFrequencyMinutes = alertFrequencyMinutes,
+                    emailEnabled = DEFAULT_EMAIL_ENABLED,
+                    pushEnabled = DEFAULT_PUSH_ENABLED,
+                )
         }
     }
+
+    private fun defaultNotificationPreferencesData(): NotificationPreferencesData =
+        NotificationPreferencesData(
+            issueAlerts = true,
+            errorAlerts = true,
+            weeklySummary = true,
+            alertFrequencyMinutes = DEFAULT_ALERT_FREQUENCY_MINUTES,
+            emailEnabled = DEFAULT_EMAIL_ENABLED,
+            pushEnabled = DEFAULT_PUSH_ENABLED,
+        )
+
+    private fun notificationPreferencesData(row: ResultRow): NotificationPreferencesData =
+        NotificationPreferencesData(
+            issueAlerts = row[NotificationPreferences.issue_alerts],
+            errorAlerts = row[NotificationPreferences.error_alerts],
+            weeklySummary = row[NotificationPreferences.weekly_summary],
+            alertFrequencyMinutes = row[NotificationPreferences.alert_frequency_minutes],
+            emailEnabled = row[NotificationPreferences.email_enabled],
+            pushEnabled = row[NotificationPreferences.push_enabled],
+        )
 }

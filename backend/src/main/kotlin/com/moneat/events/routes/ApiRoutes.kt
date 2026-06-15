@@ -34,6 +34,7 @@ import com.moneat.events.models.OnCallContactResponse
 import com.moneat.events.models.ProjectNotificationPreferences
 import com.moneat.events.models.SidebarPreferencesResponse
 import com.moneat.events.models.UpdateAlertNotificationPreferenceRequest
+import com.moneat.events.models.UpdateNotificationPreferencesRequest
 import com.moneat.events.models.UpdateOnCallContactRequest
 import com.moneat.events.models.UpdateProjectRequest
 import com.moneat.events.models.UpdateSidebarPreferencesRequest
@@ -102,6 +103,8 @@ private const val DEMO_MOBILE_SERVICE_ID = -3L
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 private const val ERROR_INVALID_SERVICE_IDS = "Invalid serviceIds"
 private const val ERROR_ALERT_EPISODE_NOT_FOUND = "Alert episode not found"
+private val supportedDensities = setOf("compact", "comfortable", "spacious")
+private val supportedDateFormats = setOf("medium", "iso", "dmy", "short", "long", "relative")
 private val DEMO_SERVICE_IDS = listOf(DEMO_PRIMARY_SERVICE_ID, DEMO_CHECKOUT_SERVICE_ID, DEMO_MOBILE_SERVICE_ID)
 
 private data class ServiceReadContext(
@@ -190,6 +193,8 @@ fun Route.apiRoutes() {
                                 sidebarHiddenItems = hiddenItems,
                                 phoneNumber = userRow[Users.phone_number],
                                 timezone = userRow[Users.timezone],
+                                density = userRow[Users.ui_density],
+                                dateFormat = userRow[Users.date_format],
                                 orgId = orgResourceId,
                             )
                         }
@@ -437,6 +442,64 @@ fun Route.apiRoutes() {
                         }
                     }
                     call.respond(UpdateTimezoneResponse(tz))
+                }
+
+                put("/user/preferences") {
+                    val principal = call.principal<JWTPrincipal>()
+                    val userId = principal!!.payload.getClaim("userId").asInt()
+
+                    @kotlinx.serialization.Serializable
+                    data class UpdatePreferencesRequest(
+                        val density: String? = null,
+                        val dateFormat: String? = null,
+                    )
+
+                    @kotlinx.serialization.Serializable
+                    data class UpdatePreferencesResponse(
+                        val density: String?,
+                        val dateFormat: String?,
+                    )
+
+                    val request = call.receive<UpdatePreferencesRequest>()
+                    val density = request.density?.trim()?.lowercase()
+                    val dateFormat = request.dateFormat?.trim()?.lowercase()
+
+                    if (density != null && density !in supportedDensities) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid density preference"))
+                        return@put
+                    }
+                    if (dateFormat != null && dateFormat !in supportedDateFormats) {
+                        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid date format preference"))
+                        return@put
+                    }
+
+                    val updated =
+                        transaction {
+                            Users.update({ Users.id eq userId }) {
+                                if (request.density != null) {
+                                    it[ui_density] = density
+                                }
+                                if (request.dateFormat != null) {
+                                    it[Users.date_format] = dateFormat
+                                }
+                            }
+                            Users
+                                .selectAll()
+                                .where { Users.id eq userId }
+                                .firstOrNull()
+                                ?.let {
+                                    UpdatePreferencesResponse(
+                                        density = it[Users.ui_density],
+                                        dateFormat = it[Users.date_format],
+                                    )
+                                }
+                        }
+
+                    if (updated == null) {
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+                    } else {
+                        call.respond(updated)
+                    }
                 }
 
                 // SDK versions used in setup documentation
@@ -1336,14 +1399,18 @@ fun Route.apiRoutes() {
                                         issueAlerts = global[NotificationPreferences.issue_alerts],
                                         errorAlerts = global[NotificationPreferences.error_alerts],
                                         weeklySummary = global[NotificationPreferences.weekly_summary],
-                                        alertFrequencyMinutes = global[NotificationPreferences.alert_frequency_minutes]
+                                        alertFrequencyMinutes = global[NotificationPreferences.alert_frequency_minutes],
+                                        emailEnabled = global[NotificationPreferences.email_enabled],
+                                        pushEnabled = global[NotificationPreferences.push_enabled],
                                     )
                                 } else {
                                     NotificationPreferencesData(
                                         issueAlerts = true,
                                         errorAlerts = true,
                                         weeklySummary = true,
-                                        alertFrequencyMinutes = 30
+                                        alertFrequencyMinutes = DEFAULT_ALERT_FREQUENCY_MINUTES,
+                                        emailEnabled = true,
+                                        pushEnabled = false,
                                     )
                                 }
 
@@ -1372,7 +1439,9 @@ fun Route.apiRoutes() {
                                             errorAlerts = pref[NotificationPreferences.error_alerts],
                                             weeklySummary = pref[NotificationPreferences.weekly_summary],
                                             alertFrequencyMinutes =
-                                            pref[NotificationPreferences.alert_frequency_minutes]
+                                            pref[NotificationPreferences.alert_frequency_minutes],
+                                            emailEnabled = pref[NotificationPreferences.email_enabled],
+                                            pushEnabled = pref[NotificationPreferences.push_enabled],
                                         )
                                     }
 
@@ -1389,7 +1458,7 @@ fun Route.apiRoutes() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
-                    val request = call.receive<Map<String, Any>>()
+                    val request = call.receive<UpdateNotificationPreferencesRequest>()
 
                     transaction {
                         val existing =
@@ -1401,18 +1470,24 @@ fun Route.apiRoutes() {
                                 }.firstOrNull()
 
                         val issueAlerts =
-                            request["issueAlerts"] as? Boolean
+                            request.issueAlerts
                                 ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
                         val errorAlerts =
-                            request["errorAlerts"] as? Boolean
+                            request.errorAlerts
                                 ?: existing?.get(NotificationPreferences.error_alerts) ?: true
                         val weeklySummary =
-                            request["weeklySummary"] as? Boolean
+                            request.weeklySummary
                                 ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
                         val alertFrequency =
-                            (request["alertFrequencyMinutes"] as? Number)?.toInt()
+                            request.alertFrequencyMinutes
                                 ?: existing?.get(NotificationPreferences.alert_frequency_minutes)
                                 ?: DEFAULT_ALERT_FREQUENCY_MINUTES // NOSONAR kotlin:S6619
+                        val emailEnabled =
+                            request.emailEnabled
+                                ?: existing?.get(NotificationPreferences.email_enabled) ?: true
+                        val pushEnabled =
+                            request.pushEnabled
+                                ?: existing?.get(NotificationPreferences.push_enabled) ?: false
 
                         if (existing != null) {
                             NotificationPreferences.update({
@@ -1423,6 +1498,8 @@ fun Route.apiRoutes() {
                                 it[error_alerts] = errorAlerts
                                 it[weekly_summary] = weeklySummary
                                 it[alert_frequency_minutes] = alertFrequency
+                                it[email_enabled] = emailEnabled
+                                it[push_enabled] = pushEnabled
                                 it[updated_at] = Clock.System.now()
                             }
                         } else {
@@ -1433,6 +1510,8 @@ fun Route.apiRoutes() {
                                 it[error_alerts] = errorAlerts
                                 it[weekly_summary] = weeklySummary
                                 it[alert_frequency_minutes] = alertFrequency
+                                it[email_enabled] = emailEnabled
+                                it[push_enabled] = pushEnabled
                                 it[created_at] = Clock.System.now()
                                 it[updated_at] = Clock.System.now()
                             }
@@ -1457,7 +1536,7 @@ fun Route.apiRoutes() {
                         return@put
                     }
 
-                    val request = call.receive<Map<String, Any>>()
+                    val request = call.receive<UpdateNotificationPreferencesRequest>()
 
                     transaction {
                         val existing =
@@ -1469,18 +1548,24 @@ fun Route.apiRoutes() {
                                 }.firstOrNull()
 
                         val issueAlerts =
-                            request["issueAlerts"] as? Boolean
+                            request.issueAlerts
                                 ?: existing?.get(NotificationPreferences.issue_alerts) ?: true
                         val errorAlerts =
-                            request["errorAlerts"] as? Boolean
+                            request.errorAlerts
                                 ?: existing?.get(NotificationPreferences.error_alerts) ?: true
                         val weeklySummary =
-                            request["weeklySummary"] as? Boolean
+                            request.weeklySummary
                                 ?: existing?.get(NotificationPreferences.weekly_summary) ?: true
                         val alertFrequency =
-                            (request["alertFrequencyMinutes"] as? Number)?.toInt()
+                            request.alertFrequencyMinutes
                                 ?: existing?.get(NotificationPreferences.alert_frequency_minutes)
                                 ?: DEFAULT_ALERT_FREQUENCY_MINUTES // NOSONAR kotlin:S6619
+                        val emailEnabled =
+                            request.emailEnabled
+                                ?: existing?.get(NotificationPreferences.email_enabled) ?: true
+                        val pushEnabled =
+                            request.pushEnabled
+                                ?: existing?.get(NotificationPreferences.push_enabled) ?: false
 
                         if (existing != null) {
                             NotificationPreferences.update({
@@ -1491,6 +1576,8 @@ fun Route.apiRoutes() {
                                 it[error_alerts] = errorAlerts
                                 it[weekly_summary] = weeklySummary
                                 it[alert_frequency_minutes] = alertFrequency
+                                it[email_enabled] = emailEnabled
+                                it[push_enabled] = pushEnabled
                                 it[updated_at] = Clock.System.now()
                             }
                         } else {
@@ -1501,6 +1588,8 @@ fun Route.apiRoutes() {
                                 it[error_alerts] = errorAlerts
                                 it[weekly_summary] = weeklySummary
                                 it[alert_frequency_minutes] = alertFrequency
+                                it[email_enabled] = emailEnabled
+                                it[push_enabled] = pushEnabled
                                 it[created_at] = Clock.System.now()
                                 it[updated_at] = Clock.System.now()
                             }
