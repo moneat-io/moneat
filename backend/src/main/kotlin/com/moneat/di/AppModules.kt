@@ -102,11 +102,6 @@ import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.synthetics.routes.SyntheticsService
-import com.moneat.uptime.repositories.UptimeMonitorRepository
-import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
-import com.moneat.uptime.services.UptimeCheckExecutor
-import com.moneat.uptime.services.UptimeScheduler
-import com.moneat.uptime.services.UptimeService
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
 import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
 import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
@@ -263,24 +258,6 @@ val logsModule = module {
     single { LogManagementService() }
 }
 
-/** Uptime monitoring and status pages. */
-fun uptimeModule(frontendBaseUrl: String) = module {
-    single<UptimeMonitorRepository> { UptimeMonitorRepositoryImpl() }
-
-    single { UptimeService(get(), get()) }
-    single { UptimeCheckExecutor() }
-    single {
-        UptimeScheduler(
-            uptimeService = get(),
-            checkExecutor = get(),
-            incidentService = get(),
-            billingQuotaService = get(),
-            workflowService = get(),
-            frontendBaseUrl = frontendBaseUrl
-        )
-    }
-}
-
 /** Custom dashboards, alert evaluation, and external data sources. */
 val dashboardsModule = module {
     single<DashboardFolderRepository> { DashboardFolderRepositoryImpl() }
@@ -316,9 +293,7 @@ val dashboardsModule = module {
 val aiModule = module {}
 
 /** All application modules combined in load order. */
-private const val DEFAULT_FRONTEND_BASE_URL = "https://moneat.io"
-
-fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
+fun buildAppModules() =
     listOf(
         sharedModule,
         authModule,
@@ -327,7 +302,6 @@ fun buildAppModules(frontendBaseUrl: String = DEFAULT_FRONTEND_BASE_URL) =
         eventsModule,
         monitorModule,
         logsModule,
-        uptimeModule(frontendBaseUrl),
         dashboardsModule,
         aiModule,
     )
