@@ -561,7 +561,7 @@ export function useResourceTelemetry(
   rangeSeconds: number,
 ): UseQueryResult<ResourceTelemetry> {
   return useQuery({
-    queryKey: ['monitoring', 'resource-telemetry', resource?.id, rangeSeconds],
+    queryKey: ['monitoring', 'resource-telemetry', resource, rangeSeconds],
     queryFn: () => fetchResourceTelemetry(resource as Resource, rangeSeconds),
     enabled: resource != null && TELEMETRY_KINDS.has(resource.kind),
     staleTime: 30_000,
