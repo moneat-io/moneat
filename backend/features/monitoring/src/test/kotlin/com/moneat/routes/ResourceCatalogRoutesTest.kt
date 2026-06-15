@@ -21,8 +21,10 @@ import com.moneat.monitor.models.CatalogOwner
 import com.moneat.monitor.models.CatalogResource
 import com.moneat.monitor.models.CatalogResourceTelemetry
 import com.moneat.monitor.models.CatalogVulnerabilityCounts
+import com.moneat.monitor.models.ResourceTelemetryResponse
 import com.moneat.monitor.routes.resourceCatalogRoutes
 import com.moneat.monitor.services.ResourceCatalogService
+import com.moneat.monitor.services.ResourceTelemetryRequest
 import com.moneat.plugins.installErrorHandling
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
@@ -39,6 +41,7 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -186,6 +189,42 @@ class ResourceCatalogRoutesTest {
         assertTrue(response.bodyAsText().contains("kind is required"))
     }
 
+    @Test
+    fun `telemetry endpoint forwards resource selector and range`() = testApplication {
+        val requestSlot = slot<ResourceTelemetryRequest>()
+        coEvery { catalogService.getResourceTelemetry(capture(requestSlot)) } returns ResourceTelemetryResponse(
+            kind = "container",
+            rangeSeconds = 600,
+            intervalSeconds = 60,
+            metrics = emptyList(),
+        )
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.get(
+            "/v1/monitoring/resources/telemetry" +
+                "?kind=container&hostId=42&service=checkout-api&host=web-01&container=checkout&rangeSeconds=600"
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains(""""kind":"container""""))
+        val request = requestSlot.captured
+        assertEquals(listOf(ORGANIZATION_ID), request.organizationIds)
+        assertEquals("container", request.kind)
+        assertEquals(600L, request.rangeSeconds)
+        assertEquals(42, request.selector.hostId)
+        assertEquals("checkout-api", request.selector.service)
+        assertEquals("web-01", request.selector.containerHost)
+        assertEquals("checkout", request.selector.containerName)
+    }
+
     // ──── Ownership claims ────
 
     @Test
@@ -236,6 +275,51 @@ class ResourceCatalogRoutesTest {
 
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains(""""team":"Payments""""))
+    }
+
+    @Test
+    fun `ownership endpoint rejects blank resource and team`() = testApplication {
+        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns true
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.put("/v1/monitoring/resources/ownership") {
+            withAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceId":"","team":"","oncall":"","slack":"","repo":""}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("resourceId and team are required"))
+    }
+
+    @Test
+    fun `ownership endpoint records unknown actor when the JWT email is blank`() = testApplication {
+        val actorSlot = slot<String>()
+        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns true
+        coEvery { catalogService.claimOwnership(eq(ORGANIZATION_ID), any(), capture(actorSlot)) } returns
+            CatalogOwner(team = "Payments", oncall = "", slack = "", repo = "")
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID, email = "")
+        val response = client.put("/v1/monitoring/resources/ownership") {
+            withAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceId":"$RESOURCE_ID","team":"Payments","oncall":"","slack":"","repo":""}""")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("unknown", actorSlot.captured)
     }
 
     @Test

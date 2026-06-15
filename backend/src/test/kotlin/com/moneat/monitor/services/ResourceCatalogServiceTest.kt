@@ -19,6 +19,8 @@ package com.moneat.monitor.services
 import com.moneat.monitor.models.CatalogOwner
 import com.moneat.monitor.models.CatalogResourceTelemetry
 import com.moneat.monitor.models.CatalogSecurityFinding
+import com.moneat.monitor.models.ContainerMetricDataPoint
+import com.moneat.monitor.models.ContainerMetricsResponse
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
@@ -798,6 +800,68 @@ class ResourceCatalogServiceTest {
     }
 
     @Test
+    fun `container telemetry resolves the owning host and maps real metric series`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns
+            listOf(hostData(HOST_ID, ORGANIZATION_ID, HOSTNAME, "online").copy(displayName = "checkout-prod"))
+        coEvery {
+            monitorService.getContainerHistoricalMetrics(HOST_ID, CONTAINER_ID, any(), any(), null)
+        } returns ContainerMetricsResponse(
+            containerName = CONTAINER_ID,
+            from = 0,
+            to = 0,
+            intervalSeconds = 0,
+            dataPoints = listOf(
+                ContainerMetricDataPoint(
+                    timestamp = 1000,
+                    cpuPercent = 25f,
+                    memUsed = 256,
+                    memLimit = 512,
+                    netRecvBytes = 1000,
+                    netSentBytes = null,
+                ),
+                ContainerMetricDataPoint(
+                    timestamp = 2000,
+                    cpuPercent = null,
+                    memUsed = 200,
+                    memLimit = 0,
+                    netRecvBytes = null,
+                    netSentBytes = 2000,
+                ),
+            ),
+        )
+        val service = ResourceCatalogService(
+            monitorService = monitorService,
+            queryClient = NoopResourceCatalogQueryClient,
+            securityReader = NoopResourceSecurityReader,
+        )
+
+        val telemetry = service.getResourceTelemetry(
+            containerTelemetryRequest(containerHost = "checkout-prod", containerName = CONTAINER_ID)
+        )
+
+        assertEquals("container", telemetry.kind)
+        assertEquals(604_800L, telemetry.rangeSeconds)
+        assertEquals(1800, telemetry.intervalSeconds)
+        assertEquals(25.0, telemetry.metrics.first { it.key == "cpu" }.lines.single().points.first().value)
+        assertEquals(50.0, telemetry.metrics.first { it.key == "mem" }.lines.single().points.first().value)
+        val network = telemetry.metrics.first { it.key == "network" }
+        assertEquals(listOf("Received", "Sent"), network.lines.map { it.name })
+        assertEquals(1000.0, network.lines.first { it.name == "Received" }.points.first().value)
+        assertEquals(2000.0, network.lines.first { it.name == "Sent" }.points.last().value)
+
+        val missingSelector = service.getResourceTelemetry(
+            containerTelemetryRequest(containerHost = "", containerName = CONTAINER_ID)
+        )
+        assertTrue(missingSelector.metrics.isEmpty())
+
+        val missingHost = service.getResourceTelemetry(
+            containerTelemetryRequest(containerHost = "missing-host", containerName = CONTAINER_ID)
+        )
+        assertTrue(missingHost.metrics.isEmpty())
+    }
+
+    @Test
     fun `clamps the telemetry range and returns empty for unknown kinds and unauthorized hosts`() = runBlocking {
         val monitorService = mockk<MonitorService>()
         every { monitorService.listHosts(ORGANIZATION_ID) } returns emptyList()
@@ -865,6 +929,14 @@ class ResourceCatalogServiceTest {
             kind = "service",
             selector = ResourceTelemetrySelector(service = service),
             rangeSeconds = rangeSeconds,
+        )
+
+    private fun containerTelemetryRequest(containerHost: String?, containerName: String?): ResourceTelemetryRequest =
+        ResourceTelemetryRequest(
+            organizationIds = listOf(ORGANIZATION_ID),
+            kind = "container",
+            selector = ResourceTelemetrySelector(containerHost = containerHost, containerName = containerName),
+            rangeSeconds = 604_800,
         )
 
     private fun hostData(
