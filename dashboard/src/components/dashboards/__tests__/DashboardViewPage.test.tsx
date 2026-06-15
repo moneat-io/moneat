@@ -233,6 +233,17 @@ describe('DashboardViewPage', () => {
   })
 
   it('routes dashboard edit callbacks through the stable update mutation', async () => {
+    apiMocks.getDashboard.mockResolvedValue(makeDashboard({
+      variables: [{
+        name: 'service',
+        type: 'query',
+        query: 'label_values(up, service)',
+        current: 'api',
+        options: ['api'],
+      }],
+    }))
+    apiMocks.resolveVariableOptions.mockResolvedValue({service: ['api', 'worker']})
+
     const DashboardViewPage = await loadDashboardViewPage()
     const queryClient = renderPage(DashboardViewPage)
 
@@ -241,6 +252,9 @@ describe('DashboardViewPage', () => {
       expect(capturedProps.grid).toBeDefined()
       expect(capturedProps.clipboard).toBeDefined()
       expect(capturedProps.variableDialog).toBeDefined()
+    })
+    await waitFor(() => {
+      expect(apiMocks.resolveVariableOptions).toHaveBeenCalledWith('dashboard-1', {service: 'api'})
     })
 
     act(() => {
@@ -257,6 +271,7 @@ describe('DashboardViewPage', () => {
       )
       ;(capturedProps.clipboard?.onUndo as () => void)()
       ;(capturedProps.toolbar?.onAddWidget as () => void)()
+      ;(capturedProps.toolbar?.onSave as () => void)()
     })
 
     await waitFor(() => {

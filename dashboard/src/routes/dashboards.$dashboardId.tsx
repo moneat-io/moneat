@@ -52,6 +52,13 @@ export const Route = createFileRoute('/dashboards/$dashboardId')({
   }),
 })
 
+function resolvedOptionsMatch(
+  current: Readonly<Record<string, string[]>>,
+  resolved: Readonly<Record<string, string[]>>,
+) {
+  return Object.keys(resolved).every((key) => JSON.stringify(current[key]) === JSON.stringify(resolved[key]))
+}
+
 export function DashboardViewPage() {
   const {dashboardId} = Route.useParams()
   const {edit, from, to, vars} = Route.useSearch()
@@ -144,8 +151,7 @@ export function DashboardViewPage() {
     api.resolveVariableOptions(id, variableValues).then(resolved => {
       if (Object.keys(resolved).length > 0) {
         setResolvedOptions(prev => {
-          const same = Object.keys(resolved).every(k => JSON.stringify(prev[k]) === JSON.stringify(resolved[k]))
-          return same ? prev : resolved
+          return resolvedOptionsMatch(prev, resolved) ? prev : resolved
         })
       }
     }).catch(() => {})
