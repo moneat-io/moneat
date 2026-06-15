@@ -24,14 +24,6 @@ import com.moneat.auth.services.AuthTokenService
 import com.moneat.auth.services.OAuthService
 import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.auth.services.RefreshTokenService
-import com.moneat.billing.repositories.SubscriptionRepository
-import com.moneat.billing.repositories.SubscriptionRepositoryImpl
-import com.moneat.billing.services.AdminBillingService
-import com.moneat.billing.services.BillingBackgroundService
-import com.moneat.billing.services.BillingQuotaService
-import com.moneat.billing.services.EntitlementService
-import com.moneat.billing.services.PricingTierService
-import com.moneat.billing.services.StripeService
 import com.moneat.dashboards.repositories.DashboardFolderRepository
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepository
@@ -117,7 +109,7 @@ import com.moneat.workflows.services.WorkflowStepRenderer
 import com.moneat.workflows.services.WorkflowTrustedActionExecutor
 import org.koin.dsl.module
 
-/** Shared cross-domain singletons: notification channels, pricing, retention, shared repositories. */
+/** Shared cross-domain singletons: notification channels, retention, shared repositories. */
 val sharedModule = module {
     single<MembershipRepository> { MembershipRepositoryImpl() }
     single<OrganizationRepository> { OrganizationRepositoryImpl() }
@@ -149,9 +141,6 @@ val sharedModule = module {
     single { WorkflowGovernanceService(get()) }
     single { IncidentService(get()) }
 
-    single { PricingTierService() }
-    single { BillingQuotaService(get()) }
-    single { EntitlementService(get()) }
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
     single { TraceFinalizerBackgroundService.fromConfig() }
@@ -181,28 +170,6 @@ val authModule = module {
         )
     }
     single { ArtifactCleanupService(get(), get()) }
-}
-
-/** Billing, subscriptions, and Stripe integration. */
-val billingModule = module {
-    single<SubscriptionRepository> { SubscriptionRepositoryImpl() }
-
-    single {
-        StripeService(
-            subscriptionRepository = get(),
-            organizationRepository = get(),
-            pricingTierService = get(),
-        )
-    }
-    single {
-        BillingBackgroundService(
-            stripeService = get(),
-            quotaService = get(),
-            emailService = get(),
-            pricingTierService = get(),
-        )
-    }
-    single { AdminBillingService(get()) }
 }
 
 /** Organization membership, invitations, and admin operations. */
@@ -297,7 +264,6 @@ fun buildAppModules() =
     listOf(
         sharedModule,
         authModule,
-        billingModule,
         orgModule,
         eventsModule,
         monitorModule,
