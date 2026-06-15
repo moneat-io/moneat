@@ -68,7 +68,9 @@ jobs:
       - name: Build Kotlin bytecode
         if: matrix.language == 'java-kotlin' && matrix.build-mode == 'manual'
         working-directory: backend
-        run: ./gradlew classes --no-daemon
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g -Dkotlin.daemon.jvmargs=-Xmx6g -Dorg.gradle.workers.max=2
+        run: ./gradlew classes --no-daemon -Dkotlin.daemon.jvmargs=-Xmx6g -Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=2
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
