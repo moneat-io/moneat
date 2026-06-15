@@ -1180,7 +1180,8 @@ class GrafanaTranslator : DashboardTranslator {
     }
 
     internal fun buildGrafanaSql(dsl: QueryDsl): String {
-        if (dsl.rawQuery != null) return dsl.rawQuery
+        val rawQuery = dsl.rawQuery
+        if (rawQuery != null) return rawQuery
 
         val metrics = dsl.metrics.joinToString(", ") { m ->
             val fn = m.function.toClickHouse(m.field)
