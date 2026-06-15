@@ -326,6 +326,148 @@ class AccountDeletionRoutesTest {
             assertEquals(HttpStatusCode.Forbidden, response.status)
         }
 
+    @Test
+    fun `patch org settings returns existing details when unchanged`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val orgId = seedOrg("Acme Corp")
+            seedMembership(userId, orgId, "owner")
+
+            val response =
+                client.patch("/organizations/${orgResourceId(orgId)}") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"name":"Acme Corp","slug":"acme-corp","defaultTimezone":"UTC"}""")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.bodyAsText()
+            assertTrue(body.contains("\"name\":\"Acme Corp\""))
+            assertTrue(body.contains("\"slug\":\"acme-corp\""))
+        }
+
+    @Test
+    fun `patch org settings validates request body and fields`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val orgId = seedOrg("Acme Corp")
+            seedMembership(userId, orgId, "owner")
+            val path = "/organizations/${orgResourceId(orgId)}"
+
+            val malformed =
+                client.patch(path) {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("not valid json")
+                }
+            assertEquals(HttpStatusCode.BadRequest, malformed.status)
+
+            val blankName =
+                client.patch(path) {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"name":"   "}""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, blankName.status)
+
+            val invalidSlug =
+                client.patch(path) {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"slug":"-bad-slug"}""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, invalidSlug.status)
+
+            val invalidTimezone =
+                client.patch(path) {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"defaultTimezone":"Mars/Base"}""")
+                }
+            assertEquals(HttpStatusCode.BadRequest, invalidTimezone.status)
+        }
+
+    @Test
+    fun `patch org settings normalizes slug and reports duplicate slug conflicts`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val orgId = seedOrg("Acme Corp")
+            val otherOrgId = seedOrg("Other Org")
+            seedMembership(userId, orgId, "owner")
+            seedMembership(userId, otherOrgId, "owner")
+
+            val updated =
+                client.patch("/organizations/${orgResourceId(orgId)}") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"slug":"Acme-Labs"}""")
+                }
+            assertEquals(HttpStatusCode.OK, updated.status)
+            assertTrue(updated.bodyAsText().contains("\"slug\":\"acme-labs\""))
+
+            val duplicate =
+                client.patch("/organizations/${orgResourceId(orgId)}") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"slug":"other-org"}""")
+                }
+            assertEquals(HttpStatusCode.Conflict, duplicate.status)
+        }
+
+    @Test
+    fun `patch org settings returns not found for inaccessible org`() =
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        accountDeletionRoutes()
+                    }
+                }
+            }
+
+            val userId = seedUser()
+            val response =
+                client.patch("/organizations/11111111-1111-4111-8111-111111111111") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(userId)}")
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"name":"Acme Labs"}""")
+                }
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+        }
+
     // ──── GET /account/deletion-validation ────
 
     @Test

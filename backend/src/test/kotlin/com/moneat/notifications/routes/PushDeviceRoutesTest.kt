@@ -137,6 +137,68 @@ class PushDeviceRoutesTest {
     }
 
     @Test
+    fun `register push device validates input and updates existing token`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            installAuth()
+            routing {
+                pushDeviceRoutes()
+            }
+        }
+
+        val shortToken =
+            client.post("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"token":"short","platform":"ios"}""")
+            }
+        assertEquals(HttpStatusCode.BadRequest, shortToken.status)
+
+        val unsupportedPlatform =
+            client.post("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"token":"$DEVICE_TOKEN","platform":"desktop"}""")
+            }
+        assertEquals(HttpStatusCode.BadRequest, unsupportedPlatform.status)
+
+        val longName =
+            client.post("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"token":"$DEVICE_TOKEN","platform":"ios","deviceName":"${"x".repeat(256)}"}""")
+            }
+        assertEquals(HttpStatusCode.BadRequest, longName.status)
+
+        val registered =
+            client.post("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"token":"$DEVICE_TOKEN","platform":"ios"}""")
+            }
+        assertEquals(HttpStatusCode.OK, registered.status)
+        assertTrue(registered.bodyAsText().contains("\"label\":\"IOS\""))
+
+        val movedToOtherUser =
+            client.post("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(OTHER_USER_ID)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"token":"$DEVICE_TOKEN","platform":"android","deviceName":"Pixel"}""")
+            }
+        assertEquals(HttpStatusCode.OK, movedToOtherUser.status)
+        val movedBody = movedToOtherUser.bodyAsText()
+        assertTrue(movedBody.contains("\"platform\":\"ANDROID\""))
+        assertTrue(movedBody.contains("\"label\":\"Pixel\""))
+
+        val oldOwnerDevices =
+            client.get("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+            }
+        assertEquals(HttpStatusCode.OK, oldOwnerDevices.status)
+        assertTrue(oldOwnerDevices.bodyAsText().contains("\"devices\":[]"))
+    }
+
+    @Test
     fun `delete push device validates resource id and user scope`() = testApplication {
         application {
             install(ContentNegotiation) { json() }

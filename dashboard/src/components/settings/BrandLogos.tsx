@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {Activity, Bell, CreditCard, GithubIcon, Layers, Link2, Plug, Server} from 'lucide-react'
+import {Activity, Bell, CreditCard, GitBranch, Layers, Link2, Plug, Server} from 'lucide-react'
 
 import {cn} from '@/lib/utils'
 
@@ -46,7 +46,7 @@ interface Glyph {
 const GLYPHS: Record<string, Glyph> = {
   slack: {Icon: SlackLogo, color: '#611f69'},
   discord: {Icon: DiscordLogo, color: '#5865f2'},
-  github: {Icon: GithubIcon},
+  github: {Icon: GitBranch},
   pagerduty: {Icon: Bell, color: '#06ac38'},
   jira: {Icon: Layers, color: '#2684ff'},
   servicenow: {Icon: Server, color: '#62d84e'},
