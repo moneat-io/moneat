@@ -33,7 +33,6 @@ import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.TraceFinalizerBackgroundService
 import com.moneat.shared.services.UsageTrackingService
-import com.moneat.uptime.services.UptimeScheduler
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
 import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
@@ -151,7 +150,6 @@ private class SchedulerBackgroundJobs {
     private val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
     private val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
     private val artifactCleanupService = koin.get<ArtifactCleanupService>()
-    private val uptimeScheduler = koin.get<UptimeScheduler>()
     private val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
 
     fun start(jobScope: CoroutineScope) {
@@ -162,7 +160,6 @@ private class SchedulerBackgroundJobs {
         traceFinalizerBackgroundService.start(jobScope)
         refreshTokenCleanupService.start(jobScope)
         artifactCleanupService.start(jobScope)
-        uptimeScheduler.start()
         demoLivenessBackgroundService.start(jobScope)
     }
 
@@ -174,7 +171,6 @@ private class SchedulerBackgroundJobs {
         traceFinalizerBackgroundService.stop()
         refreshTokenCleanupService.stop()
         artifactCleanupService.stop()
-        uptimeScheduler.stop()
         demoLivenessBackgroundService.stop()
     }
 }
