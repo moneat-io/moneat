@@ -99,9 +99,7 @@ fun interface ResourceSecurityReader {
 }
 
 /** Returns nothing — used where the catalog runs without a security data source (tests, core-only). */
-object NoopResourceSecurityReader : ResourceSecurityReader {
-    override suspend fun read(organizationIds: List<Int>): ResourceSecuritySnapshot = ResourceSecuritySnapshot()
-}
+val NoopResourceSecurityReader: ResourceSecurityReader = ResourceSecurityReader { ResourceSecuritySnapshot() }
 
 /**
  * Default reader. Vulnerability severities are read from the deduplicated security signals (Postgres),
