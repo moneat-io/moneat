@@ -56,7 +56,10 @@ function resolvedOptionsMatch(
   current: Readonly<Record<string, string[]>>,
   resolved: Readonly<Record<string, string[]>>,
 ) {
-  return Object.keys(resolved).every((key) => JSON.stringify(current[key]) === JSON.stringify(resolved[key]))
+  return (
+    Object.keys(current).length === Object.keys(resolved).length &&
+    Object.keys(resolved).every((key) => JSON.stringify(current[key]) === JSON.stringify(resolved[key]))
+  )
 }
 
 export function DashboardViewPage() {

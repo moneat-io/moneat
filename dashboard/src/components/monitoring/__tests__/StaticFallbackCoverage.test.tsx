@@ -26,6 +26,10 @@ const apiMocks = {
   getApmResourceStats: vi.fn(),
   getApmServices: vi.fn(),
   getApmTraces: vi.fn(),
+  getConnections: vi.fn(),
+  getContainers: vi.fn(),
+  getHosts: vi.fn(),
+  getServiceChecks: vi.fn(),
   isAuthenticated: vi.fn(),
 }
 
@@ -101,6 +105,10 @@ async function loadModules() {
   const [
     aiSplitPanel,
     traceList,
+    containerList,
+    hostList,
+    networkConnections,
+    serviceCheckList,
     databaseMonitoring,
     kubernetesIndex,
     kubernetesResource,
@@ -114,6 +122,10 @@ async function loadModules() {
   ] = await Promise.all([
     import('@/components/AiSplitPanel'),
     import('@/components/apm/TraceList'),
+    import('@/components/monitoring/ContainerList'),
+    import('@/components/monitoring/HostList'),
+    import('@/components/monitoring/NetworkConnections'),
+    import('@/components/monitoring/ServiceCheckList'),
     import('@/routes/monitoring.databases'),
     import('@/routes/monitoring.kubernetes.index'),
     import('@/routes/monitoring.kubernetes.$resourceType'),
@@ -129,6 +141,10 @@ async function loadModules() {
   return {
     AiSplitPanel: aiSplitPanel.AiSplitPanel,
     TraceList: traceList.TraceList,
+    ContainerList: containerList.ContainerList,
+    HostList: hostList.HostList,
+    NetworkConnections: networkConnections.NetworkConnections,
+    ServiceCheckList: serviceCheckList.ServiceCheckList,
     DatabaseMonitoringRoute: databaseMonitoring.Route,
     KubernetesIndexRoute: kubernetesIndex.Route,
     KubernetesResourceRoute: kubernetesResource.Route,
@@ -164,6 +180,10 @@ describe('static-quality fallback coverage', () => {
       summary: {total: 0, alerting: 0, degraded: 0},
     })
     apiMocks.getApmTraces.mockResolvedValue({traces: []})
+    apiMocks.getConnections.mockResolvedValue({connections: []})
+    apiMocks.getContainers.mockResolvedValue({containers: []})
+    apiMocks.getHosts.mockResolvedValue({hosts: []})
+    apiMocks.getServiceChecks.mockResolvedValue({serviceChecks: []})
     apiMocks.isAuthenticated.mockReturnValue(true)
   })
 
@@ -182,6 +202,10 @@ describe('static-quality fallback coverage', () => {
           <div>Main content</div>
         </modules.AiSplitPanel>
         <modules.TraceList />
+        <modules.ContainerList />
+        <modules.HostList />
+        <modules.NetworkConnections />
+        <modules.ServiceCheckList />
         {routeElement(modules.DatabaseMonitoringRoute)}
         {routeElement(modules.KubernetesIndexRoute)}
         {routeElement(modules.KubernetesResourceRoute)}

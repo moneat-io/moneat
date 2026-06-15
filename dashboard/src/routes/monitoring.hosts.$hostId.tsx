@@ -59,6 +59,7 @@ import {Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle} from '@/
 import {getNowDate} from '@/lib/demo'
 import {useTimezone} from '@/hooks/useTimezone'
 import {
+    buildHostMetricQueryRange,
     compactHostMetricChartData,
     formatHostMetricAxisTick,
     formatHostMetricTooltipLabel,
@@ -314,10 +315,10 @@ function HostDetailPage() {
     availableRanges.find((r) => r.value === effectiveTimeRange) ??
     availableRanges[availableRanges.length - 1] ??
     TIME_RANGES[0]
-  const now = getNowDate()
-  const fromMs = now.getTime() - selectedRange.seconds * 1000
-  const from = Math.floor(fromMs / 1000).toString()
-  const to = Math.floor(now.getTime() / 1000).toString()
+  const [from, to] = useMemo(
+    () => buildHostMetricQueryRange(selectedRange.seconds, getNowDate()),
+    [selectedRange.seconds],
+  )
 
   const {data: metrics, isLoading: metricsLoading} = useQuery({
     queryKey: ['host-metrics', hostId, effectiveTimeRange, from, to],
