@@ -44,6 +44,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.h2)
+    testImplementation(libs.jbcrypt)
     testImplementation(libs.mockk)
     testImplementation(kotlin("reflect"))
     testRuntimeOnly(libs.junit.jupiter.engine)
