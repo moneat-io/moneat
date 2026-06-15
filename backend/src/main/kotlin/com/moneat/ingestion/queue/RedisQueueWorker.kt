@@ -16,7 +16,6 @@
 
 package com.moneat.ingestion.queue
 
-import com.moneat.config.BRPOP_TIMEOUT_SECONDS
 import com.moneat.config.ClickHouseInsertDeduplication
 import com.moneat.config.RedisConfig
 import com.moneat.monitoring.OperationalMetrics
@@ -157,7 +156,7 @@ class RedisQueueWorker(
         registerQueues()
         logger.info {
             "Starting ${spec.pipeline.workerName} queue worker with " +
-                "${spec.workerCount} workers, queue=${spec.queueKey}, stream=${spec.streamKey}"
+                "${spec.workerCount} workers, stream=${spec.streamKey}"
         }
         jobs = (1..spec.workerCount).map { workerId ->
             scope.launch { runWorker(workerId) }
@@ -173,12 +172,10 @@ class RedisQueueWorker(
     private suspend fun runWorker(workerId: Int) {
         val conn = RedisConfig.newBlockingConnection()
         try {
-            if (usesStreams()) {
-                ensureConsumerGroup(conn)
-            }
+            ensureConsumerGroup(conn)
             while (scope.isActive) {
                 try {
-                    runQueueIteration(workerId, conn)
+                    consumeStreams(workerId, conn)
                 } catch (e: CancellationException) {
                     break
                 } catch (e: RedisException) {
@@ -192,39 +189,6 @@ class RedisQueueWorker(
         } finally {
             RedisConfig.closeBlockingConnection(conn)
         }
-    }
-
-    private suspend fun runQueueIteration(
-        workerId: Int,
-        conn: StatefulRedisConnection<String, String>,
-    ) {
-        when (IngestionQueueSettings.readMode()) {
-            IngestionQueueReadMode.LIST -> consumeListBlocking(workerId, conn)
-            IngestionQueueReadMode.STREAMS -> consumeStreams(workerId, conn)
-            IngestionQueueReadMode.DUAL -> {
-                if (!consumeListNonBlocking(workerId, conn)) {
-                    consumeStreams(workerId, conn)
-                }
-            }
-        }
-    }
-
-    private suspend fun consumeListBlocking(
-        workerId: Int,
-        conn: StatefulRedisConnection<String, String>,
-    ) {
-        val result = conn.sync().brpop(BRPOP_TIMEOUT_SECONDS, spec.queueKey)
-        val payload = result?.value ?: return
-        processMessage(workerId, payload)
-    }
-
-    private suspend fun consumeListNonBlocking(
-        workerId: Int,
-        conn: StatefulRedisConnection<String, String>,
-    ): Boolean {
-        val payload = conn.sync().rpop(spec.queueKey) ?: return false
-        processMessage(workerId, payload)
-        return true
     }
 
     private suspend fun consumeStreams(
@@ -336,7 +300,7 @@ class RedisQueueWorker(
         e: Throwable,
     ) {
         logger.error(e) { "${spec.pipeline.workerName} worker $workerId error in queue loop" }
-        OperationalMetrics.recordWorkerBrpopFailure(spec.pipeline.workerName, workerId, e)
+        OperationalMetrics.recordWorkerQueueLoopFailure(spec.pipeline.workerName, workerId, e)
         delay(ERROR_RETRY_DELAY_MS)
     }
 
@@ -345,29 +309,19 @@ class RedisQueueWorker(
     }
 
     private fun registerQueues() {
-        OperationalMetrics.registerWorkerQueues(spec.pipeline.workerName, spec.queueKey, spec.dlqKey)
-        if (usesStreams()) {
-            OperationalMetrics.registerWorkerQueues(spec.pipeline.workerName, spec.streamKey, spec.dlqStreamKey)
-            OperationalMetrics.registerWorkerStream(
-                workerName = spec.pipeline.workerName,
-                streamKey = spec.streamKey,
-                streamType = "primary",
-                consumerGroup = spec.consumerGroup,
-            )
-            OperationalMetrics.registerWorkerStream(
-                workerName = spec.pipeline.workerName,
-                streamKey = spec.dlqStreamKey,
-                streamType = "dlq",
-            )
-        }
+        OperationalMetrics.registerWorkerQueues(spec.pipeline.workerName, spec.streamKey, spec.dlqStreamKey)
+        OperationalMetrics.registerWorkerStream(
+            workerName = spec.pipeline.workerName,
+            streamKey = spec.streamKey,
+            streamType = "primary",
+            consumerGroup = spec.consumerGroup,
+        )
+        OperationalMetrics.registerWorkerStream(
+            workerName = spec.pipeline.workerName,
+            streamKey = spec.dlqStreamKey,
+            streamType = "dlq",
+        )
     }
-
-    private fun usesStreams(): Boolean =
-        when (IngestionQueueSettings.readMode()) {
-            IngestionQueueReadMode.LIST -> false
-            IngestionQueueReadMode.STREAMS,
-            IngestionQueueReadMode.DUAL -> true
-        }
 
     private fun consumerName(workerId: Int): String =
         "${spec.pipeline.id}-${resolveHostName()}-$workerId"

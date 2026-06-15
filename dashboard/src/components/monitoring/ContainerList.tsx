@@ -191,7 +191,7 @@ export function ContainerList() {
     refetchInterval: 10000,
   })
 
-  const containers: MergedContainer[] = containerData ?? []
+  const containers: MergedContainer[] = useMemo(() => containerData ?? [], [containerData])
 
   const filtered = useMemo(() => {
     let result = containers

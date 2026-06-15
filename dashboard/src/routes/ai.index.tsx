@@ -83,7 +83,7 @@ function AiOverviewPage() {
     queryFn: () => api.getProjects(),
   })
 
-  const projectList = projects ?? []
+  const projectList = useMemo(() => projects ?? [], [projects])
   const includedServices = useMemo(
     () => facetValues(facetFilters, 'service', false),
     [facetFilters]

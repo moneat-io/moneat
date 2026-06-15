@@ -79,7 +79,7 @@ function ServicesCatalogPage() {
     queryKey: ['apm-services', timeRange],
     queryFn: () => api.getApmServices({timeRange, limit: 200}),
   })
-  const services = catalogQuery.data?.services ?? []
+  const services = useMemo(() => catalogQuery.data?.services ?? [], [catalogQuery.data?.services])
   const facetSections = useMemo(() => buildFacetSections(services), [services])
   const rows = useMemo(() => sortServices(filterServices(services, facetFilters, query), sort), [facetFilters, query, services, sort])
   const summary = catalogQuery.data?.summary ?? {total: 0, alerting: 0, degraded: 0}

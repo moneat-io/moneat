@@ -16,7 +16,6 @@
 
 package com.moneat.monitoring
 
-import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import io.lettuce.core.Range
 import io.lettuce.core.StreamMessage
@@ -41,7 +40,6 @@ class OperationalMetricsTest {
 
     @AfterTest
     fun resetAfter() {
-        unmockkObject(EnvConfig)
         unmockkObject(RedisConfig)
         OperationalMetrics.resetForTest()
     }
@@ -137,18 +135,12 @@ class OperationalMetricsTest {
 
     @Test
     fun `renders ingestion queue mode defaults`() {
-        mockkObject(EnvConfig)
-        every { EnvConfig.get("INGESTION_QUEUE_BACKEND") } returns null
-        every { EnvConfig.get("QUEUE_BACKEND") } returns null
-        every { EnvConfig.get("INGESTION_QUEUE_READ_MODE") } returns null
-
         OperationalMetrics.bindSystemMetrics()
 
         val rendered = OperationalMetrics.scrape()
 
         assertContains(rendered, "moneat_ingestion_queue_mode")
-        assertContains(rendered, "backend=\"redis_list\"")
-        assertContains(rendered, "read_mode=\"list\"")
+        assertContains(rendered, "backend=\"redis_streams\"")
         assertHasApplicationTag(rendered)
     }
 
@@ -190,9 +182,7 @@ class OperationalMetricsTest {
     @Test
     fun `renders datadog metric ingest health metrics`() {
         // ──── Arrange ────
-        OperationalMetrics.registerQueue("DD metric", "moneat:metrics:queue", "primary")
-        OperationalMetrics.registerQueue("DD metric", "moneat:metrics:queue:processing", "processing")
-        OperationalMetrics.registerDlq("DD metric", "moneat:metrics:dlq")
+        OperationalMetrics.registerWorkerQueues("DD metric", "moneat:metrics:queue:stream", "moneat:metrics:dlq:stream")
         OperationalMetrics.recordDatadogMetricPayloadQueued(metricRows = 10)
         OperationalMetrics.recordDatadogMetricInsert(
             mode = "combined",
@@ -214,18 +204,6 @@ class OperationalMetricsTest {
             rowCount = 10,
             cause = IllegalArgumentException("fallback"),
         )
-        OperationalMetrics.recordDatadogMetricPayloadAck("success")
-        OperationalMetrics.recordDatadogMetricPayloadAck("failure")
-        OperationalMetrics.recordDatadogMetricProcessingRecovery(
-            recoveredPayloads = 3,
-            status = "success",
-        )
-        OperationalMetrics.recordDatadogMetricProcessingRecovery(
-            recoveredPayloads = 0,
-            status = "failure",
-            cause = IllegalStateException("recovery failed"),
-        )
-
         // ──── Act ────
         val rendered = OperationalMetrics.scrape()
 
@@ -239,10 +217,8 @@ class OperationalMetricsTest {
         assertContains(rendered, "moneat_datadog_metric_insert_fallbacks_total")
         assertContains(rendered, "moneat_datadog_metric_fallback_payloads_count")
         assertContains(rendered, "moneat_datadog_metric_fallback_rows_count")
-        assertContains(rendered, "moneat_datadog_metric_payload_acks_total")
-        assertContains(rendered, "moneat_datadog_metric_processing_recoveries_total")
-        assertContains(rendered, "moneat_datadog_metric_processing_recovered_payloads_count")
-        assertContains(rendered, "queue_type=\"processing\"")
+        assertContains(rendered, "queue_key=\"moneat:metrics:queue:stream\"")
+        assertContains(rendered, "queue_key=\"moneat:metrics:dlq:stream\"")
         assertContains(rendered, "mode=\"combined\"")
         assertContains(rendered, "mode=\"single\"")
         assertContains(rendered, "status=\"failure\"")

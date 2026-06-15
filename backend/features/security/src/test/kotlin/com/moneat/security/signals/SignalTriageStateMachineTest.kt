@@ -22,6 +22,12 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class SignalTriageStateMachineTest {
+    private companion object {
+        private const val INVALID_STATUS_MESSAGE = "Unknown status"
+        private const val INVALID_REASON_MESSAGE =
+            "archive_reason must be one of true_positive, false_positive, benign"
+        private const val ARCHIVE_REQUIRES_REASON_MESSAGE = "Archiving a signal requires an archive_reason"
+    }
 
     @Test
     fun `open advances to under_review`() {

@@ -36,17 +36,17 @@ Workflow secrets must be distinct from `JWT_SECRET` and `DATA_SOURCE_ENCRYPTION_
 
 ## Operational Rollout Controls
 
-These variables are optional and default to the legacy all-in-one/list-backed behavior.
+These variables are optional. Ingestion queues use Redis Streams by default.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `MONEAT_PROCESS_ROLE` | `all` | Start only one deployable role: `all`, `api`, `scheduler`, `ingestion-worker`, or `workflow-egress`. |
 | `INGESTION_PIPELINES` | `all` | Comma-separated ingestion workers to run on an `ingestion-worker`, for example `logs,otlp-traces`. |
-| `INGESTION_QUEUE_BACKEND` | `redis-list` | Producer backend. Set to `redis-streams` after consumers are ready for stream reads. |
-| `INGESTION_QUEUE_READ_MODE` | backend-derived | Consumer mode: `list`, `streams`, or `dual` for transition draining. |
 | `INGESTION_<PIPELINE>_BATCH_SIZE` | `50` | Redis Streams `XREADGROUP COUNT` batch size for a pipeline. |
 | `INGESTION_<PIPELINE>_CLAIM_IDLE_MS` | `300000` | Minimum idle time before `XAUTOCLAIM`; keep above worst-case batch processing time. |
 | `INGESTION_<PIPELINE>_MAX_DELIVERIES` | `5` | Delivery count before a stream message is written to the DLQ stream. |
+| `INGESTION_<PIPELINE>_STREAM_MAXLEN` | `250000` | Approximate maximum length for the primary stream before Redis trims old acknowledged entries. |
+| `INGESTION_<PIPELINE>_DLQ_STREAM_MAXLEN` | `10000` | Approximate maximum length for the DLQ stream. |
 
-When `INGESTION_QUEUE_BACKEND=redis-streams`, Redis becomes the durable ingestion buffer. Run Redis with
-persistence and HA appropriate for production, and alert on pending entries, oldest pending age, and DLQ growth.
+Redis Streams are the durable ingestion buffer. Run Redis with persistence and HA appropriate for production, and
+alert on pending entries, oldest pending age, and DLQ growth.

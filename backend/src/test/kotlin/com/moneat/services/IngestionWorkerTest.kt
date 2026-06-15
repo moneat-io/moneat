@@ -16,7 +16,15 @@
 
 package com.moneat.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.events.services.IngestionWorker
+import io.lettuce.core.XAddArgs
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,23 +59,43 @@ class IngestionWorkerTest {
     fun `worker sends message to DLQ when base64 decode fails`() =
         runBlocking {
             val worker = IngestionWorker("q:test", "q:test:dlq", 1)
-            val dlq = mutableListOf<String>()
+            val redis = mockDlqStream()
             val badMessage = "!!!not-base64!!!"
 
-            worker.processMessageForTest(workerId = 1, value = badMessage) { dlq.add(it) }
+            try {
+                worker.processMessageForTest(workerId = 1, value = badMessage)
 
-            assertEquals(listOf(badMessage), dlq)
+                verify(exactly = 1) {
+                    redis.xadd("q:test:dlq:stream", any<XAddArgs>(), any<Map<String, String>>())
+                }
+            } finally {
+                unmockkObject(RedisConfig)
+            }
         }
 
     @Test
     fun `worker sends message to DLQ when envelope parse fails`() =
         runBlocking {
             val worker = IngestionWorker("q:test", "q:test:dlq", 1)
-            val dlq = mutableListOf<String>()
+            val redis = mockDlqStream()
             val badEnvelopeMessage = IngestionWorker.encodeMessage(42L, "invalid-envelope".toByteArray())
 
-            worker.processMessageForTest(workerId = 2, value = badEnvelopeMessage) { dlq.add(it) }
+            try {
+                worker.processMessageForTest(workerId = 2, value = badEnvelopeMessage)
 
-            assertEquals(listOf(badEnvelopeMessage), dlq)
+                verify(exactly = 1) {
+                    redis.xadd("q:test:dlq:stream", any<XAddArgs>(), any<Map<String, String>>())
+                }
+            } finally {
+                unmockkObject(RedisConfig)
+            }
         }
+
+    private fun mockDlqStream(): RedisCommands<String, String> {
+        val redis = mockk<RedisCommands<String, String>>()
+        mockkObject(RedisConfig)
+        every { RedisConfig.sync() } returns redis
+        every { redis.xadd("q:test:dlq:stream", any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
+        return redis
+    }
 }

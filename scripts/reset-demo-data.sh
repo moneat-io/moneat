@@ -5,20 +5,20 @@ echo "🗑️  Resetting all demo data..."
 
 # Check if we're in the scripts directory or project root
 if [ -d "backend" ]; then
-    # Already in project root
-    PROJECT_ROOT="."
+  # Already in project root
+  PROJECT_ROOT="."
 elif [ -d "../backend" ]; then
-    # In scripts directory
-    PROJECT_ROOT=".."
+  # In scripts directory
+  PROJECT_ROOT=".."
 else
-    echo "❌ Cannot find backend directory. Please run from project root or scripts directory."
-    exit 1
+  echo "❌ Cannot find backend directory. Please run from project root or scripts directory."
+  exit 1
 fi
 
 cd "$PROJECT_ROOT"
 
 # Detect docker compose command (v1: docker-compose, v2: docker compose)
-if command -v docker-compose &> /dev/null; then
+if command -v docker-compose &>/dev/null; then
   DOCKER_COMPOSE="docker-compose"
 else
   DOCKER_COMPOSE="docker compose"
@@ -49,12 +49,12 @@ read -p "Are you sure you want to continue? (yes/no): " -r
 echo
 
 if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
-    echo "Cancelled."
-    exit 0
+  echo "Cancelled."
+  exit 0
 fi
 
 echo "🗑️  Deleting PostgreSQL demo data..."
-docker exec moneat-postgres psql -U moneat -d moneat << 'SQL'
+docker exec moneat-postgres psql -U moneat -d moneat <<'SQL'
 -- Delete in correct order to respect foreign keys
 DELETE FROM subscriptions WHERE organization_id IN (SELECT id FROM organizations WHERE slug = 'acme-mobile');
 DELETE FROM status_page_incidents WHERE status_page_id IN (SELECT id FROM status_pages WHERE organization_id IN (SELECT id FROM organizations WHERE slug = 'acme-mobile'));

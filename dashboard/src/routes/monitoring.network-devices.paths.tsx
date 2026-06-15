@@ -37,7 +37,7 @@ function NdmPaths() {
     queryFn: () => api.get<{paths?: NetworkPath[]}>('/v1/network-devices/paths?limit=100'),
   })
 
-  const paths: NetworkPath[] = data?.paths ?? []
+  const paths: NetworkPath[] = useMemo(() => data?.paths ?? [], [data?.paths])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return paths

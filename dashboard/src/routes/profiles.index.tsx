@@ -53,7 +53,7 @@ function ProfilesIndexPage() {
     queryFn: () => api.getProfileServices(),
     enabled: api.isAuthenticated(),
   })
-  const serviceSummaries = servicesData?.services ?? []
+  const serviceSummaries = useMemo(() => servicesData?.services ?? [], [servicesData?.services])
   const railSections = useMemo(
     () => buildProfileFacetSections(serviceSummaries),
     [serviceSummaries],

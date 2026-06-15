@@ -45,6 +45,7 @@ dependencies {
     testImplementation(libs.exposed.core)
     testImplementation(libs.exposed.jdbc)
     testImplementation(libs.h2)
+    testImplementation(libs.lettuce)
     testImplementation(libs.mockk)
     testImplementation(libs.sentry.kotlin)
     testImplementation(kotlin("reflect"))

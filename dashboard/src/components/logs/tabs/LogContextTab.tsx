@@ -39,7 +39,7 @@ export function LogContextTab({log, active}: LogContextTabProps) {
     : undefined
 
   const {data, error, isError, isLoading} = useQuery({
-    queryKey: ['logDetailContext', log.logId, log.service, log.timestamp],
+    queryKey: ['logDetailContext', log.logId, log.service, log.timestamp, from, to],
     queryFn: () => api.getLogs({
       from,
       to,

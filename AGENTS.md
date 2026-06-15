@@ -179,9 +179,8 @@ The required PR workflow is `.github/workflows/test.yml`.
   debugging, and reprocessing.
 - New ingestion pipelines should have explicit queue keys, DLQ behavior,
   operational metrics, and focused tests for enqueue/worker/failure paths.
-- If Redis Streams queue support is present, preserve list, streams, and dual
-  read modes for transition. Stream redelivery must remain idempotent for
-  ClickHouse inserts and usage accounting.
+- Redis Streams are the ingestion queue. Stream redelivery must remain
+  idempotent for ClickHouse inserts and usage accounting.
 - Process-role controls such as API-only, scheduler, ingestion worker, and
   workflow egress must not accidentally start unrelated background jobs.
 

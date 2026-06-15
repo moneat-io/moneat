@@ -16,6 +16,7 @@
 
 package com.moneat.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.models.LogEntryResponse
@@ -27,17 +28,20 @@ import com.moneat.logs.services.LogIngestionWorker
 import com.moneat.logs.services.LogManagementService
 import com.moneat.logs.services.LogService
 import com.moneat.monitoring.OperationalMetrics
+import io.lettuce.core.XAddArgs
+import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class LogIngestionWorkerTest {
     @BeforeTest
@@ -54,19 +58,25 @@ class LogIngestionWorkerTest {
     fun `processMessageForTest sends malformed payload to DLQ`() =
         runBlocking {
             val worker = LogIngestionWorker("log:q", "log:dlq", 1)
-            val dlq = mutableListOf<String>()
+            val redis = mockDlqStream()
             val malformed = "not-json"
 
-            worker.processMessageForTest(workerId = 1, payload = malformed) { dlq.add(it) }
+            try {
+                worker.processMessageForTest(workerId = 1, payload = malformed)
 
-            assertEquals(listOf(malformed), dlq)
+                verify(exactly = 1) {
+                    redis.xadd("log:dlq:stream", any<XAddArgs>(), any<Map<String, String>>())
+                }
+            } finally {
+                unmockkObject(RedisConfig)
+            }
         }
 
     @Test
     fun `processMessageForTest sends payload to DLQ when insert fails`() =
         runBlocking {
             val worker = LogIngestionWorker("log:q", "log:dlq", 1)
-            val dlq = mutableListOf<String>()
+            val redis = mockDlqStream()
             val message =
                 LogService(LogRepositoryImpl()).encodeQueueMessage(
                     QueuedLogBatch(
@@ -94,9 +104,15 @@ class LogIngestionWorkerTest {
                     )
                 )
 
-            worker.processMessageForTest(workerId = 2, payload = message) { dlq.add(it) }
+            try {
+                worker.processMessageForTest(workerId = 2, payload = message)
 
-            assertEquals(listOf(message), dlq)
+                verify(exactly = 1) {
+                    redis.xadd("log:dlq:stream", any<XAddArgs>(), any<Map<String, String>>())
+                }
+            } finally {
+                unmockkObject(RedisConfig)
+            }
         }
 
     @Test
@@ -112,7 +128,6 @@ class LogIngestionWorkerTest {
             val payload = LogService(LogRepositoryImpl()).encodeQueueMessage(batch)
             val index = logIndexResponse(name = "errors", filterQuery = "level:error")
             val pipeline = logPipelineResponse(name = "Cleanup")
-            val dlq = mutableListOf<String>()
 
             every { logService.decodeQueueMessage(payload) } returns batch
             coEvery { logIndexService.getActiveIndexesCached(99) } returns listOf(index)
@@ -136,9 +151,8 @@ class LogIngestionWorkerTest {
                 logManagementService = logManagementService
             )
 
-            worker.processMessageForTest(workerId = 4, payload = payload) { dlq.add(it) }
+            worker.processMessageForTest(workerId = 4, payload = payload)
 
-            assertEquals(emptyList(), dlq)
             coVerify {
                 logService.insertBatch(
                     match { insertedBatch ->
@@ -217,23 +231,35 @@ class LogIngestionWorkerTest {
         }
 
     @Test
-    fun `processMessageForTest records DLQ failure when callback throws`() =
+    fun `processMessageForTest records DLQ failure when stream write fails`() =
         runBlocking {
             val worker = LogIngestionWorker("log:q", "log:dlq", 1)
             val malformed = "not-json"
 
-            assertFailsWith<IllegalStateException> {
-                worker.processMessageForTest(workerId = 3, payload = malformed) {
-                    error("dlq down")
-                }
+            mockkObject(RedisConfig)
+            try {
+                every { RedisConfig.sync().xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) } throws
+                    IllegalStateException("dlq down")
+
+                worker.processMessageForTest(workerId = 3, payload = malformed)
+            } finally {
+                unmockkObject(RedisConfig)
             }
 
             val rendered = OperationalMetrics.scrape()
             assertContains(rendered, "moneat_worker_dlq_pushes_total")
             assertContains(rendered, "worker=\"Log\"")
-            assertContains(rendered, "dlq_key=\"log:dlq\"")
+            assertContains(rendered, "dlq_key=\"log:dlq:stream\"")
             assertContains(rendered, "status=\"failure\"")
         }
+
+    private fun mockDlqStream(): RedisCommands<String, String> {
+        val redis = mockk<RedisCommands<String, String>>()
+        mockkObject(RedisConfig)
+        every { RedisConfig.sync() } returns redis
+        every { redis.xadd("log:dlq:stream", any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
+        return redis
+    }
 
     private fun queuedEntry(
         logId: String,

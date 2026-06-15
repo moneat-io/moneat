@@ -102,7 +102,7 @@ export function ServiceCheckList() {
     refetchInterval: 15000,
   })
 
-  const checks = data?.serviceChecks ?? []
+  const checks = useMemo(() => data?.serviceChecks ?? [], [data?.serviceChecks])
 
   const filtered = useMemo(() => {
     let result = checks

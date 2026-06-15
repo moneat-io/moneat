@@ -161,7 +161,7 @@ export function ContextPanel({log}: Readonly<ContextPanelProps>) {
   const to = hasValidAnchor ? new Date(anchorMs + afterSec * 1000).toISOString() : undefined
 
   const {data, isLoading, isError} = useQuery({
-    queryKey: ['log-context', log.logId, effectiveScope, from, to],
+    queryKey: ['log-context', log.logId, effectiveScope, from, to, log.service, log.host, log.traceId],
     queryFn: () => {
       if (!from || !to) throw new Error('Cannot load log context without a valid timestamp')
       return api.getLogs({

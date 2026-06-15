@@ -134,8 +134,6 @@ class RedisStreamQueueOperationsTest {
     private fun logQueueSpec(): IngestionQueueSpec =
         IngestionQueueSpec(
             pipeline = IngestionPipeline.LOGS,
-            queueKey = "moneat:logs:queue",
-            dlqKey = "moneat:logs:dlq",
             workerCount = 1,
             streamKey = "moneat:logs:queue:stream",
             dlqStreamKey = "moneat:logs:dlq:stream",

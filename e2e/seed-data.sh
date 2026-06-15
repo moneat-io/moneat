@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # Detect docker compose command (v1: docker-compose, v2: docker compose)
-if command -v docker-compose &> /dev/null; then
+if command -v docker-compose &>/dev/null; then
   DOCKER_COMPOSE="docker-compose"
 else
   DOCKER_COMPOSE="docker compose"
@@ -42,13 +42,13 @@ KMP_DSN=$(grep "KMP E2E App" -A1 /tmp/e2e-seed.log | grep "DSN:" | sed 's/.*DSN:
 # Update local.properties if DSNs were found
 if [ -n "$ANDROID_DSN" ]; then
   echo "Updating Android local.properties with DSN..."
-  echo "sentry.dsn=$ANDROID_DSN" > ../e2e/Android/local.properties
+  echo "sentry.dsn=$ANDROID_DSN" >../e2e/Android/local.properties
   echo "✅ Updated e2e/Android/local.properties"
 fi
 
 if [ -n "$KMP_DSN" ]; then
   echo "Updating KMP local.properties with DSN..."
-  echo "sentry.dsn=$KMP_DSN" > ../e2e/KMP/local.properties
+  echo "sentry.dsn=$KMP_DSN" >../e2e/KMP/local.properties
   echo "✅ Updated e2e/KMP/local.properties"
 fi
 

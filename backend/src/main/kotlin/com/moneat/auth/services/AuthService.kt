@@ -35,8 +35,10 @@ import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.ApplicationConfig
+import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -52,7 +54,8 @@ import java.util.Base64
 import java.util.Date
 import java.util.UUID
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
+
+private val logger = KotlinLogging.logger {}
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
@@ -214,7 +217,7 @@ class AuthService(
                 emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
             }.getOrElse { e ->
                 // Log but don't fail signup if email fails
-                println("Failed to send verification email: ${e.message}")
+                logger.warn(e) { "Failed to send verification email" }
             }
         }
 
@@ -362,7 +365,7 @@ class AuthService(
             userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
             true
         }.getOrElse { e ->
-            println("Failed to send verification email: ${e.message}")
+            logger.warn(e) { "Failed to send verification email" }
             false
         }
     }
@@ -489,7 +492,7 @@ class AuthService(
             userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
             true
         }.getOrElse { e ->
-            println("Failed to send password reset email: ${e.message}")
+            logger.warn(e) { "Failed to send password reset email" }
             false
         }
     }

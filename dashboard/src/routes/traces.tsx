@@ -88,7 +88,7 @@ function Traces() {
     refetchInterval: 60000,
   })
 
-  const resources = data?.resources ?? []
+  const resources = useMemo(() => data?.resources ?? [], [data?.resources])
 
   const services = useMemo(
     () => [...new Set(resources.map(r => r.service))].sort(),
