@@ -395,23 +395,15 @@ object ConnectorCatalog {
                         stateKind = ConnectorStateKind.DELIVERY,
                         uiGroup = ConnectorUiGroup.SEND_NOTIFICATIONS
                     ),
-                    ConnectorUseDefinition(
-                        id = "workflow_actions",
-                        name = WORKFLOW_ACTIONS_NAME,
-                        family = ConnectorFamily.WORKFLOW_EGRESS,
-                        availability = ConnectorAvailability.ENTERPRISE,
-                        setupMode = ConnectorSetupMode.API_KEY,
-                        capabilities = listOf("workflow_action", "incident_create", "incident_update"),
-                        stateSource = WORKFLOW_CONNECTIONS,
-                        secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
-                        description = "Let workflows create or update PagerDuty incidents through trusted egress.",
-                        direction = ConnectorDirection.WRITE,
-                        allowedAuthProfileIds = listOf("workflow_api_key"),
-                        requiredScopes = listOf("incidents.write"),
-                        resourceTypes = listOf("incident"),
-                        stateKind = ConnectorStateKind.EXECUTION,
-                        uiGroup = ConnectorUiGroup.SEND_ACTIONS
+                    workflowActionUse(
+                        WorkflowActionUseOptions(
+                            setupMode = ConnectorSetupMode.API_KEY,
+                            capabilities = listOf("workflow_action", "incident_create", "incident_update"),
+                            description = "Let workflows create or update PagerDuty incidents through trusted egress.",
+                            allowedAuthProfileId = "workflow_api_key",
+                            requiredScopes = listOf("incidents.write"),
+                            resourceTypes = listOf("incident"),
+                        )
                     )
                 )
             ),
@@ -470,23 +462,15 @@ object ConnectorCatalog {
                         stateKind = ConnectorStateKind.SYNC,
                         uiGroup = ConnectorUiGroup.IMPORT_DATA
                     ),
-                    ConnectorUseDefinition(
-                        id = "workflow_actions",
-                        name = WORKFLOW_ACTIONS_NAME,
-                        family = ConnectorFamily.WORKFLOW_EGRESS,
-                        availability = ConnectorAvailability.ENTERPRISE,
-                        setupMode = ConnectorSetupMode.APP_INSTALLATION,
-                        capabilities = listOf("workflow_action", "issue_create", "issue_update"),
-                        stateSource = WORKFLOW_CONNECTIONS,
-                        secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
-                        description = "Let workflows create and update GitHub issues through trusted egress.",
-                        direction = ConnectorDirection.WRITE,
-                        allowedAuthProfileIds = listOf("workflow_app_installation"),
-                        requiredScopes = listOf(GITHUB_METADATA_READ_SCOPE, "issues:write"),
-                        resourceTypes = listOf("repository", "issue"),
-                        stateKind = ConnectorStateKind.EXECUTION,
-                        uiGroup = ConnectorUiGroup.SEND_ACTIONS
+                    workflowActionUse(
+                        WorkflowActionUseOptions(
+                            setupMode = ConnectorSetupMode.APP_INSTALLATION,
+                            capabilities = listOf("workflow_action", "issue_create", "issue_update"),
+                            description = "Let workflows create and update GitHub issues through trusted egress.",
+                            allowedAuthProfileId = "workflow_app_installation",
+                            requiredScopes = listOf(GITHUB_METADATA_READ_SCOPE, "issues:write"),
+                            resourceTypes = listOf("repository", "issue"),
+                        )
                     )
                 )
             ),
@@ -535,23 +519,15 @@ object ConnectorCatalog {
                         stateKind = ConnectorStateKind.SYNC,
                         uiGroup = ConnectorUiGroup.IMPORT_DATA
                     ),
-                    ConnectorUseDefinition(
-                        id = "workflow_actions",
-                        name = WORKFLOW_ACTIONS_NAME,
-                        family = ConnectorFamily.WORKFLOW_EGRESS,
-                        availability = ConnectorAvailability.ENTERPRISE,
-                        setupMode = ConnectorSetupMode.API_KEY,
-                        capabilities = listOf("workflow_action", "issue_create", "issue_update"),
-                        stateSource = WORKFLOW_CONNECTIONS,
-                        secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
-                        description = "Let workflows create and update Jira issues through trusted egress.",
-                        direction = ConnectorDirection.WRITE,
-                        allowedAuthProfileIds = listOf("workflow_api_token"),
-                        requiredScopes = listOf("write:jira-work"),
-                        resourceTypes = listOf("site", "project", "issue"),
-                        stateKind = ConnectorStateKind.EXECUTION,
-                        uiGroup = ConnectorUiGroup.SEND_ACTIONS
+                    workflowActionUse(
+                        WorkflowActionUseOptions(
+                            setupMode = ConnectorSetupMode.API_KEY,
+                            capabilities = listOf("workflow_action", "issue_create", "issue_update"),
+                            description = "Let workflows create and update Jira issues through trusted egress.",
+                            allowedAuthProfileId = "workflow_api_token",
+                            requiredScopes = listOf("write:jira-work"),
+                            resourceTypes = listOf("site", "project", "issue"),
+                        )
                     )
                 )
             ),
@@ -600,23 +576,15 @@ object ConnectorCatalog {
                         stateKind = ConnectorStateKind.SYNC,
                         uiGroup = ConnectorUiGroup.IMPORT_DATA
                     ),
-                    ConnectorUseDefinition(
-                        id = "workflow_actions",
-                        name = WORKFLOW_ACTIONS_NAME,
-                        family = ConnectorFamily.WORKFLOW_EGRESS,
-                        availability = ConnectorAvailability.ENTERPRISE,
-                        setupMode = ConnectorSetupMode.API_KEY,
-                        capabilities = listOf("workflow_action", "ticket_create", "ticket_update"),
-                        stateSource = WORKFLOW_CONNECTIONS,
-                        secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
-                        statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
-                        description = "Let workflows create and update ServiceNow tickets through trusted egress.",
-                        direction = ConnectorDirection.WRITE,
-                        allowedAuthProfileIds = listOf("workflow_api_key"),
-                        requiredScopes = listOf("table.write"),
-                        resourceTypes = listOf("instance", "table", "ticket"),
-                        stateKind = ConnectorStateKind.EXECUTION,
-                        uiGroup = ConnectorUiGroup.SEND_ACTIONS
+                    workflowActionUse(
+                        WorkflowActionUseOptions(
+                            setupMode = ConnectorSetupMode.API_KEY,
+                            capabilities = listOf("workflow_action", "ticket_create", "ticket_update"),
+                            description = "Let workflows create and update ServiceNow tickets through trusted egress.",
+                            allowedAuthProfileId = "workflow_api_key",
+                            requiredScopes = listOf("table.write"),
+                            resourceTypes = listOf("instance", "table", "ticket"),
+                        )
                     )
                 )
             ),
@@ -695,4 +663,33 @@ object ConnectorCatalog {
                 )
             )
         )
+
+    private fun workflowActionUse(options: WorkflowActionUseOptions): ConnectorUseDefinition =
+        ConnectorUseDefinition(
+            id = "workflow_actions",
+            name = WORKFLOW_ACTIONS_NAME,
+            family = ConnectorFamily.WORKFLOW_EGRESS,
+            availability = ConnectorAvailability.ENTERPRISE,
+            setupMode = options.setupMode,
+            capabilities = options.capabilities,
+            stateSource = WORKFLOW_CONNECTIONS,
+            secretPurpose = SecretVaultPurpose.WORKFLOW_EGRESS.id,
+            statusRoute = WORKFLOW_CONNECTIONS_STATUS_ROUTE,
+            description = options.description,
+            direction = ConnectorDirection.WRITE,
+            allowedAuthProfileIds = listOf(options.allowedAuthProfileId),
+            requiredScopes = options.requiredScopes,
+            resourceTypes = options.resourceTypes,
+            stateKind = ConnectorStateKind.EXECUTION,
+            uiGroup = ConnectorUiGroup.SEND_ACTIONS
+        )
+
+    private data class WorkflowActionUseOptions(
+        val setupMode: ConnectorSetupMode,
+        val capabilities: List<String>,
+        val description: String,
+        val allowedAuthProfileId: String,
+        val requiredScopes: List<String>,
+        val resourceTypes: List<String>,
+    )
 }
