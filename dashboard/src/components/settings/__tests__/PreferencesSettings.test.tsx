@@ -20,6 +20,7 @@ import userEvent from '@testing-library/user-event'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 
 import {PreferencesSettings} from '../PreferencesSettings'
+import {asDateFormat, hasSidebarChanges, sortedSidebarKeys} from '../preferenceSettingsModel'
 
 const apiMock = vi.hoisted(() => ({
   isAuthenticated: vi.fn(() => true),
@@ -67,6 +68,7 @@ describe('PreferencesSettings', () => {
     expect(screen.getByText('Date format')).toBeInTheDocument()
     expect(screen.getByText(/Preview:/)).toBeInTheDocument()
 
+    await user.click(screen.getAllByRole('switch')[0])
     await user.click(screen.getByRole('button', {name: /Hide all/}))
     await user.click(await screen.findByRole('button', {name: /Save changes/}))
 
@@ -74,5 +76,16 @@ describe('PreferencesSettings', () => {
     const savedItems = apiMock.updateSidebarPreferences.mock.calls.at(-1)?.[0] as string[]
     expect(savedItems).toEqual(expect.arrayContaining(['dashboards']))
     expect(savedItems.length).toBeGreaterThan(5)
+  })
+
+  it('normalizes date format and sidebar preference model values', () => {
+    expect(asDateFormat('medium')).toBe('medium')
+    expect(asDateFormat('iso')).toBe('iso')
+    expect(asDateFormat('dmy')).toBe('dmy')
+    expect(asDateFormat('relative')).toBeUndefined()
+    expect(asDateFormat(null)).toBeUndefined()
+    expect(sortedSidebarKeys(['traces', 'dashboards', 'alerts'])).toEqual(['alerts', 'dashboards', 'traces'])
+    expect(hasSidebarChanges(['alerts', 'dashboards'], ['dashboards', 'alerts'])).toBe(false)
+    expect(hasSidebarChanges(['alerts'], ['dashboards', 'alerts'])).toBe(true)
   })
 })

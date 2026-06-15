@@ -29,12 +29,7 @@ import {TIMEZONES} from '@/lib/timezones'
 import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
 import {formatDateTime} from '@/lib/date-format'
 import {SettingRow, SettingsBlock, SettingsSection} from './SettingsPrimitives'
-
-type DateFormatPref = 'medium' | 'iso' | 'dmy'
-
-function asDateFormat(value: unknown): DateFormatPref | undefined {
-  return value === 'medium' || value === 'iso' || value === 'dmy' ? value : undefined
-}
+import {asDateFormat, hasSidebarChanges, type DateFormatPref} from './preferenceSettingsModel'
 
 export function PreferencesSettings() {
   const {toast} = useToast()
@@ -112,9 +107,7 @@ export function PreferencesSettings() {
       const base = prev ?? savedHidden
       return base.includes(key) ? base.filter((k) => k !== key) : [...base, key]
     })
-  const sidebarDirty =
-    JSON.stringify([...hiddenItems].sort((a, b) => a.localeCompare(b))) !==
-    JSON.stringify([...savedHidden].sort((a, b) => a.localeCompare(b)))
+  const sidebarDirty = hasSidebarChanges(hiddenItems, savedHidden)
 
   const previewNow = formatDateTime(new Date(), timezone)
 
