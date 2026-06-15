@@ -364,12 +364,42 @@ class IncidentServiceExtendedTest {
     }
 
     @Test
-    fun `autoResolve source allowlist only includes deterministic recovery sources`() {
-        assertTrue(service.isAutoResolvableSource(AlertSource.HOST_ALERT))
-        assertTrue(service.isAutoResolvableSource(AlertSource.HOST_DOWN))
-        assertTrue(service.isAutoResolvableSource(AlertSource.UPTIME_MONITOR))
-        assertTrue(service.isAutoResolvableSource(AlertSource.DASHBOARD_ALERT))
-        assertFalse(service.isAutoResolvableSource(AlertSource.ERROR_ALERT))
+    fun `autoResolve source allowlist only includes deterministic recovery sources`() = runBlocking {
+        val allowedSources = listOf(
+            AlertSource.HOST_ALERT,
+            AlertSource.HOST_DOWN,
+            AlertSource.UPTIME_MONITOR,
+            AlertSource.DASHBOARD_ALERT
+        )
+        val blockedSource = AlertSource.ERROR_ALERT
+
+        transaction {
+            (allowedSources + blockedSource).forEach { source ->
+                IncidentRoutingRules.insert {
+                    it[providerConfigId] = this@IncidentServiceExtendedTest.providerConfigId
+                    it[alertSource] = source.name
+                    it[alertType] = null
+                    it[alertPriority] = "high"
+                    it[createdAt] = Clock.System.now()
+                    it[updatedAt] = Clock.System.now()
+                }
+            }
+        }
+
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            resolveAlertResult = Result.success("auto-resolved")
+        )
+
+        allowedSources.forEach { source ->
+            service.autoResolveAlert(orgId, source, "dedup-${source.name.lowercase()}")
+        }
+        service.autoResolveAlert(orgId, blockedSource, "dedup-blocked")
+
+        val logs = IncidentTestHelper.getEventLogs(orgId)
+        assertEquals(allowedSources.size, logs.size)
+        assertTrue(logs.all { it[IncidentEventLog.success] })
+        assertFalse(logs.any { it[IncidentEventLog.alertSource] == blockedSource.name })
     }
 
     // ──── resolveAlertPriority edge cases ────
