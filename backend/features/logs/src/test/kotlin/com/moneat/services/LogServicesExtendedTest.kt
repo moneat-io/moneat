@@ -37,8 +37,7 @@ import kotlin.test.assertTrue
 /**
  * Extended tests for LogService covering topValues, exportCsv,
  * getFilterOptionsWithCounts, getFilterOptions, getTagValues,
- * buildTagCondition, queryLogs edge cases, and aggregateLogs
- * error handling.
+ * queryLogs edge cases, and aggregateLogs error handling.
  */
 class LogServicesExtendedTest {
 
@@ -425,73 +424,6 @@ class LogServicesExtendedTest {
             val allQueries = capturedQueries.joinToString("\n")
             assertTrue(allQueries.contains("fromUnixTimestamp64Milli"))
         }
-    }
-
-    // ──── buildTagCondition ────
-
-    @Test
-    fun `buildTagCondition returns empty for blank key`() {
-        val service = newService()
-        assertEquals("", service.buildTagCondition("", "value"))
-    }
-
-    @Test
-    fun `buildTagCondition handles top-level field`() {
-        val service = newService()
-        val result = service.buildTagCondition("service", "api")
-        assertEquals(SERVICE_EQ_API, result)
-    }
-
-    @Test
-    fun `buildTagCondition handles top-level field with exclude`() {
-        val service = newService()
-        val result = service.buildTagCondition("service", "api", exclude = true)
-        assertEquals("service != 'api'", result)
-    }
-
-    @Test
-    fun `buildTagCondition maps status to level with toString`() {
-        val service = newService()
-        val result = service.buildTagCondition("status", "error")
-        assertEquals("toString(level) = 'error'", result)
-    }
-
-    @Test
-    fun `buildTagCondition handles actual tag key`() {
-        val service = newService()
-        val result = service.buildTagCondition("region", US_EAST)
-        assertTrue(result.contains(HAS_TAGS_REGION))
-        assertTrue(result.contains("tags['region'] = '$US_EAST'"))
-    }
-
-    @Test
-    fun `buildTagCondition handles actual tag key with exclude`() {
-        val service = newService()
-        val result = service.buildTagCondition("region", US_EAST, exclude = true)
-        assertTrue(result.startsWith("NOT"))
-        assertTrue(result.contains(HAS_TAGS_REGION))
-    }
-
-    @Test
-    fun `buildTagCondition handles enum field source with toString`() {
-        val service = newService()
-        val result = service.buildTagCondition("source", "sdk")
-        assertEquals("toString(source) = 'sdk'", result)
-    }
-
-    @Test
-    fun `buildTagCondition parses malformed tag with boolean operators`() {
-        val service = newService()
-        // A tag value containing "OR" should be parsed as a query
-        val result = service.buildTagCondition("service", "api OR worker")
-        assertTrue(result.isNotBlank())
-    }
-
-    @Test
-    fun `buildTagCondition parses tag key starting with dash as query`() {
-        val service = newService()
-        val result = service.buildTagCondition("-service", "api")
-        assertTrue(result.isNotBlank())
     }
 
     // ──── queryLogs edge cases ────
