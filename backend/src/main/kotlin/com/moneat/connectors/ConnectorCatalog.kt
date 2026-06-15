@@ -439,28 +439,22 @@ object ConnectorCatalog {
                     )
                 ),
                 uses = listOf(
-                    ConnectorUseDefinition(
-                        id = "repository_import",
-                        name = "Repository import",
-                        family = ConnectorFamily.DATA_IMPORT,
-                        availability = ConnectorAvailability.PLANNED,
-                        setupMode = ConnectorSetupMode.APP_INSTALLATION,
-                        capabilities = listOf("repository_read", "issue_import", "pull_request_import"),
-                        stateSource = CLOUD_SOURCES,
-                        secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
-                        description = "Import repository, issue, and pull request metadata.",
-                        direction = ConnectorDirection.READ,
-                        allowedAuthProfileIds = listOf("read_app_installation"),
-                        requiredScopes = listOf(
-                            GITHUB_METADATA_READ_SCOPE,
-                            "contents:read",
-                            "issues:read",
-                            "pull_requests:read"
-                        ),
-                        resourceTypes = listOf("organization", "repository"),
-                        stateKind = ConnectorStateKind.SYNC,
-                        uiGroup = ConnectorUiGroup.IMPORT_DATA
+                    dataImportUse(
+                        DataImportUseOptions(
+                            id = "repository_import",
+                            name = "Repository import",
+                            setupMode = ConnectorSetupMode.APP_INSTALLATION,
+                            capabilities = listOf("repository_read", "issue_import", "pull_request_import"),
+                            description = "Import repository, issue, and pull request metadata.",
+                            allowedAuthProfileId = "read_app_installation",
+                            requiredScopes = listOf(
+                                GITHUB_METADATA_READ_SCOPE,
+                                "contents:read",
+                                "issues:read",
+                                "pull_requests:read"
+                            ),
+                            resourceTypes = listOf("organization", "repository"),
+                        )
                     ),
                     workflowActionUse(
                         WorkflowActionUseOptions(
@@ -501,23 +495,17 @@ object ConnectorCatalog {
                     )
                 ),
                 uses = listOf(
-                    ConnectorUseDefinition(
-                        id = "issue_import",
-                        name = "Issue import",
-                        family = ConnectorFamily.DATA_IMPORT,
-                        availability = ConnectorAvailability.PLANNED,
-                        setupMode = ConnectorSetupMode.OAUTH,
-                        capabilities = listOf("project_read", "issue_import"),
-                        stateSource = CLOUD_SOURCES,
-                        secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
-                        description = "Import Jira project and issue metadata.",
-                        direction = ConnectorDirection.READ,
-                        allowedAuthProfileIds = listOf("site_oauth"),
-                        requiredScopes = listOf(JIRA_READ_SCOPE),
-                        resourceTypes = listOf("site", "project", "issue"),
-                        stateKind = ConnectorStateKind.SYNC,
-                        uiGroup = ConnectorUiGroup.IMPORT_DATA
+                    dataImportUse(
+                        DataImportUseOptions(
+                            id = "issue_import",
+                            name = "Issue import",
+                            setupMode = ConnectorSetupMode.OAUTH,
+                            capabilities = listOf("project_read", "issue_import"),
+                            description = "Import Jira project and issue metadata.",
+                            allowedAuthProfileId = "site_oauth",
+                            requiredScopes = listOf(JIRA_READ_SCOPE),
+                            resourceTypes = listOf("site", "project", "issue"),
+                        )
                     ),
                     workflowActionUse(
                         WorkflowActionUseOptions(
@@ -558,23 +546,17 @@ object ConnectorCatalog {
                     )
                 ),
                 uses = listOf(
-                    ConnectorUseDefinition(
-                        id = "ticket_import",
-                        name = "Ticket import",
-                        family = ConnectorFamily.DATA_IMPORT,
-                        availability = ConnectorAvailability.PLANNED,
-                        setupMode = ConnectorSetupMode.API_KEY,
-                        capabilities = listOf("ticket_import", "cmdb_import"),
-                        stateSource = CLOUD_SOURCES,
-                        secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
-                        description = "Import ticket and CMDB metadata.",
-                        direction = ConnectorDirection.READ,
-                        allowedAuthProfileIds = listOf("instance_read_api_key"),
-                        requiredScopes = listOf(SERVICENOW_TABLE_READ_SCOPE),
-                        resourceTypes = listOf("instance", "table"),
-                        stateKind = ConnectorStateKind.SYNC,
-                        uiGroup = ConnectorUiGroup.IMPORT_DATA
+                    dataImportUse(
+                        DataImportUseOptions(
+                            id = "ticket_import",
+                            name = "Ticket import",
+                            setupMode = ConnectorSetupMode.API_KEY,
+                            capabilities = listOf("ticket_import", "cmdb_import"),
+                            description = "Import ticket and CMDB metadata.",
+                            allowedAuthProfileId = "instance_read_api_key",
+                            requiredScopes = listOf(SERVICENOW_TABLE_READ_SCOPE),
+                            resourceTypes = listOf("instance", "table"),
+                        )
                     ),
                     workflowActionUse(
                         WorkflowActionUseOptions(
@@ -605,23 +587,21 @@ object ConnectorCatalog {
                     )
                 ),
                 uses = listOf(
-                    ConnectorUseDefinition(
-                        id = "subscription_import",
-                        name = "Subscription import",
-                        family = ConnectorFamily.DATA_IMPORT,
-                        availability = ConnectorAvailability.PLANNED,
-                        setupMode = ConnectorSetupMode.API_KEY,
-                        capabilities = listOf("subscription_lifecycle_import", "revenue_import", "cohort_revenue"),
-                        stateSource = CLOUD_SOURCES,
-                        secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
-                        description = "Import subscription lifecycle and revenue events for cohort economics.",
-                        direction = ConnectorDirection.READ,
-                        allowedAuthProfileIds = listOf("project_api_key"),
-                        requiredScopes = listOf("projects.read", "customers.read", "transactions.read"),
-                        resourceTypes = listOf("project", "customer", "transaction"),
-                        stateKind = ConnectorStateKind.SYNC,
-                        uiGroup = ConnectorUiGroup.IMPORT_DATA
+                    dataImportUse(
+                        DataImportUseOptions(
+                            id = "subscription_import",
+                            name = "Subscription import",
+                            setupMode = ConnectorSetupMode.API_KEY,
+                            capabilities = listOf(
+                                "subscription_lifecycle_import",
+                                "revenue_import",
+                                "cohort_revenue"
+                            ),
+                            description = "Import subscription lifecycle and revenue events for cohort economics.",
+                            allowedAuthProfileId = "project_api_key",
+                            requiredScopes = listOf("projects.read", "customers.read", "transactions.read"),
+                            resourceTypes = listOf("project", "customer", "transaction"),
+                        )
                     )
                 )
             ),
@@ -642,26 +622,40 @@ object ConnectorCatalog {
                     )
                 ),
                 uses = listOf(
-                    ConnectorUseDefinition(
-                        id = "ad_spend_import",
-                        name = "Ad spend import",
-                        family = ConnectorFamily.DATA_IMPORT,
-                        availability = ConnectorAvailability.PLANNED,
-                        setupMode = ConnectorSetupMode.OAUTH,
-                        capabilities = listOf("ad_spend_import", "campaign_metrics", "cohort_cost"),
-                        stateSource = CLOUD_SOURCES,
-                        secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-                        statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
-                        description = "Import ad spend and campaign metrics for acquisition payback reporting.",
-                        direction = ConnectorDirection.READ,
-                        allowedAuthProfileIds = listOf("manager_oauth"),
-                        requiredScopes = listOf("https://www.googleapis.com/auth/adwords"),
-                        resourceTypes = listOf("manager_account", "customer_account", "campaign"),
-                        stateKind = ConnectorStateKind.SYNC,
-                        uiGroup = ConnectorUiGroup.IMPORT_DATA
+                    dataImportUse(
+                        DataImportUseOptions(
+                            id = "ad_spend_import",
+                            name = "Ad spend import",
+                            setupMode = ConnectorSetupMode.OAUTH,
+                            capabilities = listOf("ad_spend_import", "campaign_metrics", "cohort_cost"),
+                            description = "Import ad spend and campaign metrics for acquisition payback reporting.",
+                            allowedAuthProfileId = "manager_oauth",
+                            requiredScopes = listOf("https://www.googleapis.com/auth/adwords"),
+                            resourceTypes = listOf("manager_account", "customer_account", "campaign"),
+                        )
                     )
                 )
             )
+        )
+
+    private fun dataImportUse(options: DataImportUseOptions): ConnectorUseDefinition =
+        ConnectorUseDefinition(
+            id = options.id,
+            name = options.name,
+            family = ConnectorFamily.DATA_IMPORT,
+            availability = ConnectorAvailability.PLANNED,
+            setupMode = options.setupMode,
+            capabilities = options.capabilities,
+            stateSource = CLOUD_SOURCES,
+            secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
+            statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
+            description = options.description,
+            direction = ConnectorDirection.READ,
+            allowedAuthProfileIds = listOf(options.allowedAuthProfileId),
+            requiredScopes = options.requiredScopes,
+            resourceTypes = options.resourceTypes,
+            stateKind = ConnectorStateKind.SYNC,
+            uiGroup = ConnectorUiGroup.IMPORT_DATA
         )
 
     private fun workflowActionUse(options: WorkflowActionUseOptions): ConnectorUseDefinition =
@@ -683,6 +677,17 @@ object ConnectorCatalog {
             stateKind = ConnectorStateKind.EXECUTION,
             uiGroup = ConnectorUiGroup.SEND_ACTIONS
         )
+
+    private data class DataImportUseOptions(
+        val id: String,
+        val name: String,
+        val setupMode: ConnectorSetupMode,
+        val capabilities: List<String>,
+        val description: String,
+        val allowedAuthProfileId: String,
+        val requiredScopes: List<String>,
+        val resourceTypes: List<String>,
+    )
 
     private data class WorkflowActionUseOptions(
         val setupMode: ConnectorSetupMode,
