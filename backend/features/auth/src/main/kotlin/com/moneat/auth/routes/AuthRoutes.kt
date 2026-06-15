@@ -123,8 +123,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSignup(authServi
     try {
         val result = authService.signup(request, context, inviteToken)
         AuthCookieUtils.setAuthCookie(call, result.token)
-        if (result.refreshToken != null) {
-            AuthCookieUtils.setRefreshCookie(call, result.refreshToken)
+        val refreshToken = result.refreshToken
+        if (refreshToken != null) {
+            AuthCookieUtils.setRefreshCookie(call, refreshToken)
         } else {
             AuthCookieUtils.clearRefreshCookie(call)
         }
@@ -141,8 +142,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLogin(authServic
         val result = authService.login(request)
         if (result != null) {
             AuthCookieUtils.setAuthCookie(call, result.token)
-            if (result.refreshToken != null) {
-                AuthCookieUtils.setRefreshCookie(call, result.refreshToken)
+            val refreshToken = result.refreshToken
+            if (refreshToken != null) {
+                AuthCookieUtils.setRefreshCookie(call, refreshToken)
             } else {
                 AuthCookieUtils.clearRefreshCookie(call)
             }
@@ -255,8 +257,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleRefreshToken(aut
         val result = authService.refreshToken(refreshToken)
         if (result != null) {
             AuthCookieUtils.setAuthCookie(call, result.token)
-            if (result.refreshToken != null) {
-                AuthCookieUtils.setRefreshCookie(call, result.refreshToken)
+            val nextRefreshToken = result.refreshToken
+            if (nextRefreshToken != null) {
+                AuthCookieUtils.setRefreshCookie(call, nextRefreshToken)
             } else {
                 AuthCookieUtils.clearRefreshCookie(call)
             }

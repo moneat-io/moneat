@@ -16,7 +16,6 @@
 
 package com.moneat.plugins
 
-import com.moneat.auth.routes.authRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
@@ -180,9 +179,6 @@ fun Application.configureRouting() {
         // Dashboard API endpoints
         apiRoutes()
         pushDeviceRoutes()
-
-        // Authentication endpoints
-        authRoutes()
 
         // Shared connector catalog and setup metadata
         connectorRoutes()
