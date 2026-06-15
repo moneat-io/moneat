@@ -105,6 +105,17 @@ object FeatureRegistry {
         }
     }
 
+    fun registerIngestionRoutes(route: Route) {
+        for (module in modules) {
+            suspendRunCatching {
+                module.registerIngestionRoutes(route)
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to register ingestion routes for enterprise module: ${module.name}" }
+                throw e
+            }
+        }
+    }
+
     fun koinModules(): List<Module> =
         modules.flatMap { module ->
             suspendRunCatching {

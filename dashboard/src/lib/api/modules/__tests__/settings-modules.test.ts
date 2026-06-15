@@ -39,9 +39,20 @@ describe('settings API modules', () => {
 
     await api.getConnectorProviders()
     await api.getConnectorState()
+    await api.getConnectorInstallations('revenuecat')
+    await api.rotateConnectorWebhookToken('install-1')
 
     expect(core.request).toHaveBeenNthCalledWith(1, '/v1/connectors/providers')
     expect(core.request).toHaveBeenNthCalledWith(2, '/v1/connectors/state')
+    expect(core.request).toHaveBeenNthCalledWith(
+      3,
+      '/v1/connectors/installations?providerId=revenuecat'
+    )
+    expect(core.request).toHaveBeenNthCalledWith(
+      4,
+      '/v1/connectors/installations/install-1/webhook-token/rotate',
+      {method: 'POST'}
+    )
   })
 
   it('persists user display preferences and organization settings', async () => {
