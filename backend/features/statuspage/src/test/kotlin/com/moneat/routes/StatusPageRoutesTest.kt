@@ -29,6 +29,7 @@ import com.moneat.statuspage.models.StatusPageIncidents
 import com.moneat.statuspage.models.StatusPageMonitors
 import com.moneat.statuspage.models.StatusPages
 import com.moneat.statuspage.routes.statusPageRoutes
+import com.moneat.statuspage.services.StatusPageService
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.startTestKoin
@@ -52,6 +53,7 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.jsonObject
@@ -114,6 +116,10 @@ class StatusPageRoutesTest {
                 validate { JWTPrincipal(it.payload) }
             }
         }
+    }
+
+    private fun Route.testStatusPageRoutes() {
+        statusPageRoutes(statusPageService = StatusPageService())
     }
 
     private fun token(userId: Int, orgId: Int? = null): String =
@@ -199,7 +205,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages") {
@@ -213,7 +219,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val response = client.get("/v1/status-pages") {
@@ -227,7 +233,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             seedStatusPage(orgId)
@@ -245,7 +251,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages") {
@@ -261,7 +267,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val slug = "new-page-${System.nanoTime()}"
@@ -279,7 +285,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             seedStatusPageTier(orgId, statusPagesEnabled = false, customDomainsEnabled = true)
@@ -299,7 +305,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val response = client.post("/v1/status-pages") {
@@ -318,7 +324,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val response = client.get("/v1/status-pages/not-a-uuid") {
                 header(HttpHeaders.Authorization, "Bearer ${token(999)}")
@@ -332,7 +338,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}") {
@@ -346,7 +352,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}") {
@@ -360,7 +366,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -378,7 +384,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.put("/v1/status-pages/not-a-uuid") {
@@ -394,7 +400,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.put("/v1/status-pages/${UUID.randomUUID()}") {
@@ -410,7 +416,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val response = client.put("/v1/status-pages/${UUID.randomUUID()}") {
@@ -426,7 +432,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -446,7 +452,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/not-a-uuid") {
@@ -460,7 +466,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}") {
@@ -474,7 +480,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}") {
@@ -488,7 +494,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -505,7 +511,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/not-a-uuid/monitors") {
@@ -521,7 +527,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/monitors") {
@@ -537,7 +543,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/not-a-uuid/monitors/${UUID.randomUUID()}") {
@@ -551,7 +557,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/monitors/${UUID.randomUUID()}") {
@@ -567,7 +573,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/not-a-uuid/incidents") {
@@ -581,7 +587,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.get("/v1/status-pages/${UUID.randomUUID()}/incidents") {
@@ -597,7 +603,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -615,7 +621,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/not-a-uuid/incidents") {
@@ -631,7 +637,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/incidents") {
@@ -649,7 +655,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -678,7 +684,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -699,7 +705,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -728,7 +734,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/not-uuid/incidents/also-not/updates") {
@@ -746,7 +752,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -765,7 +771,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             seedStatusPageTier(orgId, statusPagesEnabled = true, customDomainsEnabled = false)
@@ -786,7 +792,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.post("/v1/status-pages/${UUID.randomUUID()}/domains") {
@@ -802,7 +808,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)
@@ -828,7 +834,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val userId = seedUser()
             val response = client.delete("/v1/status-pages/${UUID.randomUUID()}/domains/${UUID.randomUUID()}") {
@@ -844,7 +850,7 @@ class StatusPageRoutesTest {
         testApplication {
             application {
                 installAuth()
-                routing { statusPageRoutes() }
+                routing { testStatusPageRoutes() }
             }
             val (userId, orgId) = seedUserAndOrg()
             val pageId = seedStatusPage(orgId)

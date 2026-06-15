@@ -18,8 +18,11 @@ package com.moneat.statuspage
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.statuspage.routes.statusPageRoutes
+import com.moneat.statuspage.services.StatusPageService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class StatusPageModule : EnterpriseModule {
     override val name: String = "Status Pages"
@@ -27,6 +30,13 @@ class StatusPageModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.statusPageRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single { StatusPageService(get()) }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) = Unit
 
