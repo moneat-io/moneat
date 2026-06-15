@@ -99,6 +99,7 @@ import {useAuth} from '@/hooks/useAuth'
 import {useEnterpriseFeatures, useIsSelfHosted, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
+import type {OnCallContactSettings} from '@/lib/api/types/on-call'
 
 const AUTH_TOKEN_SCOPES = [
   { group: 'Service', scopes: ['project:read', 'project:write'] },
@@ -175,6 +176,7 @@ const VALID_TABS = new Set([
   'notifications',
   'danger',
 ])
+type SilencePeriod = Awaited<ReturnType<typeof api.getSilencePeriods>>[number]
 
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
@@ -288,7 +290,7 @@ function SettingsPage() {
   )
 }
 
-function SettingsNavGroup({label, className}: {label: string; className?: string}) {
+function SettingsNavGroup({label, className}: Readonly<{label: string; className?: string}>) {
   return (
     <div
       className={cn(
@@ -306,9 +308,9 @@ function SettingsNavItem({
   icon: Icon,
   children,
 }: {
-  value: string
-  icon: React.ComponentType<{className?: string}>
-  children: React.ReactNode
+  readonly value: string
+  readonly icon: React.ComponentType<{className?: string}>
+  readonly children: React.ReactNode
 }) {
   return (
     <TabsTrigger
@@ -1901,7 +1903,23 @@ function PaymentMethodSetupForm({
   )
 }
 
-function NotificationsTab() {
+function describeEmailDelivery(email?: string, verified?: boolean): string {
+  if (!email) return 'Your account email.'
+  return `${email} · ${verified ? 'verified' : 'unverified'}`
+}
+
+function describePushDelivery(deviceCount: number): string {
+  if (deviceCount === 0) return 'No devices registered yet — install the Moneat mobile app to receive pushes.'
+  const suffix = deviceCount === 1 ? '' : 's'
+  return `Deliver alert and on-call pushes to your ${deviceCount} registered device${suffix}.`
+}
+
+function formatAlertFrequency(minutes: number): string {
+  if (minutes >= 60) return `${minutes / 60}h`
+  return `${minutes}m`
+}
+
+export function NotificationsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { timezone } = useTimezone()
@@ -2032,6 +2050,8 @@ function NotificationsTab() {
   }
 
   const servicePreferences = preferences?.projects || []
+  const emailDescription = describeEmailDelivery(user?.email, user?.emailVerified)
+  const pushDescription = describePushDelivery(pushDevices.length)
 
   return (
     <section>
@@ -2059,11 +2079,7 @@ function NotificationsTab() {
               Email
             </span>
           }
-          description={
-            user?.email
-              ? `${user.email}${user.emailVerified ? ' · verified' : ' · unverified'}`
-              : 'Your account email.'
-          }
+          description={emailDescription}
         >
           <Switch
             checked={global.emailEnabled ?? true}
@@ -2078,11 +2094,7 @@ function NotificationsTab() {
               Mobile push
             </span>
           }
-          description={
-            pushDevices.length > 0
-              ? `Deliver alert and on-call pushes to your ${pushDevices.length} registered device${pushDevices.length === 1 ? '' : 's'}.`
-              : 'No devices registered yet — install the Moneat mobile app to receive pushes.'
-          }
+          description={pushDescription}
         >
           <Switch
             checked={global.pushEnabled ?? false}
@@ -2182,9 +2194,7 @@ function NotificationsTab() {
                       />
                     </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
-                      {servicePreference.alertFrequencyMinutes >= 60
-                        ? `${servicePreference.alertFrequencyMinutes / 60}h`
-                        : `${servicePreference.alertFrequencyMinutes}m`}
+                      {formatAlertFrequency(servicePreference.alertFrequencyMinutes)}
                     </TableCell>
                     <TableCell>
                       <Button
@@ -2203,101 +2213,137 @@ function NotificationsTab() {
       </SectionCard>
 
       <SectionCard title="On-call SMS & voice fallback" icon={Phone}>
-        <div className="space-y-4">
-          {isLoadingOnCallContact ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-            </div>
-          ) : onCallContact?.onCallPhoneOptIn ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success-fg" />
-                <span className="text-sm font-medium">Opted in — {onCallContact.phoneNumber}</span>
-              </div>
-              {onCallContact.onCallPhoneConsentedAt && (
-                <p className="text-xs text-muted-foreground">
-                  Consented on {formatDateUtil(new Date(onCallContact.onCallPhoneConsentedAt), timezone)}
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => deleteOnCallContactMutation.mutate()}
-                  disabled={deleteOnCallContactMutation.isPending}
-                >
-                  {deleteOnCallContactMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Remove & opt out'}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 max-w-sm">
-              {onCallContact?.phoneNumber && !onCallContact.onCallPhoneOptIn && (
-                <div className="flex items-center gap-2 text-warning-fg text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  Phone number saved but not opted in yet. Check the consent box below to enable alerts.
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="oncall-phone">Mobile number (E.164 format)</Label>
-                <Input
-                  id="oncall-phone"
-                  type="tel"
-                  placeholder="+15551234567"
-                  value={onCallPhone}
-                  onChange={(e) => setOnCallPhone(e.target.value)}
-                />
-              </div>
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="oncall-consent"
-                  checked={onCallConsent}
-                  onCheckedChange={(c) => setOnCallConsent(c === true)}
-                  className="mt-0.5"
-                />
-                <Label htmlFor="oncall-consent" className="text-sm font-normal leading-snug cursor-pointer">
-                  I agree to receive on-call alert SMS messages and voice calls from Moneat at the number provided.
-                  Message and data rates may apply. Reply STOP to unsubscribe or HELP for help.
-                  I understand I can manage this setting anytime in my account.{' '}
-                  <Link to="/legal/sms-consent" className="underline text-primary" target="_blank">
-                    Learn more
-                  </Link>
-                </Label>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => updateOnCallContactMutation.mutate()}
-                disabled={
-                  !onCallPhone.trim().match(/^\+[1-9]\d{1,14}$/) ||
-                  !onCallConsent ||
-                  updateOnCallContactMutation.isPending
-                }
-              >
-                {updateOnCallContactMutation.isPending ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
-                ) : (
-                  'Save & opt in'
-                )}
-              </Button>
-              {onCallContact?.phoneNumber && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => deleteOnCallContactMutation.mutate()}
-                  disabled={deleteOnCallContactMutation.isPending}
-                >
-                  Remove number
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
+        <OnCallFallbackSettings
+          contact={onCallContact}
+          isLoading={isLoadingOnCallContact}
+          phone={onCallPhone}
+          consent={onCallConsent}
+          timezone={timezone}
+          isSaving={updateOnCallContactMutation.isPending}
+          isDeleting={deleteOnCallContactMutation.isPending}
+          onPhoneChange={setOnCallPhone}
+          onConsentChange={setOnCallConsent}
+          onSave={() => updateOnCallContactMutation.mutate()}
+          onDelete={() => deleteOnCallContactMutation.mutate()}
+        />
       </SectionCard>
     </section>
   )
 }
 
-function SilencePeriodsTab() {
+function isValidOnCallPhone(phone: string): boolean {
+  return /^\+[1-9]\d{1,14}$/.test(phone.trim())
+}
+
+function OnCallFallbackSettings({
+  contact,
+  isLoading,
+  phone,
+  consent,
+  timezone,
+  isSaving,
+  isDeleting,
+  onPhoneChange,
+  onConsentChange,
+  onSave,
+  onDelete,
+}: Readonly<{
+  contact?: OnCallContactSettings
+  isLoading: boolean
+  phone: string
+  consent: boolean
+  timezone: string
+  isSaving: boolean
+  isDeleting: boolean
+  onPhoneChange: (value: string) => void
+  onConsentChange: (value: boolean) => void
+  onSave: () => void
+  onDelete: () => void
+}>) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+      </div>
+    )
+  }
+
+  if (contact?.onCallPhoneOptIn) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-success-fg" />
+          <span className="text-sm font-medium">Opted in — {contact.phoneNumber}</span>
+        </div>
+        {contact.onCallPhoneConsentedAt && (
+          <p className="text-xs text-muted-foreground">
+            Consented on {formatDateUtil(new Date(contact.onCallPhoneConsentedAt), timezone)}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Button size="sm" variant="destructive" onClick={onDelete} disabled={isDeleting}>
+            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Remove & opt out'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 max-w-sm">
+      {contact?.phoneNumber && !contact.onCallPhoneOptIn && (
+        <div className="flex items-center gap-2 text-warning-fg text-sm">
+          <AlertCircle className="h-4 w-4" />
+          Phone number saved but not opted in yet. Check the consent box below to enable alerts.
+        </div>
+      )}
+      <div className="space-y-2">
+        <Label htmlFor="oncall-phone">Mobile number (E.164 format)</Label>
+        <Input
+          id="oncall-phone"
+          type="tel"
+          placeholder="+15551234567"
+          value={phone}
+          onChange={(event) => onPhoneChange(event.target.value)}
+        />
+      </div>
+      <div className="flex items-start gap-2">
+        <Checkbox
+          id="oncall-consent"
+          checked={consent}
+          onCheckedChange={(checked) => onConsentChange(checked === true)}
+          className="mt-0.5"
+        />
+        <Label htmlFor="oncall-consent" className="text-sm font-normal leading-snug cursor-pointer">
+          I agree to receive on-call alert SMS messages and voice calls from Moneat at the number provided.
+          Message and data rates may apply. Reply STOP to unsubscribe or HELP for help.
+          I understand I can manage this setting anytime in my account.{' '}
+          <Link to="/legal/sms-consent" className="underline text-primary" target="_blank">
+            Learn more
+          </Link>
+        </Label>
+      </div>
+      <Button
+        size="sm"
+        onClick={onSave}
+        disabled={!isValidOnCallPhone(phone) || !consent || isSaving}
+      >
+        {isSaving ? (
+          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
+        ) : (
+          'Save & opt in'
+        )}
+      </Button>
+      {contact?.phoneNumber && (
+        <Button size="sm" variant="ghost" onClick={onDelete} disabled={isDeleting}>
+          Remove number
+        </Button>
+      )}
+    </div>
+  )
+}
+
+export function SilencePeriodsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { timezone } = useTimezone()
@@ -2494,67 +2540,15 @@ function SilencePeriodsTab() {
         count={silencePeriods.length || undefined}
         flushBody
       >
-          {isLoading ? (
-            <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading silence periods…
-            </div>
-          ) : silencePeriods.length > 0 ? (
-            <div className="divide-y">
-              {activePeriods.map((period) => (
-                <div key={period.id} className="group flex items-center gap-3 px-4 py-2.5">
-                  <StatusDot tone="warning" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{period.reason || 'Silence period'}</span>
-                      <Badge variant="warning">Active · {formatTimeRemaining(period.endsAt).replace(' remaining', '')}</Badge>
-                    </div>
-                    <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                      {formatDateTime(period.startsAt)} → {formatDateTime(period.endsAt)}
-                    </div>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => deleteMutation.mutate(period.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-              {scheduledPeriods.map((period) => (
-                <div key={period.id} className="group flex items-center gap-3 px-4 py-2.5">
-                  <StatusDot tone="neutral" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">{period.reason || 'Scheduled silence'}</span>
-                      <Badge variant="secondary">Scheduled</Badge>
-                    </div>
-                    <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-                      {formatDateTime(period.startsAt)} → {formatDateTime(period.endsAt)}
-                    </div>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => deleteMutation.mutate(period.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="px-4 py-12 text-center">
-              <p className="text-sm font-medium">No silence periods</p>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
-                Use the quick silence buttons above or schedule a maintenance window to suppress alert notifications.
-              </p>
-            </div>
-          )}
+          <SilencePeriodList
+            isLoading={isLoading}
+            activePeriods={activePeriods}
+            scheduledPeriods={scheduledPeriods}
+            isDeleting={deleteMutation.isPending}
+            onDelete={(periodId) => deleteMutation.mutate(periodId)}
+            formatDateTime={formatDateTime}
+            formatTimeRemaining={formatTimeRemaining}
+          />
       </SectionCard>
 
       <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
@@ -2563,6 +2557,119 @@ function SilencePeriodsTab() {
         evaluated and trigger timestamps recorded; expired periods are cleaned up automatically.
       </p>
     </section>
+  )
+}
+
+function SilencePeriodList({
+  isLoading,
+  activePeriods,
+  scheduledPeriods,
+  isDeleting,
+  onDelete,
+  formatDateTime,
+  formatTimeRemaining,
+}: Readonly<{
+  isLoading: boolean
+  activePeriods: SilencePeriod[]
+  scheduledPeriods: SilencePeriod[]
+  isDeleting: boolean
+  onDelete: (periodId: string) => void
+  formatDateTime: (timestampMs: number) => string
+  formatTimeRemaining: (endsAt: number) => string
+}>) {
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading silence periods…
+      </div>
+    )
+  }
+
+  if (activePeriods.length === 0 && scheduledPeriods.length === 0) {
+    return (
+      <div className="px-4 py-12 text-center">
+        <p className="text-sm font-medium">No silence periods</p>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+          Use the quick silence buttons above or schedule a maintenance window to suppress alert notifications.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="divide-y">
+      {activePeriods.map((period) => (
+        <SilencePeriodRow
+          key={period.id}
+          period={period}
+          status="active"
+          isDeleting={isDeleting}
+          onDelete={onDelete}
+          formatDateTime={formatDateTime}
+          formatTimeRemaining={formatTimeRemaining}
+        />
+      ))}
+      {scheduledPeriods.map((period) => (
+        <SilencePeriodRow
+          key={period.id}
+          period={period}
+          status="scheduled"
+          isDeleting={isDeleting}
+          onDelete={onDelete}
+          formatDateTime={formatDateTime}
+          formatTimeRemaining={formatTimeRemaining}
+        />
+      ))}
+    </div>
+  )
+}
+
+function SilencePeriodRow({
+  period,
+  status,
+  isDeleting,
+  onDelete,
+  formatDateTime,
+  formatTimeRemaining,
+}: Readonly<{
+  period: SilencePeriod
+  status: 'active' | 'scheduled'
+  isDeleting: boolean
+  onDelete: (periodId: string) => void
+  formatDateTime: (timestampMs: number) => string
+  formatTimeRemaining: (endsAt: number) => string
+}>) {
+  const isActive = status === 'active'
+  const title = period.reason || (isActive ? 'Silence period' : 'Scheduled silence')
+  const badge =
+    isActive ? (
+      <Badge variant="warning">Active · {formatTimeRemaining(period.endsAt).replace(' remaining', '')}</Badge>
+    ) : (
+      <Badge variant="secondary">Scheduled</Badge>
+    )
+
+  return (
+    <div className="group flex items-center gap-3 px-4 py-2.5">
+      <StatusDot tone={isActive ? 'warning' : 'neutral'} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{title}</span>
+          {badge}
+        </div>
+        <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+          {formatDateTime(period.startsAt)} → {formatDateTime(period.endsAt)}
+        </div>
+      </div>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+        onClick={() => onDelete(period.id)}
+        disabled={isDeleting}
+      >
+        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+      </Button>
+    </div>
   )
 }
 

@@ -103,6 +103,7 @@ private const val DEMO_MOBILE_SERVICE_ID = -3L
 private const val ERROR_NO_ORGANIZATION_ACCESS = "No organization access"
 private const val ERROR_INVALID_SERVICE_IDS = "Invalid serviceIds"
 private const val ERROR_ALERT_EPISODE_NOT_FOUND = "Alert episode not found"
+private const val ERROR_USER_NOT_FOUND = "User not found"
 private val supportedDensities = setOf("compact", "comfortable", "spacious")
 private val supportedDateFormats = setOf("medium", "iso", "dmy", "short", "long", "relative")
 private val DEMO_SERVICE_IDS = listOf(DEMO_PRIMARY_SERVICE_ID, DEMO_CHECKOUT_SERVICE_ID, DEMO_MOBILE_SERVICE_ID)
@@ -200,7 +201,7 @@ fun Route.apiRoutes() {
                         }
 
                     if (userResponse == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_USER_NOT_FOUND))
                     } else {
                         call.respond(userResponse)
                     }
@@ -261,7 +262,7 @@ fun Route.apiRoutes() {
                             Users.selectAll().where { Users.id eq userId }.singleOrNull()
                         }
                     if (user == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_USER_NOT_FOUND))
                         return@get
                     }
                     call.respond(
@@ -496,7 +497,7 @@ fun Route.apiRoutes() {
                         }
 
                     if (updated == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("User not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(ERROR_USER_NOT_FOUND))
                     } else {
                         call.respond(updated)
                     }

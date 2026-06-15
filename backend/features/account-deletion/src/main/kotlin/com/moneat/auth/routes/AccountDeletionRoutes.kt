@@ -53,6 +53,8 @@ import kotlin.uuid.Uuid
 private val logger = KotlinLogging.logger {}
 
 private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
+private const val ORGANIZATION_ROUTE = "/organizations/{orgId}"
+private const val INVALID_REQUEST_BODY_MESSAGE = "Invalid request body"
 private const val MAX_ORGANIZATION_NAME_LENGTH = 255
 private const val MAX_ORGANIZATION_SLUG_LENGTH = 63
 private const val POSTGRES_UNIQUE_VIOLATION_STATE = "23505"
@@ -103,13 +105,13 @@ fun Route.accountDeletionRoutes(
     deletionService: AccountDeletionService = defaultAccountDeletionService(),
 ) {
     // Get organization details for account deletion confirmation
-    get("/organizations/{orgId}") { handleGetOrgForDeletion() }
+    get(ORGANIZATION_ROUTE) { handleGetOrgForDeletion() }
     // Update organization settings
-    patch("/organizations/{orgId}") { handleUpdateOrganizationSettings() }
+    patch(ORGANIZATION_ROUTE) { handleUpdateOrganizationSettings() }
     // Delete current user account
     delete("/account") { handleDeleteAccount(deletionService) }
     // Delete organization
-    delete("/organizations/{orgId}") { handleDeleteOrganization(deletionService) }
+    delete(ORGANIZATION_ROUTE) { handleDeleteOrganization(deletionService) }
     // Validate account deletion (check if user can delete)
     get("/account/deletion-validation") { handleAccountDeletionValidation(deletionService) }
     // Validate organization deletion (check if user can delete)
@@ -141,7 +143,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateOrganizati
         suspendRunCatching {
             call.receive<UpdateOrganizationSettingsRequest>()
         }.getOrElse { _ ->
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_REQUEST_BODY_MESSAGE))
             return
         }
 
@@ -192,7 +194,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteAccount(
         suspendRunCatching {
             call.receive<DeleteAccountRequest>()
         }.getOrElse { _ ->
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_REQUEST_BODY_MESSAGE))
             return
         }
 
@@ -248,7 +250,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteOrganizati
         suspendRunCatching {
             call.receive<DeleteOrganizationRequest>()
         }.getOrElse { _ ->
-            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid request body"))
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_REQUEST_BODY_MESSAGE))
             return
         }
 

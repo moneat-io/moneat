@@ -26,6 +26,7 @@ import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.RoutingContext
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -74,107 +75,121 @@ data class PushDevicesResponse(
 fun Route.pushDeviceRoutes() {
     route("/v1/user/push-devices") {
         authenticate("auth-jwt") {
-            get {
-                val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
-                val devices =
-                    transaction {
-                        UserDeviceTokens
-                            .selectAll()
-                            .where {
-                                (UserDeviceTokens.userId eq userId) and
-                                    (UserDeviceTokens.enabled eq true)
-                            }
-                            .orderBy(UserDeviceTokens.lastUsedAt, SortOrder.DESC)
-                            .map(::pushDeviceResponse)
-                    }
-                call.respond(PushDevicesResponse(devices))
-            }
+            get { handleListPushDevices() }
+            post { handleRegisterPushDevice() }
+            delete("/{deviceId}") { handleDeletePushDevice() }
+        }
+    }
+}
 
-            post {
-                val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
-                val request = call.receive<RegisterPushDeviceRequest>()
-                val token = request.token.trim()
-                val platform = request.platform.trim().uppercase(Locale.US)
-                val deviceName = request.deviceName?.trim()?.takeIf { it.isNotBlank() }
-
-                if (token.length !in MIN_DEVICE_TOKEN_LENGTH..MAX_DEVICE_TOKEN_LENGTH) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid push device token"))
-                    return@post
+private suspend fun RoutingContext.handleListPushDevices() {
+    val userId = currentUserId()
+    val devices =
+        transaction {
+            UserDeviceTokens
+                .selectAll()
+                .where {
+                    (UserDeviceTokens.userId eq userId) and
+                        (UserDeviceTokens.enabled eq true)
                 }
-                if (platform !in supportedPushPlatforms) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unsupported push platform"))
-                    return@post
-                }
-                if (deviceName != null && deviceName.length > MAX_DEVICE_NAME_LENGTH) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Device name must be 255 characters or less"))
-                    return@post
-                }
+                .orderBy(UserDeviceTokens.lastUsedAt, SortOrder.DESC)
+                .map(::pushDeviceResponse)
+        }
+    call.respond(PushDevicesResponse(devices))
+}
 
-                val now = Clock.System.now()
-                val device =
-                    transaction {
-                        val existing =
-                            UserDeviceTokens
-                                .selectAll()
-                                .where { UserDeviceTokens.deviceToken eq token }
-                                .firstOrNull()
+private suspend fun RoutingContext.handleRegisterPushDevice() {
+    val userId = currentUserId()
+    val request = call.receive<RegisterPushDeviceRequest>()
+    val token = request.token.trim()
+    val platform = request.platform.trim().uppercase(Locale.US)
+    val deviceName = request.deviceName?.trim()?.takeIf { it.isNotBlank() }
 
-                        if (existing == null) {
-                            UserDeviceTokens.insert {
-                                it[UserDeviceTokens.userId] = userId
-                                it[deviceToken] = token
-                                it[UserDeviceTokens.platform] = platform
-                                it[UserDeviceTokens.deviceName] = deviceName
-                                it[enabled] = true
-                                it[createdAt] = now
-                                it[updatedAt] = now
-                                it[lastUsedAt] = now
-                            }
-                        } else {
-                            UserDeviceTokens.update({ UserDeviceTokens.id eq existing[UserDeviceTokens.id] }) {
-                                it[UserDeviceTokens.userId] = userId
-                                it[UserDeviceTokens.platform] = platform
-                                it[UserDeviceTokens.deviceName] = deviceName
-                                it[enabled] = true
-                                it[updatedAt] = now
-                                it[lastUsedAt] = now
-                            }
-                        }
+    if (token.length !in MIN_DEVICE_TOKEN_LENGTH..MAX_DEVICE_TOKEN_LENGTH) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid push device token"))
+        return
+    }
+    if (platform !in supportedPushPlatforms) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Unsupported push platform"))
+        return
+    }
+    if (deviceName != null && deviceName.length > MAX_DEVICE_NAME_LENGTH) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Device name must be 255 characters or less"))
+        return
+    }
 
-                        UserDeviceTokens
-                            .selectAll()
-                            .where {
-                                (UserDeviceTokens.userId eq userId) and
-                                    (UserDeviceTokens.deviceToken eq token)
-                            }
-                            .first()
-                            .let(::pushDeviceResponse)
-                    }
+    val device = savePushDevice(userId, token, platform, deviceName)
+    call.respond(HttpStatusCode.OK, device)
+}
 
-                call.respond(HttpStatusCode.OK, device)
-            }
+private suspend fun RoutingContext.handleDeletePushDevice() {
+    val userId = currentUserId()
+    val deviceId =
+        call.parameters["deviceId"]?.toUuidOrNull()
+            ?: return call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid device ID"))
 
-            delete("/{deviceId}") {
-                val userId = call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
-                val deviceId =
-                    call.parameters["deviceId"]?.toUuidOrNull()
-                        ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid device ID"))
-
-                val deleted =
-                    transaction {
-                        UserDeviceTokens.deleteWhere {
-                            (UserDeviceTokens.userId eq userId) and
-                                (UserDeviceTokens.resourceId eq deviceId)
-                        }
-                    }
-
-                if (deleted == 0) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Push device not found"))
-                } else {
-                    call.respond(HttpStatusCode.NoContent)
-                }
+    val deleted =
+        transaction {
+            UserDeviceTokens.deleteWhere {
+                (UserDeviceTokens.userId eq userId) and
+                    (UserDeviceTokens.resourceId eq deviceId)
             }
         }
+
+    if (deleted == 0) {
+        call.respond(HttpStatusCode.NotFound, ErrorResponse("Push device not found"))
+    } else {
+        call.respond(HttpStatusCode.NoContent)
+    }
+}
+
+private fun RoutingContext.currentUserId(): Int =
+    call.principal<JWTPrincipal>()!!.payload.getClaim("userId").asInt()
+
+private fun savePushDevice(
+    userId: Int,
+    token: String,
+    platform: String,
+    deviceName: String?,
+): PushDeviceResponse {
+    val now = Clock.System.now()
+    return transaction {
+        val existing =
+            UserDeviceTokens
+                .selectAll()
+                .where { UserDeviceTokens.deviceToken eq token }
+                .firstOrNull()
+
+        if (existing == null) {
+            UserDeviceTokens.insert {
+                it[UserDeviceTokens.userId] = userId
+                it[deviceToken] = token
+                it[UserDeviceTokens.platform] = platform
+                it[UserDeviceTokens.deviceName] = deviceName
+                it[enabled] = true
+                it[createdAt] = now
+                it[updatedAt] = now
+                it[lastUsedAt] = now
+            }
+        } else {
+            UserDeviceTokens.update({ UserDeviceTokens.id eq existing[UserDeviceTokens.id] }) {
+                it[UserDeviceTokens.userId] = userId
+                it[UserDeviceTokens.platform] = platform
+                it[UserDeviceTokens.deviceName] = deviceName
+                it[enabled] = true
+                it[updatedAt] = now
+                it[lastUsedAt] = now
+            }
+        }
+
+        UserDeviceTokens
+            .selectAll()
+            .where {
+                (UserDeviceTokens.userId eq userId) and
+                    (UserDeviceTokens.deviceToken eq token)
+            }
+            .first()
+            .let(::pushDeviceResponse)
     }
 }
 

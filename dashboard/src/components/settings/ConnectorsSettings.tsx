@@ -96,6 +96,20 @@ interface ConnectorView {
   readonly connected: boolean
 }
 
+type ConnectorAvailability = ConnectorView['availability']
+
+function getProviderAvailability(provider: ConnectorProviderDefinition): ConnectorAvailability {
+  const availabilities = new Set(provider.uses.map((use) => use.availability))
+  if (availabilities.has('available')) return 'available'
+  if (availabilities.has('planned')) return 'planned'
+  return 'enterprise'
+}
+
+function getProviderHealth(connected: boolean, enabled?: boolean): ConnectorHealth {
+  if (!connected) return 'unknown'
+  return enabled ? 'healthy' : 'degraded'
+}
+
 function buildViews(
   providers: ConnectorProviderDefinition[],
   integrations: OrganizationIntegration[],
@@ -103,12 +117,7 @@ function buildViews(
 ): ConnectorView[] {
   return providers.map((provider) => {
     const facets = [...new Set(provider.uses.map((u) => FAMILY_TO_FACET[u.family]))]
-    const availabilities = new Set(provider.uses.map((u) => u.availability))
-    const availability = availabilities.has('available')
-      ? 'available'
-      : availabilities.has('planned')
-        ? 'planned'
-        : 'enterprise'
+    const availability = getProviderAvailability(provider)
     const integration = integrations.find(
       (i) => i.integrationType === provider.id && i.isConfigured
     )
@@ -141,7 +150,7 @@ function buildStateMap(state?: ConnectorStateResponse): Map<string, ConnectorCon
     byProvider.set(provider.providerId, {
       providerId: provider.providerId,
       connected,
-      health: connected ? (connectedUse.enabled ? 'healthy' : 'degraded') : 'unknown',
+      health: getProviderHealth(connected, connectedUse?.enabled),
       detail: connectedUse?.message ?? null,
       lastCheckedAt: null,
     })
@@ -290,9 +299,9 @@ function ConnectorGroup({
   count,
   children,
 }: {
-  title: string
-  count?: number
-  children: React.ReactNode
+  readonly title: string
+  readonly count?: number
+  readonly children: React.ReactNode
 }) {
   return (
     <div className="mb-6">
@@ -309,7 +318,7 @@ function ConnectorGroup({
   )
 }
 
-function ConnectorCard({view, onManage}: {view: ConnectorView; onManage: () => void}) {
+function ConnectorCard({view, onManage}: Readonly<{view: ConnectorView; onManage: () => void}>) {
   const {toast} = useToast()
   const {provider, facets, availability, integration, connected, state} = view
   const enabled = integration?.enabled ?? false
@@ -320,7 +329,7 @@ function ConnectorCard({view, onManage}: {view: ConnectorView; onManage: () => v
       provider.id === 'discord' ? api.startDiscordOAuth() : api.startSlackOAuth(),
     onSuccess: (data) => {
       trackEvent('Integration Connect', {provider: provider.id})
-      window.location.href = data.authUrl
+      globalThis.location.href = data.authUrl
     },
     onError: (err: Error) =>
       toast({title: 'Failed to start connection', description: err.message, variant: 'destructive'}),
@@ -426,10 +435,10 @@ function StatusBadge({
   availability,
   health,
 }: {
-  connected: boolean
-  enabled: boolean
-  availability: 'available' | 'planned' | 'enterprise'
-  health?: ConnectorHealth | null
+  readonly connected: boolean
+  readonly enabled: boolean
+  readonly availability: ConnectorAvailability
+  readonly health?: ConnectorHealth | null
 }) {
   if (connected) {
     if (!enabled) return <Badge variant="secondary">Disabled</Badge>
@@ -443,7 +452,7 @@ function StatusBadge({
 }
 
 // ── Manage dialog (Slack / Discord live controls) ───────────────────────────
-function ManageConnectorDialog({view, onClose}: {view: ConnectorView; onClose: () => void}) {
+function ManageConnectorDialog({view, onClose}: Readonly<{view: ConnectorView; onClose: () => void}>) {
   const {provider, integration} = view
   const isDiscord = provider.id === 'discord'
   const queryClient = useQueryClient()

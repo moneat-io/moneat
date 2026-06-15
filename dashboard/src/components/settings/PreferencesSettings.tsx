@@ -113,7 +113,8 @@ export function PreferencesSettings() {
       return base.includes(key) ? base.filter((k) => k !== key) : [...base, key]
     })
   const sidebarDirty =
-    JSON.stringify([...hiddenItems].sort()) !== JSON.stringify([...savedHidden].sort())
+    JSON.stringify([...hiddenItems].sort((a, b) => a.localeCompare(b))) !==
+    JSON.stringify([...savedHidden].sort((a, b) => a.localeCompare(b)))
 
   const previewNow = formatDateTime(new Date(), timezone)
 
