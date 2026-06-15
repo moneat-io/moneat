@@ -75,9 +75,13 @@ export function GeneralSettings() {
     [defaultTimezone]
   )
 
-  const handleCopy = (value: string) => {
-    navigator.clipboard.writeText(value)
-    toast({title: 'Copied', description: 'Organization ID copied to clipboard.'})
+  const handleCopy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast({title: 'Copied', description: 'Organization ID copied to clipboard.'})
+    } catch {
+      toast({title: 'Copy failed', description: 'Clipboard access was denied.', variant: 'destructive'})
+    }
   }
 
   return (

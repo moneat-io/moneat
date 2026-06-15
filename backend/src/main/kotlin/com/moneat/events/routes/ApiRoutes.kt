@@ -1459,6 +1459,13 @@ fun Route.apiRoutes() {
                     val userId = principal!!.payload.getClaim("userId").asInt()
 
                     val request = call.receive<UpdateNotificationPreferencesRequest>()
+                    if (request.alertFrequencyMinutes != null && request.alertFrequencyMinutes < 1) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse("alertFrequencyMinutes must be >= 1")
+                        )
+                        return@put
+                    }
 
                     transaction {
                         val existing =
@@ -1537,6 +1544,13 @@ fun Route.apiRoutes() {
                     }
 
                     val request = call.receive<UpdateNotificationPreferencesRequest>()
+                    if (request.alertFrequencyMinutes != null && request.alertFrequencyMinutes < 1) {
+                        call.respond(
+                            HttpStatusCode.BadRequest,
+                            ErrorResponse("alertFrequencyMinutes must be >= 1")
+                        )
+                        return@put
+                    }
 
                     transaction {
                         val existing =

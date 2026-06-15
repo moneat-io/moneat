@@ -1163,6 +1163,27 @@ class EventRoutesExtendedTest {
     }
 
     @Test
+    fun `PUT notification-preferences rejects non-positive alert frequency`() = testApplication {
+        val (userId, projectId) = seedUserWithProject()
+        every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
+
+        application { installTestApp() }
+        val global = client.put("/v1/notification-preferences") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"alertFrequencyMinutes":0}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, global.status)
+
+        val project = client.put("/v1/notification-preferences/${projectResourceId(projectId)}") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"alertFrequencyMinutes":0}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, project.status)
+    }
+
+    @Test
     fun `GET notification-preferences returns project resource IDs`() = testApplication {
         val (userId, projectId) = seedUserWithProject()
         val resourceId = projectResourceId(projectId)

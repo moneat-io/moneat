@@ -59,6 +59,7 @@ export const THEME_OPTIONS: readonly ThemeOption[] = [
 ]
 
 const DEFAULT_THEME: Theme = 'dark'
+const THEME_IDS = new Set<string>(THEME_OPTIONS.map((option) => option.id))
 
 const THEME_CLASSES = [
   'light',
@@ -109,8 +110,13 @@ export function applyTheme(theme: Theme) {
   loadThemeFont(theme)
 }
 
+function isTheme(value: string | null): value is Theme {
+  return value !== null && THEME_IDS.has(value)
+}
+
 function getThemeSnapshot(): Theme {
-  return (globalThis.localStorage?.getItem('theme') as Theme | null) || DEFAULT_THEME
+  const storedTheme = globalThis.localStorage?.getItem('theme') ?? null
+  return isTheme(storedTheme) ? storedTheme : DEFAULT_THEME
 }
 
 // Module-level subscriber set keeps every useTheme() consumer (sidebar switcher,

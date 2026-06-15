@@ -35,15 +35,16 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.patch
 import kotlinx.serialization.Serializable
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNull
-import org.jetbrains.exposed.v1.core.neq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.GlobalContext
+import java.sql.SQLException
 import java.time.ZoneId
 import java.util.Locale
 import kotlin.time.Clock
@@ -54,6 +55,7 @@ private val logger = KotlinLogging.logger {}
 private const val ORGANIZATION_NOT_FOUND_MESSAGE = "Organization not found"
 private const val MAX_ORGANIZATION_NAME_LENGTH = 255
 private const val MAX_ORGANIZATION_SLUG_LENGTH = 63
+private const val POSTGRES_UNIQUE_VIOLATION_STATE = "23505"
 private val organizationSlugPattern = Regex("^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
 
 @Serializable
@@ -158,14 +160,22 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateOrganizati
         return
     }
 
-    val now = Clock.System.now()
-    transaction {
-        Organizations.update({ Organizations.id eq orgWithRole[Organizations.id] }) {
-            update.name?.let { value -> it[name] = value }
-            update.slug?.let { value -> it[slug] = value }
-            update.defaultTimezone?.let { value -> it[default_timezone] = value }
-            it[updated_at] = now
+    suspendRunCatching {
+        val now = Clock.System.now()
+        transaction {
+            Organizations.update({ Organizations.id eq orgWithRole[Organizations.id] }) {
+                update.name?.let { value -> it[name] = value }
+                update.slug?.let { value -> it[slug] = value }
+                update.defaultTimezone?.let { value -> it[default_timezone] = value }
+                it[updated_at] = now
+            }
         }
+    }.onFailure { cause ->
+        if (update.slug != null && cause.isUniqueConstraintViolation()) {
+            call.respond(HttpStatusCode.Conflict, ErrorResponse("Organization slug is already in use"))
+            return
+        }
+        throw cause
     }
 
     val updated = resolveOrganizationRowFromPath(userId) ?: return
@@ -379,20 +389,6 @@ private suspend fun io.ktor.server.routing.RoutingContext.validatedOrganizationU
         return null
     }
 
-    if (slug != null && slug != current[Organizations.slug]) {
-        val slugTaken =
-            transaction {
-                Organizations
-                    .selectAll()
-                    .where { (Organizations.slug eq slug) and (Organizations.id neq current[Organizations.id]) }
-                    .firstOrNull() != null
-            }
-        if (slugTaken) {
-            call.respond(HttpStatusCode.Conflict, ErrorResponse("Organization slug is already in use"))
-            return null
-        }
-    }
-
     val defaultTimezone = request.defaultTimezone?.trim()?.ifBlank { "UTC" }
     if (defaultTimezone != null && defaultTimezone !in ZoneId.getAvailableZoneIds()) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid timezone identifier"))
@@ -419,6 +415,14 @@ private fun orgDetailsResponse(row: ResultRow): OrgDetailsResponse =
 
 private fun isValidOrganizationSlug(slug: String): Boolean =
     slug.length <= MAX_ORGANIZATION_SLUG_LENGTH && organizationSlugPattern.matches(slug)
+
+private fun Throwable.isUniqueConstraintViolation(): Boolean {
+    val sqlState = (this as? ExposedSQLException)?.sqlState ?: (cause as? SQLException)?.sqlState
+    if (sqlState == POSTGRES_UNIQUE_VIOLATION_STATE) return true
+    val text = sequenceOf(message, cause?.message).filterNotNull().joinToString(" ")
+    return text.contains("unique", ignoreCase = true) &&
+        text.contains("slug", ignoreCase = true)
+}
 
 private fun parseOrganizationResourceId(value: String): Uuid? =
     value.toUuidOrNull()

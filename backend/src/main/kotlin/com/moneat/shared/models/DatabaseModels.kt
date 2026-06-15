@@ -161,7 +161,7 @@ object Organizations : Table("organizations") {
     val id = integer("id").autoIncrement()
     val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val name = varchar("name", 255)
-    val slug = varchar("slug", 255)
+    val slug = varchar("slug", 255).uniqueIndex()
     val default_timezone = varchar("default_timezone", 100).default("UTC")
     val data_region = varchar("data_region", 32).default("us")
     val company_size = varchar("company_size", 50).nullable()

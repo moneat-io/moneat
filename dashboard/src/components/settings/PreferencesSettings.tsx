@@ -48,11 +48,13 @@ export function PreferencesSettings() {
   // updateUserPreferences). A null edit means "follow the server value"; we fall
   // back to localStorage for instant paint before the user query resolves.
   const serverDateFormat = asDateFormat(user?.dateFormat)
+  const storedDateFormat = asDateFormat(globalThis.localStorage?.getItem('dateFormat'))
   const [dateFormatEdit, setDateFormatEdit] = useState<DateFormatPref | null>(null)
   const dateFormat: DateFormatPref =
     dateFormatEdit ??
     serverDateFormat ??
-    ((globalThis.localStorage?.getItem('dateFormat') as DateFormatPref) || 'medium')
+    storedDateFormat ??
+    'medium'
 
   const savePrefsMutation = useMutation({
     mutationFn: (prefs: Partial<{dateFormat: DateFormatPref}>) =>
@@ -150,7 +152,13 @@ export function PreferencesSettings() {
           </Select>
         </SettingRow>
         <SettingRow label="Date format">
-          <Select value={dateFormat} onValueChange={(v) => handleDateFormatChange(v as DateFormatPref)}>
+          <Select
+            value={dateFormat}
+            onValueChange={(value) => {
+              const parsed = asDateFormat(value)
+              if (parsed) handleDateFormatChange(parsed)
+            }}
+          >
             <SelectTrigger className="w-full sm:max-w-[320px]">
               <SelectValue />
             </SelectTrigger>

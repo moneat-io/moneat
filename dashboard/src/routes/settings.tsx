@@ -161,13 +161,27 @@ const TAB_ALIASES: Record<string, string> = {
   rbac: 'roles',
   account: 'danger',
 }
+const VALID_TABS = new Set([
+  'general',
+  'api-keys',
+  'connectors',
+  'silence',
+  'team',
+  'roles',
+  'auth',
+  'billing',
+  'usage',
+  'preferences',
+  'notifications',
+  'danger',
+])
 
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
     const raw = search.tab as string | undefined
     const requestedTab = (raw && TAB_ALIASES[raw]) || raw
     return {
-      tab: requestedTab || 'general',
+      tab: requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : 'general',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
     }
   },
@@ -2054,6 +2068,7 @@ function NotificationsTab() {
           <Switch
             checked={global.emailEnabled ?? true}
             onCheckedChange={(checked) => updateGlobalMutation.mutate({ emailEnabled: checked })}
+            disabled={updateGlobalMutation.isPending}
           />
         </SettingRow>
         <SettingRow
@@ -2072,6 +2087,7 @@ function NotificationsTab() {
           <Switch
             checked={global.pushEnabled ?? false}
             onCheckedChange={(checked) => updateGlobalMutation.mutate({ pushEnabled: checked })}
+            disabled={updateGlobalMutation.isPending}
           />
         </SettingRow>
       </SettingsBlock>

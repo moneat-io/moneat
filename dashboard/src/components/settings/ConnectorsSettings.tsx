@@ -154,7 +154,7 @@ export function ConnectorsSettings() {
   const searchRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [facet, setFacet] = useState<Facet>('all')
-  const [manage, setManage] = useState<ConnectorView | null>(null)
+  const [manageProviderId, setManageProviderId] = useState<string | null>(null)
 
   const {data: catalog, isLoading: catalogLoading} = useQuery({
     queryKey: ['connectorProviders'],
@@ -183,6 +183,10 @@ export function ConnectorsSettings() {
   const views = useMemo(
     () => buildViews(catalog?.providers ?? [], integrations, stateMap),
     [catalog, integrations, stateMap]
+  )
+  const manage = useMemo(
+    () => views.find((v) => v.provider.id === manageProviderId) ?? null,
+    [views, manageProviderId]
   )
 
   const filtered = useMemo(() => {
@@ -255,14 +259,14 @@ export function ConnectorsSettings() {
           {connected.length > 0 && (
             <ConnectorGroup title="Connected" count={connected.length}>
               {connected.map((v) => (
-                <ConnectorCard key={v.provider.id} view={v} onManage={() => setManage(v)} />
+                <ConnectorCard key={v.provider.id} view={v} onManage={() => setManageProviderId(v.provider.id)} />
               ))}
             </ConnectorGroup>
           )}
           {available.length > 0 && (
             <ConnectorGroup title="Available">
               {available.map((v) => (
-                <ConnectorCard key={v.provider.id} view={v} onManage={() => setManage(v)} />
+                <ConnectorCard key={v.provider.id} view={v} onManage={() => setManageProviderId(v.provider.id)} />
               ))}
             </ConnectorGroup>
           )}
@@ -275,7 +279,7 @@ export function ConnectorsSettings() {
       )}
 
       {manage && (
-        <ManageConnectorDialog view={manage} onClose={() => setManage(null)} />
+        <ManageConnectorDialog view={manage} onClose={() => setManageProviderId(null)} />
       )}
     </section>
   )

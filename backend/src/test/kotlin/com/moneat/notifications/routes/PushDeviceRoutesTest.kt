@@ -48,6 +48,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.security.SecureRandom
 import java.util.Base64
+import java.util.UUID
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -63,6 +64,7 @@ class PushDeviceRoutesTest {
     companion object {
         private var db: Database? = null
         private const val USER_ID = 1
+        private const val OTHER_USER_ID = 2
         private const val DEVICE_TOKEN = "ExponentPushToken[settings-test-token]"
     }
 
@@ -80,6 +82,12 @@ class PushDeviceRoutesTest {
             Users.insert {
                 it[id] = USER_ID
                 it[email] = "push@example.com"
+                it[password_hash] = "hash"
+                it[email_verified] = true
+            }
+            Users.insert {
+                it[id] = OTHER_USER_ID
+                it[email] = "other-push@example.com"
                 it[password_hash] = "hash"
                 it[email_verified] = true
             }
@@ -111,6 +119,8 @@ class PushDeviceRoutesTest {
         assertTrue(registerBody.contains("Alder iPhone"))
         assertFalse(registerBody.contains(DEVICE_TOKEN))
         val deviceId = Json.parseToJsonElement(registerBody).jsonObject["id"]!!.jsonPrimitive.content
+        assertEquals(deviceId, UUID.fromString(deviceId).toString())
+        assertFalse(deviceId.all(Char::isDigit))
 
         val list =
             client.get("/v1/user/push-devices") {
@@ -124,6 +134,54 @@ class PushDeviceRoutesTest {
                 header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
             }
         assertEquals(HttpStatusCode.NoContent, delete.status)
+    }
+
+    @Test
+    fun `delete push device validates resource id and user scope`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            installAuth()
+            routing {
+                pushDeviceRoutes()
+            }
+        }
+
+        val register =
+            client.post("/v1/user/push-devices") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"token":"$DEVICE_TOKEN","platform":"ios","deviceName":"Alder iPhone"}""")
+            }
+        assertEquals(HttpStatusCode.OK, register.status)
+        val deviceId =
+            Json.parseToJsonElement(register.bodyAsText())
+                .jsonObject["id"]!!
+                .jsonPrimitive
+                .content
+
+        val numeric =
+            client.delete("/v1/user/push-devices/1") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+            }
+        assertEquals(HttpStatusCode.BadRequest, numeric.status)
+
+        val malformed =
+            client.delete("/v1/user/push-devices/not-a-uuid") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+            }
+        assertEquals(HttpStatusCode.BadRequest, malformed.status)
+
+        val unknown =
+            client.delete("/v1/user/push-devices/00000000-0000-0000-0000-000000000000") {
+                header(HttpHeaders.Authorization, "Bearer ${token(USER_ID)}")
+            }
+        assertEquals(HttpStatusCode.NotFound, unknown.status)
+
+        val outOfScope =
+            client.delete("/v1/user/push-devices/$deviceId") {
+                header(HttpHeaders.Authorization, "Bearer ${token(OTHER_USER_ID)}")
+            }
+        assertEquals(HttpStatusCode.NotFound, outOfScope.status)
     }
 
     private fun token(userId: Int): String =
