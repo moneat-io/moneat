@@ -231,6 +231,7 @@ dependencies {
     runtimeOnly(project(":features:account-deletion"))
     runtimeOnly(project(":features:ai"))
     runtimeOnly(project(":features:analytics"))
+    runtimeOnly(project(":features:auth"))
     runtimeOnly(project(":features:auth-tokens"))
     runtimeOnly(project(":features:billing"))
     runtimeOnly(project(":features:contact"))
@@ -349,6 +350,7 @@ val backendFeatureProjects =
         ":features:account-deletion",
         ":features:ai",
         ":features:analytics",
+        ":features:auth",
         ":features:auth-tokens",
         ":features:billing",
         ":features:contact",
@@ -386,6 +388,7 @@ val jacocoBackendMainExcludes =
         "**/di/**", // Koin module assembly — pure wiring, no business logic
         "**/monitoring/MonitoringModule*", // enterprise monitoring module hook — framework wiring only
         "**/analytics/AnalyticsModule*", // analytics route/worker module assembly
+        "**/auth/AuthModule*", // auth route module assembly
         "**/datadog/DatadogModule*", // datadog route/worker module assembly
         "**/ingestion/queue/RedisQueueWorker*", // blocking Redis worker loop; covered by queue client tests
         "**/workflows/services/WorkflowExecutionWorker*", // Redis worker loop; covered by runtime checks
