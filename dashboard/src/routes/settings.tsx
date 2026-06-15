@@ -28,6 +28,19 @@ import {AgentApiKeysTab} from '@/components/settings/AgentApiKeysTab'
 import {ApmSpanUsageBreakdown} from '@/components/settings/ApmSpanUsageBreakdown'
 import {McpApiKeysTab} from '@/components/settings/McpApiKeysTab'
 import {RbacSettings} from '@/components/settings/RbacSettings'
+import {GeneralSettings} from '@/components/settings/GeneralSettings'
+import {PreferencesSettings} from '@/components/settings/PreferencesSettings'
+import {ConnectorsSettings} from '@/components/settings/ConnectorsSettings'
+import {
+  OnCallFallbackSettings,
+  SilencePeriodList,
+} from '@/components/settings/NotificationDeliverySections'
+import {
+  describeEmailDelivery,
+  describePushDelivery,
+  formatAlertFrequency,
+} from '@/components/settings/NotificationDeliveryFormatting'
+import {SettingRow, SettingsBlock, SettingsSection} from '@/components/settings/SettingsPrimitives'
 import {trackEvent} from '@/lib/analytics'
 import {buildPricingCardModel} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
@@ -35,6 +48,7 @@ import {Input} from '@/components/ui/input'
 import {Label} from '@/components/ui/label'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {cn} from '@/lib/utils'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
 import {Checkbox} from '@/components/ui/checkbox'
@@ -49,6 +63,7 @@ import {
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Switch} from '@/components/ui/switch'
+import {SectionCard} from '@/components/ui/section-card'
 import {useToast} from '@/hooks/useToast'
 import {
   Activity,
@@ -57,6 +72,7 @@ import {
   Bell,
   BellOff,
   BookOpen,
+  Building2,
   Calendar,
   Check,
   CheckCircle2,
@@ -65,19 +81,20 @@ import {
   CreditCard,
   Database,
   Download,
+  Gauge,
   Info,
   Key,
   Layers,
   LayoutDashboard,
   Loader2,
+  Lock,
+  Mail,
   Minus,
   Phone,
   Plug,
   Plus,
   Receipt,
   Server,
-  Settings,
-  Shield,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
@@ -88,9 +105,7 @@ import {SsoTab} from '@/components/SsoSettings'
 import {TeamSettings} from '@/components/settings/TeamSettings'
 import {useAuth} from '@/hooks/useAuth'
 import {useEnterpriseFeatures, useIsSelfHosted, hasEnterpriseModule} from '@/hooks/useEnterpriseFeatures'
-import {CONFIGURABLE_SIDEBAR_ITEMS, getAllSidebarItemKeys} from '@/lib/sidebar-config'
 import {useTimezone} from '@/hooks/useTimezone'
-import {TIMEZONES} from '@/lib/timezones'
 import {formatDate as formatDateUtil, formatDateTime as formatDateTimeUtil} from '@/lib/date-format'
 
 const AUTH_TOKEN_SCOPES = [
@@ -145,11 +160,36 @@ function isExpired(expiresAt: string | null | undefined): boolean {
   }
 }
 
+// Back-compat: legacy tab keys redirect to their redesigned equivalents so old
+// deep links keep working after the Settings IA was regrouped by scope.
+const TAB_ALIASES: Record<string, string> = {
+  'log-indexes': 'api-keys',
+  integrations: 'connectors',
+  sso: 'auth',
+  rbac: 'roles',
+  account: 'danger',
+}
+const VALID_TABS = new Set([
+  'general',
+  'api-keys',
+  'connectors',
+  'silence',
+  'team',
+  'roles',
+  'auth',
+  'billing',
+  'usage',
+  'preferences',
+  'notifications',
+  'danger',
+])
+
 export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
-    const requestedTab = search.tab === 'log-indexes' ? 'api-keys' : search.tab
+    const raw = search.tab as string | undefined
+    const requestedTab = (raw && TAB_ALIASES[raw]) || raw
     return {
-      tab: (requestedTab as string) || 'api-keys',
+      tab: requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : 'general',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
     }
   },
@@ -194,160 +234,51 @@ function SettingsPage() {
   const canConfigureSso = user?.orgRole === 'owner' && canViewSsoTab
   
   return (
-    <div>
-      <div className="container mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
-          <Settings className="h-6 w-6 text-muted-foreground" />
-          Settings
-        </h1>
-        <Tabs 
-          value={search.tab || 'api-keys'} 
-          onValueChange={(tab) => navigate({ search: { tab } })}
-          orientation="vertical"
-          className="flex flex-col md:flex-row gap-8 items-start"
-        >
-          <aside className="w-full md:w-64 flex-shrink-0">
-            <TabsList className="flex flex-col h-auto bg-transparent p-0 gap-1 items-stretch">
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                General
-              </div>
-              <TabsTrigger 
-                value="general" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <SlidersHorizontal className="h-4 w-4 mr-2" />
-                General
-              </TabsTrigger>
-              <TabsTrigger 
-                value="api-keys" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <Key className="h-4 w-4 mr-2" />
-                API Keys
-              </TabsTrigger>
+    <div className="mx-auto max-w-[1180px] px-4 py-6 md:px-6">
+      <Tabs
+        value={search.tab}
+        onValueChange={(tab) => navigate({ search: { tab } })}
+        orientation="vertical"
+        className="flex flex-col gap-8 md:flex-row md:items-start"
+      >
+        <aside className="w-full flex-shrink-0 md:w-56">
+          <TabsList className="flex h-auto w-full flex-col items-stretch gap-0.5 bg-transparent p-0">
+            <SettingsNavGroup label="Organization" />
+            <SettingsNavItem value="general" icon={Building2}>General</SettingsNavItem>
+            <SettingsNavItem value="api-keys" icon={Key}>API keys</SettingsNavItem>
+            <SettingsNavItem value="connectors" icon={Plug}>Connectors</SettingsNavItem>
+            <SettingsNavItem value="silence" icon={BellOff}>Silence periods</SettingsNavItem>
+            {canManageTeam && <SettingsNavItem value="team" icon={Users}>Team</SettingsNavItem>}
+            {canViewRbacTab && <SettingsNavItem value="roles" icon={ShieldCheck}>Roles</SettingsNavItem>}
+            {canViewSsoTab && <SettingsNavItem value="auth" icon={Lock}>Authentication</SettingsNavItem>}
+            {!isSelfHosted && <SettingsNavItem value="billing" icon={CreditCard}>Billing</SettingsNavItem>}
+            <SettingsNavItem value="usage" icon={Gauge}>Usage</SettingsNavItem>
 
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
-                Monitoring
-              </div>
-              <TabsTrigger 
-                value="integrations" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <Plug className="h-4 w-4 mr-2" />
-                Integrations
-              </TabsTrigger>
-              <TabsTrigger 
-                value="notifications" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <Bell className="h-4 w-4 mr-2" />
-                Notifications
-              </TabsTrigger>
-              <TabsTrigger 
-                value="silence" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <BellOff className="h-4 w-4 mr-2" />
-                Silence Periods
-              </TabsTrigger>
-              {(canManageTeam || canViewRbacTab || canViewSsoTab) && (
-                <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
-                  Organization
-                </div>
-              )}
-              {canManageTeam && (
-                <TabsTrigger 
-                  value="team" 
-                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  Team
-                </TabsTrigger>
-              )}
-              {canViewRbacTab && (
-                <TabsTrigger
-                  value="rbac"
-                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-                >
-                  <ShieldCheck className="h-4 w-4 mr-2" />
-                  RBAC
-                </TabsTrigger>
-              )}
-              {!isSelfHosted && (
-              <TabsTrigger 
-                value="billing" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Billing
-              </TabsTrigger>
-              )}
-              <TabsTrigger 
-                value="usage" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <Layers className="h-4 w-4 mr-2" />
-                Usage
-              </TabsTrigger>
-              {canViewSsoTab && (
-                <TabsTrigger 
-                  value="sso" 
-                  className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-                >
-                  <Shield className="h-4 w-4 mr-2" />
-                  SSO
-                </TabsTrigger>
-              )}
+            <SettingsNavGroup label="Account" className="mt-4" />
+            <SettingsNavItem value="preferences" icon={SlidersHorizontal}>Preferences</SettingsNavItem>
+            <SettingsNavItem value="notifications" icon={Bell}>Notifications</SettingsNavItem>
+            <SettingsNavItem value="danger" icon={AlertTriangle}>Danger zone</SettingsNavItem>
+          </TabsList>
+        </aside>
 
-              <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-4">
-                User
-              </div>
-              <TabsTrigger 
-                value="account" 
-                className="w-full justify-start px-3 py-2 h-9 text-sm font-medium rounded-md hover:bg-muted/50 data-[state=active]:bg-muted data-[state=active]:text-foreground"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Account
-              </TabsTrigger>
-            </TabsList>
-          </aside>
-          
-          <div className="flex-1 w-full min-w-0">
-            <TabsContent value="api-keys" className="space-y-4 mt-0">
-              <ApiKeysTab />
-            </TabsContent>
-            <TabsContent value="integrations" className="space-y-4 mt-0">
-              <IntegrationsTab />
-            </TabsContent>
-            <TabsContent value="notifications" className="space-y-4 mt-0">
-              <NotificationsTab />
-            </TabsContent>
-            <TabsContent value="silence" className="space-y-4 mt-0">
-              <SilencePeriodsTab />
-            </TabsContent>
+        <div className="w-full min-w-0 flex-1">
+          <div className="mx-auto max-w-[940px]">
+            <TabsContent value="general" className="mt-0"><GeneralSettings /></TabsContent>
+            <TabsContent value="api-keys" className="mt-0"><ApiKeysTab /></TabsContent>
+            <TabsContent value="connectors" className="mt-0"><ConnectorsSettings /></TabsContent>
+            <TabsContent value="silence" className="mt-0"><SilencePeriodsTab /></TabsContent>
             {canManageTeam && (
-              <TabsContent value="team" className="space-y-4 mt-0">
-                <TeamSettings />
-              </TabsContent>
+              <TabsContent value="team" className="mt-0"><TeamSettings /></TabsContent>
             )}
             {canViewRbacTab && (
-              <TabsContent value="rbac" className="space-y-4 mt-0">
-                <RbacSettings />
-              </TabsContent>
+              <TabsContent value="roles" className="mt-0"><RbacSettings /></TabsContent>
             )}
-            <TabsContent value="general" className="space-y-4 mt-0">
-              <GeneralTab />
-            </TabsContent>
             {!isSelfHosted && (
-            <TabsContent value="billing" className="space-y-4 mt-0">
-              <BillingTab />
-            </TabsContent>
+              <TabsContent value="billing" className="mt-0"><BillingTab /></TabsContent>
             )}
-            <TabsContent value="usage" className="space-y-4 mt-0">
-              <UsageTab />
-            </TabsContent>
+            <TabsContent value="usage" className="mt-0"><UsageTab /></TabsContent>
             {canViewSsoTab && (
-              <TabsContent value="sso" className="space-y-4 mt-0">
+              <TabsContent value="auth" className="mt-0">
                 <SsoTab
                   organizationId={organizationId}
                   hasSamlModule={hasSamlModule}
@@ -355,20 +286,66 @@ function SettingsPage() {
                 />
               </TabsContent>
             )}
-            <TabsContent value="account" className="space-y-4 mt-0">
-              <AccountTab />
-            </TabsContent>
+            <TabsContent value="preferences" className="mt-0"><PreferencesSettings /></TabsContent>
+            <TabsContent value="notifications" className="mt-0"><NotificationsTab /></TabsContent>
+            <TabsContent value="danger" className="mt-0"><AccountTab /></TabsContent>
           </div>
-        </Tabs>
-      </div>
+        </div>
+      </Tabs>
     </div>
+  )
+}
+
+function SettingsNavGroup({label, className}: Readonly<{label: string; className?: string}>) {
+  return (
+    <div
+      className={cn(
+        'px-2 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground/70',
+        className
+      )}
+    >
+      {label}
+    </div>
+  )
+}
+
+function SettingsNavItem({
+  value,
+  icon: Icon,
+  children,
+}: {
+  readonly value: string
+  readonly icon: React.ComponentType<{className?: string}>
+  readonly children: React.ReactNode
+}) {
+  return (
+    <TabsTrigger
+      value={value}
+      className="h-[30px] w-full justify-start gap-2.5 rounded-md px-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground data-[state=active]:bg-primary/10 data-[state=active]:font-medium data-[state=active]:text-primary data-[state=active]:shadow-[inset_2px_0_0_hsl(var(--primary))]"
+    >
+      <Icon className="h-4 w-4" />
+      {children}
+    </TabsTrigger>
   )
 }
 
 function ApiKeysTab() {
   const hasDatadog = true // Datadog module is always available (OSS)
   return (
-    <Tabs defaultValue="opentelemetry">
+    <section>
+      <SettingsSection
+        title="API keys"
+        description="Credentials for sending telemetry into Moneat. Keys are organization-scoped; routing maps incoming services to Moneat services."
+        actions={
+          <Button variant="outline" asChild>
+            <a href="/docs/api-tokens" target="_blank" rel="noopener noreferrer">
+              <BookOpen data-icon="inline-start" />
+              Docs
+            </a>
+          </Button>
+        }
+      />
+      <Tabs defaultValue="opentelemetry">
       <TabsList className="mb-4">
         <TabsTrigger value="opentelemetry">OpenTelemetry</TabsTrigger>
         <TabsTrigger value="datadog" disabled={!hasDatadog}>Datadog</TabsTrigger>
@@ -388,6 +365,7 @@ function ApiKeysTab() {
         <McpApiKeysTab />
       </TabsContent>
     </Tabs>
+    </section>
   )
 }
 
@@ -1931,560 +1909,11 @@ function PaymentMethodSetupForm({
   )
 }
 
-// Brand marks render monochrome (currentColor) so they sit on the app's one palette.
-const SlackLogo = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="currentColor">
-    <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.52 2.52 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.522 2.522 0 0 1 2.521 2.52v6.313A2.52 2.52 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"/>
-    <path d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.52 2.52 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52h-2.521zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.522 2.522 0 0 1-2.521 2.521H2.522A2.52 2.52 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"/>
-    <path d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.52 2.52 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.522 2.522 0 0 1-2.52-2.521V2.522A2.52 2.52 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312z"/>
-    <path d="M15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.52 2.52 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.52 2.52 0 0 1 2.52-2.52h6.313A2.52 2.52 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
-  </svg>
-)
-
-const DiscordLogo = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className={className} fill="currentColor">
-    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
-  </svg>
-)
-
-function IntegrationsTab() {
-  const queryClient = useQueryClient()
-  const { toast } = useToast()
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [showDiscordDeleteDialog, setShowDiscordDeleteDialog] = useState(false)
-
-  const { data: integrations = [], isLoading } = useQuery({
-    queryKey: ['integrations'],
-    queryFn: () => api.getIntegrations(),
-    enabled: api.isAuthenticated(),
-  })
-
-  const slackIntegration = integrations.find(i => i.integrationType === 'slack')
-  const discordIntegration = integrations.find(i => i.integrationType === 'discord')
-
-  const { data: channelsData, isLoading: channelsLoading } = useQuery({
-    queryKey: ['slackChannels'],
-    queryFn: () => api.getSlackChannels(),
-    enabled: !!slackIntegration?.isConfigured,
-  })
-
-  const { data: discordChannelsData, isLoading: discordChannelsLoading } = useQuery({
-    queryKey: ['discordChannels'],
-    queryFn: () => api.getDiscordChannels(),
-    enabled: !!discordIntegration?.isConfigured,
-  })
-
-  const oauthMutation = useMutation({
-    mutationFn: () => api.startSlackOAuth(),
-    onSuccess: (data) => {
-      trackEvent('Integration Connect', { provider: 'slack' })
-      window.location.href = data.authUrl
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to start Slack OAuth',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const updateChannelMutation = useMutation({
-    mutationFn: ({ channelId, channelName }: { channelId: string, channelName: string }) => 
-      api.updateSlackChannel(channelId, channelName),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      toast({ title: 'Slack channel updated' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to update channel',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const toggleMutation = useMutation({
-    mutationFn: () => api.toggleSlackIntegration(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      toast({ title: 'Slack integration updated' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to update integration',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => api.deleteSlackIntegration(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      setShowDeleteDialog(false)
-      toast({ title: 'Slack integration removed' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to remove integration',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const testMutation = useMutation({
-    mutationFn: () => api.testSlackIntegration(),
-    onSuccess: (response) => {
-      toast({
-        title: response.success ? 'Test successful' : 'Test failed',
-        description: response.message,
-        variant: response.success ? 'default' : 'destructive',
-      })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Test failed',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  // Discord mutations
-  const discordOauthMutation = useMutation({
-    mutationFn: () => api.startDiscordOAuth(),
-    onSuccess: (data) => {
-      trackEvent('Integration Connect', { provider: 'discord' })
-      window.location.href = data.authUrl
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to start Discord OAuth',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const discordUpdateChannelMutation = useMutation({
-    mutationFn: ({ channelId, channelName }: { channelId: string, channelName: string }) => 
-      api.updateDiscordChannel(channelId, channelName),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      toast({ title: 'Discord channel updated' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to update channel',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const discordToggleMutation = useMutation({
-    mutationFn: () => api.toggleDiscordIntegration(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      toast({ title: 'Discord integration updated' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to update integration',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const discordDeleteMutation = useMutation({
-    mutationFn: () => api.deleteDiscordIntegration(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['integrations'] })
-      setShowDiscordDeleteDialog(false)
-      toast({ title: 'Discord integration removed' })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Failed to remove integration',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const discordTestMutation = useMutation({
-    mutationFn: () => api.testDiscordIntegration(),
-    onSuccess: (response) => {
-      toast({
-        title: response.success ? 'Test successful' : 'Test failed',
-        description: response.message,
-        variant: response.success ? 'default' : 'destructive',
-      })
-    },
-    onError: (err: Error) => {
-      toast({
-        title: 'Test failed',
-        description: err.message,
-        variant: 'destructive',
-      })
-    },
-  })
-
-  if (isLoading) {
-    return <div className="text-sm text-muted-foreground">Loading integrations...</div>
-  }
-
-  return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <Card className="border-l-4 border-l-primary overflow-hidden">
-        <CardHeader className="bg-muted/10 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-muted border flex items-center justify-center p-2 text-foreground">
-                <SlackLogo className="h-full w-full" />
-              </div>
-              <div>
-                <CardTitle className="text-xl">Slack</CardTitle>
-                <CardDescription className="mt-1">
-                  Receive real-time alerts and notifications directly in your Slack workspace.
-                </CardDescription>
-              </div>
-            </div>
-            {slackIntegration?.isConfigured && (
-              <div className="flex items-center gap-2">
-                 <Badge variant={slackIntegration.enabled ? 'success' : 'secondary'}>
-                  {slackIntegration.enabled ? 'Active' : 'Disabled'}
-                </Badge>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-6">
-          {!slackIntegration?.isConfigured ? (
-             <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
-                <div className="p-4 bg-muted/30 rounded-full">
-                   <SlackLogo className="h-12 w-12 opacity-80" />
-                </div>
-                <div className="max-w-md space-y-2">
-                   <h3 className="font-semibold text-lg">Connect your Slack Workspace</h3>
-                   <p className="text-muted-foreground text-sm">
-                      Install the Moneat app to your Slack workspace to start receiving critical alerts and notifications where your team works.
-                   </p>
-                </div>
-                <Button
-                   size="lg"
-                   variant="outline"
-                   className="mt-4 font-semibold"
-                   onClick={() => oauthMutation.mutate()}
-                   disabled={oauthMutation.isPending}
-                >
-                   {oauthMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Connecting...
-                      </>
-                   ) : (
-                      <>
-                        <SlackLogo className="h-4 w-4 mr-2" />
-                        Add to Slack
-                      </>
-                   )}
-                </Button>
-             </div>
-          ) : (
-             <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
-                   <div className="space-y-1">
-                      <p className="font-medium">Connected Workspace</p>
-                      <p className="text-sm text-muted-foreground">
-                         Connected to <strong>{slackIntegration.teamName || 'Slack'}</strong>
-                      </p>
-                   </div>
-                   <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowDeleteDialog(true)}
-                   >
-                      Disconnect
-                   </Button>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                   <div className="space-y-2">
-                      <Label>Notification Channel</Label>
-                      <Select 
-                         value={slackIntegration.channelId || ''} 
-                         onValueChange={(val) => {
-                            const channel = channelsData?.channels.find(c => c.id === val)
-                            if (channel) {
-                               updateChannelMutation.mutate({ 
-                                  channelId: channel.id, 
-                                  channelName: channel.name 
-                               })
-                            }
-                         }}
-                         disabled={channelsLoading || updateChannelMutation.isPending}
-                      >
-                         <SelectTrigger>
-                            <SelectValue placeholder="Select a channel" />
-                         </SelectTrigger>
-                         <SelectContent>
-                            {channelsLoading ? (
-                               <div className="p-2 text-center text-xs text-muted-foreground">Loading channels...</div>
-                            ) : (
-                               channelsData?.channels.map(channel => (
-                                  <SelectItem key={channel.id} value={channel.id}>
-                                     #{channel.name}
-                                  </SelectItem>
-                               ))
-                            )}
-                         </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                         Select the channel where Moneat should post alerts.
-                      </p>
-                   </div>
-
-                   <div className="space-y-2">
-                      <Label className="block">Status</Label>
-                      <div className="flex items-center space-x-2 border rounded-md p-2.5 bg-muted/10 h-10">
-                          <Checkbox
-                            id="slack-enabled"
-                            checked={slackIntegration.enabled}
-                            onCheckedChange={() => toggleMutation.mutate()}
-                            disabled={toggleMutation.isPending}
-                          />
-                          <Label htmlFor="slack-enabled" className="font-normal cursor-pointer">
-                              Enable Slack notifications
-                          </Label>
-                      </div>
-                   </div>
-                </div>
-
-                <div className="flex items-center gap-2 pt-4 border-t">
-                   <Button
-                     variant="outline"
-                     onClick={() => testMutation.mutate()}
-                     disabled={testMutation.isPending}
-                   >
-                     {testMutation.isPending ? (
-                       <>
-                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                         Testing...
-                       </>
-                     ) : (
-                       'Test Connection'
-                     )}
-                   </Button>
-                </div>
-             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Discord Integration Card */}
-      <Card className="border-l-4 border-l-primary overflow-hidden">
-        <CardHeader className="bg-muted/10 pb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-muted border flex items-center justify-center p-2 text-foreground">
-                <DiscordLogo className="h-full w-full" />
-              </div>
-              <div>
-                <CardTitle className="text-xl">Discord</CardTitle>
-                <CardDescription className="mt-1">
-                  Receive real-time alerts and notifications in your Discord server.
-                </CardDescription>
-              </div>
-            </div>
-            {discordIntegration?.isConfigured && (
-              <div className="flex items-center gap-2">
-                 <Badge variant={discordIntegration.enabled ? 'success' : 'secondary'}>
-                  {discordIntegration.enabled ? 'Active' : 'Disabled'}
-                </Badge>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-6">
-          {!discordIntegration?.isConfigured ? (
-             <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
-                <div className="p-4 bg-muted/30 rounded-full">
-                   <DiscordLogo className="h-12 w-12 opacity-80" />
-                </div>
-                <div className="max-w-md space-y-2">
-                   <h3 className="font-semibold text-lg">Connect your Discord Server</h3>
-                   <p className="text-muted-foreground text-sm">
-                      Add the Moneat bot to your Discord server to receive critical alerts and notifications.
-                   </p>
-                </div>
-                <Button 
-                   size="lg" 
-                   variant="outline"
-                   className="mt-4 font-semibold"
-                   onClick={() => discordOauthMutation.mutate()}
-                   disabled={discordOauthMutation.isPending}
-                >
-                   {discordOauthMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Connecting...
-                      </>
-                   ) : (
-                      <>
-                        <DiscordLogo className="h-4 w-4 mr-2" />
-                        Add to Discord
-                      </>
-                   )}
-                </Button>
-             </div>
-          ) : (
-             <div className="space-y-6">
-                <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
-                   <div className="space-y-1">
-                      <p className="font-medium">Connected Server</p>
-                      <p className="text-sm text-muted-foreground">
-                         Connected to <strong>{discordIntegration.teamName || 'Discord'}</strong>
-                      </p>
-                   </div>
-                   <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowDiscordDeleteDialog(true)}
-                   >
-                      Disconnect
-                   </Button>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                   <div className="space-y-2">
-                      <Label>Notification Channel</Label>
-                      <Select 
-                         value={discordIntegration.channelId || ''} 
-                         onValueChange={(val) => {
-                            const channel = discordChannelsData?.channels.find(c => c.id === val)
-                            if (channel) {
-                               discordUpdateChannelMutation.mutate({ channelId: val, channelName: channel.name })
-                            }
-                         }}
-                      >
-                         <SelectTrigger>
-                            <SelectValue placeholder={discordChannelsLoading ? "Loading..." : "Select channel"} />
-                         </SelectTrigger>
-                         <SelectContent>
-                            {discordChannelsData?.channels.map(channel => (
-                               <SelectItem key={channel.id} value={channel.id}>
-                                  # {channel.name}
-                               </SelectItem>
-                            ))}
-                         </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                         Choose which channel receives Moneat notifications
-                      </p>
-                   </div>
-                   
-                   <div className="space-y-2">
-                      <Label>Status</Label>
-                      <div className="flex items-center gap-2 h-10">
-                         <Switch 
-                            checked={discordIntegration.enabled}
-                            onCheckedChange={() => discordToggleMutation.mutate()}
-                         />
-                         <span className="text-sm">
-                            {discordIntegration.enabled ? 'Enabled' : 'Disabled'}
-                         </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                         Enable or disable Discord notifications
-                      </p>
-                   </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                   <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => discordTestMutation.mutate()}
-                      disabled={discordTestMutation.isPending || !discordIntegration.enabled}
-                   >
-                      {discordTestMutation.isPending ? (
-                        <>
-                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                          Testing...
-                        </>
-                      ) : (
-                        'Test Connection'
-                      )}
-                   </Button>
-                </div>
-             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Delete confirmation dialog */}
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove Slack integration?</DialogTitle>
-            <DialogDescription>
-              This will disconnect your Slack workspace and stop sending notifications.
-              You can reconnect at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteMutation.mutate()}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Discord Delete confirmation dialog */}
-      <Dialog open={showDiscordDeleteDialog} onOpenChange={setShowDiscordDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove Discord integration?</DialogTitle>
-            <DialogDescription>
-              This will disconnect your Discord server and stop sending notifications.
-              You can reconnect at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDiscordDeleteDialog(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => discordDeleteMutation.mutate()}
-              disabled={discordDeleteMutation.isPending}
-            >
-              {discordDeleteMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
-
-function NotificationsTab() {
+export function NotificationsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { timezone } = useTimezone()
+  const { user } = useAuth()
 
   const { data: preferences, isLoading: isLoadingPrefs } = useQuery({
     queryKey: ['notificationPreferences'],
@@ -2492,10 +1921,18 @@ function NotificationsTab() {
     enabled: api.isAuthenticated(),
   })
 
+  const { data: pushDevices = [] } = useQuery({
+    queryKey: ['pushDevices'],
+    queryFn: () => api.getPushDevices(),
+    enabled: api.isAuthenticated(),
+  })
+
   const updateGlobalMutation = useMutation({
     mutationFn: (prefs: Partial<{
       weeklySummary: boolean
       alertFrequencyMinutes: number
+      emailEnabled: boolean
+      pushEnabled: boolean
     }>) => api.updateNotificationPreferences(prefs),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationPreferences'] })
@@ -2598,109 +2035,104 @@ function NotificationsTab() {
   const global = preferences?.global || {
     weeklySummary: true,
     alertFrequencyMinutes: 30,
+    emailEnabled: true,
+    pushEnabled: false,
   }
 
   const servicePreferences = preferences?.projects || []
+  const emailDescription = describeEmailDelivery(user?.email, user?.emailVerified)
+  const pushDescription = describePushDelivery(pushDevices.length)
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-full">
-              <Bell className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle>Notification Channels</CardTitle>
-              <CardDescription>
-                Alert delivery is managed by workflows.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-4 rounded-md border bg-muted/40 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-2xl">
-              <p className="font-medium">Alert notifications are managed by workflows.</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use the default alert and recovery workflows to control email, Slack, and Discord delivery.
-              </p>
-            </div>
-            <Button asChild>
-              <Link to="/workflows">Open workflows</Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <section>
+      <SettingsSection
+        title="Notifications"
+        description="How and when Moneat reaches you. Channel delivery rules live in workflows."
+      />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-full">
-              <Settings className="h-5 w-5 text-primary" />
-            </div>
-            <CardTitle>Additional Settings</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="global-weekly-summary" className="text-base">
-                Weekly Summary
-              </Label>
-              <p className="text-sm text-muted-foreground">Receive a weekly summary email every Monday</p>
-            </div>
-            <Switch
-              id="global-weekly-summary"
-              checked={global.weeklySummary}
-              onCheckedChange={(checked) => updateGlobalMutation.mutate({ weeklySummary: checked })}
-            />
-          </div>
+      <div className="mb-5 flex flex-col gap-3 rounded-md border border-info-border bg-info-bg/60 p-3 text-sm sm:flex-row sm:items-center">
+        <Info className="h-4 w-4 shrink-0 text-info-fg" />
+        <span className="flex-1 text-info-fg">
+          Email, Slack, and Discord alert delivery is controlled by your alert &amp; recovery{' '}
+          <Link to="/workflows" className="underline">workflows</Link>.
+        </span>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/workflows">Open workflows</Link>
+        </Button>
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="global-frequency" className="text-base">
-              Error Alert Frequency
-            </Label>
-            <p className="text-sm text-muted-foreground mb-2">
-              Minimum time between alerts for the same service
-            </p>
-            <Select
-              value={global.alertFrequencyMinutes.toString()}
-              onValueChange={(value) => updateGlobalMutation.mutate({ alertFrequencyMinutes: parseInt(value) })}
-            >
-              <SelectTrigger id="global-frequency" className="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="5">5 minutes</SelectItem>
-                <SelectItem value="15">15 minutes</SelectItem>
-                <SelectItem value="30">30 minutes</SelectItem>
-                <SelectItem value="60">1 hour</SelectItem>
-                <SelectItem value="240">4 hours</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <SettingsBlock title="Your delivery channels">
+        <SettingRow
+          label={
+            <span className="inline-flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              Email
+            </span>
+          }
+          description={emailDescription}
+        >
+          <Switch
+            checked={global.emailEnabled ?? true}
+            onCheckedChange={(checked) => updateGlobalMutation.mutate({ emailEnabled: checked })}
+            disabled={updateGlobalMutation.isPending}
+          />
+        </SettingRow>
+        <SettingRow
+          label={
+            <span className="inline-flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              Mobile push
+            </span>
+          }
+          description={pushDescription}
+        >
+          <Switch
+            checked={global.pushEnabled ?? false}
+            onCheckedChange={(checked) => updateGlobalMutation.mutate({ pushEnabled: checked })}
+            disabled={updateGlobalMutation.isPending}
+          />
+        </SettingRow>
+      </SettingsBlock>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary/10 rounded-full">
-              <Layers className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <CardTitle>Per-Service Overrides</CardTitle>
-              <CardDescription>
-                Customize notification settings for specific services
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <SettingsBlock title="Email digests">
+        <SettingRow label="Weekly summary" description="A digest of errors, alerts, and uptime every Monday.">
+          <Switch
+            checked={global.weeklySummary}
+            onCheckedChange={(checked) => updateGlobalMutation.mutate({ weeklySummary: checked })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Error alert frequency"
+          description="Minimum time between repeat alerts for the same service."
+        >
+          <Select
+            value={global.alertFrequencyMinutes.toString()}
+            onValueChange={(value) => updateGlobalMutation.mutate({ alertFrequencyMinutes: parseInt(value) })}
+          >
+            <SelectTrigger className="w-full sm:max-w-[320px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5">5 minutes</SelectItem>
+              <SelectItem value="15">15 minutes</SelectItem>
+              <SelectItem value="30">30 minutes</SelectItem>
+              <SelectItem value="60">1 hour</SelectItem>
+              <SelectItem value="240">4 hours</SelectItem>
+            </SelectContent>
+          </Select>
+        </SettingRow>
+      </SettingsBlock>
+
+      <SectionCard
+        title="Per-service overrides"
+        icon={Layers}
+        count={servicePreferences.length || undefined}
+        className="mb-4"
+        flushBody
+      >
           {servicePreferences.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No service-specific overrides configured. All services use the global preferences above.
+            <p className="px-4 py-3 text-sm text-muted-foreground">
+              Services not listed here use your defaults above.
             </p>
           ) : (
             <Table>
@@ -2752,9 +2184,7 @@ function NotificationsTab() {
                       />
                     </TableCell>
                     <TableCell className="text-center text-sm text-muted-foreground">
-                      {servicePreference.alertFrequencyMinutes >= 60
-                        ? `${servicePreference.alertFrequencyMinutes / 60}h`
-                        : `${servicePreference.alertFrequencyMinutes}m`}
+                      {formatAlertFrequency(servicePreference.alertFrequencyMinutes)}
                     </TableCell>
                     <TableCell>
                       <Button
@@ -2770,115 +2200,28 @@ function NotificationsTab() {
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+      </SectionCard>
 
-      {/* On-Call SMS & Voice Fallback */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            On-Call SMS &amp; Voice Fallback
-          </CardTitle>
-          <CardDescription>
-            Receive SMS messages and voice calls when you don't acknowledge a push or Slack on-call alert within the configured delay.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoadingOnCallContact ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-            </div>
-          ) : onCallContact?.onCallPhoneOptIn ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-success-fg" />
-                <span className="text-sm font-medium">Opted in — {onCallContact.phoneNumber}</span>
-              </div>
-              {onCallContact.onCallPhoneConsentedAt && (
-                <p className="text-xs text-muted-foreground">
-                  Consented on {formatDateUtil(new Date(onCallContact.onCallPhoneConsentedAt), timezone)}
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => deleteOnCallContactMutation.mutate()}
-                  disabled={deleteOnCallContactMutation.isPending}
-                >
-                  {deleteOnCallContactMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Remove & opt out'}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 max-w-sm">
-              {onCallContact?.phoneNumber && !onCallContact.onCallPhoneOptIn && (
-                <div className="flex items-center gap-2 text-warning-fg text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  Phone number saved but not opted in yet. Check the consent box below to enable alerts.
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="oncall-phone">Mobile number (E.164 format)</Label>
-                <Input
-                  id="oncall-phone"
-                  type="tel"
-                  placeholder="+15551234567"
-                  value={onCallPhone}
-                  onChange={(e) => setOnCallPhone(e.target.value)}
-                />
-              </div>
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="oncall-consent"
-                  checked={onCallConsent}
-                  onCheckedChange={(c) => setOnCallConsent(c === true)}
-                  className="mt-0.5"
-                />
-                <Label htmlFor="oncall-consent" className="text-sm font-normal leading-snug cursor-pointer">
-                  I agree to receive on-call alert SMS messages and voice calls from Moneat at the number provided.
-                  Message and data rates may apply. Reply STOP to unsubscribe or HELP for help.
-                  I understand I can manage this setting anytime in my account.{' '}
-                  <Link to="/legal/sms-consent" className="underline text-primary" target="_blank">
-                    Learn more
-                  </Link>
-                </Label>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => updateOnCallContactMutation.mutate()}
-                disabled={
-                  !onCallPhone.trim().match(/^\+[1-9]\d{1,14}$/) ||
-                  !onCallConsent ||
-                  updateOnCallContactMutation.isPending
-                }
-              >
-                {updateOnCallContactMutation.isPending ? (
-                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
-                ) : (
-                  'Save & opt in'
-                )}
-              </Button>
-              {onCallContact?.phoneNumber && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => deleteOnCallContactMutation.mutate()}
-                  disabled={deleteOnCallContactMutation.isPending}
-                >
-                  Remove number
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      <SectionCard title="On-call SMS & voice fallback" icon={Phone}>
+        <OnCallFallbackSettings
+          contact={onCallContact}
+          isLoading={isLoadingOnCallContact}
+          phone={onCallPhone}
+          consent={onCallConsent}
+          timezone={timezone}
+          isSaving={updateOnCallContactMutation.isPending}
+          isDeleting={deleteOnCallContactMutation.isPending}
+          onPhoneChange={setOnCallPhone}
+          onConsentChange={setOnCallConsent}
+          onSave={() => updateOnCallContactMutation.mutate()}
+          onDelete={() => deleteOnCallContactMutation.mutate()}
+        />
+      </SectionCard>
+    </section>
   )
 }
 
-function SilencePeriodsTab() {
+export function SilencePeriodsTab() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { timezone } = useTimezone()
@@ -2965,74 +2308,57 @@ function SilencePeriodsTab() {
   const toInputFormat = (d: Date) => d.toISOString().slice(0, 16)
 
   return (
-    <div className="space-y-6">
+    <section>
+      <SettingsSection
+        title="Silence periods"
+        description="Suppress alert notifications org-wide during deploys and maintenance. Alerts still evaluate — only delivery is muted."
+        actions={
+          <Button onClick={() => setIsCustomDialogOpen(true)}>
+            <Calendar data-icon="inline-start" />
+            Schedule window
+          </Button>
+        }
+      />
+
       {isCurrentlySilenced && (
-        <div className="rounded-lg border border-warning-border bg-warning-bg p-4 flex items-center gap-3">
-          <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-warning-bg shrink-0">
-            <BellOff className="h-5 w-5 text-warning-fg" />
-          </div>
-          <div className="flex-1">
-            <p className="font-medium text-warning-fg">Alerts are currently silenced</p>
-            <p className="text-sm text-warning-fg/80">
-              {activePeriods.length === 1
-                ? `${formatTimeRemaining(activePeriods[0].endsAt)} — ${activePeriods[0].reason || 'No reason specified'}`
-                : `${activePeriods.length} active silence periods`}
-            </p>
-          </div>
+        <div className="mb-5 flex flex-col gap-3 rounded-md border border-warning-border bg-warning-bg/60 p-3 text-sm sm:flex-row sm:items-center">
+          <BellOff className="h-4 w-4 shrink-0 text-warning-fg" />
+          <span className="flex-1 text-warning-fg">
+            <b className="font-semibold">Alerts are currently silenced.</b>{' '}
+            {activePeriods.length === 1
+              ? `${formatTimeRemaining(activePeriods[0].endsAt)} · ${activePeriods[0].reason || 'No reason specified'}`
+              : `${activePeriods.length} active silence periods`}
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => activePeriods.forEach((p) => deleteMutation.mutate(p.id))}
+            disabled={deleteMutation.isPending}
+          >
+            End now
+          </Button>
         </div>
       )}
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-warning-bg">
-              <BellOff className="h-5 w-5 text-warning-fg" />
-            </div>
-            <div>
-              <CardTitle>Quick Silence</CardTitle>
-              <CardDescription>
-                Instantly silence all alert notifications for a preset duration. Alerts will still be evaluated but notifications will be suppressed.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {quickOptions.map((opt) => (
-              <Button
-                key={opt.minutes}
-                variant="outline"
-                className="gap-2"
-                onClick={() => handleQuickSilence(opt.minutes, opt.label)}
-                disabled={createMutation.isPending}
-              >
-                <BellOff className="h-4 w-4" />
-                {opt.label}
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <SettingsBlock title="Quick silence">
+        <div className="flex flex-wrap gap-2">
+          {quickOptions.map((opt) => (
+            <Button
+              key={opt.minutes}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => handleQuickSilence(opt.minutes, opt.label)}
+              disabled={createMutation.isPending}
+            >
+              <BellOff className="h-3.5 w-3.5" />
+              {opt.label}
+            </Button>
+          ))}
+        </div>
+      </SettingsBlock>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-info-bg">
-                <Calendar className="h-5 w-5 text-info-fg" />
-              </div>
-              <div>
-                <CardTitle>Silence Periods</CardTitle>
-                <CardDescription>
-                  Schedule maintenance windows or manage active silence periods. All alert notifications across the organization will be suppressed during these windows.
-                </CardDescription>
-              </div>
-            </div>
-            <Dialog open={isCustomDialogOpen} onOpenChange={setIsCustomDialogOpen}>
-              <Button className="gap-2" onClick={() => setIsCustomDialogOpen(true)}>
-                <Plus className="h-4 w-4" />
-                Schedule Window
-              </Button>
+      <Dialog open={isCustomDialogOpen} onOpenChange={setIsCustomDialogOpen}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle className="flex items-center gap-2">
@@ -3084,297 +2410,31 @@ function SilencePeriodsTab() {
                   </DialogFooter>
                 </form>
               </DialogContent>
-            </Dialog>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <p className="text-muted-foreground text-sm">Loading silence periods...</p>
-              </div>
-            </div>
-          ) : silencePeriods.length > 0 ? (
-            <div className="space-y-3">
-              {activePeriods.map((period) => (
-                <div
-                  key={period.id}
-                  className="group flex items-center gap-4 rounded-lg border border-warning-border bg-warning-bg/50 p-4"
-                >
-                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-warning-bg shrink-0">
-                    <BellOff className="h-4 w-4 text-warning-fg" />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{period.reason || 'Silence period'}</span>
-                      <Badge variant="warning" className="text-xs">
-                        Active
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDateTime(period.startsAt)} — {formatDateTime(period.endsAt)}
-                      </span>
-                      <span className="text-warning-fg font-medium">{formatTimeRemaining(period.endsAt)}</span>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => deleteMutation.mutate(period.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-              {scheduledPeriods.map((period) => (
-                <div
-                  key={period.id}
-                  className="group flex items-center gap-4 rounded-lg border p-4 bg-card hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-info-bg shrink-0">
-                    <Calendar className="h-4 w-4 text-info-fg" />
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium">{period.reason || 'Scheduled silence'}</span>
-                      <Badge variant="secondary" className="text-xs">Scheduled</Badge>
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatDateTime(period.startsAt)} — {formatDateTime(period.endsAt)}
-                      </span>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={() => deleteMutation.mutate(period.id)}
-                    disabled={deleteMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
-                <BellOff className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-medium mb-1">No silence periods</h3>
-              <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">
-                Use the quick silence buttons above or schedule a maintenance window to suppress alert notifications.
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      </Dialog>
 
-      <Card className="bg-info-bg/40 border-info-border">
-        <CardContent className="pt-5 pb-4">
-          <div className="flex items-start gap-3">
-            <div className="flex items-center justify-center h-9 w-9 rounded-lg bg-info-bg shrink-0">
-              <Info className="h-4 w-4 text-info-fg" />
-            </div>
-            <div className="space-y-1">
-              <h4 className="text-sm font-medium">How Silence Periods Work</h4>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                During a silence period, all alert notifications (metric alerts, system up/down, and uptime alerts) are suppressed organization-wide.
-                Alerts are still evaluated and trigger timestamps are recorded, but no emails, Slack, or Discord notifications are sent.
-                Expired silence periods are automatically cleaned up.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
+      <SectionCard
+        title="Active & scheduled"
+        icon={Calendar}
+        count={silencePeriods.length || undefined}
+        flushBody
+      >
+          <SilencePeriodList
+            isLoading={isLoading}
+            activePeriods={activePeriods}
+            scheduledPeriods={scheduledPeriods}
+            isDeleting={deleteMutation.isPending}
+            onDelete={(periodId) => deleteMutation.mutate(periodId)}
+            formatDateTime={formatDateTime}
+            formatTimeRemaining={formatTimeRemaining}
+          />
+      </SectionCard>
 
-function GeneralTab() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const { timezone, updateTimezone } = useTimezone()
-  const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone
-  const [saving, setSaving] = useState(false)
-
-  const { data: user } = useQuery({
-    queryKey: ['currentUser'],
-    queryFn: () => api.getCurrentUser(),
-  })
-
-  const [hiddenItems, setHiddenItems] = useState<string[]>(() => user?.sidebarHiddenItems || [])
-
-  const savedTimezone = user?.timezone ?? null
-  const hasCurrentTimezoneOption = TIMEZONES.some((tz) => tz.value === (savedTimezone ?? browserTz))
-
-  const handleTimezoneChange = async (value: string) => {
-    setSaving(true)
-    try {
-      await updateTimezone(value === '__browser__' ? null : value)
-      toast({ title: 'Display preferences saved', description: 'Your timezone has been updated.' })
-    } catch {
-      toast({ title: 'Error', description: 'Failed to save timezone.', variant: 'destructive' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const saveMutation = useMutation({
-    mutationFn: (items: string[]) => api.updateSidebarPreferences(items),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentUser'] })
-      toast({
-        title: 'Preferences saved',
-        description: 'Your sidebar preferences have been updated.',
-      })
-    },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to save sidebar preferences.',
-        variant: 'destructive',
-      })
-    },
-  })
-
-  const toggleItem = (itemKey: string) => {
-    setHiddenItems(prev => {
-      if (prev.includes(itemKey)) {
-        return prev.filter(k => k !== itemKey)
-      } else {
-        return [...prev, itemKey]
-      }
-    })
-  }
-
-  const checkAll = () => {
-    setHiddenItems([])
-  }
-
-  const uncheckAll = () => {
-    setHiddenItems(getAllSidebarItemKeys())
-  }
-
-  const hasChanges = JSON.stringify(hiddenItems.sort()) !== JSON.stringify((user?.sidebarHiddenItems || []).sort())
-  const selectValue = savedTimezone ?? '__browser__'
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Display Settings</CardTitle>
-          <CardDescription>
-            Choose how dates and times are displayed throughout the dashboard.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="timezone-select">Timezone</Label>
-            <Select
-              value={selectValue}
-              onValueChange={handleTimezoneChange}
-            >
-              <SelectTrigger id="timezone-select" className="max-w-md">
-                <SelectValue placeholder="Select timezone..." />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                <SelectItem value="__browser__">Browser default ({browserTz})</SelectItem>
-                {!hasCurrentTimezoneOption && savedTimezone && (
-                  <SelectItem value={savedTimezone}>{savedTimezone}</SelectItem>
-                )}
-                {TIMEZONES.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              Preview: {formatDateTimeUtil(new Date(), timezone)}
-            </p>
-          </div>
-          {saving && (
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Saving…
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Sidebar Navigation</CardTitle>
-          <CardDescription>
-            Customize which features appear in your sidebar. Settings and Admin are always visible.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2 mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={checkAll}
-            >
-              <Check className="h-4 w-4 mr-2" />
-              Show All
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={uncheckAll}
-            >
-              <Minus className="h-4 w-4 mr-2" />
-              Hide All
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {CONFIGURABLE_SIDEBAR_ITEMS.map(item => {
-              const ItemIcon = item.icon
-              return (
-                <div key={item.key} className="flex items-center justify-between space-x-2 rounded-lg border p-3">
-                  <div className="flex items-center space-x-3">
-                    {ItemIcon && <ItemIcon className="h-4 w-4 text-muted-foreground" />}
-                    <Label
-                      htmlFor={`sidebar-${item.key}`}
-                      className="text-sm font-medium leading-none cursor-pointer"
-                    >
-                      {item.label}
-                    </Label>
-                  </div>
-                  <Switch
-                    id={`sidebar-${item.key}`}
-                    checked={!hiddenItems.includes(item.key)}
-                    onCheckedChange={() => toggleItem(item.key)}
-                  />
-                </div>
-              )
-            })}
-          </div>
-
-          {hasChanges && (
-            <div className="flex justify-end pt-4 border-t">
-              <Button
-                onClick={() => saveMutation.mutate(hiddenItems)}
-                disabled={saveMutation.isPending}
-              >
-                {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save Changes
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
+        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        During a silence period, all alert notifications are suppressed organization-wide. Alerts are still
+        evaluated and trigger timestamps recorded; expired periods are cleaned up automatically.
+      </p>
+    </section>
   )
 }
 
@@ -3452,7 +2512,12 @@ function AccountTab() {
     accountConfirmation.trim().toLowerCase() === (user?.email || '').trim().toLowerCase()
   
   return (
-    <div className="space-y-6">
+    <section>
+      <SettingsSection
+        title="Danger zone"
+        description="Irreversible, destructive actions. Please be certain."
+      />
+      <div className="space-y-4">
       {/* Organization Deletion - Owner Only */}
       {isOwner && (
         <Card className="border-danger-border">
@@ -3662,6 +2727,7 @@ function AccountTab() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </div>
+    </section>
   )
 }

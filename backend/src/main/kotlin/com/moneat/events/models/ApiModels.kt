@@ -61,6 +61,8 @@ data class UserResponse(
     val sidebarHiddenItems: List<String> = emptyList(),
     val phoneNumber: String? = null,
     val timezone: String? = null,
+    val density: String? = null,
+    val dateFormat: String? = null,
     val orgId: String? = null
 )
 
@@ -671,7 +673,9 @@ data class NotificationPreferencesData(
     val issueAlerts: Boolean,
     val errorAlerts: Boolean,
     val weeklySummary: Boolean,
-    val alertFrequencyMinutes: Int
+    val alertFrequencyMinutes: Int,
+    val emailEnabled: Boolean,
+    val pushEnabled: Boolean
 )
 
 @Serializable
@@ -681,13 +685,25 @@ data class ProjectNotificationPreferences(
     val issueAlerts: Boolean,
     val errorAlerts: Boolean,
     val weeklySummary: Boolean,
-    val alertFrequencyMinutes: Int
+    val alertFrequencyMinutes: Int,
+    val emailEnabled: Boolean,
+    val pushEnabled: Boolean
 )
 
 @Serializable
 data class NotificationPreferencesResponse(
     val global: NotificationPreferencesData,
     val projects: List<ProjectNotificationPreferences>
+)
+
+@Serializable
+data class UpdateNotificationPreferencesRequest(
+    val issueAlerts: Boolean? = null,
+    val errorAlerts: Boolean? = null,
+    val weeklySummary: Boolean? = null,
+    val alertFrequencyMinutes: Int? = null,
+    val emailEnabled: Boolean? = null,
+    val pushEnabled: Boolean? = null
 )
 
 // Alert Notification Preferences Models

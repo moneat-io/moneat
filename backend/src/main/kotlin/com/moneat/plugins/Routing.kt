@@ -25,6 +25,8 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
 import com.moneat.monitoring.OperationalMetrics
+import com.moneat.notifications.routes.pushDeviceRoutes
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -38,7 +40,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import com.moneat.utils.suspendRunCatching
 
 @Serializable
 data class HealthResponse(
@@ -178,6 +179,7 @@ fun Application.configureRouting() {
 
         // Dashboard API endpoints
         apiRoutes()
+        pushDeviceRoutes()
 
         // Authentication endpoints
         authRoutes()

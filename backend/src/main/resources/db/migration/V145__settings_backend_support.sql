@@ -1,0 +1,31 @@
+-- Backend support for redesigned settings surfaces.
+
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS default_timezone VARCHAR(100) NOT NULL DEFAULT 'UTC';
+
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS data_region VARCHAR(32) NOT NULL DEFAULT 'us';
+
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE organizations
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS ui_density VARCHAR(20);
+
+ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS date_format VARCHAR(20);
+
+ALTER TABLE notification_preferences
+    ADD COLUMN IF NOT EXISTS email_enabled BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE notification_preferences
+    ADD COLUMN IF NOT EXISTS push_enabled BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE user_device_tokens
+    ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE user_device_tokens
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;

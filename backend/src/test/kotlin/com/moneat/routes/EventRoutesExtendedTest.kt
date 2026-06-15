@@ -73,6 +73,7 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
@@ -87,6 +88,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class EventRoutesExtendedTest {
@@ -1099,6 +1101,63 @@ class EventRoutesExtendedTest {
     }
 
     @Test
+    fun `PUT user preferences accepts dashboard date format values`() = testApplication {
+        val seeded = seedUserProject()
+
+        application { installTestApp() }
+        val densityResponse = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"density":"compact"}""")
+        }
+        assertEquals(HttpStatusCode.OK, densityResponse.status)
+        assertTrue(densityResponse.bodyAsText().contains("\"density\":\"compact\""))
+
+        val isoResponse = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"dateFormat":"iso"}""")
+        }
+        assertEquals(HttpStatusCode.OK, isoResponse.status)
+        assertTrue(isoResponse.bodyAsText().contains("\"dateFormat\":\"iso\""))
+
+        val dmyResponse = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"dateFormat":"dmy"}""")
+        }
+        assertEquals(HttpStatusCode.OK, dmyResponse.status)
+        assertTrue(dmyResponse.bodyAsText().contains("\"dateFormat\":\"dmy\""))
+    }
+
+    @Test
+    fun `PUT user preferences rejects unsupported values and unknown users`() = testApplication {
+        val seeded = seedUserProject()
+
+        application { installTestApp() }
+        val invalidDensity = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"density":"crowded"}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, invalidDensity.status)
+
+        val invalidDateFormat = client.put("/v1/user/preferences") {
+            withAuth(token(seeded.userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"dateFormat":"calendar"}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, invalidDateFormat.status)
+
+        val missingUser = client.put("/v1/user/preferences") {
+            withAuth(RouteTestSupport.createToken(userId = 999_999, orgId = null))
+            contentType(ContentType.Application.Json)
+            setBody("""{"density":"comfortable"}""")
+        }
+        assertEquals(HttpStatusCode.NotFound, missingUser.status)
+    }
+
+    @Test
     fun `GET user returns 401 without auth`() = testApplication {
         application { installTestApp() }
         val response = client.get("/v1/user")
@@ -1117,6 +1176,77 @@ class EventRoutesExtendedTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issueAlerts"))
+    }
+
+    @Test
+    fun `PUT notification-preferences persists delivery channel toggles`() = testApplication {
+        val (userId, _) = seedUserWithProject()
+
+        application { installTestApp() }
+        val update = client.put("/v1/notification-preferences") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.OK, update.status)
+
+        val response = client.get("/v1/notification-preferences") {
+            withAuth(token(userId))
+        }
+        val body = response.bodyAsText()
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(body.contains("\"emailEnabled\":false"))
+        assertTrue(body.contains("\"pushEnabled\":true"))
+    }
+
+    @Test
+    fun `PUT notification-preferences updates existing delivery channel toggles`() = testApplication {
+        val (userId, _) = seedUserWithProject()
+
+        application { installTestApp() }
+        val insert = client.put("/v1/notification-preferences") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"issueAlerts":false,"alertFrequencyMinutes":10}""")
+        }
+        assertEquals(HttpStatusCode.OK, insert.status)
+
+        val update = client.put("/v1/notification-preferences") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"emailEnabled":false,"pushEnabled":true,"alertFrequencyMinutes":45}""")
+        }
+        assertEquals(HttpStatusCode.OK, update.status)
+
+        val response = client.get("/v1/notification-preferences") {
+            withAuth(token(userId))
+        }
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"issueAlerts\":false"))
+        assertTrue(body.contains("\"alertFrequencyMinutes\":45"))
+        assertTrue(body.contains("\"emailEnabled\":false"))
+        assertTrue(body.contains("\"pushEnabled\":true"))
+    }
+
+    @Test
+    fun `PUT notification-preferences rejects non-positive alert frequency`() = testApplication {
+        val (userId, projectId) = seedUserWithProject()
+        every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
+
+        application { installTestApp() }
+        val global = client.put("/v1/notification-preferences") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"alertFrequencyMinutes":0}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, global.status)
+
+        val project = client.put("/v1/notification-preferences/${projectResourceId(projectId)}") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"alertFrequencyMinutes":0}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, project.status)
     }
 
     @Test
@@ -1186,6 +1316,57 @@ class EventRoutesExtendedTest {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.NoContent, response.status)
+    }
+
+    @Test
+    fun `PUT project notification-preferences persists delivery channel toggles`() = testApplication {
+        val (userId, projectId) = seedUserWithProject()
+        val crossOrgUser = seedUserProject()
+        val resourceId = projectResourceId(projectId)
+        every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
+        every { mockDashboardService.hasProjectAccess(crossOrgUser.userId, projectId) } returns false
+
+        application { installTestApp() }
+        val numericPathId = client.put("/v1/notification-preferences/$projectId") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"issueAlerts":false,"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, numericPathId.status)
+
+        val crossOrg = client.put("/v1/notification-preferences/$resourceId") {
+            withAuth(token(crossOrgUser.userId, crossOrgUser.orgId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"issueAlerts":false,"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.Forbidden, crossOrg.status)
+
+        val insert = client.put("/v1/notification-preferences/$resourceId") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"issueAlerts":false,"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.OK, insert.status)
+
+        val update = client.put("/v1/notification-preferences/$resourceId") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"errorAlerts":false,"alertFrequencyMinutes":20}""")
+        }
+        assertEquals(HttpStatusCode.OK, update.status)
+
+        val response = client.get("/v1/notification-preferences") {
+            withAuth(token(userId))
+        }
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"issueAlerts\":false"))
+        assertTrue(body.contains("\"errorAlerts\":false"))
+        assertTrue(body.contains("\"alertFrequencyMinutes\":20"))
+        assertTrue(body.contains("\"emailEnabled\":false"))
+        assertTrue(body.contains("\"pushEnabled\":true"))
+        val projectPrefs = Json.parseToJsonElement(body).jsonObject["projects"]!!.jsonArray.single()
+        assertEquals(resourceId, projectPrefs.jsonObject["projectId"]!!.jsonPrimitive.content)
+        assertFalse(body.contains("\"projectId\":\"$projectId\""))
     }
 
     @Test

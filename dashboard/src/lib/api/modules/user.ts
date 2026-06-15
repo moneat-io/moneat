@@ -20,6 +20,8 @@ import type {
   AccountDeletionValidation,
   OrganizationAccountSettings,
   OrganizationDeletionValidation,
+  PushDevice,
+  PushDevicesResponse,
 } from '../types'
 
 type CurrentUserResponse = {
@@ -35,6 +37,8 @@ type CurrentUserResponse = {
   demoEpochMs?: number | null
   sidebarHiddenItems?: string[]
   timezone?: string | null
+  density?: string | null
+  dateFormat?: string | null
 }
 
 export function userMethods(core: ApiClientCore) {
@@ -62,6 +66,24 @@ export function userMethods(core: ApiClientCore) {
         body: JSON.stringify({ timezone }),
       }),
 
+    // Personal display preferences (density, date format). Persisted server-side
+    // and returned on getCurrentUser; the CSS/format application layer is FE.
+    updateUserPreferences: (
+      preferences: Partial<{ density: string; dateFormat: string }>
+    ) =>
+      core.request<void>(`${base}/user/preferences`, {
+        method: 'PUT',
+        body: JSON.stringify(preferences),
+      }),
+
+    // Registered push devices (display metadata only; never tokens).
+    getPushDevices: async (): Promise<PushDevice[]> => {
+      const res = await core.request<PushDevicesResponse>(
+        `${base}/user/push-devices`
+      )
+      return res.devices ?? []
+    },
+
     getOrganizations: () =>
       core.request<Array<{ id: string; name: string; slug: string }>>(
         `${base}/organizations`
@@ -70,6 +92,20 @@ export function userMethods(core: ApiClientCore) {
     getOrganizationAccountSettings: (organizationId: string) =>
       core.request<OrganizationAccountSettings>(
         `${base}/organizations/${organizationId}`
+      ),
+
+    // Update org-level identity/defaults (workspace name, slug, default timezone).
+    // Backend contract: PATCH /v1/organizations/{id} accepting any subset of fields.
+    updateOrganizationSettings: (
+      organizationId: string,
+      settings: Partial<{ name: string; slug: string; defaultTimezone: string }>
+    ) =>
+      core.request<OrganizationAccountSettings>(
+        `${base}/organizations/${organizationId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(settings),
+        }
       ),
 
     getAccountDeletionValidation: () =>

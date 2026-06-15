@@ -199,7 +199,7 @@ class NotificationService(
                         .mapNotNull { user ->
                             val userId = user[Users.id]
                             val prefs = getPreferences(userId, null)
-                            if (!prefs.weeklySummary) return@mapNotNull null
+                            if (!prefs.weeklySummary || !prefs.emailEnabled) return@mapNotNull null
 
                             Pair(userId, user[Users.email])
                         }
@@ -550,7 +550,8 @@ class NotificationService(
         val issueAlerts: Boolean,
         val errorAlerts: Boolean,
         val weeklySummary: Boolean,
-        val alertFrequencyMinutes: Int
+        val alertFrequencyMinutes: Int,
+        val emailEnabled: Boolean
     )
 
     private fun getPreferences(
@@ -585,7 +586,8 @@ class NotificationService(
                     issueAlerts = prefs[NotificationPreferences.issue_alerts],
                     errorAlerts = prefs[NotificationPreferences.error_alerts],
                     weeklySummary = prefs[NotificationPreferences.weekly_summary],
-                    alertFrequencyMinutes = prefs[NotificationPreferences.alert_frequency_minutes]
+                    alertFrequencyMinutes = prefs[NotificationPreferences.alert_frequency_minutes],
+                    emailEnabled = prefs[NotificationPreferences.email_enabled]
                 )
             } else {
                 // Defaults
@@ -593,7 +595,8 @@ class NotificationService(
                     issueAlerts = true,
                     errorAlerts = true,
                     weeklySummary = true,
-                    alertFrequencyMinutes = 30
+                    alertFrequencyMinutes = 30,
+                    emailEnabled = true
                 )
             }
         }
