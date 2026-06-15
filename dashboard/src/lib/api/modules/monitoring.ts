@@ -257,6 +257,19 @@ export function monitoringMethods(core: ApiClientCore) {
         {method: 'DELETE'}
       ),
 
+    // Resource catalog ownership claim (paid-plan gated server-side).
+    claimResourceOwnership: (claim: {
+      resourceId: string
+      team: string
+      oncall?: string
+      slack?: string
+      repo?: string
+    }): Promise<{team: string; oncall: string; slack: string; repo: string}> =>
+      core.request(`${base}/monitoring/resources/ownership`, {
+        method: 'PUT',
+        body: JSON.stringify(claim),
+      }),
+
     // Connections
     getConnections: (
       params: {

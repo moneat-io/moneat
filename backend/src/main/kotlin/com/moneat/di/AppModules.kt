@@ -64,6 +64,8 @@ import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepository
 import com.moneat.monitor.repositories.HostRepositoryImpl
+import com.moneat.monitor.repositories.ResourceOwnershipRepository
+import com.moneat.monitor.repositories.ResourceOwnershipRepositoryImpl
 import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.ClickHouseCloudResourceWriter
 import com.moneat.monitor.services.CloudResourceWriter
@@ -242,7 +244,8 @@ val monitorModule = module {
 
     single { MonitorService(get(), get(), get(), get()) }
     single { MonitorAlertService(get(), get()) }
-    single { ResourceCatalogService(get()) }
+    single<ResourceOwnershipRepository> { ResourceOwnershipRepositoryImpl() }
+    single { ResourceCatalogService(monitorService = get(), ownershipRepository = get()) }
     single<CloudSourceVerifier> { ManagedIdentityCloudSourceVerifier() }
     single<CloudResourceWriter> { ClickHouseCloudResourceWriter() }
     single { CloudSourceService(get(), get()) }

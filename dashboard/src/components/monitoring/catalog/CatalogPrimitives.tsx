@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo} from 'react'
 import {Tag} from 'lucide-react'
 
 import {cn} from '@/lib/utils'
@@ -26,48 +25,13 @@ import {
   HEALTH_TONE,
   KIND_META,
   TONE_BAR,
-  TONE_TEXT,
   VULN_BAR,
   VULN_SEVERITIES,
-  sparkline,
   totalVulns,
   type Health,
   type ResourceKind,
   type VulnCounts,
 } from './resourceCatalogData'
-
-/** A compact inline trend sparkline (deterministic from its seed). */
-export function Sparkline({seed, tone = 'accent', className}: {readonly seed: string; readonly tone?: StatusTone; readonly className?: string}) {
-  const data = useMemo(() => sparkline(seed), [seed])
-  const width = 100
-  const height = 28
-  const max = Math.max(...data)
-  const min = Math.min(...data)
-  const span = Math.max(1, max - min)
-  const step = width / (data.length - 1)
-  const line = data
-    .map((v, i) => `${(i * step).toFixed(1)},${(height - 2 - ((v - min) / span) * (height - 4)).toFixed(1)}`)
-    .join(' ')
-  return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      preserveAspectRatio="none"
-      className={cn('block', TONE_TEXT[tone], className)}
-      aria-hidden="true"
-    >
-      <polyline points={`0,${height} ${line} ${width},${height}`} fill="currentColor" fillOpacity={0.12} stroke="none" />
-      <polyline
-        points={line}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  )
-}
 
 /** A thin utilization meter. */
 export function Meter({value, tone}: {readonly value: number; readonly tone: StatusTone}) {
