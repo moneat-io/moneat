@@ -111,7 +111,7 @@ export function OnCallFallbackSettings({
           I agree to receive on-call alert SMS messages and voice calls from Moneat at the number provided.
           Message and data rates may apply. Reply STOP to unsubscribe or HELP for help.
           I understand I can manage this setting anytime in my account.{' '}
-          <Link to="/legal/sms-consent" className="underline text-primary" target="_blank">
+          <Link to="/legal/sms-consent" className="underline text-primary" target="_blank" rel="noopener noreferrer">
             Learn more
           </Link>
         </Label>
@@ -239,7 +239,7 @@ function SilencePeriodRow({
       <Button
         size="icon"
         variant="ghost"
-        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100"
+        className="h-7 w-7 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"
         aria-label="Delete silence period"
         onClick={() => onDelete(period.id)}
         disabled={isDeleting}

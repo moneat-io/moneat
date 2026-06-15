@@ -73,6 +73,7 @@ import io.mockk.mockk
 import io.mockk.runs
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
@@ -87,6 +88,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class EventRoutesExtendedTest {
@@ -1319,17 +1321,34 @@ class EventRoutesExtendedTest {
     @Test
     fun `PUT project notification-preferences persists delivery channel toggles`() = testApplication {
         val (userId, projectId) = seedUserWithProject()
+        val crossOrgUser = seedUserProject()
+        val resourceId = projectResourceId(projectId)
         every { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
+        every { mockDashboardService.hasProjectAccess(crossOrgUser.userId, projectId) } returns false
 
         application { installTestApp() }
-        val insert = client.put("/v1/notification-preferences/${projectResourceId(projectId)}") {
+        val numericPathId = client.put("/v1/notification-preferences/$projectId") {
+            withAuth(token(userId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"issueAlerts":false,"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, numericPathId.status)
+
+        val crossOrg = client.put("/v1/notification-preferences/$resourceId") {
+            withAuth(token(crossOrgUser.userId, crossOrgUser.orgId))
+            contentType(ContentType.Application.Json)
+            setBody("""{"issueAlerts":false,"emailEnabled":false,"pushEnabled":true}""")
+        }
+        assertEquals(HttpStatusCode.Forbidden, crossOrg.status)
+
+        val insert = client.put("/v1/notification-preferences/$resourceId") {
             withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"issueAlerts":false,"emailEnabled":false,"pushEnabled":true}""")
         }
         assertEquals(HttpStatusCode.OK, insert.status)
 
-        val update = client.put("/v1/notification-preferences/${projectResourceId(projectId)}") {
+        val update = client.put("/v1/notification-preferences/$resourceId") {
             withAuth(token(userId))
             contentType(ContentType.Application.Json)
             setBody("""{"errorAlerts":false,"alertFrequencyMinutes":20}""")
@@ -1345,6 +1364,9 @@ class EventRoutesExtendedTest {
         assertTrue(body.contains("\"alertFrequencyMinutes\":20"))
         assertTrue(body.contains("\"emailEnabled\":false"))
         assertTrue(body.contains("\"pushEnabled\":true"))
+        val projectPrefs = Json.parseToJsonElement(body).jsonObject["projects"]!!.jsonArray.single()
+        assertEquals(resourceId, projectPrefs.jsonObject["projectId"]!!.jsonPrimitive.content)
+        assertFalse(body.contains("\"projectId\":\"$projectId\""))
     }
 
     @Test
