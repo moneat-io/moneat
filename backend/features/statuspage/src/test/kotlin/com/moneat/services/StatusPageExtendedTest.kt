@@ -61,6 +61,7 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.runBlocking
@@ -138,6 +139,10 @@ class StatusPageExtendedTest {
                 validate { JWTPrincipal(it.payload) }
             }
         }
+    }
+
+    private fun Route.testStatusPageRoutes() {
+        statusPageRoutes(statusPageService = StatusPageService())
     }
 
     private fun token(userId: Int, orgId: Int? = null): String =
@@ -905,7 +910,7 @@ class StatusPageExtendedTest {
     fun `public status page returns 200 for public page`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val slug = "public-route-${System.nanoTime()}"
         seedStatusPage(orgId, slug)
@@ -919,7 +924,7 @@ class StatusPageExtendedTest {
     fun `public status page returns 404 for non-existent slug`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
 
         val response = client.get("/public/status/no-such-slug")
@@ -930,7 +935,7 @@ class StatusPageExtendedTest {
     fun `public status page returns 404 for private page`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val slug = "private-route-${System.nanoTime()}"
         val pageId = UUID.randomUUID()
@@ -957,7 +962,7 @@ class StatusPageExtendedTest {
     fun `public status page by domain returns 404 for unknown domain`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
 
         val response = client.get("/public/status/domain/unknown.example.com")
@@ -970,7 +975,7 @@ class StatusPageExtendedTest {
     fun `verify domain returns 400 for invalid parameters`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -984,7 +989,7 @@ class StatusPageExtendedTest {
     fun `verify domain returns 403 when user has no org`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
         val pageId = UUID.randomUUID()
@@ -1000,7 +1005,7 @@ class StatusPageExtendedTest {
     fun `verify domain returns 404 when domain not found`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1018,7 +1023,7 @@ class StatusPageExtendedTest {
     fun `remove monitor returns 204 when successfully removed`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1042,7 +1047,7 @@ class StatusPageExtendedTest {
     fun `remove monitor returns 404 when monitor not on page`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1059,7 +1064,7 @@ class StatusPageExtendedTest {
     fun `remove monitor returns 400 for invalid monitor uuid`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1075,7 +1080,7 @@ class StatusPageExtendedTest {
     fun `add domain returns 400 for invalid page uuid`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1093,7 +1098,7 @@ class StatusPageExtendedTest {
     fun `remove domain returns 400 for invalid page uuid`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1107,7 +1112,7 @@ class StatusPageExtendedTest {
     fun `remove domain returns 404 when not found`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1125,7 +1130,7 @@ class StatusPageExtendedTest {
     fun `update incident returns 400 for invalid page uuid`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1141,7 +1146,7 @@ class StatusPageExtendedTest {
     fun `update incident returns 400 for invalid incident uuid`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1157,7 +1162,7 @@ class StatusPageExtendedTest {
     fun `update incident returns 403 when user has no org`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1175,7 +1180,7 @@ class StatusPageExtendedTest {
     fun `post incident update returns 403 when user has no org`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val userId = seedUser()
 
@@ -1192,7 +1197,7 @@ class StatusPageExtendedTest {
     fun `post incident update returns 404 when incident not found`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1212,7 +1217,7 @@ class StatusPageExtendedTest {
     fun `add monitors returns 200 with monitor list`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1233,7 +1238,7 @@ class StatusPageExtendedTest {
     fun `get incidents returns 200 with incident data`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1258,7 +1263,7 @@ class StatusPageExtendedTest {
     fun `update status page returns 400 for invalid slug via route`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)
@@ -1277,7 +1282,7 @@ class StatusPageExtendedTest {
     fun `add domain returns 400 for invalid domain format via route`() = testApplication {
         application {
             installAuth()
-            routing { statusPageRoutes() }
+            routing { testStatusPageRoutes() }
         }
         val (userId, localOrgId) = seedUserAndOrg()
         val pageId = seedStatusPage(localOrgId)

@@ -101,7 +101,6 @@ import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TraceFinalizerBackgroundService
-import com.moneat.statuspage.services.StatusPageService
 import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.uptime.repositories.UptimeMonitorRepository
 import com.moneat.uptime.repositories.UptimeMonitorRepositoryImpl
@@ -280,7 +279,6 @@ fun uptimeModule(frontendBaseUrl: String) = module {
             frontendBaseUrl = frontendBaseUrl
         )
     }
-    single { StatusPageService(get()) }
 }
 
 /** Custom dashboards, alert evaluation, and external data sources. */

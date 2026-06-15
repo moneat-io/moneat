@@ -21,6 +21,8 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
+import com.moneat.statuspage.services.StatusPageService
+import com.moneat.uptime.services.UptimeService
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
@@ -30,10 +32,14 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.mockk
+import org.koin.core.KoinApplication
+import org.koin.dsl.module
 import java.util.ServiceLoader
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class StatusPageFeatureRegistryTest {
@@ -53,6 +59,23 @@ class StatusPageFeatureRegistryTest {
             .map { module -> module.name }
 
         assertTrue("Status Pages" in moduleNames)
+    }
+
+    @Test
+    fun `Status Pages module provides feature Koin bindings`() {
+        val koinApplication = KoinApplication.init()
+            .modules(
+                module {
+                    single { mockk<UptimeService>(relaxed = true) }
+                },
+                *StatusPageModule().koinModules().toTypedArray(),
+            )
+
+        try {
+            assertIs<StatusPageService>(koinApplication.koin.get<StatusPageService>())
+        } finally {
+            koinApplication.close()
+        }
     }
 
     @Test

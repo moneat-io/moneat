@@ -17,6 +17,7 @@
 package com.moneat.testsupport
 
 import com.moneat.di.appModules
+import com.moneat.enterprise.FeatureRegistry
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin
@@ -27,7 +28,8 @@ import org.koin.core.context.stopKoin
  */
 fun startTestKoin() {
     if (GlobalContext.getOrNull() == null) {
-        startKoin { modules(appModules) }
+        FeatureRegistry.initialize()
+        startKoin { modules(appModules + FeatureRegistry.koinModules()) }
     }
 }
 
