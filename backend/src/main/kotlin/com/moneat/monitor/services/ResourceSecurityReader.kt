@@ -117,8 +117,8 @@ class DefaultResourceSecurityReader : ResourceSecurityReader {
         )
     }
 
-    private fun readVulnerabilities(organizationIds: List<Int>): List<ResourceVulnAggregate> =
-        runCatching {
+    private suspend fun readVulnerabilities(organizationIds: List<Int>): List<ResourceVulnAggregate> =
+        suspendRunCatching {
             val hostAcc = HashMap<String, VulnAccumulator>()
             val imageAcc = HashMap<String, VulnAccumulator>()
             val serviceAcc = HashMap<String, VulnAccumulator>()

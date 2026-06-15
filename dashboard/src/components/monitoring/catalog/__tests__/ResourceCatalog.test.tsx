@@ -1,4 +1,4 @@
-import {type MouseEvent, type ReactNode} from 'react'
+import {useState, type MouseEvent, type ReactNode} from 'react'
 import {screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
@@ -215,6 +215,54 @@ describe('ResourceCatalog', () => {
 
     await user.click(screen.getByRole('tab', {name: 'Changes'}))
     expect(screen.getByText('No recent changes')).toBeInTheDocument()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('shows telemetry load failures in the detail panel', async () => {
+    const onSelect = vi.fn()
+
+    mockApi.get.mockImplementation((path: string) =>
+      path.startsWith('/monitoring/resources/telemetry') ? Promise.reject(new Error('unavailable')) : Promise.resolve(RESOURCES),
+    )
+    renderWithQueryClient(<ResourceDetailPanel resource={emptyResource} onSelect={onSelect} />)
+
+    expect(await screen.findByText('Could not load telemetry')).toBeInTheDocument()
+    expect(screen.getByText('Telemetry is temporarily unavailable. Try again shortly.')).toBeInTheDocument()
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('resets ownership editing when the selected resource changes', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    const ownedResource = makeResource({
+      id: 'service:1:billing',
+      name: 'billing-api',
+      kind: 'service',
+      owner: {team: 'Payments', oncall: 'Dana', slack: '#pay', repo: 'moneat/pay'},
+    })
+
+    function DetailHarness() {
+      const [resource, setResource] = useState<Resource>(ownedResource)
+      return (
+        <>
+          <button type="button" onClick={() => setResource(emptyResource)}>
+            Switch resource
+          </button>
+          <ResourceDetailPanel resource={resource} onSelect={onSelect} />
+        </>
+      )
+    }
+
+    renderWithQueryClient(<DetailHarness />)
+
+    await user.click(screen.getByRole('tab', {name: 'Ownership & Tags'}))
+    await user.click(screen.getByRole('button', {name: 'Edit'}))
+    expect(screen.getByDisplayValue('Payments')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', {name: 'Switch resource'}))
+
+    await waitFor(() => expect(screen.queryByDisplayValue('Payments')).not.toBeInTheDocument())
+    expect(screen.getByText('No owner assigned')).toBeInTheDocument()
     expect(onSelect).not.toHaveBeenCalled()
   })
 

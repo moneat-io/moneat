@@ -96,6 +96,13 @@ type OwnershipClaimError = {
   readonly message: string
 }
 
+type OwnershipForm = {
+  readonly team: string
+  readonly oncall: string
+  readonly slack: string
+  readonly repo: string
+}
+
 const DETAIL_TABS: readonly {readonly id: DetailTab; readonly label: string}[] = [
   {id: 'overview', label: 'Overview'},
   {id: 'relationships', label: 'Relationships'},
@@ -127,6 +134,15 @@ function getOwnershipClaimError(error: unknown, isError: boolean): OwnershipClai
     }
   }
   return null
+}
+
+function ownershipForm(owner: Resource['owner']): OwnershipForm {
+  return {
+    team: owner?.team ?? '',
+    oncall: owner?.oncall ?? '',
+    slack: owner?.slack ?? '',
+    repo: owner?.repo ?? '',
+  }
 }
 
 function FieldRow({label, value}: {readonly label: string; readonly value: ReactNode}) {
@@ -274,6 +290,15 @@ function OverviewTab({
           <div key={key} className="h-[150px] animate-pulse rounded-md border border-border/70 bg-muted/20" />
         ))}
       </div>
+    )
+  } else if (telemetryQuery.isError) {
+    telemetryContent = (
+      <EmptyState
+        icon={AlertTriangle}
+        title="Could not load telemetry"
+        description="Telemetry is temporarily unavailable. Try again shortly."
+        className="py-8"
+      />
     )
   } else if (metrics.length > 0) {
     telemetryContent = (
@@ -443,16 +468,12 @@ function OwnershipTab({resource}: {readonly resource: Resource}) {
   const owner = resource.owner
   const claim = useClaimOwnership()
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({
-    team: owner?.team ?? '',
-    oncall: owner?.oncall ?? '',
-    slack: owner?.slack ?? '',
-    repo: owner?.repo ?? '',
-  })
+  const [form, setForm] = useState(() => ownershipForm(owner))
+  const {reset: resetClaim} = claim
 
   const startEdit = () => {
-    setForm({team: owner?.team ?? '', oncall: owner?.oncall ?? '', slack: owner?.slack ?? '', repo: owner?.repo ?? ''})
-    claim.reset()
+    setForm(ownershipForm(owner))
+    resetClaim()
     setEditing(true)
   }
 
@@ -809,7 +830,7 @@ export function ResourceDetailPanel({resource, onSelect, onClose, className}: Re
             <RelationshipsTab resource={resource} onSelect={onSelect} />
           </TabsContent>
           <TabsContent value="ownership" className="mt-0">
-            <OwnershipTab resource={resource} />
+            <OwnershipTab key={resource.id} resource={resource} />
           </TabsContent>
           <TabsContent value="security" className="mt-0">
             <SecurityTab resource={resource} />

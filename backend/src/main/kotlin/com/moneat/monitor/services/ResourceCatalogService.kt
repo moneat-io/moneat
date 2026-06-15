@@ -551,9 +551,13 @@ class ResourceCatalogService(
         demoEpochMs: Long?,
     ): List<ResourceTelemetryMetric> {
         if (containerHost.isNullOrBlank() || containerName.isNullOrBlank()) return emptyList()
+        val normalizedContainerHost = containerHost.trim().lowercase()
         val host = organizationIds
             .flatMap { monitorService.listHosts(it) }
-            .firstOrNull { it.hostname == containerHost || it.displayName == containerHost }
+            .firstOrNull {
+                it.hostname.lowercase() == normalizedContainerHost ||
+                    it.displayName?.trim()?.lowercase() == normalizedContainerHost
+            }
             ?: return emptyList()
         val nowSeconds = telemetryNowSeconds(demoEpochMs)
         val points = monitorService
@@ -610,11 +614,15 @@ class ResourceCatalogService(
         if (rows.isEmpty()) return emptyList()
         fun rowTsMs(row: JsonObject): Long = (row.d("ts") ?: 0.0).toLong() * MILLIS_PER_SECOND
         val latencyCol = rows.map { rowTsMs(it) to it.d("latency_ms") }
-        val throughputCol = rows.map { rowTsMs(it) to ((it.d("span_count") ?: 0.0) / SECONDS_PER_HOUR) }
+        val throughputCol = rows.map { row -> rowTsMs(row) to row.d("span_count")?.div(SECONDS_PER_HOUR) }
         val errorCol = rows.map { row ->
-            val span = row.d("span_count") ?: 0.0
+            val span = row.d("span_count")
             val errors = row.d("error_count") ?: 0.0
-            rowTsMs(row) to if (span > 0) errors / span * PERCENT_SCALE else 0.0
+            rowTsMs(row) to when {
+                span == null -> null
+                span > 0 -> errors / span * PERCENT_SCALE
+                else -> 0.0
+            }
         }
         return buildList {
             metricOrNull(

@@ -780,6 +780,7 @@ class ResourceCatalogServiceTest {
             extras = StubResourceCatalogQueryExtras(
                 telemetryRows = listOf(
                     jsonObject("""{"ts": 1000, "latency_ms": 245.0, "span_count": 3600, "error_count": 36}"""),
+                    jsonObject("""{"ts": 2000, "latency_ms": 250.0, "error_count": 12}"""),
                 ),
             ),
         )
@@ -795,8 +796,12 @@ class ResourceCatalogServiceTest {
         assertEquals(10, telemetry.intervalSeconds)
         assertEquals(245.0, telemetry.metrics.first { it.key == "latency" }.lines.first().points.first().value)
         // 3600 spans/hour = 1 req/s, 36/3600 errors = 1% error rate.
-        assertEquals(1.0, telemetry.metrics.first { it.key == "throughput" }.lines.first().points.first().value)
-        assertEquals(1.0, telemetry.metrics.first { it.key == "errorRate" }.lines.first().points.first().value)
+        val throughputPoints = telemetry.metrics.first { it.key == "throughput" }.lines.first().points
+        assertEquals(1.0, throughputPoints.first().value)
+        assertNull(throughputPoints.last().value)
+        val errorRatePoints = telemetry.metrics.first { it.key == "errorRate" }.lines.first().points
+        assertEquals(1.0, errorRatePoints.first().value)
+        assertNull(errorRatePoints.last().value)
     }
 
     @Test
@@ -837,7 +842,7 @@ class ResourceCatalogServiceTest {
         )
 
         val telemetry = service.getResourceTelemetry(
-            containerTelemetryRequest(containerHost = "checkout-prod", containerName = CONTAINER_ID)
+            containerTelemetryRequest(containerHost = " CHECKOUT-PROD ", containerName = CONTAINER_ID)
         )
 
         assertEquals("container", telemetry.kind)

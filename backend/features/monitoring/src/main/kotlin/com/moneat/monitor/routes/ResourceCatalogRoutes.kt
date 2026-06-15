@@ -67,14 +67,13 @@ fun Route.resourceCatalogRoutes(
                 val organizationId = call.resolveResourceCatalogOrganizationId()
                 val kind = call.request.queryParameters["kind"]?.takeIf { it.isNotBlank() }
                     ?: throw BadRequestException("kind is required")
-                val rangeSeconds = call.request.queryParameters["rangeSeconds"]?.toLongOrNull()
-                    ?: DEFAULT_TELEMETRY_RANGE_SECONDS
+                val rangeSeconds = call.resolveTelemetryRangeSeconds()
                 val telemetry = resourceCatalogService.getResourceTelemetry(
                     ResourceTelemetryRequest(
                         organizationIds = listOf(organizationId),
                         kind = kind,
                         selector = ResourceTelemetrySelector(
-                            hostId = call.request.queryParameters["hostId"]?.toIntOrNull(),
+                            hostId = call.resolveTelemetryHostId(),
                             service = call.request.queryParameters["service"],
                             containerHost = call.request.queryParameters["host"],
                             containerName = call.request.queryParameters["container"],
@@ -129,4 +128,16 @@ private fun ApplicationCall.resolveResourceCatalogLimit(): Int? {
     val parsedLimit = rawLimit.toIntOrNull()
         ?: throw BadRequestException("limit must be an integer")
     return parsedLimit.coerceIn(1, MAX_RESOURCE_CATALOG_LIMIT)
+}
+
+private fun ApplicationCall.resolveTelemetryRangeSeconds(): Long {
+    val rawRange = request.queryParameters["rangeSeconds"] ?: return DEFAULT_TELEMETRY_RANGE_SECONDS
+    return rawRange.toLongOrNull()
+        ?: throw BadRequestException("rangeSeconds must be an integer")
+}
+
+private fun ApplicationCall.resolveTelemetryHostId(): Int? {
+    val rawHostId = request.queryParameters["hostId"] ?: return null
+    return rawHostId.toIntOrNull()
+        ?: throw BadRequestException("hostId must be an integer")
 }

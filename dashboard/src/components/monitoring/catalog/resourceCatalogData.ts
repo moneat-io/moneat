@@ -550,20 +550,25 @@ function telemetryParams(resource: Resource, rangeSeconds: number): URLSearchPar
   }
 }
 
-async function fetchResourceTelemetry(resource: Resource, rangeSeconds: number): Promise<ResourceTelemetry> {
-  const params = telemetryParams(resource, rangeSeconds)
-  if (!params) return {kind: resource.kind, rangeSeconds, intervalSeconds: 0, metrics: []}
-  return api.get<ResourceTelemetry>(`/monitoring/resources/telemetry?${params.toString()}`)
+type ResourceTelemetryQueryKey = readonly ['monitoring', 'resource-telemetry', string | null]
+
+async function fetchResourceTelemetry(paramsString: string): Promise<ResourceTelemetry> {
+  return api.get<ResourceTelemetry>(`/monitoring/resources/telemetry?${paramsString}`)
 }
 
 export function useResourceTelemetry(
   resource: Resource | null,
   rangeSeconds: number,
 ): UseQueryResult<ResourceTelemetry> {
-  return useQuery({
-    queryKey: ['monitoring', 'resource-telemetry', resource, rangeSeconds],
-    queryFn: () => fetchResourceTelemetry(resource as Resource, rangeSeconds),
-    enabled: resource != null && TELEMETRY_KINDS.has(resource.kind),
+  const paramsString = resource ? telemetryParams(resource, rangeSeconds)?.toString() ?? null : null
+  const queryKey: ResourceTelemetryQueryKey = ['monitoring', 'resource-telemetry', paramsString]
+  return useQuery<ResourceTelemetry, Error, ResourceTelemetry, ResourceTelemetryQueryKey>({
+    queryKey,
+    queryFn: ({queryKey: [, , keyParams]}) => {
+      if (keyParams === null) throw new Error('Resource telemetry query is disabled without params')
+      return fetchResourceTelemetry(keyParams)
+    },
+    enabled: paramsString !== null,
     staleTime: 30_000,
   })
 }

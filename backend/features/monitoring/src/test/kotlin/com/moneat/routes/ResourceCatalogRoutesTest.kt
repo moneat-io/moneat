@@ -190,6 +190,40 @@ class ResourceCatalogRoutesTest {
     }
 
     @Test
+    fun `telemetry endpoint rejects malformed range`() = testApplication {
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.get("/v1/monitoring/resources/telemetry?kind=service&rangeSeconds=abc") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("rangeSeconds must be an integer"))
+    }
+
+    @Test
+    fun `telemetry endpoint rejects malformed host id`() = testApplication {
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.get("/v1/monitoring/resources/telemetry?kind=host&hostId=abc") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("hostId must be an integer"))
+    }
+
+    @Test
     fun `telemetry endpoint forwards resource selector and range`() = testApplication {
         val requestSlot = slot<ResourceTelemetryRequest>()
         coEvery { catalogService.getResourceTelemetry(capture(requestSlot)) } returns ResourceTelemetryResponse(
