@@ -89,7 +89,7 @@ fun Application.module() {
     install(Koin) {
         slf4jLogger()
         val frontendBaseUrl = environment.config.property("email.frontendUrl").getString()
-        modules(buildAppModules(frontendBaseUrl = frontendBaseUrl))
+        modules(buildAppModules(frontendBaseUrl = frontendBaseUrl) + FeatureRegistry.koinModules())
     }
     val processRole = RuntimeMode.role()
     if (processRole == MoneatProcessRole.WORKFLOW_EGRESS || workflowWorkerMode() == WorkflowWorkerMode.EGRESS) {

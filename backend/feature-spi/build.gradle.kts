@@ -13,6 +13,7 @@ repositories {
 
 dependencies {
     implementation(libs.ktor.server.core)
+    implementation(libs.koin.core)
     detektPlugins(libs.detekt.formatting)
 }
 

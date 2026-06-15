@@ -18,6 +18,7 @@ package com.moneat.enterprise
 
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
 
 /**
  * Service Provider Interface for feature modules.
@@ -36,6 +37,9 @@ interface EnterpriseModule {
 
     /** Register module routes into the core routing tree. */
     fun registerRoutes(route: Route)
+
+    /** Register module-owned Koin bindings during application startup. */
+    fun koinModules(): List<Module> = emptyList()
 
     /** Start module background jobs during application startup. */
     fun startBackgroundJobs(application: Application)

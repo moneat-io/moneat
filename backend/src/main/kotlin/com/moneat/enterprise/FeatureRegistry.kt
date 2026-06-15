@@ -28,6 +28,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
+import org.koin.core.module.Module
 import java.util.ServiceLoader
 
 private val logger = KotlinLogging.logger {}
@@ -104,6 +105,16 @@ object FeatureRegistry {
         }
     }
 
+    fun koinModules(): List<Module> =
+        modules.flatMap { module ->
+            suspendRunCatching {
+                module.koinModules()
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to collect Koin modules for enterprise module: ${module.name}" }
+                throw e
+            }
+        }
+
     fun startBackgroundJobs(
         application: Application,
         startSchedulers: Boolean = true,
@@ -157,6 +168,11 @@ object FeatureRegistry {
     // For testing
     fun resetForTest() {
         reset()
+    }
+
+    internal fun registerForTest(vararg enterpriseModules: EnterpriseModule) {
+        modules.addAll(enterpriseModules)
+        initialized = true
     }
 
     internal fun reset() {
