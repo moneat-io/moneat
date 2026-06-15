@@ -15,7 +15,19 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
-import type { ConnectorProvidersResponse, ConnectorStateResponse } from '../types'
+import { urlWithQuery } from '../utils'
+import type {
+  ConnectorBindingsResponse,
+  ConnectorExternalResourcesResponse,
+  ConnectorInstallationResponse,
+  ConnectorInstallationsResponse,
+  ConnectorProvidersResponse,
+  ConnectorStateResponse,
+  ConnectorWebhookSetupResponse,
+  CreateConnectorInstallationRequest,
+  RotateConnectorApiCredentialRequest,
+  UpsertConnectorBindingRequest,
+} from '../types'
 
 export function connectorsMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -30,5 +42,86 @@ export function connectorsMethods(core: ApiClientCore) {
     // which providers can be set up.
     getConnectorState: () =>
       core.request<ConnectorStateResponse>(`${base}/connectors/state`),
+
+    getConnectorInstallations: (providerId?: string | null) => {
+      const query = providerId ? new URLSearchParams({ providerId }).toString() : ''
+      return core.request<ConnectorInstallationsResponse>(
+        urlWithQuery(`${base}/connectors/installations`, query)
+      )
+    },
+
+    createConnectorInstallation: (request: CreateConnectorInstallationRequest) =>
+      core.request<ConnectorInstallationResponse>(`${base}/connectors/installations`, {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }),
+
+    getConnectorInstallation: (installationId: string) =>
+      core.request<ConnectorInstallationResponse>(
+        `${base}/connectors/installations/${installationId}`
+      ),
+
+    deleteConnectorInstallation: (installationId: string) =>
+      core.request<{ deleted: boolean }>(
+        `${base}/connectors/installations/${installationId}`,
+        { method: 'DELETE' }
+      ),
+
+    testConnectorInstallation: (installationId: string) =>
+      core.request<ConnectorInstallationResponse>(
+        `${base}/connectors/installations/${installationId}/test`,
+        { method: 'POST' }
+      ),
+
+    rotateConnectorApiCredential: (
+      installationId: string,
+      request: RotateConnectorApiCredentialRequest
+    ) =>
+      core.request<ConnectorInstallationResponse>(
+        `${base}/connectors/installations/${installationId}/credentials/rotate`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      ),
+
+    rotateConnectorWebhookToken: (installationId: string) =>
+      core.request<ConnectorInstallationResponse>(
+        `${base}/connectors/installations/${installationId}/webhook-token/rotate`,
+        { method: 'POST' }
+      ),
+
+    getConnectorExternalResources: (installationId: string) =>
+      core.request<ConnectorExternalResourcesResponse>(
+        `${base}/connectors/installations/${installationId}/resources`
+      ),
+
+    refreshConnectorExternalResources: (installationId: string) =>
+      core.request<ConnectorExternalResourcesResponse>(
+        `${base}/connectors/installations/${installationId}/resources/refresh`,
+        { method: 'POST' }
+      ),
+
+    getConnectorBindings: (installationId: string) =>
+      core.request<ConnectorBindingsResponse>(
+        `${base}/connectors/installations/${installationId}/bindings`
+      ),
+
+    updateConnectorBindings: (
+      installationId: string,
+      request: UpsertConnectorBindingRequest
+    ) =>
+      core.request<ConnectorBindingsResponse>(
+        `${base}/connectors/installations/${installationId}/bindings`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(request),
+        }
+      ),
+
+    getConnectorWebhookSetup: (installationId: string) =>
+      core.request<ConnectorWebhookSetupResponse>(
+        `${base}/connectors/installations/${installationId}/webhook-setup`
+      ),
   }
 }

@@ -16,19 +16,53 @@
 
 package com.moneat.connectors
 
+import com.moneat.connectors.routes.connectorWebhookRoutes
 import com.moneat.connectors.routes.connectorRoutes
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueSettings
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class ConnectorsModule : EnterpriseModule {
     override val name: String = "Connectors"
+    private var connectorEventWorker: ConnectorEventWorker? = null
 
     override fun registerRoutes(route: Route) {
         route.connectorRoutes()
     }
 
+    override fun registerIngestionRoutes(route: Route) {
+        route.connectorWebhookRoutes()
+    }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<RevenueCatProviderClient> { RevenueCatClient() }
+                single { ConnectorService(projectIdResolver = get(), revenueCatClient = get()) }
+                single { ConnectorEventWorker(connectorService = get()) }
+            }
+        )
+
     override fun startBackgroundJobs(application: Application) = Unit
 
-    override fun stopBackgroundJobs() = Unit
+    override fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (!startIngestionWorkers || !IngestionQueueSettings.isSelected(IngestionPipeline.CONNECTOR_EVENTS)) {
+            return
+        }
+        connectorEventWorker = GlobalContext.get().get<ConnectorEventWorker>().also { worker -> worker.start() }
+    }
+
+    override fun stopBackgroundJobs() {
+        connectorEventWorker?.stop()
+        connectorEventWorker = null
+    }
 }

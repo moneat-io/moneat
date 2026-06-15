@@ -18,14 +18,20 @@ package com.moneat.connectors.routes
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.connectors.ConnectorH2Schema
+import com.moneat.connectors.ConnectorInstallations
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
-import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.shared.models.Users
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
@@ -68,7 +74,11 @@ class ConnectorRoutesTest {
             )
         }
         TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Organizations, OrganizationIntegrations)
+        ConnectorH2Schema.reset(
+            Users,
+            Organizations,
+            OrganizationIntegrations,
+        )
     }
 
     @Test
@@ -149,11 +159,87 @@ class ConnectorRoutesTest {
         }
     }
 
-    private fun token(): String =
-        JWT.create()
+    @Test
+    fun `state endpoint reports RevenueCat connector installation detail`() {
+        val installationId =
+            transaction {
+                Organizations.insert {
+                    it[id] = ORGANIZATION_ID
+                    it[name] = "Connector Org"
+                    it[slug] = "connector-org"
+                }
+                ConnectorInstallations.insert {
+                    it[organizationId] = ORGANIZATION_ID
+                    it[provider] = "revenuecat"
+                    it[name] = "Bandapella RevenueCat"
+                    it[credentialType] = "api_key"
+                    it[authProfileId] = "project_api_key"
+                    it[externalProjectId] = "proj_123"
+                    it[externalProjectName] = "Bandapella"
+                    it[status] = "healthy"
+                    it[apiSecretLastFour] = "1234"
+                    it[enabled] = true
+                    it[createdAt] = Clock.System.now()
+                    it[updatedAt] = Clock.System.now()
+                }[ConnectorInstallations.resourceId].toString()
+            }
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    connectorRoutes()
+                }
+            }
+
+            val response =
+                client.get("/v1/connectors/state") {
+                    header(HttpHeaders.Authorization, "Bearer ${token()}")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.bodyAsText()
+            assertTrue(body.contains("\"providerId\":\"revenuecat\""))
+            assertTrue(body.contains("\"state\":\"connected\""))
+            assertTrue(body.contains("\"integrationId\":\"$installationId\""))
+            assertTrue(body.contains("Connect RevenueCat apps to Moneat projects"))
+            assertTrue(body.contains("\"status\":\"awaiting_traffic\""))
+        }
+    }
+
+    @Test
+    fun `installation writes require organization admin role`() {
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    connectorRoutes()
+                }
+            }
+
+            val response =
+                client.post("/v1/connectors/installations") {
+                    header(HttpHeaders.Authorization, "Bearer ${token(orgRole = "viewer")}")
+                    contentType(ContentType.Application.Json)
+                    setBody("{}")
+                }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Only organization owners and admins can manage connectors"))
+        }
+    }
+
+    private fun token(orgRole: String? = null): String {
+        val builder = JWT.create()
             .withClaim("userId", 1)
             .withClaim("orgId", ORGANIZATION_ID)
-            .sign(Algorithm.HMAC256(jwtSecret))
+        if (orgRole != null) {
+            builder.withClaim("orgRole", orgRole)
+        }
+        return builder.sign(Algorithm.HMAC256(jwtSecret))
+    }
 
     private fun io.ktor.server.application.Application.installAuth() {
         install(Authentication) {

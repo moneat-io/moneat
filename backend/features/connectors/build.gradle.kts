@@ -31,6 +31,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
+    implementation(libs.kotlin.logging)
+    implementation(libs.koin.ktor)
 
     detektPlugins(libs.detekt.formatting)
 

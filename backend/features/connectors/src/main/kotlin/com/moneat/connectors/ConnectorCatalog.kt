@@ -239,6 +239,7 @@ data class ConnectorUseState(
     val enabled: Boolean,
     val integrationId: String? = null,
     val message: String? = null,
+    val detail: ConnectorProviderStateDetail? = null,
 )
 
 @Serializable
@@ -264,9 +265,12 @@ data class ConnectorStateResponse(
 
 object ConnectorCatalog {
     private const val ORGANIZATION_INTEGRATIONS = "organization_integrations"
+    private const val CONNECTOR_INSTALLATIONS = "connector_installations"
     private const val WORKFLOW_CONNECTIONS = "workflow_connections"
     private const val CLOUD_SOURCES = "cloud_sources"
     private const val CLOUD_SOURCES_STATUS_ROUTE = "/v1/cloud-sources"
+    private const val CONNECTOR_INSTALLATIONS_SETUP_ROUTE = "/v1/connectors/installations"
+    private const val CONNECTOR_STATE_STATUS_ROUTE = "/v1/connectors/state"
     private const val WORKFLOW_ACTIONS_NAME = "Workflow actions"
     private const val WORKFLOW_CONNECTIONS_STATUS_ROUTE = "/v1/workflows/connections"
     private const val GITHUB_METADATA_READ_SCOPE = "metadata:read"
@@ -600,7 +604,11 @@ object ConnectorCatalog {
                             description = "Import subscription lifecycle and revenue events for cohort economics.",
                             allowedAuthProfileId = "project_api_key",
                             requiredScopes = listOf("projects.read", "customers.read", "transactions.read"),
-                            resourceTypes = listOf("project", "customer", "transaction"),
+                            resourceTypes = listOf("revenuecat_project", "revenuecat_app", "customer", "transaction"),
+                            availability = ConnectorAvailability.AVAILABLE,
+                            stateSource = CONNECTOR_INSTALLATIONS,
+                            setupRoute = CONNECTOR_INSTALLATIONS_SETUP_ROUTE,
+                            statusRoute = CONNECTOR_STATE_STATUS_ROUTE,
                         )
                     )
                 )
@@ -643,12 +651,13 @@ object ConnectorCatalog {
             id = options.id,
             name = options.name,
             family = ConnectorFamily.DATA_IMPORT,
-            availability = ConnectorAvailability.PLANNED,
+            availability = options.availability,
             setupMode = options.setupMode,
             capabilities = options.capabilities,
-            stateSource = CLOUD_SOURCES,
+            stateSource = options.stateSource,
             secretPurpose = SecretVaultPurpose.DATA_IMPORT.id,
-            statusRoute = CLOUD_SOURCES_STATUS_ROUTE,
+            setupRoute = options.setupRoute,
+            statusRoute = options.statusRoute,
             description = options.description,
             direction = ConnectorDirection.READ,
             allowedAuthProfileIds = listOf(options.allowedAuthProfileId),
@@ -687,6 +696,10 @@ object ConnectorCatalog {
         val allowedAuthProfileId: String,
         val requiredScopes: List<String>,
         val resourceTypes: List<String>,
+        val availability: ConnectorAvailability = ConnectorAvailability.PLANNED,
+        val stateSource: String = CLOUD_SOURCES,
+        val setupRoute: String? = null,
+        val statusRoute: String? = CLOUD_SOURCES_STATUS_ROUTE,
     )
 
     private data class WorkflowActionUseOptions(

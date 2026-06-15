@@ -172,6 +172,7 @@ fun Application.configureRouting() {
         // Sentry-compatible ingestion endpoints (rate limited per project key)
         rateLimit(RateLimitName("ingestion")) {
             ingestRoutes()
+            FeatureRegistry.registerIngestionRoutes(this)
         }
         routingLogger.info { "Ingestion routes registered" }
 

@@ -38,6 +38,9 @@ interface EnterpriseModule {
     /** Register module routes into the core routing tree. */
     fun registerRoutes(route: Route)
 
+    /** Register module ingestion routes inside the core ingestion rate-limit bucket. */
+    fun registerIngestionRoutes(route: Route) = Unit
+
     /** Register module-owned Koin bindings during application startup. */
     fun koinModules(): List<Module> = emptyList()
 

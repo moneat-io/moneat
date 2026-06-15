@@ -63,9 +63,13 @@ class ConnectorCatalogTest {
         val googleAds = use("google_ads", "ad_spend_import")
 
         assertEquals(ConnectorFamily.DATA_IMPORT, revenueCat.family)
-        assertEquals("cloud_sources", revenueCat.stateSource)
+        assertEquals(ConnectorAvailability.AVAILABLE, revenueCat.availability)
+        assertEquals("connector_installations", revenueCat.stateSource)
         assertEquals("data_import", revenueCat.secretPurpose)
+        assertEquals("/v1/connectors/installations", revenueCat.setupRoute)
+        assertEquals("/v1/connectors/state", revenueCat.statusRoute)
         assertEquals(ConnectorFamily.DATA_IMPORT, googleAds.family)
+        assertEquals(ConnectorAvailability.PLANNED, googleAds.availability)
         assertEquals("cloud_sources", googleAds.stateSource)
     }
 

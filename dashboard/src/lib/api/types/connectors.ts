@@ -83,7 +83,13 @@ export interface ConnectorProvidersResponse {
 
 // Optional live connection state (GET /v1/connectors/state). Used to enrich the
 // catalog with health/last-checked for connectors that are already set up.
-export type ConnectorHealth = 'healthy' | 'degraded' | 'error' | 'unknown'
+export type ConnectorHealth =
+  | 'healthy'
+  | 'degraded'
+  | 'error'
+  | 'unknown'
+  | 'needs_mapping'
+  | 'awaiting_traffic'
 
 export interface ConnectorConnectionState {
   providerId: string
@@ -104,6 +110,7 @@ export interface ConnectorUseState {
   enabled: boolean
   integrationId?: string | null
   message?: string | null
+  detail?: ConnectorProviderStateDetail | null
 }
 
 export interface ConnectorProviderState {
@@ -114,4 +121,129 @@ export interface ConnectorProviderState {
 export interface ConnectorStateResponse {
   connections: ConnectorConnectionState[]
   providers?: ConnectorProviderState[]
+}
+
+export interface ConnectorExternalAccountRequest {
+  projectId: string
+}
+
+export interface CreateConnectorInstallationRequest {
+  providerId: string
+  authProfileId: string
+  name: string
+  externalAccount: ConnectorExternalAccountRequest
+  secret: string
+}
+
+export interface RotateConnectorApiCredentialRequest {
+  secret: string
+}
+
+export interface ConnectorInstallationResponse {
+  id: string
+  providerId: string
+  name: string
+  credentialType: string
+  authProfileId: string
+  externalProjectId?: string | null
+  externalProjectName?: string | null
+  status: string
+  statusReason?: string | null
+  enabled: boolean
+  apiSecretLastFour?: string | null
+  webhookTokenPrefix?: string | null
+  webhookToken?: string | null
+  lastTestedAt?: string | null
+  lastTestResult?: string | null
+  lastSuccessfulProviderCallAt?: string | null
+  lastError?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ConnectorInstallationsResponse {
+  installations: ConnectorInstallationResponse[]
+}
+
+export interface ConnectorExternalResourceResponse {
+  id: string
+  installationId: string
+  externalProjectId?: string | null
+  externalResourceType: string
+  externalResourceId: string
+  displayName?: string | null
+  providerMetadata?: Record<string, string>
+  lastSeenAt: string
+}
+
+export interface ConnectorExternalResourcesResponse {
+  resources: ConnectorExternalResourceResponse[]
+}
+
+export interface ConnectorBindingInput {
+  externalResourceType: string
+  externalResourceId: string
+  localResourceType: string
+  localResourceId: string
+}
+
+export interface UpsertConnectorBindingRequest {
+  bindings: ConnectorBindingInput[]
+}
+
+export interface ConnectorBindingResponse {
+  id: string
+  installationId: string
+  externalProjectId?: string | null
+  externalResourceType: string
+  externalResourceId: string
+  localResourceType: string
+  localResourceId: string
+  status: string
+  bindingVersion: number
+  effectiveFrom: string
+  effectiveTo?: string | null
+}
+
+export interface ConnectorBindingsResponse {
+  bindings: ConnectorBindingResponse[]
+}
+
+export interface ConnectorObservedWebhookIntegration {
+  id: string
+  name?: string | null
+  enabled?: boolean | null
+  appIds?: string[]
+  environments?: string[]
+  eventTypes?: string[]
+  matchesExpectedUrl?: boolean
+}
+
+export interface ConnectorWebhookSetupResponse {
+  installationId: string
+  providerId: string
+  webhookUrl: string
+  authorizationHeaderName: string
+  authorizationHeaderValue?: string | null
+  authorizationHeaderPrefix?: string | null
+  recommendedEventTypes: string[]
+  recommendedEnvironment: string
+  setupMode: string
+  observedIntegrations?: ConnectorObservedWebhookIntegration[]
+  warnings?: string[]
+}
+
+export interface ConnectorProviderStateDetail {
+  installationId: string
+  status: string
+  health: string
+  message?: string | null
+  mappedResources: number
+  unmappedEvents: number
+  failedReceipts: number
+  sandboxEvents: number
+  productionEvents: number
+  lastAcceptedWebhookAt?: string | null
+  lastAppliedAt?: string | null
+  processingLagSeconds?: number | null
 }
