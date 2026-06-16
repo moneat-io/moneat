@@ -1619,8 +1619,11 @@ private fun List<String>.sqlStringArray(): String =
         "[" + joinToString(",") { value -> "'${escapeSql(value)}'" } + "]"
     }
 
+// DateTime64(3) columns: pass epoch millis via fromUnixTimestamp64Milli rather than a
+// string. Instant.toString() emits ISO-8601 with a `Z`, which ClickHouse's
+// toDateTime64(string, 3) does not reliably parse.
 private fun Instant.sqlDateTime64(): String =
-    "toDateTime64('${escapeSql(toString())}', 3, 'UTC')"
+    "fromUnixTimestamp64Milli(${toEpochMilliseconds()}, 'UTC')"
 
 private fun Instant?.sqlNullableDateTime64(): String =
     this?.sqlDateTime64() ?: "NULL"
