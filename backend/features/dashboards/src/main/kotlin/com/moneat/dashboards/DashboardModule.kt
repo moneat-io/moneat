@@ -16,10 +16,25 @@
 
 package com.moneat.dashboards
 
+import com.moneat.dashboards.repositories.DashboardFolderRepository
+import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardRepository
+import com.moneat.dashboards.repositories.DashboardRepositoryImpl
+import com.moneat.dashboards.repositories.DashboardWidgetRepository
+import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
 import com.moneat.dashboards.routes.customDashboardRoutes
+import com.moneat.dashboards.services.CustomDashboardService
+import com.moneat.dashboards.services.CustomDataSourceExecutor
+import com.moneat.dashboards.services.CustomDataSourceService
+import com.moneat.dashboards.services.DashboardAlertService
+import com.moneat.dashboards.services.DashboardQueryEngine
+import com.moneat.dashboards.services.DashboardTemplateCatalogService
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.events.repositories.ProjectRepositoryImpl
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class DashboardModule : EnterpriseModule {
     override val name: String = "Dashboards"
@@ -27,6 +42,38 @@ class DashboardModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.customDashboardRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<DashboardFolderRepository> { DashboardFolderRepositoryImpl() }
+                single<DashboardRepository> { DashboardRepositoryImpl() }
+                single<DashboardWidgetRepository> { DashboardWidgetRepositoryImpl() }
+
+                single { DashboardQueryEngine() }
+                single { DashboardTemplateCatalogService() }
+                single {
+                    DashboardAlertService(
+                        incidentService = get(),
+                        workflowService = get(),
+                        queryEngine = get(),
+                        retentionPolicyService = get(),
+                        dataSourceService = get(),
+                        dataSourceExecutor = get(),
+                    )
+                }
+                single {
+                    CustomDashboardService(
+                        folderRepository = get(),
+                        dashboardRepository = get(),
+                        dashboardWidgetRepository = get(),
+                        projectRepository = ProjectRepositoryImpl { col, _, _ -> col },
+                    )
+                }
+                single { CustomDataSourceService() }
+                single { CustomDataSourceExecutor() }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) = Unit
 
