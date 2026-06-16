@@ -17,7 +17,6 @@
 package com.moneat.plugins
 
 import com.moneat.auth.services.RefreshTokenCleanupService
-import com.moneat.billing.services.BillingBackgroundService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.dashboards.services.DashboardAlertService
@@ -145,7 +144,6 @@ private class SchedulerBackgroundJobs {
     private val koin = GlobalContext.get()
     private val monitorAlertService = koin.get<MonitorAlertService>()
     private val dashboardAlertService = koin.get<DashboardAlertService>()
-    private val billingBackgroundService = koin.get<BillingBackgroundService>()
     private val retentionBackgroundService = koin.get<RetentionBackgroundService>()
     private val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
     private val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
@@ -155,7 +153,6 @@ private class SchedulerBackgroundJobs {
     fun start(jobScope: CoroutineScope) {
         monitorAlertService.start(jobScope)
         dashboardAlertService.start(jobScope)
-        billingBackgroundService.start(jobScope)
         retentionBackgroundService.start(jobScope)
         traceFinalizerBackgroundService.start(jobScope)
         refreshTokenCleanupService.start(jobScope)
@@ -166,7 +163,6 @@ private class SchedulerBackgroundJobs {
     fun stop() {
         monitorAlertService.stop()
         dashboardAlertService.stop()
-        billingBackgroundService.stop()
         retentionBackgroundService.stop()
         traceFinalizerBackgroundService.stop()
         refreshTokenCleanupService.stop()
