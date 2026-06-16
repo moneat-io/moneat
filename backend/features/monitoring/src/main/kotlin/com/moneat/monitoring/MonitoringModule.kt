@@ -39,7 +39,12 @@ import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.services.ResourceCatalogService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -49,6 +54,8 @@ private val logger = KotlinLogging.logger {}
  * Enterprise monitoring module that contributes monitor and resource APIs.
  */
 class MonitoringModule : EnterpriseModule {
+    private var backgroundJobs: MonitoringBackgroundJobs? = null
+
     override val name: String = "Monitoring"
 
     override fun registerRoutes(route: Route) {
@@ -79,10 +86,30 @@ class MonitoringModule : EnterpriseModule {
         )
 
     override fun startBackgroundJobs(application: Application) {
-        logger.info { "Starting monitoring enterprise background jobs" }
+        if (backgroundJobs != null) return
+        logger.info { "Starting monitoring background jobs" }
+        backgroundJobs = MonitoringBackgroundJobs(GlobalContext.get().get<MonitorAlertService>())
+            .also { it.start() }
     }
 
     override fun stopBackgroundJobs() {
-        logger.info { "Stopping monitoring enterprise background jobs" }
+        logger.info { "Stopping monitoring background jobs" }
+        backgroundJobs?.stop()
+        backgroundJobs = null
+    }
+}
+
+private class MonitoringBackgroundJobs(
+    private val monitorAlertService: MonitorAlertService,
+) {
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    fun start() {
+        monitorAlertService.start(scope)
+    }
+
+    fun stop() {
+        monitorAlertService.stop()
+        scope.cancel()
     }
 }
