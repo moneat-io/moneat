@@ -44,6 +44,9 @@ interface EnterpriseModule {
     /** Register module-owned Koin bindings during application startup. */
     fun koinModules(): List<Module> = emptyList()
 
+    /** Whether this module needs isolated startup before core infrastructure and routes are configured. */
+    fun shouldStartIsolatedBackgroundJobs(application: Application): Boolean = false
+
     /** Start module background jobs during application startup. */
     fun startBackgroundJobs(application: Application)
 

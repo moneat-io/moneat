@@ -22,7 +22,6 @@ import com.moneat.config.configureClickHouse
 import com.moneat.config.configureRedis
 import com.moneat.di.buildAppModules
 import com.moneat.enterprise.FeatureRegistry
-import com.moneat.plugins.WorkflowWorkerMode
 import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
 import com.moneat.plugins.configureDemoModeRestrictions
@@ -33,7 +32,6 @@ import com.moneat.plugins.configureRateLimiting
 import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
-import com.moneat.plugins.workflowWorkerMode
 import com.moneat.runtime.MoneatProcessRole
 import com.moneat.runtime.RuntimeMode
 import io.ktor.server.application.Application
@@ -90,10 +88,10 @@ fun Application.module() {
         modules(buildAppModules() + FeatureRegistry.koinModules())
     }
     val processRole = RuntimeMode.role()
-    if (processRole == MoneatProcessRole.WORKFLOW_EGRESS || workflowWorkerMode() == WorkflowWorkerMode.EGRESS) {
+    if (FeatureRegistry.shouldStartIsolatedBackgroundJobs(this)) {
         configureSerialization()
         FeatureRegistry.startBackgroundJobs(this, startSchedulers = false, startIngestionWorkers = false)
-        log.info("Workflow egress worker startup complete")
+        log.info("Isolated feature worker startup complete")
         return
     }
     configureSecurity()

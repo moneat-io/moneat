@@ -126,6 +126,16 @@ object FeatureRegistry {
             }
         }
 
+    fun shouldStartIsolatedBackgroundJobs(application: Application): Boolean =
+        modules.any { module ->
+            suspendRunCatching {
+                module.shouldStartIsolatedBackgroundJobs(application)
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to resolve isolated startup state for enterprise module: ${module.name}" }
+                throw e
+            }
+        }
+
     fun startBackgroundJobs(
         application: Application,
         startSchedulers: Boolean = true,
