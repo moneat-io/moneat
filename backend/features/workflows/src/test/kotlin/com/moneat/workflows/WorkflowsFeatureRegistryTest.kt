@@ -136,6 +136,16 @@ class WorkflowsFeatureRegistryTest {
         assertTrue("Workflows" in response.modules)
     }
 
+    @Test
+    fun `Workflows module skips Temporal workers for ingestion worker role`() = testApplication {
+        application {
+            val workflowsModule = WorkflowsModule()
+
+            workflowsModule.startBackgroundJobs(this, startSchedulers = false, startIngestionWorkers = true)
+            workflowsModule.stopBackgroundJobs()
+        }
+    }
+
     private suspend fun ApplicationCall.respondFeatures() {
         respond(
             FeaturesResponse(

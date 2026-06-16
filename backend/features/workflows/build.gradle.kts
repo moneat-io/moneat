@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.kotlin.logging)
     implementation(libs.koin.ktor)
+    implementation(libs.temporal.sdk)
 
     detektPlugins(libs.detekt.formatting)
 
