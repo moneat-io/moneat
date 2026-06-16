@@ -16,8 +16,6 @@
 
 package com.moneat.workflows
 
-import com.moneat.plugins.WorkflowWorkerMode
-import com.moneat.plugins.workflowWorkerMode
 import com.moneat.runtime.MoneatProcessRole
 import com.moneat.runtime.RuntimeMode
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
@@ -59,7 +57,7 @@ internal class WorkflowBackgroundWorkers {
         }
     }
 
-    private fun shouldStartIsolatedEgressWorker(application: Application): Boolean =
+    fun shouldStartIsolatedEgressWorker(application: Application): Boolean =
         RuntimeMode.role() == MoneatProcessRole.WORKFLOW_EGRESS ||
             application.workflowWorkerMode() == WorkflowWorkerMode.EGRESS
 

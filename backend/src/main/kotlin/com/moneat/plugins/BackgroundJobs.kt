@@ -45,34 +45,6 @@ import kotlin.time.Duration.Companion.hours
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
 private const val DEFAULT_PULSE_INTERVAL_HOURS = 4
-private const val WORKFLOW_WORKER_MODE_CONFIG = "workflows.workerMode"
-
-enum class WorkflowWorkerMode {
-    ALL,
-    TRUSTED,
-    EGRESS,
-    NONE
-}
-
-fun Application.workflowWorkerMode(): WorkflowWorkerMode {
-    return parseWorkflowWorkerMode(
-        environment.config
-            .propertyOrNull(WORKFLOW_WORKER_MODE_CONFIG)
-            ?.getString()
-    )
-}
-
-internal fun parseWorkflowWorkerMode(rawMode: String?): WorkflowWorkerMode {
-    val normalized = rawMode?.trim()?.uppercase()
-    if (normalized.isNullOrBlank()) {
-        return WorkflowWorkerMode.TRUSTED
-    }
-    return WorkflowWorkerMode.entries.firstOrNull { mode -> mode.name == normalized }
-        ?: throw IllegalArgumentException(
-            "Invalid $WORKFLOW_WORKER_MODE_CONFIG value '$normalized'. Expected one of: " +
-                WorkflowWorkerMode.entries.joinToString { mode -> mode.name.lowercase() }
-        )
-}
 
 fun Application.configureBackgroundJobs(
     startSchedulers: Boolean = true,

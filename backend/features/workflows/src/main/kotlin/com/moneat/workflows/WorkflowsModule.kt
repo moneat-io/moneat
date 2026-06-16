@@ -80,6 +80,9 @@ class WorkflowsModule : EnterpriseModule {
         backgroundWorkers.start(application, startSchedulers = true)
     }
 
+    override fun shouldStartIsolatedBackgroundJobs(application: Application): Boolean =
+        backgroundWorkers.shouldStartIsolatedEgressWorker(application)
+
     override fun startBackgroundJobs(
         application: Application,
         startSchedulers: Boolean,

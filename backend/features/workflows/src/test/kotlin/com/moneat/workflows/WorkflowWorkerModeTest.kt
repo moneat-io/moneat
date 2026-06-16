@@ -14,30 +14,34 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.plugins
+package com.moneat.workflows
 
-import com.moneat.runtime.MoneatProcessRole
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class BackgroundJobsTest {
+class WorkflowWorkerModeTest {
     @Test
-    fun `process role parser accepts deployable roles`() {
-        assertEquals(MoneatProcessRole.ALL, MoneatProcessRole.from(null))
-        assertEquals(MoneatProcessRole.API, MoneatProcessRole.from("api-only"))
-        assertEquals(MoneatProcessRole.SCHEDULER, MoneatProcessRole.from("schedulers"))
-        assertEquals(MoneatProcessRole.INGESTION_WORKER, MoneatProcessRole.from("ingestion-worker"))
-        assertEquals(MoneatProcessRole.WORKFLOW_EGRESS, MoneatProcessRole.from("egress"))
+    fun `workflow worker mode defaults to trusted when unset or blank`() {
+        assertEquals(WorkflowWorkerMode.TRUSTED, parseWorkflowWorkerMode(null))
+        assertEquals(WorkflowWorkerMode.TRUSTED, parseWorkflowWorkerMode("  "))
     }
 
     @Test
-    fun `process role parser rejects invalid values`() {
+    fun `workflow worker mode accepts configured enum names case insensitively`() {
+        assertEquals(WorkflowWorkerMode.ALL, parseWorkflowWorkerMode("all"))
+        assertEquals(WorkflowWorkerMode.EGRESS, parseWorkflowWorkerMode(" egress "))
+        assertEquals(WorkflowWorkerMode.NONE, parseWorkflowWorkerMode("NONE"))
+    }
+
+    @Test
+    fun `workflow worker mode rejects invalid values`() {
         val error = assertFailsWith<IllegalArgumentException> {
-            MoneatProcessRole.from("web")
+            parseWorkflowWorkerMode("egres")
         }
 
-        assertTrue(error.message.orEmpty().contains("MONEAT_PROCESS_ROLE"))
+        assertTrue(error.message.orEmpty().contains("EGRES"))
+        assertTrue(error.message.orEmpty().contains("trusted"))
     }
 }
