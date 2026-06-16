@@ -16,7 +16,6 @@
 
 package com.moneat.plugins
 
-import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.dashboards.services.DashboardAlertService
@@ -146,7 +145,6 @@ private class SchedulerBackgroundJobs {
     private val dashboardAlertService = koin.get<DashboardAlertService>()
     private val retentionBackgroundService = koin.get<RetentionBackgroundService>()
     private val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
-    private val refreshTokenCleanupService = koin.get<RefreshTokenCleanupService>()
     private val artifactCleanupService = koin.get<ArtifactCleanupService>()
     private val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
 
@@ -155,7 +153,6 @@ private class SchedulerBackgroundJobs {
         dashboardAlertService.start(jobScope)
         retentionBackgroundService.start(jobScope)
         traceFinalizerBackgroundService.start(jobScope)
-        refreshTokenCleanupService.start(jobScope)
         artifactCleanupService.start(jobScope)
         demoLivenessBackgroundService.start(jobScope)
     }
@@ -165,7 +162,6 @@ private class SchedulerBackgroundJobs {
         dashboardAlertService.stop()
         retentionBackgroundService.stop()
         traceFinalizerBackgroundService.stop()
-        refreshTokenCleanupService.stop()
         artifactCleanupService.stop()
         demoLivenessBackgroundService.stop()
     }

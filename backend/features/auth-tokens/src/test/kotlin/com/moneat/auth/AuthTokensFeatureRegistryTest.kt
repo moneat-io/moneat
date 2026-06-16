@@ -16,6 +16,9 @@
 
 package com.moneat.auth
 
+import com.moneat.auth.services.AuthTokenService
+import com.moneat.auth.services.RefreshTokenCleanupService
+import com.moneat.auth.services.RefreshTokenService
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
@@ -30,10 +33,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import org.koin.core.KoinApplication
 import java.util.ServiceLoader
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class AuthTokensFeatureRegistryTest {
@@ -53,6 +58,20 @@ class AuthTokensFeatureRegistryTest {
             .map { module -> module.name }
 
         assertTrue("Auth Tokens" in moduleNames)
+    }
+
+    @Test
+    fun `Auth Tokens module provides feature Koin bindings`() {
+        val koinApplication = KoinApplication.init()
+            .modules(*AuthTokensModule().koinModules().toTypedArray())
+
+        try {
+            assertIs<AuthTokenService>(koinApplication.koin.get<AuthTokenService>())
+            assertIs<RefreshTokenService>(koinApplication.koin.get<RefreshTokenService>())
+            assertIs<RefreshTokenCleanupService>(koinApplication.koin.get<RefreshTokenCleanupService>())
+        } finally {
+            koinApplication.close()
+        }
     }
 
     @Test
