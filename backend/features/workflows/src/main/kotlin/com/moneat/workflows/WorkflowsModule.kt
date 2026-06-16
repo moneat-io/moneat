@@ -18,7 +18,6 @@ package com.moneat.workflows
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.workflows.routes.workflowRoutes
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
 import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
 import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
@@ -26,6 +25,7 @@ import com.moneat.workflows.engine.temporal.RequestApprovalActivityImpl
 import com.moneat.workflows.engine.temporal.TemporalClientProvider
 import com.moneat.workflows.engine.temporal.TemporalWorkflowExecutionEngine
 import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
+import com.moneat.workflows.routes.workflowRoutes
 import com.moneat.workflows.services.WorkflowActionExecutor
 import com.moneat.workflows.services.WorkflowEgressActionExecutor
 import com.moneat.workflows.services.WorkflowGovernanceService
@@ -40,6 +40,8 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 
 class WorkflowsModule : EnterpriseModule {
+    private val backgroundWorkers = WorkflowBackgroundWorkers()
+
     override val name: String = "Workflows"
 
     override fun registerRoutes(route: Route) {
@@ -74,7 +76,20 @@ class WorkflowsModule : EnterpriseModule {
             }
         )
 
-    override fun startBackgroundJobs(application: Application) = Unit
+    override fun startBackgroundJobs(application: Application) {
+        backgroundWorkers.start(application, startSchedulers = true)
+    }
 
-    override fun stopBackgroundJobs() = Unit
+    override fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean,
+        startIngestionWorkers: Boolean,
+    ) {
+        if (!startSchedulers && startIngestionWorkers) return
+        backgroundWorkers.start(application, startSchedulers)
+    }
+
+    override fun stopBackgroundJobs() {
+        backgroundWorkers.stop()
+    }
 }
