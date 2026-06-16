@@ -15,18 +15,36 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import {render, screen, waitFor} from '@testing-library/react'
+import {render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 
 import {ConnectorsSettings} from '../ConnectorsSettings'
-import type {ConnectorProviderDefinition, OrganizationIntegration} from '@/lib/api/types'
+import type {
+  ConnectorInstallationResponse,
+  ConnectorProviderDefinition,
+  ConnectorProviderStateDetail,
+  OrganizationIntegration,
+} from '@/lib/api/types'
 
 const apiMock = vi.hoisted(() => ({
   isAuthenticated: vi.fn(() => true),
   getConnectorProviders: vi.fn(),
   getIntegrations: vi.fn(),
   getConnectorState: vi.fn(),
+  getConnectorInstallations: vi.fn(),
+  getConnectorInstallation: vi.fn(),
+  createConnectorInstallation: vi.fn(),
+  deleteConnectorInstallation: vi.fn(),
+  testConnectorInstallation: vi.fn(),
+  rotateConnectorApiCredential: vi.fn(),
+  rotateConnectorWebhookToken: vi.fn(),
+  getConnectorExternalResources: vi.fn(),
+  refreshConnectorExternalResources: vi.fn(),
+  getConnectorBindings: vi.fn(),
+  updateConnectorBindings: vi.fn(),
+  getConnectorWebhookSetup: vi.fn(),
+  getProjects: vi.fn(),
   getSlackChannels: vi.fn(),
   getDiscordChannels: vi.fn(),
   startSlackOAuth: vi.fn(),
@@ -75,6 +93,116 @@ function provider(
   }
 }
 
+// RevenueCat ships as an installation-backed data-import connector (stateSource
+// connector_installations), unlike the OAuth notification providers above.
+function revenueCatProvider(
+  availability: 'available' | 'planned' | 'enterprise' = 'available'
+): ConnectorProviderDefinition {
+  return {
+    id: 'revenuecat',
+    name: 'RevenueCat',
+    description: 'Connect RevenueCat for subscription lifecycle and revenue data.',
+    authProfiles: [
+      {
+        id: 'project_api_key',
+        name: 'Project API key',
+        authKind: 'api_key',
+        subjectKinds: ['service_account'],
+        tokenLifecycle: 'rotatable',
+        defaultScopes: ['projects.read'],
+        separateReconsentRequired: false,
+        secretPurpose: 'data_import',
+      },
+    ],
+    uses: [
+      {
+        id: 'subscription_import',
+        name: 'Subscription import',
+        family: 'data_import',
+        availability,
+        setupMode: 'api_key',
+        capabilities: ['subscription_lifecycle_import'],
+        stateSource: 'connector_installations',
+        secretPurpose: 'data_import',
+        statusRoute: '/v1/connectors/state',
+        description: 'Import subscription lifecycle and revenue events.',
+        direction: 'read',
+        allowedAuthProfileIds: ['project_api_key'],
+        resourceTypes: ['revenuecat_app'],
+        uiGroup: 'import_data',
+      },
+    ],
+  }
+}
+
+const rcInstallation: ConnectorInstallationResponse = {
+  id: 'inst-1',
+  providerId: 'revenuecat',
+  name: 'Prod RevenueCat',
+  credentialType: 'api_key',
+  authProfileId: 'project_api_key',
+  externalProjectId: 'proj_abc',
+  externalProjectName: 'Acme',
+  status: 'healthy',
+  statusReason: null,
+  enabled: true,
+  apiSecretLastFour: '1234',
+  webhookTokenPrefix: 'whpref123456',
+  webhookToken: null,
+  lastTestedAt: '2026-06-15T10:00:00Z',
+  lastTestResult: 'success',
+  lastSuccessfulProviderCallAt: '2026-06-15T10:00:00Z',
+  lastError: null,
+  createdAt: '2026-06-15T09:00:00Z',
+  updatedAt: '2026-06-15T10:00:00Z',
+}
+
+const rcDetail: ConnectorProviderStateDetail = {
+  installationId: 'inst-1',
+  status: 'awaiting_traffic',
+  health: 'healthy',
+  message: 'Connected, awaiting RevenueCat webhook traffic',
+  mappedResources: 2,
+  unmappedEvents: 0,
+  failedReceipts: 0,
+  sandboxEvents: 0,
+  productionEvents: 0,
+  lastAcceptedWebhookAt: null,
+  lastAppliedAt: null,
+  processingLagSeconds: null,
+}
+
+// Connects RevenueCat: installation present + connected provider state with detail,
+// and no OAuth integrations so RevenueCat is the only "Manage"-able connector.
+function connectRevenueCat() {
+  apiMock.getIntegrations.mockResolvedValue([])
+  apiMock.getConnectorInstallations.mockResolvedValue({installations: [rcInstallation]})
+  apiMock.getConnectorInstallation.mockResolvedValue(rcInstallation)
+  apiMock.getConnectorState.mockResolvedValue({
+    connections: [
+      {providerId: 'revenuecat', connected: true, health: 'healthy', detail: rcDetail.message},
+    ],
+    providers: [
+      {
+        providerId: 'revenuecat',
+        uses: [
+          {
+            useId: 'subscription_import',
+            availability: 'available',
+            stateSource: 'connector_installations',
+            state: 'connected',
+            connected: true,
+            enabled: true,
+            integrationId: 'inst-1',
+            message: rcDetail.message,
+            detail: rcDetail,
+          },
+        ],
+      },
+    ],
+  })
+}
+
 function renderWithClient(ui: React.ReactElement) {
   const queryClient = new QueryClient({
     defaultOptions: {queries: {retry: false}, mutations: {retry: false}},
@@ -83,6 +211,14 @@ function renderWithClient(ui: React.ReactElement) {
 }
 
 describe('ConnectorsSettings', () => {
+  beforeAll(() => {
+    // Radix Select/Tabs use pointer-capture + scrollIntoView, absent in jsdom.
+    if (!HTMLElement.prototype.hasPointerCapture) HTMLElement.prototype.hasPointerCapture = () => false
+    if (!HTMLElement.prototype.setPointerCapture) HTMLElement.prototype.setPointerCapture = () => {}
+    if (!HTMLElement.prototype.releasePointerCapture) HTMLElement.prototype.releasePointerCapture = () => {}
+    if (!HTMLElement.prototype.scrollIntoView) HTMLElement.prototype.scrollIntoView = () => {}
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     apiMock.getConnectorProviders.mockResolvedValue({
@@ -90,6 +226,7 @@ describe('ConnectorsSettings', () => {
         provider('slack', 'Slack', 'available'),
         provider('github', 'GitHub', 'planned', 'dashboard_query'),
         provider('pagerduty', 'PagerDuty', 'enterprise'),
+        revenueCatProvider('available'),
       ],
     })
     apiMock.getIntegrations.mockResolvedValue([
@@ -124,6 +261,25 @@ describe('ConnectorsSettings', () => {
       ],
     })
     apiMock.getSlackChannels.mockResolvedValue({channels: [{id: 'C123', name: 'alerts'}]})
+    // Installation-backed defaults: nothing connected, no apps/bindings/projects.
+    apiMock.getConnectorInstallations.mockResolvedValue({installations: []})
+    apiMock.getConnectorInstallation.mockResolvedValue(rcInstallation)
+    apiMock.getConnectorExternalResources.mockResolvedValue({resources: []})
+    apiMock.getConnectorBindings.mockResolvedValue({bindings: []})
+    apiMock.getProjects.mockResolvedValue([])
+    apiMock.getConnectorWebhookSetup.mockResolvedValue({
+      installationId: 'inst-1',
+      providerId: 'revenuecat',
+      webhookUrl: 'https://moneat.test/api/connectors/revenuecat/inst-1/webhook',
+      authorizationHeaderName: 'Authorization',
+      authorizationHeaderValue: null,
+      authorizationHeaderPrefix: 'whpref123456',
+      recommendedEventTypes: ['INITIAL_PURCHASE', 'RENEWAL'],
+      recommendedEnvironment: 'production_and_sandbox',
+      setupMode: 'manual',
+      observedIntegrations: [],
+      warnings: [],
+    })
   })
 
   it('groups connected and unavailable providers with clear state labels', async () => {
@@ -149,4 +305,157 @@ describe('ConnectorsSettings', () => {
     expect(screen.getByText(/Connected to Observability/)).toBeInTheDocument()
     await waitFor(() => expect(apiMock.getSlackChannels).toHaveBeenCalled())
   })
+
+  it('shows RevenueCat as an available data-import connector with a connect action', async () => {
+    renderWithClient(<ConnectorsSettings />)
+
+    expect(await screen.findByText('RevenueCat')).toBeInTheDocument()
+    // Only RevenueCat exposes a Connect action here (Slack is connected, GitHub is
+    // planned, PagerDuty is enterprise), and it is not gated behind Coming soon.
+    const connect = screen.getByRole('button', {name: 'Connect'})
+    expect(connect).toBeEnabled()
+    expect(screen.getAllByText('Data import').length).toBeGreaterThan(0)
+  })
+
+  it('submits the generic create payload and reveals the one-time webhook token', async () => {
+    const user = userEvent.setup()
+    apiMock.createConnectorInstallation.mockResolvedValue({
+      ...rcInstallation,
+      webhookToken: 'test-webhook-token',
+    })
+    renderWithClient(<ConnectorsSettings />)
+
+    await user.click(await screen.findByRole('button', {name: 'Connect'}))
+
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Connection name'), 'Prod RevenueCat')
+    await user.type(within(dialog).getByLabelText('RevenueCat project ID'), 'proj_abc')
+    await user.type(within(dialog).getByLabelText('RevenueCat V2 secret API key'), 'sk_secret_value')
+    await user.click(within(dialog).getByRole('button', {name: 'Connect'}))
+
+    await waitFor(() =>
+      expect(apiMock.createConnectorInstallation).toHaveBeenCalledWith({
+        providerId: 'revenuecat',
+        authProfileId: 'project_api_key',
+        name: 'Prod RevenueCat',
+        externalAccount: {projectId: 'proj_abc'},
+        secret: 'sk_secret_value',
+      })
+    )
+
+    // Wizard advances to the Webhook step: URL + one-time token revealed, with the
+    // token shown as a ready-to-paste Authorization value (and flagged one-time).
+    expect(
+      await screen.findByDisplayValue('https://moneat.test/api/connectors/revenuecat/inst-1/webhook')
+    ).toBeInTheDocument()
+    expect(screen.getByText(/shown only once/i)).toBeInTheDocument()
+    expect(screen.getAllByDisplayValue('Bearer test-webhook-token').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('sends full replacement bindings when app mapping changes', async () => {
+    const user = userEvent.setup()
+    connectRevenueCat()
+    apiMock.getConnectorExternalResources.mockResolvedValue({
+      resources: [
+        {
+          id: 'res-a',
+          installationId: 'inst-1',
+          externalProjectId: 'proj_abc',
+          externalResourceType: 'revenuecat_app',
+          externalResourceId: 'appA',
+          displayName: 'App A',
+          lastSeenAt: '2026-06-15T10:00:00Z',
+        },
+        {
+          id: 'res-b',
+          installationId: 'inst-1',
+          externalProjectId: 'proj_abc',
+          externalResourceType: 'revenuecat_app',
+          externalResourceId: 'appB',
+          displayName: 'App B',
+          lastSeenAt: '2026-06-15T10:00:00Z',
+        },
+      ],
+    })
+    apiMock.getConnectorBindings.mockResolvedValue({
+      bindings: [
+        bindingFor('appA', 'proj1'),
+        bindingFor('appB', 'proj2'),
+      ],
+    })
+    apiMock.getProjects.mockResolvedValue([
+      {id: 'proj1', name: 'Web', slug: 'web', keys: [], dsn: 'dsn1'},
+      {id: 'proj2', name: 'iOS', slug: 'ios', keys: [], dsn: 'dsn2'},
+    ])
+    apiMock.updateConnectorBindings.mockResolvedValue({bindings: []})
+
+    renderWithClient(<ConnectorsSettings />)
+
+    await user.click(await screen.findByRole('button', {name: 'Manage'}))
+    await user.click(await screen.findByRole('tab', {name: 'App mapping'}))
+
+    // Unmap App A, leave App B mapped, then save.
+    await user.click(await screen.findByRole('button', {name: 'Unmap App A'}))
+    await user.click(screen.getByRole('button', {name: 'Save mapping'}))
+
+    // Replacement semantics: the full desired list is sent (App B kept), and the
+    // unmapped App A is omitted rather than patched.
+    await waitFor(() =>
+      expect(apiMock.updateConnectorBindings).toHaveBeenCalledWith('inst-1', {
+        bindings: [
+          {
+            externalResourceType: 'revenuecat_app',
+            externalResourceId: 'appB',
+            localResourceType: 'project',
+            localResourceId: 'proj2',
+          },
+        ],
+      })
+    )
+  })
+
+  it('shows copyable webhook setup and reveals a rotated one-time token', async () => {
+    const user = userEvent.setup()
+    connectRevenueCat()
+    apiMock.rotateConnectorWebhookToken.mockResolvedValue({
+      ...rcInstallation,
+      webhookToken: 'new-one-time-token',
+    })
+
+    renderWithClient(<ConnectorsSettings />)
+
+    await user.click(await screen.findByRole('button', {name: 'Manage'}))
+    await user.click(await screen.findByRole('tab', {name: 'Webhook'}))
+
+    expect(
+      await screen.findByDisplayValue('https://moneat.test/api/connectors/revenuecat/inst-1/webhook')
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: 'Copy Webhook URL'})).toBeInTheDocument()
+    // Only a token prefix is stored, so the user is told to rotate to reveal one.
+    expect(screen.getByText(/Only the token prefix is stored/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', {name: 'Rotate token'}))
+    await user.click(screen.getByRole('button', {name: 'Rotate & reveal'}))
+
+    // The rotated token surfaces (header field + one-time reveal panel) exactly once.
+    const revealed = await screen.findAllByDisplayValue('Bearer new-one-time-token')
+    expect(revealed.length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/shown only once/i)).toBeInTheDocument()
+  })
 })
+
+function bindingFor(externalResourceId: string, localResourceId: string) {
+  return {
+    id: `binding-${externalResourceId}`,
+    installationId: 'inst-1',
+    externalProjectId: 'proj_abc',
+    externalResourceType: 'revenuecat_app',
+    externalResourceId,
+    localResourceType: 'project',
+    localResourceId,
+    status: 'active',
+    bindingVersion: 1,
+    effectiveFrom: '2026-06-15T10:00:00Z',
+    effectiveTo: null,
+  }
+}
