@@ -27,7 +27,6 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
-import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
@@ -91,7 +90,6 @@ val sharedModule = module {
     single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
     single { WorkflowService(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WorkflowGovernanceService(get()) }
-    single { IncidentService(get()) }
 
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }

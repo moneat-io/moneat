@@ -18,8 +18,11 @@ package com.moneat.incident
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.incident.routes.incidentProviderRoutes
+import com.moneat.incident.services.IncidentService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class IncidentModule : EnterpriseModule {
     override val name: String = "Incident Providers"
@@ -27,6 +30,13 @@ class IncidentModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.incidentProviderRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single { IncidentService(get()) }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) = Unit
 
