@@ -16,10 +16,16 @@
 
 package com.moneat.auth
 
+import com.moneat.auth.repositories.UserRepository
+import com.moneat.auth.repositories.UserRepositoryImpl
 import com.moneat.auth.routes.authRoutes
+import com.moneat.auth.services.AuthService
+import com.moneat.auth.services.OAuthService
 import com.moneat.enterprise.EnterpriseModule
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class AuthModule : EnterpriseModule {
     override val name: String = "Authentication"
@@ -27,6 +33,24 @@ class AuthModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.authRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<UserRepository> { UserRepositoryImpl() }
+                single { OAuthService(get()) }
+                single {
+                    AuthService(
+                        userRepository = get(),
+                        membershipRepository = get(),
+                        organizationRepository = get(),
+                        emailService = get(),
+                        refreshTokenService = get(),
+                        workflowService = get(),
+                    )
+                }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) = Unit
 

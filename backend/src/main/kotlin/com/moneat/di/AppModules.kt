@@ -17,13 +17,6 @@
 package com.moneat.di
 
 import com.moneat.alerts.services.AlertEpisodeService
-import com.moneat.auth.repositories.UserRepository
-import com.moneat.auth.repositories.UserRepositoryImpl
-import com.moneat.auth.services.AuthService
-import com.moneat.auth.services.AuthTokenService
-import com.moneat.auth.services.OAuthService
-import com.moneat.auth.services.RefreshTokenCleanupService
-import com.moneat.auth.services.RefreshTokenService
 import com.moneat.dashboards.repositories.DashboardFolderRepository
 import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
 import com.moneat.dashboards.repositories.DashboardRepository
@@ -142,26 +135,6 @@ val sharedModule = module {
     single { AttributionAnalyticsService() }
     single { DemoLivenessBackgroundService() }
     single { GeoIpService() }
-}
-
-/** Authentication, token management, and account lifecycle. */
-val authModule = module {
-    single<UserRepository> { UserRepositoryImpl() }
-
-    single { OAuthService() }
-    single { AuthTokenService() }
-    single { RefreshTokenService() }
-    single { RefreshTokenCleanupService() }
-    single {
-        AuthService(
-            userRepository = get(),
-            membershipRepository = get(),
-            organizationRepository = get(),
-            emailService = get(),
-            refreshTokenService = get(),
-            workflowService = get(),
-        )
-    }
     single { ArtifactCleanupService(get(), get()) }
 }
 
@@ -246,7 +219,6 @@ val aiModule = module {}
 fun buildAppModules() =
     listOf(
         sharedModule,
-        authModule,
         eventsModule,
         monitorModule,
         logsModule,
