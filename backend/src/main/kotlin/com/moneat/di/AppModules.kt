@@ -28,21 +28,7 @@ import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.incident.services.IncidentService
-import com.moneat.monitor.repositories.HostAlertRepository
-import com.moneat.monitor.repositories.HostAlertRepositoryImpl
-import com.moneat.monitor.repositories.HostRepository
-import com.moneat.monitor.repositories.HostRepositoryImpl
-import com.moneat.monitor.repositories.ResourceOwnershipRepository
-import com.moneat.monitor.repositories.ResourceOwnershipRepositoryImpl
-import com.moneat.monitor.services.AgentApiKeyService
-import com.moneat.monitor.services.ClickHouseCloudResourceWriter
-import com.moneat.monitor.services.CloudResourceWriter
-import com.moneat.monitor.services.CloudSourceService
-import com.moneat.monitor.services.CloudSourceVerifier
-import com.moneat.monitor.services.ManagedIdentityCloudSourceVerifier
 import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.monitor.services.MonitorService
-import com.moneat.monitor.services.ResourceCatalogService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -60,7 +46,6 @@ import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TraceFinalizerBackgroundService
-import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
 import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
 import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
@@ -135,22 +120,6 @@ val eventsModule = module {
     single { DashboardService(get(), get(), get(), get()) }
 }
 
-/** Infrastructure monitoring and alerting. */
-val monitorModule = module {
-    single<HostRepository> { HostRepositoryImpl() }
-    single<HostAlertRepository> { HostAlertRepositoryImpl() }
-
-    single { MonitorService(get(), get(), get(), get()) }
-    single { MonitorAlertService(get(), get()) }
-    single<ResourceOwnershipRepository> { ResourceOwnershipRepositoryImpl() }
-    single { ResourceCatalogService(monitorService = get(), ownershipRepository = get()) }
-    single<CloudSourceVerifier> { ManagedIdentityCloudSourceVerifier() }
-    single<CloudResourceWriter> { ClickHouseCloudResourceWriter() }
-    single { CloudSourceService(get(), get()) }
-    single { AgentApiKeyService() }
-    single { SyntheticsService(get(), get()) }
-}
-
 /** AI chat assistant. */
 val aiModule = module {}
 
@@ -159,7 +128,6 @@ fun buildAppModules() =
     listOf(
         sharedModule,
         eventsModule,
-        monitorModule,
         aiModule,
     )
 

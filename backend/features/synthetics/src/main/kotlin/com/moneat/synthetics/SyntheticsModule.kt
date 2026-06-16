@@ -18,9 +18,12 @@ package com.moneat.synthetics
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.synthetics.routes.SyntheticsScheduler
+import com.moneat.synthetics.routes.SyntheticsService
 import com.moneat.synthetics.routes.syntheticsRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class SyntheticsModule : EnterpriseModule {
     override val name: String = "Synthetics"
@@ -30,6 +33,13 @@ class SyntheticsModule : EnterpriseModule {
     override fun registerRoutes(route: Route) {
         route.syntheticsRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single { SyntheticsService(get(), get()) }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) {
         startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)
