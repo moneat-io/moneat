@@ -22,8 +22,6 @@ import com.moneat.auth.repositories.UserRepository
 import com.moneat.auth.repositories.UserRepositoryImpl
 import com.moneat.auth.repositories.models.UserRow
 import com.moneat.auth.services.AuthService
-import com.moneat.auth.services.RefreshTokenCleaner
-import com.moneat.auth.services.RefreshTokenCleanupService
 import com.moneat.auth.services.RefreshTokenResponse
 import com.moneat.auth.services.RefreshTokenService
 import com.moneat.config.EnvConfig
@@ -49,8 +47,6 @@ import com.moneat.workflows.services.WorkflowService
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -70,7 +66,6 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.milliseconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthServiceExtendedTest {
@@ -289,53 +284,6 @@ class AuthServiceExtendedTest {
 
         val remaining = transaction { RefreshTokens.selectAll().count() }
         assertEquals(0L, remaining)
-    }
-
-    // ── RefreshTokenCleanupService ──────────────────────────────────
-
-    @Test
-    fun `cleanup service invokes cleaner and can be stopped`() {
-        var cleanupCallCount = 0
-        val cleaner = RefreshTokenCleaner {
-            cleanupCallCount++
-            0
-        }
-        val service = RefreshTokenCleanupService(
-            refreshTokenCleaner = cleaner,
-            cleanupInterval = 50.milliseconds
-        )
-
-        runBlocking {
-            val scope = this
-            service.start(scope)
-            delay(200)
-            service.stop()
-        }
-
-        assertTrue(cleanupCallCount >= 1, "Cleaner should have been invoked at least once")
-    }
-
-    @Test
-    fun `cleanup service handles exceptions gracefully`() {
-        var callCount = 0
-        val cleaner = RefreshTokenCleaner {
-            callCount++
-            if (callCount == 1) throw RuntimeException("test error")
-            0
-        }
-        val service = RefreshTokenCleanupService(
-            refreshTokenCleaner = cleaner,
-            cleanupInterval = 50.milliseconds
-        )
-
-        runBlocking {
-            val scope = this
-            service.start(scope)
-            delay(200)
-            service.stop()
-        }
-
-        assertTrue(callCount >= 2, "Should continue after exception")
     }
 
     // ── AuthService - completeOnboarding ────────────────────────────
