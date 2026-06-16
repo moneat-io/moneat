@@ -27,7 +27,6 @@ import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
-import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.notifications.services.AlertNotificationPreferencesService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
@@ -45,19 +44,6 @@ import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TraceFinalizerBackgroundService
-import com.moneat.workflows.engine.temporal.ExecuteActionActivityImpl
-import com.moneat.workflows.engine.temporal.ExecuteEgressActionActivityImpl
-import com.moneat.workflows.engine.temporal.PersistRunActivityImpl
-import com.moneat.workflows.engine.temporal.RequestApprovalActivityImpl
-import com.moneat.workflows.engine.temporal.TemporalClientProvider
-import com.moneat.workflows.engine.temporal.TemporalWorkflowExecutionEngine
-import com.moneat.workflows.engine.temporal.WorkflowExecutionEngine
-import com.moneat.workflows.services.WorkflowActionExecutor
-import com.moneat.workflows.services.WorkflowEgressActionExecutor
-import com.moneat.workflows.services.WorkflowGovernanceService
-import com.moneat.workflows.services.WorkflowService
-import com.moneat.workflows.services.WorkflowStepRenderer
-import com.moneat.workflows.services.WorkflowTrustedActionExecutor
 import org.koin.dsl.module
 
 /** Shared cross-domain singletons: notification channels, retention, shared repositories. */
@@ -70,26 +56,6 @@ val sharedModule = module {
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
     single { AlertEpisodeService() }
-    single { WorkflowStepRenderer() }
-    single {
-        WorkflowTrustedActionExecutor(
-            logService = get(),
-            dashboardService = get(),
-            monitorService = get(),
-            monitorAlertServiceProvider = { get<MonitorAlertService>() },
-            statusPageService = get(),
-        )
-    }
-    single { WorkflowActionExecutor(get(), get(), get(), get(), get()) }
-    single { WorkflowEgressActionExecutor() }
-    single { PersistRunActivityImpl() }
-    single { RequestApprovalActivityImpl() }
-    single { ExecuteActionActivityImpl(get()) }
-    single { ExecuteEgressActionActivityImpl(get()) }
-    single { TemporalClientProvider() }
-    single<WorkflowExecutionEngine> { TemporalWorkflowExecutionEngine(get()) }
-    single { WorkflowService(get(), get(), get(), get(), get(), get(), get(), get()) }
-    single { WorkflowGovernanceService(get()) }
 
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
