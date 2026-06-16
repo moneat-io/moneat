@@ -108,11 +108,17 @@ function CopyButton({
 }) {
   const {toast} = useToast()
   const [copied, setCopied] = useState(false)
-  const onCopy = () => {
-    void navigator.clipboard?.writeText(value)
-    setCopied(true)
-    toast({title: `${label} copied`})
-    globalThis.setTimeout(() => setCopied(false), 1500)
+  const onCopy = async () => {
+    try {
+      const clipboard = globalThis.navigator.clipboard
+      if (!clipboard) throw new Error('Clipboard unavailable')
+      await clipboard.writeText(value)
+      setCopied(true)
+      toast({title: `${label} copied`})
+      globalThis.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      toast({title: `Failed to copy ${label.toLowerCase()}`, variant: 'destructive'})
+    }
   }
   const Icon = copied ? Check : Copy
   if (size === 'sm') {

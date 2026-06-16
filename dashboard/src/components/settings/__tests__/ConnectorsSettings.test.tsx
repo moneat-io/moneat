@@ -524,6 +524,11 @@ describe('ConnectorsSettings', () => {
 
   it('shows copyable webhook setup and reveals a rotated one-time token', async () => {
     const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(globalThis.navigator, 'clipboard', {
+      configurable: true,
+      value: {writeText},
+    })
     connectRevenueCat()
     apiMock.rotateConnectorWebhookToken.mockResolvedValue({
       ...rcInstallation,
@@ -540,6 +545,13 @@ describe('ConnectorsSettings', () => {
     ).toBeInTheDocument()
     expect(screen.getByRole('button', {name: 'Copy Webhook URL'})).toBeInTheDocument()
     await user.click(screen.getByRole('button', {name: 'Copy Webhook URL'}))
+    expect(writeText).toHaveBeenCalledWith(
+      'https://moneat.test/api/connectors/revenuecat/inst-1/webhook'
+    )
+    writeText.mockRejectedValueOnce(new Error('denied'))
+    await user.click(screen.getByRole('button', {name: 'Copy event types'}))
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2))
+    expect(writeText).toHaveBeenLastCalledWith('INITIAL_PURCHASE\nRENEWAL')
     // Only a token prefix is stored, so the user is told to rotate to reveal one.
     expect(screen.getByText(/Only the token prefix is stored/i)).toBeInTheDocument()
 
