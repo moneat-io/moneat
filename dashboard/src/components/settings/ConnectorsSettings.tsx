@@ -32,7 +32,9 @@ import type {
   ConnectorConnectionState,
   ConnectorFamily,
   ConnectorHealth,
+  ConnectorInstallationResponse,
   ConnectorProviderDefinition,
+  ConnectorProviderStateDetail,
   ConnectorStateResponse,
   OrganizationIntegration,
 } from '@/lib/api/types'
@@ -55,6 +57,13 @@ import {useToast} from '@/hooks/useToast'
 import {trackEvent} from '@/lib/analytics'
 import {ConnectorLogo} from './BrandLogos'
 import {SettingsSection} from './SettingsPrimitives'
+import {ConnectorSetupDialog, RevenueCatManageDialog} from './ConnectorInstallationDialogs'
+import {
+  type HealthDescriptor,
+  describeConnectorHealth,
+  effectiveConnectorState,
+  isInstallationBacked,
+} from './connectorHealth'
 
 // ── capability facets ───────────────────────────────────────────────────────
 type Facet = 'all' | 'notifications' | 'workflows' | 'dataimport' | 'dashboard' | 'webhooks'
@@ -93,6 +102,8 @@ interface ConnectorView {
   readonly availability: 'available' | 'planned' | 'enterprise'
   readonly integration?: OrganizationIntegration
   readonly state?: ConnectorConnectionState
+  readonly installation?: ConnectorInstallationResponse
+  readonly detail?: ConnectorProviderStateDetail | null
   readonly connected: boolean
 }
 
@@ -113,7 +124,9 @@ function getProviderHealth(connected: boolean, enabled?: boolean): ConnectorHeal
 function buildViews(
   providers: ConnectorProviderDefinition[],
   integrations: OrganizationIntegration[],
-  states: Map<string, ConnectorConnectionState>
+  states: Map<string, ConnectorConnectionState>,
+  installations: Map<string, ConnectorInstallationResponse>,
+  details: Map<string, ConnectorProviderStateDetail>
 ): ConnectorView[] {
   return providers.map((provider) => {
     const facets = [...new Set(provider.uses.map((u) => FAMILY_TO_FACET[u.family]))]
@@ -121,21 +134,36 @@ function buildViews(
     const integration = integrations.find(
       (i) => i.integrationType === provider.id && i.isConfigured
     )
-    // Connection comes from a configured integration; `state` only enriches it
-    // with live health. Setup for non-OAuth providers still gates on availability.
+    // Connection comes from a configured OAuth integration (Slack/Discord) or an
+    // installation-backed connector (RevenueCat); `state`/`detail` enrich it with
+    // live health. Setup for unconnected providers still gates on availability.
     const state = states.get(provider.id)
-    return {provider, facets, availability, integration, state, connected: !!integration}
+    const installation = installations.get(provider.id)
+    const detail = details.get(provider.id)
+    return {
+      provider,
+      facets,
+      availability,
+      integration,
+      state,
+      installation,
+      detail,
+      connected: !!integration || !!installation,
+    }
   })
 }
 
+// Notification connectors (Slack/Discord) read as "Active" when healthy. Shares
+// the {tone, badge, label} shape with describeConnectorHealth so cards can render
+// either uniformly.
 function describeHealth(
   enabled: boolean,
   health: ConnectorHealth | null | undefined
-): {tone: 'success' | 'neutral' | 'warning' | 'danger'; label: string} {
-  if (!enabled) return {tone: 'neutral', label: 'Disabled'}
-  if (health === 'error') return {tone: 'danger', label: 'Error'}
-  if (health === 'degraded') return {tone: 'warning', label: 'Degraded'}
-  return {tone: 'success', label: 'Active'}
+): HealthDescriptor {
+  if (!enabled) return {tone: 'neutral', badge: 'secondary', label: 'Disabled'}
+  if (health === 'error') return {tone: 'danger', badge: 'danger', label: 'Error'}
+  if (health === 'degraded') return {tone: 'warning', badge: 'warning', label: 'Degraded'}
+  return {tone: 'success', badge: 'success', label: 'Active'}
 }
 
 function buildStateMap(state?: ConnectorStateResponse): Map<string, ConnectorConnectionState> {
@@ -159,11 +187,25 @@ function buildStateMap(state?: ConnectorStateResponse): Map<string, ConnectorCon
   return byProvider
 }
 
+// Rich per-provider state detail (mapped/unmapped/failed counts, lag, etc.) for
+// installation-backed connectors, keyed by provider id.
+function buildDetailMap(
+  state?: ConnectorStateResponse
+): Map<string, ConnectorProviderStateDetail> {
+  const byProvider = new Map<string, ConnectorProviderStateDetail>()
+  for (const provider of state?.providers ?? []) {
+    const withDetail = provider.uses.find((use) => use.detail)
+    if (withDetail?.detail) byProvider.set(provider.providerId, withDetail.detail)
+  }
+  return byProvider
+}
+
 export function ConnectorsSettings() {
   const searchRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [facet, setFacet] = useState<Facet>('all')
   const [manageProviderId, setManageProviderId] = useState<string | null>(null)
+  const [setupProviderId, setSetupProviderId] = useState<string | null>(null)
 
   const {data: catalog, isLoading: catalogLoading} = useQuery({
     queryKey: ['connectorProviders'],
@@ -183,19 +225,38 @@ export function ConnectorsSettings() {
     enabled: api.isAuthenticated(),
     retry: false,
   })
+  // Installations back the generic connectors (e.g. RevenueCat); presence here
+  // marks a provider connected. Degrades to empty so OAuth connectors still work.
+  const {data: installationsData} = useQuery({
+    queryKey: ['connectorInstallations'],
+    queryFn: () => api.getConnectorInstallations(),
+    enabled: api.isAuthenticated(),
+    retry: false,
+  })
 
-  const stateMap = useMemo(
-    () => buildStateMap(connectorState),
-    [connectorState]
-  )
+  const stateMap = useMemo(() => buildStateMap(connectorState), [connectorState])
+  const detailMap = useMemo(() => buildDetailMap(connectorState), [connectorState])
+  const installationMap = useMemo(() => {
+    // listInstallations is newest-first and excludes deleted rows, so the first
+    // installation per provider is the active one to manage.
+    const map = new Map<string, ConnectorInstallationResponse>()
+    for (const installation of installationsData?.installations ?? []) {
+      if (!map.has(installation.providerId)) map.set(installation.providerId, installation)
+    }
+    return map
+  }, [installationsData])
 
   const views = useMemo(
-    () => buildViews(catalog?.providers ?? [], integrations, stateMap),
-    [catalog, integrations, stateMap]
+    () => buildViews(catalog?.providers ?? [], integrations, stateMap, installationMap, detailMap),
+    [catalog, integrations, stateMap, installationMap, detailMap]
   )
   const manage = useMemo(
     () => views.find((v) => v.provider.id === manageProviderId) ?? null,
     [views, manageProviderId]
+  )
+  const setup = useMemo(
+    () => views.find((v) => v.provider.id === setupProviderId) ?? null,
+    [views, setupProviderId]
   )
 
   const filtered = useMemo(() => {
@@ -268,14 +329,24 @@ export function ConnectorsSettings() {
           {connected.length > 0 && (
             <ConnectorGroup title="Connected" count={connected.length}>
               {connected.map((v) => (
-                <ConnectorCard key={v.provider.id} view={v} onManage={() => setManageProviderId(v.provider.id)} />
+                <ConnectorCard
+                  key={v.provider.id}
+                  view={v}
+                  onManage={() => setManageProviderId(v.provider.id)}
+                  onSetup={() => setSetupProviderId(v.provider.id)}
+                />
               ))}
             </ConnectorGroup>
           )}
           {available.length > 0 && (
             <ConnectorGroup title="Available">
               {available.map((v) => (
-                <ConnectorCard key={v.provider.id} view={v} onManage={() => setManageProviderId(v.provider.id)} />
+                <ConnectorCard
+                  key={v.provider.id}
+                  view={v}
+                  onManage={() => setManageProviderId(v.provider.id)}
+                  onSetup={() => setSetupProviderId(v.provider.id)}
+                />
               ))}
             </ConnectorGroup>
           )}
@@ -287,8 +358,10 @@ export function ConnectorsSettings() {
         </>
       )}
 
-      {manage && (
-        <ManageConnectorDialog view={manage} onClose={() => setManageProviderId(null)} />
+      <ConnectorManageDialogSwitch view={manage} onClose={() => setManageProviderId(null)} />
+
+      {setup && (
+        <ConnectorSetupDialog provider={setup.provider} onClose={() => setSetupProviderId(null)} />
       )}
     </section>
   )
@@ -318,11 +391,39 @@ function ConnectorGroup({
   )
 }
 
-function ConnectorCard({view, onManage}: Readonly<{view: ConnectorView; onManage: () => void}>) {
+function ConnectorManageDialogSwitch({
+  view,
+  onClose,
+}: Readonly<{view?: ConnectorView | null; onClose: () => void}>) {
+  if (!view) return null
+  if (view.installation) {
+    return (
+      <RevenueCatManageDialog
+        provider={view.provider}
+        installation={view.installation}
+        detail={view.detail}
+        onClose={onClose}
+      />
+    )
+  }
+  return <ManageConnectorDialog view={view} onClose={onClose} />
+}
+
+function ConnectorCard({
+  view,
+  onManage,
+  onSetup,
+}: Readonly<{view: ConnectorView; onManage: () => void; onSetup: () => void}>) {
   const {toast} = useToast()
-  const {provider, facets, availability, integration, connected, state} = view
-  const enabled = integration?.enabled ?? false
-  const {tone: healthTone, label: healthLabel} = describeHealth(enabled, state?.health)
+  const {provider, facets, availability, integration, installation, detail, connected, state} = view
+
+  const installationBacked = isInstallationBacked(provider)
+  const enabled = installationBacked ? (installation?.enabled ?? true) : (integration?.enabled ?? false)
+  const installState = installationBacked ? effectiveConnectorState(detail, installation) : undefined
+  const footerHealth = installationBacked
+    ? describeConnectorHealth(installState, enabled)
+    : describeHealth(enabled, state?.health)
+  const footerTitle = installationBacked ? (detail?.message ?? undefined) : (state?.detail ?? undefined)
 
   const slackOAuth = useMutation({
     mutationFn: () =>
@@ -335,19 +436,21 @@ function ConnectorCard({view, onManage}: Readonly<{view: ConnectorView; onManage
       toast({title: 'Failed to start connection', description: err.message, variant: 'destructive'}),
   })
 
-  const canConnect = OAUTH_PROVIDERS.has(provider.id) && availability === 'available'
+  const canOAuthConnect = OAUTH_PROVIDERS.has(provider.id) && availability === 'available'
+  const canInstall = installationBacked && availability === 'available'
+  const usedBy = [...new Set(facets.map((f) => FACET_META[f].usedBy))].slice(0, 2).join(', ') || '—'
 
   return (
     <div className={cn('flex flex-col overflow-hidden rounded-lg border bg-card', !connected && availability !== 'available' && 'opacity-70')}>
-      <div className="flex items-start gap-3 p-3.5 pb-0">
-        <ConnectorLogo providerId={provider.id} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-semibold">{provider.name}</span>
-            <StatusBadge connected={connected} enabled={enabled} availability={availability} health={state?.health} />
-          </div>
-        </div>
-      </div>
+      <ConnectorCardHeader
+        provider={provider}
+        connected={connected}
+        installationBacked={installationBacked}
+        enabled={enabled}
+        availability={availability}
+        state={state}
+        footerHealth={footerHealth}
+      />
 
       {!connected && (
         <p className="px-3.5 pt-2 text-xs leading-relaxed text-muted-foreground">
@@ -370,62 +473,239 @@ function ConnectorCard({view, onManage}: Readonly<{view: ConnectorView; onManage
         })}
       </div>
 
-      {connected && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
-          <dt className="text-muted-foreground">Used by</dt>
-          <dd className="m-0 text-right font-medium">
-            {[...new Set(facets.map((f) => FACET_META[f].usedBy))].slice(0, 2).join(', ') || '—'}
-          </dd>
-          {integration?.channelName && (
-            <>
-              <dt className="text-muted-foreground">Channel</dt>
-              <dd className="m-0 text-right font-mono">#{integration.channelName}</dd>
-            </>
-          )}
-          {integration?.teamName && (
-            <>
-              <dt className="text-muted-foreground">Workspace</dt>
-              <dd className="m-0 truncate text-right font-medium">{integration.teamName}</dd>
-            </>
-          )}
-        </dl>
-      )}
+      <ConnectorCardDetails
+        connected={connected}
+        usedBy={usedBy}
+        installation={installationBacked ? installation : undefined}
+        integration={integration}
+      />
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t px-3.5 py-2.5">
-        {connected ? (
-          <>
-            <span
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-              title={state?.detail ?? undefined}
-            >
-              <StatusDot tone={healthTone} size="sm" />
-              {healthLabel}
-            </span>
-            <Button variant="outline" size="sm" onClick={onManage}>
-              Manage
-            </Button>
-          </>
-        ) : (
-          <>
-            <span />
-            {canConnect ? (
-              <Button size="sm" onClick={() => slackOAuth.mutate()} disabled={slackOAuth.isPending}>
-                {slackOAuth.isPending ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                Connect
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" disabled title={availability === 'enterprise' ? 'Enterprise plan' : 'Coming soon'}>
-                {availability === 'enterprise' ? 'Enterprise' : 'Coming soon'}
-              </Button>
-            )}
-          </>
-        )}
+        <ConnectorCardFooter
+          connected={connected}
+          footerTitle={footerTitle}
+          footerHealth={footerHealth}
+          canOAuthConnect={canOAuthConnect}
+          canInstall={canInstall}
+          oauthPending={slackOAuth.isPending}
+          availability={availability}
+          onManage={onManage}
+          onOAuthConnect={() => slackOAuth.mutate()}
+          onSetup={onSetup}
+        />
       </div>
     </div>
+  )
+}
+
+function ConnectorCardHeader({
+  provider,
+  connected,
+  installationBacked,
+  enabled,
+  availability,
+  state,
+  footerHealth,
+}: {
+  readonly provider: ConnectorProviderDefinition
+  readonly connected: boolean
+  readonly installationBacked: boolean
+  readonly enabled: boolean
+  readonly availability: ConnectorAvailability
+  readonly state?: ConnectorConnectionState
+  readonly footerHealth: HealthDescriptor
+}) {
+  return (
+    <div className="flex items-start gap-3 p-3.5 pb-0">
+      <ConnectorLogo providerId={provider.id} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold">{provider.name}</span>
+          <ConnectorCardStatus
+            connected={connected}
+            installationBacked={installationBacked}
+            enabled={enabled}
+            availability={availability}
+            health={state?.health}
+            footerHealth={footerHealth}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConnectorCardStatus({
+  connected,
+  installationBacked,
+  enabled,
+  availability,
+  health,
+  footerHealth,
+}: {
+  readonly connected: boolean
+  readonly installationBacked: boolean
+  readonly enabled: boolean
+  readonly availability: ConnectorAvailability
+  readonly health?: ConnectorHealth | null
+  readonly footerHealth: HealthDescriptor
+}) {
+  if (connected && installationBacked) {
+    return <Badge variant={footerHealth.badge}>{footerHealth.label}</Badge>
+  }
+  return <StatusBadge connected={connected} enabled={enabled} availability={availability} health={health} />
+}
+
+function ConnectorCardDetails({
+  connected,
+  usedBy,
+  installation,
+  integration,
+}: {
+  readonly connected: boolean
+  readonly usedBy: string
+  readonly installation?: ConnectorInstallationResponse
+  readonly integration?: OrganizationIntegration
+}) {
+  if (!connected) return null
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
+      <dt className="text-muted-foreground">Used by</dt>
+      <dd className="m-0 text-right font-medium">{usedBy}</dd>
+      <ConnectorCardConnectionFields installation={installation} integration={integration} />
+    </dl>
+  )
+}
+
+function ConnectorCardConnectionFields({
+  installation,
+  integration,
+}: {
+  readonly installation?: ConnectorInstallationResponse
+  readonly integration?: OrganizationIntegration
+}) {
+  if (installation) {
+    return (
+      <>
+        <dt className="text-muted-foreground">Project</dt>
+        <dd className="m-0 truncate text-right font-mono">
+          {installation.externalProjectName ?? installation.externalProjectId ?? '—'}
+        </dd>
+        {installation.apiSecretLastFour && (
+          <>
+            <dt className="text-muted-foreground">API key</dt>
+            <dd className="m-0 text-right font-mono">•••• {installation.apiSecretLastFour}</dd>
+          </>
+        )}
+      </>
+    )
+  }
+  return (
+    <>
+      {integration?.channelName && (
+        <>
+          <dt className="text-muted-foreground">Channel</dt>
+          <dd className="m-0 text-right font-mono">#{integration.channelName}</dd>
+        </>
+      )}
+      {integration?.teamName && (
+        <>
+          <dt className="text-muted-foreground">Workspace</dt>
+          <dd className="m-0 truncate text-right font-medium">{integration.teamName}</dd>
+        </>
+      )}
+    </>
+  )
+}
+
+function ConnectorCardFooter({
+  connected,
+  footerTitle,
+  footerHealth,
+  canOAuthConnect,
+  canInstall,
+  oauthPending,
+  availability,
+  onManage,
+  onOAuthConnect,
+  onSetup,
+}: {
+  readonly connected: boolean
+  readonly footerTitle?: string
+  readonly footerHealth: HealthDescriptor
+  readonly canOAuthConnect: boolean
+  readonly canInstall: boolean
+  readonly oauthPending: boolean
+  readonly availability: ConnectorAvailability
+  readonly onManage: () => void
+  readonly onOAuthConnect: () => void
+  readonly onSetup: () => void
+}) {
+  if (connected) {
+    return (
+      <>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={footerTitle}>
+          <StatusDot tone={footerHealth.tone} size="sm" />
+          {footerHealth.label}
+        </span>
+        <Button variant="outline" size="sm" onClick={onManage}>
+          Manage
+        </Button>
+      </>
+    )
+  }
+
+  if (canOAuthConnect) {
+    return (
+      <>
+        <span />
+        <Button size="sm" onClick={onOAuthConnect} disabled={oauthPending}>
+          <ConnectorConnectButtonIcon pending={oauthPending} />
+          Connect
+        </Button>
+      </>
+    )
+  }
+
+  if (canInstall) {
+    return (
+      <>
+        <span />
+        <Button size="sm" onClick={onSetup}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Connect
+        </Button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <span />
+      <UnavailableConnectorButton availability={availability} />
+    </>
+  )
+}
+
+function ConnectorConnectButtonIcon({pending}: Readonly<{pending: boolean}>) {
+  if (pending) return <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+  return <Plus className="mr-1.5 h-3.5 w-3.5" />
+}
+
+function UnavailableConnectorButton({
+  availability,
+}: Readonly<{availability: ConnectorAvailability}>) {
+  if (availability === 'enterprise') {
+    return (
+      <Button size="sm" variant="outline" disabled title="Enterprise plan">
+        Enterprise
+      </Button>
+    )
+  }
+  return (
+    <Button size="sm" variant="outline" disabled title="Coming soon">
+      Coming soon
+    </Button>
   )
 }
 
