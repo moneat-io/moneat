@@ -23,7 +23,6 @@ import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
-import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
 import com.moneat.shared.services.PulseService
@@ -86,7 +85,6 @@ private fun Application.initializeTaskLock() {
 
 private class SchedulerBackgroundJobs {
     private val koin = GlobalContext.get()
-    private val monitorAlertService = koin.get<MonitorAlertService>()
     private val dashboardAlertService = koin.get<DashboardAlertService>()
     private val retentionBackgroundService = koin.get<RetentionBackgroundService>()
     private val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
@@ -94,7 +92,6 @@ private class SchedulerBackgroundJobs {
     private val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
 
     fun start(jobScope: CoroutineScope) {
-        monitorAlertService.start(jobScope)
         dashboardAlertService.start(jobScope)
         retentionBackgroundService.start(jobScope)
         traceFinalizerBackgroundService.start(jobScope)
@@ -103,7 +100,6 @@ private class SchedulerBackgroundJobs {
     }
 
     fun stop() {
-        monitorAlertService.stop()
         dashboardAlertService.stop()
         retentionBackgroundService.stop()
         traceFinalizerBackgroundService.stop()
