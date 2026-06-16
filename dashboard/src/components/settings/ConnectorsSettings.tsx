@@ -358,16 +358,7 @@ export function ConnectorsSettings() {
         </>
       )}
 
-      {manage && manage.installation ? (
-        <RevenueCatManageDialog
-          provider={manage.provider}
-          installation={manage.installation}
-          detail={manage.detail}
-          onClose={() => setManageProviderId(null)}
-        />
-      ) : manage ? (
-        <ManageConnectorDialog view={manage} onClose={() => setManageProviderId(null)} />
-      ) : null}
+      <ConnectorManageDialogSwitch view={manage} onClose={() => setManageProviderId(null)} />
 
       {setup && (
         <ConnectorSetupDialog provider={setup.provider} onClose={() => setSetupProviderId(null)} />
@@ -398,6 +389,24 @@ function ConnectorGroup({
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">{children}</div>
     </div>
   )
+}
+
+function ConnectorManageDialogSwitch({
+  view,
+  onClose,
+}: Readonly<{view?: ConnectorView | null; onClose: () => void}>) {
+  if (!view) return null
+  if (view.installation) {
+    return (
+      <RevenueCatManageDialog
+        provider={view.provider}
+        installation={view.installation}
+        detail={view.detail}
+        onClose={onClose}
+      />
+    )
+  }
+  return <ManageConnectorDialog view={view} onClose={onClose} />
 }
 
 function ConnectorCard({
@@ -433,19 +442,15 @@ function ConnectorCard({
 
   return (
     <div className={cn('flex flex-col overflow-hidden rounded-lg border bg-card', !connected && availability !== 'available' && 'opacity-70')}>
-      <div className="flex items-start gap-3 p-3.5 pb-0">
-        <ConnectorLogo providerId={provider.id} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-semibold">{provider.name}</span>
-            {connected && installationBacked ? (
-              <Badge variant={footerHealth.badge}>{footerHealth.label}</Badge>
-            ) : (
-              <StatusBadge connected={connected} enabled={enabled} availability={availability} health={state?.health} />
-            )}
-          </div>
-        </div>
-      </div>
+      <ConnectorCardHeader
+        provider={provider}
+        connected={connected}
+        installationBacked={installationBacked}
+        enabled={enabled}
+        availability={availability}
+        state={state}
+        footerHealth={footerHealth}
+      />
 
       {!connected && (
         <p className="px-3.5 pt-2 text-xs leading-relaxed text-muted-foreground">
@@ -468,82 +473,239 @@ function ConnectorCard({
         })}
       </div>
 
-      {connected && (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
-          <dt className="text-muted-foreground">Used by</dt>
-          <dd className="m-0 text-right font-medium">{usedBy}</dd>
-          {installationBacked && installation ? (
-            <>
-              <dt className="text-muted-foreground">Project</dt>
-              <dd className="m-0 truncate text-right font-mono">
-                {installation.externalProjectName ?? installation.externalProjectId ?? '—'}
-              </dd>
-              {installation.apiSecretLastFour && (
-                <>
-                  <dt className="text-muted-foreground">API key</dt>
-                  <dd className="m-0 text-right font-mono">•••• {installation.apiSecretLastFour}</dd>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              {integration?.channelName && (
-                <>
-                  <dt className="text-muted-foreground">Channel</dt>
-                  <dd className="m-0 text-right font-mono">#{integration.channelName}</dd>
-                </>
-              )}
-              {integration?.teamName && (
-                <>
-                  <dt className="text-muted-foreground">Workspace</dt>
-                  <dd className="m-0 truncate text-right font-medium">{integration.teamName}</dd>
-                </>
-              )}
-            </>
-          )}
-        </dl>
-      )}
+      <ConnectorCardDetails
+        connected={connected}
+        usedBy={usedBy}
+        installation={installationBacked ? installation : undefined}
+        integration={integration}
+      />
 
       <div className="mt-auto flex items-center justify-between gap-2 border-t px-3.5 py-2.5">
-        {connected ? (
-          <>
-            <span
-              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-              title={footerTitle}
-            >
-              <StatusDot tone={footerHealth.tone} size="sm" />
-              {footerHealth.label}
-            </span>
-            <Button variant="outline" size="sm" onClick={onManage}>
-              Manage
-            </Button>
-          </>
-        ) : (
-          <>
-            <span />
-            {canOAuthConnect ? (
-              <Button size="sm" onClick={() => slackOAuth.mutate()} disabled={slackOAuth.isPending}>
-                {slackOAuth.isPending ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plus className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                Connect
-              </Button>
-            ) : canInstall ? (
-              <Button size="sm" onClick={onSetup}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Connect
-              </Button>
-            ) : (
-              <Button size="sm" variant="outline" disabled title={availability === 'enterprise' ? 'Enterprise plan' : 'Coming soon'}>
-                {availability === 'enterprise' ? 'Enterprise' : 'Coming soon'}
-              </Button>
-            )}
-          </>
-        )}
+        <ConnectorCardFooter
+          connected={connected}
+          footerTitle={footerTitle}
+          footerHealth={footerHealth}
+          canOAuthConnect={canOAuthConnect}
+          canInstall={canInstall}
+          oauthPending={slackOAuth.isPending}
+          availability={availability}
+          onManage={onManage}
+          onOAuthConnect={() => slackOAuth.mutate()}
+          onSetup={onSetup}
+        />
       </div>
     </div>
+  )
+}
+
+function ConnectorCardHeader({
+  provider,
+  connected,
+  installationBacked,
+  enabled,
+  availability,
+  state,
+  footerHealth,
+}: {
+  readonly provider: ConnectorProviderDefinition
+  readonly connected: boolean
+  readonly installationBacked: boolean
+  readonly enabled: boolean
+  readonly availability: ConnectorAvailability
+  readonly state?: ConnectorConnectionState
+  readonly footerHealth: HealthDescriptor
+}) {
+  return (
+    <div className="flex items-start gap-3 p-3.5 pb-0">
+      <ConnectorLogo providerId={provider.id} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold">{provider.name}</span>
+          <ConnectorCardStatus
+            connected={connected}
+            installationBacked={installationBacked}
+            enabled={enabled}
+            availability={availability}
+            health={state?.health}
+            footerHealth={footerHealth}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ConnectorCardStatus({
+  connected,
+  installationBacked,
+  enabled,
+  availability,
+  health,
+  footerHealth,
+}: {
+  readonly connected: boolean
+  readonly installationBacked: boolean
+  readonly enabled: boolean
+  readonly availability: ConnectorAvailability
+  readonly health?: ConnectorHealth | null
+  readonly footerHealth: HealthDescriptor
+}) {
+  if (connected && installationBacked) {
+    return <Badge variant={footerHealth.badge}>{footerHealth.label}</Badge>
+  }
+  return <StatusBadge connected={connected} enabled={enabled} availability={availability} health={health} />
+}
+
+function ConnectorCardDetails({
+  connected,
+  usedBy,
+  installation,
+  integration,
+}: {
+  readonly connected: boolean
+  readonly usedBy: string
+  readonly installation?: ConnectorInstallationResponse
+  readonly integration?: OrganizationIntegration
+}) {
+  if (!connected) return null
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
+      <dt className="text-muted-foreground">Used by</dt>
+      <dd className="m-0 text-right font-medium">{usedBy}</dd>
+      <ConnectorCardConnectionFields installation={installation} integration={integration} />
+    </dl>
+  )
+}
+
+function ConnectorCardConnectionFields({
+  installation,
+  integration,
+}: {
+  readonly installation?: ConnectorInstallationResponse
+  readonly integration?: OrganizationIntegration
+}) {
+  if (installation) {
+    return (
+      <>
+        <dt className="text-muted-foreground">Project</dt>
+        <dd className="m-0 truncate text-right font-mono">
+          {installation.externalProjectName ?? installation.externalProjectId ?? '—'}
+        </dd>
+        {installation.apiSecretLastFour && (
+          <>
+            <dt className="text-muted-foreground">API key</dt>
+            <dd className="m-0 text-right font-mono">•••• {installation.apiSecretLastFour}</dd>
+          </>
+        )}
+      </>
+    )
+  }
+  return (
+    <>
+      {integration?.channelName && (
+        <>
+          <dt className="text-muted-foreground">Channel</dt>
+          <dd className="m-0 text-right font-mono">#{integration.channelName}</dd>
+        </>
+      )}
+      {integration?.teamName && (
+        <>
+          <dt className="text-muted-foreground">Workspace</dt>
+          <dd className="m-0 truncate text-right font-medium">{integration.teamName}</dd>
+        </>
+      )}
+    </>
+  )
+}
+
+function ConnectorCardFooter({
+  connected,
+  footerTitle,
+  footerHealth,
+  canOAuthConnect,
+  canInstall,
+  oauthPending,
+  availability,
+  onManage,
+  onOAuthConnect,
+  onSetup,
+}: {
+  readonly connected: boolean
+  readonly footerTitle?: string
+  readonly footerHealth: HealthDescriptor
+  readonly canOAuthConnect: boolean
+  readonly canInstall: boolean
+  readonly oauthPending: boolean
+  readonly availability: ConnectorAvailability
+  readonly onManage: () => void
+  readonly onOAuthConnect: () => void
+  readonly onSetup: () => void
+}) {
+  if (connected) {
+    return (
+      <>
+        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground" title={footerTitle}>
+          <StatusDot tone={footerHealth.tone} size="sm" />
+          {footerHealth.label}
+        </span>
+        <Button variant="outline" size="sm" onClick={onManage}>
+          Manage
+        </Button>
+      </>
+    )
+  }
+
+  if (canOAuthConnect) {
+    return (
+      <>
+        <span />
+        <Button size="sm" onClick={onOAuthConnect} disabled={oauthPending}>
+          <ConnectorConnectButtonIcon pending={oauthPending} />
+          Connect
+        </Button>
+      </>
+    )
+  }
+
+  if (canInstall) {
+    return (
+      <>
+        <span />
+        <Button size="sm" onClick={onSetup}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          Connect
+        </Button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <span />
+      <UnavailableConnectorButton availability={availability} />
+    </>
+  )
+}
+
+function ConnectorConnectButtonIcon({pending}: Readonly<{pending: boolean}>) {
+  if (pending) return <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+  return <Plus className="mr-1.5 h-3.5 w-3.5" />
+}
+
+function UnavailableConnectorButton({
+  availability,
+}: Readonly<{availability: ConnectorAvailability}>) {
+  if (availability === 'enterprise') {
+    return (
+      <Button size="sm" variant="outline" disabled title="Enterprise plan">
+        Enterprise
+      </Button>
+    )
+  }
+  return (
+    <Button size="sm" variant="outline" disabled title="Coming soon">
+      Coming soon
+    </Button>
   )
 }
 

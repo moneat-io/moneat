@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import type {Dispatch, SetStateAction} from 'react'
 import {useMemo, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
@@ -34,9 +35,11 @@ import {
 import {api} from '@/lib/api'
 import type {
   ConnectorBindingInput,
+  ConnectorExternalResourceResponse,
   ConnectorInstallationResponse,
   ConnectorProviderDefinition,
   ConnectorProviderStateDetail,
+  Project,
 } from '@/lib/api/types'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -67,6 +70,9 @@ import {
 const REVENUECAT_APP_RESOURCE_TYPE = 'revenuecat_app'
 const PROJECT_LOCAL_RESOURCE_TYPE = 'project'
 const UNMAPPED_VALUE = '__unmapped__'
+const REVENUECAT_PROJECT_URL_RE = /projects\/([^/?#\s]+)/i
+const WHITESPACE_RE = /\s+/g
+const PROJECT_PREFIX_RE = /^proj/i
 
 const ENVIRONMENT_LABELS: Record<string, string> = {
   production_and_sandbox: 'Production & sandbox',
@@ -84,9 +90,9 @@ function ts(value: string | null | undefined): string {
 // drop stray whitespace, and strip a redundant leading `proj` so it isn't doubled.
 function normalizeProjectIdInput(raw: string): string {
   let value = raw.trim()
-  const fromUrl = value.match(/projects\/([^/?#\s]+)/i)
+  const fromUrl = REVENUECAT_PROJECT_URL_RE.exec(value)
   if (fromUrl) value = fromUrl[1]
-  return value.replace(/\s+/g, '').replace(/^proj/i, '')
+  return value.replaceAll(WHITESPACE_RE, '').replace(PROJECT_PREFIX_RE, '')
 }
 
 // ── small primitives ─────────────────────────────────────────────────────────
@@ -347,7 +353,7 @@ export function ConnectorSetupDialog({
                   >
                     Project settings → API keys ↗
                   </a>
-                  . Moneat validates it before connecting.
+                  {'. '}Moneat validates it before connecting.
                 </p>
               </div>
               <div className="rounded-md border bg-muted/40 p-3">
@@ -1023,74 +1029,13 @@ function MappingTab({installationId, active}: Readonly<{installationId: string; 
         </Button>
       </div>
 
-      {resourcesLoading ? (
-        <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading apps…
-        </div>
-      ) : apps.length === 0 ? (
-        <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-          <Inbox className="mx-auto mb-2 h-8 w-8 opacity-50" />
-          <p className="font-medium">No RevenueCat apps yet</p>
-          <p className="mt-0.5 text-xs">Refresh apps after creating apps in your RevenueCat project.</p>
-        </div>
-      ) : (
-        <div className="divide-y rounded-md border">
-          {apps.map((app) => {
-            const mappedTo = valueFor(app.externalResourceId)
-            return (
-              <div key={app.externalResourceId} className="flex items-center gap-3 px-3 py-2">
-                <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">
-                    {app.displayName ?? app.externalResourceId}
-                  </div>
-                  <div className="truncate font-mono text-[11px] text-muted-foreground">
-                    {app.externalResourceId}
-                  </div>
-                </div>
-                <Select
-                  value={mappedTo || UNMAPPED_VALUE}
-                  onValueChange={(val) =>
-                    setDraft((d) => ({
-                      ...d,
-                      [app.externalResourceId]: val === UNMAPPED_VALUE ? '' : val,
-                    }))
-                  }
-                >
-                  <SelectTrigger
-                    className="h-8 w-[200px]"
-                    aria-label={`Moneat project for ${app.displayName ?? app.externalResourceId}`}
-                  >
-                    <SelectValue placeholder="Not mapped" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={UNMAPPED_VALUE}>Not mapped</SelectItem>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {mappedTo ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground"
-                    aria-label={`Unmap ${app.displayName ?? app.externalResourceId}`}
-                    onClick={() => setDraft((d) => ({...d, [app.externalResourceId]: ''}))}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <span className="w-8" />
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      <MappingAppsContent
+        resourcesLoading={resourcesLoading}
+        apps={apps}
+        projects={projects}
+        valueFor={valueFor}
+        setDraft={setDraft}
+      />
 
       <div className="flex items-center justify-end gap-2">
         {isDirty && (
@@ -1102,6 +1047,112 @@ function MappingTab({installationId, active}: Readonly<{installationId: string; 
           {save.isPending ? 'Saving…' : 'Save mapping'}
         </Button>
       </div>
+    </div>
+  )
+}
+
+function MappingAppsContent({
+  resourcesLoading,
+  apps,
+  projects,
+  valueFor,
+  setDraft,
+}: {
+  readonly resourcesLoading: boolean
+  readonly apps: ConnectorExternalResourceResponse[]
+  readonly projects: Project[]
+  readonly valueFor: (appId: string) => string
+  readonly setDraft: Dispatch<SetStateAction<Record<string, string>>>
+}) {
+  if (resourcesLoading) {
+    return (
+      <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading apps…
+      </div>
+    )
+  }
+
+  if (apps.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
+        <Inbox className="mx-auto mb-2 h-8 w-8 opacity-50" />
+        <p className="font-medium">No RevenueCat apps yet</p>
+        <p className="mt-0.5 text-xs">Refresh apps after creating apps in your RevenueCat project.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="divide-y rounded-md border">
+      {apps.map((app) => (
+        <MappingAppRow
+          key={app.externalResourceId}
+          app={app}
+          projects={projects}
+          mappedTo={valueFor(app.externalResourceId)}
+          setDraft={setDraft}
+        />
+      ))}
+    </div>
+  )
+}
+
+function MappingAppRow({
+  app,
+  projects,
+  mappedTo,
+  setDraft,
+}: {
+  readonly app: ConnectorExternalResourceResponse
+  readonly projects: Project[]
+  readonly mappedTo: string
+  readonly setDraft: Dispatch<SetStateAction<Record<string, string>>>
+}) {
+  const appName = app.displayName ?? app.externalResourceId
+  return (
+    <div className="flex items-center gap-3 px-3 py-2">
+      <Link2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{appName}</div>
+        <div className="truncate font-mono text-[11px] text-muted-foreground">
+          {app.externalResourceId}
+        </div>
+      </div>
+      <Select
+        value={mappedTo || UNMAPPED_VALUE}
+        onValueChange={(val) =>
+          setDraft((d) => ({
+            ...d,
+            [app.externalResourceId]: val === UNMAPPED_VALUE ? '' : val,
+          }))
+        }
+      >
+        <SelectTrigger className="h-8 w-[200px]" aria-label={`Moneat project for ${appName}`}>
+          <SelectValue placeholder="Not mapped" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={UNMAPPED_VALUE}>Not mapped</SelectItem>
+          {projects.map((project) => (
+            <SelectItem key={project.id} value={project.id}>
+              {project.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {mappedTo ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground"
+          aria-label={`Unmap ${appName}`}
+          onClick={() => setDraft((d) => ({...d, [app.externalResourceId]: ''}))}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      ) : (
+        <span className="w-8" />
+      )}
     </div>
   )
 }
