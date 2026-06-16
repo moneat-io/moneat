@@ -17,14 +17,31 @@
 package com.moneat.monitoring
 
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.monitor.repositories.HostAlertRepository
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepository
+import com.moneat.monitor.repositories.HostRepositoryImpl
+import com.moneat.monitor.repositories.ResourceOwnershipRepository
+import com.moneat.monitor.repositories.ResourceOwnershipRepositoryImpl
 import com.moneat.monitor.routes.agentApiKeyRoutes
 import com.moneat.monitor.routes.cloudSourceRoutes
 import com.moneat.monitor.routes.infraRoutes
 import com.moneat.monitor.routes.monitorRoutes
 import com.moneat.monitor.routes.resourceCatalogRoutes
+import com.moneat.monitor.services.AgentApiKeyService
+import com.moneat.monitor.services.ClickHouseCloudResourceWriter
+import com.moneat.monitor.services.CloudResourceWriter
+import com.moneat.monitor.services.CloudSourceService
+import com.moneat.monitor.services.CloudSourceVerifier
+import com.moneat.monitor.services.ManagedIdentityCloudSourceVerifier
+import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.services.MonitorService
+import com.moneat.monitor.services.ResourceCatalogService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import mu.KotlinLogging
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 private val logger = KotlinLogging.logger {}
 
@@ -43,6 +60,23 @@ class MonitoringModule : EnterpriseModule {
             agentApiKeyRoutes()
         }
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<HostRepository> { HostRepositoryImpl() }
+                single<HostAlertRepository> { HostAlertRepositoryImpl() }
+
+                single { MonitorService(get(), get(), get(), get()) }
+                single { MonitorAlertService(get(), get()) }
+                single<ResourceOwnershipRepository> { ResourceOwnershipRepositoryImpl() }
+                single { ResourceCatalogService(monitorService = get(), ownershipRepository = get()) }
+                single<CloudSourceVerifier> { ManagedIdentityCloudSourceVerifier() }
+                single<CloudResourceWriter> { ClickHouseCloudResourceWriter() }
+                single { CloudSourceService(get(), get()) }
+                single { AgentApiKeyService() }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) {
         logger.info { "Starting monitoring enterprise background jobs" }

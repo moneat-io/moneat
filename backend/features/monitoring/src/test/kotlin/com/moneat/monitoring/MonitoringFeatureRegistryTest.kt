@@ -18,8 +18,27 @@ package com.moneat.monitoring
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.incident.services.IncidentService
+import com.moneat.monitor.repositories.HostAlertRepository
+import com.moneat.monitor.repositories.HostAlertRepositoryImpl
+import com.moneat.monitor.repositories.HostRepository
+import com.moneat.monitor.repositories.HostRepositoryImpl
+import com.moneat.monitor.repositories.ResourceOwnershipRepository
+import com.moneat.monitor.repositories.ResourceOwnershipRepositoryImpl
+import com.moneat.monitor.services.AgentApiKeyService
+import com.moneat.monitor.services.ClickHouseCloudResourceWriter
+import com.moneat.monitor.services.CloudResourceWriter
+import com.moneat.monitor.services.CloudSourceService
+import com.moneat.monitor.services.CloudSourceVerifier
+import com.moneat.monitor.services.ManagedIdentityCloudSourceVerifier
+import com.moneat.monitor.services.MonitorAlertService
+import com.moneat.monitor.services.MonitorService
+import com.moneat.monitor.services.ResourceCatalogService
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
+import com.moneat.billing.services.PricingTierService
+import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
@@ -29,10 +48,14 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.mockk
+import org.koin.core.KoinApplication
+import org.koin.dsl.module
 import java.util.ServiceLoader
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class MonitoringFeatureRegistryTest {
@@ -52,6 +75,35 @@ class MonitoringFeatureRegistryTest {
             .map { module -> module.name }
 
         assertTrue("Monitoring" in moduleNames)
+    }
+
+    @Test
+    fun `Monitoring module provides feature Koin bindings`() {
+        val koinApplication = KoinApplication.init()
+            .modules(
+                module {
+                    single { mockk<PricingTierService>(relaxed = true) }
+                    single { mockk<RetentionPolicyService>(relaxed = true) }
+                    single { mockk<IncidentService>(relaxed = true) }
+                    single { mockk<WorkflowService>(relaxed = true) }
+                },
+                *MonitoringModule().koinModules().toTypedArray(),
+            )
+
+        try {
+            assertIs<HostRepositoryImpl>(koinApplication.koin.get<HostRepository>())
+            assertIs<HostAlertRepositoryImpl>(koinApplication.koin.get<HostAlertRepository>())
+            assertIs<MonitorService>(koinApplication.koin.get<MonitorService>())
+            assertIs<MonitorAlertService>(koinApplication.koin.get<MonitorAlertService>())
+            assertIs<ResourceOwnershipRepositoryImpl>(koinApplication.koin.get<ResourceOwnershipRepository>())
+            assertIs<ResourceCatalogService>(koinApplication.koin.get<ResourceCatalogService>())
+            assertIs<ManagedIdentityCloudSourceVerifier>(koinApplication.koin.get<CloudSourceVerifier>())
+            assertIs<ClickHouseCloudResourceWriter>(koinApplication.koin.get<CloudResourceWriter>())
+            assertIs<CloudSourceService>(koinApplication.koin.get<CloudSourceService>())
+            assertIs<AgentApiKeyService>(koinApplication.koin.get<AgentApiKeyService>())
+        } finally {
+            koinApplication.close()
+        }
     }
 
     @Test
