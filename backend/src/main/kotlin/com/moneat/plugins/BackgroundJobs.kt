@@ -18,7 +18,6 @@ package com.moneat.plugins
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
-import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
@@ -85,14 +84,12 @@ private fun Application.initializeTaskLock() {
 
 private class SchedulerBackgroundJobs {
     private val koin = GlobalContext.get()
-    private val dashboardAlertService = koin.get<DashboardAlertService>()
     private val retentionBackgroundService = koin.get<RetentionBackgroundService>()
     private val traceFinalizerBackgroundService = koin.get<TraceFinalizerBackgroundService>()
     private val artifactCleanupService = koin.get<ArtifactCleanupService>()
     private val demoLivenessBackgroundService = koin.get<DemoLivenessBackgroundService>()
 
     fun start(jobScope: CoroutineScope) {
-        dashboardAlertService.start(jobScope)
         retentionBackgroundService.start(jobScope)
         traceFinalizerBackgroundService.start(jobScope)
         artifactCleanupService.start(jobScope)
@@ -100,7 +97,6 @@ private class SchedulerBackgroundJobs {
     }
 
     fun stop() {
-        dashboardAlertService.stop()
         retentionBackgroundService.stop()
         traceFinalizerBackgroundService.stop()
         artifactCleanupService.stop()
