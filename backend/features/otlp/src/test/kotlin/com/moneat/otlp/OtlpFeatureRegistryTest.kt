@@ -18,6 +18,8 @@ package com.moneat.otlp
 
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.otlp.services.OtlpApiKeyService
+import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
 import io.ktor.client.call.body
@@ -29,10 +31,12 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import org.koin.core.KoinApplication
 import java.util.ServiceLoader
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class OtlpFeatureRegistryTest {
@@ -52,6 +56,19 @@ class OtlpFeatureRegistryTest {
             .map { module -> module.name }
 
         assertTrue("OTLP" in moduleNames)
+    }
+
+    @Test
+    fun `OTLP module provides feature Koin bindings`() {
+        val koinApplication = KoinApplication.init()
+            .modules(*OtlpModule().koinModules().toTypedArray())
+
+        try {
+            assertIs<OtlpApiKeyService>(koinApplication.koin.get<OtlpApiKeyService>())
+            assertIs<OtlpServiceRoutingService>(koinApplication.koin.get<OtlpServiceRoutingService>())
+        } finally {
+            koinApplication.close()
+        }
     }
 
     @Test

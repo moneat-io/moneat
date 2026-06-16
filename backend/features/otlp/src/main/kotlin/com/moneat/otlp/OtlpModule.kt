@@ -23,8 +23,10 @@ import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
+import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpIngestionWorkerBase
 import com.moneat.otlp.services.OtlpMetricsIngestionWorker
+import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.otlp.services.OtlpTraceIngestionWorker
 import io.ktor.server.application.Application
 import io.ktor.server.config.ApplicationConfig
@@ -34,6 +36,8 @@ import io.ktor.server.routing.Route
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 private const val DEFAULT_OTLP_TRACES_QUEUE_KEY = "moneat:otlp-traces:queue"
 private const val DEFAULT_OTLP_TRACES_DLQ_KEY = "moneat:otlp-traces:dlq"
@@ -54,6 +58,14 @@ class OtlpModule : EnterpriseModule {
             otlpFeedbackRoutes()
         }
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single { OtlpApiKeyService() }
+                single { OtlpServiceRoutingService() }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) {
         startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)

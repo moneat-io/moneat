@@ -40,11 +40,6 @@ import com.moneat.events.services.DashboardService
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.incident.services.IncidentService
-import com.moneat.logs.repositories.LogRepository
-import com.moneat.logs.repositories.LogRepositoryImpl
-import com.moneat.logs.services.LogIndexService
-import com.moneat.logs.services.LogManagementService
-import com.moneat.logs.services.LogService
 import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostAlertRepositoryImpl
 import com.moneat.monitor.repositories.HostRepository
@@ -65,8 +60,6 @@ import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.notifications.services.SlackService
-import com.moneat.otlp.services.OtlpApiKeyService
-import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.MembershipRepositoryImpl
 import com.moneat.shared.repositories.OrganizationRepository
@@ -170,17 +163,6 @@ val monitorModule = module {
     single { SyntheticsService(get(), get()) }
 }
 
-/** Log ingestion and querying. */
-val logsModule = module {
-    single<LogRepository> { LogRepositoryImpl() }
-
-    single { LogService(get()) }
-    single { OtlpApiKeyService() }
-    single { OtlpServiceRoutingService() }
-    single { LogIndexService() }
-    single { LogManagementService() }
-}
-
 /** Custom dashboards, alert evaluation, and external data sources. */
 val dashboardsModule = module {
     single<DashboardFolderRepository> { DashboardFolderRepositoryImpl() }
@@ -221,7 +203,6 @@ fun buildAppModules() =
         sharedModule,
         eventsModule,
         monitorModule,
-        logsModule,
         dashboardsModule,
         aiModule,
     )
