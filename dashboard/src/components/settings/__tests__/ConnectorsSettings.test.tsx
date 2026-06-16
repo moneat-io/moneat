@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import {render, screen, waitFor, within} from '@testing-library/react'
+import {fireEvent, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 
@@ -317,6 +317,23 @@ describe('ConnectorsSettings', () => {
     expect(screen.getAllByText('Data import').length).toBeGreaterThan(0)
   })
 
+  it('focuses and filters the connector catalog', async () => {
+    const user = userEvent.setup()
+
+    renderWithClient(<ConnectorsSettings />)
+
+    await screen.findByRole('button', {name: 'Add connector'})
+
+    await user.click(screen.getByRole('button', {name: 'Dashboard data'}))
+    expect(screen.getByText('GitHub')).toBeInTheDocument()
+    expect(screen.queryByText('Slack')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Search connectors…'), {
+      target: {value: 'missing-provider'},
+    })
+    expect(screen.getByText('No connectors match your filters.')).toBeInTheDocument()
+  })
+
   it('submits the generic create payload and reveals the one-time webhook token', async () => {
     const user = userEvent.setup()
     apiMock.createConnectorInstallation.mockResolvedValue({
@@ -394,7 +411,11 @@ describe('ConnectorsSettings', () => {
     await user.click(await screen.findByRole('button', {name: 'Manage'}))
     await user.click(await screen.findByRole('tab', {name: 'App mapping'}))
 
-    // Unmap App A, leave App B mapped, then save.
+    // Unmap App A, confirm the reset control restores the server mapping, then
+    // unmap again and save.
+    await user.click(await screen.findByRole('button', {name: 'Unmap App A'}))
+    await user.click(screen.getByRole('button', {name: 'Reset'}))
+    expect(screen.getByRole('button', {name: 'Save mapping'})).toBeDisabled()
     await user.click(await screen.findByRole('button', {name: 'Unmap App A'}))
     await user.click(screen.getByRole('button', {name: 'Save mapping'}))
 
@@ -414,6 +435,93 @@ describe('ConnectorsSettings', () => {
     )
   })
 
+  it('refreshes an empty RevenueCat app mapping state', async () => {
+    const user = userEvent.setup()
+    connectRevenueCat()
+    apiMock.refreshConnectorExternalResources
+      .mockRejectedValueOnce(new Error('RevenueCat unavailable'))
+      .mockResolvedValueOnce({resources: []})
+
+    renderWithClient(<ConnectorsSettings />)
+
+    await user.click(await screen.findByRole('button', {name: 'Manage'}))
+    await user.click(await screen.findByRole('tab', {name: 'App mapping'}))
+
+    expect(await screen.findByText('No RevenueCat apps yet')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', {name: 'Refresh apps'}))
+
+    await waitFor(() => expect(apiMock.refreshConnectorExternalResources).toHaveBeenCalledWith('inst-1'))
+    await user.click(screen.getByRole('button', {name: 'Refresh apps'}))
+    await waitFor(() => expect(apiMock.refreshConnectorExternalResources).toHaveBeenCalledTimes(2))
+  })
+
+  it('keeps the mapping dialog open when saving bindings fails', async () => {
+    const user = userEvent.setup()
+    connectRevenueCat()
+    apiMock.getConnectorExternalResources.mockResolvedValue({
+      resources: [
+        {
+          id: 'res-a',
+          installationId: 'inst-1',
+          externalProjectId: 'proj_abc',
+          externalResourceType: 'revenuecat_app',
+          externalResourceId: 'appA',
+          displayName: 'App A',
+          lastSeenAt: '2026-06-15T10:00:00Z',
+        },
+      ],
+    })
+    apiMock.getConnectorBindings.mockResolvedValue({
+      bindings: [bindingFor('appA', 'proj1')],
+    })
+    apiMock.getProjects.mockResolvedValue([
+      {id: 'proj1', name: 'Web', slug: 'web', keys: [], dsn: 'dsn1'},
+    ])
+    apiMock.updateConnectorBindings.mockRejectedValue(new Error('save failed'))
+
+    renderWithClient(<ConnectorsSettings />)
+
+    await user.click(await screen.findByRole('button', {name: 'Manage'}))
+    await user.click(await screen.findByRole('tab', {name: 'App mapping'}))
+    await user.click(await screen.findByRole('button', {name: 'Unmap App A'}))
+    await user.click(screen.getByRole('button', {name: 'Save mapping'}))
+
+    await waitFor(() => expect(apiMock.updateConnectorBindings).toHaveBeenCalled())
+    expect(screen.getByRole('button', {name: 'Save mapping'})).toBeInTheDocument()
+  })
+
+  it('shows an unmapped RevenueCat app row without enabling save', async () => {
+    const user = userEvent.setup()
+    connectRevenueCat()
+    apiMock.getConnectorExternalResources.mockResolvedValue({
+      resources: [
+        {
+          id: 'res-c',
+          installationId: 'inst-1',
+          externalProjectId: 'proj_abc',
+          externalResourceType: 'revenuecat_app',
+          externalResourceId: 'appC',
+          displayName: null,
+          lastSeenAt: '2026-06-15T10:00:00Z',
+        },
+      ],
+    })
+    apiMock.getProjects.mockResolvedValue([
+      {id: 'proj1', name: 'Web', slug: 'web', keys: [], dsn: 'dsn1'},
+    ])
+    apiMock.updateConnectorBindings.mockResolvedValue({bindings: []})
+
+    renderWithClient(<ConnectorsSettings />)
+
+    await user.click(await screen.findByRole('button', {name: 'Manage'}))
+    await user.click(await screen.findByRole('tab', {name: 'App mapping'}))
+
+    expect(await screen.findAllByText('appC')).toHaveLength(2)
+    expect(screen.getByLabelText('Moneat project for appC')).toBeInTheDocument()
+    expect(screen.queryByRole('button', {name: 'Unmap appC'})).not.toBeInTheDocument()
+    expect(screen.getByRole('button', {name: 'Save mapping'})).toBeDisabled()
+  })
+
   it('shows copyable webhook setup and reveals a rotated one-time token', async () => {
     const user = userEvent.setup()
     connectRevenueCat()
@@ -431,6 +539,7 @@ describe('ConnectorsSettings', () => {
       await screen.findByDisplayValue('https://moneat.test/api/connectors/revenuecat/inst-1/webhook')
     ).toBeInTheDocument()
     expect(screen.getByRole('button', {name: 'Copy Webhook URL'})).toBeInTheDocument()
+    await user.click(screen.getByRole('button', {name: 'Copy Webhook URL'}))
     // Only a token prefix is stored, so the user is told to rotate to reveal one.
     expect(screen.getByText(/Only the token prefix is stored/i)).toBeInTheDocument()
 
