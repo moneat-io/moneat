@@ -17,10 +17,19 @@
 package com.moneat.org
 
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.org.repositories.OrgInvitationRepository
+import com.moneat.org.repositories.OrgInvitationRepositoryImpl
+import com.moneat.org.repositories.OrgMembershipRepository
+import com.moneat.org.repositories.OrgMembershipRepositoryImpl
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.orgManagementRoutes
+import com.moneat.org.services.AdminService
+import com.moneat.org.services.OrgInvitationService
+import com.moneat.org.services.OrgMembershipService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 class OrgModule : EnterpriseModule {
     override val name: String = "Organization"
@@ -29,6 +38,18 @@ class OrgModule : EnterpriseModule {
         route.adminRoutes()
         route.orgManagementRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<OrgMembershipRepository> { OrgMembershipRepositoryImpl() }
+                single<OrgInvitationRepository> { OrgInvitationRepositoryImpl() }
+
+                single { OrgMembershipService(get()) }
+                single { OrgInvitationService(get(), get(), get()) }
+                single { AdminService(get()) }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) = Unit
 
