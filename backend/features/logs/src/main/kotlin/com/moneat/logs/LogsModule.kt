@@ -19,14 +19,21 @@ package com.moneat.logs
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.logs.repositories.LogRepository
+import com.moneat.logs.repositories.LogRepositoryImpl
 import com.moneat.logs.routes.logIngestRoutes
 import com.moneat.logs.routes.logRoutes
+import com.moneat.logs.services.LogIndexService
 import com.moneat.logs.services.LogIngestionWorker
+import com.moneat.logs.services.LogManagementService
+import com.moneat.logs.services.LogService
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
 import io.ktor.server.routing.Route
 import org.koin.core.context.GlobalContext
+import org.koin.core.module.Module
+import org.koin.dsl.module
 
 private const val DEFAULT_LOG_QUEUE_KEY = "moneat:logs:queue"
 private const val DEFAULT_LOG_DLQ_KEY = "moneat:logs:dlq"
@@ -43,6 +50,16 @@ class LogsModule : EnterpriseModule {
         }
         route.logRoutes()
     }
+
+    override fun koinModules(): List<Module> =
+        listOf(
+            module {
+                single<LogRepository> { LogRepositoryImpl() }
+                single { LogService(get()) }
+                single { LogIndexService() }
+                single { LogManagementService() }
+            }
+        )
 
     override fun startBackgroundJobs(application: Application) {
         startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)
