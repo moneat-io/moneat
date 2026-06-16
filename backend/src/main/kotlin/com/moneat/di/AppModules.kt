@@ -72,13 +72,6 @@ import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
 import com.moneat.notifications.services.SlackService
-import com.moneat.org.repositories.OrgInvitationRepository
-import com.moneat.org.repositories.OrgInvitationRepositoryImpl
-import com.moneat.org.repositories.OrgMembershipRepository
-import com.moneat.org.repositories.OrgMembershipRepositoryImpl
-import com.moneat.org.services.AdminService
-import com.moneat.org.services.OrgInvitationService
-import com.moneat.org.services.OrgMembershipService
 import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.shared.repositories.MembershipRepository
@@ -172,16 +165,6 @@ val authModule = module {
     single { ArtifactCleanupService(get(), get()) }
 }
 
-/** Organization membership, invitations, and admin operations. */
-val orgModule = module {
-    single<OrgMembershipRepository> { OrgMembershipRepositoryImpl() }
-    single<OrgInvitationRepository> { OrgInvitationRepositoryImpl() }
-
-    single { OrgMembershipService(get()) }
-    single { OrgInvitationService(get(), get(), get()) }
-    single { AdminService(get()) }
-}
-
 /** Core error-tracking and telemetry pipeline. */
 val eventsModule = module {
     single<EventRepository> { EventRepositoryImpl() }
@@ -264,7 +247,6 @@ fun buildAppModules() =
     listOf(
         sharedModule,
         authModule,
-        orgModule,
         eventsModule,
         monitorModule,
         logsModule,
