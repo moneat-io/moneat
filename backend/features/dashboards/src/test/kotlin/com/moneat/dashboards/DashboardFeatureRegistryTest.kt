@@ -39,13 +39,18 @@ import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.mockk
+import io.mockk.verify
 import org.koin.core.KoinApplication
+import org.koin.core.context.GlobalContext
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
 import org.koin.dsl.module
 import java.util.ServiceLoader
 import kotlin.test.AfterTest
@@ -57,12 +62,14 @@ import kotlin.test.assertTrue
 class DashboardFeatureRegistryTest {
     @BeforeTest
     fun resetBefore() {
+        stopKoinIfStarted()
         FeatureRegistry.resetForTest()
     }
 
     @AfterTest
     fun resetAfter() {
         FeatureRegistry.resetForTest()
+        stopKoinIfStarted()
     }
 
     @Test
@@ -121,6 +128,42 @@ class DashboardFeatureRegistryTest {
         assertTrue("Dashboards" in response.modules)
     }
 
+    @Test
+    fun `Dashboards module owns alert scheduler lifecycle`() {
+        val application = mockk<Application>(relaxed = true)
+        val dashboardAlertService = mockk<DashboardAlertService>(relaxUnitFun = true)
+        startKoin {
+            modules(
+                module {
+                    single { dashboardAlertService }
+                }
+            )
+        }
+
+        try {
+            val dashboardModule = DashboardModule()
+
+            dashboardModule.startBackgroundJobs(
+                application,
+                startSchedulers = false,
+                startIngestionWorkers = true,
+            )
+            verify(exactly = 0) { dashboardAlertService.start(any()) }
+
+            dashboardModule.startBackgroundJobs(
+                application,
+                startSchedulers = true,
+                startIngestionWorkers = false,
+            )
+            verify(exactly = 1) { dashboardAlertService.start(any()) }
+
+            dashboardModule.stopBackgroundJobs()
+            verify(exactly = 1) { dashboardAlertService.stop() }
+        } finally {
+            stopKoinIfStarted()
+        }
+    }
+
     private suspend fun ApplicationCall.respondFeatures() {
         respond(
             FeaturesResponse(
@@ -129,5 +172,11 @@ class DashboardFeatureRegistryTest {
                 selfHost = false,
             )
         )
+    }
+
+    private fun stopKoinIfStarted() {
+        if (GlobalContext.getOrNull() != null) {
+            stopKoin()
+        }
     }
 }

@@ -33,10 +33,20 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.events.repositories.ProjectRepositoryImpl
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import mu.KotlinLogging
+import org.koin.core.context.GlobalContext
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
+private val logger = KotlinLogging.logger {}
+
 class DashboardModule : EnterpriseModule {
+    private var backgroundJobs: DashboardBackgroundJobs? = null
+
     override val name: String = "Dashboards"
 
     override fun registerRoutes(route: Route) {
@@ -75,7 +85,31 @@ class DashboardModule : EnterpriseModule {
             }
         )
 
-    override fun startBackgroundJobs(application: Application) = Unit
+    override fun startBackgroundJobs(application: Application) {
+        if (backgroundJobs != null) return
+        logger.info { "Starting dashboard background jobs" }
+        backgroundJobs = DashboardBackgroundJobs(GlobalContext.get().get<DashboardAlertService>())
+            .also { it.start() }
+    }
 
-    override fun stopBackgroundJobs() = Unit
+    override fun stopBackgroundJobs() {
+        logger.info { "Stopping dashboard background jobs" }
+        backgroundJobs?.stop()
+        backgroundJobs = null
+    }
+}
+
+private class DashboardBackgroundJobs(
+    private val dashboardAlertService: DashboardAlertService,
+) {
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    fun start() {
+        dashboardAlertService.start(scope)
+    }
+
+    fun stop() {
+        dashboardAlertService.stop()
+        scope.cancel()
+    }
 }

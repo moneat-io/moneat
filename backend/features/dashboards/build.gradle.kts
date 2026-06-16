@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.kotlin.logging)
