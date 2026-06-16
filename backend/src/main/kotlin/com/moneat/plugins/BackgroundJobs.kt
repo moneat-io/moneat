@@ -24,7 +24,6 @@ import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.DemoLivenessBackgroundService
-import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionBackgroundService
 import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.TraceFinalizerBackgroundService
@@ -38,11 +37,9 @@ import kotlinx.coroutines.SupervisorJob
 import mu.KotlinLogging
 import net.javacrumbs.shedlock.provider.exposed.ExposedLockProvider
 import org.koin.core.context.GlobalContext
-import kotlin.time.Duration.Companion.hours
 
 private val logger = KotlinLogging.logger {}
 private const val DEFAULT_WORKER_THREADS = 4
-private const val DEFAULT_PULSE_INTERVAL_HOURS = 4
 
 fun Application.configureBackgroundJobs(
     startSchedulers: Boolean = true,
@@ -68,8 +65,7 @@ fun Application.configureBackgroundJobs(
     coreWorkers.startSelected(startIngestionWorkers)
 
     FeatureRegistry.startBackgroundJobs(this, startSchedulers, startIngestionWorkers)
-    val pulseService = startPulseIfEnabled(startSchedulers, jobScope)
-    registerBackgroundShutdown(schedulerJobs, coreWorkers, pulseService)
+    registerBackgroundShutdown(schedulerJobs, coreWorkers)
 }
 
 private fun Application.backgroundJobsEnabled(): Boolean =
@@ -125,33 +121,14 @@ private class CoreIngestionWorkers(application: Application) {
     }
 }
 
-private fun Application.startPulseIfEnabled(
-    startSchedulers: Boolean,
-    jobScope: CoroutineScope,
-): PulseService? {
-    if (!startSchedulers || !PulseService.isEnabled()) return null
-    val telemetryIntervalHours =
-        environment.config
-            .propertyOrNull("pulse.intervalHours")
-            ?.getString()
-            ?.toIntOrNull()
-            ?.takeIf { it > 0 } ?: DEFAULT_PULSE_INTERVAL_HOURS
-    return PulseService(interval = telemetryIntervalHours.hours).also {
-        logger.info { "Telemetry pulse enabled for self-hosted deployment" }
-        it.start(jobScope)
-    }
-}
-
 private fun Application.registerBackgroundShutdown(
     schedulerJobs: SchedulerBackgroundJobs,
     coreWorkers: CoreIngestionWorkers,
-    pulseService: PulseService?,
 ) {
     monitor.subscribe(ApplicationStopping) {
         flushUsageOnShutdown()
         schedulerJobs.stop()
         coreWorkers.stop()
-        pulseService?.stop()
         FeatureRegistry.stopBackgroundJobs()
         closeInfrastructureConnections()
     }

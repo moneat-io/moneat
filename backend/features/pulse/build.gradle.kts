@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlin.logging)
     implementation(libs.koin.ktor)
 
@@ -41,6 +42,7 @@ dependencies {
     testImplementation(libs.ktor.serialization.kotlinx.json)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.junit.jupiter.api)
+    testImplementation(libs.mockk)
     testImplementation(kotlin("reflect"))
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)

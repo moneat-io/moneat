@@ -21,20 +21,30 @@ import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
+import com.moneat.shared.services.PulseService
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
+import io.ktor.server.config.MapApplicationConfig
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.mockk.verify
 import java.util.ServiceLoader
+import kotlin.test.assertEquals
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.hours
 
 class PulseFeatureRegistryTest {
     @BeforeTest
@@ -76,6 +86,44 @@ class PulseFeatureRegistryTest {
         assertTrue("Pulse" in response.modules)
     }
 
+    @Test
+    fun `Pulse module owns telemetry pulse scheduler lifecycle`() {
+        withSelfHostedTelemetryEnabled {
+            testApplication {
+                environment {
+                    config = MapApplicationConfig("pulse.intervalHours" to "2")
+                }
+
+                val pulseService = mockk<PulseService>(relaxUnitFun = true)
+                var capturedInterval: Duration? = null
+                val pulseModule = PulseModule { interval ->
+                    capturedInterval = interval
+                    pulseService
+                }
+
+                application {
+                    pulseModule.startBackgroundJobs(
+                        this,
+                        startSchedulers = false,
+                        startIngestionWorkers = true,
+                    )
+                    verify(exactly = 0) { pulseService.start(any()) }
+
+                    pulseModule.startBackgroundJobs(
+                        this,
+                        startSchedulers = true,
+                        startIngestionWorkers = false,
+                    )
+                    assertEquals(2.hours, capturedInterval)
+                    verify(exactly = 1) { pulseService.start(any()) }
+
+                    pulseModule.stopBackgroundJobs()
+                    verify(exactly = 1) { pulseService.stop() }
+                }
+            }
+        }
+    }
+
     private suspend fun ApplicationCall.respondFeatures() {
         respond(
             FeaturesResponse(
@@ -84,5 +132,22 @@ class PulseFeatureRegistryTest {
                 selfHost = EnvConfig.SelfHost.enabled,
             )
         )
+    }
+
+    private fun withSelfHostedTelemetryEnabled(block: () -> Unit) {
+        val previousTelemetryEnabled = System.getProperty("TELEMETRY_ENABLED")
+        mockkObject(EnvConfig.SelfHost)
+        try {
+            every { EnvConfig.SelfHost.enabled } returns true
+            System.setProperty("TELEMETRY_ENABLED", "true")
+            block()
+        } finally {
+            if (previousTelemetryEnabled == null) {
+                System.clearProperty("TELEMETRY_ENABLED")
+            } else {
+                System.setProperty("TELEMETRY_ENABLED", previousTelemetryEnabled)
+            }
+            unmockkObject(EnvConfig.SelfHost)
+        }
     }
 }
