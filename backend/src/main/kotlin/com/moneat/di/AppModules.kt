@@ -17,18 +17,6 @@
 package com.moneat.di
 
 import com.moneat.alerts.services.AlertEpisodeService
-import com.moneat.dashboards.repositories.DashboardFolderRepository
-import com.moneat.dashboards.repositories.DashboardFolderRepositoryImpl
-import com.moneat.dashboards.repositories.DashboardRepository
-import com.moneat.dashboards.repositories.DashboardRepositoryImpl
-import com.moneat.dashboards.repositories.DashboardWidgetRepository
-import com.moneat.dashboards.repositories.DashboardWidgetRepositoryImpl
-import com.moneat.dashboards.services.CustomDashboardService
-import com.moneat.dashboards.services.CustomDataSourceExecutor
-import com.moneat.dashboards.services.CustomDataSourceService
-import com.moneat.dashboards.services.DashboardAlertService
-import com.moneat.dashboards.services.DashboardQueryEngine
-import com.moneat.dashboards.services.DashboardTemplateCatalogService
 import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.repositories.IssueRepository
@@ -163,37 +151,6 @@ val monitorModule = module {
     single { SyntheticsService(get(), get()) }
 }
 
-/** Custom dashboards, alert evaluation, and external data sources. */
-val dashboardsModule = module {
-    single<DashboardFolderRepository> { DashboardFolderRepositoryImpl() }
-    single<DashboardRepository> { DashboardRepositoryImpl() }
-    single<DashboardWidgetRepository> { DashboardWidgetRepositoryImpl() }
-
-    single { DashboardQueryEngine() }
-    single { DashboardTemplateCatalogService() }
-    single {
-        DashboardAlertService(
-            incidentService = get(),
-            workflowService = get(),
-            queryEngine = get(),
-            retentionPolicyService = get(),
-            dataSourceService = get(),
-            dataSourceExecutor = get(),
-        )
-    }
-    single {
-        CustomDashboardService(
-            folderRepository = get(),
-            dashboardRepository = get(),
-            dashboardWidgetRepository = get(),
-            // Simplified projection without retention — only needed for the custom dashboard builder
-            projectRepository = ProjectRepositoryImpl { col, _, _ -> col },
-        )
-    }
-    single { CustomDataSourceService() }
-    single { CustomDataSourceExecutor() }
-}
-
 /** AI chat assistant. */
 val aiModule = module {}
 
@@ -203,7 +160,6 @@ fun buildAppModules() =
         sharedModule,
         eventsModule,
         monitorModule,
-        dashboardsModule,
         aiModule,
     )
 
