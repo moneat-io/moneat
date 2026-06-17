@@ -48,6 +48,7 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import io.ktor.utils.io.readAvailable
 import io.ktor.utils.io.toByteArray
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.Serializable
@@ -61,6 +62,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
+import java.util.zip.ZipEntry
 import java.util.zip.ZipException
 import java.util.zip.ZipInputStream
 
@@ -71,6 +73,11 @@ private const val PROJECT_NOT_FOUND = "Project not found"
 private const val LEGACY_DSYM_CPU_NAME = "any"
 private const val PROGUARD_ENTRY_PREFIX = "proguard/"
 private const val SHA_1_ALGORITHM = "SHA-1"
+private const val BYTES_PER_MIB = 1024L * 1024L
+private const val LEGACY_DSYM_MAX_COMPRESSED_BYTES = 32L * BYTES_PER_MIB
+private const val LEGACY_DSYM_MAX_UNCOMPRESSED_ENTRY_BYTES = 128L * BYTES_PER_MIB
+private const val LEGACY_DSYM_MAX_UNCOMPRESSED_ARCHIVE_BYTES = 256L * BYTES_PER_MIB
+private const val READ_BUFFER_SIZE = 8192
 
 private data class UploadedSourceMapChunk(
     val checksum: String,
@@ -97,6 +104,8 @@ private data class SourceMapQuotaReservation(
     val units: Int,
     val bytes: Long
 )
+
+private class UploadLimitExceededException(message: String) : IllegalArgumentException(message)
 
 @Serializable
 private data class SentryDebugInfoFileResponse(
@@ -595,12 +604,25 @@ private suspend fun io.ktor.server.routing.RoutingContext.receiveLegacyDebugFile
     var fileName: String? = null
     var fileBytes: ByteArray? = null
 
-    multipart.forEachPart { part ->
-        if (part is PartData.FileItem) {
-            fileName = part.originalFileName ?: part.name ?: "unknown"
-            fileBytes = part.provider().toByteArray()
+    try {
+        multipart.forEachPart { part ->
+            try {
+                if (part is PartData.FileItem) {
+                    fileName = part.originalFileName ?: part.name ?: "unknown"
+                    fileBytes =
+                        readFileItemBytes(
+                            part,
+                            LEGACY_DSYM_MAX_COMPRESSED_BYTES,
+                            "Debug file archive"
+                        )
+                }
+            } finally {
+                part.release()
+            }
         }
-        part.release()
+    } catch (e: UploadLimitExceededException) {
+        call.respond(HttpStatusCode.PayloadTooLarge, ErrorResponse(e.message))
+        return null
     }
 
     val uploadedBytes = fileBytes
@@ -610,6 +632,30 @@ private suspend fun io.ktor.server.routing.RoutingContext.receiveLegacyDebugFile
     }
 
     return UploadedLegacyDebugFile(fileName ?: "unknown", uploadedBytes)
+}
+
+private suspend fun readFileItemBytes(
+    part: PartData.FileItem,
+    maxBytes: Long,
+    description: String
+): ByteArray {
+    val channel = part.provider()
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(READ_BUFFER_SIZE)
+    var totalBytes = 0L
+
+    while (true) {
+        val read = channel.readAvailable(buffer, 0, buffer.size)
+        if (read == -1) break
+
+        totalBytes += read.toLong()
+        if (totalBytes > maxBytes) {
+            throw UploadLimitExceededException("$description exceeds ${maxBytes.toMib()} MiB")
+        }
+        out.write(buffer, 0, read)
+    }
+
+    return out.toByteArray()
 }
 
 private fun extractProguardMappings(upload: UploadedLegacyDebugFile): List<UploadedProguardMapping> {
@@ -623,14 +669,16 @@ private fun extractProguardMappings(upload: UploadedLegacyDebugFile): List<Uploa
 
 private fun extractProguardMappingsFromZip(bytes: ByteArray): List<UploadedProguardMapping> {
     val mappings = mutableListOf<UploadedProguardMapping>()
+    var totalUncompressedBytes = 0L
 
     ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
         while (true) {
             val entry = zip.nextEntry ?: break
-            if (!entry.isDirectory && entry.name.startsWith(PROGUARD_ENTRY_PREFIX)) {
-                val out = ByteArrayOutputStream()
-                zip.copyTo(out)
-                mappings += UploadedProguardMapping(entry.name, out.toByteArray())
+            val mapping = readProguardMappingEntry(zip, entry)
+            if (mapping != null) {
+                totalUncompressedBytes =
+                    validateLegacyDsymArchiveSize(totalUncompressedBytes, mapping.bytes.size.toLong())
+                mappings += mapping
             }
             zip.closeEntry()
         }
@@ -638,6 +686,55 @@ private fun extractProguardMappingsFromZip(bytes: ByteArray): List<UploadedProgu
 
     return mappings
 }
+
+private fun readProguardMappingEntry(
+    zip: ZipInputStream,
+    entry: ZipEntry
+): UploadedProguardMapping? {
+    if (entry.isDirectory || !entry.name.startsWith(PROGUARD_ENTRY_PREFIX)) return null
+
+    return UploadedProguardMapping(entry.name, readZipEntryBytes(zip, entry.name))
+}
+
+private fun validateLegacyDsymArchiveSize(
+    currentBytes: Long,
+    entryBytes: Long
+): Long {
+    val totalBytes = currentBytes + entryBytes
+    if (totalBytes > LEGACY_DSYM_MAX_UNCOMPRESSED_ARCHIVE_BYTES) {
+        throw UploadLimitExceededException(
+            "Debug file archive expands beyond ${LEGACY_DSYM_MAX_UNCOMPRESSED_ARCHIVE_BYTES.toMib()} MiB"
+        )
+    }
+    return totalBytes
+}
+
+private fun readZipEntryBytes(
+    zip: ZipInputStream,
+    entryName: String
+): ByteArray {
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(READ_BUFFER_SIZE)
+    var entryBytes = 0L
+
+    while (true) {
+        val read = zip.read(buffer)
+        if (read == -1) break
+
+        entryBytes += read.toLong()
+        if (entryBytes > LEGACY_DSYM_MAX_UNCOMPRESSED_ENTRY_BYTES) {
+            throw UploadLimitExceededException(
+                "Debug file archive entry $entryName exceeds " +
+                    "${LEGACY_DSYM_MAX_UNCOMPRESSED_ENTRY_BYTES.toMib()} MiB"
+            )
+        }
+        out.write(buffer, 0, read)
+    }
+
+    return out.toByteArray()
+}
+
+private fun Long.toMib(): Long = this / BYTES_PER_MIB
 
 private suspend fun io.ktor.server.routing.RoutingContext.receiveUploadedSourceMapChunks():
     List<UploadedSourceMapChunk> {
@@ -768,7 +865,13 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadLegacyDsym
 ) {
     val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
     val upload = receiveLegacyDebugFileUpload() ?: return
-    val mappings = extractProguardMappings(upload)
+    val mappings =
+        try {
+            extractProguardMappings(upload)
+        } catch (e: UploadLimitExceededException) {
+            call.respond(HttpStatusCode.PayloadTooLarge, ErrorResponse(e.message))
+            return
+        }
 
     if (mappings.isEmpty()) {
         call.respond(emptyList<SentryDebugInfoFileResponse>())
@@ -793,29 +896,38 @@ private suspend fun io.ktor.server.routing.RoutingContext.uploadLegacyDsymsOrRes
     projectId: Long,
     mappings: List<UploadedProguardMapping>
 ) {
+    var committedUnits = 0
+    var committedBytes = 0L
+
     try {
         val responses =
             mappings.map { mapping ->
                 val checksum = sha1(mapping.bytes)
                 releaseService.storeChunk(checksum, mapping.bytes)
-                releaseService
-                    .assembleProjectDif(projectId, checksum, listOf(checksum), mapping.objectName, null)
-                    .toSentryDebugInfoFile()
+                val response =
+                    releaseService
+                        .assembleProjectDif(projectId, checksum, listOf(checksum), mapping.objectName, null)
+                        .toSentryDebugInfoFile()
+                committedUnits += 1
+                committedBytes += mapping.bytes.size.toLong()
+                response
             }
         call.respond(responses)
     } catch (e: IOException) {
-        respondLegacyDsymUploadFailure(e, quotaService, quotaReservation)
+        respondLegacyDsymUploadFailure(e, quotaService, quotaReservation, committedUnits, committedBytes)
     } catch (e: IllegalStateException) {
-        respondLegacyDsymUploadFailure(e, quotaService, quotaReservation)
+        respondLegacyDsymUploadFailure(e, quotaService, quotaReservation, committedUnits, committedBytes)
     }
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.respondLegacyDsymUploadFailure(
     error: Exception,
     quotaService: BillingQuotaService,
-    quotaReservation: SourceMapQuotaReservation
+    quotaReservation: SourceMapQuotaReservation,
+    committedUnits: Int,
+    committedBytes: Long
 ) {
-    refundReservedSourceMapQuota(quotaService, quotaReservation)
+    refundReservedSourceMapQuota(quotaService, quotaReservation, committedUnits, committedBytes)
     logger.error(error) { "Failed to upload legacy debug file archive" }
     call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
 }
@@ -837,10 +949,16 @@ private fun AssembledDif.toSentryDebugInfoFile(): SentryDebugInfoFileResponse =
 
 private fun refundReservedSourceMapQuota(
     quotaService: BillingQuotaService,
-    reservation: SourceMapQuotaReservation
+    reservation: SourceMapQuotaReservation,
+    committedUnits: Int = 0,
+    committedBytes: Long = 0L
 ) {
     val organizationId = reservation.organizationId ?: return
-    quotaService.refundUnits(organizationId, reservation.units, "sourcemap", reservation.bytes)
+    val refundUnits = (reservation.units - committedUnits).coerceAtLeast(0)
+    val refundBytes = (reservation.bytes - committedBytes).coerceAtLeast(0)
+    if (refundUnits == 0 && refundBytes == 0L) return
+
+    quotaService.refundUnits(organizationId, refundUnits, "sourcemap", refundBytes)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleArtifactBundle(

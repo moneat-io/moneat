@@ -585,6 +585,75 @@ class ReleaseRoutesTest {
         }
 
     @Test
+    fun `POST legacy dsyms upload refunds only uncommitted mappings when later entry fails`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            val firstName = "proguard/$PROGUARD_DEBUG_ID.txt"
+            val secondDebugId = "623fb246-631d-5716-8ac6-6fd116137be7"
+            val secondName = "proguard/$secondDebugId.txt"
+            val firstBytes = "first mapping".toByteArray()
+            val secondBytes = "second mapping".toByteArray()
+            val firstChecksum = sha1(firstBytes)
+            val secondChecksum = sha1(secondBytes)
+
+            every { releaseService.storeChunk(firstChecksum, any()) } just Runs
+            every {
+                releaseService.assembleProjectDif(
+                    TEST_PROJECT_ID,
+                    firstChecksum,
+                    listOf(firstChecksum),
+                    firstName,
+                    null
+                )
+            } returns AssembledDif(
+                resourceId = resourceId(102),
+                debugId = PROGUARD_DEBUG_ID,
+                objectName = firstName,
+                checksum = firstChecksum,
+                size = firstBytes.size.toLong(),
+                dateCreated = "2026-05-23T00:00:00Z"
+            )
+            every { releaseService.storeChunk(secondChecksum, any()) } throws IOException("storage failed")
+
+            val quotaService = allowingQuotaService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), quotaService, projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/dsyms/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile(
+                                    "file",
+                                    "proguard.zip",
+                                    zipProguardMappings(firstName to firstBytes, secondName to secondBytes)
+                                )
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.InternalServerError, response.status, response.bodyAsText())
+            verify {
+                quotaService.reserveUnits(
+                    TEST_ORG_ID,
+                    2,
+                    "sourcemap",
+                    firstBytes.size.toLong() + secondBytes.size.toLong()
+                )
+            }
+            verify { quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", secondBytes.size.toLong()) }
+        }
+
+    @Test
     fun `POST reprocessing returns ok for sentry cli compatibility`() =
         testApplication {
             val releaseService = sourceMapReleaseService()
@@ -727,11 +796,17 @@ class ReleaseRoutesTest {
     }
 
     private fun zipProguardMapping(name: String, bytes: ByteArray): ByteArray {
+        return zipProguardMappings(name to bytes)
+    }
+
+    private fun zipProguardMappings(vararg entries: Pair<String, ByteArray>): ByteArray {
         val out = ByteArrayOutputStream()
         ZipOutputStream(out).use { zip ->
-            zip.putNextEntry(ZipEntry(name))
-            zip.write(bytes)
-            zip.closeEntry()
+            entries.forEach { (name, bytes) ->
+                zip.putNextEntry(ZipEntry(name))
+                zip.write(bytes)
+                zip.closeEntry()
+            }
         }
         return out.toByteArray()
     }
