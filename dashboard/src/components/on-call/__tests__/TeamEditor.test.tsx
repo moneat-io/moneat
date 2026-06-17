@@ -17,7 +17,7 @@
 import {render, screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type {ComponentProps} from 'react'
-import {describe, expect, it, vi} from 'vitest'
+import {beforeAll, describe, expect, it, vi} from 'vitest'
 import {TeamEditor, type TeamFormData, type TeamEditorOption} from '../TeamEditor'
 
 const members: TeamEditorOption[] = [
@@ -46,7 +46,23 @@ function renderEditor(overrides: Partial<ComponentProps<typeof TeamEditor>> = {}
   return props
 }
 
+async function selectOption(user: ReturnType<typeof userEvent.setup>, triggerName: string, optionName: string) {
+  await user.click(screen.getByRole('combobox', {name: triggerName}))
+  await user.click(await screen.findByRole('option', {name: optionName}))
+}
+
 describe('TeamEditor', () => {
+  beforeAll(() => {
+    globalThis.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
+    globalThis.HTMLElement.prototype.releasePointerCapture = vi.fn()
+    globalThis.HTMLElement.prototype.hasPointerCapture = vi.fn(() => false)
+  })
+
   it('creates a team with trimmed metadata', async () => {
     const user = userEvent.setup()
     const {onSave, onCancel} = renderEditor()
@@ -99,6 +115,30 @@ describe('TeamEditor', () => {
       ...initialData,
       name: 'Platform',
       memberIds: [],
+    })
+  })
+
+  it('adds members and selects routing defaults', async () => {
+    const user = userEvent.setup()
+    const {onSave} = renderEditor()
+
+    await user.type(screen.getByLabelText('Team name'), 'Payments')
+    await selectOption(user, 'Primary on-call schedule', 'Payments Primary')
+    await selectOption(user, 'Default escalation policy', 'Sev1 Policy')
+    await selectOption(user, 'Add member', 'Theo Park')
+
+    expect(screen.getByText('Theo Park')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', {name: 'Create team'}))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    expect(onSave).toHaveBeenCalledWith({
+      name: 'Payments',
+      description: '',
+      slack: '',
+      repo: '',
+      memberIds: ['user-2'],
+      onCallScheduleId: 'schedule-1',
+      escalationPolicyId: 'policy-1',
     })
   })
 
