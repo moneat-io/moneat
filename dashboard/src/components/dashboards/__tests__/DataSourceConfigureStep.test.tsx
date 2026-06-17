@@ -135,15 +135,24 @@ describe('DataSourceConfigureStep', () => {
     })
 
     expect(screen.getByLabelText('Host')).toHaveValue('metrics.internal')
-    expect(screen.getByLabelText('Port')).toHaveValue('9443')
+    expect(screen.getByLabelText(/^Port/)).toHaveValue('9443')
     expect(screen.getByLabelText(/Base path/)).toHaveValue('/prometheus')
     expect(screen.getByText(/Split your pasted value/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', {name: 'undo'}))
 
     expect(screen.getByLabelText('Host')).toHaveValue('')
-    expect(screen.getByLabelText('Port')).toHaveValue('9090')
+    // Prometheus has no default port, so undo restores the blank field.
+    expect(screen.getByLabelText(/^Port/)).toHaveValue('')
     expect(screen.getByLabelText(/Base path/)).toHaveValue('')
+  })
+
+  it('defaults the Prometheus port to a blank, optional field', () => {
+    renderConfigureStep('prometheus')
+
+    expect(screen.getByLabelText(/^Port/)).toHaveValue('')
+    // The Port label is flagged optional for http sources (reverse-proxy friendly).
+    expect(screen.getByText(/^Port/)).toHaveTextContent('optional')
   })
 
   it('renders HTTP authentication variants and advanced request options', () => {

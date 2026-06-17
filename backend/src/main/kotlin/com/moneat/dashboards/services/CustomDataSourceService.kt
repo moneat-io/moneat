@@ -207,7 +207,12 @@ class CustomDataSourceService {
                 request.name?.let { v -> it[name] = v }
                 request.description?.let { v -> it[description] = v }
                 request.host?.let { v -> it[host] = v }
-                request.port?.let { v -> it[port] = v }
+                // An explicit port wins; otherwise clearPort erases it and a plain
+                // omission leaves the stored value untouched (partial update).
+                when {
+                    request.port != null -> it[port] = request.port
+                    request.clearPort -> it[port] = null
+                }
                 request.databaseName?.let { v -> it[databaseName] = v }
                 newEncryptedCreds?.let { v -> it[encryptedCredentials] = v }
                 request.extraConfig?.let { v ->

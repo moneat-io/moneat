@@ -16,6 +16,7 @@
 
 package com.moneat.dashboards
 
+import com.moneat.dashboards.models.UpdateCustomDataSourceRequest
 import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -27,6 +28,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.uuid.Uuid
 
 class CustomDataSourceServiceTest {
@@ -101,6 +103,47 @@ class CustomDataSourceServiceTest {
         val source = service.listDataSources(ORG_ID).single()
 
         assertEquals(0, source.usedByDashboardCount)
+    }
+
+    @Test
+    fun `updateDataSource clears a stored port when clearPort is set`() {
+        seedDataSource(id = 20, name = "Edge Prom", sourceType = "prometheus")
+
+        val updated = service.updateDataSource(
+            id = 20,
+            orgId = ORG_ID,
+            request = UpdateCustomDataSourceRequest(clearPort = true),
+        )
+
+        assertNull(updated?.port)
+    }
+
+    @Test
+    fun `updateDataSource keeps the existing port when port is omitted`() {
+        seedDataSource(id = 21, name = "Edge Prom", sourceType = "prometheus")
+
+        val updated = service.updateDataSource(
+            id = 21,
+            orgId = ORG_ID,
+            request = UpdateCustomDataSourceRequest(name = "Renamed"),
+        )
+
+        assertEquals("Renamed", updated?.name)
+        assertEquals(9090, updated?.port)
+    }
+
+    @Test
+    fun `updateDataSource sets an explicit port and does not clear it`() {
+        seedDataSource(id = 22, name = "Edge Prom", sourceType = "prometheus")
+
+        val updated = service.updateDataSource(
+            id = 22,
+            orgId = ORG_ID,
+            request = UpdateCustomDataSourceRequest(port = 9443, clearPort = true),
+        )
+
+        // An explicit port wins over the clear flag.
+        assertEquals(9443, updated?.port)
     }
 
     private fun seedDataSource(

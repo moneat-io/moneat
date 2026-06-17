@@ -18,7 +18,7 @@ import {describe, expect, it} from 'vitest'
 import type {CustomDataSourceResponse} from '@/lib/api'
 import {
   buildEndpointPreview, buildExtraConfig, buildPayload, buildTestRequest,
-  defaultFormState, effectiveName, hydrateFormState, isFormReady,
+  buildUpdatePayload, defaultFormState, effectiveName, hydrateFormState, isFormReady,
   smartSplitHost, validatePort,
 } from '../dataSourceConnection'
 
@@ -97,13 +97,19 @@ describe('buildEndpointPreview', () => {
     expect(p.sub).toContain('TLS: require')
   })
 
-  it('shows the real API path and auth for an http source', () => {
-    const s = {...defaultFormState('prometheus'), host: 'prom.example.com'}
+  it('shows the real API path and auth for an http source, omitting a blank port', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prometheus.bandapella.com'}
     const p = buildEndpointPreview(s)
-    expect(previewText(s)).toBe('https://prom.example.com:9090')
+    // Reverse-proxy case: no :9090, and no stray trailing colon either.
+    expect(previewText(s)).toBe('https://prometheus.bandapella.com')
     expect(p.sub).toContain('Moneat calls /api/v1/query')
     expect(p.sub).toContain('auth: none')
     expect(p.portOk).toBe(true)
+  })
+
+  it('shows an explicit http port when one is set', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prom.example.com', port: '9090'}
+    expect(previewText(s)).toBe('https://prom.example.com:9090')
   })
 
   it('flags an invalid port', () => {
@@ -354,9 +360,35 @@ describe('buildPayload', () => {
       extra_config: {ch_protocol: 'native'},
     })
   })
+
+  it('omits the port for a blank Prometheus form (HTTPS reverse proxy)', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prometheus.bandapella.com'}
+    const p = buildPayload(s)
+    expect(p.host).toBe('prometheus.bandapella.com')
+    expect(p.port).toBeUndefined()
+    expect('port' in p).toBe(false)
+  })
+
+  it('persists an explicit Prometheus port', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prom.internal', port: '9090'}
+    expect(buildPayload(s).port).toBe(9090)
+  })
 })
 
 describe('buildTestRequest', () => {
+  it('omits the port when testing a blank Prometheus connection', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prometheus.bandapella.com'}
+    const t = buildTestRequest(s)
+    expect(t.source_type).toBe('prometheus')
+    expect(t.host).toBe('prometheus.bandapella.com')
+    expect(t.port).toBeUndefined()
+  })
+
+  it('carries an explicit port into the test request', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prom.internal', port: '9090'}
+    expect(buildTestRequest(s).port).toBe(9090)
+  })
+
   it('mirrors the payload connection fields', () => {
     const s = {...defaultFormState('prometheus'), host: 'h', basePath: '/p'}
     const t = buildTestRequest(s)
@@ -377,6 +409,29 @@ describe('buildTestRequest', () => {
       header_value: 'tenant-a',
       extra_config: {auth_method: 'header', header_name: 'X-Scope-OrgID'},
     })
+  })
+})
+
+describe('buildUpdatePayload', () => {
+  it('signals clear_port when an http source is saved with a blank port', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prometheus.bandapella.com'}
+    const p = buildUpdatePayload(s)
+    expect(p.port).toBeUndefined()
+    expect(p.clear_port).toBe(true)
+  })
+
+  it('keeps an explicit port and leaves clear_port unset', () => {
+    const s = {...defaultFormState('prometheus'), host: 'prom.internal', port: '9090'}
+    const p = buildUpdatePayload(s)
+    expect(p.port).toBe(9090)
+    expect(p.clear_port).toBeUndefined()
+  })
+
+  it('never clears the port for a sql source that keeps its default', () => {
+    const s = {...defaultFormState('postgresql'), host: 'db.internal'}
+    const p = buildUpdatePayload(s)
+    expect(p.port).toBe(5432)
+    expect(p.clear_port).toBeUndefined()
   })
 })
 

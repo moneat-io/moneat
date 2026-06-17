@@ -24,7 +24,8 @@ import {Button} from '@/components/ui/button'
 import {getVendor} from './dataSourceCatalog'
 import {
   type DsFormState,
-  buildPayload, buildTestRequest, defaultFormState, hydrateFormState, isFormReady,
+  buildPayload, buildTestRequest, buildUpdatePayload,
+  defaultFormState, hydrateFormState, isFormReady,
 } from './dataSourceConnection'
 import {DataSourcePickerStep} from './DataSourcePickerStep'
 import {DataSourceConfigureStep} from './DataSourceConfigureStep'
@@ -53,12 +54,10 @@ export function DataSourceConnectDialog({mode, initial, onClose, onSaved}: DataS
   const vendor = getVendor(form?.vendor)
 
   const saveMutation = useMutation({
-    mutationFn: () => {
-      const payload = buildPayload(form!)
-      return editing && initial
-        ? api.updateCustomDataSource(initial.id, payload)
-        : api.createCustomDataSource(payload)
-    },
+    mutationFn: () =>
+      editing && initial
+        ? api.updateCustomDataSource(initial.id, buildUpdatePayload(form!))
+        : api.createCustomDataSource(buildPayload(form!)),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['custom-datasources']})
       queryClient.invalidateQueries({queryKey: ['datasources']})

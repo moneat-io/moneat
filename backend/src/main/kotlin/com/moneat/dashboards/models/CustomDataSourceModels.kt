@@ -155,6 +155,9 @@ data class UpdateCustomDataSourceRequest(
     val description: String? = null,
     val host: String? = null,
     val port: Int? = null,
+    // A null `port` means "leave unchanged" (partial update); this flag is the explicit
+    // opt-in to erase a stored port, e.g. an http source moved behind a reverse proxy.
+    @SerialName("clear_port") val clearPort: Boolean = false,
     @SerialName("database_name") val databaseName: String? = null,
     val username: String? = null,
     val password: String? = null,

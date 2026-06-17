@@ -23,6 +23,7 @@ import type {
   CreateCustomDataSourceRequest,
   CustomDataSourceResponse,
   TestConnectionRequest,
+  UpdateCustomDataSourceRequest,
 } from '@/lib/api'
 import {
   type AuthMethod,
@@ -114,7 +115,9 @@ export function hydrateFormState(ds: CustomDataSourceResponse): DsFormState {
     name: ds.name,
     description: ds.description ?? '',
     host,
-    port: ds.port === undefined ? base.port : String(ds.port),
+    // `== null` also catches an explicit JSON `port: null` (the API encodes nulls),
+    // so a portless source hydrates to a blank field rather than the string "null".
+    port: ds.port == null ? base.port : String(ds.port),
     database: ds.database_name ?? '',
     scheme: x.scheme === 'http' ? 'http' : 'https',
     basePath: x.base_path ?? '',
@@ -365,14 +368,19 @@ function clickhousePreview({state, host}: PreviewContext): PreviewBody {
   }
 }
 
-function httpPreview({state, vendor, host, port}: PreviewContext): PreviewBody {
+function httpPreview({state, vendor, host}: PreviewContext): PreviewBody {
   const base = state.basePath && state.basePath !== '/' ? state.basePath.replace(/\/$/, '') : ''
   const pathSegments = base ? [{tone: 'path' as const, text: base}] : []
+  // HTTP sources can sit behind a reverse proxy on the scheme's default port, so a
+  // blank field means "no port" — show nothing rather than a vendor fallback or a
+  // stray colon (e.g. https://prometheus.example.com, not …:9090 or …:).
+  const explicitPort = state.port.trim()
+  const portSegments = explicitPort ? [{tone: 'port' as const, text: `:${explicitPort}`}] : []
   return {
     segments: [
       {tone: 'scheme', text: `${state.scheme}://`},
       {tone: 'host', text: host},
-      {tone: 'port', text: `:${port}`},
+      ...portSegments,
       ...pathSegments,
     ],
     sub: `Moneat calls ${base}${vendor.apiPath} · auth: ${authLabel(state)}`,
@@ -545,6 +553,9 @@ function payloadPort(state: DsFormState, v: VendorDef): number | undefined {
     return parseConnectionUri(state.connStr).port ?? v.port
   }
   if (state.port && /^\d+$/.test(state.port)) return Number(state.port)
+  // HTTP sources keep the port optional (reverse-proxy friendly); every other
+  // archetype falls back to its conventional wire-protocol port.
+  if (v.arch === 'http') return undefined
   return v.port
 }
 
@@ -566,6 +577,21 @@ export function buildPayload(state: DsFormState): CreateCustomDataSourceRequest 
   addCredentials(req, state, v)
   addExtraConfig(req, state)
   return req
+}
+
+/**
+ * Map the form to the update API request. Identical to {@link buildPayload}, but
+ * when a port-bearing source intentionally leaves the port blank (an http source
+ * behind a reverse proxy) it asks the backend to clear any previously stored port —
+ * a plain omitted `port` is a partial-update no-op and could not erase the old value.
+ */
+export function buildUpdatePayload(state: DsFormState): UpdateCustomDataSourceRequest & {header_value?: string} {
+  const payload: UpdateCustomDataSourceRequest & {header_value?: string} = buildPayload(state)
+  const v = getVendor(state.vendor)
+  if (v && payload.port == null && PORT_FIELD_ARCHES.has(v.arch)) {
+    payload.clear_port = true
+  }
+  return payload
 }
 
 type DataSourcePayload = CreateCustomDataSourceRequest & {header_value?: string}
