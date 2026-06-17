@@ -58,13 +58,17 @@ import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.zip.GZIPOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -77,6 +81,7 @@ class ReleaseRoutesTest {
     private val testSourceMapToken = "test-source-map-token-releases"
 
     companion object {
+        private const val PROGUARD_DEBUG_ID = "523fb246-631d-5716-8ac6-6fd116137be7"
         private var dbInitialized = false
         private var testUserId = -1
         private const val TEST_ORG_ID = 7
@@ -515,6 +520,98 @@ class ReleaseRoutesTest {
         }
 
     @Test
+    fun `POST legacy dsyms upload stores proguard zip entries`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            val mappingName = "proguard/$PROGUARD_DEBUG_ID.txt"
+            val mappingBytes =
+                """
+                # compiler: R8
+                com.example.Foo -> a:
+                    1:1:void doThing():10:10 -> a
+                """.trimIndent().toByteArray()
+            val checksum = sha1(mappingBytes)
+            val storedBytes = slot<ByteArray>()
+
+            every { releaseService.storeChunk(checksum, capture(storedBytes)) } just Runs
+            every {
+                releaseService.assembleProjectDif(
+                    TEST_PROJECT_ID,
+                    checksum,
+                    listOf(checksum),
+                    mappingName,
+                    null
+                )
+            } returns AssembledDif(
+                resourceId = resourceId(101),
+                debugId = PROGUARD_DEBUG_ID,
+                objectName = mappingName,
+                checksum = checksum,
+                size = mappingBytes.size.toLong(),
+                dateCreated = "2026-05-23T00:00:00Z"
+            )
+
+            val quotaService = allowingQuotaService()
+            val eventService = projectOrgEventService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), quotaService, eventService)
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/dsyms/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile("file", "proguard.zip", zipProguardMapping(mappingName, mappingBytes))
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            val body = response.bodyAsText()
+            assertTrue(body.contains(PROGUARD_DEBUG_ID), body)
+            assertTrue(body.contains("\"objectName\":\"$mappingName\""), body)
+            assertTrue(body.contains("\"cpuName\":\"any\""), body)
+            assertTrue(body.contains("\"sha1\":\"$checksum\""), body)
+            assertTrue(storedBytes.captured.contentEquals(mappingBytes))
+            verify { quotaService.reserveUnits(TEST_ORG_ID, 1, "sourcemap", mappingBytes.size.toLong()) }
+        }
+
+    @Test
+    fun `POST reprocessing returns ok for sentry cli compatibility`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(
+                        releaseService,
+                        AuthTokenService(),
+                        allowingQuotaService(),
+                        projectOrgEventService()
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/reprocessing/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            assertEquals("[]", response.bodyAsText())
+        }
+
+    @Test
     fun `GET difs returns stored difs for the project`() =
         testApplication {
             val releaseService = sourceMapReleaseService()
@@ -628,6 +725,22 @@ class ReleaseRoutesTest {
         GZIPOutputStream(out).use { it.write(bytes) }
         return out.toByteArray()
     }
+
+    private fun zipProguardMapping(name: String, bytes: ByteArray): ByteArray {
+        val out = ByteArrayOutputStream()
+        ZipOutputStream(out).use { zip ->
+            zip.putNextEntry(ZipEntry(name))
+            zip.write(bytes)
+            zip.closeEntry()
+        }
+        return out.toByteArray()
+    }
+
+    private fun sha1(bytes: ByteArray): String =
+        MessageDigest
+            .getInstance("SHA-1")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     @AfterTest
     fun teardownKoin() {

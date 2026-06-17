@@ -16,9 +16,6 @@
 
 package com.moneat.events.routes
 
-import kotlinx.serialization.SerializationException
-import java.io.IOException
-
 import com.moneat.auth.services.AuthTokenService
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
@@ -38,6 +35,7 @@ import com.moneat.events.services.ReleaseService
 import com.moneat.plugins.AuthTokenPrincipal
 import com.moneat.shared.models.Users
 import com.moneat.utils.ErrorResponse
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
@@ -51,19 +49,28 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.utils.io.toByteArray
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.Serializable
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.security.MessageDigest
 import java.util.zip.GZIPInputStream
-import com.moneat.utils.suspendRunCatching
+import java.util.zip.ZipException
+import java.util.zip.ZipInputStream
 
 private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
 private const val UPLOAD_FAILED = "Upload failed"
 private const val PROJECT_NOT_FOUND = "Project not found"
+private const val LEGACY_DSYM_CPU_NAME = "any"
+private const val PROGUARD_ENTRY_PREFIX = "proguard/"
+private const val SHA_1_ALGORITHM = "SHA-1"
 
 private data class UploadedSourceMapChunk(
     val checksum: String,
@@ -75,10 +82,29 @@ private data class UploadedSourceMap(
     val bytes: ByteArray
 )
 
+private data class UploadedLegacyDebugFile(
+    val fileName: String,
+    val bytes: ByteArray
+)
+
+private data class UploadedProguardMapping(
+    val objectName: String,
+    val bytes: ByteArray
+)
+
 private data class SourceMapQuotaReservation(
     val organizationId: Int?,
     val units: Int,
     val bytes: Long
+)
+
+@Serializable
+private data class SentryDebugInfoFileResponse(
+    val uuid: String?,
+    val debugId: String?,
+    val objectName: String,
+    val cpuName: String,
+    val sha1: String
 )
 
 fun Route.releaseRoutes(
@@ -136,6 +162,17 @@ fun Route.releaseRoutes(
         // POST /api/0/organizations/{orgSlug}/artifactbundle/assemble/
         route("/api/0/organizations/{orgSlug}/artifactbundle") {
             post("/assemble/") { handleAssembleArtifactBundle(releaseService) }
+        }
+
+        // Legacy debug-file upload endpoint used by sentry-cli upload-proguard and the
+        // Sentry Android Gradle plugin's uploadSentryProguardMappings task.
+        post("/api/0/projects/{orgSlug}/{projectSlug}/files/dsyms/") {
+            handleUploadLegacyDsyms(releaseService, authTokenService, quotaService, eventService)
+        }
+
+        // sentry-cli calls this after a successful ProGuard upload unless --no-reprocessing is used.
+        post("/api/0/projects/{orgSlug}/{projectSlug}/reprocessing/") {
+            handleTriggerReprocessing(releaseService, authTokenService)
         }
 
         // Debug information files (ProGuard mappings, dSYMs) for sentry-cli upload-proguard /
@@ -553,6 +590,55 @@ private suspend fun io.ktor.server.routing.RoutingContext.receiveSourceMapUpload
     return UploadedSourceMap(finalFileName, uploadedBytes)
 }
 
+private suspend fun io.ktor.server.routing.RoutingContext.receiveLegacyDebugFileUpload(): UploadedLegacyDebugFile? {
+    val multipart = call.receiveMultipart()
+    var fileName: String? = null
+    var fileBytes: ByteArray? = null
+
+    multipart.forEachPart { part ->
+        if (part is PartData.FileItem) {
+            fileName = part.originalFileName ?: part.name ?: "unknown"
+            fileBytes = part.provider().toByteArray()
+        }
+        part.release()
+    }
+
+    val uploadedBytes = fileBytes
+    if (uploadedBytes == null) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse("Missing debug file archive"))
+        return null
+    }
+
+    return UploadedLegacyDebugFile(fileName ?: "unknown", uploadedBytes)
+}
+
+private fun extractProguardMappings(upload: UploadedLegacyDebugFile): List<UploadedProguardMapping> {
+    return try {
+        extractProguardMappingsFromZip(upload.bytes)
+    } catch (e: ZipException) {
+        logger.debug(e) { "Legacy debug file upload was not a zip archive; storing raw file" }
+        listOf(UploadedProguardMapping(upload.fileName, upload.bytes))
+    }
+}
+
+private fun extractProguardMappingsFromZip(bytes: ByteArray): List<UploadedProguardMapping> {
+    val mappings = mutableListOf<UploadedProguardMapping>()
+
+    ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+        while (true) {
+            val entry = zip.nextEntry ?: break
+            if (!entry.isDirectory && entry.name.startsWith(PROGUARD_ENTRY_PREFIX)) {
+                val out = ByteArrayOutputStream()
+                zip.copyTo(out)
+                mappings += UploadedProguardMapping(entry.name, out.toByteArray())
+            }
+            zip.closeEntry()
+        }
+    }
+
+    return mappings
+}
+
 private suspend fun io.ktor.server.routing.RoutingContext.receiveUploadedSourceMapChunks():
     List<UploadedSourceMapChunk> {
     val chunks = mutableListOf<UploadedSourceMapChunk>()
@@ -673,6 +759,81 @@ private suspend fun io.ktor.server.routing.RoutingContext.respondChunkUploadFail
     logger.error(error) { "Failed to store chunks for org $orgSlug" }
     call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
 }
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUploadLegacyDsyms(
+    releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
+    quotaService: BillingQuotaService,
+    eventService: EventService,
+) {
+    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
+    val upload = receiveLegacyDebugFileUpload() ?: return
+    val mappings = extractProguardMappings(upload)
+
+    if (mappings.isEmpty()) {
+        call.respond(emptyList<SentryDebugInfoFileResponse>())
+        return
+    }
+
+    val quotaReservation =
+        reserveSourceMapQuotaOrRespond(
+            quotaService = quotaService,
+            organizationId = eventService.getOrganizationIdForProject(projectId),
+            units = mappings.size,
+            bytes = mappings.sumOf { it.bytes.size.toLong() }
+        ) ?: return
+
+    uploadLegacyDsymsOrRespond(releaseService, quotaService, quotaReservation, projectId, mappings)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.uploadLegacyDsymsOrRespond(
+    releaseService: ReleaseService,
+    quotaService: BillingQuotaService,
+    quotaReservation: SourceMapQuotaReservation,
+    projectId: Long,
+    mappings: List<UploadedProguardMapping>
+) {
+    try {
+        val responses =
+            mappings.map { mapping ->
+                val checksum = sha1(mapping.bytes)
+                releaseService.storeChunk(checksum, mapping.bytes)
+                releaseService
+                    .assembleProjectDif(projectId, checksum, listOf(checksum), mapping.objectName, null)
+                    .toSentryDebugInfoFile()
+            }
+        call.respond(responses)
+    } catch (e: IOException) {
+        respondLegacyDsymUploadFailure(e, quotaService, quotaReservation)
+    } catch (e: IllegalStateException) {
+        respondLegacyDsymUploadFailure(e, quotaService, quotaReservation)
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondLegacyDsymUploadFailure(
+    error: Exception,
+    quotaService: BillingQuotaService,
+    quotaReservation: SourceMapQuotaReservation
+) {
+    refundReservedSourceMapQuota(quotaService, quotaReservation)
+    logger.error(error) { "Failed to upload legacy debug file archive" }
+    call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
+}
+
+private fun sha1(bytes: ByteArray): String =
+    MessageDigest
+        .getInstance(SHA_1_ALGORITHM)
+        .digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
+private fun AssembledDif.toSentryDebugInfoFile(): SentryDebugInfoFileResponse =
+    SentryDebugInfoFileResponse(
+        uuid = debugId,
+        debugId = debugId,
+        objectName = objectName,
+        cpuName = LEGACY_DSYM_CPU_NAME,
+        sha1 = checksum
+    )
 
 private fun refundReservedSourceMapQuota(
     quotaService: BillingQuotaService,
@@ -834,6 +995,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectD
         }
 
     call.respond(response)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleTriggerReprocessing(
+    releaseService: ReleaseService,
+    authTokenService: AuthTokenService,
+) {
+    resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
+    call.respond(emptyList<String>())
 }
 
 private suspend fun assembleSingleDif(
