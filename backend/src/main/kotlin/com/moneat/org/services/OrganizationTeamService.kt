@@ -110,7 +110,7 @@ class OrganizationTeamService(
         val name = request.name?.let(::normalizedRequiredName)
         val memberUserIds = request.memberIds?.let { memberIds -> resolveMemberUserIds(organizationId, memberIds) }
         transaction {
-            val current = teamRow(organizationId, teamId) ?: throw NotFoundException("Team not found")
+            val current = teamRowInTx(organizationId, teamId) ?: throw NotFoundException("Team not found")
             val nextName = name ?: current.name
             val nextSlug =
                 if (name == null || nextName == current.name) {
@@ -252,29 +252,39 @@ class OrganizationTeamService(
         organizationId: Int,
         teamIds: Set<Int>? = null,
     ): List<TeamRow> =
-        transaction {
-            val condition =
-                if (teamIds == null) {
-                    OrganizationTeams.organizationId eq organizationId
-                } else {
-                    (OrganizationTeams.organizationId eq organizationId) and (OrganizationTeams.id inList teamIds)
-                }
-            val rows =
-                OrganizationTeams
-                    .selectAll()
-                    .where { condition }
-                    .orderBy(OrganizationTeams.name to SortOrder.ASC)
-                    .toList()
+        transaction { teamRowsInTx(organizationId, teamIds) }
 
-            val scheduleResourceIds = scheduleResourceIds(rows.mapNotNull { it[OrganizationTeams.onCallScheduleId] })
-            val policyResourceIds = policyResourceIds(rows.mapNotNull { it[OrganizationTeams.escalationPolicyId] })
-            rows.map { row -> row.toTeamRow(scheduleResourceIds, policyResourceIds) }
-        }
+    private fun teamRowsInTx(
+        organizationId: Int,
+        teamIds: Set<Int>? = null,
+    ): List<TeamRow> {
+        val condition =
+            if (teamIds == null) {
+                OrganizationTeams.organizationId eq organizationId
+            } else {
+                (OrganizationTeams.organizationId eq organizationId) and (OrganizationTeams.id inList teamIds)
+            }
+        val rows =
+            OrganizationTeams
+                .selectAll()
+                .where { condition }
+                .orderBy(OrganizationTeams.name to SortOrder.ASC)
+                .toList()
+
+        val scheduleResourceIds = scheduleResourceIds(rows.mapNotNull { it[OrganizationTeams.onCallScheduleId] })
+        val policyResourceIds = policyResourceIds(rows.mapNotNull { it[OrganizationTeams.escalationPolicyId] })
+        return rows.map { row -> row.toTeamRow(scheduleResourceIds, policyResourceIds) }
+    }
 
     private fun teamRow(
         organizationId: Int,
         teamId: Int,
     ): TeamRow? = teamRows(organizationId, setOf(teamId)).firstOrNull()
+
+    private fun teamRowInTx(
+        organizationId: Int,
+        teamId: Int,
+    ): TeamRow? = teamRowsInTx(organizationId, setOf(teamId)).firstOrNull()
 
     private fun ResultRow.toTeamRow(
         scheduleResourceIds: Map<Int, String>,

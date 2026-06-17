@@ -48,6 +48,7 @@ import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.routing.routing
@@ -313,6 +314,30 @@ class OrgManagementRoutesMockTest {
 
             assertEquals(HttpStatusCode.NotFound, response.status)
             assertTrue(response.bodyAsText().contains("Team not found"))
+        }
+    }
+
+    @Test
+    fun `POST teams returns bad request when service rejects invalid payload`() {
+        val orgId = seedOrg("Acme")
+        val userId = seedUser(OWNER_EMAIL)
+        seedMembership(orgId, userId, "owner")
+        every { mockTeamService.createTeam(orgId, userId, any()) } throws
+            BadRequestException("Invalid team member ID")
+
+        testApplication {
+            application {
+                installAuth()
+                routing { orgManagementRoutes(mockMembershipService, mockInvitationService, mockTeamService) }
+            }
+            val response = client.post("/v1/org/teams") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"name":"Platform","memberIds":["not-a-uuid"]}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid team member ID"))
         }
     }
 }

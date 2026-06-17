@@ -35,6 +35,7 @@ import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -456,10 +457,23 @@ class IncidentService(
         val resourcePolicyId =
             catalogResourceId(event)
                 ?.let { resourceId ->
-                    ownershipRepository.escalationPolicyIdForResource(event.organizationId, resourceId)
+                    escalationPolicyIdForResource(event.organizationId, resourceId)
                 }
         return resourcePolicyId ?: getEscalationPolicyForSource(event.organizationId, event.source)
     }
+
+    private fun escalationPolicyIdForResource(
+        organizationId: Int,
+        resourceId: String,
+    ): Int? =
+        try {
+            ownershipRepository.escalationPolicyIdForResource(organizationId, resourceId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.warn("Failed to resolve resource ownership policy for {}", resourceId, e)
+            null
+        }
 
     private fun catalogResourceId(event: AlertLifecycleEvent): String? =
         metadataString(event, CATALOG_RESOURCE_ID_METADATA_KEY)

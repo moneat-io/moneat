@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import React from 'react'
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 import {screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {clearAuthStorage, renderRoute} from '@/test/utils'
@@ -81,6 +81,11 @@ describe('On-call Teams view', () => {
     clearAuthStorage()
   })
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
+
   it('shows the locked upgrade state and skips loading teams when not entitled', async () => {
     mockApi.getBillingUsage.mockResolvedValue({teamsEnabled: false})
 
@@ -143,7 +148,7 @@ describe('On-call Teams view', () => {
 
   it('deletes a team after confirmation', async () => {
     const user = userEvent.setup()
-    vi.stubGlobal('confirm', vi.fn(() => true))
+    vi.spyOn(globalThis.window, 'confirm').mockReturnValue(true)
     mockApi.getBillingUsage.mockResolvedValue({teamsEnabled: true})
     seedSupportingData()
     mockApi.getOrganizationTeams.mockResolvedValue([
@@ -156,6 +161,5 @@ describe('On-call Teams view', () => {
     await user.click(await screen.findByRole('button', {name: 'Delete Payments'}))
 
     await waitFor(() => expect(mockApi.deleteOrganizationTeam).toHaveBeenCalledWith('team-1'))
-    vi.unstubAllGlobals()
   })
 })

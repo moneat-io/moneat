@@ -207,31 +207,32 @@ function OnCallTeams() {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const entitlement = useTeamsEntitlement()
+  const shouldLoadTeams = entitlement.enabled || entitlement.isError
   const [showEditor, setShowEditor] = useState(false)
   const [editingTeam, setEditingTeam] = useState<OrganizationTeam | null>(null)
 
   const teamsQuery = useQuery({
     queryKey: ORG_TEAMS_QUERY_KEY,
     queryFn: () => api.getOrganizationTeams(),
-    enabled: entitlement.enabled,
+    enabled: shouldLoadTeams,
   })
 
   const {data: orgMembers} = useQuery({
     queryKey: ['org-members'],
     queryFn: () => api.getOrgMembers(),
-    enabled: entitlement.enabled,
+    enabled: shouldLoadTeams,
   })
 
   const {data: schedules} = useQuery({
     queryKey: ['on-call-schedules'],
     queryFn: () => api.getOnCallSchedules(),
-    enabled: entitlement.enabled,
+    enabled: shouldLoadTeams,
   })
 
   const {data: policies} = useQuery({
     queryKey: ['escalation-policies'],
     queryFn: () => api.getEscalationPolicies(),
-    enabled: entitlement.enabled,
+    enabled: shouldLoadTeams,
   })
 
   const memberOptions = (orgMembers?.members ?? []).map((member) => ({
@@ -287,7 +288,10 @@ function OnCallTeams() {
   }
 
   const handleDelete = (team: OrganizationTeam) => {
-    if (confirm(`Delete the "${team.name}" team? Resources owned by it will become unowned.`)) {
+    const confirmed = globalThis.window.confirm(
+      `Delete the "${team.name}" team? Resources owned by it will become unowned.`
+    )
+    if (confirmed) {
       deleteMutation.mutate(team.id)
     }
   }
@@ -296,7 +300,7 @@ function OnCallTeams() {
   const isSaving = createMutation.isPending || updateMutation.isPending
 
   let content
-  if (!entitlement.enabled) {
+  if (!entitlement.enabled && !entitlement.isError) {
     content = entitlement.isLoading ? (
       <div className="flex items-center justify-center py-10">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
@@ -352,7 +356,7 @@ function OnCallTeams() {
         title="On-call teams"
         description="Group engineers into teams that own resources and carry a primary on-call schedule"
         actions={
-          entitlement.enabled ? (
+          shouldLoadTeams ? (
             <Button
               size="sm"
               className="shrink-0 gap-1.5"

@@ -40,6 +40,10 @@ object ResourceOwnership : Table("resource_ownership") {
     val updated_by = varchar("updated_by", 320)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
+
+    init {
+        uniqueIndex(organization_id, resource_id)
+    }
 }
 
 /** Persistent store for resource ownership claims, keyed by catalog resource id. */
@@ -71,6 +75,7 @@ class ResourceOwnershipRepositoryImpl : ResourceOwnershipRepository {
     override fun upsert(organizationId: Int, resourceId: String, teamId: Int, updatedBy: String) {
         val now = Clock.System.now()
         transaction {
+            requireTeamBelongsToOrganization(organizationId, teamId)
             if (updateOwnership(organizationId, resourceId, teamId, updatedBy, now) == 0) {
                 insertOwnershipIfMissing(organizationId, resourceId, teamId, updatedBy, now)
                 check(updateOwnership(organizationId, resourceId, teamId, updatedBy, now) > 0) {
@@ -121,6 +126,18 @@ class ResourceOwnershipRepositoryImpl : ResourceOwnershipRepository {
             it[updated_by] = updatedBy
             it[updated_at] = updatedAt
         }
+
+    private fun requireTeamBelongsToOrganization(organizationId: Int, teamId: Int) {
+        val exists =
+            OrganizationTeams
+                .selectAll()
+                .where {
+                    (OrganizationTeams.organizationId eq organizationId) and
+                        (OrganizationTeams.id eq teamId)
+                }
+                .any()
+        require(exists) { "Team does not belong to organization" }
+    }
 
     private fun insertOwnershipIfMissing(
         organizationId: Int,

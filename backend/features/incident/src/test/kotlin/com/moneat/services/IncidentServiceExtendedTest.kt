@@ -573,26 +573,28 @@ class IncidentServiceExtendedTest {
         )
         val teamAwareService = IncidentService(workflowService, ownershipRepository)
 
-        teamAwareService.fireAlert(
-            makeEvent(
-                metadata = mapOf("catalog_resource_id" to JsonPrimitive("service:7:checkout-api")),
+        try {
+            teamAwareService.fireAlert(
+                makeEvent(
+                    metadata = mapOf("catalog_resource_id" to JsonPrimitive("service:7:checkout-api")),
+                )
             )
-        )
 
-        coVerify {
-            bridge.triggerEscalation(
-                organizationId = orgId,
-                escalationPolicyId = teamPolicyId,
-                title = any(),
-                description = any(),
-                priority = "P1",
-                alertSource = AlertSource.UPTIME_MONITOR.name,
-                deduplicationKey = any(),
-                metadata = any()
-            )
+            coVerify {
+                bridge.triggerEscalation(
+                    organizationId = orgId,
+                    escalationPolicyId = teamPolicyId,
+                    title = any(),
+                    description = any(),
+                    priority = "P1",
+                    alertSource = AlertSource.UPTIME_MONITOR.name,
+                    deduplicationKey = any(),
+                    metadata = any()
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
         }
-
-        unmockkObject(FeatureRegistry)
     }
 
     @Test

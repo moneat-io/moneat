@@ -24,6 +24,8 @@ export interface TeamsEntitlement {
   readonly isError: boolean
 }
 
+export const BILLING_USAGE_QUERY_KEY = ['billingUsage'] as const
+
 /**
  * Whether on-call Teams (team-based ownership) is available on the org's plan.
  * Teams is gated to the TEAM tier and above; the backend also enforces this, so
@@ -31,7 +33,7 @@ export interface TeamsEntitlement {
  */
 export function useTeamsEntitlement(): TeamsEntitlement {
   const {data, isLoading, isError} = useQuery({
-    queryKey: ['billingUsage'],
+    queryKey: BILLING_USAGE_QUERY_KEY,
     queryFn: () => api.getBillingUsage(),
     staleTime: 60_000,
   })

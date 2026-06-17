@@ -37,6 +37,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -68,6 +69,11 @@ private fun FeatureNotAvailableException.errorResponse(): ErrorResponse =
 private suspend fun ApplicationCall.respondTeamRouteFailure(error: Throwable) {
     when (error) {
         is FeatureNotAvailableException -> respond(HttpStatusCode.Forbidden, error.errorResponse())
+        is BadRequestException ->
+            respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponse(error.message ?: "Invalid team request"),
+            )
         is NotFoundException -> respond(HttpStatusCode.NotFound, ErrorResponse(error.message ?: "Team not found"))
         is IllegalStateException ->
             respond(HttpStatusCode.Forbidden, ErrorResponse(error.message ?: "Insufficient permissions"))
