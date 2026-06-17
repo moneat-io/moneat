@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.stripe.java)
+    implementation(libs.sentry.kotlin)
     implementation(libs.kotlin.logging)
     implementation(libs.koin.ktor)
 
