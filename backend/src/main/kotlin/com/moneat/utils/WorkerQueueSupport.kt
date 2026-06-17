@@ -41,6 +41,7 @@ private val WORKER_PIPELINES =
         "NDM" to IngestionPipeline.DD_NDM,
         "Security" to IngestionPipeline.DD_SECURITY,
         "Connector event" to IngestionPipeline.CONNECTOR_EVENTS,
+        "Connector import" to IngestionPipeline.CONNECTOR_IMPORTS,
     )
 
 /**

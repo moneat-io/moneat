@@ -151,6 +151,37 @@ data class ConnectorWebhookAcceptedResponse(
 )
 
 @Serializable
+data class ConnectorSyncRequest(
+    val startDate: String? = null,
+    val endDate: String? = null,
+)
+
+@Serializable
+data class ConnectorImportRunResponse(
+    val id: String,
+    val installationId: String,
+    val providerId: String,
+    val importType: String,
+    val externalProjectId: String?,
+    val externalResourceId: String?,
+    val startDate: String,
+    val endDate: String,
+    val status: String,
+    val rowsImported: Int,
+    val queuedAt: String,
+    val startedAt: String?,
+    val finishedAt: String?,
+    val attemptCount: Int,
+    val lastErrorCode: String?,
+    val lastErrorMessage: String?,
+)
+
+@Serializable
+data class ConnectorImportRunsResponse(
+    val runs: List<ConnectorImportRunResponse>,
+)
+
+@Serializable
 data class ConnectorProviderStateDetail(
     val installationId: String,
     val status: String,
@@ -164,6 +195,10 @@ data class ConnectorProviderStateDetail(
     val lastAcceptedWebhookAt: String?,
     val lastAppliedAt: String?,
     val processingLagSeconds: Long?,
+    val lastImportStatus: String? = null,
+    val lastImportFinishedAt: String? = null,
+    val lastImportRows: Int? = null,
+    val importLagSeconds: Long? = null,
 )
 
 @Serializable

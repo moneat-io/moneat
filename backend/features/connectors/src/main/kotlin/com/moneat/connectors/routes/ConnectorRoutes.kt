@@ -29,6 +29,7 @@ import com.moneat.connectors.ConnectorProvidersResponse
 import com.moneat.connectors.ConnectorService
 import com.moneat.connectors.ConnectorServiceException
 import com.moneat.connectors.ConnectorStateResponse
+import com.moneat.connectors.ConnectorSyncRequest
 import com.moneat.connectors.ConnectorUseDefinition
 import com.moneat.connectors.ConnectorUseState
 import com.moneat.connectors.ConnectorWebhookAcceptedResponse
@@ -181,6 +182,21 @@ private fun Route.connectorInstallationActionRoutes(connectorService: ConnectorS
             connectorService.webhookSetup(context.orgId, installationId)
         }
     }
+
+    post("/sync") {
+        val context = call.requireConnectorAdmin() ?: return@post
+        val installationId = call.requireInstallationId() ?: return@post
+        val request = call.receiveConnectorSyncRequest()
+        call.respondConnector(HttpStatusCode.Accepted) {
+            connectorService.enqueueSync(context.orgId, context.userId, installationId, request)
+        }
+    }
+}
+
+private suspend fun ApplicationCall.receiveConnectorSyncRequest(): ConnectorSyncRequest {
+    val contentLength = request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+    if (contentLength == 0L) return ConnectorSyncRequest()
+    return receive()
 }
 
 private fun Route.connectorInstallationResourceRoutes(connectorService: ConnectorService) {
@@ -205,6 +221,14 @@ private fun Route.connectorInstallationResourceRoutes(connectorService: Connecto
         val installationId = call.requireInstallationId() ?: return@get
         call.respondConnector {
             connectorService.listBindings(context.orgId, installationId)
+        }
+    }
+
+    get("/sync-runs") {
+        val context = call.requireCurrentOrg() ?: return@get
+        val installationId = call.requireInstallationId() ?: return@get
+        call.respondConnector {
+            connectorService.listImportRuns(context.orgId, installationId)
         }
     }
 

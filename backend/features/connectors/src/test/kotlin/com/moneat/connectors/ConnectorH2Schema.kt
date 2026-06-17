@@ -179,6 +179,33 @@ object ConnectorH2Schema {
                 )
                 """.trimIndent()
             )
+            exec(
+                """
+                CREATE TABLE connector_import_runs (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    resource_id UUID NOT NULL,
+                    organization_id INT NOT NULL,
+                    installation_id INT NOT NULL,
+                    provider VARCHAR(64) NOT NULL,
+                    import_type VARCHAR(64) NOT NULL,
+                    external_project_id VARCHAR(255),
+                    external_resource_id VARCHAR(255),
+                    date_start DATE NOT NULL,
+                    date_end DATE NOT NULL,
+                    status VARCHAR(32) DEFAULT 'queued' NOT NULL,
+                    rows_imported INT DEFAULT 0 NOT NULL,
+                    requested_by INT,
+                    queued_at TIMESTAMP(9) NOT NULL,
+                    started_at TIMESTAMP(9),
+                    finished_at TIMESTAMP(9),
+                    attempt_count INT DEFAULT 0 NOT NULL,
+                    last_error_code VARCHAR(64),
+                    last_error_message TEXT,
+                    created_at TIMESTAMP(9) NOT NULL,
+                    updated_at TIMESTAMP(9) NOT NULL
+                )
+                """.trimIndent()
+            )
         }
     }
 
@@ -189,5 +216,6 @@ object ConnectorH2Schema {
             ConnectorUseBindings,
             ConnectorInboundEventsRaw,
             ConnectorEventReceipts,
+            ConnectorImportRuns,
         )
 }

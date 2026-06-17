@@ -36,7 +36,8 @@ enum class IngestionPipeline(
     DD_MISC("dd-misc", "Misc"),
     DD_NDM("dd-ndm", "NDM"),
     DD_SECURITY("dd-security", "Security"),
-    CONNECTOR_EVENTS("connector-events", "Connector event");
+    CONNECTOR_EVENTS("connector-events", "Connector event"),
+    CONNECTOR_IMPORTS("connector-imports", "Connector import");
 
     val envKey: String = id.uppercase().replace('-', '_')
     val consumerGroup: String = "moneat:$id:workers"

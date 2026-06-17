@@ -26,10 +26,12 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.datetime.LocalDate
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -70,6 +72,32 @@ data class GoogleAdsCustomerAccount(
     val loginCustomerId: String?,
 )
 
+data class GoogleAdsSpendReportRow(
+    val reportDate: LocalDate,
+    val customerId: String,
+    val loginCustomerId: String?,
+    val campaignId: String?,
+    val campaignName: String?,
+    val campaignStatus: String?,
+    val campaignType: String?,
+    val campaignSubType: String?,
+    val biddingStrategyType: String?,
+    val adGroupId: String?,
+    val adGroupName: String?,
+    val adGroupStatus: String?,
+    val device: String?,
+    val geoTargetCountry: String?,
+    val currencyCode: String?,
+    val timeZone: String?,
+    val impressions: Long,
+    val clicks: Long,
+    val costMicros: Long,
+    val conversions: Double,
+    val conversionsValue: Double,
+    val allConversions: Double,
+    val allConversionsValue: Double,
+)
+
 class GoogleAdsClientException(
     message: String,
     val code: String,
@@ -89,6 +117,14 @@ interface GoogleAdsProviderClient {
         credential: GoogleAdsOAuthCredential,
         loginCustomerId: String,
     ): List<GoogleAdsCustomerAccount>
+
+    fun fetchSpendReport(
+        credential: GoogleAdsOAuthCredential,
+        customerId: String,
+        loginCustomerId: String?,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<GoogleAdsSpendReportRow>
 }
 
 data class GoogleAdsClientConfig(
@@ -195,6 +231,30 @@ class GoogleAdsClient(
                 loginCustomerId = normalizedLoginCustomerId,
             )
         }
+    }
+
+    override fun fetchSpendReport(
+        credential: GoogleAdsOAuthCredential,
+        customerId: String,
+        loginCustomerId: String?,
+        startDate: LocalDate,
+        endDate: LocalDate,
+    ): List<GoogleAdsSpendReportRow> {
+        val normalizedCustomerId = normalizeCustomerId(customerId)
+            ?: throw GoogleAdsClientException("Google Ads customer ID is required", "missing_customer_id")
+        val normalizedLoginCustomerId = normalizeCustomerId(loginCustomerId)
+        val response = searchStream(
+            credential = credential,
+            customerId = normalizedCustomerId,
+            loginCustomerId = normalizedLoginCustomerId,
+            query = spendReportQuery(startDate, endDate),
+            operation = "fetch Google Ads spend report",
+        )
+        return parseSpendReportRows(
+            body = response.body(),
+            customerId = normalizedCustomerId,
+            loginCustomerId = normalizedLoginCustomerId,
+        )
     }
 
     private fun getCustomer(
@@ -392,6 +452,22 @@ class GoogleAdsClient(
         }
     }
 
+    private fun parseSpendReportRows(
+        body: String,
+        customerId: String,
+        loginCustomerId: String?,
+    ): List<GoogleAdsSpendReportRow> {
+        val root = json.parseToJsonElement(body)
+        val batches = if (root is JsonArray) root.toList() else listOf(root)
+        return batches.flatMap { batch ->
+            batch.jsonObjectOrNull()
+                ?.get("results")
+                ?.jsonArray
+                ?.mapNotNull { result -> result.jsonObjectOrNull()?.toSpendReportRow(customerId, loginCustomerId) }
+                .orEmpty()
+        }
+    }
+
     private fun formBody(values: Map<String, String>): String =
         values.entries.joinToString("&") { (key, value) ->
             "${key.urlEncode()}=${value.urlEncode()}"
@@ -444,6 +520,36 @@ class GoogleAdsClient(
             FROM customer_client
             WHERE customer_client.level <= 1
         """.trimIndent()
+
+        private fun spendReportQuery(
+            startDate: LocalDate,
+            endDate: LocalDate,
+        ): String = """
+            SELECT
+              segments.date,
+              segments.device,
+              segments.geo_target_country,
+              customer.currency_code,
+              customer.time_zone,
+              campaign.id,
+              campaign.name,
+              campaign.status,
+              campaign.advertising_channel_type,
+              campaign.advertising_channel_sub_type,
+              campaign.bidding_strategy_type,
+              ad_group.id,
+              ad_group.name,
+              ad_group.status,
+              metrics.impressions,
+              metrics.clicks,
+              metrics.cost_micros,
+              metrics.conversions,
+              metrics.conversions_value,
+              metrics.all_conversions,
+              metrics.all_conversions_value
+            FROM geographic_view
+            WHERE segments.date BETWEEN '$startDate' AND '$endDate'
+        """.trimIndent()
     }
 }
 
@@ -453,11 +559,62 @@ private fun JsonElement.jsonObjectOrNull(): JsonObject? =
 private fun JsonObject.string(key: String): String? =
     this[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
 
+private fun JsonObject.stringAny(vararg keys: String): String? =
+    keys.firstNotNullOfOrNull { key -> string(key) }
+
 private fun JsonObject.boolean(key: String): Boolean? =
     this[key]?.jsonPrimitive?.booleanOrNull
 
 private fun JsonObject.int(key: String): Int? =
     this[key]?.jsonPrimitive?.intOrNull
+
+private fun JsonObject.longAny(vararg keys: String): Long =
+    stringAny(*keys)?.toLongOrNull() ?: 0L
+
+private fun JsonObject.doubleAny(vararg keys: String): Double =
+    stringAny(*keys)?.toDoubleOrNull()
+        ?: keys.firstNotNullOfOrNull { key -> this[key]?.jsonPrimitive?.doubleOrNull }
+        ?: 0.0
+
+private fun JsonObject.child(key: String): JsonObject =
+    this[key]?.jsonObjectOrNull() ?: JsonObject(emptyMap())
+
+private fun JsonObject.toSpendReportRow(
+    customerId: String,
+    loginCustomerId: String?,
+): GoogleAdsSpendReportRow? {
+    val segments = child("segments")
+    val metrics = child("metrics")
+    val campaign = child("campaign")
+    val adGroup = child("adGroup")
+    val customer = child("customer")
+    val date = segments.string("date")?.let { rawDate -> LocalDate.parse(rawDate) } ?: return null
+    return GoogleAdsSpendReportRow(
+        reportDate = date,
+        customerId = customerId,
+        loginCustomerId = loginCustomerId,
+        campaignId = campaign.stringAny("id"),
+        campaignName = campaign.stringAny("name"),
+        campaignStatus = campaign.stringAny("status"),
+        campaignType = campaign.stringAny("advertisingChannelType", "advertising_channel_type"),
+        campaignSubType = campaign.stringAny("advertisingChannelSubType", "advertising_channel_sub_type"),
+        biddingStrategyType = campaign.stringAny("biddingStrategyType", "bidding_strategy_type"),
+        adGroupId = adGroup.stringAny("id"),
+        adGroupName = adGroup.stringAny("name"),
+        adGroupStatus = adGroup.stringAny("status"),
+        device = segments.stringAny("device"),
+        geoTargetCountry = segments.stringAny("geoTargetCountry", "geo_target_country"),
+        currencyCode = customer.stringAny("currencyCode", "currency_code"),
+        timeZone = customer.stringAny("timeZone", "time_zone"),
+        impressions = metrics.longAny("impressions"),
+        clicks = metrics.longAny("clicks"),
+        costMicros = metrics.longAny("costMicros", "cost_micros"),
+        conversions = metrics.doubleAny("conversions"),
+        conversionsValue = metrics.doubleAny("conversionsValue", "conversions_value"),
+        allConversions = metrics.doubleAny("allConversions", "all_conversions"),
+        allConversionsValue = metrics.doubleAny("allConversionsValue", "all_conversions_value"),
+    )
+}
 
 private fun String.urlEncode(): String =
     URLEncoder.encode(this, Charsets.UTF_8)

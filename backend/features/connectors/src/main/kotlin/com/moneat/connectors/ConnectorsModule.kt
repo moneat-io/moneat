@@ -30,6 +30,7 @@ import org.koin.dsl.module
 class ConnectorsModule : EnterpriseModule {
     override val name: String = "Connectors"
     private var connectorEventWorker: ConnectorEventWorker? = null
+    private var connectorImportWorker: ConnectorImportWorker? = null
 
     override fun registerRoutes(route: Route) {
         route.connectorRoutes()
@@ -52,6 +53,7 @@ class ConnectorsModule : EnterpriseModule {
                     )
                 }
                 single { ConnectorEventWorker(connectorService = get()) }
+                single { ConnectorImportWorker(connectorService = get()) }
             }
         )
 
@@ -62,14 +64,21 @@ class ConnectorsModule : EnterpriseModule {
         startSchedulers: Boolean,
         startIngestionWorkers: Boolean,
     ) {
-        if (!startIngestionWorkers || !IngestionQueueSettings.isSelected(IngestionPipeline.CONNECTOR_EVENTS)) {
+        if (!startIngestionWorkers) {
             return
         }
-        connectorEventWorker = GlobalContext.get().get<ConnectorEventWorker>().also { worker -> worker.start() }
+        if (IngestionQueueSettings.isSelected(IngestionPipeline.CONNECTOR_EVENTS)) {
+            connectorEventWorker = GlobalContext.get().get<ConnectorEventWorker>().also { worker -> worker.start() }
+        }
+        if (IngestionQueueSettings.isSelected(IngestionPipeline.CONNECTOR_IMPORTS)) {
+            connectorImportWorker = GlobalContext.get().get<ConnectorImportWorker>().also { worker -> worker.start() }
+        }
     }
 
     override fun stopBackgroundJobs() {
         connectorEventWorker?.stop()
         connectorEventWorker = null
+        connectorImportWorker?.stop()
+        connectorImportWorker = null
     }
 }
