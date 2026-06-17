@@ -37,6 +37,8 @@ dependencies {
     implementation(libs.kotlin.logging)
     implementation(libs.lettuce)
     implementation(libs.koin.ktor)
+    implementation(libs.protobuf.java)
+    implementation(libs.opentelemetry.proto)
 
     detektPlugins(libs.detekt.formatting)
 
@@ -49,8 +51,6 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.h2)
     testImplementation(libs.mockk)
-    testImplementation(libs.protobuf.java)
-    testImplementation(libs.opentelemetry.proto)
     testImplementation(kotlin("reflect"))
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
