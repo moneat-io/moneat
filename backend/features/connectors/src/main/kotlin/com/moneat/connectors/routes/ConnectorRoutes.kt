@@ -186,11 +186,17 @@ private fun Route.connectorInstallationActionRoutes(connectorService: ConnectorS
     post("/sync") {
         val context = call.requireConnectorAdmin() ?: return@post
         val installationId = call.requireInstallationId() ?: return@post
-        val request = call.receive<ConnectorSyncRequest>()
+        val request = call.receiveConnectorSyncRequest()
         call.respondConnector(HttpStatusCode.Accepted) {
             connectorService.enqueueSync(context.orgId, context.userId, installationId, request)
         }
     }
+}
+
+private suspend fun ApplicationCall.receiveConnectorSyncRequest(): ConnectorSyncRequest {
+    val contentLength = request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+    if (contentLength == 0L) return ConnectorSyncRequest()
+    return receive()
 }
 
 private fun Route.connectorInstallationResourceRoutes(connectorService: ConnectorService) {

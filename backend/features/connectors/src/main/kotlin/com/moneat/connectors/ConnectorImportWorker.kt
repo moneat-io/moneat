@@ -32,6 +32,7 @@ class ConnectorImportWorker(
     private var queueWorker: RedisQueueWorker? = null
 
     fun start() {
+        if (queueWorker != null) return
         val spec = IngestionQueueSettings.spec(
             pipeline = IngestionPipeline.CONNECTOR_IMPORTS,
             queueKey = ConnectorService.CONNECTOR_IMPORT_QUEUE_KEY,
@@ -47,6 +48,7 @@ class ConnectorImportWorker(
 
     fun stop() {
         queueWorker?.stop()
+        queueWorker = null
         connectorImportWorkerLogger.info { "ConnectorImportWorker stopped" }
     }
 
