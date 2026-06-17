@@ -18,11 +18,11 @@ package com.moneat.shared.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType

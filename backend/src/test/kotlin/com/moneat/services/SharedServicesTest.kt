@@ -26,8 +26,6 @@ import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.UsageRecords
 import com.moneat.shared.services.ArtifactCleanupService
 import com.moneat.shared.services.CacheService
-import com.moneat.shared.services.PulsePayload
-import com.moneat.shared.services.PulseService
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.shared.services.TaskLock
 import com.moneat.shared.services.UsageTrackingService
@@ -45,7 +43,6 @@ import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.json.Json
 import net.javacrumbs.shedlock.core.LockConfiguration
 import net.javacrumbs.shedlock.core.LockProvider
 import net.javacrumbs.shedlock.core.SimpleLock
@@ -559,91 +556,6 @@ class SharedServicesTest {
     @Test
     fun `normalizeVersionTag returns null for two-part version`() {
         assertNull(normalizeVersionTag("1.2"))
-    }
-
-    // ──── PulsePayload serialization ────
-
-    @Test
-    fun `PulsePayload serializes and deserializes correctly`() {
-        val payload = PulsePayload(
-            deploymentId = "test-id-123",
-            version = "v1.2.3",
-            cpuCount = 4,
-            memTotalBytes = 8_000_000_000,
-            memUsedBytes = 4_000_000_000,
-            osName = "Linux",
-            osArch = "amd64",
-            jvmVersion = "21",
-            projectCount = 10,
-            userCount = 5,
-            eventCount = 1000,
-            issueCount = 50,
-            selfHost = true,
-            sslEnabled = true
-        )
-
-        val json = Json { encodeDefaults = true }
-        val encoded = json.encodeToString(PulsePayload.serializer(), payload)
-        val decoded = json.decodeFromString(PulsePayload.serializer(), encoded)
-
-        assertEquals(payload.deploymentId, decoded.deploymentId)
-        assertEquals(payload.version, decoded.version)
-        assertEquals(payload.cpuCount, decoded.cpuCount)
-        assertEquals(payload.memTotalBytes, decoded.memTotalBytes)
-        assertEquals(payload.memUsedBytes, decoded.memUsedBytes)
-        assertEquals(payload.osName, decoded.osName)
-        assertEquals(payload.projectCount, decoded.projectCount)
-        assertEquals(payload.sslEnabled, decoded.sslEnabled)
-    }
-
-    @Test
-    fun `PulsePayload defaults are applied`() {
-        val payload = PulsePayload(deploymentId = "minimal")
-
-        assertEquals(0, payload.cpuCount)
-        assertEquals("", payload.version)
-        assertEquals(0L, payload.memTotalBytes)
-        assertEquals("", payload.osName)
-        assertEquals(0L, payload.projectCount)
-        assertTrue(payload.selfHost)
-        assertFalse(payload.sslEnabled)
-    }
-
-    // ──── PulseService static methods ────
-
-    @Test
-    fun `PulseService isEnabled returns false when not self hosted`() {
-        // In test env SELF_HOSTED is typically not set
-        assertFalse(PulseService.isEnabled())
-    }
-
-    @Test
-    fun `PulseService getStatus returns consistent enabled flag`() = runBlocking {
-        val status = PulseService.getStatus()
-        assertEquals(PulseService.isEnabled(), status.enabled)
-        assertTrue(status.endpoint.isNotBlank())
-    }
-
-    @Test
-    fun `PulseService getStatus has null metrics when disabled`() = runBlocking {
-        val status = PulseService.getStatus()
-        if (!status.enabled) {
-            assertNull(status.metrics)
-        }
-    }
-
-    // ──── PulseService start and stop lifecycle ────
-
-    @Test
-    fun `PulseService start and stop does not throw`() {
-        val service = PulseService(
-            interval = kotlin.time.Duration.parse("1h"),
-            endpoint = "http://localhost:1/noop"
-        )
-        val scope = CoroutineScope(Dispatchers.Default)
-        service.start(scope)
-        service.stop()
-        scope.cancel()
     }
 
     // ──── RetentionPolicyService with PRO tier ────
