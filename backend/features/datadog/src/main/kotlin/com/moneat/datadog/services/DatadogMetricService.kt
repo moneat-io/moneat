@@ -40,6 +40,17 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
 private const val ERROR_BODY_MAX_LEN = 600
+private const val PERCENTAGE_SCALE = 100.0
+private const val DD_DISK_IN_USE_METRIC = "system.disk.in_use"
+private const val DD_NET_BYTES_RECEIVED_METRIC = "system.net.bytes_rcvd"
+private const val DD_NET_BYTES_SENT_METRIC = "system.net.bytes_sent"
+private const val DD_MEM_PCT_USABLE_METRIC = "system.mem.pct_usable"
+private const val DD_MEM_USABLE_METRIC = "system.mem.usable"
+private const val MONEAT_MEM_AVAILABLE_METRIC = "system.mem.available"
+private const val MONEAT_MEM_TOTAL_METRIC = "system.mem.total"
+private const val MONEAT_DISK_PERCENT_METRIC = "system.disk.percent"
+private const val MONEAT_NET_RECEIVED_METRIC = "system.net.recv_bytes"
+private const val MONEAT_NET_SENT_METRIC = "system.net.sent_bytes"
 
 @Serializable
 data class QueuedMetricBatch(
@@ -392,18 +403,7 @@ object DatadogMetricService {
     private suspend fun insertMetricRollupsBestEffort(batch: QueuedMetricBatch) {
         try {
             InfraTelemetryRollups.insertMetricRollups(
-                batch.metrics.map { metric ->
-                    InfraMetricRollupRow(
-                        organizationId = batch.organizationId,
-                        metricName = metric.name,
-                        timestampMs = metric.timestampMs,
-                        value = metric.value,
-                        host = metric.host,
-                        tags = metric.tags,
-                        unit = metric.unit,
-                        source = "datadog",
-                    )
-                }
+                batch.toInfraMetricRollupRows()
             )
         } catch (e: CancellationException) {
             throw e
@@ -415,8 +415,71 @@ object DatadogMetricService {
         }
     }
 
+    private fun QueuedMetricBatch.toInfraMetricRollupRows(): List<InfraMetricRollupRow> {
+        val rows = metrics
+            .mapNotNull { metric -> metric.toInfraMetricRollupRow(organizationId) }
+            .toMutableList()
+        val availableKeys = rows
+            .filter { row -> row.metricName == MONEAT_MEM_AVAILABLE_METRIC }
+            .mapTo(mutableSetOf()) { row -> row.memoryAvailabilityKey() }
+        val totalByKey = metrics
+            .filter { metric -> metric.name == MONEAT_MEM_TOTAL_METRIC }
+            .associateBy { metric -> metric.memoryAvailabilityKey() }
+
+        metrics
+            .filter { metric -> metric.name == DD_MEM_PCT_USABLE_METRIC }
+            .forEach { metric ->
+                val key = metric.memoryAvailabilityKey()
+                if (key in availableKeys) return@forEach
+                val total = totalByKey[key] ?: return@forEach
+                val row = metric.copy(
+                    name = MONEAT_MEM_AVAILABLE_METRIC,
+                    value = metric.value * total.value,
+                    unit = total.unit,
+                ).toInfraMetricRollupRow(organizationId) ?: return@forEach
+                rows += row
+                availableKeys += key
+            }
+
+        return rows
+    }
+
+    private fun QueuedMetricEntry.toInfraMetricRollupRow(organizationId: Long): InfraMetricRollupRow? {
+        val (metricName, metricValue) =
+            when (name) {
+                DD_DISK_IN_USE_METRIC -> MONEAT_DISK_PERCENT_METRIC to value * PERCENTAGE_SCALE
+                DD_NET_BYTES_RECEIVED_METRIC -> MONEAT_NET_RECEIVED_METRIC to value
+                DD_NET_BYTES_SENT_METRIC -> MONEAT_NET_SENT_METRIC to value
+                DD_MEM_USABLE_METRIC -> MONEAT_MEM_AVAILABLE_METRIC to value
+                DD_MEM_PCT_USABLE_METRIC -> return null
+                else -> name to value
+            }
+        return InfraMetricRollupRow(
+            organizationId = organizationId,
+            metricName = metricName,
+            timestampMs = timestampMs,
+            value = metricValue,
+            host = host,
+            tags = tags,
+            unit = unit,
+            source = "datadog",
+        )
+    }
+
+    private fun QueuedMetricEntry.memoryAvailabilityKey(): MemoryAvailabilityKey =
+        MemoryAvailabilityKey(host = host, timestampMs = timestampMs, tags = tags)
+
+    private fun InfraMetricRollupRow.memoryAvailabilityKey(): MemoryAvailabilityKey =
+        MemoryAvailabilityKey(host = host, timestampMs = timestampMs, tags = tags)
+
     private fun QueuedMetricEntry.hostLookupName(): String =
         host.ifBlank {
             tags["host"] ?: tags["host.name"] ?: tags["hostname"] ?: ""
         }
+
+    private data class MemoryAvailabilityKey(
+        val host: String,
+        val timestampMs: Long,
+        val tags: Map<String, String>,
+    )
 }

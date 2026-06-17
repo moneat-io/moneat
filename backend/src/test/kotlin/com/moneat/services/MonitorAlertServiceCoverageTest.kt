@@ -260,10 +260,11 @@ class MonitorAlertServiceCoverageTest {
         val query = service.currentMetricValueQuery(153, 1, "disk_percent")
 
         assertNotNull(query)
-        assertTrue(query.contains("metric_name IN ('system.disk.used','system.disk.total')"))
+        assertTrue(query.contains("metric_name IN ('system.disk.percent','system.disk.used','system.disk.total')"))
         assertTrue(query.contains("GROUP BY disk_identity"))
         assertTrue(query.contains("tags['device_name']"))
-        assertTrue(query.contains("max(used / nullIf(total, 0) * 100)"))
+        assertTrue(query.contains("max(pct)"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.percent')"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.used')"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.total')"))
         assertFalse(query.contains("system.disk.in_use"))
@@ -271,14 +272,158 @@ class MonitorAlertServiceCoverageTest {
     }
 
     @Test
-    fun `currentMetricValueQuery calculates memory percent from available and total`() {
+    fun `currentMetricValueQuery calculates memory percent with normalized fallback metrics`() {
         val query = service.currentMetricValueQuery(153, 1, "mem_percent")
 
         assertNotNull(query)
+        assertFalse(query.contains("system.mem.pct_usable"))
         assertTrue(query.contains("system.mem.available"))
+        assertTrue(query.contains("system.mem.used"))
         assertTrue(query.contains("system.mem.total"))
-        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name='system.mem.available')"))
+        assertTrue(query.indexOf("system.mem.available") < query.indexOf("system.mem.used"))
+        assertTrue(query.contains("countIf(metric_name = 'system.mem.available') > 0"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.mem.available')"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.mem.used')"))
     }
+
+    @Test
+    fun `checkSustainedCondition calculates memory percent with normalized fallback metrics`() =
+        runBlocking {
+            val body = """{"data":[["1"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "mem_percent",
+                    condition = ">",
+                    threshold = 80.0,
+                    durationSeconds = 60,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertTrue(result)
+            val query = queries.single()
+            assertTrue(query.contains("metrics_rollup_1m"))
+            assertFalse(query.contains("system.mem.pct_usable"))
+            assertTrue(query.contains("sumIf(value_count, metric_name = 'system.mem.available') > 0"))
+            assertTrue(query.indexOf("system.mem.available") < query.indexOf("system.mem.used"))
+        }
+
+    @Test
+    fun `checkSustainedCondition calculates disk percent with normalized fallback metrics`() =
+        runBlocking {
+            val body = """{"data":[["2"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "disk_percent",
+                    condition = "<=",
+                    threshold = 90.0,
+                    durationSeconds = 120,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertTrue(result)
+            val query = queries.single()
+            assertTrue(query.contains("metrics_rollup_1m"))
+            assertTrue(query.contains("metric_name = 'system.disk.percent'"))
+            assertTrue(query.contains("metric_name = 'system.disk.used'"))
+            assertTrue(query.contains("metric_name = 'system.disk.total'"))
+            assertTrue(query.contains("HAVING pct <= 90.0"))
+            assertFalse(query.contains("system.disk.in_use"))
+        }
+
+    @Test
+    fun `checkSustainedCondition builds scalar sustained condition query`() =
+        runBlocking {
+            val body = """{"data":[["1"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "load_1",
+                    condition = ">=",
+                    threshold = 1.0,
+                    durationSeconds = 60,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertTrue(result)
+            val query = queries.single()
+            assertTrue(query.contains("metric_name = 'system.load.1'"))
+            assertTrue(query.contains("HAVING value >= 1.0"))
+        }
+
+    @Test
+    fun `checkSustainedCondition returns false for invalid condition without querying`() =
+        runBlocking {
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "mem_percent",
+                    condition = "gt",
+                    threshold = 80.0,
+                    durationSeconds = 60,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertFalse(result)
+            coVerify(exactly = 0) { ClickHouseClient.execute(any()) }
+        }
 
     @Test
     fun `currentMetricValueQuery builds latest value queries for scalar metrics`() {
@@ -320,7 +465,7 @@ class MonitorAlertServiceCoverageTest {
             assertEquals(87.5, v!!, 0.001)
             assertFalse(queries.single().contains("system.disk.in_use"))
             assertTrue(queries.single().contains("GROUP BY disk_identity"))
-            assertTrue(queries.single().contains("max(used / nullIf(total, 0) * 100)"))
+            assertTrue(queries.single().contains("system.disk.percent"))
         }
 
     @Test

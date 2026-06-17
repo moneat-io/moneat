@@ -16,6 +16,7 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.config.ClickHouseClient
 import com.moneat.datadog.models.DdApmErrorsResponse
 import com.moneat.datadog.models.DdApmOverviewFacets
 import com.moneat.datadog.models.DdApmOverviewPreviousStats
@@ -32,6 +33,7 @@ import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DatadogJfrFlamegraphService
 import com.moneat.datadog.services.DatadogPprofFlamegraphService
 import com.moneat.datadog.services.DdResourceStatsQuery
+import com.moneat.datadog.services.DdHostInfo
 import com.moneat.datadog.services.DdTraceListQuery
 import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.ProfileMergeService
@@ -42,6 +44,7 @@ import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -51,13 +54,17 @@ import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.mockkStatic
 import io.mockk.unmockkObject
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 import kotlinx.serialization.json.buildJsonArray
@@ -69,12 +76,15 @@ class DatadogQueryRoutesTest {
     @BeforeTest
     fun setup() {
         startTestKoin()
+        mockkObject(ClickHouseClient)
         mockkObject(DatadogHostService)
         mockkObject(TraceIngestionService)
         mockkObject(ProfileIngestionService)
         mockkObject(ProfileMergeService)
         mockkObject(ProfileStorageService)
+        mockkStatic(HttpResponse::bodyAsText)
 
+        every { ClickHouseClient.getDatabase() } returns "testdb"
         every { DatadogHostService.listHosts(any<Int>()) } returns emptyList()
         every { DatadogHostService.getHost(any<Int>(), any<Uuid>()) } returns null
         every { DatadogHostService.deleteHost(any<Int>(), any<Uuid>()) } returns false
@@ -106,11 +116,13 @@ class DatadogQueryRoutesTest {
 
     @AfterTest
     fun teardown() {
+        unmockkStatic(HttpResponse::bodyAsText)
         unmockkObject(ProfileMergeService)
         unmockkObject(ProfileStorageService)
         unmockkObject(ProfileIngestionService)
         unmockkObject(TraceIngestionService)
         unmockkObject(DatadogHostService)
+        unmockkObject(ClickHouseClient)
         stopTestKoin()
     }
 
@@ -291,6 +303,103 @@ class DatadogQueryRoutesTest {
         val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
         val resp = client.delete("/v1/hosts/11111111-1111-4111-8111-111111111111") { withAuth(token) }
         assertEquals(HttpStatusCode.NotFound, resp.status)
+    }
+
+    @Test
+    fun `hosts metrics uses normalized rollups and computes dashboard values`() = testApplication {
+        val hostId = Uuid.parse(TEST_HOST_RESOURCE_ID)
+        val queries = mutableListOf<String>()
+        val clickHouseResponse = mockk<HttpResponse>()
+        every { DatadogHostService.getHost(10, hostId) } returns sampleHost()
+        every { clickHouseResponse.status } returns HttpStatusCode.OK
+        coEvery { clickHouseResponse.bodyAsText(any()) } returns normalizedHostMetricRows()
+        coEvery { ClickHouseClient.execute(any()) } coAnswers {
+            queries.add(firstArg())
+            clickHouseResponse
+        }
+        installHostRoutes()()
+
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get(
+            "/v1/hosts/$TEST_HOST_RESOURCE_ID/metrics" +
+                "?from=2026-06-15T00%3A00%3A00Z&to=2026-06-15T01%3A00%3A00Z"
+        ) {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"cpu_percent\":100.0"), body)
+        assertTrue(body.contains("\"mem_percent\":80.0"), body)
+        assertTrue(body.contains("\"mem_percent\":30.0"), body)
+        assertTrue(body.contains("\"disk_percent\":71.5"), body)
+        assertTrue(body.contains("\"net_recv_bytes\":1024.0"), body)
+        assertTrue(body.contains("\"net_sent_bytes\":2048.0"), body)
+        assertTrue(body.contains("\"load_1\":1.25"), body)
+
+        val query = queries.single()
+        assertTrue(query.contains("metrics_rollup_1m"))
+        assertTrue(query.contains("host_id = 42"))
+        assertTrue(query.contains("bucket_start >= toDateTime('2026-06-15T00:00:00Z')"))
+        assertTrue(query.contains("bucket_start <= toDateTime('2026-06-15T01:00:00Z')"))
+        assertTrue(query.contains("'system.mem.available'"))
+        assertTrue(query.contains("'system.disk.percent'"))
+        assertTrue(query.contains("'system.net.recv_bytes'"))
+        assertFalse(query.contains("system.mem.pct_usable"))
+        assertFalse(query.contains("system.disk.in_use"))
+        assertFalse(query.contains("system.net.bytes_rcvd"))
+    }
+
+    @Test
+    fun `hosts metrics returns empty data points when rollup query fails`() = testApplication {
+        val hostId = Uuid.parse(TEST_HOST_RESOURCE_ID)
+        val clickHouseResponse = mockk<HttpResponse>()
+        every { DatadogHostService.getHost(10, hostId) } returns sampleHost()
+        every { clickHouseResponse.status } returns HttpStatusCode.InternalServerError
+        coEvery { ClickHouseClient.execute(any()) } returns clickHouseResponse
+        installHostRoutes()()
+
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/hosts/$TEST_HOST_RESOURCE_ID/metrics") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        assertTrue(resp.bodyAsText().contains("\"data_points\":[]"))
+    }
+
+    @Test
+    fun `hosts containers returns latest container rows`() = testApplication {
+        val hostId = Uuid.parse(TEST_HOST_RESOURCE_ID)
+        val queries = mutableListOf<String>()
+        val clickHouseResponse = mockk<HttpResponse>()
+        every { DatadogHostService.getHost(10, hostId) } returns sampleHost()
+        every { clickHouseResponse.status } returns HttpStatusCode.OK
+        coEvery { clickHouseResponse.bodyAsText(any()) } returns normalizedContainerRows()
+        coEvery { ClickHouseClient.execute(any()) } coAnswers {
+            queries.add(firstArg())
+            clickHouseResponse
+        }
+        installHostRoutes()()
+
+        val token = RouteTestSupport.createToken(userId = 1, orgId = 10)
+        val resp = client.get("/v1/hosts/$TEST_HOST_RESOURCE_ID/containers") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.OK, resp.status)
+        val body = resp.bodyAsText()
+        assertTrue(body.contains("\"totalCount\":2"), body)
+        assertTrue(body.contains("\"name\":\"api\""), body)
+        assertTrue(body.contains("\"image\":\"ghcr.io/moneat/api:1\""), body)
+        assertTrue(body.contains("\"name\":\"worker\""), body)
+        assertTrue(body.contains("\"cpuPercent\":12.5"), body)
+        assertTrue(body.contains("\"netTxBytes\":456.0"), body)
+
+        val query = queries.single()
+        assertTrue(query.contains("containers_latest_by_host"))
+        assertTrue(query.contains("host_id = 42"))
+        assertTrue(query.contains("INTERVAL 10 MINUTE"))
     }
 
     // ──── Trace Dashboard Routes — 401 without JWT ────
@@ -826,6 +935,74 @@ class DatadogQueryRoutesTest {
         assertEquals(HttpStatusCode.OK, resp.status)
     }
 
+    private fun sampleHost(): DdHostInfo =
+        DdHostInfo(
+            id = TEST_HOST_RESOURCE_ID,
+            internalId = 42,
+            organizationId = 10,
+            hostname = "prod-host-01",
+            os = "linux",
+            platform = "ubuntu",
+            processor = "x86_64",
+            cpuCores = 8,
+            memoryTotalKb = 16_000_000L,
+            agentVersion = "7.52.0",
+            tags = mapOf("env" to "prod"),
+            firstSeenAt = "2026-06-15T00:00:00Z",
+            lastSeenAt = "2026-06-15T01:00:00Z",
+            isOnline = true,
+        )
+
+    private fun normalizedHostMetricRows(): String =
+        listOf(
+            """{"ts":1700000000,"metric_name":"system.cpu.user","value":60.0}""",
+            """{"ts":1700000000,"metric_name":"system.cpu.system","value":55.0}""",
+            """{"ts":1700000000,"metric_name":"system.mem.available","value":200.0}""",
+            """{"ts":1700000000,"metric_name":"system.mem.total","value":1000.0}""",
+            """{"ts":1700000000,"metric_name":"system.disk.percent","value":71.5}""",
+            """{"ts":1700000000,"metric_name":"system.net.recv_bytes","value":1024.0}""",
+            """{"ts":1700000000,"metric_name":"system.net.sent_bytes","value":2048.0}""",
+            """{"ts":1700000000,"metric_name":"system.load.1","value":1.25}""",
+            """{"ts":1700000000,"metric_name":"system.load.5","value":1.5}""",
+            """{"ts":1700000000,"metric_name":"system.load.15","value":1.75}""",
+            """{"ts":1700000300,"metric_name":"system.mem.used","value":300.0}""",
+            """{"ts":1700000300,"metric_name":"system.mem.total","value":1000.0}""",
+        ).joinToString("\n")
+
+    private fun normalizedContainerRows(): String =
+        listOf(
+            """
+            {
+              "host":"prod-host-01",
+              "container_id":"container-a",
+              "name":"api",
+              "image":"ghcr.io/moneat/api:1",
+              "state":"running",
+              "cpu_percent":12.5,
+              "mem_usage":256.0,
+              "mem_limit":512.0,
+              "net_rx_bytes":123.0,
+              "net_tx_bytes":456.0,
+              "tags":{"env":"prod"},
+              "ts":"2026-06-15T00:00:00.000Z"
+            }
+            """.trimIndent().replace("\n", ""),
+            """
+            {
+              "host":"prod-host-01",
+              "container_id":"container-b",
+              "name":"",
+              "image":"",
+              "state":"running",
+              "tags":{
+                "docker_image":"ghcr.io/moneat/worker:2",
+                "docker_container_name":"worker"
+              },
+              "ts":"2026-06-15T00:01:00.000Z"
+            }
+            """.trimIndent().replace("\n", ""),
+        ).joinToString("\n")
+
     private fun sampleProfile(): DdProfileResponse = DdProfileResponse(
         profileId = "known-id",
         host = "h1",
@@ -843,3 +1020,5 @@ class DatadogQueryRoutesTest {
         source = "datadog",
     )
 }
+
+private const val TEST_HOST_RESOURCE_ID = "11111111-1111-4111-8111-111111111111"

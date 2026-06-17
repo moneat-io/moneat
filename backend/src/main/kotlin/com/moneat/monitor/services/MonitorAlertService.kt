@@ -77,6 +77,12 @@ private val logger = KotlinLogging.logger {}
 private const val CURRENT_METRIC_LOOKBACK_MINUTES = 10
 private const val EMAIL_FRONTEND_URL_CONFIG = "email.frontendUrl"
 private const val LATEST_METRIC_VALUE_EXPR = "argMax(value, timestamp)"
+private const val MEM_AVAILABLE_METRIC = "system.mem.available"
+private const val MEM_USED_METRIC = "system.mem.used"
+private const val MEM_TOTAL_METRIC = "system.mem.total"
+private const val DISK_PERCENT_METRIC = "system.disk.percent"
+private const val DISK_USED_METRIC = "system.disk.used"
+private const val DISK_TOTAL_METRIC = "system.disk.total"
 private const val DISK_ID_EXPRESSION = """
     multiIf(
         tags['device_name'] != '', tags['device_name'],
@@ -93,6 +99,105 @@ private fun String.escapeHtml(): String =
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
+
+private fun memoryPercentMetricFilter(): String =
+    "metric_name IN ('$MEM_AVAILABLE_METRIC','$MEM_USED_METRIC','$MEM_TOTAL_METRIC')"
+
+private fun latestMemoryPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            countIf(metric_name = '$MEM_AVAILABLE_METRIC') > 0 AND
+                countIf(metric_name = '$MEM_TOTAL_METRIC') > 0,
+            (1 - argMaxIf(value, timestamp, metric_name = '$MEM_AVAILABLE_METRIC') /
+                nullIf(argMaxIf(value, timestamp, metric_name = '$MEM_TOTAL_METRIC'), 0)) * 100,
+            NULL
+        ),
+        if(
+            countIf(metric_name = '$MEM_USED_METRIC') > 0 AND countIf(metric_name = '$MEM_TOTAL_METRIC') > 0,
+            argMaxIf(value, timestamp, metric_name = '$MEM_USED_METRIC') /
+                nullIf(argMaxIf(value, timestamp, metric_name = '$MEM_TOTAL_METRIC'), 0) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
+private fun rollupMemoryPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            sumIf(value_count, metric_name = '$MEM_AVAILABLE_METRIC') > 0 AND
+                sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC') > 0,
+            (1 - (
+                sumIf(value_sum, metric_name = '$MEM_AVAILABLE_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_AVAILABLE_METRIC'), 0)
+            ) / nullIf(
+                sumIf(value_sum, metric_name = '$MEM_TOTAL_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC'), 0),
+                0
+            )) * 100,
+            NULL
+        ),
+        if(
+            sumIf(value_count, metric_name = '$MEM_USED_METRIC') > 0 AND
+                sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC') > 0,
+            (
+                sumIf(value_sum, metric_name = '$MEM_USED_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_USED_METRIC'), 0)
+            ) / nullIf(
+                sumIf(value_sum, metric_name = '$MEM_TOTAL_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC'), 0),
+                0
+            ) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
+private fun diskPercentMetricFilter(): String =
+    "metric_name IN ('$DISK_PERCENT_METRIC','$DISK_USED_METRIC','$DISK_TOTAL_METRIC')"
+
+private fun latestDiskPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            countIf(metric_name = '$DISK_PERCENT_METRIC') > 0,
+            argMaxIf(value, timestamp, metric_name = '$DISK_PERCENT_METRIC'),
+            NULL
+        ),
+        if(
+            countIf(metric_name = '$DISK_USED_METRIC') > 0 AND countIf(metric_name = '$DISK_TOTAL_METRIC') > 0,
+            argMaxIf(value, timestamp, metric_name = '$DISK_USED_METRIC') /
+                nullIf(argMaxIf(value, timestamp, metric_name = '$DISK_TOTAL_METRIC'), 0) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
+private fun rollupDiskPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            sumIf(value_count, metric_name = '$DISK_PERCENT_METRIC') > 0,
+            sumIf(value_sum, metric_name = '$DISK_PERCENT_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$DISK_PERCENT_METRIC'), 0),
+            NULL
+        ),
+        if(
+            sumIf(value_count, metric_name = '$DISK_USED_METRIC') > 0 AND
+                sumIf(value_count, metric_name = '$DISK_TOTAL_METRIC') > 0,
+            (
+                sumIf(value_sum, metric_name = '$DISK_USED_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$DISK_USED_METRIC'), 0)
+            ) / nullIf(
+                sumIf(value_sum, metric_name = '$DISK_TOTAL_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$DISK_TOTAL_METRIC'), 0),
+                0
+            ) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
 
 class MonitorAlertService(
     private val incidentService: IncidentService = IncidentService(),
@@ -615,11 +720,7 @@ class MonitorAlertService(
         val (selectExpr, metricFilter) =
             when (metric) {
                 "cpu_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.cpu.percent'"
-                "mem_percent" ->
-                    "(1 - argMaxIf(value, timestamp, metric_name='system.mem.available') / " +
-                        "nullIf(argMaxIf(value, timestamp, metric_name='system.mem.total'), 0)) * " +
-                        "100" to
-                        "metric_name IN ('system.mem.available','system.mem.total')"
+                "mem_percent" -> latestMemoryPercentExpr() to memoryPercentMetricFilter()
                 "load_1" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.1'"
                 "load_5" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.5'"
                 "load_15" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.15'"
@@ -646,21 +747,113 @@ class MonitorAlertService(
     ): String =
         """
         SELECT
-            max(used / nullIf(total, 0) * 100) AS value
+            max(pct) AS value
         FROM (
             SELECT
                 $DISK_ID_EXPRESSION AS disk_identity,
-                argMaxIf(value, timestamp, metric_name = 'system.disk.used') AS used,
-                argMaxIf(value, timestamp, metric_name = 'system.disk.total') AS total
+                ${latestDiskPercentExpr()} AS pct
             FROM `$clickhouseDb`.metrics_latest_by_host
             WHERE organization_id = $organizationId
               AND host_id = $hostId
-              AND metric_name IN ('system.disk.used','system.disk.total')
+              AND ${diskPercentMetricFilter()}
               AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
             GROUP BY disk_identity
         )
         FORMAT JSONCompact
         """.trimIndent()
+
+    private fun sustainedConditionQuery(alert: AlertData, baseFilter: String): String? =
+        when (alert.metric) {
+            "mem_percent" -> derivedSustainedConditionQuery(
+                alert = alert,
+                baseFilter = baseFilter,
+                percentExpression = rollupMemoryPercentExpr(),
+                metricFilter = memoryPercentMetricFilter(),
+            )
+            "disk_percent" -> derivedSustainedConditionQuery(
+                alert = alert,
+                baseFilter = baseFilter,
+                percentExpression = rollupDiskPercentExpr(),
+                metricFilter = diskPercentMetricFilter(),
+            )
+            else -> scalarSustainedConditionQuery(alert, baseFilter)
+        }
+
+    private fun derivedSustainedConditionQuery(
+        alert: AlertData,
+        baseFilter: String,
+        percentExpression: String,
+        metricFilter: String
+    ): String? {
+        val havingClause = conditionSql("pct", alert.condition, alert.threshold) ?: return null
+        return """
+            SELECT count(*) as cnt FROM (
+                SELECT bucket_start,
+                    $percentExpression as pct
+                FROM `$clickhouseDb`.metrics_rollup_1m
+                WHERE $baseFilter AND $metricFilter
+                GROUP BY bucket_start
+                HAVING $havingClause
+            )
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
+
+    private fun scalarSustainedConditionQuery(alert: AlertData, baseFilter: String): String? {
+        val metricName = scalarAlertMetricName(alert.metric) ?: return null
+        val conditionSql = conditionSql("value", alert.condition, alert.threshold) ?: return null
+        return """
+            SELECT count(*) as cnt
+            FROM (
+                SELECT bucket_start,
+                    sum(value_sum) / nullIf(sum(value_count), 0) as value
+                FROM `$clickhouseDb`.metrics_rollup_1m
+                WHERE $baseFilter AND metric_name = '$metricName'
+                GROUP BY bucket_start
+                HAVING $conditionSql
+            )
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
+
+    private fun scalarAlertMetricName(metric: String): String? =
+        when (metric) {
+            "cpu_percent" -> "system.cpu.percent"
+            "load_1" -> "system.load.1"
+            "load_5" -> "system.load.5"
+            "load_15" -> "system.load.15"
+            "temp_max" -> "system.temp.max"
+            "gpu_percent" -> "system.gpu.percent"
+            "battery_percent" -> "system.battery.percent"
+            else -> null
+        }
+
+    private fun conditionSql(fieldName: String, condition: String, threshold: Double): String? =
+        when (condition) {
+            ">" -> "$fieldName > $threshold"
+            "<" -> "$fieldName < $threshold"
+            ">=" -> "$fieldName >= $threshold"
+            "<=" -> "$fieldName <= $threshold"
+            "==" -> "$fieldName == $threshold"
+            else -> null
+        }
+
+    private fun sustainedConditionCount(body: String): Long? {
+        if (body.isBlank()) {
+            return null
+        }
+        val json = Json { ignoreUnknownKeys = true }
+        val result = json.parseToJsonElement(body).jsonObject
+        val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
+        return data[0].toString().replace("\"", "").toLongOrNull() ?: 0
+    }
+
+    private fun expectedSustainedDataPoints(durationSeconds: Int): Int {
+        if (durationSeconds == 0) {
+            return 0
+        }
+        return kotlin.math.ceil(durationSeconds.toDouble() / SECONDS_PER_MINUTE).toInt()
+    }
 
     /**
      * Check if the alert condition has been sustained for the required duration.
@@ -669,85 +862,7 @@ class MonitorAlertService(
         val baseFilter =
             "organization_id = ${alert.organizationId} AND host_id = ${alert.hostId} " +
                 "AND bucket_start >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
-
-        val (query, usesDerived) =
-            when (alert.metric) {
-                "mem_percent", "disk_percent" -> {
-                    val availName = if (alert.metric == "mem_percent") "system.mem.available" else null
-                    val usedName = if (alert.metric == "mem_percent") "system.mem.used" else "system.disk.used"
-                    val totalName = if (alert.metric == "mem_percent") "system.mem.total" else "system.disk.total"
-                    val havingClause =
-                        when (alert.condition) {
-                            ">" -> "pct > ${alert.threshold}"
-                            "<" -> "pct < ${alert.threshold}"
-                            ">=" -> "pct >= ${alert.threshold}"
-                            "<=" -> "pct <= ${alert.threshold}"
-                            "==" -> "pct == ${alert.threshold}"
-                            else -> return false
-                        }
-                    val pctExpr = if (availName != null) {
-                        "(1 - sumIf(value_sum, metric_name='$availName') / " +
-                            "nullIf(sumIf(value_sum, metric_name='$totalName'), 0)) * 100"
-                    } else {
-                        "sumIf(value_sum, metric_name='$usedName') / " +
-                            "nullIf(sumIf(value_sum, metric_name='$totalName'), 0) * 100"
-                    }
-                    val metricFilter = if (availName != null) {
-                        "metric_name IN ('$availName','$totalName')"
-                    } else {
-                        "metric_name IN ('$usedName','$totalName')"
-                    }
-                    val q =
-                        """
-                        SELECT count(*) as cnt FROM (
-                            SELECT bucket_start,
-                                $pctExpr as pct
-                            FROM `$clickhouseDb`.metrics_rollup_1m
-                            WHERE $baseFilter AND $metricFilter
-                            GROUP BY bucket_start
-                            HAVING $havingClause
-                        )
-                        FORMAT JSONCompact
-                        """.trimIndent()
-                    q to true
-                }
-                else -> {
-                    val metricName =
-                        when (alert.metric) {
-                            "cpu_percent" -> "system.cpu.percent"
-                            "load_1" -> "system.load.1"
-                            "load_5" -> "system.load.5"
-                            "load_15" -> "system.load.15"
-                            "temp_max" -> "system.temp.max"
-                            "gpu_percent" -> "system.gpu.percent"
-                            "battery_percent" -> "system.battery.percent"
-                            else -> return false
-                        }
-                    val conditionSql =
-                        when (alert.condition) {
-                            ">" -> "value > ${alert.threshold}"
-                            "<" -> "value < ${alert.threshold}"
-                            ">=" -> "value >= ${alert.threshold}"
-                            "<=" -> "value <= ${alert.threshold}"
-                            "==" -> "value == ${alert.threshold}"
-                            else -> return false
-                        }
-                    val q =
-                        """
-                        SELECT count(*) as cnt
-                        FROM (
-                            SELECT bucket_start,
-                                sum(value_sum) / nullIf(sum(value_count), 0) as value
-                            FROM `$clickhouseDb`.metrics_rollup_1m
-                            WHERE $baseFilter AND metric_name = '$metricName'
-                            GROUP BY bucket_start
-                            HAVING $conditionSql
-                        )
-                        FORMAT JSONCompact
-                        """.trimIndent()
-                    q to false
-                }
-            }
+        val query = sustainedConditionQuery(alert, baseFilter) ?: return false
 
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
@@ -757,21 +872,8 @@ class MonitorAlertService(
                 return false
             }
 
-            val body = response.bodyAsText()
-            if (body.isBlank()) return false
-
-            val json = Json { ignoreUnknownKeys = true }
-            val result = json.parseToJsonElement(body).jsonObject
-            val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return false
-
-            val count = data[0].toString().replace("\"", "").toLongOrNull() ?: 0
-
-            // Check if we have enough data points
-            val expectedDataPoints = if (alert.durationSeconds == 0) {
-                0
-            } else {
-                kotlin.math.ceil(alert.durationSeconds.toDouble() / SECONDS_PER_MINUTE).toInt()
-            }
+            val count = sustainedConditionCount(response.bodyAsText()) ?: return false
+            val expectedDataPoints = expectedSustainedDataPoints(alert.durationSeconds)
             count >= expectedDataPoints * MIN_DATA_POINT_RATIO
         }.getOrElse { e ->
             logger.error(e) { "Error checking sustained condition" }

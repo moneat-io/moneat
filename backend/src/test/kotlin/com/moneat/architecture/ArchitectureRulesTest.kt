@@ -58,6 +58,22 @@ class ArchitectureRulesTest {
     }
 
     @Test
+    fun `vendor specific infrastructure metric aliases stay inside ingestion compatibility code`() {
+        val violations =
+            productionFiles()
+                .filterNot { file -> file.allowsVendorSpecificMetricAliases() }
+                .flatMap { file -> file.violatingLines(VENDOR_INFRA_METRIC_ALIAS_PATTERN) }
+
+        assertTrue(
+            violations.isEmpty(),
+            violations.joinToString(
+                prefix = "Normalize vendor-specific infrastructure metric aliases before core product code:\n",
+                separator = "\n"
+            )
+        )
+    }
+
+    @Test
     fun `feature module import graph remains explicit`() {
         val edges =
             productionFiles()
@@ -94,6 +110,11 @@ class ArchitectureRulesTest {
 
     private fun KoFileDeclaration.normalizedPath(): String = path.replace('\\', '/')
 
+    private fun KoFileDeclaration.allowsVendorSpecificMetricAliases(): Boolean =
+        normalizedPath().endsWith(
+            "/features/datadog/src/main/kotlin/com/moneat/datadog/services/DatadogMetricService.kt"
+        )
+
     private fun KoFileDeclaration.sourceFeature(): String? {
         val normalizedPath = normalizedPath()
         return FEATURE_MODULES.firstOrNull { feature ->
@@ -119,6 +140,11 @@ class ArchitectureRulesTest {
     companion object {
         private val SYSTEM_GETENV_PATTERN = Regex("""\bSystem\.getenv\s*\(""")
         private val CONSOLE_OUTPUT_PATTERN = Regex("""\b(?:println|printStackTrace)\s*\(""")
+        private val VENDOR_INFRA_METRIC_ALIAS_PATTERN =
+            Regex(
+                """\b(?:system\.mem\.pct_usable|system\.mem\.usable|""" +
+                    """system\.disk\.in_use|system\.net\.bytes_rcvd|system\.net\.bytes_sent)\b"""
+            )
         private val FEATURE_MODULES =
             setOf(
                 "analytics",

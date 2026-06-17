@@ -103,9 +103,9 @@ class MonitorService(
         private const val LATEST_METRICS_LOOKBACK_HOURS = 6
         private const val LATEST_METRIC_NAMES_SQL =
             "'system.cpu.percent','system.cpu.user','system.cpu.system','system.cpu.idle'," +
-                "'system.mem.total','system.mem.used','system.mem.available','system.mem.pct_usable'," +
-                "'system.disk.total','system.disk.used','system.disk.in_use'," +
-                "'system.net.recv_bytes','system.net.sent_bytes','system.net.bytes_rcvd','system.net.bytes_sent'," +
+                "'system.mem.total','system.mem.used','system.mem.available'," +
+                "'system.disk.percent','system.disk.total','system.disk.used'," +
+                "'system.net.recv_bytes','system.net.sent_bytes'," +
                 "'system.load.1','system.temp.max','system.gpu.percent','system.battery.percent'"
 
         // Time-range thresholds for historical downsampling (in seconds)
@@ -129,8 +129,7 @@ class MonitorService(
         // JSONCompact column indices — single-host latest metrics query
         // SELECT: cpu_percent(0), mem_total(1), mem_used(2), mem_available(3),
         //         disk_total(4), disk_used(5), net_recv_bytes(6), net_sent_bytes(7),
-        //         load_1(8), temp_max(9), gpu_percent(10), battery_percent(11),
-        //         mem_pct_usable(12), disk_in_use(13)
+        //         load_1(8), temp_max(9), gpu_percent(10), battery_percent(11), disk_percent(12)
         private const val LATEST_COL_MEM_AVAILABLE = 3
         private const val LATEST_COL_DISK_TOTAL = 4
         private const val LATEST_COL_DISK_USED = 5
@@ -140,14 +139,13 @@ class MonitorService(
         private const val LATEST_COL_TEMP_MAX = 9
         private const val LATEST_COL_GPU_PERCENT = 10
         private const val LATEST_COL_BATTERY_PERCENT = 11
-        private const val LATEST_COL_MEM_PCT_USABLE = 12
-        private const val LATEST_COL_DISK_IN_USE = 13
+        private const val LATEST_COL_DISK_PERCENT = 12
 
         // JSONCompact column indices — multi-host batch latest metrics query
         // SELECT: host_id(0), cpu_percent(1), mem_total(2), mem_used(3),
         //         mem_available(4), disk_total(5), disk_used(6), net_recv_bytes(7),
         //         net_sent_bytes(8), load_1(9), temp_max(10), gpu_percent(11),
-        //         battery_percent(12), mem_pct_usable(13), disk_in_use(14)
+        //         battery_percent(12), disk_percent(13)
         private const val BATCH_COL_MEM_USED = 3
         private const val BATCH_COL_MEM_AVAILABLE = 4
         private const val BATCH_COL_DISK_TOTAL = 5
@@ -158,8 +156,7 @@ class MonitorService(
         private const val BATCH_COL_TEMP_MAX = 10
         private const val BATCH_COL_GPU_PERCENT = 11
         private const val BATCH_COL_BATTERY_PERCENT = 12
-        private const val BATCH_COL_MEM_PCT_USABLE = 13
-        private const val BATCH_COL_DISK_IN_USE = 14
+        private const val BATCH_COL_DISK_PERCENT = 13
 
         // JSONCompact column indices — historical metrics query
         // SELECT: ts(0), cpu(1), mem(2), disk(3), net_recv(4), net_sent(5),
@@ -331,20 +328,13 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
                 argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp) as disk_total,
                 argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) as disk_used,
-                coalesce(
-                    argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp),
-                    argMax(CASE WHEN metric_name='system.net.bytes_rcvd' THEN value END, timestamp)
-                ) as net_recv_bytes,
-                coalesce(
-                    argMax(CASE WHEN metric_name='system.net.sent_bytes' THEN value END, timestamp),
-                    argMax(CASE WHEN metric_name='system.net.bytes_sent' THEN value END, timestamp)
-                ) as net_sent_bytes,
+                argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp) as net_recv_bytes,
+                argMax(CASE WHEN metric_name='system.net.sent_bytes' THEN value END, timestamp) as net_sent_bytes,
                 argMax(CASE WHEN metric_name='system.load.1' THEN value END, timestamp) as load_1,
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent,
-                argMax(CASE WHEN metric_name='system.mem.pct_usable' THEN value END, timestamp) as mem_pct_usable,
-                argMax(CASE WHEN metric_name='system.disk.in_use' THEN value END, timestamp) as disk_in_use
+                argMax(CASE WHEN metric_name='system.disk.percent' THEN value END, timestamp) as disk_percent
             FROM `$clickhouseDb`.metrics_latest_by_host
             WHERE ${clickHouseOrgClause(host.organizationId)}
               AND host_id = $hostId
@@ -408,20 +398,11 @@ class MonitorService(
             val tempMax = data.getOrNull(LATEST_COL_TEMP_MAX)?.toString()?.toFloatOrNull()
             val gpuPercent = data.getOrNull(LATEST_COL_GPU_PERCENT)?.toString()?.toFloatOrNull()
             val batteryPercent = data.getOrNull(LATEST_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
-            val memPctUsable = data.getOrNull(LATEST_COL_MEM_PCT_USABLE)?.toString()?.toFloatOrNull()
-            val diskInUse = data.getOrNull(LATEST_COL_DISK_IN_USE)?.toString()?.toFloatOrNull()
+            val diskPercentMetric = data.getOrNull(LATEST_COL_DISK_PERCENT)?.toString()?.toFloatOrNull()
 
             val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
-            val memPercent = when {
-                memPctUsable != null -> (1f - memPctUsable) * PERCENT_MULTIPLIER
-                memTotal > 0 -> effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER
-                else -> 0f
-            }
-            val diskPercent = when {
-                diskInUse != null -> diskInUse * PERCENT_MULTIPLIER
-                diskTotal > 0 -> diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER
-                else -> 0f
-            }
+            val memPercent = percent(effectiveMemUsed, memTotal)
+            val diskPercent = diskPercent(diskPercentMetric, diskUsed, diskTotal)
             return LatestMetrics(
                 cpuPercent = cpuPercent,
                 memTotal = memTotal,
@@ -481,20 +462,13 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
                 argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp) as disk_total,
                 argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) as disk_used,
-                coalesce(
-                    argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp),
-                    argMax(CASE WHEN metric_name='system.net.bytes_rcvd' THEN value END, timestamp)
-                ) as net_recv_bytes,
-                coalesce(
-                    argMax(CASE WHEN metric_name='system.net.sent_bytes' THEN value END, timestamp),
-                    argMax(CASE WHEN metric_name='system.net.bytes_sent' THEN value END, timestamp)
-                ) as net_sent_bytes,
+                argMax(CASE WHEN metric_name='system.net.recv_bytes' THEN value END, timestamp) as net_recv_bytes,
+                argMax(CASE WHEN metric_name='system.net.sent_bytes' THEN value END, timestamp) as net_sent_bytes,
                 argMax(CASE WHEN metric_name='system.load.1' THEN value END, timestamp) as load_1,
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
                 argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent,
-                argMax(CASE WHEN metric_name='system.mem.pct_usable' THEN value END, timestamp) as mem_pct_usable,
-                argMax(CASE WHEN metric_name='system.disk.in_use' THEN value END, timestamp) as disk_in_use
+                argMax(CASE WHEN metric_name='system.disk.percent' THEN value END, timestamp) as disk_percent
             FROM `$clickhouseDb`.metrics_latest_by_host
             WHERE ${clickHouseOrgClause(organizationId)}
               AND host_id IN ($hostIdList)
@@ -531,17 +505,16 @@ class MonitorService(
         val memAvailable = arr.longAt(BATCH_COL_MEM_AVAILABLE)
         val diskTotal = arr.longAt(BATCH_COL_DISK_TOTAL)
         val diskUsed = arr.longAt(BATCH_COL_DISK_USED)
-        val memPctUsable = arr.floatAt(BATCH_COL_MEM_PCT_USABLE)
-        val diskInUse = arr.floatAt(BATCH_COL_DISK_IN_USE)
+        val diskPercentMetric = arr.floatAt(BATCH_COL_DISK_PERCENT)
         val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
         return rowHostId to LatestMetrics(
             cpuPercent = arr.floatAt(1) ?: 0f,
             memTotal = memTotal,
             memUsed = effectiveMemUsed,
-            memPercent = memPercent(memPctUsable, effectiveMemUsed, memTotal),
+            memPercent = percent(effectiveMemUsed, memTotal),
             diskTotal = diskTotal,
             diskUsed = diskUsed,
-            diskPercent = diskPercent(diskInUse, diskUsed, diskTotal),
+            diskPercent = diskPercent(diskPercentMetric, diskUsed, diskTotal),
             netRecvBytes = arr.longAt(BATCH_COL_NET_RECV_BYTES),
             netSentBytes = arr.longAt(BATCH_COL_NET_SENT_BYTES),
             netRecvMbps = null,
@@ -565,11 +538,8 @@ class MonitorService(
     private fun percent(value: Long, total: Long): Float =
         if (total > 0L) value.toFloat() / total * PERCENT_MULTIPLIER else 0f
 
-    private fun memPercent(pctUsable: Float?, used: Long, total: Long): Float =
-        pctUsable?.let { (1f - it) * PERCENT_MULTIPLIER } ?: percent(used, total)
-
-    private fun diskPercent(inUse: Float?, used: Long, total: Long): Float =
-        inUse?.let { it * PERCENT_MULTIPLIER } ?: percent(used, total)
+    private fun diskPercent(diskPercent: Float?, used: Long, total: Long): Float =
+        diskPercent ?: percent(used, total)
 
     private fun latestMetricsNowClause(demoEpochMs: Long?): String =
         if (demoEpochMs != null) {
@@ -656,14 +626,6 @@ class MonitorService(
                     )
                 ) as cpu,
                 coalesce(
-                    if(
-                        sumIf(value_count, metric_name='system.mem.pct_usable') > 0,
-                        (1 - (
-                            sumIf(value_sum, metric_name='system.mem.pct_usable') /
-                            nullIf(sumIf(value_count, metric_name='system.mem.pct_usable'), 0)
-                        )) * 100,
-                        NULL
-                    ),
                     (1 - (
                         sumIf(value_sum, metric_name='system.mem.available') /
                         nullIf(sumIf(value_count, metric_name='system.mem.available'), 0)
@@ -683,11 +645,9 @@ class MonitorService(
                 ) as mem,
                 coalesce(
                     if(
-                        sumIf(value_count, metric_name='system.disk.in_use') > 0,
-                        (
-                            sumIf(value_sum, metric_name='system.disk.in_use') /
-                            nullIf(sumIf(value_count, metric_name='system.disk.in_use'), 0)
-                        ) * 100,
+                        sumIf(value_count, metric_name='system.disk.percent') > 0,
+                        sumIf(value_sum, metric_name='system.disk.percent') /
+                            nullIf(sumIf(value_count, metric_name='system.disk.percent'), 0),
                         NULL
                     ),
                     (
@@ -699,16 +659,8 @@ class MonitorService(
                         0
                     ) * 100
                 ) as disk,
-                if(
-                    sumIf(value_count, metric_name='system.net.recv_bytes') > 0,
-                    sumIf(value_sum, metric_name='system.net.recv_bytes'),
-                    sumIf(value_sum, metric_name='system.net.bytes_rcvd')
-                ) as net_recv,
-                if(
-                    sumIf(value_count, metric_name='system.net.sent_bytes') > 0,
-                    sumIf(value_sum, metric_name='system.net.sent_bytes'),
-                    sumIf(value_sum, metric_name='system.net.bytes_sent')
-                ) as net_sent,
+                sumIf(value_sum, metric_name='system.net.recv_bytes') as net_recv,
+                sumIf(value_sum, metric_name='system.net.sent_bytes') as net_sent,
                 sumIf(value_sum, metric_name='system.load.1') /
                     nullIf(sumIf(value_count, metric_name='system.load.1'), 0) as load1,
                 sumIf(value_sum, metric_name='system.load.5') /

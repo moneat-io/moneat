@@ -456,7 +456,7 @@ class MonitorServiceExtendedTest {
     }
 
     @Test
-    fun `getHistoricalMetrics prefers Datadog percent metrics over derived ratios`() = runBlocking {
+    fun `getHistoricalMetrics uses normalized ratio metrics`() = runBlocking {
         every { hostRepo.getById(1) } returns testHost
         coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
         val queries = mutableListOf<String>()
@@ -469,8 +469,11 @@ class MonitorServiceExtendedTest {
         service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 120)
 
         val query = queries.single()
-        assertTrue(query.indexOf("system.mem.pct_usable") < query.indexOf("system.mem.available"))
-        assertTrue(query.indexOf("system.disk.in_use") < query.indexOf("system.disk.used"))
+        assertFalse(query.contains("system.mem.pct_usable"))
+        assertTrue(query.contains("system.mem.available"))
+        assertTrue(query.contains("system.mem.used"))
+        assertFalse(query.contains("system.disk.in_use"))
+        assertTrue(query.indexOf("system.disk.percent") < query.indexOf("system.disk.used"))
     }
 
     @Test
