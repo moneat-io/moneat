@@ -65,7 +65,7 @@ describe('DataSourceConnectDialog', () => {
       target: {value: 'https://prom.example.com:9090/prometheus'},
     })
     expect((screen.getByLabelText('Host') as HTMLInputElement).value).toBe('prom.example.com')
-    expect((screen.getByLabelText('Port') as HTMLInputElement).value).toBe('9090')
+    expect((screen.getByLabelText(/^Port/) as HTMLInputElement).value).toBe('9090')
     expect(screen.getByText(/Split your pasted value/)).toBeInTheDocument()
   })
 
@@ -73,7 +73,7 @@ describe('DataSourceConnectDialog', () => {
     renderWithQueryClient(<DataSourceConnectDialog mode="create" onClose={vi.fn()} />)
     pickPrometheus()
     fireEvent.change(screen.getByLabelText('Host'), {target: {value: 'prom'}})
-    fireEvent.change(screen.getByLabelText('Port'), {target: {value: '80808080'}})
+    fireEvent.change(screen.getByLabelText(/^Port/), {target: {value: '80808080'}})
     expect(screen.getByText(/between 1 and 65535/)).toBeInTheDocument()
     expect(screen.getByRole('button', {name: 'Add data source'})).toBeDisabled()
   })
@@ -144,5 +144,45 @@ describe('DataSourceConnectDialog', () => {
         expect.objectContaining({name: 'Renamed'})
       )
     )
+  })
+
+  it('creates a Prometheus source with no port when the field is left blank', async () => {
+    renderWithQueryClient(<DataSourceConnectDialog mode="create" onClose={vi.fn()} />)
+    pickPrometheus()
+    fireEvent.change(screen.getByLabelText('Host'), {target: {value: 'prometheus.bandapella.com'}})
+    expect((screen.getByLabelText(/^Port/) as HTMLInputElement).value).toBe('')
+    fireEvent.click(screen.getByRole('button', {name: 'Add data source'}))
+
+    await waitFor(() => expect(mockApi.createCustomDataSource).toHaveBeenCalled())
+    const payload = mockApi.createCustomDataSource.mock.calls[0][0]
+    expect(payload.host).toBe('prometheus.bandapella.com')
+    expect(payload.port).toBeUndefined()
+    expect('clear_port' in payload).toBe(false)
+  })
+
+  it('clears a stored port when the user blanks it in edit mode', async () => {
+    const initial: CustomDataSourceResponse = {
+      id: '00000000-0000-0000-0000-000000000008',
+      org_id: '11111111-1111-4111-8111-111111111111',
+      name: 'Edge Prom',
+      source_type: 'prometheus',
+      host: 'prom.example.com', port: 9090, extra_config: {scheme: 'https'},
+      enabled: true,
+      created_by: '22222222-2222-4222-8222-222222222222',
+      created_at: '',
+      updated_at: '',
+      has_credentials: true,
+    }
+    renderWithQueryClient(<DataSourceConnectDialog mode="edit" initial={initial} onClose={vi.fn()} />)
+    expect((screen.getByLabelText(/^Port/) as HTMLInputElement).value).toBe('9090')
+
+    fireEvent.change(screen.getByLabelText(/^Port/), {target: {value: ''}})
+    fireEvent.click(screen.getByRole('button', {name: 'Save changes'}))
+
+    await waitFor(() => expect(mockApi.updateCustomDataSource).toHaveBeenCalled())
+    const [id, payload] = mockApi.updateCustomDataSource.mock.calls[0]
+    expect(id).toBe('00000000-0000-0000-0000-000000000008')
+    expect(payload.clear_port).toBe(true)
+    expect(payload.port).toBeUndefined()
   })
 })

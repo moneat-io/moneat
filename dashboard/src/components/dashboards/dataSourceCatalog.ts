@@ -102,7 +102,10 @@ export const VENDORS: readonly VendorDef[] = [
   {key: 'cockroachdb', label: 'CockroachDB', category: 'database', arch: 'sql', port: 26257, scheme: 'postgresql', blurb: 'Distributed SQL · PG wire', dbPlaceholder: 'defaultdb', userPlaceholder: 'root', note: 'Speaks the PostgreSQL wire protocol.', supportsString: true},
   {key: 'sqlite', label: 'SQLite', category: 'database', arch: 'file', blurb: 'Embedded SQL database'},
   // Metrics & time-series
-  {key: 'prometheus', label: 'Prometheus', category: 'metrics', arch: 'http', port: 9090, apiPath: '/api/v1/query', blurb: 'Metrics & monitoring', supportsString: true},
+  // No default port: Prometheus is commonly fronted by an HTTPS reverse proxy
+  // (Thanos/Mimir/Cortex/Grafana Cloud) on the scheme's standard port, so a blank
+  // port must stay blank rather than forcing :9090 onto the endpoint.
+  {key: 'prometheus', label: 'Prometheus', category: 'metrics', arch: 'http', apiPath: '/api/v1/query', blurb: 'Metrics & monitoring', supportsString: true},
   {key: 'influxdb', label: 'InfluxDB', category: 'metrics', arch: 'influx', port: 8086, blurb: 'Time-series database'},
   {key: 'graphite', label: 'Graphite', category: 'metrics', arch: 'http', port: 80, apiPath: '/render', blurb: 'Metrics storage & graphing', supportsString: true},
   // Search & logs

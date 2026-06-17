@@ -287,7 +287,7 @@ export interface CustomDataSourceResponse {
   description?: string
   source_type: string
   host: string
-  port?: number
+  port?: number | null
   database_name?: string
   extra_config: Record<string, string>
   enabled: boolean
@@ -324,6 +324,8 @@ export interface UpdateCustomDataSourceRequest {
   description?: string
   host?: string
   port?: number
+  /** Clear a previously stored port (omitting `port` is a partial-update no-op). */
+  clear_port?: boolean
   database_name?: string
   username?: string
   password?: string

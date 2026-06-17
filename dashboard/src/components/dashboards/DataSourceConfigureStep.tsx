@@ -276,8 +276,15 @@ export function DataSourceConfigureStep({
         <Field id="ds-host" label="Host" value={state.host} onChange={onHostChange}
           placeholder={vendor.arch === 'http' || vendor.arch === 'influx' ? 'metrics.example.com' : 'db.internal.example.com'}
           hint="Hostname or IP only — no scheme, port, or path." />
-        <Field id="ds-port" label="Port" value={state.port} onChange={(v) => update({port: v})}
-          placeholder={String(vendor.port ?? '')} invalid={!portCheck.ok} />
+        <Field
+          id="ds-port"
+          label="Port"
+          optional={vendor.arch === 'http'}
+          value={state.port}
+          onChange={(v) => update({port: v})}
+          placeholder={String(vendor.port ?? '')}
+          invalid={!portCheck.ok}
+        />
       </div>
       {adjustBanner}
       {portError}
