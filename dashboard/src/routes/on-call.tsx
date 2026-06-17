@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {Bell, Calendar, ListChecks, AlertTriangle, Shield} from 'lucide-react'
+import {Bell, Calendar, ListChecks, AlertTriangle, Shield, Users2} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
 
@@ -25,6 +25,7 @@ export const Route = createFileRoute('/on-call')({
 
 const tabs = [
   {id: 'overview', label: 'Overview', href: '/on-call', icon: Bell},
+  {id: 'teams', label: 'Teams', href: '/on-call/teams', icon: Users2},
   {id: 'schedules', label: 'Schedules', href: '/on-call/schedules', icon: Calendar},
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
   {id: 'alerts', label: 'Alerts', href: '/on-call/alerts', icon: AlertTriangle},

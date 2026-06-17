@@ -21,8 +21,13 @@ import com.moneat.billing.services.EffectiveTierContext
 import com.moneat.billing.services.EntitlementService
 import com.moneat.billing.services.FeatureNotAvailableException
 import com.moneat.billing.services.PricingTierService
+import com.moneat.config.EnvConfig
+import com.moneat.enterprise.FeatureRegistry
+import com.moneat.enterprise.license.LicenseInfo
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -70,10 +75,63 @@ class EntitlementServiceTest {
         assertEquals("Slack integration is not available on your current plan", error.message)
     }
 
-    private fun entitlementService(slackEnabled: Boolean): EntitlementService {
+    @Test
+    fun `isTeamsEnabled returns tier teams entitlement`() {
+        assertTrue(entitlementService(slackEnabled = true, teamsEnabled = true).isTeamsEnabled(1))
+        assertFalse(entitlementService(slackEnabled = true, teamsEnabled = false).isTeamsEnabled(1))
+    }
+
+    @Test
+    fun `requireTeamsEnabled throws when teams are disabled`() {
+        val service = entitlementService(slackEnabled = true, teamsEnabled = false)
+
+        val error = assertFailsWith<FeatureNotAvailableException> {
+            service.requireTeamsEnabled(1)
+        }
+
+        assertEquals("Teams is not available on your current plan", error.message)
+    }
+
+    @Test
+    fun `isTeamsEnabled requires teams license feature on self-host`() {
+        val service = entitlementService(slackEnabled = true, teamsEnabled = false)
+        mockkObject(EnvConfig.SelfHost)
+        mockkObject(FeatureRegistry)
+
+        try {
+            every { EnvConfig.SelfHost.enabled } returns true
+            every { FeatureRegistry.activeLicense } returns LicenseInfo(
+                customer = "Acme",
+                plan = "business",
+                features = setOf("teams"),
+                expiresAt = null,
+            )
+            assertTrue(service.isTeamsEnabled(1))
+
+            every { FeatureRegistry.activeLicense } returns LicenseInfo(
+                customer = "Acme",
+                plan = "business",
+                features = setOf("oncall"),
+                expiresAt = null,
+            )
+            assertFalse(service.isTeamsEnabled(1))
+            assertEquals(
+                "Teams requires a paid teams license feature on self-hosted installs",
+                service.unavailableTeamsMessage(1),
+            )
+        } finally {
+            unmockkObject(FeatureRegistry)
+            unmockkObject(EnvConfig.SelfHost)
+        }
+    }
+
+    private fun entitlementService(
+        slackEnabled: Boolean,
+        teamsEnabled: Boolean = false,
+    ): EntitlementService {
         val pricingTierService = mockk<PricingTierService>()
         every { pricingTierService.getEffectiveTierForOrganization(1) } returns EffectiveTierContext(
-            tier = tier(slackEnabled),
+            tier = tier(slackEnabled, teamsEnabled),
             subscriptionId = null,
             subscriptionStatus = "active",
             paygBudgetCents = 0,
@@ -86,7 +144,10 @@ class EntitlementServiceTest {
         return EntitlementService(pricingTierService)
     }
 
-    private fun tier(slackEnabled: Boolean): PricingTierConfigResponse {
+    private fun tier(
+        slackEnabled: Boolean,
+        teamsEnabled: Boolean,
+    ): PricingTierConfigResponse {
         return PricingTierConfigResponse(
             id = "00000000-0000-0000-0000-000000000001",
             tierName = "TEST",
@@ -123,6 +184,7 @@ class EntitlementServiceTest {
             paygEnabled = false,
             paygRateMicrosPerUnit = 0,
             overageRateCentsPerGb = 0,
+            teamsEnabled = teamsEnabled,
             isCurrent = true
         )
     }

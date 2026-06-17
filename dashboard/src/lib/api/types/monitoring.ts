@@ -220,3 +220,28 @@ export interface CloudSourceSetupPreview {
   snippetLanguage: string
   snippet: string
 }
+
+// Resource catalog ownership. A resource's owner is an organization team; the
+// on-call person, Slack channel, and repo are derived from that team rather than
+// typed in per resource. `currentOnCall` is resolved server-side from the team's
+// primary on-call schedule.
+
+export interface ResourceCurrentOnCall {
+  userId: string
+  userName: string
+}
+
+export interface ResourceOwner {
+  teamId: string
+  teamName: string
+  slack?: string | null
+  repo?: string | null
+  onCallScheduleId?: string | null
+  escalationPolicyId?: string | null
+  currentOnCall?: ResourceCurrentOnCall | null
+}
+
+export interface ResourceOwnershipClaim {
+  resourceId: string
+  teamId: string
+}

@@ -26,12 +26,17 @@ import com.moneat.incident.models.IncidentEventLog
 import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.incident.models.ProviderConfig
+import com.moneat.monitor.repositories.NoopResourceOwnershipRepository
+import com.moneat.monitor.repositories.ResourceOwnershipRepository
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
+import com.moneat.shared.models.Hosts
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.suspendRunCatching
 import com.moneat.workflows.services.AlertResolvedWorkflowEvent
 import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import org.jetbrains.exposed.v1.core.and
@@ -49,12 +54,16 @@ import kotlin.time.Clock
  * Handles routing rule lookup, alert priority resolution, and event logging.
  */
 class IncidentService(
-    private val workflowService: WorkflowService = WorkflowService()
+    private val workflowService: WorkflowService = WorkflowService(),
+    private val ownershipRepository: ResourceOwnershipRepository = NoopResourceOwnershipRepository,
 ) {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
 
     companion object {
+        private const val CATALOG_RESOURCE_ID_METADATA_KEY = "catalog_resource_id"
+        private const val HOST_ID_METADATA_KEY = "host_id"
+
         private val AUTO_RESOLVABLE_SOURCES =
             setOf(
                 AlertSource.HOST_ALERT,
@@ -389,8 +398,7 @@ class IncidentService(
             return
         }
         suspendRunCatching {
-            // Check if organization has an escalation policy for this alert source
-            val escalationPolicyId = getEscalationPolicyForSource(event.organizationId, event.source)
+            val escalationPolicyId = getEscalationPolicyForAlert(event)
 
             if (escalationPolicyId == null) {
                 logger.debug("No escalation policy configured for org ${event.organizationId}, source ${event.source}")
@@ -444,6 +452,44 @@ class IncidentService(
      * Get the escalation policy ID for a given alert source.
      * Uses per-source routing when configured, otherwise falls back to first policy.
      */
+    private fun getEscalationPolicyForAlert(event: AlertLifecycleEvent): Int? {
+        val resourcePolicyId =
+            catalogResourceId(event)
+                ?.let { resourceId ->
+                    ownershipRepository.escalationPolicyIdForResource(event.organizationId, resourceId)
+                }
+        return resourcePolicyId ?: getEscalationPolicyForSource(event.organizationId, event.source)
+    }
+
+    private fun catalogResourceId(event: AlertLifecycleEvent): String? =
+        metadataString(event, CATALOG_RESOURCE_ID_METADATA_KEY)
+            ?: hostCatalogResourceId(event)
+
+    private fun hostCatalogResourceId(event: AlertLifecycleEvent): String? {
+        if (event.source != AlertSource.HOST_ALERT && event.source != AlertSource.HOST_DOWN) return null
+        val hostResourceId = metadataString(event, HOST_ID_METADATA_KEY)?.toUuidOrNull() ?: return null
+        val hostId =
+            transaction {
+                Hosts
+                    .select(Hosts.id)
+                    .where {
+                        (Hosts.organization_id eq event.organizationId) and
+                            (Hosts.resource_id eq hostResourceId)
+                    }
+                    .firstOrNull()
+                    ?.get(Hosts.id)
+            } ?: return null
+        return "host:${event.organizationId}:$hostId"
+    }
+
+    private fun metadataString(
+        event: AlertLifecycleEvent,
+        key: String,
+    ): String? =
+        (event.metadata[key] as? JsonPrimitive)
+            ?.content
+            ?.takeIf { it.isNotBlank() }
+
     private fun getEscalationPolicyForSource(
         organizationId: Int,
         source: AlertSource

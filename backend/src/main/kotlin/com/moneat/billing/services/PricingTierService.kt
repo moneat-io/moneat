@@ -73,7 +73,8 @@ class PricingTierService {
         val oidcEnabled: Boolean,
         val prioritySupportEnabled: Boolean,
         val slaEnabled: Boolean,
-        val customRetentionEnabled: Boolean
+        val customRetentionEnabled: Boolean,
+        val teamsEnabled: Boolean,
     )
 
     fun getCurrentPlans(): List<BillingPlanResponse> {
@@ -254,6 +255,7 @@ class PricingTierService {
             val resolvedOncallPerUserYearlyCents =
                 request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
+            val resolvedTeamsEnabled = request.teamsEnabled ?: currentConfig?.teamsEnabled ?: defaults.teamsEnabled
             val resolvedMaxAnalyticsSites = request.maxAnalyticsSites
             val resolvedAnalyticsRetentionDays =
                 request.analyticsRetentionDays
@@ -398,6 +400,7 @@ class PricingTierService {
                     it[oncall_per_user_monthly_cents] = resolvedOncallPerUserMonthlyCents
                     it[oncall_per_user_yearly_cents] = resolvedOncallPerUserYearlyCents
                     it[oncall_enabled] = resolvedOncallEnabled
+                    it[teams_enabled] = resolvedTeamsEnabled
                     it[max_analytics_sites] = resolvedMaxAnalyticsSites
                     it[analytics_retention_days] = resolvedAnalyticsRetentionDays
                     it[monthly_analytics_pageview_limit] = resolvedMonthlyAnalyticsPageviewLimit
@@ -663,7 +666,8 @@ class PricingTierService {
             oidcEnabled = isTeamOrBusiness,
             prioritySupportEnabled = isBusiness,
             slaEnabled = isBusiness,
-            customRetentionEnabled = isBusiness
+            customRetentionEnabled = isBusiness,
+            teamsEnabled = isTeamOrBusiness,
         )
     }
 

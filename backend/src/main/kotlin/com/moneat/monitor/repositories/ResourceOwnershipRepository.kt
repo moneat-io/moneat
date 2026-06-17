@@ -16,11 +16,14 @@
 
 package com.moneat.monitor.repositories
 
-import com.moneat.monitor.models.CatalogOwner
+import com.moneat.shared.models.OrganizationTeams
+import org.jetbrains.exposed.v1.core.JoinType
+import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -33,10 +36,7 @@ object ResourceOwnership : Table("resource_ownership") {
     val id = integer("id").autoIncrement()
     val organization_id = integer("organization_id")
     val resource_id = varchar("resource_id", 512)
-    val team = varchar("team", 200)
-    val oncall = varchar("oncall", 200)
-    val slack = varchar("slack", 200)
-    val repo = varchar("repo", 300)
+    val team_id = integer("team_id").references(OrganizationTeams.id, onDelete = ReferenceOption.CASCADE)
     val updated_by = varchar("updated_by", 320)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
@@ -44,55 +44,80 @@ object ResourceOwnership : Table("resource_ownership") {
 
 /** Persistent store for resource ownership claims, keyed by catalog resource id. */
 interface ResourceOwnershipRepository {
-    /** All ownership claims for an organization, keyed by catalog resource id. */
-    fun listByOrganization(organizationId: Int): Map<String, CatalogOwner>
+    /** All ownership claims for an organization, keyed by catalog resource id, valued by internal team id. */
+    fun listByOrganization(organizationId: Int): Map<String, Int>
 
     /** Create or replace the ownership claim for one resource. */
-    fun upsert(organizationId: Int, resourceId: String, owner: CatalogOwner, updatedBy: String)
+    fun upsert(organizationId: Int, resourceId: String, teamId: Int, updatedBy: String)
+
+    /** Delete the ownership claim for one resource. */
+    fun delete(organizationId: Int, resourceId: String): Boolean
+
+    /** Resolve the owning team's default escalation policy for one catalog resource. */
+    fun escalationPolicyIdForResource(organizationId: Int, resourceId: String): Int?
 }
 
 class ResourceOwnershipRepositoryImpl : ResourceOwnershipRepository {
-    override fun listByOrganization(organizationId: Int): Map<String, CatalogOwner> =
+    override fun listByOrganization(organizationId: Int): Map<String, Int> =
         transaction {
             ResourceOwnership
                 .selectAll()
                 .where { ResourceOwnership.organization_id eq organizationId }
                 .associate { row ->
-                    row[ResourceOwnership.resource_id] to CatalogOwner(
-                        team = row[ResourceOwnership.team],
-                        oncall = row[ResourceOwnership.oncall],
-                        slack = row[ResourceOwnership.slack],
-                        repo = row[ResourceOwnership.repo],
-                    )
+                    row[ResourceOwnership.resource_id] to row[ResourceOwnership.team_id]
                 }
         }
 
-    override fun upsert(organizationId: Int, resourceId: String, owner: CatalogOwner, updatedBy: String) {
+    override fun upsert(organizationId: Int, resourceId: String, teamId: Int, updatedBy: String) {
         val now = Clock.System.now()
         transaction {
-            if (updateOwnership(organizationId, resourceId, owner, updatedBy, now) == 0) {
-                insertOwnershipIfMissing(organizationId, resourceId, owner, updatedBy, now)
-                check(updateOwnership(organizationId, resourceId, owner, updatedBy, now) > 0) {
+            if (updateOwnership(organizationId, resourceId, teamId, updatedBy, now) == 0) {
+                insertOwnershipIfMissing(organizationId, resourceId, teamId, updatedBy, now)
+                check(updateOwnership(organizationId, resourceId, teamId, updatedBy, now) > 0) {
                     "Resource ownership upsert did not persist for resource $resourceId"
                 }
             }
         }
     }
 
+    override fun delete(organizationId: Int, resourceId: String): Boolean =
+        transaction {
+            ResourceOwnership.deleteWhere {
+                (ResourceOwnership.organization_id eq organizationId) and
+                    (ResourceOwnership.resource_id eq resourceId)
+            } > 0
+        }
+
+    override fun escalationPolicyIdForResource(organizationId: Int, resourceId: String): Int? =
+        transaction {
+            ResourceOwnership
+                .join(
+                    otherTable = OrganizationTeams,
+                    joinType = JoinType.INNER,
+                    onColumn = ResourceOwnership.team_id,
+                    otherColumn = OrganizationTeams.id,
+                )
+                .selectAll()
+                .where {
+                    (ResourceOwnership.organization_id eq organizationId) and
+                        (ResourceOwnership.resource_id eq resourceId) and
+                        (OrganizationTeams.organizationId eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(OrganizationTeams.escalationPolicyId)
+        }
+
     private fun updateOwnership(
         organizationId: Int,
         resourceId: String,
-        owner: CatalogOwner,
+        teamId: Int,
         updatedBy: String,
         updatedAt: Instant,
     ): Int =
         ResourceOwnership.update({
             (ResourceOwnership.organization_id eq organizationId) and (ResourceOwnership.resource_id eq resourceId)
         }) {
-            it[team] = owner.team
-            it[oncall] = owner.oncall
-            it[slack] = owner.slack
-            it[repo] = owner.repo
+            it[ResourceOwnership.team_id] = teamId
             it[updated_by] = updatedBy
             it[updated_at] = updatedAt
         }
@@ -100,17 +125,14 @@ class ResourceOwnershipRepositoryImpl : ResourceOwnershipRepository {
     private fun insertOwnershipIfMissing(
         organizationId: Int,
         resourceId: String,
-        owner: CatalogOwner,
+        teamId: Int,
         updatedBy: String,
         updatedAt: Instant,
     ) {
         ResourceOwnership.insertIgnore {
             it[organization_id] = organizationId
             it[resource_id] = resourceId
-            it[team] = owner.team
-            it[oncall] = owner.oncall
-            it[slack] = owner.slack
-            it[repo] = owner.repo
+            it[team_id] = teamId
             it[updated_by] = updatedBy
             it[updated_at] = updatedAt
         }
@@ -119,6 +141,8 @@ class ResourceOwnershipRepositoryImpl : ResourceOwnershipRepository {
 
 /** Default no-op store used when no persistence is wired (tests, OSS without a DB). */
 object NoopResourceOwnershipRepository : ResourceOwnershipRepository {
-    override fun listByOrganization(organizationId: Int): Map<String, CatalogOwner> = emptyMap()
-    override fun upsert(organizationId: Int, resourceId: String, owner: CatalogOwner, updatedBy: String) = Unit
+    override fun listByOrganization(organizationId: Int): Map<String, Int> = emptyMap()
+    override fun upsert(organizationId: Int, resourceId: String, teamId: Int, updatedBy: String) = Unit
+    override fun delete(organizationId: Int, resourceId: String): Boolean = false
+    override fun escalationPolicyIdForResource(organizationId: Int, resourceId: String): Int? = null
 }

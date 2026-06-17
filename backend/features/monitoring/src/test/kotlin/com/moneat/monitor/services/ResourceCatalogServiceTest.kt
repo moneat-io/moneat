@@ -54,6 +54,8 @@ class ResourceCatalogServiceTest {
         const val SERVICE_NAME = "checkout-api"
         const val CONTAINER_ID = "abc123"
         const val CLOUD_RESOURCE_ID = "aws:i-123"
+        const val TEAM_INTERNAL_ID = 11
+        const val TEAM_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
         const val LAST_SEEN = "2026-06-07T12:00:00.000Z"
         const val FIRST_SEEN = "2026-06-01T00:00:00.000Z"
     }
@@ -401,7 +403,7 @@ class ResourceCatalogServiceTest {
     }
 
     @Test
-    fun `merges persisted ownership claims and falls back to a team tag`() = runBlocking {
+    fun `merges persisted ownership claims and ignores team tags for ownership`() = runBlocking {
         val monitorService = mockk<MonitorService>()
         val host = hostData(
             id = HOST_ID,
@@ -421,6 +423,18 @@ class ResourceCatalogServiceTest {
             monitorService = monitorService,
             queryClient = queryClient,
             ownershipRepository = ownership,
+            teamResolver = InMemoryResourceCatalogTeamResolver(
+                mapOf(
+                    TEAM_RESOURCE_ID to (
+                        TEAM_INTERNAL_ID to CatalogOwner(
+                            teamId = TEAM_RESOURCE_ID,
+                            teamName = "Payments",
+                            slack = "#pay",
+                            repo = "moneat/pay",
+                        )
+                        ),
+                ),
+            ),
             securityReader = NoopResourceSecurityReader,
         )
 
@@ -428,25 +442,23 @@ class ResourceCatalogServiceTest {
             ORGANIZATION_ID,
             ResourceOwnershipClaim(
                 resourceId = "service:7:checkout-api",
-                team = "Payments",
-                oncall = "Dana",
-                slack = "#pay",
-                repo = "moneat/pay",
+                teamId = TEAM_RESOURCE_ID,
             ),
             actor = "admin@moneat.io",
         )
-        assertEquals("Payments", claimed?.team)
+        assertEquals("Payments", claimed?.teamName)
 
         val byName = service.listResources(listOf(ORGANIZATION_ID)).associateBy { it.name }
 
         // A persisted claim wins for the service.
         val checkout = byName.getValue("checkout-api")
-        assertEquals("Payments", checkout.owner?.team)
-        assertEquals("Dana", checkout.owner?.oncall)
-        // No claim, but a team: tag yields a derived owner with the team filled in.
+        assertEquals(TEAM_RESOURCE_ID, checkout.owner?.teamId)
+        assertEquals("Payments", checkout.owner?.teamName)
+        assertEquals("#pay", checkout.owner?.slack)
+        // No claim: a telemetry team tag remains a tag, not ownership.
         val hostResource = byName.getValue(HOSTNAME)
-        assertEquals("infra", hostResource.owner?.team)
-        assertEquals("", hostResource.owner?.oncall)
+        assertNull(hostResource.owner)
+        assertTrue("team:infra" in hostResource.tags)
     }
 
     @Test
@@ -469,10 +481,7 @@ class ResourceCatalogServiceTest {
             ORGANIZATION_ID,
             ResourceOwnershipClaim(
                 resourceId = "service:8:checkout-api",
-                team = "Payments",
-                oncall = "Dana",
-                slack = "#pay",
-                repo = "moneat/pay",
+                teamId = TEAM_RESOURCE_ID,
             ),
             actor = "admin@moneat.io",
         )
@@ -1053,14 +1062,32 @@ class ResourceCatalogServiceTest {
 }
 
 private class InMemoryResourceOwnershipRepository : ResourceOwnershipRepository {
-    private val store = HashMap<Pair<Int, String>, CatalogOwner>()
+    private val store = HashMap<Pair<Int, String>, Int>()
 
-    override fun listByOrganization(organizationId: Int): Map<String, CatalogOwner> =
+    override fun listByOrganization(organizationId: Int): Map<String, Int> =
         store.filterKeys { it.first == organizationId }.mapKeys { it.key.second }
 
-    override fun upsert(organizationId: Int, resourceId: String, owner: CatalogOwner, updatedBy: String) {
-        store[organizationId to resourceId] = owner
+    override fun upsert(organizationId: Int, resourceId: String, teamId: Int, updatedBy: String) {
+        store[organizationId to resourceId] = teamId
     }
+
+    override fun delete(organizationId: Int, resourceId: String): Boolean =
+        store.remove(organizationId to resourceId) != null
+
+    override fun escalationPolicyIdForResource(organizationId: Int, resourceId: String): Int? = null
+}
+
+private class InMemoryResourceCatalogTeamResolver(
+    private val teamsByResourceId: Map<String, Pair<Int, CatalogOwner>>,
+) : ResourceCatalogTeamResolver {
+    override fun resolveTeamId(organizationId: Int, teamResourceId: String): Int? =
+        teamsByResourceId[teamResourceId]?.first
+
+    override fun catalogOwnersByInternalIds(organizationId: Int, teamIds: Set<Int>): Map<Int, CatalogOwner> =
+        teamsByResourceId
+            .values
+            .filter { (teamId, _) -> teamId in teamIds }
+            .associate { (teamId, owner) -> teamId to owner }
 }
 
 private object NoopResourceCatalogQueryClient : ResourceCatalogQueryClient {

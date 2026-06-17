@@ -390,7 +390,7 @@ function ResourceTable({
                   <HealthBadge health={r.health} />
                 </TableCell>
                 <TableCell className="text-xs">
-                  {r.owner ? r.owner.team : <span className="text-warning-fg">Unowned</span>}
+                  {r.owner ? r.owner.teamName : <span className="text-warning-fg">Unowned</span>}
                 </TableCell>
                 <TableCell className="hidden xl:table-cell">
                   <div className="flex max-w-[200px] flex-wrap gap-1">

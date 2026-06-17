@@ -25,10 +25,13 @@ import com.moneat.monitor.models.ResourceTelemetryResponse
 import com.moneat.monitor.routes.resourceCatalogRoutes
 import com.moneat.monitor.services.ResourceCatalogService
 import com.moneat.monitor.services.ResourceTelemetryRequest
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.plugins.installErrorHandling
 import com.moneat.testsupport.RouteTestSupport
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
@@ -36,6 +39,8 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.server.plugins.NotFoundException
+import io.ktor.server.routing.Route
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
@@ -49,6 +54,7 @@ import kotlin.test.assertTrue
 class ResourceCatalogRoutesTest {
     private val catalogService = mockk<ResourceCatalogService>()
     private val entitlementService = mockk<EntitlementService>()
+    private val membershipService = mockk<OrgMembershipService>(relaxed = true)
 
     private companion object {
         const val USER_ID = 41
@@ -62,6 +68,10 @@ class ResourceCatalogRoutesTest {
         const val LIMIT_ABOVE_MAX = 9999
     }
 
+    private fun Route.installResourceCatalogRoutesForTest() {
+        resourceCatalogRoutes(catalogService, entitlementService, membershipService)
+    }
+
     // ──── Authentication ────
 
     @Test
@@ -69,7 +79,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val response = client.get("/v1/monitoring/resources")
@@ -82,7 +92,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = null)
@@ -125,7 +135,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -145,7 +155,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -162,7 +172,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -179,7 +189,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -194,7 +204,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -211,7 +221,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -236,7 +246,7 @@ class ResourceCatalogRoutesTest {
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -263,31 +273,38 @@ class ResourceCatalogRoutesTest {
 
     @Test
     fun `ownership endpoint rejects a claim on the free plan`() = testApplication {
-        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns false
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns false
+        every { entitlementService.unavailableTeamsMessage(ORGANIZATION_ID) } returns
+            "Teams is not available on your current plan"
 
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
         val response = client.put("/v1/monitoring/resources/ownership") { withAuth(token) }
 
         assertEquals(HttpStatusCode.Forbidden, response.status)
-        assertTrue(response.bodyAsText().contains("paid plans"))
+        assertTrue(response.bodyAsText().contains("Teams is not available"))
     }
 
     @Test
     fun `ownership endpoint persists a claim on a paid plan`() = testApplication {
-        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns true
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
         coEvery { catalogService.claimOwnership(eq(ORGANIZATION_ID), any(), any()) } returns
-            CatalogOwner(team = "Payments", oncall = "Dana", slack = "#pay", repo = "moneat/pay")
+            CatalogOwner(
+                teamId = "11111111-1111-1111-1111-111111111111",
+                teamName = "Payments",
+                slack = "#pay",
+                repo = "moneat/pay",
+            )
 
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
@@ -298,58 +315,78 @@ class ResourceCatalogRoutesTest {
                 """
                 {
                   "resourceId": "$RESOURCE_ID",
-                  "team": "Payments",
-                  "oncall": "Dana",
-                  "slack": "#pay",
-                  "repo": "moneat/pay"
+                  "teamId": "11111111-1111-1111-1111-111111111111"
                 }
                 """.trimIndent()
             )
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
-        assertTrue(response.bodyAsText().contains(""""team":"Payments""""))
+        assertTrue(response.bodyAsText().contains(""""teamName":"Payments""""))
     }
 
     @Test
-    fun `ownership endpoint rejects blank resource and team`() = testApplication {
-        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns true
+    fun `ownership endpoint requires an organization admin`() = testApplication {
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
+        every { membershipService.requireRole(ORGANIZATION_ID, USER_ID, OrgRole.ADMIN) } throws
+            IllegalStateException("Insufficient permissions")
 
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
         val response = client.put("/v1/monitoring/resources/ownership") {
             withAuth(token)
             contentType(ContentType.Application.Json)
-            setBody("""{"resourceId":"","team":"","oncall":"","slack":"","repo":""}""")
+            setBody("""{"resourceId":"$RESOURCE_ID","teamId":"11111111-1111-1111-1111-111111111111"}""")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertTrue(response.bodyAsText().contains("Insufficient permissions"))
+    }
+
+    @Test
+    fun `ownership endpoint rejects blank resource and team`() = testApplication {
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { installResourceCatalogRoutesForTest() }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.put("/v1/monitoring/resources/ownership") {
+            withAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceId":"","teamId":""}""")
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("resourceId and team are required"))
+        assertTrue(response.bodyAsText().contains("resourceId and teamId are required"))
     }
 
     @Test
     fun `ownership endpoint records unknown actor when the JWT email is blank`() = testApplication {
         val actorSlot = slot<String>()
-        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns true
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
         coEvery { catalogService.claimOwnership(eq(ORGANIZATION_ID), any(), capture(actorSlot)) } returns
-            CatalogOwner(team = "Payments", oncall = "", slack = "", repo = "")
+            CatalogOwner(teamId = "11111111-1111-1111-1111-111111111111", teamName = "Payments")
 
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID, email = "")
         val response = client.put("/v1/monitoring/resources/ownership") {
             withAuth(token)
             contentType(ContentType.Application.Json)
-            setBody("""{"resourceId":"$RESOURCE_ID","team":"Payments","oncall":"","slack":"","repo":""}""")
+            setBody("""{"resourceId":"$RESOURCE_ID","teamId":"11111111-1111-1111-1111-111111111111"}""")
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
@@ -358,23 +395,85 @@ class ResourceCatalogRoutesTest {
 
     @Test
     fun `ownership endpoint returns not found for resources outside the scoped catalog`() = testApplication {
-        every { entitlementService.isFeatureEnabled(eq(ORGANIZATION_ID), any()) } returns true
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
         coEvery { catalogService.claimOwnership(eq(ORGANIZATION_ID), any(), any()) } returns null
 
         application {
             installJwtAuth()
             installErrorHandling()
-            routing { resourceCatalogRoutes(catalogService, entitlementService) }
+            routing { installResourceCatalogRoutesForTest() }
         }
 
         val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
         val response = client.put("/v1/monitoring/resources/ownership") {
             withAuth(token)
             contentType(ContentType.Application.Json)
-            setBody("""{"resourceId":"service:8:checkout-api","team":"Payments","oncall":"","slack":"","repo":""}""")
+            setBody("""{"resourceId":"service:8:checkout-api","teamId":"11111111-1111-1111-1111-111111111111"}""")
         }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
         assertTrue(response.bodyAsText().contains("Resource not found"))
+    }
+
+    @Test
+    fun `ownership endpoint returns not found for an unknown team`() = testApplication {
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
+        coEvery { catalogService.claimOwnership(eq(ORGANIZATION_ID), any(), any()) } throws
+            NotFoundException("Team not found")
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { installResourceCatalogRoutesForTest() }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.put("/v1/monitoring/resources/ownership") {
+            withAuth(token)
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceId":"$RESOURCE_ID","teamId":"11111111-1111-1111-1111-111111111111"}""")
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertTrue(response.bodyAsText().contains("Team not found"))
+    }
+
+    @Test
+    fun `delete ownership endpoint removes a claim on a paid plan`() = testApplication {
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
+        coEvery { catalogService.deleteOwnership(ORGANIZATION_ID, RESOURCE_ID) } returns true
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { installResourceCatalogRoutesForTest() }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.delete("/v1/monitoring/resources/ownership/$RESOURCE_ID") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.NoContent, response.status)
+    }
+
+    @Test
+    fun `delete ownership endpoint returns not found for missing claim`() = testApplication {
+        every { entitlementService.isTeamsEnabled(ORGANIZATION_ID) } returns true
+        coEvery { catalogService.deleteOwnership(ORGANIZATION_ID, RESOURCE_ID) } returns false
+
+        application {
+            installJwtAuth()
+            installErrorHandling()
+            routing { installResourceCatalogRoutesForTest() }
+        }
+
+        val token = RouteTestSupport.createToken(userId = USER_ID, orgId = ORGANIZATION_ID)
+        val response = client.delete("/v1/monitoring/resources/ownership/$RESOURCE_ID") {
+            withAuth(token)
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertTrue(response.bodyAsText().contains("Resource ownership not found"))
     }
 }

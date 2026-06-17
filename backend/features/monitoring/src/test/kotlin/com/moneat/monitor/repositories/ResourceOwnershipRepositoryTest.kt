@@ -16,14 +16,13 @@
 
 package com.moneat.monitor.repositories
 
-import com.moneat.monitor.models.CatalogOwner
-import com.moneat.testsupport.TestDatabaseHelper
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ResourceOwnershipRepositoryTest {
@@ -32,6 +31,8 @@ class ResourceOwnershipRepositoryTest {
         private const val ORG_ID = 7
         private const val OTHER_ORG_ID = 8
         private const val RESOURCE_ID = "host:7:42"
+        private const val TEAM_ID = 101
+        private const val OTHER_TEAM_ID = 202
     }
 
     private val repository = ResourceOwnershipRepositoryImpl()
@@ -45,8 +46,20 @@ class ResourceOwnershipRepositoryTest {
             )
         }
         TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(ResourceOwnership)
         transaction {
+            exec("DROP ALL OBJECTS")
+            exec(
+                """
+                CREATE TABLE resource_ownership (
+                    id INTEGER AUTO_INCREMENT PRIMARY KEY,
+                    organization_id INTEGER NOT NULL,
+                    resource_id VARCHAR(512) NOT NULL,
+                    team_id INTEGER NOT NULL,
+                    updated_by VARCHAR(320) NOT NULL,
+                    updated_at TIMESTAMP NOT NULL
+                )
+                """.trimIndent(),
+            )
             exec(
                 "CREATE UNIQUE INDEX idx_resource_ownership_org_resource " +
                     "ON resource_ownership (organization_id, resource_id)",
@@ -56,33 +69,36 @@ class ResourceOwnershipRepositoryTest {
 
     @Test
     fun `upsert inserts a claim and list returns it for the owning organization`() {
-        val owner = CatalogOwner(team = "Payments", oncall = "Dana", slack = "#pay", repo = "moneat/pay")
+        repository.upsert(ORG_ID, RESOURCE_ID, TEAM_ID, updatedBy = "owner@moneat.test")
 
-        repository.upsert(ORG_ID, RESOURCE_ID, owner, updatedBy = "owner@moneat.test")
-
-        assertEquals(mapOf(RESOURCE_ID to owner), repository.listByOrganization(ORG_ID))
+        assertEquals(mapOf(RESOURCE_ID to TEAM_ID), repository.listByOrganization(ORG_ID))
         assertTrue(repository.listByOrganization(OTHER_ORG_ID).isEmpty())
     }
 
     @Test
     fun `upsert replaces the same organization resource without touching other organizations`() {
-        val original = CatalogOwner(team = "Payments", oncall = "Dana", slack = "#pay", repo = "moneat/pay")
-        val replacement = CatalogOwner(team = "Platform", oncall = "Riley", slack = "#plat", repo = "moneat/app")
-        val otherOrgOwner = CatalogOwner(team = "Security", oncall = "", slack = "#sec", repo = "moneat/sec")
+        repository.upsert(ORG_ID, RESOURCE_ID, TEAM_ID, updatedBy = "first@moneat.test")
+        repository.upsert(OTHER_ORG_ID, RESOURCE_ID, OTHER_TEAM_ID, updatedBy = "other@moneat.test")
+        repository.upsert(ORG_ID, RESOURCE_ID, OTHER_TEAM_ID, updatedBy = "second@moneat.test")
 
-        repository.upsert(ORG_ID, RESOURCE_ID, original, updatedBy = "first@moneat.test")
-        repository.upsert(OTHER_ORG_ID, RESOURCE_ID, otherOrgOwner, updatedBy = "other@moneat.test")
-        repository.upsert(ORG_ID, RESOURCE_ID, replacement, updatedBy = "second@moneat.test")
+        assertEquals(mapOf(RESOURCE_ID to OTHER_TEAM_ID), repository.listByOrganization(ORG_ID))
+        assertEquals(mapOf(RESOURCE_ID to OTHER_TEAM_ID), repository.listByOrganization(OTHER_ORG_ID))
+    }
 
-        assertEquals(mapOf(RESOURCE_ID to replacement), repository.listByOrganization(ORG_ID))
-        assertEquals(mapOf(RESOURCE_ID to otherOrgOwner), repository.listByOrganization(OTHER_ORG_ID))
+    @Test
+    fun `delete removes only the scoped organization claim`() {
+        repository.upsert(ORG_ID, RESOURCE_ID, TEAM_ID, updatedBy = "owner@moneat.test")
+        repository.upsert(OTHER_ORG_ID, RESOURCE_ID, OTHER_TEAM_ID, updatedBy = "other@moneat.test")
+
+        assertTrue(repository.delete(ORG_ID, RESOURCE_ID))
+        assertFalse(repository.delete(ORG_ID, RESOURCE_ID))
+        assertTrue(repository.listByOrganization(ORG_ID).isEmpty())
+        assertEquals(mapOf(RESOURCE_ID to OTHER_TEAM_ID), repository.listByOrganization(OTHER_ORG_ID))
     }
 
     @Test
     fun `noop repository ignores claims`() {
-        val owner = CatalogOwner(team = "Payments", oncall = "Dana", slack = "#pay", repo = "moneat/pay")
-
-        NoopResourceOwnershipRepository.upsert(ORG_ID, RESOURCE_ID, owner, updatedBy = "owner@moneat.test")
+        NoopResourceOwnershipRepository.upsert(ORG_ID, RESOURCE_ID, TEAM_ID, updatedBy = "owner@moneat.test")
 
         assertTrue(NoopResourceOwnershipRepository.listByOrganization(ORG_ID).isEmpty())
     }

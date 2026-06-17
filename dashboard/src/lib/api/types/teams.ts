@@ -1,0 +1,59 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+export interface OrganizationTeamMember {
+  userId: string
+  email: string
+  name?: string | null
+}
+
+export interface OrganizationTeamCurrentOnCall {
+  userId: string
+  userName: string
+}
+
+export interface OrganizationTeam {
+  id: string
+  name: string
+  slug: string
+  description?: string | null
+  slack?: string | null
+  repo?: string | null
+  onCallScheduleId?: string | null
+  escalationPolicyId?: string | null
+  currentOnCall?: OrganizationTeamCurrentOnCall | null
+  members: OrganizationTeamMember[]
+}
+
+export interface CreateOrganizationTeamRequest {
+  name: string
+  description?: string | null
+  slack?: string | null
+  repo?: string | null
+  onCallScheduleId?: string | null
+  escalationPolicyId?: string | null
+  memberIds?: string[]
+}
+
+export interface UpdateOrganizationTeamRequest {
+  name?: string
+  description?: string | null
+  slack?: string | null
+  repo?: string | null
+  onCallScheduleId?: string | null
+  escalationPolicyId?: string | null
+  memberIds?: string[]
+}

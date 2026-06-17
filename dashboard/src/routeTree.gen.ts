@@ -104,6 +104,7 @@ import { Route as ProfilesProfileIdRouteImport } from './routes/profiles.$profil
 import { Route as PerformanceTracesRouteImport } from './routes/performance.traces'
 import { Route as PerformanceServiceMapRouteImport } from './routes/performance.service-map'
 import { Route as PerformanceTransactionIdRouteImport } from './routes/performance.$transactionId'
+import { Route as OnCallTeamsRouteImport } from './routes/on-call.teams'
 import { Route as OnCallSchedulesRouteImport } from './routes/on-call.schedules'
 import { Route as OnCallIncidentsRouteImport } from './routes/on-call.incidents'
 import { Route as OnCallEscalationPoliciesRouteImport } from './routes/on-call.escalation-policies'
@@ -641,6 +642,11 @@ const PerformanceTransactionIdRoute =
     path: '/$transactionId',
     getParentRoute: () => PerformanceRoute,
   } as any)
+const OnCallTeamsRoute = OnCallTeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => OnCallRoute,
+} as any)
 const OnCallSchedulesRoute = OnCallSchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
@@ -1048,6 +1054,7 @@ export interface FileRoutesByFullPath {
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
+  '/on-call/teams': typeof OnCallTeamsRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/performance/service-map': typeof PerformanceServiceMapRoute
   '/performance/traces': typeof PerformanceTracesRouteWithChildren
@@ -1190,6 +1197,7 @@ export interface FileRoutesByTo {
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
+  '/on-call/teams': typeof OnCallTeamsRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/performance/service-map': typeof PerformanceServiceMapRoute
   '/profiles/$profileId': typeof ProfilesProfileIdRoute
@@ -1345,6 +1353,7 @@ export interface FileRoutesById {
   '/on-call/escalation-policies': typeof OnCallEscalationPoliciesRoute
   '/on-call/incidents': typeof OnCallIncidentsRouteWithChildren
   '/on-call/schedules': typeof OnCallSchedulesRoute
+  '/on-call/teams': typeof OnCallTeamsRoute
   '/performance/$transactionId': typeof PerformanceTransactionIdRoute
   '/performance/service-map': typeof PerformanceServiceMapRoute
   '/performance/traces': typeof PerformanceTracesRouteWithChildren
@@ -1503,6 +1512,7 @@ export interface FileRouteTypes {
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
+    | '/on-call/teams'
     | '/performance/$transactionId'
     | '/performance/service-map'
     | '/performance/traces'
@@ -1645,6 +1655,7 @@ export interface FileRouteTypes {
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
+    | '/on-call/teams'
     | '/performance/$transactionId'
     | '/performance/service-map'
     | '/profiles/$profileId'
@@ -1799,6 +1810,7 @@ export interface FileRouteTypes {
     | '/on-call/escalation-policies'
     | '/on-call/incidents'
     | '/on-call/schedules'
+    | '/on-call/teams'
     | '/performance/$transactionId'
     | '/performance/service-map'
     | '/performance/traces'
@@ -2601,6 +2613,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PerformanceTransactionIdRouteImport
       parentRoute: typeof PerformanceRoute
     }
+    '/on-call/teams': {
+      id: '/on-call/teams'
+      path: '/teams'
+      fullPath: '/on-call/teams'
+      preLoaderRoute: typeof OnCallTeamsRouteImport
+      parentRoute: typeof OnCallRoute
+    }
     '/on-call/schedules': {
       id: '/on-call/schedules'
       path: '/schedules'
@@ -3247,6 +3266,7 @@ interface OnCallRouteChildren {
   OnCallEscalationPoliciesRoute: typeof OnCallEscalationPoliciesRoute
   OnCallIncidentsRoute: typeof OnCallIncidentsRouteWithChildren
   OnCallSchedulesRoute: typeof OnCallSchedulesRoute
+  OnCallTeamsRoute: typeof OnCallTeamsRoute
   OnCallIndexRoute: typeof OnCallIndexRoute
 }
 
@@ -3255,6 +3275,7 @@ const OnCallRouteChildren: OnCallRouteChildren = {
   OnCallEscalationPoliciesRoute: OnCallEscalationPoliciesRoute,
   OnCallIncidentsRoute: OnCallIncidentsRouteWithChildren,
   OnCallSchedulesRoute: OnCallSchedulesRoute,
+  OnCallTeamsRoute: OnCallTeamsRoute,
   OnCallIndexRoute: OnCallIndexRoute,
 }
 

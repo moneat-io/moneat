@@ -18,6 +18,10 @@ package com.moneat.billing.services
 
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.FeatureRegistry
+
+private const val TEAMS_LICENSE_FEATURE = "teams"
+private const val TEAMS_FEATURE_NAME = "Teams"
 
 class EntitlementService(
     private val pricingTierService: PricingTierService
@@ -49,6 +53,31 @@ class EntitlementService(
         if (EnvConfig.SelfHost.enabled) return null
         val tier = pricingTierService.getEffectiveTierForOrganization(organizationId).tier
         return if (featureCheck(tier)) null else "$featureName is not available on your current plan"
+    }
+
+    fun requireTeamsEnabled(organizationId: Int) {
+        unavailableTeamsMessage(organizationId)?.let {
+            throw FeatureNotAvailableException(it)
+        }
+    }
+
+    fun isTeamsEnabled(organizationId: Int): Boolean =
+        unavailableTeamsMessage(organizationId) == null
+
+    fun unavailableTeamsMessage(organizationId: Int): String? {
+        if (EnvConfig.SelfHost.enabled) {
+            val licensed = FeatureRegistry.activeLicense
+                ?.features
+                ?.any { feature -> feature.equals(TEAMS_LICENSE_FEATURE, ignoreCase = true) }
+                ?: false
+            return if (licensed) {
+                null
+            } else {
+                "$TEAMS_FEATURE_NAME requires a paid teams license feature on self-hosted installs"
+            }
+        }
+        val tier = pricingTierService.getEffectiveTierForOrganization(organizationId).tier
+        return if (tier.teamsEnabled) null else "$TEAMS_FEATURE_NAME is not available on your current plan"
     }
 }
 
