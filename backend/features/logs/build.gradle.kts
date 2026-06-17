@@ -21,9 +21,9 @@ val rootBackendTestOutput = rootBackendSourceSets.named("test").get().output
 
 dependencies {
     compileOnly(project(":"))
-    compileOnly(project(":features:otlp"))
     implementation(project(":feature-spi"))
     implementation(project(":ingest-common"))
+    implementation(project(":features:otlp"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.auth)
