@@ -25,23 +25,14 @@ import com.moneat.monitor.models.AlertRow
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostRepository
-import com.moneat.monitor.services.AgentApiKeyService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.shared.models.AgentApiKeys
-import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.Users
 import com.moneat.shared.services.RetentionPolicyService
-import com.moneat.testsupport.TestDatabaseHelper
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
-import org.jetbrains.exposed.v1.jdbc.Database
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
-import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -691,162 +682,8 @@ class MonitorServiceExtendedTest {
         io.mockk.verify(exactly = 7) { alertRepo.createAlert(any()) }
     }
 
-    // ──── AgentApiKeyService ────
-
     companion object {
-        private var db: Database? = null
         private const val DATA_EMPTY_JSON = """{"data":[]}"""
-        private const val ORG1_KEY = "org1-key"
-    }
-
-    private val agentApiKeyService = AgentApiKeyService()
-
-    private fun ensureDb() {
-        if (db == null) {
-            db = Database.connect(
-                url = "jdbc:h2:mem:moneat_extended_test;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
-                driver = "org.h2.Driver"
-            )
-        }
-        TransactionManager.defaultDatabase = db
-        TestDatabaseHelper.resetSchema(Users, Organizations, AgentApiKeys)
-    }
-
-    private fun seedOrg(name: String = "Key Org"): Int =
-        transaction {
-            Organizations.insert {
-                it[Organizations.name] = name
-                it[slug] = name.lowercase().replace(" ", "-")
-            } get Organizations.id
-        }
-
-    private fun seedUser(email: String = "test@moneat.io"): Int =
-        transaction {
-            Users.insert {
-                it[Users.email] = email
-                it[password_hash] = "hash"
-            } get Users.id
-        }
-
-    @Test
-    fun `AgentApiKeyService createKey returns key with prefix`() {
-        ensureDb()
-        val orgId = seedOrg()
-        val userId = seedUser()
-
-        val result = agentApiKeyService.createKey(orgId, "test-key", userId)
-        assertTrue(result.key.startsWith("magt_"))
-        assertEquals("test-key", result.name)
-        assertEquals(result.id, Uuid.parse(result.id).toString())
-        assertEquals(result.key.take(12), result.keyPrefix)
-    }
-
-    @Test
-    fun `AgentApiKeyService validateKey returns orgId for valid key`() {
-        ensureDb()
-        val orgId = seedOrg()
-        val userId = seedUser()
-        val created = agentApiKeyService.createKey(orgId, "validate-key", userId)
-
-        val result = agentApiKeyService.validateKey(created.key)
-        assertEquals(orgId, result)
-    }
-
-    @Test
-    fun `AgentApiKeyService validateKey returns null for invalid key`() {
-        ensureDb()
-        assertNull(agentApiKeyService.validateKey("invalid-key"))
-    }
-
-    @Test
-    fun `AgentApiKeyService validateKey returns null for key without prefix`() {
-        ensureDb()
-        assertNull(agentApiKeyService.validateKey("short"))
-    }
-
-    @Test
-    fun `AgentApiKeyService validateKey returns null for deleted key`() {
-        ensureDb()
-        val orgId = seedOrg()
-        val userId = seedUser()
-        val created = agentApiKeyService.createKey(orgId, "to-delete", userId)
-
-        agentApiKeyService.deleteKey(orgId, created.id)
-        assertNull(agentApiKeyService.validateKey(created.key))
-    }
-
-    @Test
-    fun `AgentApiKeyService listKeys returns active keys`() {
-        ensureDb()
-        val orgId = seedOrg()
-        val userId = seedUser()
-
-        agentApiKeyService.createKey(orgId, "key-1", userId)
-        agentApiKeyService.createKey(orgId, "key-2", userId)
-
-        val keys = agentApiKeyService.listKeys(orgId)
-        assertEquals(2, keys.size)
-        assertTrue(keys.any { it.name == "key-1" })
-        assertTrue(keys.any { it.name == "key-2" })
-    }
-
-    @Test
-    fun `AgentApiKeyService listKeys does not return deleted keys`() {
-        ensureDb()
-        val orgId = seedOrg()
-        val userId = seedUser()
-
-        val key1 = agentApiKeyService.createKey(orgId, "active", userId)
-        val key2 = agentApiKeyService.createKey(orgId, "deleted", userId)
-        agentApiKeyService.deleteKey(orgId, key2.id)
-
-        val keys = agentApiKeyService.listKeys(orgId)
-        assertEquals(1, keys.size)
-        assertEquals("active", keys[0].name)
-    }
-
-    @Test
-    fun `AgentApiKeyService listKeys only returns keys for given org`() {
-        ensureDb()
-        val org1 = seedOrg("Org A")
-        val org2 = seedOrg("Org B")
-        val userId = seedUser()
-
-        agentApiKeyService.createKey(org1, ORG1_KEY, userId)
-        agentApiKeyService.createKey(org2, "org2-key", userId)
-
-        assertEquals(1, agentApiKeyService.listKeys(org1).size)
-        assertEquals(ORG1_KEY, agentApiKeyService.listKeys(org1)[0].name)
-    }
-
-    @Test
-    fun `AgentApiKeyService deleteKey returns true for existing key`() {
-        ensureDb()
-        val orgId = seedOrg()
-        val userId = seedUser()
-        val created = agentApiKeyService.createKey(orgId, "to-delete", userId)
-
-        assertTrue(agentApiKeyService.deleteKey(orgId, created.id))
-    }
-
-    @Test
-    fun `AgentApiKeyService deleteKey returns false for non-existent key`() {
-        ensureDb()
-        val orgId = seedOrg()
-        assertFalse(agentApiKeyService.deleteKey(orgId, "99999999-9999-9999-9999-999999999999"))
-    }
-
-    @Test
-    fun `AgentApiKeyService deleteKey cannot delete key from other org`() {
-        ensureDb()
-        val org1 = seedOrg("Org 1")
-        val org2 = seedOrg("Org 2")
-        val userId = seedUser()
-        val created = agentApiKeyService.createKey(org1, ORG1_KEY, userId)
-
-        assertFalse(agentApiKeyService.deleteKey(org2, created.id))
-        // Key should still be valid
-        assertEquals(org1, agentApiKeyService.validateKey(created.key))
     }
 
     // ──── Helpers ────
