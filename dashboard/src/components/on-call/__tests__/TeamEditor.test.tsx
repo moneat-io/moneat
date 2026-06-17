@@ -17,7 +17,7 @@
 import {render, screen, waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type {ComponentProps} from 'react'
-import {beforeAll, describe, expect, it, vi} from 'vitest'
+import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest'
 import {TeamEditor, type TeamFormData, type TeamEditorOption} from '../TeamEditor'
 
 const members: TeamEditorOption[] = [
@@ -52,6 +52,11 @@ async function selectOption(user: ReturnType<typeof userEvent.setup>, triggerNam
 }
 
 describe('TeamEditor', () => {
+  const originalResizeObserver = globalThis.ResizeObserver
+  const originalScrollIntoView = globalThis.HTMLElement.prototype.scrollIntoView
+  const originalReleasePointerCapture = globalThis.HTMLElement.prototype.releasePointerCapture
+  const originalHasPointerCapture = globalThis.HTMLElement.prototype.hasPointerCapture
+
   beforeAll(() => {
     globalThis.ResizeObserver = class ResizeObserver {
       observe() {}
@@ -61,6 +66,13 @@ describe('TeamEditor', () => {
     globalThis.HTMLElement.prototype.scrollIntoView = vi.fn()
     globalThis.HTMLElement.prototype.releasePointerCapture = vi.fn()
     globalThis.HTMLElement.prototype.hasPointerCapture = vi.fn(() => false)
+  })
+
+  afterAll(() => {
+    globalThis.ResizeObserver = originalResizeObserver
+    globalThis.HTMLElement.prototype.scrollIntoView = originalScrollIntoView
+    globalThis.HTMLElement.prototype.releasePointerCapture = originalReleasePointerCapture
+    globalThis.HTMLElement.prototype.hasPointerCapture = originalHasPointerCapture
   })
 
   it('creates a team with trimmed metadata', async () => {
