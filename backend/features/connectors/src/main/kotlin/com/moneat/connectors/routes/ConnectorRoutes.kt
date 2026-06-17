@@ -33,7 +33,6 @@ import com.moneat.connectors.ConnectorUseDefinition
 import com.moneat.connectors.ConnectorUseState
 import com.moneat.connectors.ConnectorWebhookAcceptedResponse
 import com.moneat.connectors.CreateConnectorInstallationRequest
-import com.moneat.connectors.RevenueCatClient
 import com.moneat.connectors.RotateConnectorApiCredentialRequest
 import com.moneat.connectors.UpsertConnectorBindingRequest
 import com.moneat.shared.models.OrganizationIntegrations
@@ -80,20 +79,18 @@ private suspend fun ApplicationCall.respondConnectorState(connectorService: Conn
         principal<JWTPrincipal>()?.currentOrgIdOrNull()
             ?: return respond(HttpStatusCode.NotFound, ErrorResponse("No organization found"))
     val legacyIntegrations = legacyIntegrationStates(organizationId)
-    val revenueCatState = connectorService.revenueCatState(organizationId)
+    val connectorStates = connectorService.connectorInstallationStates(organizationId)
     val response =
         ConnectorStateResponse(
             connections = ConnectorCatalog.providers.map { provider ->
-                val connectorSummary = revenueCatState.first.takeIf {
-                    provider.id == RevenueCatClient.PROVIDER_ID
-                }
+                val connectorSummary = connectorStates[provider.id]?.first
                 provider.providerConnectionSummary(
                     integration = legacyIntegrations[provider.id],
                     connectorSummary = connectorSummary,
                 )
             },
             providers = ConnectorCatalog.providers.map { provider ->
-                val detail = revenueCatState.second.takeIf { provider.id == RevenueCatClient.PROVIDER_ID }
+                val detail = connectorStates[provider.id]?.second
                 ConnectorProviderState(
                     providerId = provider.id,
                     uses = provider.uses.map { use ->

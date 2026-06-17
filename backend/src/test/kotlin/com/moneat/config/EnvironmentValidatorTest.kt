@@ -45,7 +45,19 @@ class EnvironmentValidatorTest {
 
         assertFalse(result.errors.any { it.contains("SLACK_CLIENT_ID") })
         assertFalse(result.errors.any { it.contains("DISCORD_CLIENT_ID") })
+        assertFalse(result.errors.any { it.contains("GOOGLE_ADS_DEVELOPER_TOKEN") })
         assertFalse(result.errors.any { it.contains("STRIPE_SECRET_KEY") })
+    }
+
+    @Test
+    fun `validate requires Google Ads provider config when enabled`() {
+        withSystemProperty("GOOGLE_ADS_ENABLED", "true") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("GOOGLE_ADS_DEVELOPER_TOKEN") })
+            assertTrue(result.errors.any { it.contains("GOOGLE_ADS_CLIENT_ID") })
+            assertTrue(result.errors.any { it.contains("GOOGLE_ADS_CLIENT_SECRET") })
+        }
     }
 
     @Test

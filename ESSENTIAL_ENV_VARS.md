@@ -29,6 +29,7 @@ Workflow runtime variables are required when `WORKFLOWS_ENABLED=true` (the defau
 | `WORKFLOWS_TEMPORAL_PAYLOAD_KEY` | Workflows are enabled | Encrypts workflow payloads before they are stored in Temporal history. |
 | `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_REDIRECT_URI` | `SLACK_ENABLED=true` | Slack integration OAuth. |
 | `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_REDIRECT_URI`, `DISCORD_BOT_TOKEN` | `DISCORD_ENABLED=true` | Discord integration OAuth and bot delivery. |
+| `GOOGLE_ADS_DEVELOPER_TOKEN`, `GOOGLE_ADS_CLIENT_ID`, `GOOGLE_ADS_CLIENT_SECRET` | `GOOGLE_ADS_ENABLED=true` | Google Ads connector API access and OAuth token refresh. |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | `STRIPE_ENABLED=true` | Stripe billing. |
 | `EXPO_TOKEN` | `ONCALL_ENABLED=true` | Mobile push notifications. |
 
@@ -47,6 +48,7 @@ These variables are optional. Ingestion queues use Redis Streams by default.
 | `INGESTION_<PIPELINE>_MAX_DELIVERIES` | `5` | Delivery count before a stream message is written to the DLQ stream. |
 | `INGESTION_<PIPELINE>_STREAM_MAXLEN` | `250000` | Approximate maximum length for the primary stream before Redis trims old acknowledged entries. |
 | `INGESTION_<PIPELINE>_DLQ_STREAM_MAXLEN` | `10000` | Approximate maximum length for the DLQ stream. |
+| `GOOGLE_ADS_API_VERSION` | `v24` | Google Ads API version used by the connector client. |
 
 Redis Streams are the durable ingestion buffer. Run Redis with persistence and HA appropriate for production, and
 alert on pending entries, oldest pending age, and DLQ growth.

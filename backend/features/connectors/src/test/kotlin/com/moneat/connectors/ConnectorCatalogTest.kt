@@ -69,8 +69,10 @@ class ConnectorCatalogTest {
         assertEquals("/v1/connectors/installations", revenueCat.setupRoute)
         assertEquals("/v1/connectors/state", revenueCat.statusRoute)
         assertEquals(ConnectorFamily.DATA_IMPORT, googleAds.family)
-        assertEquals(ConnectorAvailability.PLANNED, googleAds.availability)
-        assertEquals("cloud_sources", googleAds.stateSource)
+        assertEquals(ConnectorAvailability.AVAILABLE, googleAds.availability)
+        assertEquals("connector_installations", googleAds.stateSource)
+        assertEquals("/v1/connectors/installations", googleAds.setupRoute)
+        assertEquals("/v1/connectors/state", googleAds.statusRoute)
     }
 
     private fun provider(id: String): ConnectorProviderDefinition {

@@ -45,6 +45,9 @@ class ConnectorServiceTest {
         private const val OTHER_PROJECT_ID = 101L
         private const val REVENUECAT_PROJECT_ID = "proj_bandapella"
         private const val REVENUECAT_SECRET = "rc_sk_live_1234"
+        private const val GOOGLE_ADS_CUSTOMER_ID = "1234567890"
+        private const val GOOGLE_ADS_CHILD_CUSTOMER_ID = "2223334444"
+        private const val GOOGLE_ADS_REFRESH_TOKEN = "google_refresh_3456"
         private var db: Database? = null
     }
 
@@ -86,6 +89,39 @@ class ConnectorServiceTest {
             assertFalse(installation[ConnectorInstallations.apiSecretCiphertext].orEmpty().contains(REVENUECAT_SECRET))
             assertNotEquals(response.webhookToken, installation[ConnectorInstallations.webhookTokenHash])
             assertEquals(2L, ConnectorExternalResources.selectAll().count())
+        }
+    }
+
+    @Test
+    fun `create installation redacts Google Ads OAuth credentials and caches accounts`() {
+        val service = connectorService()
+
+        val response = service.createInstallation(ORGANIZATION_ID, USER_ID, googleAdsRequest())
+
+        assertEquals(GoogleAdsClient.PROVIDER_ID, response.providerId)
+        assertEquals(GOOGLE_ADS_CUSTOMER_ID, response.externalProjectId)
+        assertEquals("Bandapella Google Ads", response.externalProjectName)
+        assertEquals("oauth_refresh_token", response.credentialType)
+        assertEquals("3456", response.apiSecretLastFour)
+        assertEquals("healthy", response.status)
+
+        transaction {
+            val installation = ConnectorInstallations.selectAll().single()
+            assertFalse(
+                installation[ConnectorInstallations.apiSecretCiphertext].orEmpty().contains(GOOGLE_ADS_REFRESH_TOKEN)
+            )
+            val resources = ConnectorExternalResources.selectAll().toList()
+            assertEquals(2, resources.size)
+            assertTrue(
+                resources.any { row ->
+                    row[ConnectorExternalResources.externalResourceId] == GOOGLE_ADS_CUSTOMER_ID
+                }
+            )
+            assertTrue(
+                resources.any { row ->
+                    row[ConnectorExternalResources.externalResourceId] == GOOGLE_ADS_CHILD_CUSTOMER_ID
+                }
+            )
         }
     }
 
@@ -203,11 +239,25 @@ class ConnectorServiceTest {
         assertEquals("needs_mapping", detail.health)
     }
 
+    @Test
+    fun `state reports connected Google Ads installation detail`() {
+        val service = connectorService()
+
+        service.createInstallation(ORGANIZATION_ID, USER_ID, googleAdsRequest())
+
+        val detail = assertNotNull(service.googleAdsState(ORGANIZATION_ID).second)
+
+        assertEquals(2, detail.mappedResources)
+        assertEquals("healthy", detail.health)
+        assertEquals("Connected to 2 Google Ads accounts", detail.message)
+    }
+
     private fun connectorService(
         queuedMessages: MutableList<String> = mutableListOf(),
     ): ConnectorService =
         ConnectorService(
             revenueCatClient = FakeRevenueCatProviderClient(),
+            googleAdsClient = FakeGoogleAdsProviderClient(),
             secretCipherFactory = { FakeConnectorSecretCipher },
             enqueueConnectorEvent = { payload -> queuedMessages += payload },
         )
@@ -219,6 +269,18 @@ class ConnectorServiceTest {
             name = "Bandapella RevenueCat",
             externalAccount = ConnectorExternalAccountRequest(projectId = REVENUECAT_PROJECT_ID),
             secret = REVENUECAT_SECRET,
+        )
+
+    private fun googleAdsRequest(): CreateConnectorInstallationRequest =
+        CreateConnectorInstallationRequest(
+            providerId = GoogleAdsClient.PROVIDER_ID,
+            authProfileId = GoogleAdsClient.AUTH_PROFILE_MANAGER_OAUTH,
+            name = "Bandapella Google Ads",
+            externalAccount = ConnectorExternalAccountRequest(
+                customerId = GOOGLE_ADS_CUSTOMER_ID,
+                managerCustomerId = GOOGLE_ADS_CUSTOMER_ID,
+            ),
+            secret = """{"refreshToken":"$GOOGLE_ADS_REFRESH_TOKEN"}""",
         )
 
     private fun bindingRequest(
@@ -323,6 +385,57 @@ class ConnectorServiceTest {
         ): Pair<List<ConnectorObservedWebhookIntegration>, List<String>> {
             resolveProject(apiKey, projectId)
             return emptyList<ConnectorObservedWebhookIntegration>() to emptyList()
+        }
+    }
+
+    private class FakeGoogleAdsProviderClient : GoogleAdsProviderClient {
+        override fun validateCustomer(
+            credential: GoogleAdsOAuthCredential,
+            customerId: String,
+            managerCustomerId: String?,
+        ): GoogleAdsCustomerAccount {
+            if (credential.refreshToken != GOOGLE_ADS_REFRESH_TOKEN) {
+                throw GoogleAdsClientException("Google Ads rejected the OAuth credential", "google_ads_unauthorized")
+            }
+            if (customerId != GOOGLE_ADS_CUSTOMER_ID) {
+                throw GoogleAdsClientException("Google Ads customer was not visible", "google_ads_customer_not_found")
+            }
+            return GoogleAdsCustomerAccount(
+                customerId = GOOGLE_ADS_CUSTOMER_ID,
+                resourceName = "customers/$GOOGLE_ADS_CUSTOMER_ID",
+                descriptiveName = "Bandapella Google Ads",
+                manager = true,
+                testAccount = false,
+                status = "ENABLED",
+                currencyCode = "USD",
+                timeZone = "America/New_York",
+                level = 0,
+                loginCustomerId = managerCustomerId,
+            )
+        }
+
+        override fun listAccessibleCustomers(credential: GoogleAdsOAuthCredential): List<GoogleAdsCustomerAccount> =
+            listOf(validateCustomer(credential, GOOGLE_ADS_CUSTOMER_ID, null))
+
+        override fun listCustomerClients(
+            credential: GoogleAdsOAuthCredential,
+            loginCustomerId: String,
+        ): List<GoogleAdsCustomerAccount> {
+            validateCustomer(credential, loginCustomerId, loginCustomerId)
+            return listOf(
+                GoogleAdsCustomerAccount(
+                    customerId = GOOGLE_ADS_CHILD_CUSTOMER_ID,
+                    resourceName = "customers/$GOOGLE_ADS_CHILD_CUSTOMER_ID",
+                    descriptiveName = "Bandapella iOS UA",
+                    manager = false,
+                    testAccount = false,
+                    status = "ENABLED",
+                    currencyCode = "USD",
+                    timeZone = "America/New_York",
+                    level = 1,
+                    loginCustomerId = loginCustomerId,
+                )
+            )
         }
     }
 

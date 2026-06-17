@@ -640,6 +640,10 @@ object ConnectorCatalog {
                             allowedAuthProfileId = "manager_oauth",
                             requiredScopes = listOf("https://www.googleapis.com/auth/adwords"),
                             resourceTypes = listOf("manager_account", "customer_account", "campaign"),
+                            availability = ConnectorAvailability.AVAILABLE,
+                            stateSource = CONNECTOR_INSTALLATIONS,
+                            setupRoute = CONNECTOR_INSTALLATIONS_SETUP_ROUTE,
+                            statusRoute = CONNECTOR_STATE_STATUS_ROUTE,
                         )
                     )
                 )

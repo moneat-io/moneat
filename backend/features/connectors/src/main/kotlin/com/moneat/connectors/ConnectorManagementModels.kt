@@ -21,7 +21,9 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ConnectorExternalAccountRequest(
-    val projectId: String,
+    val projectId: String = "",
+    val customerId: String? = null,
+    val managerCustomerId: String? = null,
 )
 
 @Serializable
