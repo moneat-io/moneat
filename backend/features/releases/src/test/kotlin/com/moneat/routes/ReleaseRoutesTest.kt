@@ -584,6 +584,132 @@ class ReleaseRoutesTest {
         }
 
     @Test
+    fun `POST legacy dsyms upload stores raw mapping uploads`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            val mappingName = "mapping.txt"
+            val mappingBytes = "raw proguard mapping".toByteArray()
+            val checksum = "075d7fa57b20f2bbee31b0dfbbed049c8dca2c56"
+            val storedBytes = slot<ByteArray>()
+
+            every { releaseService.storeChunk(checksum, capture(storedBytes)) } just Runs
+            every {
+                releaseService.assembleProjectDif(
+                    TEST_PROJECT_ID,
+                    checksum,
+                    listOf(checksum),
+                    mappingName,
+                    null
+                )
+            } returns AssembledDif(
+                resourceId = resourceId(102),
+                debugId = PROGUARD_DEBUG_ID,
+                objectName = mappingName,
+                checksum = checksum,
+                size = mappingBytes.size.toLong(),
+                dateCreated = "2026-05-23T00:00:00Z"
+            )
+
+            val quotaService = allowingQuotaService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), quotaService, projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/dsyms/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile("file", mappingName, mappingBytes)
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            val body = response.bodyAsText()
+            assertTrue(body.contains("\"objectName\":\"$mappingName\""), body)
+            assertTrue(body.contains("\"sha1\":\"$checksum\""), body)
+            assertTrue(storedBytes.captured.contentEquals(mappingBytes))
+            verify { quotaService.reserveUnits(TEST_ORG_ID, 1, "sourcemap", mappingBytes.size.toLong()) }
+        }
+
+    @Test
+    fun `POST legacy dsyms upload returns empty for zip without proguard entries`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            val quotaService = allowingQuotaService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), quotaService, projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/dsyms/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile(
+                                    "file",
+                                    "proguard.zip",
+                                    zipProguardMappings("ignored/mapping.txt" to "ignored".toByteArray())
+                                )
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
+            assertEquals("[]", response.bodyAsText())
+            verify(exactly = 0) { quotaService.reserveUnits(any(), any(), any(), any()) }
+            verify(exactly = 0) { releaseService.storeChunk(any(), any()) }
+        }
+
+    @Test
+    fun `POST legacy dsyms upload returns 429 when quota reservation is rejected`() =
+        testApplication {
+            val releaseService = sourceMapReleaseService()
+            val mappingName = "proguard/$PROGUARD_DEBUG_ID.txt"
+            val mappingBytes = "quota mapping".toByteArray()
+            val quotaService = rejectingQuotaService()
+
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    releaseRoutes(releaseService, AuthTokenService(), quotaService, projectOrgEventService())
+                }
+            }
+
+            val response =
+                client.post("/api/0/projects/my-org/my-project/files/dsyms/") {
+                    header(HttpHeaders.Authorization, "Bearer $testSourceMapToken")
+                    setBody(
+                        MultiPartFormDataContent(
+                            formData {
+                                appendFile("file", "proguard.zip", zipProguardMapping(mappingName, mappingBytes))
+                            }
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.TooManyRequests, response.status, response.bodyAsText())
+            verify { quotaService.reserveUnits(TEST_ORG_ID, 1, "sourcemap", mappingBytes.size.toLong()) }
+            verify(exactly = 0) { releaseService.storeChunk(any(), any()) }
+        }
+
+    @Test
     fun `POST legacy dsyms upload refunds only uncommitted mappings when later entry fails`() =
         testApplication {
             val releaseService = sourceMapReleaseService()

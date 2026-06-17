@@ -662,7 +662,13 @@ private suspend fun readFileItemBytes(
 
 private fun extractProguardMappings(upload: UploadedLegacyDebugFile): List<UploadedProguardMapping> {
     return try {
-        extractProguardMappingsFromZip(upload.bytes)
+        val mappings = extractProguardMappingsFromZip(upload.bytes)
+        if (mappings.isNotEmpty() || upload.fileName.endsWith(".zip", ignoreCase = true)) {
+            mappings
+        } else {
+            logger.debug { "Legacy debug file upload was not a zip archive; storing raw file" }
+            listOf(UploadedProguardMapping(upload.fileName, upload.bytes))
+        }
     } catch (e: ZipException) {
         logger.debug(e) { "Legacy debug file upload was not a zip archive; storing raw file" }
         listOf(UploadedProguardMapping(upload.fileName, upload.bytes))
