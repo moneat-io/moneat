@@ -26,6 +26,7 @@ import com.moneat.shared.services.ProjectIdResolver
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.http.HttpStatusCode
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -90,6 +91,7 @@ data class AcceptedConnectorWebhook(
 class ConnectorService(
     private val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
     private val revenueCatClient: RevenueCatProviderClient = RevenueCatClient(),
+    private val googleAdsClient: GoogleAdsProviderClient = GoogleAdsClient(),
     private val secretCipherFactory: () -> ConnectorSecretCipher = {
         PurposeConnectorSecretCipher(PurposeScopedSecretCipher.fromEnv(SecretVaultPurpose.DATA_IMPORT))
     },
@@ -131,6 +133,17 @@ class ConnectorService(
         }
 
     fun createInstallation(
+        organizationId: Int,
+        userId: Int,
+        request: CreateConnectorInstallationRequest,
+    ): ConnectorInstallationResponse =
+        when (request.providerId) {
+            RevenueCatClient.PROVIDER_ID -> createRevenueCatInstallation(organizationId, userId, request)
+            GoogleAdsClient.PROVIDER_ID -> createGoogleAdsInstallation(organizationId, userId, request)
+            else -> throw badRequest("Unsupported connector provider: ${request.providerId}")
+        }
+
+    private fun createRevenueCatInstallation(
         organizationId: Int,
         userId: Int,
         request: CreateConnectorInstallationRequest,
@@ -192,6 +205,70 @@ class ConnectorService(
         }
     }
 
+    private fun createGoogleAdsInstallation(
+        organizationId: Int,
+        userId: Int,
+        request: CreateConnectorInstallationRequest,
+    ): ConnectorInstallationResponse {
+        ensureGoogleAdsInstallRequest(request)
+        val credential = parseGoogleAdsCredential(request.secret)
+        val customerId = googleAdsCustomerId(request)
+        val managerCustomerId = googleAdsManagerCustomerId(request)
+        val customer = withGoogleAdsErrorMapping {
+            googleAdsClient.validateCustomer(credential, customerId, managerCustomerId)
+        }
+        val resources = withGoogleAdsErrorMapping {
+            googleAdsDiscoveredAccounts(credential, customer)
+        }
+        val cipher = secretCipherFactory()
+        val serializedCredential = json.encodeToString(credential)
+        val encryptedSecret = cipher.encrypt(serializedCredential, organizationId)
+        val now = Clock.System.now()
+
+        return transaction {
+            val installationId =
+                ConnectorInstallations.insert {
+                    it[ConnectorInstallations.organizationId] = organizationId
+                    it[provider] = GoogleAdsClient.PROVIDER_ID
+                    it[name] = request.name.trim().ifBlank {
+                        customer.descriptiveName?.let { accountName -> "Google Ads $accountName" } ?: "Google Ads"
+                    }
+                    it[credentialType] = "oauth_refresh_token"
+                    it[authProfileId] = GoogleAdsClient.AUTH_PROFILE_MANAGER_OAUTH
+                    it[externalProjectId] = customer.customerId
+                    it[externalProjectName] = customer.descriptiveName
+                    it[externalProjectDiscoveredAt] = now
+                    it[authPermissionsSummary] = stringMapJson(
+                        mapOf(
+                            "scope" to GoogleAdsClient.OAUTH_SCOPE,
+                            "loginCustomerId" to customer.loginCustomerId.orEmpty(),
+                        )
+                    )
+                    it[status] = STATUS_HEALTHY
+                    it[statusReason] = "Google Ads OAuth grant validated"
+                    it[lastTestedAt] = now
+                    it[lastTestResult] = "success"
+                    it[lastSuccessfulProviderCallAt] = now
+                    it[lastError] = null
+                    it[apiSecretCiphertext] = encryptedSecret
+                    it[apiSecretKeyId] = cipher.activeKeyId
+                    it[apiSecretLastFour] = credential.refreshToken.takeLast(API_SECRET_SUFFIX_CHARS)
+                    it[enabled] = true
+                    it[createdBy] = userId
+                    it[createdAt] = now
+                    it[updatedAt] = now
+                }[ConnectorInstallations.id]
+            upsertGoogleAdsCustomers(
+                organizationId = organizationId,
+                installationId = installationId,
+                externalProjectId = customer.customerId,
+                accounts = resources,
+                now = now,
+            )
+            installationRowById(organizationId, installationId).toInstallationResponse()
+        }
+    }
+
     fun deleteInstallation(
         organizationId: Int,
         installationResourceId: String,
@@ -213,9 +290,21 @@ class ConnectorService(
         installationResourceId: String,
         request: RotateConnectorApiCredentialRequest,
     ): ConnectorInstallationResponse {
-        val secret = normalizedSecret(request.secret)
         val row =
             transaction { installationRowByResourceId(organizationId, installationResourceId).toInstallationRecord() }
+        return when (row.provider) {
+            RevenueCatClient.PROVIDER_ID -> rotateRevenueCatCredential(organizationId, row, request)
+            GoogleAdsClient.PROVIDER_ID -> rotateGoogleAdsCredential(organizationId, row, request)
+            else -> throw badRequest("Unsupported connector provider: ${row.provider}")
+        }
+    }
+
+    private fun rotateRevenueCatCredential(
+        organizationId: Int,
+        row: ConnectorInstallationRecord,
+        request: RotateConnectorApiCredentialRequest,
+    ): ConnectorInstallationResponse {
+        val secret = normalizedSecret(request.secret)
         val projectId = row.externalProjectId ?: throw badRequest("Connector installation has no external project")
         withRevenueCatErrorMapping {
             revenueCatClient.resolveProject(secret, projectId)
@@ -245,6 +334,43 @@ class ConnectorService(
         }
     }
 
+    private fun rotateGoogleAdsCredential(
+        organizationId: Int,
+        row: ConnectorInstallationRecord,
+        request: RotateConnectorApiCredentialRequest,
+    ): ConnectorInstallationResponse {
+        val credential = parseGoogleAdsCredential(request.secret)
+        val customerId = row.externalProjectId ?: throw badRequest("Connector installation has no Google Ads customer")
+        val customer = withGoogleAdsErrorMapping {
+            googleAdsClient.validateCustomer(credential, customerId, credential.loginCustomerId)
+        }
+        val accounts = withGoogleAdsErrorMapping {
+            googleAdsDiscoveredAccounts(credential, customer)
+        }
+        val cipher = secretCipherFactory()
+        val encryptedSecret = cipher.encrypt(json.encodeToString(credential), organizationId)
+        val now = Clock.System.now()
+
+        return transaction {
+            ConnectorInstallations.update({ ConnectorInstallations.id eq row.id }) {
+                it[apiSecretCiphertext] = encryptedSecret
+                it[apiSecretKeyId] = cipher.activeKeyId
+                it[apiSecretLastFour] = credential.refreshToken.takeLast(API_SECRET_SUFFIX_CHARS)
+                it[status] = STATUS_HEALTHY
+                it[statusReason] = "Google Ads OAuth grant validated"
+                it[externalProjectName] = customer.descriptiveName
+                it[externalProjectDiscoveredAt] = now
+                it[lastTestedAt] = now
+                it[lastTestResult] = "success"
+                it[lastSuccessfulProviderCallAt] = now
+                it[lastError] = null
+                it[updatedAt] = now
+            }
+            upsertGoogleAdsCustomers(organizationId, row.id, customer.customerId, accounts, now)
+            installationRowById(organizationId, row.id).toInstallationResponse()
+        }
+    }
+
     fun rotateWebhookToken(
         organizationId: Int,
         installationResourceId: String,
@@ -253,6 +379,9 @@ class ConnectorService(
         val now = Clock.System.now()
         return transaction {
             val row = installationRowByResourceId(organizationId, installationResourceId)
+            if (row[ConnectorInstallations.provider] != RevenueCatClient.PROVIDER_ID) {
+                throw badRequest("Connector does not use webhook tokens")
+            }
             ConnectorInstallations.update({ ConnectorInstallations.id eq row[ConnectorInstallations.id] }) {
                 it[webhookTokenHash] = sha256Hex(webhookToken)
                 it[webhookTokenPrefix] = webhookToken.take(WEBHOOK_TOKEN_PREFIX_CHARS)
@@ -270,6 +399,17 @@ class ConnectorService(
     ): ConnectorInstallationResponse {
         val row =
             transaction { installationRowByResourceId(organizationId, installationResourceId).toInstallationRecord() }
+        return when (row.provider) {
+            RevenueCatClient.PROVIDER_ID -> testRevenueCatInstallation(organizationId, row)
+            GoogleAdsClient.PROVIDER_ID -> testGoogleAdsInstallation(organizationId, row)
+            else -> throw badRequest("Unsupported connector provider: ${row.provider}")
+        }
+    }
+
+    private fun testRevenueCatInstallation(
+        organizationId: Int,
+        row: ConnectorInstallationRecord,
+    ): ConnectorInstallationResponse {
         val projectId = row.externalProjectId ?: throw badRequest("Connector installation has no external project")
         val secret = decryptApiSecret(row)
         val now = Clock.System.now()
@@ -310,12 +450,67 @@ class ConnectorService(
         }
     }
 
+    private fun testGoogleAdsInstallation(
+        organizationId: Int,
+        row: ConnectorInstallationRecord,
+    ): ConnectorInstallationResponse {
+        val customerId = row.externalProjectId ?: throw badRequest("Connector installation has no Google Ads customer")
+        val credential = parseGoogleAdsCredential(decryptApiSecret(row))
+        val now = Clock.System.now()
+        return try {
+            val customer = withGoogleAdsErrorMapping {
+                googleAdsClient.validateCustomer(credential, customerId, credential.loginCustomerId)
+            }
+            val accounts = withGoogleAdsErrorMapping {
+                googleAdsDiscoveredAccounts(credential, customer)
+            }
+            transaction {
+                ConnectorInstallations.update({ ConnectorInstallations.id eq row.id }) {
+                    it[status] = STATUS_HEALTHY
+                    it[statusReason] = "Google Ads OAuth grant validated"
+                    it[externalProjectName] = customer.descriptiveName
+                    it[externalProjectDiscoveredAt] = now
+                    it[lastTestedAt] = now
+                    it[lastTestResult] = "success"
+                    it[lastSuccessfulProviderCallAt] = now
+                    it[lastError] = null
+                    it[updatedAt] = now
+                }
+                upsertGoogleAdsCustomers(organizationId, row.id, customer.customerId, accounts, now)
+                installationRowById(organizationId, row.id).toInstallationResponse()
+            }
+        } catch (error: ConnectorServiceException) {
+            transaction {
+                ConnectorInstallations.update({ ConnectorInstallations.id eq row.id }) {
+                    it[status] = STATUS_DEGRADED
+                    it[statusReason] = error.message
+                    it[lastTestedAt] = now
+                    it[lastTestResult] = "failed"
+                    it[lastError] = error.message
+                    it[updatedAt] = now
+                }
+                installationRowById(organizationId, row.id).toInstallationResponse()
+            }
+        }
+    }
+
     fun refreshExternalResources(
         organizationId: Int,
         installationResourceId: String,
     ): ConnectorExternalResourcesResponse {
         val row =
             transaction { installationRowByResourceId(organizationId, installationResourceId).toInstallationRecord() }
+        return when (row.provider) {
+            RevenueCatClient.PROVIDER_ID -> refreshRevenueCatExternalResources(organizationId, row)
+            GoogleAdsClient.PROVIDER_ID -> refreshGoogleAdsExternalResources(organizationId, row)
+            else -> throw badRequest("Unsupported connector provider: ${row.provider}")
+        }
+    }
+
+    private fun refreshRevenueCatExternalResources(
+        organizationId: Int,
+        row: ConnectorInstallationRecord,
+    ): ConnectorExternalResourcesResponse {
         val projectId = row.externalProjectId ?: throw badRequest("Connector installation has no external project")
         val apps = withRevenueCatErrorMapping {
             revenueCatClient.listApps(decryptApiSecret(row), projectId)
@@ -323,6 +518,34 @@ class ConnectorService(
         val now = Clock.System.now()
         return transaction {
             upsertRevenueCatApps(organizationId, row.id, projectId, apps, now)
+            resourcesForInstallation(organizationId, row.id)
+        }
+    }
+
+    private fun refreshGoogleAdsExternalResources(
+        organizationId: Int,
+        row: ConnectorInstallationRecord,
+    ): ConnectorExternalResourcesResponse {
+        val customerId = row.externalProjectId ?: throw badRequest("Connector installation has no Google Ads customer")
+        val credential = parseGoogleAdsCredential(decryptApiSecret(row))
+        val customer = withGoogleAdsErrorMapping {
+            googleAdsClient.validateCustomer(credential, customerId, credential.loginCustomerId)
+        }
+        val accounts = withGoogleAdsErrorMapping {
+            googleAdsDiscoveredAccounts(credential, customer)
+        }
+        val now = Clock.System.now()
+        return transaction {
+            upsertGoogleAdsCustomers(organizationId, row.id, customer.customerId, accounts, now)
+            ConnectorInstallations.update({ ConnectorInstallations.id eq row.id }) {
+                it[status] = STATUS_HEALTHY
+                it[statusReason] = "Google Ads accounts refreshed"
+                it[externalProjectName] = customer.descriptiveName
+                it[externalProjectDiscoveredAt] = now
+                it[lastSuccessfulProviderCallAt] = now
+                it[lastError] = null
+                it[updatedAt] = now
+            }
             resourcesForInstallation(organizationId, row.id)
         }
     }
@@ -371,6 +594,7 @@ class ConnectorService(
     ): ConnectorWebhookSetupResponse {
         val row =
             transaction { installationRowByResourceId(organizationId, installationResourceId).toInstallationRecord() }
+        ensureProvider(row, RevenueCatClient.PROVIDER_ID)
         val projectId = row.externalProjectId ?: throw badRequest("Connector installation has no external project")
         val webhookUrl = webhookUrl(row.resourceId)
         val observed = runCatching {
@@ -546,6 +770,26 @@ class ConnectorService(
         }
     }
 
+    fun connectorInstallationStates(
+        organizationId: Int,
+    ): Map<String, Pair<ConnectorConnectionSummary, ConnectorProviderStateDetail>> =
+        buildMap {
+            revenueCatState(organizationId).let { state ->
+                val summary = state.first
+                val detail = state.second
+                if (summary != null && detail != null) {
+                    put(RevenueCatClient.PROVIDER_ID, summary to detail)
+                }
+            }
+            googleAdsState(organizationId).let { state ->
+                val summary = state.first
+                val detail = state.second
+                if (summary != null && detail != null) {
+                    put(GoogleAdsClient.PROVIDER_ID, summary to detail)
+                }
+            }
+        }
+
     fun revenueCatState(organizationId: Int): Pair<ConnectorConnectionSummary?, ConnectorProviderStateDetail?> =
         transaction {
             val installation =
@@ -603,6 +847,52 @@ class ConnectorService(
             summary to detail
         }
 
+    fun googleAdsState(organizationId: Int): Pair<ConnectorConnectionSummary?, ConnectorProviderStateDetail?> =
+        transaction {
+            val installation =
+                ConnectorInstallations
+                    .selectAll()
+                    .where {
+                        (ConnectorInstallations.organizationId eq organizationId) and
+                            (ConnectorInstallations.provider eq GoogleAdsClient.PROVIDER_ID) and
+                            ConnectorInstallations.deletedAt.isNull()
+                    }
+                    .orderBy(ConnectorInstallations.createdAt, SortOrder.DESC)
+                    .firstOrNull()
+                    ?: return@transaction null to null
+            val record = installation.toInstallationRecord()
+            val resourceCount = externalResourceCount(record.id)
+            val health = when {
+                !record.enabled -> STATUS_DEGRADED
+                record.status == STATUS_DEGRADED -> STATUS_DEGRADED
+                record.status == STATUS_HEALTHY -> STATUS_HEALTHY
+                else -> "unknown"
+            }
+            val message = googleAdsStateMessage(record, resourceCount)
+            val detail = ConnectorProviderStateDetail(
+                installationId = record.resourceId.toString(),
+                status = record.status,
+                health = health,
+                message = message,
+                mappedResources = resourceCount,
+                unmappedEvents = 0,
+                failedReceipts = 0,
+                sandboxEvents = 0,
+                productionEvents = 0,
+                lastAcceptedWebhookAt = null,
+                lastAppliedAt = null,
+                processingLagSeconds = null,
+            )
+            val summary = ConnectorConnectionSummary(
+                providerId = GoogleAdsClient.PROVIDER_ID,
+                connected = true,
+                health = health,
+                detail = message,
+                lastCheckedAt = record.lastTestedAt?.toString(),
+            )
+            summary to detail
+        }
+
     private fun ensureRevenueCatInstallRequest(request: CreateConnectorInstallationRequest) {
         if (request.providerId != RevenueCatClient.PROVIDER_ID) {
             throw badRequest("Only RevenueCat connector installation is available in this release")
@@ -613,6 +903,53 @@ class ConnectorService(
         if (request.externalAccount.projectId.isBlank()) {
             throw badRequest("RevenueCat project ID is required")
         }
+    }
+
+    private fun ensureGoogleAdsInstallRequest(request: CreateConnectorInstallationRequest) {
+        if (request.authProfileId != GoogleAdsClient.AUTH_PROFILE_MANAGER_OAUTH) {
+            throw badRequest("Google Ads requires the manager_oauth auth profile")
+        }
+        googleAdsCustomerId(request)
+        parseGoogleAdsCredential(request.secret)
+    }
+
+    private fun googleAdsCustomerId(request: CreateConnectorInstallationRequest): String =
+        GoogleAdsClient.normalizeCustomerId(request.externalAccount.customerId ?: request.externalAccount.projectId)
+            ?: throw badRequest("Google Ads customer ID is required")
+
+    private fun googleAdsManagerCustomerId(request: CreateConnectorInstallationRequest): String? =
+        GoogleAdsClient.normalizeCustomerId(request.externalAccount.managerCustomerId)
+
+    private fun parseGoogleAdsCredential(secret: String): GoogleAdsOAuthCredential {
+        val normalized = normalizedSecret(secret)
+        val credential =
+            if (normalized.startsWith("{")) {
+                runCatching { json.decodeFromString<GoogleAdsOAuthCredential>(normalized) }
+                    .getOrElse { throw badRequest("Google Ads OAuth credential must be valid JSON") }
+            } else {
+                GoogleAdsOAuthCredential(refreshToken = normalized)
+            }
+        val refreshToken = credential.refreshToken.trim()
+        if (refreshToken.isBlank()) {
+            throw badRequest("Google Ads refresh token is required")
+        }
+        val loginCustomerId = GoogleAdsClient.normalizeCustomerId(credential.loginCustomerId)
+        return credential.copy(refreshToken = refreshToken, loginCustomerId = loginCustomerId)
+    }
+
+    private fun googleAdsDiscoveredAccounts(
+        credential: GoogleAdsOAuthCredential,
+        selectedCustomer: GoogleAdsCustomerAccount,
+    ): List<GoogleAdsCustomerAccount> {
+        val directAccounts = googleAdsClient.listAccessibleCustomers(credential)
+        val managedAccounts =
+            if (selectedCustomer.manager) {
+                googleAdsClient.listCustomerClients(credential, selectedCustomer.customerId)
+            } else {
+                emptyList()
+            }
+        return (listOf(selectedCustomer) + directAccounts + managedAccounts)
+            .distinctBy { account -> account.customerId }
     }
 
     private fun normalizedSecret(secret: String): String =
@@ -667,6 +1004,68 @@ class ConnectorService(
             }
         }
     }
+
+    private fun upsertGoogleAdsCustomers(
+        organizationId: Int,
+        installationId: Int,
+        externalProjectId: String,
+        accounts: List<GoogleAdsCustomerAccount>,
+        now: Instant,
+    ) {
+        accounts.forEach { account ->
+            val existing =
+                ConnectorExternalResources
+                    .selectAll()
+                    .where {
+                        (ConnectorExternalResources.installationId eq installationId) and
+                            (ConnectorExternalResources.externalResourceType eq googleAdsResourceType(account)) and
+                            (ConnectorExternalResources.externalResourceId eq account.customerId)
+                    }
+                    .firstOrNull()
+            val metadata = googleAdsAccountMetadata(account)
+            if (existing == null) {
+                ConnectorExternalResources.insert {
+                    it[ConnectorExternalResources.organizationId] = organizationId
+                    it[ConnectorExternalResources.installationId] = installationId
+                    it[ConnectorExternalResources.externalProjectId] = externalProjectId
+                    it[externalResourceType] = googleAdsResourceType(account)
+                    it[externalResourceId] = account.customerId
+                    it[displayName] = account.descriptiveName ?: account.customerId
+                    it[providerMetadata] = metadata
+                    it[lastSeenAt] = now
+                    it[createdAt] = now
+                    it[updatedAt] = now
+                }
+            } else {
+                ConnectorExternalResources.update({
+                    ConnectorExternalResources.id eq existing[ConnectorExternalResources.id]
+                }) {
+                    it[ConnectorExternalResources.externalProjectId] = externalProjectId
+                    it[displayName] = account.descriptiveName ?: account.customerId
+                    it[providerMetadata] = metadata
+                    it[lastSeenAt] = now
+                    it[updatedAt] = now
+                }
+            }
+        }
+    }
+
+    private fun googleAdsResourceType(account: GoogleAdsCustomerAccount): String =
+        if (account.manager) GoogleAdsClient.RESOURCE_TYPE_MANAGER else GoogleAdsClient.RESOURCE_TYPE_CUSTOMER
+
+    private fun googleAdsAccountMetadata(account: GoogleAdsCustomerAccount): String =
+        stringMapJson(
+            buildMap {
+                put("resourceName", account.resourceName)
+                put("manager", account.manager.toString())
+                account.testAccount?.let { value -> put("testAccount", value.toString()) }
+                account.status?.let { value -> put("status", value) }
+                account.currencyCode?.let { value -> put("currencyCode", value) }
+                account.timeZone?.let { value -> put("timeZone", value) }
+                account.level?.let { value -> put("level", value.toString()) }
+                account.loginCustomerId?.let { value -> put("loginCustomerId", value) }
+            }
+        )
 
     private fun resourcesForInstallation(
         organizationId: Int,
@@ -1182,6 +1581,13 @@ class ConnectorService(
             .count()
             .toInt()
 
+    private fun externalResourceCount(installationId: Int): Int =
+        ConnectorExternalResources
+            .selectAll()
+            .where { ConnectorExternalResources.installationId eq installationId }
+            .count()
+            .toInt()
+
     private fun failedReceiptCount(installationId: Int): Int =
         ConnectorEventReceipts
             .selectAll()
@@ -1283,6 +1689,19 @@ class ConnectorService(
             else -> "Connected"
         }
 
+    private fun googleAdsStateMessage(
+        record: ConnectorInstallationRecord,
+        resourceCount: Int,
+    ): String =
+        when {
+            !record.enabled -> "Google Ads connector is disabled"
+            record.lastError != null -> record.lastError
+            record.status == STATUS_DEGRADED -> "Google Ads API validation failed"
+            resourceCount == 0 -> "Connected, no Google Ads accounts discovered yet"
+            resourceCount == 1 -> "Connected to 1 Google Ads account"
+            else -> "Connected to $resourceCount Google Ads accounts"
+        }
+
     private fun ensureProvider(
         record: ConnectorInstallationRecord,
         providerId: String,
@@ -1299,12 +1718,28 @@ class ConnectorService(
             throw ConnectorServiceException(revenueCatStatus(error), error.message.orEmpty(), error)
         }
 
+    private fun <T> withGoogleAdsErrorMapping(block: () -> T): T =
+        try {
+            block()
+        } catch (error: GoogleAdsClientException) {
+            throw ConnectorServiceException(googleAdsStatus(error), error.message.orEmpty(), error)
+        }
+
     private fun revenueCatStatus(error: RevenueCatClientException): HttpStatusCode =
         when (error.code) {
             "revenuecat_unauthorized" -> HttpStatusCode.Unauthorized
             "revenuecat_forbidden" -> HttpStatusCode.Forbidden
             "revenuecat_not_found", "project_not_found" -> HttpStatusCode.NotFound
             "revenuecat_rate_limited" -> HttpStatusCode.TooManyRequests
+            else -> if (error.retryable) HttpStatusCode.BadGateway else HttpStatusCode.BadRequest
+        }
+
+    private fun googleAdsStatus(error: GoogleAdsClientException): HttpStatusCode =
+        when (error.code) {
+            "google_ads_unauthorized" -> HttpStatusCode.Unauthorized
+            "google_ads_forbidden" -> HttpStatusCode.Forbidden
+            "google_ads_not_found", "google_ads_customer_not_found" -> HttpStatusCode.NotFound
+            "google_ads_rate_limited" -> HttpStatusCode.TooManyRequests
             else -> if (error.retryable) HttpStatusCode.BadGateway else HttpStatusCode.BadRequest
         }
 

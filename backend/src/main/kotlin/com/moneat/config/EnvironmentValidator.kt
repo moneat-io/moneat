@@ -22,6 +22,7 @@ import com.moneat.secrets.SecretVaultPurpose
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
+private const val GOOGLE_ADS_CONNECTOR_ENABLED_REASON = "Google Ads connector is enabled"
 
 class EnvironmentValidator {
 
@@ -112,6 +113,8 @@ class EnvironmentValidator {
             validateRequired("DISCORD_BOT_TOKEN", "Discord integration is enabled", errors)
         }
 
+        validateGoogleAdsConnectorConfig(errors)
+
         // Validate Stripe configuration when enabled
         val stripeEnabled = getConfigValue("STRIPE_ENABLED")?.toBoolean() ?: false
         if (stripeEnabled) {
@@ -151,6 +154,15 @@ class EnvironmentValidator {
 
         validateProcessRole(errors)
         validateWorkflowRuntimeConfig(errors)
+    }
+
+    private fun validateGoogleAdsConnectorConfig(errors: MutableList<String>) {
+        val googleAdsEnabled = getConfigValue("GOOGLE_ADS_ENABLED")?.toBoolean() ?: false
+        if (googleAdsEnabled) {
+            validateRequired("GOOGLE_ADS_DEVELOPER_TOKEN", GOOGLE_ADS_CONNECTOR_ENABLED_REASON, errors)
+            validateRequired("GOOGLE_ADS_CLIENT_ID", GOOGLE_ADS_CONNECTOR_ENABLED_REASON, errors)
+            validateRequired("GOOGLE_ADS_CLIENT_SECRET", GOOGLE_ADS_CONNECTOR_ENABLED_REASON, errors)
+        }
     }
 
     private fun validateProcessRole(errors: MutableList<String>) {

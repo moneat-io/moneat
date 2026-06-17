@@ -43,7 +43,14 @@ class ConnectorsModule : EnterpriseModule {
         listOf(
             module {
                 single<RevenueCatProviderClient> { RevenueCatClient() }
-                single { ConnectorService(projectIdResolver = get(), revenueCatClient = get()) }
+                single<GoogleAdsProviderClient> { GoogleAdsClient() }
+                single {
+                    ConnectorService(
+                        projectIdResolver = get(),
+                        revenueCatClient = get(),
+                        googleAdsClient = get(),
+                    )
+                }
                 single { ConnectorEventWorker(connectorService = get()) }
             }
         )

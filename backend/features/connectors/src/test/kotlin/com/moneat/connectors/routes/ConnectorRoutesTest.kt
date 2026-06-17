@@ -209,6 +209,55 @@ class ConnectorRoutesTest {
     }
 
     @Test
+    fun `state endpoint reports Google Ads connector installation detail`() {
+        val installationId =
+            transaction {
+                Organizations.insert {
+                    it[id] = ORGANIZATION_ID
+                    it[name] = "Connector Org"
+                    it[slug] = "connector-org"
+                }
+                ConnectorInstallations.insert {
+                    it[organizationId] = ORGANIZATION_ID
+                    it[provider] = "google_ads"
+                    it[name] = "Bandapella Google Ads"
+                    it[credentialType] = "oauth_refresh_token"
+                    it[authProfileId] = "manager_oauth"
+                    it[externalProjectId] = "1234567890"
+                    it[externalProjectName] = "Bandapella Google Ads"
+                    it[status] = "healthy"
+                    it[apiSecretLastFour] = "3456"
+                    it[enabled] = true
+                    it[createdAt] = Clock.System.now()
+                    it[updatedAt] = Clock.System.now()
+                }[ConnectorInstallations.resourceId].toString()
+            }
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    connectorRoutes()
+                }
+            }
+
+            val response =
+                client.get("/v1/connectors/state") {
+                    header(HttpHeaders.Authorization, "Bearer ${token()}")
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            val body = response.bodyAsText()
+            assertTrue(body.contains("\"providerId\":\"google_ads\""))
+            assertTrue(body.contains("\"state\":\"connected\""))
+            assertTrue(body.contains("\"integrationId\":\"$installationId\""))
+            assertTrue(body.contains("Connected, no Google Ads accounts discovered yet"))
+            assertTrue(body.contains("\"status\":\"healthy\""))
+        }
+    }
+
+    @Test
     fun `installation writes require organization admin role`() {
         testApplication {
             application {
