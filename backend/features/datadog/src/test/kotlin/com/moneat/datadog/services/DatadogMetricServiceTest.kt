@@ -501,6 +501,133 @@ class DatadogMetricServiceTest {
     }
 
     @Test
+    fun `insertMetricBatch normalizes Datadog infra aliases before rollup writes`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "system.disk.in_use",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 0.42,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                        ),
+                        QueuedMetricEntry(
+                            name = "system.net.bytes_rcvd",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 2048.0,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                        ),
+                        QueuedMetricEntry(
+                            name = "system.mem.pct_usable",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 0.58,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                        ),
+                        QueuedMetricEntry(
+                            name = "system.mem.usable",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 928.0,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                        ),
+                    )
+                )
+            )
+
+            val rawInsert = queries.single { it.contains("INSERT INTO `test_db`.metrics ") }
+            assertTrue(rawInsert.contains("system.disk.in_use"))
+            assertTrue(rawInsert.contains("system.net.bytes_rcvd"))
+            assertTrue(rawInsert.contains("system.mem.pct_usable"))
+            assertTrue(rawInsert.contains("system.mem.usable"))
+
+            val latestRollup = queries.single { it.contains("metrics_latest_by_host") }
+            assertTrue(latestRollup.contains("'system.disk.percent'"))
+            assertTrue(latestRollup.contains("42.0"))
+            assertTrue(latestRollup.contains("'system.net.recv_bytes'"))
+            assertTrue(latestRollup.contains("'system.mem.available'"))
+            assertTrue(latestRollup.contains("928.0"))
+            assertFalse(latestRollup.contains("system.disk.in_use"))
+            assertFalse(latestRollup.contains("system.net.bytes_rcvd"))
+            assertFalse(latestRollup.contains("system.mem.pct_usable"))
+            assertFalse(latestRollup.contains("system.mem.usable"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `insertMetricBatch derives normalized memory available from Datadog pct usable`() = runBlocking {
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            DatadogMetricService.insertMetricBatch(
+                QueuedMetricBatch(
+                    organizationId = 42L,
+                    metrics = listOf(
+                        QueuedMetricEntry(
+                            name = "system.mem.total",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 1_600.0,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                            unit = "byte",
+                        ),
+                        QueuedMetricEntry(
+                            name = "system.mem.used",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 1_300.0,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                            unit = "byte",
+                        ),
+                        QueuedMetricEntry(
+                            name = "system.mem.pct_usable",
+                            type = "gauge",
+                            timestampMs = 1_700_000_000_000L,
+                            value = 0.5,
+                            host = "web-01",
+                            tags = mapOf("host_id" to "7"),
+                        ),
+                    )
+                )
+            )
+
+            val rawInsert = queries.single { it.contains("INSERT INTO `test_db`.metrics ") }
+            assertTrue(rawInsert.contains("system.mem.pct_usable"))
+
+            val latestRollup = queries.single { it.contains("metrics_latest_by_host") }
+            assertTrue(latestRollup.contains("'system.mem.available'"))
+            assertTrue(latestRollup.contains("800.0"))
+            assertFalse(latestRollup.contains("system.mem.pct_usable"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
     fun `insertMetricBatch preserves raw insert success when rollup setup fails`() = runBlocking {
         val queries = mutableListOf<String>()
         val response = mockk<HttpResponse>()

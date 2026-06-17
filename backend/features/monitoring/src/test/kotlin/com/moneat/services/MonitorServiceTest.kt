@@ -230,7 +230,7 @@ class MonitorServiceTest {
     }
 
     @Test
-    fun `getLatestMetricsForHosts derives Datadog agent metric percentages`() = runBlocking {
+    fun `getLatestMetricsForHosts derives normalized host metric percentages`() = runBlocking {
         val hostRepository = mockk<HostRepository>()
         val hostAlertRepository = mockk<HostAlertRepository>(relaxed = true)
         val querySlot = slot<String>()
@@ -238,7 +238,7 @@ class MonitorServiceTest {
             """
             {
               "data": [
-                [7, 23.5, 16000000, 0, 0, 0, 0, 123, 456, 1.2, null, null, null, 0.25, 0.4]
+                [7, 23.5, 16000000, 12000000, 0, 100, 40, 123, 456, 1.2, null, null, null, 40.0]
               ]
             }
             """.trimIndent()
@@ -249,7 +249,11 @@ class MonitorServiceTest {
 
         assertNotNull(result)
         assertTrue(querySlot.captured.contains("system.cpu.user"))
-        assertTrue(querySlot.captured.contains("system.mem.pct_usable"))
+        assertFalse(querySlot.captured.contains("system.mem.pct_usable"))
+        assertTrue(querySlot.captured.contains("system.mem.used"))
+        assertTrue(querySlot.captured.contains("system.mem.total"))
+        assertFalse(querySlot.captured.contains("system.disk.in_use"))
+        assertTrue(querySlot.captured.contains("system.disk.percent"))
         assertEquals(23.5f, result.cpuPercent)
         assertEquals(75.0f, result.memPercent)
         assertEquals(40.0f, result.diskPercent)
