@@ -62,6 +62,7 @@ export interface BillingTierConfig {
   oncallPerUserMonthlyCents?: number
   oncallPerUserYearlyCents?: number
   oncallEnabled?: boolean
+  teamsEnabled?: boolean
   maxAnalyticsSites?: number | null
   analyticsRetentionDays?: number
   monthlyAnalyticsPageviewLimit?: number
@@ -139,6 +140,7 @@ export interface BillingUsage {
   oncallUsedSeats?: number
   oncallPerUserMonthlyCents?: number
   oncallEnabled?: boolean
+  teamsEnabled?: boolean
   usedAnalyticsPageviews?: number
   analyticsPageviewLimit?: number
   analyticsPageviewOverageCentsEstimate?: number

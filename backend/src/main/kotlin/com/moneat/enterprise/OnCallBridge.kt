@@ -46,6 +46,12 @@ interface OnCallBridge {
         alertResourceId: String
     ): Int?
 
+    /** Resolve the current on-call user for a schedule inside the organization. */
+    fun getCurrentOnCall(
+        organizationId: Int,
+        scheduleId: Int
+    ): OnCallUserInfo?
+
     /** Trigger the escalation engine and return the on-call alert resource ID (or null). */
     suspend fun triggerEscalation(
         organizationId: Int,
@@ -95,6 +101,9 @@ interface OnCallBridge {
 
 /** Lightweight data carrier for priority info, avoiding enterprise model dependency. */
 data class PriorityInfo(val priority: String, val label: String?)
+
+/** Lightweight data carrier for current on-call user info, avoiding enterprise model dependency. */
+data class OnCallUserInfo(val userId: String, val userName: String)
 
 /** Lightweight data carrier for incident info, avoiding enterprise model dependency. */
 data class IncidentInfo(val id: Int, val organizationId: Int, val title: String, val status: String)

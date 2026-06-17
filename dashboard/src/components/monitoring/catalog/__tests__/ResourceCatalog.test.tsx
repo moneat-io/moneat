@@ -12,6 +12,9 @@ const mockApi = vi.hoisted(() => ({
   get: vi.fn(),
   isAuthenticated: vi.fn(() => false),
   getCurrentUser: vi.fn(),
+  getOrganizationTeams: vi.fn(),
+  claimResourceOwnership: vi.fn(),
+  deleteResourceOwnership: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({
@@ -132,6 +135,7 @@ const sampleTelemetry = {
 describe('ResourceCatalog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockApi.getOrganizationTeams.mockResolvedValue([])
     mockApi.get.mockImplementation((path: string) =>
       path.startsWith('/monitoring/resources/telemetry')
         ? Promise.resolve(sampleTelemetry)
@@ -204,7 +208,7 @@ describe('ResourceCatalog', () => {
 
     await user.click(screen.getByRole('tab', {name: 'Ownership & Tags'}))
     expect(screen.getByText('No owner assigned')).toBeInTheDocument()
-    expect(screen.getByRole('button', {name: /Claim ownership/})).toBeInTheDocument()
+    expect(screen.getByRole('button', {name: /Assign owner/})).toBeInTheDocument()
     expect(screen.getByText('No tags.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Security'}))
@@ -231,14 +235,17 @@ describe('ResourceCatalog', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
-  it('resets ownership editing when the selected resource changes', async () => {
+  it('shows the team owner and resets ownership editing when the selected resource changes', async () => {
     const user = userEvent.setup()
     const onSelect = vi.fn()
+    mockApi.getOrganizationTeams.mockResolvedValue([
+      {id: 'team-1', name: 'Payments', slug: 'payments', slack: '#pay', repo: 'moneat/pay', members: [], currentOnCall: {userId: 'u1', userName: 'Dana'}},
+    ])
     const ownedResource = makeResource({
       id: 'service:1:billing',
       name: 'billing-api',
       kind: 'service',
-      owner: {team: 'Payments', oncall: 'Dana', slack: '#pay', repo: 'moneat/pay'},
+      owner: {teamId: 'team-1', teamName: 'Payments', slack: '#pay', repo: 'moneat/pay', currentOnCall: {userId: 'u1', userName: 'Dana'}},
     })
 
     function DetailHarness() {
@@ -256,12 +263,18 @@ describe('ResourceCatalog', () => {
     renderWithQueryClient(<DetailHarness />)
 
     await user.click(screen.getByRole('tab', {name: 'Ownership & Tags'}))
+    // View mode reads the owning team and the server-resolved current on-call person.
+    expect(screen.getByText('Payments')).toBeInTheDocument()
+    expect(screen.getByText('Dana')).toBeInTheDocument()
+    // No free-text on-call input anymore.
+    expect(screen.queryByPlaceholderText('Dana Whitfield')).not.toBeInTheDocument()
+
     await user.click(screen.getByRole('button', {name: 'Edit'}))
-    expect(screen.getByDisplayValue('Payments')).toBeInTheDocument()
+    expect(await screen.findByRole('button', {name: 'Cancel'})).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', {name: 'Switch resource'}))
 
-    await waitFor(() => expect(screen.queryByDisplayValue('Payments')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', {name: 'Cancel'})).not.toBeInTheDocument())
     expect(screen.getByText('No owner assigned')).toBeInTheDocument()
     expect(onSelect).not.toHaveBeenCalled()
   })

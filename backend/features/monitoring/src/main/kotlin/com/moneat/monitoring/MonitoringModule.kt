@@ -37,6 +37,7 @@ import com.moneat.monitor.services.ManagedIdentityCloudSourceVerifier
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.services.ResourceCatalogService
+import com.moneat.monitor.services.ResourceCatalogTeamResolver
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +78,13 @@ class MonitoringModule : EnterpriseModule {
                 single { MonitorService(get(), get(), get(), get()) }
                 single { MonitorAlertService(get(), get()) }
                 single<ResourceOwnershipRepository> { ResourceOwnershipRepositoryImpl() }
-                single { ResourceCatalogService(monitorService = get(), ownershipRepository = get()) }
+                single {
+                    ResourceCatalogService(
+                        monitorService = get(),
+                        ownershipRepository = get(),
+                        teamResolver = get<ResourceCatalogTeamResolver>(),
+                    )
+                }
                 single<CloudSourceVerifier> { ManagedIdentityCloudSourceVerifier() }
                 single<CloudResourceWriter> { ClickHouseCloudResourceWriter() }
                 single { CloudSourceService(get(), get()) }

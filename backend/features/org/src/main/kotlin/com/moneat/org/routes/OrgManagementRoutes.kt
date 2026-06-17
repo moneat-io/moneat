@@ -22,16 +22,23 @@ import com.moneat.events.models.BulkInviteRequest
 import com.moneat.events.models.InviteMemberRequest
 import com.moneat.events.models.OrgMembersResponse
 import com.moneat.events.models.UpdateMemberRoleRequest
+import com.moneat.billing.services.FeatureNotAvailableException
+import com.moneat.org.models.CreateOrganizationTeamRequest
+import com.moneat.org.models.UpdateOrganizationTeamRequest
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.org.services.OrganizationTeamService
 import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.BooleanResponse
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -44,16 +51,136 @@ import org.koin.core.context.GlobalContext
 import kotlin.uuid.Uuid
 
 private const val INVALID_TOKEN_ERROR = "Invalid token"
+private const val INVALID_TEAM_ID_ERROR = "Invalid team ID"
+private const val TEAMS_UNAVAILABLE_ERROR = "Teams is not available"
 
 private fun parseOrgResourceId(value: String): Uuid? =
     value.toUuidOrNull()
 
+private fun String?.validTeamIdOrNull(): String? =
+    this?.takeIf { it.isNotBlank() && it.toUuidOrNull() != null }
+
+private fun resolveTeamService(teamService: OrganizationTeamService?): OrganizationTeamService =
+    teamService ?: GlobalContext.get().get()
+
+private fun FeatureNotAvailableException.errorResponse(): ErrorResponse =
+    ErrorResponse(message ?: TEAMS_UNAVAILABLE_ERROR)
+
+private suspend fun ApplicationCall.respondTeamRouteFailure(error: Throwable) {
+    when (error) {
+        is FeatureNotAvailableException -> respond(HttpStatusCode.Forbidden, error.errorResponse())
+        is BadRequestException ->
+            respond(
+                HttpStatusCode.BadRequest,
+                ErrorResponse(error.message ?: "Invalid team request"),
+            )
+        is NotFoundException -> respond(HttpStatusCode.NotFound, ErrorResponse(error.message ?: "Team not found"))
+        is IllegalStateException ->
+            respond(HttpStatusCode.Forbidden, ErrorResponse(error.message ?: "Insufficient permissions"))
+        else -> throw error
+    }
+}
+
+private fun Route.organizationTeamRoutes(teamService: OrganizationTeamService?) {
+    listOrganizationTeamsRoute(teamService)
+    createOrganizationTeamRoute(teamService)
+    updateOrganizationTeamRoute(teamService)
+    deleteOrganizationTeamRoute(teamService)
+}
+
+private fun Route.listOrganizationTeamsRoute(teamService: OrganizationTeamService?) {
+    get("/teams") {
+        val resolvedTeamService = resolveTeamService(teamService)
+        val principal = call.principal<JWTPrincipal>()!!
+        val userId = principal.payload.getClaim("userId").asInt()
+        val orgId = principal.currentOrgIdOrNull() ?: return@get call.respond(
+            HttpStatusCode.Unauthorized,
+            ErrorResponse(INVALID_TOKEN_ERROR)
+        )
+
+        try {
+            call.respond(resolvedTeamService.listTeams(orgId, userId))
+        } catch (e: Exception) {
+            call.respondTeamRouteFailure(e)
+        }
+    }
+}
+
+private fun Route.createOrganizationTeamRoute(teamService: OrganizationTeamService?) {
+    post("/teams") {
+        val resolvedTeamService = resolveTeamService(teamService)
+        val principal = call.principal<JWTPrincipal>()!!
+        val userId = principal.payload.getClaim("userId").asInt()
+        val orgId = principal.currentOrgIdOrNull() ?: return@post call.respond(
+            HttpStatusCode.Unauthorized,
+            ErrorResponse(INVALID_TOKEN_ERROR)
+        )
+        val request = call.receive<CreateOrganizationTeamRequest>()
+
+        try {
+            val team = resolvedTeamService.createTeam(orgId, userId, request)
+            call.respond(HttpStatusCode.Created, team)
+        } catch (e: Exception) {
+            call.respondTeamRouteFailure(e)
+        }
+    }
+}
+
+private fun Route.updateOrganizationTeamRoute(teamService: OrganizationTeamService?) {
+    put("/teams/{teamId}") {
+        val resolvedTeamService = resolveTeamService(teamService)
+        val principal = call.principal<JWTPrincipal>()!!
+        val userId = principal.payload.getClaim("userId").asInt()
+        val orgId = principal.currentOrgIdOrNull() ?: return@put call.respond(
+            HttpStatusCode.Unauthorized,
+            ErrorResponse(INVALID_TOKEN_ERROR)
+        )
+        val teamId = call.parameters["teamId"].validTeamIdOrNull()
+            ?: return@put call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_TEAM_ID_ERROR))
+        val request = call.receive<UpdateOrganizationTeamRequest>()
+
+        try {
+            call.respond(resolvedTeamService.updateTeam(orgId, userId, teamId, request))
+        } catch (e: Exception) {
+            call.respondTeamRouteFailure(e)
+        }
+    }
+}
+
+private fun Route.deleteOrganizationTeamRoute(teamService: OrganizationTeamService?) {
+    delete("/teams/{teamId}") {
+        val resolvedTeamService = resolveTeamService(teamService)
+        val principal = call.principal<JWTPrincipal>()!!
+        val userId = principal.payload.getClaim("userId").asInt()
+        val orgId = principal.currentOrgIdOrNull() ?: return@delete call.respond(
+            HttpStatusCode.Unauthorized,
+            ErrorResponse(INVALID_TOKEN_ERROR)
+        )
+        val teamId = call.parameters["teamId"].validTeamIdOrNull()
+            ?: return@delete call.respond(HttpStatusCode.BadRequest, ErrorResponse(INVALID_TEAM_ID_ERROR))
+
+        try {
+            val deleted = resolvedTeamService.deleteTeam(orgId, userId, teamId)
+            if (!deleted) {
+                call.respond(HttpStatusCode.NotFound, ErrorResponse("Team not found"))
+                return@delete
+            }
+            call.respond(HttpStatusCode.NoContent)
+        } catch (e: Exception) {
+            call.respondTeamRouteFailure(e)
+        }
+    }
+}
+
 fun Route.orgManagementRoutes(
     membershipService: OrgMembershipService = GlobalContext.get().get(),
     invitationService: OrgInvitationService = GlobalContext.get().get(),
+    teamService: OrganizationTeamService? = null,
 ) {
     route("/v1/org") {
         authenticate("auth-jwt") {
+            organizationTeamRoutes(teamService)
+
             // Get all members and pending invitations
             get("/members") {
                 val principal = call.principal<JWTPrincipal>()!!
