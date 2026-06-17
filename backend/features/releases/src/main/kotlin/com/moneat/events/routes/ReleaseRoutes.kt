@@ -70,6 +70,8 @@ private val logger = KotlinLogging.logger {}
 private const val FAILED_TO_UPLOAD_SOURCE_MAP = "Failed to upload source map"
 private const val UPLOAD_FAILED = "Upload failed"
 private const val PROJECT_NOT_FOUND = "Project not found"
+private const val SOURCEMAPS_READ_SCOPE = "sourcemaps:read"
+private const val SOURCEMAPS_WRITE_SCOPE = "sourcemaps:write"
 private const val LEGACY_DSYM_CPU_NAME = "any"
 private const val PROGUARD_ENTRY_PREFIX = "proguard/"
 private const val SHA_1_ALGORITHM = "SHA-1"
@@ -414,10 +416,10 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadSourceMap(
                 return
             }
 
-    if (!authTokenService.hasScope(principal.scopes, "sourcemaps:write")) {
+    if (!authTokenService.hasScope(principal.scopes, SOURCEMAPS_WRITE_SCOPE)) {
         call.respond(
             HttpStatusCode.Forbidden,
-            ErrorResponse("Missing required scope: sourcemaps:write")
+            ErrorResponse("Missing required scope: $SOURCEMAPS_WRITE_SCOPE")
         )
         return
     }
@@ -467,7 +469,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListReleaseFiles
                 return
             }
 
-    if (!authTokenService.hasScope(principal.scopes, "sourcemaps:read")) {
+    if (!authTokenService.hasScope(principal.scopes, SOURCEMAPS_READ_SCOPE)) {
         call.respond(HttpStatusCode.Forbidden)
         return
     }
@@ -863,7 +865,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleUploadLegacyDsym
     quotaService: BillingQuotaService,
     eventService: EventService,
 ) {
-    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
+    val projectId = resolveDifProject(releaseService, authTokenService, SOURCEMAPS_WRITE_SCOPE) ?: return
     val upload = receiveLegacyDebugFileUpload() ?: return
     val mappings =
         try {
@@ -932,13 +934,15 @@ private suspend fun io.ktor.server.routing.RoutingContext.respondLegacyDsymUploa
     call.respond(HttpStatusCode.InternalServerError, ErrorResponse(UPLOAD_FAILED))
 }
 
-private fun sha1(bytes: ByteArray): String =
-    MessageDigest
-        // Sentry debug-file APIs require SHA-1 as a protocol checksum, not for trust or password storage.
-        // codeql[java/potentially-weak-cryptographic-algorithm]
-        .getInstance(SHA_1_ALGORITHM)
+private fun sha1(bytes: ByteArray): String {
+    // Sentry debug-file APIs require SHA-1 as a protocol checksum, not for trust or password storage.
+
+    // codeql[java/potentially-weak-cryptographic-algorithm]
+    val digest = MessageDigest.getInstance(SHA_1_ALGORITHM)
+    return digest
         .digest(bytes)
         .joinToString("") { "%02x".format(it) }
+}
 
 private fun AssembledDif.toSentryDebugInfoFile(): SentryDebugInfoFileResponse =
     SentryDebugInfoFileResponse(
@@ -1091,7 +1095,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleListProjectDifs(
     releaseService: ReleaseService,
     authTokenService: AuthTokenService,
 ) {
-    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:read") ?: return
+    val projectId = resolveDifProject(releaseService, authTokenService, SOURCEMAPS_READ_SCOPE) ?: return
 
     val checksums = call.request.queryParameters.getAll("checksums")?.toSet() ?: emptySet()
     val debugIds = call.request.queryParameters.getAll("debug_id")?.toSet() ?: emptySet()
@@ -1104,7 +1108,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleAssembleProjectD
     releaseService: ReleaseService,
     authTokenService: AuthTokenService,
 ) {
-    val projectId = resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
+    val projectId = resolveDifProject(releaseService, authTokenService, SOURCEMAPS_WRITE_SCOPE) ?: return
 
     // Body maps each assembled file's SHA-1 checksum to its name, optional debug id, and chunks.
     val request = call.receive<Map<String, AssembleDifEntry>>()
@@ -1121,7 +1125,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTriggerReprocess
     releaseService: ReleaseService,
     authTokenService: AuthTokenService,
 ) {
-    resolveDifProject(releaseService, authTokenService, "sourcemaps:write") ?: return
+    resolveDifProject(releaseService, authTokenService, SOURCEMAPS_WRITE_SCOPE) ?: return
     call.respond(emptyList<String>())
 }
 
