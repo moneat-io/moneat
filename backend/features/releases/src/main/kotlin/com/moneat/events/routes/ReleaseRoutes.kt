@@ -933,9 +933,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.respondLegacyDsymUploa
 }
 
 private fun sha1(bytes: ByteArray): String =
-    // Sentry debug-file APIs require SHA-1 as a protocol checksum, not for trust or password storage.
-    // codeql[java/potentially-weak-cryptographic-algorithm]
     MessageDigest
+        // Sentry debug-file APIs require SHA-1 as a protocol checksum, not for trust or password storage.
+        // codeql[java/potentially-weak-cryptographic-algorithm]
         .getInstance(SHA_1_ALGORITHM)
         .digest(bytes)
         .joinToString("") { "%02x".format(it) }
