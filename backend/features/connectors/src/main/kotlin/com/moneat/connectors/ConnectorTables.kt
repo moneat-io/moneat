@@ -21,6 +21,7 @@ import com.moneat.shared.models.Users
 import com.moneat.shared.models.jsonb
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
 import kotlin.uuid.Uuid
 
@@ -170,6 +171,39 @@ object ConnectorEventReceipts : Table("connector_event_receipts") {
     init {
         uniqueIndex(installationId, providerEventId)
         index(false, installationId, state, updatedAt)
+    }
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+object ConnectorImportRuns : Table("connector_import_runs") {
+    val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
+    val installationId =
+        integer("installation_id")
+            .references(ConnectorInstallations.id, onDelete = ReferenceOption.CASCADE)
+    val provider = varchar("provider", 64)
+    val importType = varchar("import_type", 64)
+    val externalProjectId = varchar("external_project_id", 255).nullable()
+    val externalResourceId = varchar("external_resource_id", 255).nullable()
+    val dateStart = date("date_start")
+    val dateEnd = date("date_end")
+    val status = varchar("status", 32).default("queued")
+    val rowsImported = integer("rows_imported").default(0)
+    val requestedBy = integer("requested_by").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
+    val queuedAt = timestamp("queued_at")
+    val startedAt = timestamp("started_at").nullable()
+    val finishedAt = timestamp("finished_at").nullable()
+    val attemptCount = integer("attempt_count").default(0)
+    val lastErrorCode = varchar("last_error_code", 64).nullable()
+    val lastErrorMessage = text("last_error_message").nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(organizationId, resourceId)
+        index(false, installationId, status, updatedAt)
     }
 
     override val primaryKey = PrimaryKey(id)

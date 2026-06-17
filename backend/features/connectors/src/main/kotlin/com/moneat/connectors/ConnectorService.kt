@@ -71,7 +71,7 @@ interface ConnectorSecretCipher {
     fun decrypt(envelope: String, organizationId: Int): String
 }
 
-private class PurposeConnectorSecretCipher(
+class PurposeConnectorSecretCipher(
     private val delegate: PurposeScopedSecretCipher,
 ) : ConnectorSecretCipher {
     override val activeKeyId: String = delegate.activeKeyId
@@ -98,6 +98,10 @@ class ConnectorService(
     private val enqueueConnectorEvent: (String) -> Unit = { payload ->
         IngestionQueueClient.enqueue(IngestionPipeline.CONNECTOR_EVENTS, CONNECTOR_EVENT_QUEUE_KEY, payload)
     },
+    private val importService: ConnectorImportService = ConnectorImportService(
+        googleAdsClient = googleAdsClient,
+        secretCipherFactory = secretCipherFactory,
+    ),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -568,6 +572,23 @@ class ConnectorService(
             bindingsForInstallation(organizationId, row[ConnectorInstallations.id])
         }
 
+    fun listImportRuns(
+        organizationId: Int,
+        installationResourceId: String,
+    ): ConnectorImportRunsResponse =
+        importService.listImportRuns(organizationId, installationResourceId)
+
+    fun enqueueSync(
+        organizationId: Int,
+        userId: Int,
+        installationResourceId: String,
+        request: ConnectorSyncRequest,
+    ): ConnectorImportRunResponse =
+        importService.enqueueSync(organizationId, userId, installationResourceId, request)
+
+    suspend fun processImportRun(importRunId: Long) =
+        importService.processImportRun(importRunId)
+
     fun upsertBindings(
         organizationId: Int,
         userId: Int,
@@ -848,50 +869,7 @@ class ConnectorService(
         }
 
     fun googleAdsState(organizationId: Int): Pair<ConnectorConnectionSummary?, ConnectorProviderStateDetail?> =
-        transaction {
-            val installation =
-                ConnectorInstallations
-                    .selectAll()
-                    .where {
-                        (ConnectorInstallations.organizationId eq organizationId) and
-                            (ConnectorInstallations.provider eq GoogleAdsClient.PROVIDER_ID) and
-                            ConnectorInstallations.deletedAt.isNull()
-                    }
-                    .orderBy(ConnectorInstallations.createdAt, SortOrder.DESC)
-                    .firstOrNull()
-                    ?: return@transaction null to null
-            val record = installation.toInstallationRecord()
-            val resourceCount = externalResourceCount(record.id)
-            val health = when {
-                !record.enabled -> STATUS_DEGRADED
-                record.status == STATUS_DEGRADED -> STATUS_DEGRADED
-                record.status == STATUS_HEALTHY -> STATUS_HEALTHY
-                else -> "unknown"
-            }
-            val message = googleAdsStateMessage(record, resourceCount)
-            val detail = ConnectorProviderStateDetail(
-                installationId = record.resourceId.toString(),
-                status = record.status,
-                health = health,
-                message = message,
-                mappedResources = resourceCount,
-                unmappedEvents = 0,
-                failedReceipts = 0,
-                sandboxEvents = 0,
-                productionEvents = 0,
-                lastAcceptedWebhookAt = null,
-                lastAppliedAt = null,
-                processingLagSeconds = null,
-            )
-            val summary = ConnectorConnectionSummary(
-                providerId = GoogleAdsClient.PROVIDER_ID,
-                connected = true,
-                health = health,
-                detail = message,
-                lastCheckedAt = record.lastTestedAt?.toString(),
-            )
-            summary to detail
-        }
+        importService.googleAdsState(organizationId)
 
     private fun ensureRevenueCatInstallRequest(request: CreateConnectorInstallationRequest) {
         if (request.providerId != RevenueCatClient.PROVIDER_ID) {
@@ -1105,7 +1083,7 @@ class ConnectorService(
             .keys
             .firstOrNull()
         if (duplicateKey != null) {
-            throw badRequest("RevenueCat app ${duplicateKey.externalResourceId} appears more than once")
+            throw badRequest("External resource ${duplicateKey.externalResourceId} appears more than once")
         }
     }
 
@@ -1144,11 +1122,14 @@ class ConnectorService(
         input: ConnectorBindingInput,
         now: Instant,
     ) {
-        if (input.externalResourceType != RevenueCatClient.RESOURCE_TYPE_APP) {
-            throw badRequest("RevenueCat bindings must use revenuecat_app external resources")
+        val allowedExternalResourceTypes = allowedBindingExternalResourceTypes(installation.provider)
+        if (input.externalResourceType !in allowedExternalResourceTypes) {
+            throw badRequest(
+                "Connector bindings must use ${allowedExternalResourceTypes.joinToString()} external resources"
+            )
         }
-        if (input.localResourceType != RevenueCatClient.LOCAL_RESOURCE_PROJECT) {
-            throw badRequest("RevenueCat apps can only be mapped to Moneat projects")
+        if (input.localResourceType != LOCAL_RESOURCE_PROJECT) {
+            throw badRequest("Connector resources can only be mapped to Moneat projects")
         }
         val localResourceUuid =
             input.localResourceId.toUuidOrNull() ?: throw badRequest("localResourceId must be a project UUID")
@@ -1163,7 +1144,7 @@ class ConnectorService(
                         (ConnectorExternalResources.externalResourceId eq input.externalResourceId)
                 }
                 .firstOrNull()
-                ?: throw ConnectorServiceException(HttpStatusCode.NotFound, "External RevenueCat app was not found")
+                ?: throw ConnectorServiceException(HttpStatusCode.NotFound, "External connector resource was not found")
         val duplicateActive =
             ConnectorUseBindings
                 .selectAll()
@@ -1177,7 +1158,7 @@ class ConnectorService(
                 }
                 .count() > 0
         if (duplicateActive) {
-            throw badRequest("RevenueCat app is already mapped through another installation")
+            throw badRequest("External connector resource is already mapped through another installation")
         }
 
         val activeBinding =
@@ -1225,6 +1206,16 @@ class ConnectorService(
             it[updatedAt] = now
         }
     }
+
+    private fun allowedBindingExternalResourceTypes(provider: String): Set<String> =
+        when (provider) {
+            RevenueCatClient.PROVIDER_ID -> setOf(RevenueCatClient.RESOURCE_TYPE_APP)
+            GoogleAdsClient.PROVIDER_ID -> setOf(
+                GoogleAdsClient.RESOURCE_TYPE_CUSTOMER,
+                GoogleAdsClient.RESOURCE_TYPE_MANAGER,
+            )
+            else -> throw badRequest("Unsupported connector provider: $provider")
+        }
 
     private fun webhookUrl(installationResourceId: Uuid): String =
         EnvConfig.get("BACKEND_URL", "https://api.moneat.io")
@@ -1581,13 +1572,6 @@ class ConnectorService(
             .count()
             .toInt()
 
-    private fun externalResourceCount(installationId: Int): Int =
-        ConnectorExternalResources
-            .selectAll()
-            .where { ConnectorExternalResources.installationId eq installationId }
-            .count()
-            .toInt()
-
     private fun failedReceiptCount(installationId: Int): Int =
         ConnectorEventReceipts
             .selectAll()
@@ -1687,19 +1671,6 @@ class ConnectorService(
             counts.lastRaw == null && health == STATUS_HEALTHY -> "Connected, awaiting RevenueCat webhook traffic"
             record.lastError != null -> record.lastError
             else -> "Connected"
-        }
-
-    private fun googleAdsStateMessage(
-        record: ConnectorInstallationRecord,
-        resourceCount: Int,
-    ): String =
-        when {
-            !record.enabled -> "Google Ads connector is disabled"
-            record.lastError != null -> record.lastError
-            record.status == STATUS_DEGRADED -> "Google Ads API validation failed"
-            resourceCount == 0 -> "Connected, no Google Ads accounts discovered yet"
-            resourceCount == 1 -> "Connected to 1 Google Ads account"
-            else -> "Connected to $resourceCount Google Ads accounts"
         }
 
     private fun ensureProvider(
@@ -1840,8 +1811,11 @@ class ConnectorService(
     companion object {
         const val CONNECTOR_EVENT_QUEUE_KEY = "moneat:connectors:events:queue"
         const val CONNECTOR_EVENT_DLQ_KEY = "moneat:connectors:events:dlq"
+        const val CONNECTOR_IMPORT_QUEUE_KEY = "moneat:connectors:imports:queue"
+        const val CONNECTOR_IMPORT_DLQ_KEY = "moneat:connectors:imports:dlq"
         private const val API_SECRET_SUFFIX_CHARS = 4
         private const val WEBHOOK_TOKEN_PREFIX_CHARS = 12
+        private const val LOCAL_RESOURCE_PROJECT = "project"
         private const val STATUS_HEALTHY = "healthy"
         private const val STATUS_DEGRADED = "degraded"
         private const val STATUS_AWAITING_TRAFFIC = "awaiting_traffic"

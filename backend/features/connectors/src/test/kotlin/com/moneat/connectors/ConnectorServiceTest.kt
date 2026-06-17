@@ -20,6 +20,8 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.LocalDate
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -247,19 +249,75 @@ class ConnectorServiceTest {
 
         val detail = assertNotNull(service.googleAdsState(ORGANIZATION_ID).second)
 
-        assertEquals(2, detail.mappedResources)
+        assertEquals(0, detail.mappedResources)
         assertEquals("healthy", detail.health)
         assertEquals("Connected to 2 Google Ads accounts", detail.message)
     }
 
+    @Test
+    fun `google ads sync run imports spend facts and updates state`() = runBlocking {
+        val queuedImports = mutableListOf<String>()
+        var importedFacts = 0
+        val service = connectorService(
+            importMessages = queuedImports,
+            insertAdSpendFacts = { facts -> importedFacts += facts.size },
+        )
+        val installation = service.createInstallation(ORGANIZATION_ID, USER_ID, googleAdsRequest())
+        service.upsertBindings(
+            organizationId = ORGANIZATION_ID,
+            userId = USER_ID,
+            installationResourceId = installation.id,
+            request = googleAdsBindingRequest(projectResourceId(PROJECT_ID)),
+        )
+
+        val queued = service.enqueueSync(
+            organizationId = ORGANIZATION_ID,
+            userId = USER_ID,
+            installationResourceId = installation.id,
+            request = ConnectorSyncRequest(startDate = "2026-06-01", endDate = "2026-06-02"),
+        )
+
+        assertEquals("queued", queued.status)
+        assertEquals(1, queuedImports.size)
+
+        service.processImportRun(queuedImports.single().toLong())
+
+        val run = service.listImportRuns(ORGANIZATION_ID, installation.id).runs.single()
+        assertEquals("succeeded", run.status)
+        assertEquals(1, run.rowsImported)
+        assertEquals(1, importedFacts)
+
+        val detail = assertNotNull(service.googleAdsState(ORGANIZATION_ID).second)
+        assertEquals("succeeded", detail.lastImportStatus)
+        assertEquals(1, detail.lastImportRows)
+        assertEquals("Imported 1 Google Ads spend rows", detail.message)
+    }
+
     private fun connectorService(
         queuedMessages: MutableList<String> = mutableListOf(),
+        importMessages: MutableList<String> = mutableListOf(),
+        insertAdSpendFacts: suspend (List<AppAdSpendFact>) -> Unit = {},
+    ): ConnectorService =
+        connectorService(
+            queuedMessages = queuedMessages,
+            importService = ConnectorImportService(
+                googleAdsClient = FakeGoogleAdsProviderClient(),
+                secretCipherFactory = { FakeConnectorSecretCipher },
+                enqueueConnectorImport = { payload -> importMessages += payload },
+                insertAdSpendFacts = insertAdSpendFacts,
+            ),
+        )
+
+    private fun connectorService(
+        queuedMessages: MutableList<String>,
+        importService: ConnectorImportService,
     ): ConnectorService =
         ConnectorService(
             revenueCatClient = FakeRevenueCatProviderClient(),
             googleAdsClient = FakeGoogleAdsProviderClient(),
             secretCipherFactory = { FakeConnectorSecretCipher },
             enqueueConnectorEvent = { payload -> queuedMessages += payload },
+            importService = importService,
         )
 
     private fun createRequest(): CreateConnectorInstallationRequest =
@@ -293,6 +351,18 @@ class ConnectorServiceTest {
                     externalResourceType = RevenueCatClient.RESOURCE_TYPE_APP,
                     externalResourceId = appId,
                     localResourceType = RevenueCatClient.LOCAL_RESOURCE_PROJECT,
+                    localResourceId = projectResourceId,
+                )
+            )
+        )
+
+    private fun googleAdsBindingRequest(projectResourceId: String): UpsertConnectorBindingRequest =
+        UpsertConnectorBindingRequest(
+            listOf(
+                ConnectorBindingInput(
+                    externalResourceType = GoogleAdsClient.RESOURCE_TYPE_MANAGER,
+                    externalResourceId = GOOGLE_ADS_CUSTOMER_ID,
+                    localResourceType = "project",
                     localResourceId = projectResourceId,
                 )
             )
@@ -434,6 +504,43 @@ class ConnectorServiceTest {
                     timeZone = "America/New_York",
                     level = 1,
                     loginCustomerId = loginCustomerId,
+                )
+            )
+        }
+
+        override fun fetchSpendReport(
+            credential: GoogleAdsOAuthCredential,
+            customerId: String,
+            loginCustomerId: String?,
+            startDate: LocalDate,
+            endDate: LocalDate,
+        ): List<GoogleAdsSpendReportRow> {
+            validateCustomer(credential, customerId, loginCustomerId)
+            return listOf(
+                GoogleAdsSpendReportRow(
+                    reportDate = startDate,
+                    customerId = customerId,
+                    loginCustomerId = loginCustomerId,
+                    campaignId = "campaign_1",
+                    campaignName = "Bandapella Search",
+                    campaignStatus = "ENABLED",
+                    campaignType = "SEARCH",
+                    campaignSubType = null,
+                    biddingStrategyType = "MAXIMIZE_CONVERSIONS",
+                    adGroupId = "ad_group_1",
+                    adGroupName = "Core",
+                    adGroupStatus = "ENABLED",
+                    device = "MOBILE",
+                    geoTargetCountry = "geoTargetConstants/2840",
+                    currencyCode = "USD",
+                    timeZone = "America/New_York",
+                    impressions = 100,
+                    clicks = 12,
+                    costMicros = 4_200_000,
+                    conversions = 2.0,
+                    conversionsValue = 12.0,
+                    allConversions = 3.0,
+                    allConversionsValue = 15.0,
                 )
             )
         }
