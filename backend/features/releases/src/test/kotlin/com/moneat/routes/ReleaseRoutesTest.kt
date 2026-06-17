@@ -65,7 +65,6 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.io.ByteArrayOutputStream
 import java.io.IOException
-import java.security.MessageDigest
 import java.util.zip.GZIPOutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
@@ -530,7 +529,7 @@ class ReleaseRoutesTest {
                 com.example.Foo -> a:
                     1:1:void doThing():10:10 -> a
                 """.trimIndent().toByteArray()
-            val checksum = sha1(mappingBytes)
+            val checksum = "931c96ccfdf6418eec054cbae8fba57a3c7a8f3d"
             val storedBytes = slot<ByteArray>()
 
             every { releaseService.storeChunk(checksum, capture(storedBytes)) } just Runs
@@ -593,8 +592,8 @@ class ReleaseRoutesTest {
             val secondName = "proguard/$secondDebugId.txt"
             val firstBytes = "first mapping".toByteArray()
             val secondBytes = "second mapping".toByteArray()
-            val firstChecksum = sha1(firstBytes)
-            val secondChecksum = sha1(secondBytes)
+            val firstChecksum = "64fe3c5856063dc209a9fdef81ec63ead39bfca4"
+            val secondChecksum = "c098be88dc8bb221cb0048b31b7d313f3fd2732a"
 
             every { releaseService.storeChunk(firstChecksum, any()) } just Runs
             every {
@@ -810,12 +809,6 @@ class ReleaseRoutesTest {
         }
         return out.toByteArray()
     }
-
-    private fun sha1(bytes: ByteArray): String =
-        MessageDigest
-            .getInstance("SHA-1")
-            .digest(bytes)
-            .joinToString("") { "%02x".format(it) }
 
     @AfterTest
     fun teardownKoin() {
