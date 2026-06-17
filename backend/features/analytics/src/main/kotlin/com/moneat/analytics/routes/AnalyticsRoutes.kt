@@ -19,6 +19,7 @@ package com.moneat.analytics.routes
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
+import com.moneat.analytics.services.ProductRetentionRequest
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.EnvConfig
 import com.moneat.events.services.DashboardService
@@ -53,7 +54,11 @@ private const val PERIOD_12MO_MONTHS = 12L
 private const val FILTER_PARTS_COUNT = 3
 private const val MAX_RETENTION_PERIOD_DAYS = 365
 private const val INVALID_DATE_RANGE = "Invalid date range"
+private const val DEFAULT_PRODUCT_RETENTION_PERIODS = 7
+private const val MAX_PRODUCT_RETENTION_PERIODS = 12
+private const val MIN_PRODUCT_RETENTION_PERIODS = 1
 private val DEFAULT_RETENTION_PERIODS = listOf(1, 7, 14, 30)
+private val PRODUCT_RETENTION_MODES = setOf("key_action", "any_session", "custom")
 
 /**
  * Authenticated dashboard API routes for product analytics.
@@ -130,6 +135,24 @@ private fun Route.analyticsReadRoutes(
         }
         get("/retention") {
             call.respondRetention(analyticsService, contextProvider)
+        }
+        get("/product/summary") {
+            call.respondProductSummary(analyticsService, contextProvider)
+        }
+        get("/product/activity") {
+            call.respondProductActivity(analyticsService, contextProvider)
+        }
+        get("/product/movers") {
+            call.respondProductMovers(analyticsService, contextProvider)
+        }
+        get("/product/feature-adoption") {
+            call.respondProductFeatureAdoption(analyticsService, contextProvider)
+        }
+        get("/product/segmentation") {
+            call.respondProductSegmentation(analyticsService, contextProvider)
+        }
+        get("/product/retention") {
+            call.respondProductRetention(analyticsService, contextProvider)
         }
     }
 }
@@ -246,6 +269,61 @@ private suspend fun ApplicationCall.respondRetention(
     )
 }
 
+private suspend fun ApplicationCall.respondProductSummary(
+    analyticsService: AnalyticsService,
+    contextProvider: AnalyticsContextProvider,
+) {
+    val context = contextProvider(this) ?: return
+    val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
+    respond(analyticsService.getProductAnalyticsSummary(context, dateFrom, dateTo, parseFilters(this)))
+}
+
+private suspend fun ApplicationCall.respondProductActivity(
+    analyticsService: AnalyticsService,
+    contextProvider: AnalyticsContextProvider,
+) {
+    val context = contextProvider(this) ?: return
+    val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
+    respond(analyticsService.getProductActivity(context, dateFrom, dateTo, parseFilters(this)))
+}
+
+private suspend fun ApplicationCall.respondProductMovers(
+    analyticsService: AnalyticsService,
+    contextProvider: AnalyticsContextProvider,
+) {
+    val context = contextProvider(this) ?: return
+    val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
+    respond(analyticsService.getProductMovers(context, dateFrom, dateTo, parseFilters(this)))
+}
+
+private suspend fun ApplicationCall.respondProductFeatureAdoption(
+    analyticsService: AnalyticsService,
+    contextProvider: AnalyticsContextProvider,
+) {
+    val context = contextProvider(this) ?: return
+    val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
+    respond(analyticsService.getProductFeatureAdoption(context, dateFrom, dateTo, parseFilters(this)))
+}
+
+private suspend fun ApplicationCall.respondProductSegmentation(
+    analyticsService: AnalyticsService,
+    contextProvider: AnalyticsContextProvider,
+) {
+    val context = contextProvider(this) ?: return
+    val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
+    respond(analyticsService.getProductSegmentation(context, dateFrom, dateTo, parseFilters(this)))
+}
+
+private suspend fun ApplicationCall.respondProductRetention(
+    analyticsService: AnalyticsService,
+    contextProvider: AnalyticsContextProvider,
+) {
+    val context = contextProvider(this) ?: return
+    val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
+    val retentionRequest = productRetentionRequest(dateFrom, dateTo, parseFilters(this)) ?: return
+    respond(analyticsService.getProductRetention(context, retentionRequest))
+}
+
 // --- Helpers ---
 
 private const val DEFAULT_LIMIT = 100
@@ -357,6 +435,58 @@ private suspend fun AnalyticsService.getEvents(
 ) = context.projectId?.let { projectId ->
     getEvents(projectId, dateFrom, dateTo, filters, limit, groupBy, source)
 } ?: getEvents(context.scope, dateFrom, dateTo, filters, limit, groupBy, source)
+
+private suspend fun AnalyticsService.getProductAnalyticsSummary(
+    context: AnalyticsRouteContext,
+    dateFrom: LocalDate,
+    dateTo: LocalDate,
+    filters: List<AnalyticsFilter>,
+) = context.projectId?.let { projectId ->
+    getProductAnalyticsSummary(projectId, dateFrom, dateTo, filters)
+} ?: getProductAnalyticsSummary(context.scope, dateFrom, dateTo, filters)
+
+private suspend fun AnalyticsService.getProductActivity(
+    context: AnalyticsRouteContext,
+    dateFrom: LocalDate,
+    dateTo: LocalDate,
+    filters: List<AnalyticsFilter>,
+) = context.projectId?.let { projectId ->
+    getProductActivity(projectId, dateFrom, dateTo, filters)
+} ?: getProductActivity(context.scope, dateFrom, dateTo, filters)
+
+private suspend fun AnalyticsService.getProductMovers(
+    context: AnalyticsRouteContext,
+    dateFrom: LocalDate,
+    dateTo: LocalDate,
+    filters: List<AnalyticsFilter>,
+) = context.projectId?.let { projectId ->
+    getProductMovers(projectId, dateFrom, dateTo, filters)
+} ?: getProductMovers(context.scope, dateFrom, dateTo, filters)
+
+private suspend fun AnalyticsService.getProductFeatureAdoption(
+    context: AnalyticsRouteContext,
+    dateFrom: LocalDate,
+    dateTo: LocalDate,
+    filters: List<AnalyticsFilter>,
+) = context.projectId?.let { projectId ->
+    getProductFeatureAdoption(projectId, dateFrom, dateTo, filters)
+} ?: getProductFeatureAdoption(context.scope, dateFrom, dateTo, filters)
+
+private suspend fun AnalyticsService.getProductSegmentation(
+    context: AnalyticsRouteContext,
+    dateFrom: LocalDate,
+    dateTo: LocalDate,
+    filters: List<AnalyticsFilter>,
+) = context.projectId?.let { projectId ->
+    getProductSegmentation(projectId, dateFrom, dateTo, filters)
+} ?: getProductSegmentation(context.scope, dateFrom, dateTo, filters)
+
+private suspend fun AnalyticsService.getProductRetention(
+    context: AnalyticsRouteContext,
+    request: ProductRetentionRequest,
+) = context.projectId?.let { projectId ->
+    getProductRetention(projectId, request)
+} ?: getProductRetention(context.scope, request)
 
 private suspend fun extractOrganizationContext(
     call: ApplicationCall,
@@ -587,4 +717,36 @@ private fun parseRetentionPeriods(call: ApplicationCall): List<Int> {
         .distinct()
         .sorted()
         .ifEmpty { DEFAULT_RETENTION_PERIODS }
+}
+
+private suspend fun ApplicationCall.productRetentionRequest(
+    dateFrom: LocalDate,
+    dateTo: LocalDate,
+    filters: List<AnalyticsFilter>,
+): ProductRetentionRequest? {
+    val mode = request.queryParameters["mode"] ?: "key_action"
+    if (mode !in PRODUCT_RETENTION_MODES) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid product retention mode"))
+        return null
+    }
+
+    val customEvent = request.queryParameters["custom_event"]?.trim()
+    if (mode == "custom" && customEvent.isNullOrBlank()) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("custom_event is required for custom retention"))
+        return null
+    }
+
+    val periodCount = request.queryParameters["periods"]
+        ?.toIntOrNull()
+        ?.coerceIn(MIN_PRODUCT_RETENTION_PERIODS, MAX_PRODUCT_RETENTION_PERIODS)
+        ?: DEFAULT_PRODUCT_RETENTION_PERIODS
+
+    return ProductRetentionRequest(
+        dateFrom = dateFrom,
+        dateTo = dateTo,
+        filters = filters,
+        mode = mode,
+        customEvent = customEvent,
+        periodCount = periodCount,
+    )
 }
