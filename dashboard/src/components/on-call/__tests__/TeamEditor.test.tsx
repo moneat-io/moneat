@@ -154,6 +154,31 @@ describe('TeamEditor', () => {
     })
   })
 
+  it('clears routing defaults back to none', async () => {
+    const user = userEvent.setup()
+    const initialData: TeamFormData = {
+      name: 'Payments',
+      description: '',
+      slack: '',
+      repo: '',
+      memberIds: [],
+      onCallScheduleId: 'schedule-1',
+      escalationPolicyId: 'policy-1',
+    }
+    const {onSave} = renderEditor({initialData})
+
+    await selectOption(user, 'Primary on-call schedule', 'None')
+    await selectOption(user, 'Default escalation policy', 'None')
+    await user.click(screen.getByRole('button', {name: 'Save changes'}))
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1))
+    expect(onSave).toHaveBeenCalledWith({
+      ...initialData,
+      onCallScheduleId: null,
+      escalationPolicyId: null,
+    })
+  })
+
   it('disables actions while saving', () => {
     renderEditor({isSaving: true})
 

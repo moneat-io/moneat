@@ -146,6 +146,75 @@ describe('On-call Teams view', () => {
     expect(mockApi.createOrganizationTeam.mock.calls[0][0]).toMatchObject({name: 'Platform'})
   })
 
+  it('updates an existing team from the editor dialog', async () => {
+    const user = userEvent.setup()
+    mockApi.getBillingUsage.mockResolvedValue({teamsEnabled: true})
+    seedSupportingData()
+    mockApi.getOrganizationTeams.mockResolvedValue([
+      {
+        id: 'team-1',
+        name: 'Payments',
+        slug: 'payments',
+        description: 'Owns checkout',
+        slack: '#payments-oncall',
+        repo: 'moneat-io/payments',
+        onCallScheduleId: SCHEDULE_ID,
+        escalationPolicyId: POLICY_ID,
+        currentOnCall: null,
+        members: [
+          {userId: 'u1', email: 'dana@example.com', name: 'Dana Whitfield'},
+        ],
+      },
+    ])
+    mockApi.updateOrganizationTeam.mockResolvedValue({
+      id: 'team-1',
+      name: 'Payments Core',
+      slug: 'payments',
+      members: [],
+    })
+
+    renderRoute(TeamsRoute)
+
+    await user.click(await screen.findByRole('button', {name: 'Edit Payments'}))
+
+    const dialog = await screen.findByRole('dialog')
+    await user.clear(within(dialog).getByLabelText('Team name'))
+    await user.type(within(dialog).getByLabelText('Team name'), 'Payments Core')
+    await user.clear(within(dialog).getByLabelText('Slack channel'))
+    await user.click(within(dialog).getByRole('button', {name: 'Save changes'}))
+
+    await waitFor(() => expect(mockApi.updateOrganizationTeam).toHaveBeenCalledTimes(1))
+    expect(mockApi.updateOrganizationTeam).toHaveBeenCalledWith('team-1', {
+      name: 'Payments Core',
+      description: 'Owns checkout',
+      slack: null,
+      repo: 'moneat-io/payments',
+      onCallScheduleId: SCHEDULE_ID,
+      escalationPolicyId: POLICY_ID,
+      memberIds: ['u1'],
+    })
+    expect(mockToast).toHaveBeenCalledWith({
+      title: 'Team updated',
+      description: 'Team changes have been saved.',
+    })
+  })
+
+  it('keeps a team when delete confirmation is canceled', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(globalThis.window, 'confirm').mockReturnValue(false)
+    mockApi.getBillingUsage.mockResolvedValue({teamsEnabled: true})
+    seedSupportingData()
+    mockApi.getOrganizationTeams.mockResolvedValue([
+      {id: 'team-1', name: 'Payments', slug: 'payments', members: []},
+    ])
+
+    renderRoute(TeamsRoute)
+
+    await user.click(await screen.findByRole('button', {name: 'Delete Payments'}))
+
+    expect(mockApi.deleteOrganizationTeam).not.toHaveBeenCalled()
+  })
+
   it('deletes a team after confirmation', async () => {
     const user = userEvent.setup()
     vi.spyOn(globalThis.window, 'confirm').mockReturnValue(true)
