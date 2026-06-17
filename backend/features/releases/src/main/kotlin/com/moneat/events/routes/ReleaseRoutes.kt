@@ -937,7 +937,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.respondLegacyDsymUploa
 private fun sha1(bytes: ByteArray): String {
     // Sentry debug-file APIs require SHA-1 as a protocol checksum, not for trust or password storage.
 
-    // codeql[java/potentially-weak-cryptographic-algorithm]
+    // lgtm[java/potentially-weak-cryptographic-algorithm]
     val digest = MessageDigest.getInstance(SHA_1_ALGORITHM)
     return digest
         .digest(bytes)
