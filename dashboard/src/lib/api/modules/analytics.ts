@@ -30,6 +30,13 @@ import type {
   AnalyticsRealtimeApiResponse,
   AnalyticsRetentionQuery,
   AnalyticsRetentionResponse,
+  ProductAnalyticsSummary,
+  ProductActivityResponse,
+  ProductMover,
+  ProductFeatureAdoptionItem,
+  ProductSegmentation,
+  ProductRetentionGrid,
+  ProductRetentionQuery,
 } from '../types'
 
 function appendAnalyticsParams(qs: URLSearchParams, params?: AnalyticsParams) {
@@ -110,6 +117,15 @@ function buildRetentionQuery(params: AnalyticsRetentionQuery): string {
   qs.append('start_event', params.startEvent)
   qs.append('return_event', params.returnEvent)
   params.periods?.forEach((period) => qs.append('periods[]', String(period)))
+  return toQueryString(qs)
+}
+
+function buildProductRetentionQuery(params: ProductRetentionQuery): string {
+  const qs = new URLSearchParams()
+  appendAnalyticsParams(qs, params)
+  qs.append('mode', params.mode)
+  if (params.customEvent) qs.append('custom_event', params.customEvent)
+  if (params.periods != null) qs.append('periods', String(params.periods))
   return toQueryString(qs)
 }
 
@@ -280,6 +296,50 @@ export function analyticsMethods(core: ApiClientCore) {
     ) =>
       core.request<AnalyticsRetentionResponse>(
         `${analyticsScopeBase(base, projectId)}/retention${buildRetentionQuery(params)}`
+      ),
+
+    // ---- Product analytics (target-state) ----
+
+    getProductAnalyticsSummary: (
+      projectId: AnalyticsScopeId,
+      params?: AnalyticsParams
+    ) =>
+      core.request<ProductAnalyticsSummary>(
+        `${analyticsScopeBase(base, projectId)}/product/summary${buildAnalyticsQuery(params)}`
+      ),
+
+    getProductActivity: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
+      core.request<ProductActivityResponse>(
+        `${analyticsScopeBase(base, projectId)}/product/activity${buildAnalyticsQuery(params)}`
+      ),
+
+    getProductMovers: (projectId: AnalyticsScopeId, params?: AnalyticsParams) =>
+      core.request<ProductMover[]>(
+        `${analyticsScopeBase(base, projectId)}/product/movers${buildAnalyticsQuery(params)}`
+      ),
+
+    getProductFeatureAdoption: (
+      projectId: AnalyticsScopeId,
+      params?: AnalyticsParams
+    ) =>
+      core.request<ProductFeatureAdoptionItem[]>(
+        `${analyticsScopeBase(base, projectId)}/product/feature-adoption${buildAnalyticsQuery(params)}`
+      ),
+
+    getProductSegmentation: (
+      projectId: AnalyticsScopeId,
+      params?: AnalyticsParams
+    ) =>
+      core.request<ProductSegmentation>(
+        `${analyticsScopeBase(base, projectId)}/product/segmentation${buildAnalyticsQuery(params)}`
+      ),
+
+    getProductRetention: (
+      projectId: AnalyticsScopeId,
+      params: ProductRetentionQuery
+    ) =>
+      core.request<ProductRetentionGrid>(
+        `${analyticsScopeBase(base, projectId)}/product/retention${buildProductRetentionQuery(params)}`
       ),
   }
 }

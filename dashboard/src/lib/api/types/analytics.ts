@@ -155,3 +155,134 @@ export interface AnalyticsRealtimeApiResponse {
   currentVisitors?: number
   visitors?: number
 }
+
+// ---------------------------------------------------------------------------
+// Product analytics (target-state)
+//
+// Source-neutral, app-agnostic shapes for the product analytics view: a
+// north-star KPI band, an activity trend, biggest movers, a configurable
+// activation funnel, return-to-value retention cohorts, feature adoption and
+// segmentation. Event names here (signup_completed, first_key_action, …) are
+// generic defaults each app overrides.
+// ---------------------------------------------------------------------------
+
+export interface ProductKpiMetric {
+  /** Current value. Percentage metrics are expressed as 0–100. */
+  value: number
+  /** Previous-period value, for the delta. */
+  previous?: number
+  /** Small trend series for the sparkline, oldest → newest. */
+  spark?: number[]
+}
+
+export interface ProductAnalyticsSummary {
+  weeklyActiveUsers: ProductKpiMetric
+  dailyActiveUsers?: number
+  newUsers: ProductKpiMetric
+  /** North-star: share of new users who activate (0–100). */
+  activationRate: ProductKpiMetric
+  /** DAU / MAU (0–100). */
+  stickiness: ProductKpiMetric
+  /** Week-1 return to a key action (0–100). */
+  week1Retention: ProductKpiMetric
+  /** Share of active users with 5+ key actions per week (0–100). */
+  powerUsers: ProductKpiMetric
+}
+
+export type ProductActivityMetric = 'active' | 'new' | 'key_action'
+
+export interface ProductActivityPoint {
+  timestamp: string
+  value: number
+  /** Same point in the previous period, for the comparison overlay. */
+  previous?: number
+}
+
+export type ProductAnnotationKind = 'release' | 'feature' | 'campaign'
+
+export interface ProductActivityAnnotation {
+  date: string
+  label: string
+  kind?: ProductAnnotationKind
+}
+
+export interface ProductActivitySeries {
+  metric: ProductActivityMetric
+  points: ProductActivityPoint[]
+}
+
+export interface ProductActivityResponse {
+  series: ProductActivitySeries[]
+  annotations?: ProductActivityAnnotation[]
+}
+
+export type ProductMoverTone = 'good' | 'bad'
+
+export interface ProductMover {
+  name: string
+  /** Short category tag, e.g. "activation", "feature", "platform", "plan", "cohort". */
+  category: string
+  /** Optional context, e.g. "after v3.1", "new", "regression". */
+  detail?: string
+  /** Pre-formatted magnitude, e.g. "+7.0pp", "−3.2pp", "+19%". */
+  change: string
+  tone: ProductMoverTone
+}
+
+export interface ProductEventTrend {
+  name: string
+  count: number
+  users: number
+  /** Period-over-period change in event count, as a fraction (0.12 = +12%). */
+  changeRatio?: number
+}
+
+export interface ProductFeatureAdoptionItem {
+  name: string
+  /** Share of active users (0–100). */
+  adoptionRate: number
+}
+
+export interface ProductSegmentRow {
+  name: string
+  users: number
+  /** 0–100. */
+  activationRate: number
+  /** 0–100. */
+  week1Retention: number
+  /** 0–100. */
+  stickiness: number
+}
+
+export type ProductSegmentDimension = 'plan' | 'platform' | 'country'
+
+export interface ProductSegmentation {
+  plan: ProductSegmentRow[]
+  platform: ProductSegmentRow[]
+  country: ProductSegmentRow[]
+}
+
+export type ProductRetentionMode = 'key_action' | 'any_session' | 'custom'
+
+export interface ProductRetentionCohortRow {
+  /** Cohort label, e.g. "May 5". */
+  cohort: string
+  users: number
+  /** Retention per period (W0…Wn) as 0–100; null where the period has not elapsed. */
+  values: Array<number | null>
+}
+
+export interface ProductRetentionGrid {
+  mode: ProductRetentionMode
+  /** Period offsets shown as columns, e.g. [0, 1, 2, 3, 4, 5, 6]. */
+  periods: number[]
+  cohorts: ProductRetentionCohortRow[]
+}
+
+export interface ProductRetentionQuery extends AnalyticsParams {
+  mode: ProductRetentionMode
+  /** Required when mode is "custom". */
+  customEvent?: string
+  /** Number of period columns to return. */
+  periods?: number
+}

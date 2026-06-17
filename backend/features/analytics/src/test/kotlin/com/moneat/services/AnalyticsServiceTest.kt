@@ -19,6 +19,7 @@ package com.moneat.services
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
+import com.moneat.analytics.services.ProductRetentionRequest
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
 import com.moneat.testsupport.requestBodyText
@@ -562,6 +563,196 @@ class AnalyticsServiceTest {
         }
     }
 
+    // ──── Product analytics ────
+
+    @Test
+    fun `getProductAnalyticsSummary returns product KPI metrics`() = runBlocking {
+        val queries = mutableListOf<String>()
+        var callCount = 0
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            callCount++
+            val body = when (callCount) {
+                1 ->
+                    productSummaryRow(
+                        ProductSummaryRowFixture(
+                            activeUsers = 100,
+                            weeklyActiveUsers = 90,
+                            dailyActiveUsers = 12,
+                            monthlyActiveUsers = 100,
+                            newUsers = 20,
+                            activatedNewUsers = 10,
+                            powerUsers = 5,
+                        )
+                    )
+
+                2 ->
+                    productSummaryRow(
+                        ProductSummaryRowFixture(
+                            activeUsers = 80,
+                            weeklyActiveUsers = 70,
+                            dailyActiveUsers = 8,
+                            monthlyActiveUsers = 80,
+                            newUsers = 16,
+                            activatedNewUsers = 4,
+                            powerUsers = 4,
+                        )
+                    )
+
+                3 -> """{"eligible_users":10,"retained_users":6}"""
+                4 -> """{"eligible_users":8,"retained_users":4}"""
+                else ->
+                    """{"day":"2026-01-01","active_users":4,"new_users":2,"activated_users":1,"key_action_users":1}
+{"day":"2026-01-02","active_users":6,"new_users":3,"activated_users":2,"key_action_users":2}"""
+            }
+            exchange.respond(200, body, contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            val result = service.getProductAnalyticsSummary(projectId, dateFrom, dateTo, emptyList())
+
+            assertEquals(90.0, result.weeklyActiveUsers.value)
+            assertEquals(70.0, result.weeklyActiveUsers.previous)
+            assertEquals(12L, result.dailyActiveUsers)
+            assertEquals(50.0, result.activationRate.value)
+            assertEquals(60.0, result.week1Retention.value)
+            assertEquals(2, result.weeklyActiveUsers.spark.size)
+            assertTrue(result.stickiness.spark.isEmpty())
+            assertTrue(queries.any { it.contains("e.source = 'server'") })
+            assertTrue(queries.any { it.contains("e.user_id != ''") })
+            assertTrue(queries.first().contains("countIf(month_event_count > 0) AS monthly_active_users"))
+            assertTrue(queries.first().contains("e.timestamp >= '2026-01-02' AND e.timestamp < '2026-02-01'"))
+        }
+    }
+
+    @Test
+    fun `getProductActivity returns current points with previous period overlay`() = runBlocking {
+        var callCount = 0
+        withClickHouseMockServer({ exchange ->
+            exchange.requestBodyText()
+            callCount++
+            val body = if (callCount == 1) {
+                """{"day":"2026-01-01","active_users":3,"new_users":1,"activated_users":1,"key_action_users":2}
+{"day":"2026-01-02","active_users":5,"new_users":2,"activated_users":1,"key_action_users":3}"""
+            } else {
+                """{"day":"2025-12-01","active_users":2,"new_users":1,"activated_users":0,"key_action_users":1}
+{"day":"2025-12-02","active_users":4,"new_users":1,"activated_users":1,"key_action_users":2}"""
+            }
+            exchange.respond(200, body, contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            val result = service.getProductActivity(projectId, dateFrom, dateTo, emptyList())
+            val active = result.series.first { it.metric == "active" }
+
+            assertEquals(31, active.points.size)
+            assertEquals("2026-01-01", active.points.first().timestamp)
+            assertEquals(3L, active.points.first().value)
+            assertEquals(2L, active.points.first().previous)
+        }
+    }
+
+    @Test
+    fun `getProductMovers returns event changes`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(
+                200,
+                """{"name":"activated","current_count":30,"previous_count":20}""",
+                contentType = CONTENT_TYPE_TEXT_PLAIN
+            )
+        }) { _ ->
+
+            val result = service.getProductMovers(projectId, dateFrom, dateTo, emptyList())
+
+            assertEquals(1, result.size)
+            assertEquals("activated", result.first().name)
+            assertEquals("+50%", result.first().change)
+            assertTrue(queries.any { it.contains("event_name != 'pageview'") })
+        }
+    }
+
+    @Test
+    fun `getProductFeatureAdoption derives feature usage from event props`() = runBlocking {
+        val queries = mutableListOf<String>()
+        var callCount = 0
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            callCount++
+            val body = if (callCount == 1) {
+                productSummaryRow(ProductSummaryRowFixture(activeUsers = 100))
+            } else {
+                """{"name":"Search","users":25}"""
+            }
+            exchange.respond(200, body, contentType = CONTENT_TYPE_TEXT_PLAIN)
+        }) { _ ->
+
+            val result = service.getProductFeatureAdoption(projectId, dateFrom, dateTo, emptyList())
+
+            assertEquals(1, result.size)
+            assertEquals("Search", result.first().name)
+            assertEquals(25.0, result.first().adoptionRate)
+            assertTrue(queries.any { it.contains("mapContains(e.props, 'feature')") })
+        }
+    }
+
+    @Test
+    fun `getProductSegmentation queries plan platform and country dimensions`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(
+                200,
+                productSegmentRow("pro"),
+                contentType = CONTENT_TYPE_TEXT_PLAIN
+            )
+        }) { _ ->
+
+            val result = service.getProductSegmentation(projectId, dateFrom, dateTo, emptyList())
+
+            assertEquals("pro", result.plan.first().name)
+            assertEquals(50.0, result.plan.first().activationRate)
+            assertTrue(queries.any { it.contains("e.props['plan']") })
+            assertTrue(queries.any { it.contains("e.props['platform']") })
+            assertTrue(queries.any { it.contains("e.country_code") })
+            assertTrue(queries.any { it.contains("countIf(month_event_count > 0) AS monthly_active_users") })
+            assertTrue(queries.any { it.contains("e.timestamp >= '2026-01-02' AND e.timestamp < '2026-02-01'") })
+        }
+    }
+
+    @Test
+    fun `getProductRetention returns retention grid for custom event`() = runBlocking {
+        val queries = mutableListOf<String>()
+        withClickHouseMockServer({ exchange ->
+            queries.add(exchange.requestBodyText())
+            exchange.respond(
+                200,
+                productRetentionRow(),
+                contentType = CONTENT_TYPE_TEXT_PLAIN
+            )
+        }) { _ ->
+
+            val result = service.getProductRetention(
+                projectId,
+                ProductRetentionRequest(
+                    dateFrom = dateFrom,
+                    dateTo = dateTo,
+                    filters = emptyList(),
+                    mode = "custom",
+                    customEvent = "purchase_completed",
+                    periodCount = 3,
+                ),
+            )
+
+            assertEquals("custom", result.mode)
+            assertEquals(listOf(0, 1, 2), result.periods)
+            assertEquals(listOf(100.0, 50.0, 40.0), result.cohorts.first().values)
+            assertTrue(queries.any { it.contains("e.event_name = 'purchase_completed'") })
+            assertTrue(queries.any { it.contains("eligible_2") })
+            assertTrue(queries.any { it.contains("INTERVAL 14 DAY AND e.timestamp < c.first_seen + INTERVAL 21 DAY") })
+            assertTrue(queries.any { it.contains("c.first_seen + INTERVAL 21 DAY <= '2026-02-01'") })
+        }
+    }
+
     // ──── Filters ────
 
     @Test
@@ -903,4 +1094,47 @@ not valid json
             assertEquals(0.0, result.bounceRate)
         }
     }
+
+    private fun productSummaryRow(row: ProductSummaryRowFixture = ProductSummaryRowFixture()): String =
+        listOf(
+            """"active_users":${row.activeUsers}""",
+            """"weekly_active_users":${row.weeklyActiveUsers}""",
+            """"daily_active_users":${row.dailyActiveUsers}""",
+            """"monthly_active_users":${row.monthlyActiveUsers}""",
+            """"new_users":${row.newUsers}""",
+            """"activated_new_users":${row.activatedNewUsers}""",
+            """"power_users":${row.powerUsers}""",
+        ).joinToString(prefix = "{", postfix = "}")
+
+    private data class ProductSummaryRowFixture(
+        val activeUsers: Long = 0,
+        val weeklyActiveUsers: Long = 0,
+        val dailyActiveUsers: Long = 0,
+        val monthlyActiveUsers: Long = 0,
+        val newUsers: Long = 0,
+        val activatedNewUsers: Long = 0,
+        val powerUsers: Long = 0,
+    )
+
+    private fun productRetentionRow(): String =
+        listOf(
+            """"cohort":"2026-01-05 00:00:00"""",
+            """"users":10""",
+            """"eligible_1":10""",
+            """"retained_1":5""",
+            """"eligible_2":10""",
+            """"retained_2":4""",
+        ).joinToString(prefix = "{", postfix = "}")
+
+    private fun productSegmentRow(name: String): String =
+        listOf(
+            """"name":"$name"""",
+            """"users":20""",
+            """"new_users":10""",
+            """"activated_new_users":5""",
+            """"eligible_users":8""",
+            """"retained_users":4""",
+            """"daily_active_users":6""",
+            """"monthly_active_users":12""",
+        ).joinToString(prefix = "{", postfix = "}")
 }

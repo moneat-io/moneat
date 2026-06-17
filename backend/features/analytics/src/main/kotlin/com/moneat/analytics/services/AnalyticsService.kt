@@ -22,6 +22,17 @@ import com.moneat.analytics.models.BreakdownResponse
 import com.moneat.analytics.models.BreakdownRow
 import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
+import com.moneat.analytics.models.ProductActivityPoint
+import com.moneat.analytics.models.ProductActivityResponse
+import com.moneat.analytics.models.ProductActivitySeries
+import com.moneat.analytics.models.ProductAnalyticsSummary
+import com.moneat.analytics.models.ProductFeatureAdoptionItem
+import com.moneat.analytics.models.ProductKpiMetric
+import com.moneat.analytics.models.ProductMover
+import com.moneat.analytics.models.ProductRetentionCohortRow
+import com.moneat.analytics.models.ProductRetentionGrid
+import com.moneat.analytics.models.ProductSegmentRow
+import com.moneat.analytics.models.ProductSegmentation
 import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.RetentionCohort
 import com.moneat.analytics.models.RetentionPeriod
@@ -36,8 +47,11 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 private val logger = KotlinLogging.logger {}
 private val jsonParser = Json { ignoreUnknownKeys = true }
@@ -46,6 +60,29 @@ private const val ERROR_TRUNCATE_LENGTH = 500
 private const val PERCENTAGE_MULTIPLIER = 100
 private const val DEFAULT_LIMIT = 100
 private const val FUNNEL_WINDOW_SECONDS = 86400
+private const val PRODUCT_SOURCE = "server"
+private const val PRODUCT_SIGNUP_EVENT = "signup_completed"
+private const val PRODUCT_ONBOARDING_EVENT = "onboarding_completed"
+private const val PRODUCT_KEY_ACTION_EVENT = "first_key_action"
+private const val PRODUCT_ACTIVATED_EVENT = "activated"
+private const val PRODUCT_WEEK_DAYS = 7L
+private const val PRODUCT_MONTH_DAYS = 29L
+private const val PRODUCT_WEEK_OFFSET_DAYS = 6L
+private const val PRODUCT_POWER_USER_KEY_ACTIONS = 5L
+private const val PRODUCT_MOVER_LIMIT = 6
+private const val PRODUCT_FEATURE_LIMIT = 8
+private const val PRODUCT_SEGMENT_LIMIT = 8
+private const val PRODUCT_RETENTION_DAYS_PER_PERIOD = 7
+private const val POSITIVE_CHANGE_PREFIX = "+"
+
+data class ProductRetentionRequest(
+    val dateFrom: LocalDate,
+    val dateTo: LocalDate,
+    val filters: List<AnalyticsFilter>,
+    val mode: String,
+    val customEvent: String?,
+    val periodCount: Int,
+)
 
 /**
  * Query builder for analytics dashboard endpoints.
@@ -529,7 +566,610 @@ $retentionColumns
         return BreakdownResponse(rows)
     }
 
+    // --- Product analytics ---
+
+    suspend fun getProductAnalyticsSummary(
+        projectId: Long,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductAnalyticsSummary =
+        getProductAnalyticsSummary(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters)
+
+    suspend fun getProductAnalyticsSummary(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductAnalyticsSummary {
+        val current = queryProductSummaryMetrics(scope, dateFrom, dateTo, filters)
+        val previousRange = previousRange(dateFrom, dateTo)
+        val previous = queryProductSummaryMetrics(scope, previousRange.dateFrom, previousRange.dateTo, filters)
+        val currentWeek1Retention = queryProductWeek1Retention(scope, dateFrom, dateTo, filters)
+        val previousWeek1Retention = queryProductWeek1Retention(
+            scope,
+            previousRange.dateFrom,
+            previousRange.dateTo,
+            filters
+        )
+        val spark = productSpark(queryProductDailyMetrics(scope, dateFrom, dateTo, filters))
+
+        return ProductAnalyticsSummary(
+            weeklyActiveUsers = countMetric(current.weeklyActiveUsers, previous.weeklyActiveUsers, spark.activeUsers),
+            dailyActiveUsers = current.dailyActiveUsers,
+            newUsers = countMetric(current.newUsers, previous.newUsers, spark.newUsers),
+            activationRate = rateMetric(
+                percentage(current.activatedNewUsers, current.newUsers),
+                percentage(previous.activatedNewUsers, previous.newUsers),
+                spark.activationRates,
+            ),
+            stickiness = rateMetric(
+                percentage(current.dailyActiveUsers, current.monthlyActiveUsers),
+                percentage(previous.dailyActiveUsers, previous.monthlyActiveUsers),
+                spark.stickinessRates,
+            ),
+            week1Retention = rateMetric(currentWeek1Retention, previousWeek1Retention, emptyList()),
+            powerUsers = rateMetric(
+                percentage(current.powerUsers, current.weeklyActiveUsers),
+                percentage(previous.powerUsers, previous.weeklyActiveUsers),
+                spark.powerUserRates,
+            ),
+        )
+    }
+
+    suspend fun getProductActivity(
+        projectId: Long,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductActivityResponse =
+        getProductActivity(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters)
+
+    suspend fun getProductActivity(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductActivityResponse {
+        val currentRange = ProductDateRange(dateFrom, dateTo)
+        val previousRange = previousRange(dateFrom, dateTo)
+        val current = queryProductDailyMetrics(scope, currentRange.dateFrom, currentRange.dateTo, filters)
+        val previous = queryProductDailyMetrics(scope, previousRange.dateFrom, previousRange.dateTo, filters)
+        val previousDates = dateBuckets(previousRange)
+        val previousByOffset = previousDates.mapIndexedNotNull { index, date ->
+            previous[date]?.let { index to it }
+        }.toMap()
+        val currentDates = dateBuckets(currentRange)
+
+        return ProductActivityResponse(
+            series = listOf(
+                productActivitySeries("active", currentDates, current, previousByOffset) { it.activeUsers },
+                productActivitySeries("new", currentDates, current, previousByOffset) { it.newUsers },
+                productActivitySeries("key_action", currentDates, current, previousByOffset) { it.keyActionUsers },
+            ),
+        )
+    }
+
+    suspend fun getProductMovers(
+        projectId: Long,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): List<ProductMover> =
+        getProductMovers(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters)
+
+    suspend fun getProductMovers(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): List<ProductMover> {
+        val previousRange = previousRange(dateFrom, dateTo)
+        val where = productWhere(scope, previousRange.dateFrom, dateTo, filters, "e")
+        val currentDate = dateRange(dateFrom, dateTo, "e", "timestamp")
+        val previousDate = dateRange(previousRange.dateFrom, previousRange.dateTo, "e", "timestamp")
+        val sql = """
+            SELECT
+                e.event_name AS name,
+                countIf($currentDate) AS current_count,
+                countIf($previousDate) AS previous_count
+            FROM analytics_events AS e
+            WHERE $where
+              AND e.event_name != ''
+              AND e.event_name != 'pageview'
+            GROUP BY name
+            HAVING current_count > 0 OR previous_count > 0
+            ORDER BY abs(current_count - previous_count) DESC
+            LIMIT $PRODUCT_MOVER_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
+            ProductMoverCounts(
+                name = row.stringValue("name"),
+                current = row.longValue("current_count"),
+                previous = row.longValue("previous_count"),
+            )
+        }.filter { it.current != it.previous }
+            .map { counts ->
+                ProductMover(
+                    name = counts.name,
+                    category = "event",
+                    detail = "${counts.current} this period",
+                    change = changeLabel(counts.current, counts.previous),
+                    tone = if (counts.current >= counts.previous) "good" else "bad",
+                )
+            }
+    }
+
+    suspend fun getProductFeatureAdoption(
+        projectId: Long,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): List<ProductFeatureAdoptionItem> =
+        getProductFeatureAdoption(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters)
+
+    suspend fun getProductFeatureAdoption(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): List<ProductFeatureAdoptionItem> {
+        val activeUsers = queryProductSummaryMetrics(scope, dateFrom, dateTo, filters).activeUsers
+        if (activeUsers == 0L) return emptyList()
+
+        val where = productWhere(scope, dateFrom, dateTo, filters, "e")
+        val featureExpr = "if(mapContains(e.props, 'feature') AND e.props['feature'] != '', " +
+            "e.props['feature'], e.event_name)"
+        val lifecycleEvents = productLifecycleEventList()
+        val sql = """
+            SELECT
+                feature AS name,
+                uniqExact(user_id) AS users
+            FROM (
+                SELECT
+                    e.user_id AS user_id,
+                    $featureExpr AS feature
+                FROM analytics_events AS e
+                WHERE $where
+                  AND e.event_name != 'pageview'
+                  AND (
+                    (mapContains(e.props, 'feature') AND e.props['feature'] != '')
+                    OR e.event_name NOT IN ($lifecycleEvents)
+                  )
+            )
+            WHERE feature != ''
+            GROUP BY feature
+            ORDER BY users DESC
+            LIMIT $PRODUCT_FEATURE_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
+            ProductFeatureUsers(
+                name = row.stringValue("name"),
+                users = row.longValue("users"),
+            )
+        }.map { feature ->
+            ProductFeatureAdoptionItem(
+                name = feature.name,
+                adoptionRate = percentage(feature.users, activeUsers),
+            )
+        }
+    }
+
+    suspend fun getProductSegmentation(
+        projectId: Long,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductSegmentation =
+        getProductSegmentation(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters)
+
+    suspend fun getProductSegmentation(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductSegmentation =
+        ProductSegmentation(
+            plan = queryProductSegment(scope, dateFrom, dateTo, filters, ProductSegmentDimension.PLAN),
+            platform = queryProductSegment(scope, dateFrom, dateTo, filters, ProductSegmentDimension.PLATFORM),
+            country = queryProductSegment(scope, dateFrom, dateTo, filters, ProductSegmentDimension.COUNTRY),
+        )
+
+    suspend fun getProductRetention(
+        projectId: Long,
+        request: ProductRetentionRequest,
+    ): ProductRetentionGrid =
+        getProductRetention(AnalyticsQueryScope.service(projectId), request)
+
+    suspend fun getProductRetention(
+        scope: AnalyticsQueryScope,
+        request: ProductRetentionRequest,
+    ): ProductRetentionGrid {
+        val periods = (0 until request.periodCount).toList()
+        val where = productWhere(scope, request.dateFrom, request.dateTo, request.filters, "e")
+        val retentionColumns = periods.drop(1).joinToString(",\n") { period ->
+            val periodStartDays = period * PRODUCT_RETENTION_DAYS_PER_PERIOD
+            val periodEndDays = (period + 1) * PRODUCT_RETENTION_DAYS_PER_PERIOD
+            val mature = "c.first_seen + INTERVAL $periodEndDays DAY <= '${endExclusive(request.dateTo)}'"
+            "                uniqExactIf(c.user_id, $mature) AS eligible_$period,\n" +
+                "                uniqExactIf(c.user_id, $mature AND " +
+                "e.timestamp >= c.first_seen + INTERVAL $periodStartDays DAY AND " +
+                "e.timestamp < c.first_seen + INTERVAL $periodEndDays DAY AND " +
+                "${productRetentionEventCondition(request.mode, request.customEvent, "e")}) AS retained_$period"
+        }
+        val extraColumns = if (retentionColumns.isBlank()) "" else ",\n$retentionColumns"
+        val maxRetentionDays = request.periodCount * PRODUCT_RETENTION_DAYS_PER_PERIOD
+        val sql = """
+            WITH cohorts AS (
+                SELECT
+                    e.project_id AS project_id,
+                    e.user_id AS user_id,
+                    min(e.timestamp) AS first_seen,
+                    toStartOfWeek(min(e.timestamp)) AS cohort_week
+                FROM analytics_events AS e
+                WHERE $where
+                  AND e.event_name = '$PRODUCT_SIGNUP_EVENT'
+                GROUP BY e.project_id, e.user_id
+            )
+            SELECT
+                toString(c.cohort_week) AS cohort,
+                uniqExact(c.user_id) AS users$extraColumns
+            FROM cohorts AS c
+            LEFT JOIN analytics_events AS e
+                ON e.project_id = c.project_id
+                AND e.source = '$PRODUCT_SOURCE'
+                AND e.user_id = c.user_id
+                AND e.timestamp > c.first_seen
+                AND e.timestamp < '${endExclusive(request.dateTo)}'
+                AND e.timestamp <= c.first_seen + INTERVAL $maxRetentionDays DAY
+            GROUP BY c.cohort_week
+            ORDER BY c.cohort_week
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val cohorts = parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
+            ProductRetentionCohortRow(
+                cohort = row.stringValue("cohort"),
+                users = row.longValue("users"),
+                values = periods.map { period ->
+                    if (period == 0) {
+                        PERCENTAGE_MULTIPLIER.toDouble()
+                    } else {
+                        val eligible = row.longValue("eligible_$period")
+                        if (eligible == 0L) null else percentage(row.longValue("retained_$period"), eligible)
+                    }
+                },
+            )
+        }
+        return ProductRetentionGrid(request.mode, periods, cohorts)
+    }
+
+    private suspend fun queryProductSummaryMetrics(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): ProductSummaryMetrics {
+        val selectedStart = dateFrom.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val selectedEnd = endExclusive(dateTo)
+        val dayStart = dateTo.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val weekStart = dateTo.minusDays(PRODUCT_WEEK_OFFSET_DAYS).format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val monthStart = dateTo.minusDays(PRODUCT_MONTH_DAYS).format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val selectedWindow = "e.timestamp >= '$selectedStart' AND e.timestamp < '$selectedEnd'"
+        val dayWindow = "e.timestamp >= '$dayStart' AND e.timestamp < '$selectedEnd'"
+        val weekWindow = "e.timestamp >= '$weekStart' AND e.timestamp < '$selectedEnd'"
+        val monthWindow = "e.timestamp >= '$monthStart' AND e.timestamp < '$selectedEnd'"
+        val where = productWhere(scope, productLookbackStart(dateFrom, dateTo), dateTo, filters, "e")
+        val sql = """
+            SELECT
+                countIf(selected_event_count > 0) AS active_users,
+                countIf(week_event_count > 0) AS weekly_active_users,
+                countIf(day_event_count > 0) AS daily_active_users,
+                countIf(month_event_count > 0) AS monthly_active_users,
+                countIf(selected_signup_count > 0) AS new_users,
+                countIf(selected_signup_count > 0 AND selected_activated_count > 0) AS activated_new_users,
+                countIf(selected_key_action_count >= $PRODUCT_POWER_USER_KEY_ACTIONS) AS power_users
+            FROM (
+                SELECT
+                    e.project_id,
+                    e.user_id,
+                    countIf($selectedWindow) AS selected_event_count,
+                    countIf($weekWindow) AS week_event_count,
+                    countIf($dayWindow) AS day_event_count,
+                    countIf($monthWindow) AS month_event_count,
+                    countIf($selectedWindow AND e.event_name = '$PRODUCT_SIGNUP_EVENT') AS selected_signup_count,
+                    countIf($selectedWindow AND e.event_name = '$PRODUCT_ACTIVATED_EVENT') AS selected_activated_count,
+                    countIf($selectedWindow AND ${keyActionEventCondition("e")}) AS selected_key_action_count
+                FROM analytics_events AS e
+                WHERE $where
+                GROUP BY e.project_id, e.user_id
+            )
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val body = ClickHouseClient.executeWithFormat(sql, "JSONEachRow")
+        if (body.isBlank()) return ProductSummaryMetrics()
+        val row = jsonParser.parseToJsonElement(body.trim().lines().first()).jsonObject
+        return ProductSummaryMetrics(
+            activeUsers = row.longValue("active_users"),
+            weeklyActiveUsers = row.longValue("weekly_active_users"),
+            dailyActiveUsers = row.longValue("daily_active_users"),
+            monthlyActiveUsers = row.longValue("monthly_active_users"),
+            newUsers = row.longValue("new_users"),
+            activatedNewUsers = row.longValue("activated_new_users"),
+            powerUsers = row.longValue("power_users"),
+        )
+    }
+
+    private suspend fun queryProductWeek1Retention(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): Double {
+        val where = productWhere(scope, dateFrom, dateTo, filters, "e")
+        val sql = """
+            WITH cohorts AS (
+                SELECT
+                    e.project_id AS project_id,
+                    e.user_id AS user_id,
+                    min(e.timestamp) AS first_seen
+                FROM analytics_events AS e
+                WHERE $where
+                  AND e.event_name = '$PRODUCT_SIGNUP_EVENT'
+                GROUP BY e.project_id, e.user_id
+            )
+            SELECT
+                uniqExactIf(c.user_id, c.first_seen + INTERVAL $PRODUCT_WEEK_DAYS DAY <= '${endExclusive(dateTo)}')
+                    AS eligible_users,
+                uniqExactIf(
+                    c.user_id,
+                    c.first_seen + INTERVAL $PRODUCT_WEEK_DAYS DAY <= '${endExclusive(dateTo)}'
+                    AND e.timestamp > c.first_seen
+                    AND e.timestamp <= c.first_seen + INTERVAL $PRODUCT_WEEK_DAYS DAY
+                    AND ${keyActionEventCondition("e")}
+                ) AS retained_users
+            FROM cohorts AS c
+            LEFT JOIN analytics_events AS e
+                ON e.project_id = c.project_id
+                AND e.source = '$PRODUCT_SOURCE'
+                AND e.user_id = c.user_id
+                AND e.timestamp > c.first_seen
+                AND e.timestamp <= c.first_seen + INTERVAL $PRODUCT_WEEK_DAYS DAY
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        val body = ClickHouseClient.executeWithFormat(sql, "JSONEachRow")
+        if (body.isBlank()) return 0.0
+        val row = jsonParser.parseToJsonElement(body.trim().lines().first()).jsonObject
+        return percentage(row.longValue("retained_users"), row.longValue("eligible_users"))
+    }
+
+    private suspend fun queryProductDailyMetrics(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+    ): Map<LocalDate, ProductDailyMetrics> {
+        val where = productWhere(scope, dateFrom, dateTo, filters, "e")
+        val sql = """
+            SELECT
+                toString(toDate(e.timestamp)) AS day,
+                uniqExact(e.user_id) AS active_users,
+                uniqExactIf(e.user_id, e.event_name = '$PRODUCT_SIGNUP_EVENT') AS new_users,
+                uniqExactIf(e.user_id, e.event_name = '$PRODUCT_ACTIVATED_EVENT') AS activated_users,
+                uniqExactIf(e.user_id, ${keyActionEventCondition("e")}) AS key_action_users
+            FROM analytics_events AS e
+            WHERE $where
+            GROUP BY day
+            ORDER BY day
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
+            ProductDailyMetrics(
+                day = LocalDate.parse(row.stringValue("day")),
+                activeUsers = row.longValue("active_users"),
+                newUsers = row.longValue("new_users"),
+                activatedUsers = row.longValue("activated_users"),
+                keyActionUsers = row.longValue("key_action_users"),
+            )
+        }.associateBy { it.day }
+    }
+
+    private suspend fun queryProductSegment(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        dimension: ProductSegmentDimension,
+    ): List<ProductSegmentRow> {
+        val selectedStart = dateFrom.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val selectedEnd = endExclusive(dateTo)
+        val dayStart = dateTo.format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val monthStart = dateTo.minusDays(PRODUCT_MONTH_DAYS).format(DateTimeFormatter.ISO_LOCAL_DATE)
+        val selectedWindow = "e.timestamp >= '$selectedStart' AND e.timestamp < '$selectedEnd'"
+        val dayWindow = "e.timestamp >= '$dayStart' AND e.timestamp < '$selectedEnd'"
+        val monthWindow = "e.timestamp >= '$monthStart' AND e.timestamp < '$selectedEnd'"
+        val where = productWhere(scope, productLookbackStart(dateFrom, dateTo), dateTo, filters, "e")
+        val segmentExpr = productSegmentExpression(dimension)
+        val sql = """
+            SELECT
+                segment AS name,
+                countIf(selected_event_count > 0) AS users,
+                countIf(selected_signup_count > 0) AS new_users,
+                countIf(selected_signup_count > 0 AND selected_activated_count > 0) AS activated_new_users,
+                countIf(
+                    selected_signup_count > 0
+                    AND signup_at + INTERVAL $PRODUCT_WEEK_DAYS DAY <= '${endExclusive(dateTo)}'
+                ) AS eligible_users,
+                countIf(
+                    selected_signup_count > 0
+                    AND key_action_at > signup_at
+                    AND key_action_at <= signup_at + INTERVAL $PRODUCT_WEEK_DAYS DAY
+                ) AS retained_users,
+                countIf(day_event_count > 0) AS daily_active_users,
+                countIf(month_event_count > 0) AS monthly_active_users
+            FROM (
+                SELECT
+                    e.project_id,
+                    e.user_id,
+                    anyIf($segmentExpr, $segmentExpr != '') AS segment,
+                    countIf($selectedWindow) AS selected_event_count,
+                    countIf($dayWindow) AS day_event_count,
+                    countIf($monthWindow) AS month_event_count,
+                    countIf($selectedWindow AND e.event_name = '$PRODUCT_SIGNUP_EVENT') AS selected_signup_count,
+                    countIf($selectedWindow AND e.event_name = '$PRODUCT_ACTIVATED_EVENT') AS selected_activated_count,
+                    minIf(e.timestamp, $selectedWindow AND e.event_name = '$PRODUCT_SIGNUP_EVENT') AS signup_at,
+                    minIf(e.timestamp, $selectedWindow AND ${keyActionEventCondition("e")}) AS key_action_at
+                FROM analytics_events AS e
+                WHERE $where
+                GROUP BY e.project_id, e.user_id
+            )
+            WHERE segment != ''
+            GROUP BY segment
+            ORDER BY users DESC
+            LIMIT $PRODUCT_SEGMENT_LIMIT
+            FORMAT JSONEachRow
+        """.trimIndent()
+
+        return parseRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow")) { row ->
+            ProductSegmentRow(
+                name = row.stringValue("name"),
+                users = row.longValue("users"),
+                activationRate = percentage(row.longValue("activated_new_users"), row.longValue("new_users")),
+                week1Retention = percentage(row.longValue("retained_users"), row.longValue("eligible_users")),
+                stickiness = percentage(row.longValue("daily_active_users"), row.longValue("monthly_active_users")),
+            )
+        }
+    }
+
     // --- Query helpers ---
+
+    private fun previousRange(
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+    ): ProductDateRange {
+        val days = ChronoUnit.DAYS.between(dateFrom, dateTo) + 1
+        val previousTo = dateFrom.minusDays(1)
+        return ProductDateRange(previousTo.minusDays(days - 1), previousTo)
+    }
+
+    private fun dateBuckets(range: ProductDateRange): List<LocalDate> {
+        if (range.dateTo.isBefore(range.dateFrom)) return emptyList()
+        val days = ChronoUnit.DAYS.between(range.dateFrom, range.dateTo)
+        return (0..days).map { offset -> range.dateFrom.plusDays(offset) }
+    }
+
+    private fun endExclusive(dateTo: LocalDate): String =
+        dateTo.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE)
+
+    private fun productLookbackStart(
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+    ): LocalDate {
+        val monthStart = dateTo.minusDays(PRODUCT_MONTH_DAYS)
+        return if (monthStart.isBefore(dateFrom)) monthStart else dateFrom
+    }
+
+    private fun productWhere(
+        scope: AnalyticsQueryScope,
+        dateFrom: LocalDate,
+        dateTo: LocalDate,
+        filters: List<AnalyticsFilter>,
+        alias: String,
+    ): String =
+        buildWhere(scope, dateFrom, dateTo, filters, alias, "timestamp") +
+            " AND $alias.source = '$PRODUCT_SOURCE' AND $alias.user_id != ''"
+
+    private fun countMetric(
+        value: Long,
+        previous: Long,
+        spark: List<Double>,
+    ): ProductKpiMetric =
+        ProductKpiMetric(value = value.toDouble(), previous = previous.toDouble(), spark = spark)
+
+    private fun rateMetric(
+        value: Double,
+        previous: Double,
+        spark: List<Double>,
+    ): ProductKpiMetric =
+        ProductKpiMetric(value = value, previous = previous, spark = spark)
+
+    private fun productSpark(metricsByDate: Map<LocalDate, ProductDailyMetrics>): ProductSpark {
+        val metrics = metricsByDate.toSortedMap().values.toList()
+        return ProductSpark(
+            activeUsers = metrics.map { it.activeUsers.toDouble() },
+            newUsers = metrics.map { it.newUsers.toDouble() },
+            activationRates = metrics.map { percentage(it.activatedUsers, it.newUsers) },
+            stickinessRates = emptyList(),
+            powerUserRates = metrics.map { percentage(it.keyActionUsers, it.activeUsers) },
+        )
+    }
+
+    private fun productActivitySeries(
+        metric: String,
+        dates: List<LocalDate>,
+        current: Map<LocalDate, ProductDailyMetrics>,
+        previousByOffset: Map<Int, ProductDailyMetrics>,
+        selector: (ProductDailyMetrics) -> Long,
+    ): ProductActivitySeries =
+        ProductActivitySeries(
+            metric = metric,
+            points = dates.mapIndexed { index, date ->
+                ProductActivityPoint(
+                    timestamp = date.format(DateTimeFormatter.ISO_LOCAL_DATE),
+                    value = current[date]?.let(selector) ?: 0L,
+                    previous = previousByOffset[index]?.let(selector),
+                )
+            },
+        )
+
+    private fun keyActionEventCondition(alias: String): String =
+        "$alias.event_name IN ('$PRODUCT_KEY_ACTION_EVENT', '$PRODUCT_ACTIVATED_EVENT')"
+
+    private fun productRetentionEventCondition(
+        mode: String,
+        customEvent: String?,
+        alias: String,
+    ): String =
+        when (mode) {
+            "any_session" -> "$alias.event_name != ''"
+            "custom" -> "$alias.event_name = '${AnalyticsIngestionWorker.escapeCH(customEvent.orEmpty())}'"
+            else -> keyActionEventCondition(alias)
+        }
+
+    private fun productLifecycleEventList(): String =
+        listOf(
+            PRODUCT_SIGNUP_EVENT,
+            PRODUCT_ONBOARDING_EVENT,
+            PRODUCT_KEY_ACTION_EVENT,
+            PRODUCT_ACTIVATED_EVENT,
+        ).joinToString(", ") { "'$it'" }
+
+    private fun productSegmentExpression(dimension: ProductSegmentDimension): String =
+        when (dimension) {
+            ProductSegmentDimension.PLAN ->
+                "if(mapContains(e.props, 'plan') AND e.props['plan'] != '', e.props['plan'], '')"
+            ProductSegmentDimension.PLATFORM ->
+                "if(mapContains(e.props, 'platform') AND e.props['platform'] != '', " +
+                    "e.props['platform'], e.device_type)"
+            ProductSegmentDimension.COUNTRY -> "e.country_code"
+        }
+
+    private fun changeLabel(
+        current: Long,
+        previous: Long,
+    ): String {
+        if (previous == 0L) return if (current > 0) "${POSITIVE_CHANGE_PREFIX}100%" else "0%"
+        val ratio = (current - previous).toDouble() / previous * PERCENTAGE_MULTIPLIER
+        val prefix = if (ratio > 0) POSITIVE_CHANGE_PREFIX else ""
+        return "$prefix${abs(ratio).roundToInt()}%"
+    }
 
     private fun buildWhere(
         scope: AnalyticsQueryScope,
@@ -680,4 +1320,52 @@ $retentionColumns
         val avgVisitDuration: Double = 0.0,
         val viewsPerVisit: Double = 0.0,
     )
+
+    private data class ProductDateRange(
+        val dateFrom: LocalDate,
+        val dateTo: LocalDate,
+    )
+
+    private data class ProductSummaryMetrics(
+        val activeUsers: Long = 0,
+        val weeklyActiveUsers: Long = 0,
+        val dailyActiveUsers: Long = 0,
+        val monthlyActiveUsers: Long = 0,
+        val newUsers: Long = 0,
+        val activatedNewUsers: Long = 0,
+        val powerUsers: Long = 0,
+    )
+
+    private data class ProductDailyMetrics(
+        val day: LocalDate,
+        val activeUsers: Long,
+        val newUsers: Long,
+        val activatedUsers: Long,
+        val keyActionUsers: Long,
+    )
+
+    private data class ProductSpark(
+        val activeUsers: List<Double>,
+        val newUsers: List<Double>,
+        val activationRates: List<Double>,
+        val stickinessRates: List<Double>,
+        val powerUserRates: List<Double>,
+    )
+
+    private data class ProductMoverCounts(
+        val name: String,
+        val current: Long,
+        val previous: Long,
+    )
+
+    private data class ProductFeatureUsers(
+        val name: String,
+        val users: Long,
+    )
+
+    private enum class ProductSegmentDimension {
+        PLAN,
+        PLATFORM,
+        COUNTRY,
+    }
 }

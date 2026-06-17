@@ -28,6 +28,12 @@ const {mockApi, mockAnalyticsParams} = vi.hoisted(() => ({
     getAnalyticsEvents: vi.fn(),
     getAnalyticsRetention: vi.fn(),
     getAnalyticsFunnel: vi.fn(),
+    getProductAnalyticsSummary: vi.fn(),
+    getProductActivity: vi.fn(),
+    getProductMovers: vi.fn(),
+    getProductFeatureAdoption: vi.fn(),
+    getProductSegmentation: vi.fn(),
+    getProductRetention: vi.fn(),
   },
   mockAnalyticsParams: {
     current: {
@@ -130,6 +136,24 @@ describe('Analytics index service facets', () => {
       cohorts: [],
     })
     mockApi.getAnalyticsFunnel.mockResolvedValue({steps: [], overallConversion: 0})
+    mockApi.getProductAnalyticsSummary.mockResolvedValue({
+      weeklyActiveUsers: {value: 24600, previous: 23000, spark: [10, 12, 14]},
+      dailyActiveUsers: 9400,
+      newUsers: {value: 9200, previous: 8200},
+      activationRate: {value: 41, previous: 38.6},
+      stickiness: {value: 28, previous: 27},
+      week1Retention: {value: 44, previous: 42.5},
+      powerUsers: {value: 12, previous: 11.4},
+    })
+    mockApi.getProductActivity.mockResolvedValue({series: [], annotations: []})
+    mockApi.getProductMovers.mockResolvedValue([])
+    mockApi.getProductFeatureAdoption.mockResolvedValue([])
+    mockApi.getProductSegmentation.mockResolvedValue({plan: [], platform: [], country: []})
+    mockApi.getProductRetention.mockResolvedValue({
+      mode: 'key_action',
+      periods: [0, 1, 2, 3, 4, 5, 6],
+      cohorts: [],
+    })
   })
 
   it('loads organization analytics by default', async () => {
@@ -251,27 +275,24 @@ describe('Analytics index service facets', () => {
   })
 
   it('renders product analytics data with organization scope', async () => {
-    mockApi.getAnalyticsEvents.mockResolvedValue([{name: 'signup.completed', visitors: 3, pageviews: 3}])
+    mockApi.getAnalyticsEvents.mockResolvedValue([{name: 'signup_completed', visitors: 3, pageviews: 3}])
 
     renderRoute(AnalyticsIndexRoute)
 
     await screen.findByText('Unique Visitors')
     selectProductTab()
 
-    expect(await screen.findByText('Product Events')).toBeInTheDocument()
-    expect(screen.getByText('Activation Funnel')).toBeInTheDocument()
+    expect(await screen.findByText('Activation funnel')).toBeInTheDocument()
+    expect(screen.getByText('Key event trends')).toBeInTheDocument()
+    expect(screen.getByText('Weekly active users')).toBeInTheDocument()
     await waitFor(() => {
-      expect(mockApi.getAnalyticsRetention).toHaveBeenCalledWith(
+      expect(mockApi.getProductAnalyticsSummary).toHaveBeenCalledWith(
         null,
-        expect.objectContaining({
-          startEvent: 'signup.completed',
-          returnEvent: 'recording.started',
-          period: '7d',
-        })
+        expect.objectContaining({period: '7d'})
       )
       expect(mockApi.getAnalyticsFunnel).toHaveBeenCalledWith(
         null,
-        ['signup.completed', 'recording.started', 'export.completed'],
+        ['signup_completed', 'onboarding_completed', 'first_key_action', 'activated'],
         expect.objectContaining({period: '7d'}),
         {source: 'server', groupBy: 'user_id'}
       )
@@ -279,12 +300,12 @@ describe('Analytics index service facets', () => {
   })
 
   it('renders populated product funnel results', async () => {
-    mockApi.getAnalyticsEvents.mockResolvedValue([{name: 'signup.completed', visitors: 3, pageviews: 3}])
+    mockApi.getAnalyticsEvents.mockResolvedValue([{name: 'signup_completed', visitors: 3, pageviews: 3}])
     mockApi.getAnalyticsFunnel.mockResolvedValue({
       overallConversion: 50,
       steps: [
-        {name: 'signup.completed', visitors: 4, dropoff: 0, conversionRate: 100},
-        {name: 'recording.started', visitors: 2, dropoff: 2, conversionRate: 50},
+        {name: 'signup_completed', visitors: 4, dropoff: 0, conversionRate: 100},
+        {name: 'activated', visitors: 2, dropoff: 2, conversionRate: 50},
       ],
     })
 
@@ -293,32 +314,119 @@ describe('Analytics index service facets', () => {
     await screen.findByText('Unique Visitors')
     selectProductTab()
 
-    expect(await screen.findByText('Overall conversion')).toBeInTheDocument()
-    expect(screen.getByText('50.0%')).toBeInTheDocument()
-    expect(screen.getAllByText('signup.completed').length).toBeGreaterThan(0)
-    expect(screen.getByText('4 / 100.0%')).toBeInTheDocument()
+    expect(await screen.findByText('Activation funnel')).toBeInTheDocument()
+    // Overall conversion is shown to one decimal in the funnel header once it loads.
+    expect(await screen.findByText('50.0%')).toBeInTheDocument()
+    expect(screen.getAllByText('signup_completed').length).toBeGreaterThan(0)
   })
 
-  it('updates product funnel steps from the panel controls', async () => {
-    mockApi.getAnalyticsEvents.mockResolvedValue([{name: 'signup.completed', visitors: 3, pageviews: 3}])
+  it('renders populated product analytics panels and custom retention', async () => {
+    mockApi.getAnalyticsEvents.mockResolvedValue([
+      {name: 'signup_completed', visitors: 18, pageviews: 24},
+      {name: 'playlist.saved', visitors: 9, pageviews: 16},
+    ])
+    mockApi.getAnalyticsFunnel.mockResolvedValue({
+      overallConversion: 120,
+      steps: [
+        {name: 'signup_completed', visitors: 10, dropoff: 0, conversionRate: 100},
+        {name: 'activated', visitors: 12, dropoff: -2, conversionRate: 120},
+      ],
+    })
+    mockApi.getProductActivity.mockResolvedValue({
+      series: [
+        {
+          metric: 'active',
+          points: [
+            {timestamp: '2026-06-01', value: 8, previous: 6},
+            {timestamp: '2026-06-02', value: 14, previous: 11},
+          ],
+        },
+        {
+          metric: 'new',
+          points: [
+            {timestamp: '2026-06-01', value: 3, previous: 2},
+            {timestamp: '2026-06-02', value: 5, previous: 4},
+          ],
+        },
+        {
+          metric: 'key_action',
+          points: [
+            {timestamp: '2026-06-01', value: 2, previous: 1},
+            {timestamp: '2026-06-02', value: 7, previous: 4},
+          ],
+        },
+      ],
+      annotations: [{date: '2026-06-02', label: 'v2 launch', kind: 'release'}],
+    })
+    mockApi.getProductMovers.mockResolvedValue([
+      {name: 'Onboarding completed', category: 'activation', detail: 'new flow', change: '+7.0pp', tone: 'good'},
+      {name: 'Invite sent', category: 'collab', change: '-3.0pp', tone: 'bad'},
+    ])
+    mockApi.getProductFeatureAdoption.mockResolvedValue([
+      {name: 'Saved views', adoptionRate: 140},
+      {name: 'Invite collaborators', adoptionRate: 26},
+    ])
+    mockApi.getProductSegmentation.mockResolvedValue({
+      plan: [{name: 'Free', users: 42, activationRate: 38, week1Retention: 24, stickiness: 18}],
+      platform: [{name: 'Web', users: 31, activationRate: 45, week1Retention: 28, stickiness: 22}],
+      country: [{name: 'US', users: 19, activationRate: 52, week1Retention: 34, stickiness: 26}],
+    })
+    mockApi.getProductRetention.mockResolvedValue({
+      mode: 'key_action',
+      periods: [0, 1, 2],
+      cohorts: [{cohort: 'May 4', users: 20, values: [100, 48, null]}],
+    })
 
     renderRoute(AnalyticsIndexRoute)
 
     await screen.findByText('Unique Visitors')
     selectProductTab()
-    expect(await screen.findByText('Activation Funnel')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', {name: 'Step'}))
+    expect(await screen.findByText('Activation funnel')).toBeInTheDocument()
+    expect(await screen.findByText('120.0%')).toBeInTheDocument()
+    expect(screen.getByText('+20%')).toBeInTheDocument()
+    expect(screen.getByText('v2 launch')).toBeInTheDocument()
+    expect(screen.getByText('Onboarding completed')).toBeInTheDocument()
+    expect(screen.getByText('Saved views')).toBeInTheDocument()
+    expect(screen.getByText('May 4')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Platform'}))
+    expect(screen.getAllByText('Web').length).toBeGreaterThan(1)
+
+    fireEvent.click(screen.getByRole('button', {name: 'Custom event'}))
+    fireEvent.change(screen.getByLabelText('Custom retention event'), {target: {value: 'playlist.saved'}})
+    fireEvent.blur(screen.getByLabelText('Custom retention event'))
+
+    await waitFor(() => {
+      expect(mockApi.getProductRetention).toHaveBeenLastCalledWith(
+        null,
+        expect.objectContaining({mode: 'custom', customEvent: 'playlist.saved'})
+      )
+    })
+  })
+
+  it('updates product funnel steps from the panel controls', async () => {
+    mockApi.getAnalyticsEvents.mockResolvedValue([{name: 'signup_completed', visitors: 3, pageviews: 3}])
+
+    renderRoute(AnalyticsIndexRoute)
+
+    await screen.findByText('Unique Visitors')
+    selectProductTab()
+    expect(await screen.findByText('Activation funnel')).toBeInTheDocument()
+
+    // The funnel ships with four general default steps.
     let stepInputs = screen.getAllByPlaceholderText('event.name')
     expect(stepInputs).toHaveLength(4)
 
-    fireEvent.change(stepInputs[3], {target: {value: 'purchase.completed'}})
-    fireEvent.click(screen.getAllByRole('button', {name: 'Remove funnel step'})[3])
-    expect(screen.getAllByPlaceholderText('event.name')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', {name: 'Step'}))
+    stepInputs = screen.getAllByPlaceholderText('event.name')
+    expect(stepInputs).toHaveLength(5)
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Remove step'})[4])
+    expect(screen.getAllByPlaceholderText('event.name')).toHaveLength(4)
 
     stepInputs = screen.getAllByPlaceholderText('event.name')
-    fireEvent.change(stepInputs[0], {target: {value: ''}})
-    fireEvent.change(stepInputs[1], {target: {value: ''}})
+    stepInputs.forEach((input) => fireEvent.change(input, {target: {value: ''}}))
 
     expect(await screen.findByText('Add at least two steps')).toBeInTheDocument()
   })
