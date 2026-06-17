@@ -649,7 +649,12 @@ class ReleaseRoutesTest {
                     firstBytes.size.toLong() + secondBytes.size.toLong()
                 )
             }
-            verify { quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", secondBytes.size.toLong()) }
+            verify(exactly = 1) {
+                quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", secondBytes.size.toLong())
+            }
+            verify(exactly = 0) {
+                quotaService.refundUnits(TEST_ORG_ID, 1, "sourcemap", firstBytes.size.toLong())
+            }
         }
 
     @Test
