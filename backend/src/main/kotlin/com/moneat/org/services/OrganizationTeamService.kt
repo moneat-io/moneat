@@ -51,6 +51,7 @@ import kotlin.time.Clock
 private const val MAX_TEAM_NAME_LENGTH = 200
 private const val MAX_TEAM_SLUG_LENGTH = 120
 private const val MAX_TEAM_SLUG_SUFFIX_ATTEMPTS = 1_000
+private const val TEAM_NOT_FOUND_ERROR = "Team not found"
 
 class OrganizationTeamService(
     private val membershipService: OrgMembershipService,
@@ -96,7 +97,7 @@ class OrganizationTeamService(
                 replaceMemberUserIds(insertedTeamId, memberUserIds)
                 insertedTeamId
             }
-        return teamResponse(organizationId, teamId) ?: throw NotFoundException("Team not found")
+        return teamResponse(organizationId, teamId) ?: throw NotFoundException(TEAM_NOT_FOUND_ERROR)
     }
 
     fun updateTeam(
@@ -106,36 +107,18 @@ class OrganizationTeamService(
         request: UpdateOrganizationTeamRequest,
     ): OrganizationTeamResponse {
         requireTeamMutation(organizationId, userId)
-        val teamId = resolveTeamId(organizationId, teamResourceId) ?: throw NotFoundException("Team not found")
+        val teamId = resolveTeamId(organizationId, teamResourceId) ?: throw NotFoundException(TEAM_NOT_FOUND_ERROR)
         val name = request.name?.let(::normalizedRequiredName)
         val memberUserIds = request.memberIds?.let { memberIds -> resolveMemberUserIds(organizationId, memberIds) }
         transaction {
-            val current = teamRowInTx(organizationId, teamId) ?: throw NotFoundException("Team not found")
+            val current = teamRowInTx(organizationId, teamId) ?: throw NotFoundException(TEAM_NOT_FOUND_ERROR)
             val nextName = name ?: current.name
-            val nextSlug =
-                if (name == null || nextName == current.name) {
-                    current.slug
-                } else {
-                    nextAvailableSlug(organizationId, slugForName(nextName), excludeTeamId = teamId)
-                }
-            val nextDescription =
-                if (request.description != null) normalizedOptional(request.description) else current.description
-            val nextSlack =
-                if (request.slack != null) normalizedOptional(request.slack) else current.slack
-            val nextRepository =
-                if (request.repo != null) normalizedOptional(request.repo) else current.repo
-            val scheduleId =
-                if (request.onCallScheduleId != null) {
-                    resolveScheduleId(organizationId, request.onCallScheduleId)
-                } else {
-                    current.onCallScheduleId
-                }
-            val policyId =
-                if (request.escalationPolicyId != null) {
-                    resolveEscalationPolicyId(organizationId, request.escalationPolicyId)
-                } else {
-                    current.escalationPolicyId
-                }
+            val nextSlug = nextSlugForUpdate(organizationId, teamId, name, nextName, current)
+            val nextDescription = optionalStringUpdate(request.description, current.description)
+            val nextSlack = optionalStringUpdate(request.slack, current.slack)
+            val nextRepository = optionalStringUpdate(request.repo, current.repo)
+            val scheduleId = scheduleIdForUpdate(organizationId, request.onCallScheduleId, current.onCallScheduleId)
+            val policyId = policyIdForUpdate(organizationId, request.escalationPolicyId, current.escalationPolicyId)
             OrganizationTeams.update({
                 (OrganizationTeams.organizationId eq organizationId) and (OrganizationTeams.id eq teamId)
             }) {
@@ -150,7 +133,7 @@ class OrganizationTeamService(
             }
             memberUserIds?.let { replaceMemberUserIds(teamId, it) }
         }
-        return teamResponse(organizationId, teamId) ?: throw NotFoundException("Team not found")
+        return teamResponse(organizationId, teamId) ?: throw NotFoundException(TEAM_NOT_FOUND_ERROR)
     }
 
     fun deleteTeam(
@@ -276,15 +259,48 @@ class OrganizationTeamService(
         return rows.map { row -> row.toTeamRow(scheduleResourceIds, policyResourceIds) }
     }
 
-    private fun teamRow(
-        organizationId: Int,
-        teamId: Int,
-    ): TeamRow? = teamRows(organizationId, setOf(teamId)).firstOrNull()
-
     private fun teamRowInTx(
         organizationId: Int,
         teamId: Int,
     ): TeamRow? = teamRowsInTx(organizationId, setOf(teamId)).firstOrNull()
+
+    private fun nextSlugForUpdate(
+        organizationId: Int,
+        teamId: Int,
+        requestedName: String?,
+        nextName: String,
+        current: TeamRow,
+    ): String =
+        if (requestedName == null || nextName == current.name) {
+            current.slug
+        } else {
+            nextAvailableSlug(organizationId, slugForName(nextName), excludeTeamId = teamId)
+        }
+
+    private fun optionalStringUpdate(requestedValue: String?, currentValue: String?): String? =
+        if (requestedValue != null) normalizedOptional(requestedValue) else currentValue
+
+    private fun scheduleIdForUpdate(
+        organizationId: Int,
+        requestedScheduleId: String?,
+        currentScheduleId: Int?,
+    ): Int? =
+        if (requestedScheduleId != null) {
+            resolveScheduleId(organizationId, requestedScheduleId)
+        } else {
+            currentScheduleId
+        }
+
+    private fun policyIdForUpdate(
+        organizationId: Int,
+        requestedPolicyId: String?,
+        currentPolicyId: Int?,
+    ): Int? =
+        if (requestedPolicyId != null) {
+            resolveEscalationPolicyId(organizationId, requestedPolicyId)
+        } else {
+            currentPolicyId
+        }
 
     private fun ResultRow.toTeamRow(
         scheduleResourceIds: Map<Int, String>,

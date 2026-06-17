@@ -255,7 +255,12 @@ class PricingTierService {
             val resolvedOncallPerUserYearlyCents =
                 request.oncallPerUserYearlyCents ?: currentConfig?.oncallPerUserYearlyCents ?: 0
             val resolvedOncallEnabled = request.oncallEnabled ?: currentConfig?.oncallEnabled ?: false
-            val resolvedTeamsEnabled = request.teamsEnabled ?: currentConfig?.teamsEnabled ?: defaults.teamsEnabled
+            val resolvedTeamsEnabled =
+                when {
+                    request.teamsEnabled != null -> request.teamsEnabled
+                    currentConfig != null -> currentConfig.teamsEnabled
+                    else -> defaults.teamsEnabled
+                }
             val resolvedMaxAnalyticsSites = request.maxAnalyticsSites
             val resolvedAnalyticsRetentionDays =
                 request.analyticsRetentionDays

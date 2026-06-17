@@ -45,13 +45,13 @@ export interface TeamEditorOption {
 }
 
 interface TeamEditorProps {
-  initialData?: TeamFormData
-  members: TeamEditorOption[]
-  schedules: TeamEditorOption[]
-  policies: TeamEditorOption[]
-  isSaving?: boolean
-  onSave: (data: TeamFormData) => void
-  onCancel: () => void
+  readonly initialData?: TeamFormData
+  readonly members: readonly TeamEditorOption[]
+  readonly schedules: readonly TeamEditorOption[]
+  readonly policies: readonly TeamEditorOption[]
+  readonly isSaving?: boolean
+  readonly onSave: (data: TeamFormData) => void
+  readonly onCancel: () => void
 }
 
 const NONE_VALUE = '__none__'
@@ -78,6 +78,7 @@ export function TeamEditor({
   onCancel,
 }: TeamEditorProps) {
   const [form, setForm] = useState<TeamFormData>(initialData ?? emptyForm())
+  const saveButtonLabel = teamSaveButtonLabel(isSaving, initialData !== undefined)
 
   const availableMembers = members.filter((member) => !form.memberIds.includes(member.id))
   const selectedMembers = form.memberIds
@@ -234,9 +235,14 @@ export function TeamEditor({
           Cancel
         </Button>
         <Button type="button" onClick={handleSave} disabled={!nameValid || isSaving}>
-          {isSaving ? 'Saving…' : initialData ? 'Save changes' : 'Create team'}
+          {saveButtonLabel}
         </Button>
       </div>
     </div>
   )
+}
+
+function teamSaveButtonLabel(isSaving: boolean, isEditing: boolean): string {
+  if (isSaving) return 'Saving…'
+  return isEditing ? 'Save changes' : 'Create team'
 }
