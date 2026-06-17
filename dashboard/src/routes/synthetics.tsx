@@ -15,12 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {BookOpen, FlaskConical, Plus} from 'lucide-react'
-import {useState} from 'react'
 import {api} from '@/lib/api'
-import {BetaBanner} from '@/components/BetaBanner'
-import {Button} from '@/components/ui/button'
-import CreateSyntheticTestDialog from '@/components/CreateSyntheticTestDialog'
 
 export const Route = createFileRoute('/synthetics')({
   beforeLoad: async () => {
@@ -32,41 +27,8 @@ export const Route = createFileRoute('/synthetics')({
   component: SyntheticsLayout,
 })
 
+// Child routes own their full chrome (the overview fills the viewport via ExplorerShell;
+// the builder and result drill-in are full-page). The layout is just the auth gate.
 function SyntheticsLayout() {
-  const [createOpen, setCreateOpen] = useState(false)
-
-  return (
-    <div className="space-y-2">
-      <BetaBanner pageKey="synthetics" />
-      <div className="p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 shrink-0">
-            <FlaskConical className="h-3.5 w-3.5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold">Synthetics</h2>
-            <p className="text-muted-foreground text-xs">Synthetic test results and monitoring</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <a href="/docs/datadog-agent/synthetics" target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-            <BookOpen className="h-3 w-3" />
-            View docs
-          </a>
-          <Button size="sm" onClick={() => setCreateOpen(true)} className="gap-1 text-xs">
-            <Plus className="h-3 w-3" />New Test
-          </Button>
-        </div>
-      </div>
-      <Outlet />
-    </div>
-      <CreateSyntheticTestDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        onSuccess={() => setCreateOpen(false)}
-      />
-    </div>
-  )
+  return <Outlet />
 }

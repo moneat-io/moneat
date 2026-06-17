@@ -20,8 +20,11 @@ import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CreateDashboardRequest
 import com.moneat.dashboards.models.CreateFolderRequest
 import com.moneat.dashboards.models.CreateWidgetRequest
+import com.moneat.dashboards.models.DashboardFolders
 import com.moneat.dashboards.models.DashboardResponse
 import com.moneat.dashboards.models.DashboardVariable
+import com.moneat.dashboards.models.DashboardWidgets
+import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.FolderResponse
@@ -41,9 +44,16 @@ import com.moneat.dashboards.repositories.DashboardRepository
 import com.moneat.dashboards.repositories.DashboardWidgetRepository
 import com.moneat.dashboards.repositories.DashboardWithFavoriteFlag
 import com.moneat.events.repositories.ProjectRepository
+import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private val json = Json {
     ignoreUnknownKeys = true
@@ -55,6 +65,7 @@ class CustomDashboardService(
     private val dashboardRepository: DashboardRepository,
     private val dashboardWidgetRepository: DashboardWidgetRepository,
     private val projectRepository: ProjectRepository,
+    private val projectIdResolver: ProjectIdResolver = ProjectIdResolver(),
 ) {
 
     private fun parseVariables(variablesJson: String): List<DashboardVariable> {
@@ -65,21 +76,73 @@ class CustomDashboardService(
         }
     }
 
+    private fun parseUuid(value: String): Uuid? =
+        value.toUuidOrNull()
+
+    fun isValidResourceId(value: String?): Boolean =
+        value?.let(::parseUuid) != null
+
+    fun resolveDashboardId(resourceId: String, orgId: Long): Long? =
+        parseUuid(resourceId)?.let { parsed ->
+            transaction {
+                Dashboards.selectAll()
+                    .where { (Dashboards.resourceId eq parsed) and (Dashboards.orgId eq orgId) }
+                    .firstOrNull()
+                    ?.get(Dashboards.id)
+            }
+        }
+
+    fun resolveFolderId(resourceId: String, orgId: Long): Long? =
+        parseUuid(resourceId)?.let { parsed ->
+            transaction {
+                DashboardFolders.selectAll()
+                    .where { (DashboardFolders.resourceId eq parsed) and (DashboardFolders.orgId eq orgId) }
+                    .firstOrNull()
+                    ?.get(DashboardFolders.id)
+            }
+        }
+
+    fun resolveWidgetId(resourceId: String, dashboardId: Long): Long? =
+        parseUuid(resourceId)?.let { parsed ->
+            transaction {
+                DashboardWidgets.selectAll()
+                    .where {
+                        (DashboardWidgets.resourceId eq parsed) and
+                            (DashboardWidgets.dashboardId eq dashboardId)
+                    }
+                    .firstOrNull()
+                    ?.get(DashboardWidgets.id)
+            }
+        }
+
+    private fun resolveProjectId(resourceId: String, orgId: Long): Long =
+        requireNotNull(projectIdResolver.resolve(resourceId, orgId)) {
+            "Invalid project ID"
+        }
+
+    private fun resolveOptionalFolderId(resourceId: String?, orgId: Long): Long? =
+        resourceId?.let {
+            requireNotNull(resolveFolderId(it, orgId)) {
+                "Folder not found"
+            }
+        }
+
     private fun mapToResponse(d: DashboardWithFavoriteFlag, widgets: List<WidgetResponse>): DashboardResponse =
         DashboardResponse(
-            id = d.id,
-            orgId = d.orgId,
-            projectId = d.projectId,
-            folderId = d.folderId,
+            id = d.resourceId,
+            orgId = d.orgResourceId,
+            projectId = d.projectResourceId,
+            folderId = d.folderResourceId,
             title = d.title,
             description = d.description,
             layoutType = d.layoutType,
             isDefault = d.isDefault,
             isFavorited = d.isFavorited,
             variables = parseVariables(d.variables),
-            createdBy = d.createdBy,
+            createdBy = d.createdByResourceId,
             createdAt = d.createdAt,
             updatedAt = d.updatedAt,
+            ownerName = d.ownerName,
             widgets = widgets
         )
 
@@ -93,8 +156,8 @@ class CustomDashboardService(
                 } catch (_: SerializationException) { emptyList() }
             }
             WidgetResponse(
-                id = wd.id,
-                dashboardId = wd.dashboardId,
+                id = wd.resourceId,
+                dashboardId = wd.dashboardResourceId,
                 title = wd.title,
                 widgetType = wd.widgetType,
                 gridX = wd.gridX,
@@ -122,43 +185,22 @@ class CustomDashboardService(
     }
 
     fun createDashboard(orgId: Long, userId: Long, request: CreateDashboardRequest): DashboardResponse {
-        val data = dashboardRepository.create(orgId, userId, request)
+        val projectId = request.projectId?.let { resolveProjectId(it, orgId) }
+        val folderId = resolveOptionalFolderId(request.folderId, orgId)
+        val data = dashboardRepository.create(orgId, userId, request, projectId, folderId)
         val now = Clock.System.now()
-        val widgets = request.widgets.mapIndexed { index, widget ->
+        request.widgets.forEachIndexed { index, widget ->
             val sortOrder = widget.sortOrder.takeIf { it > 0 } ?: index
-            val widgetId = dashboardWidgetRepository.insert(data.id, widget, sortOrder, now)
-            WidgetResponse(
-                id = widgetId,
-                dashboardId = data.id,
-                title = widget.title,
-                widgetType = widget.widgetType,
-                gridX = widget.gridX,
-                gridY = widget.gridY,
-                gridW = widget.gridW,
-                gridH = widget.gridH,
-                queryConfigs = widget.queryConfigs,
-                displayConfig = widget.displayConfig,
-                sortOrder = widget.sortOrder
-            )
+            dashboardWidgetRepository.insert(data.id, widget, sortOrder, now)
         }
-        return DashboardResponse(
-            id = data.id,
-            orgId = data.orgId,
-            projectId = data.projectId,
-            title = data.title,
-            description = data.description,
-            layoutType = data.layoutType,
-            isDefault = data.isDefault,
-            variables = parseVariables(data.variables),
-            createdBy = data.createdBy,
-            createdAt = data.createdAt,
-            updatedAt = data.updatedAt,
-            widgets = widgets
-        )
+        return requireNotNull(getDashboard(data.id, orgId, userId.toInt())) {
+            "Created dashboard could not be reloaded"
+        }
     }
 
     fun updateDashboard(id: Long, orgId: Long, request: UpdateDashboardRequest): DashboardResponse? {
-        val updated = dashboardRepository.update(id, orgId, request)
+        val folderId = resolveOptionalFolderId(request.folderId, orgId)
+        val updated = dashboardRepository.update(id, orgId, request, folderId)
         if (!updated) return null
         if (request.widgets != null) {
             val now = Clock.System.now()
@@ -174,11 +216,43 @@ class CustomDashboardService(
     fun deleteDashboard(id: Long, orgId: Long): Boolean =
         dashboardRepository.delete(id, orgId)
 
+    /** Deep-copies a dashboard (title suffixed " (Copy)") and all of its widgets. */
+    fun duplicateDashboard(id: Long, orgId: Long, userId: Long): DashboardResponse? {
+        val source = getDashboard(id, orgId, userId.toInt()) ?: return null
+        val request = CreateDashboardRequest(
+            title = "${source.title} (Copy)",
+            description = source.description,
+            projectId = source.projectId,
+            folderId = source.folderId,
+            layoutType = source.layoutType,
+            isDefault = false,
+            variables = source.variables,
+            widgets = source.widgets.map { w ->
+                CreateWidgetRequest(
+                    title = w.title,
+                    widgetType = w.widgetType,
+                    gridX = w.gridX,
+                    gridY = w.gridY,
+                    gridW = w.gridW,
+                    gridH = w.gridH,
+                    queryConfigs = w.queryConfigs,
+                    displayConfig = w.displayConfig,
+                    sortOrder = w.sortOrder
+                )
+            }
+        )
+        return createDashboard(orgId, userId, request)
+    }
+
+    /** Marks a dashboard as the org's single default ("home") dashboard. */
+    fun setDefaultDashboard(id: Long, orgId: Long): Boolean =
+        dashboardRepository.setDefault(id, orgId)
+
     fun listFolders(orgId: Long): List<FolderResponse> =
         folderRepository.listByOrgId(orgId).map { row ->
             FolderResponse(
-                id = row.id,
-                orgId = row.orgId,
+                id = row.resourceId,
+                orgId = row.orgResourceId,
                 name = row.name,
                 color = row.color,
                 sortOrder = row.sortOrder,
@@ -189,9 +263,12 @@ class CustomDashboardService(
 
     fun createFolder(orgId: Long, request: CreateFolderRequest): FolderResponse {
         val id = folderRepository.create(orgId, request.name, request.color, request.sortOrder)
+        val row = requireNotNull(folderRepository.getByIdAndOrgId(id, orgId)) {
+            "Created folder could not be reloaded"
+        }
         return FolderResponse(
-            id = id,
-            orgId = orgId,
+            id = row.resourceId,
+            orgId = row.orgResourceId,
             name = request.name,
             color = request.color,
             sortOrder = request.sortOrder,
@@ -204,8 +281,8 @@ class CustomDashboardService(
         val row = folderRepository.getByIdAndOrgId(id, orgId) ?: return null
         folderRepository.update(id, orgId, request.name, request.color, request.sortOrder)
         return FolderResponse(
-            id = id,
-            orgId = row.orgId,
+            id = row.resourceId,
+            orgId = row.orgResourceId,
             name = request.name ?: row.name,
             color = request.color ?: row.color,
             sortOrder = request.sortOrder ?: row.sortOrder,
@@ -227,7 +304,7 @@ class CustomDashboardService(
             mapToResponse(d, loadWidgets(d.id))
         }
         val projects = projectRepository.searchProjectsByName(orgId.toInt(), pattern, limit = 10).map { row ->
-            SearchProjectResponse(id = row.projectId, name = row.name)
+            SearchProjectResponse(id = row.resourceId, name = row.name)
         }
         return SearchResponse(dashboards = dashboards, projects = projects)
     }
@@ -318,7 +395,7 @@ class CustomDashboardService(
                     QueryDsl(
                         dataSource = "events",
                         metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
-                        groupBy = listOf(GroupByDef("transaction", GroupByType.FIELD)),
+                        groupBy = listOf(GroupByDef("transaction_name", GroupByType.FIELD)),
                         filters = listOf(FilterDef("level", FilterOp.EQ, "error")),
                         orderBy = OrderByDef("count", "desc"),
                         limit = 10

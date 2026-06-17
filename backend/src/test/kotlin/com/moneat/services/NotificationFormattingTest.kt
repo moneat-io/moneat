@@ -475,7 +475,7 @@ class NotificationFormattingTest {
                 elements = listOf(
                     SlackService.SlackElement(
                         type = "button",
-                        text = SlackService.SlackText(type = "plain_text", text = "View Host"),
+                        text = SlackService.SlackText(type = "plain_text", text = "View"),
                         url = "https://app.moneat.io/monitoring/hosts/1"
                     )
                 )

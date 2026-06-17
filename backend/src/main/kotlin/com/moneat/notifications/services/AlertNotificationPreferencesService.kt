@@ -37,6 +37,7 @@ class AlertNotificationPreferencesService {
         HOST_ALERT("HOST_ALERT"),
         HOST_DOWN("HOST_DOWN"),
         UPTIME_MONITOR("UPTIME_MONITOR"),
+        SYNTHETIC_TEST("SYNTHETIC_TEST"),
         ERROR_ALERT("ERROR_ALERT"),
         DASHBOARD_ALERT("DASHBOARD_ALERT");
 

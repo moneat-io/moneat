@@ -1,31 +1,59 @@
 ---
 title: Uptime Monitoring
-description: Monitor your endpoints and services with HTTP checks and heartbeat monitors.
+description: Monitor endpoints, certificates, network checks, containers, and heartbeat jobs.
 ---
 
 # Uptime Monitoring
 
 ## Overview
 
-Uptime monitoring tracks the availability of your websites, APIs, and background services. Get alerted when something goes down, and track uptime history and response times.
+Uptime monitoring tracks the availability of websites, APIs, network services, containers, and
+background jobs. Moneat records uptime history, response times, and failure messages, then can open
+incidents when a monitor goes down.
 
 ## Monitor Types
+
+Moneat supports several monitor types:
+
+| Type | Use |
+|------|-----|
+| HTTP(S) | Check a URL, HTTP method, status code, timeout, and response time |
+| Keyword | Check an HTTP response for expected or unexpected text |
+| JSON query | Validate fields in a JSON response through the API-supported monitor type |
+| TCP port | Confirm a host and port accepts TCP connections |
+| Ping | Check host reachability |
+| DNS | Validate DNS resolution and expected records |
+| SSL certificate | Check certificate connectivity and expiry windows |
+| WebSocket | Confirm a WebSocket endpoint accepts connections |
+| Docker | Check Docker container health by container name and Docker host |
+| Push | Record passive heartbeats from cron jobs, workers, and scheduled tasks |
 
 ### HTTP Monitors
 
 HTTP monitors send periodic requests to a URL and check the response. You can configure:
 
 - **URL** - The endpoint to check
-- **Check interval** - How often to check (e.g., every 1, 5, or 10 minutes)
-- **Expected status code** - The HTTP status code that indicates success (default: 200)
+- **Check interval** - How often to check
+- **Expected status code** - The HTTP status code that indicates success
 - **Timeout** - How long to wait before marking the check as failed
-- **HTTP method** - GET, POST, HEAD, etc.
+- **HTTP method** - GET, POST, PUT, DELETE, HEAD, and similar methods
+
+### Network and Certificate Monitors
+
+TCP, ping, DNS, SSL certificate, and WebSocket monitors check lower-level availability signals.
+Use them for services where an HTTP status code is not the right health signal, such as ports,
+DNS records, TLS expiry, or WebSocket handshakes.
+
+### Docker Monitors
+
+Docker monitors check a container by name through a configured Docker host. Use them for self-hosted
+or private deployments where container health is the relevant availability signal.
 
 ### Push / Heartbeat Monitors
 
-Heartbeat monitors work in reverse: your service sends a ping to Moneat at regular intervals. If Moneat doesn't receive a ping within the expected window, it marks the service as down. Useful for cron jobs, background workers, and scheduled tasks.
-
-**Heartbeat Ping (cURL)**
+Push monitors work in reverse: your service sends a ping to Moneat at regular intervals. If Moneat
+does not receive a ping within the expected window, it marks the service as down. Use push monitors
+for cron jobs, background workers, and scheduled tasks.
 
 ```bash
 # Add to the end of your cron job or scheduled task
@@ -33,14 +61,15 @@ curl -s https://api.moneat.io/v1/uptime/push/<monitor_token>
 ```
 
 :::tip[Easy integration]
-Just add a `curl` call to the end of your cron job script. If the job fails or hangs, the ping won't be sent and Moneat will alert you.
+Add a `curl` call to the end of your job script. If the job fails or hangs before the ping is sent,
+Moneat will alert you.
 :::
 
 ## Managing Monitors
 
-Navigate to **Uptime** in the sidebar to view and manage your monitors. From there you can:
+Navigate to **Uptime** in the sidebar to view and manage monitors. From there you can:
 
-- Create new HTTP or heartbeat monitors
+- Create monitors for endpoints, network checks, containers, and heartbeat jobs
 - View current status and uptime percentage
 - See response time history and trends
 - Pause and resume monitors temporarily
@@ -48,11 +77,17 @@ Navigate to **Uptime** in the sidebar to view and manage your monitors. From the
 
 ## Alerting
 
-When a monitor detects a failure, Moneat can create an incident and notify your team through the configured escalation policy. This integrates with the on-call system so the right person gets paged when your service goes down.
+When a monitor detects a failure, Moneat can create an incident and notify your team through the
+configured escalation policy. This integrates with on-call so the right person gets paged when a
+service goes down.
 
-:::info[Connect your monitors to escalation policies in the monitor settings to enable automatic incident creation on downtime.]
+:::info[Escalation policies]
+Connect monitors to escalation policies in monitor settings to enable automatic incident creation on
+downtime.
 :::
 
 ## Status Page Integration
 
-Monitors can be linked to status page components. When a monitor goes down, the corresponding component on your public status page is automatically updated. See the [Status Pages](/docs/status-pages) documentation for more details.
+Monitors can be linked to status page components. When a monitor goes down, the corresponding
+component on your public status page is automatically updated. See [Status Pages](/docs/status-pages)
+for more details.

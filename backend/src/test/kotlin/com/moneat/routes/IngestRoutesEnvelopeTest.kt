@@ -18,8 +18,14 @@ package com.moneat.routes
 
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.QuotaReservationResult
+import com.moneat.events.models.EnvelopeItem
+import com.moneat.events.repositories.models.ProjectKeyVerification
+import com.moneat.events.routes.IngestRouteDependencies
 import com.moneat.events.routes.ingestRoutes
+import com.moneat.events.routes.mapEnvelopeItemToQuotaType
 import com.moneat.events.routes.mapEnvelopeItemTypeToQuotaType
+import com.moneat.events.services.EventService
+import com.moneat.logs.services.LogService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -39,9 +45,15 @@ import io.ktor.server.config.MapApplicationConfig
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.coVerify
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -112,12 +124,14 @@ class IngestRoutesEnvelopeTest {
                 install(ContentNegotiation) { json() }
                 routing {
                     ingestRoutes(
-                        enqueueEnvelope = { _, _ -> },
-                        isQuotaEnforcementEnabled = { true },
-                        reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
-                            reservations.add(requestedUnitsByType)
-                            QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
-                        }
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                                reservations.add(requestedUnitsByType)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
                     )
                 }
             }
@@ -142,7 +156,403 @@ class IngestRoutesEnvelopeTest {
             assertEquals(HttpStatusCode.Accepted, response.status)
             assertEquals(1, reservations.size)
             assertEquals(1, reservations[0]["transaction"])
-            assertEquals(2, reservations[0]["error"])
+            assertEquals(1, reservations[0]["session"])
+            assertEquals(1, reservations[0]["error"])
+        }
+
+    @Test
+    fun `envelope endpoint reserves event feedback payload as feedback quota`() =
+        testApplication {
+            val reservations = mutableListOf<Map<String, Int>>()
+
+            environment {
+                config =
+                    MapApplicationConfig(
+                        "ingest.queueKey" to "test:ingest:q",
+                        "logs.queueKey" to "test:logs:q"
+                    )
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, requestedUnitsByType, _ ->
+                                reservations.add(requestedUnitsByType)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
+                    )
+                }
+            }
+
+            val feedbackPayload =
+                """
+                {
+                    "event_id":"44bad9a2e3774046977a21440ddb39b2",
+                    "type":"feedback",
+                    "contexts":{"feedback":{"message":"Great app"}}
+                }
+                """.trimIndent()
+
+            val response =
+                client.post("/api/$testProjectId/envelope/") {
+                    contentType(ContentType.Application.OctetStream)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody(
+                        buildEnvelope(
+                            eventId = "evt-feedback-1",
+                            items = listOf("event" to feedbackPayload.toByteArray())
+                        )
+                    )
+                }
+
+            assertEquals(HttpStatusCode.Accepted, response.status)
+            assertEquals(1, reservations.size)
+            assertEquals(1, reservations[0]["feedback"])
+            assertEquals(null, reservations[0]["error"])
+        }
+
+    @Test
+    fun `store endpoint reserves feedback event payload as feedback quota`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+            val reservedTypes = mutableListOf<String>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+            coEvery { eventService.processStoreEvent(testProjectId, any()) } returns Unit
+
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            isQuotaEnforcementEnabled = { true }
+                            reserveSingleQuota = { orgId, _, eventType, _ ->
+                                reservedTypes.add(eventType)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/store/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                    setBody(
+                        """
+                        {
+                            "event_id":"64bad9a2e3774046977a21440ddb39b2",
+                            "type":"feedback",
+                            "contexts":{"feedback":{"message":"Legacy store feedback"}}
+                        }
+                        """.trimIndent()
+                    )
+                }
+
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(listOf("feedback"), reservedTypes)
+        }
+
+    @Test
+    fun `logs endpoint accepts gzipped SDK logs and uses default queue`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+            val logService = mockk<LogService>()
+            val reservedUnits = mutableListOf<Int>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+            every { logService.estimateBillableBytes(any()) } returns 23L
+            coEvery {
+                logService.enqueueSdkLogs(testOrgId.toLong(), any(), "moneat:logs:queue")
+            } returns 1
+
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            this.logService = logService
+                            isQuotaEnforcementEnabled = { true }
+                            reserveLogQuota = { orgId, units, bytes ->
+                                reservedUnits.add(units)
+                                assertEquals(23L, bytes)
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/logs/") {
+                    contentType(ContentType.Application.Json)
+                    header("x-moneat-dsn", "https://$testPublicKey@example.test/$testProjectId")
+                    header("Content-Encoding", "gzip")
+                    setBody(gzip("""[{"level":"info","message":"hello","service":"sdk"}]"""))
+                }
+
+            assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("\"accepted\":1"))
+            assertEquals(listOf(1), reservedUnits)
+            coVerify(exactly = 1) {
+                logService.enqueueSdkLogs(testOrgId.toLong(), any(), "moneat:logs:queue")
+            }
+        }
+
+    @Test
+    fun `logs endpoint returns accepted zero for empty log list`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            isQuotaEnforcementEnabled = { true }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/logs/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("[]")
+                }
+
+            assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
+            assertTrue(response.bodyAsText().contains("\"accepted\":0"))
+        }
+
+    @Test
+    fun `logs endpoint returns bad request for malformed payload`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/logs/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("{not-json")
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid log payload"))
+        }
+
+    @Test
+    fun `logs endpoint returns 429 when quota reservation rejects`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+            val logService = mockk<LogService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+            every { logService.estimateBillableBytes(any()) } returns 42L
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            this.logService = logService
+                            isQuotaEnforcementEnabled = { true }
+                            reserveLogQuota = { orgId, _, _ ->
+                                QuotaReservationResult(
+                                    allowed = false,
+                                    reason = "log_quota",
+                                    usage = emptyUsage(orgId),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/logs/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("""[{"message":"blocked"}]""")
+                }
+
+            assertEquals(HttpStatusCode.TooManyRequests, response.status)
+            assertTrue(response.bodyAsText().contains("Quota exceeded"))
+        }
+
+    @Test
+    fun `logs endpoint returns not found when project organization is missing`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns null
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/logs/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("""[{"message":"orphaned"}]""")
+                }
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("Project organization not found"))
+        }
+
+    @Test
+    fun `store endpoint returns not found when project organization is missing`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns null
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            isQuotaEnforcementEnabled = { true }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/store/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("""{"event_id":"store-orphan"}""")
+                }
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("Project organization not found"))
+        }
+
+    @Test
+    fun `store endpoint returns 429 when quota reservation rejects`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            every { eventService.getOrganizationIdForProject(testProjectId) } returns testOrgId
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            isQuotaEnforcementEnabled = { true }
+                            reserveSingleQuota = { orgId, _, _, _ ->
+                                QuotaReservationResult(
+                                    allowed = false,
+                                    reason = "store_quota",
+                                    usage = emptyUsage(orgId),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/store/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("""{"event_id":"store-quota"}""")
+                }
+
+            assertEquals(HttpStatusCode.TooManyRequests, response.status)
+            assertTrue(response.bodyAsText().contains("Quota exceeded"))
+        }
+
+    @Test
+    fun `store endpoint returns bad request when processing fails`() =
+        testApplication {
+            val eventService = mockk<EventService>()
+
+            every { eventService.verifyProjectKey(testProjectId, testPublicKey) } returns
+                ProjectKeyVerification(true, "jvm")
+            coEvery { eventService.processStoreEvent(testProjectId, any()) } throws IllegalStateException("bad event")
+
+            application {
+                install(ContentNegotiation) { json() }
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            this.eventService = eventService
+                            isQuotaEnforcementEnabled = { false }
+                        },
+                    )
+                }
+            }
+
+            val response =
+                client.post("/api/$testProjectId/store/") {
+                    contentType(ContentType.Application.Json)
+                    header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey")
+                    setBody("""{"event_id":"bad-store"}""")
+                }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertEquals("Invalid event format", response.bodyAsText())
         }
 
     @Test
@@ -155,15 +565,17 @@ class IngestRoutesEnvelopeTest {
                 install(ContentNegotiation) { json() }
                 routing {
                     ingestRoutes(
-                        enqueueEnvelope = { _, _ -> },
-                        isQuotaEnforcementEnabled = { true },
-                        reserveEnvelopeQuota = { orgId, _, _ ->
-                            QuotaReservationResult(
-                                allowed = false,
-                                reason = "quota_exceeded",
-                                usage = emptyUsage(orgId)
-                            )
-                        }
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, _, _ ->
+                                QuotaReservationResult(
+                                    allowed = false,
+                                    reason = "quota_exceeded",
+                                    usage = emptyUsage(orgId)
+                                )
+                            }
+                        },
                     )
                 }
             }
@@ -195,7 +607,11 @@ class IngestRoutesEnvelopeTest {
             application {
                 install(ContentNegotiation) { json() }
                 routing {
-                    ingestRoutes(enqueueEnvelope = { _, _ -> })
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            enqueueEnvelope = { _, _ -> }
+                        }
+                    )
                 }
             }
 
@@ -217,9 +633,25 @@ class IngestRoutesEnvelopeTest {
         assertEquals("feedback", mapEnvelopeItemTypeToQuotaType("feedback"))
         assertEquals("feedback", mapEnvelopeItemTypeToQuotaType("user_report"))
         assertEquals("llm", mapEnvelopeItemTypeToQuotaType("llm_generation"))
-        assertEquals("error", mapEnvelopeItemTypeToQuotaType("session"))
+        assertEquals("session", mapEnvelopeItemTypeToQuotaType("session"))
+        assertEquals("session", mapEnvelopeItemTypeToQuotaType("sessions"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("check_in"))
         assertEquals("error", mapEnvelopeItemTypeToQuotaType("unknown_type"))
+    }
+
+    @Test
+    fun `envelope item quota mapping detects feedback event payloads`() {
+        val feedbackPayload =
+            """
+            {
+                "event_id": "44bad9a2e3774046977a21440ddb39b2",
+                "type": "feedback",
+                "contexts": {"feedback": {"message": "Great app"}}
+            }
+            """.trimIndent()
+
+        assertEquals("feedback", mapEnvelopeItemToQuotaType(EnvelopeItem("event", feedbackPayload)))
+        assertEquals("error", mapEnvelopeItemToQuotaType(EnvelopeItem("event", """{"message":"User Feedback"}""")))
     }
 
     private fun buildEnvelope(
@@ -238,12 +670,21 @@ class IngestRoutesEnvelopeTest {
         return out.toByteArray()
     }
 
+    private fun gzip(payload: String): ByteArray {
+        val output = ByteArrayOutputStream()
+        GZIPOutputStream(output).use { gzip ->
+            gzip.write(payload.toByteArray())
+        }
+        return output.toByteArray()
+    }
+
     private fun emptyUsage(organizationId: Int): BillingUsageResponse {
         return BillingUsageResponse(
-            organizationId = organizationId,
+            organizationId = resourceId(organizationId),
             periodStart = "2026-01-01",
             periodEnd = "2026-01-31",
             retentionDays = 30,
+            apmTraceRetentionDays = 30,
             usedUnits = 0,
             usedErrors = 0,
             errorLimit = 1000,
@@ -266,6 +707,9 @@ class IngestRoutesEnvelopeTest {
             withinQuota = true
         )
     }
+
+    private fun resourceId(id: Int): String =
+        "00000000-0000-0000-0000-${id.toString().padStart(12, '0')}"
 
     @AfterTest
     fun teardownKoin() {

@@ -1,0 +1,2473 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.dashboards
+
+import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.DashboardResponse
+import com.moneat.dashboards.models.FilterDef
+import com.moneat.dashboards.models.FilterOp
+import com.moneat.dashboards.models.GroupByDef
+import com.moneat.dashboards.models.GroupByType.TIME
+import com.moneat.dashboards.models.MetricDef
+import com.moneat.dashboards.models.QueryDsl
+import com.moneat.dashboards.models.WidgetResponse
+import com.moneat.dashboards.translation.GrafanaTranslator
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+class GrafanaTranslatorTest {
+    private companion object {
+        const val DASHBOARD_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+        const val WIDGET_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+        const val ORG_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+        const val USER_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+    }
+
+    private val translator = GrafanaTranslator()
+
+    // ──── Import ────
+
+    @Test
+    fun `import extracts dashboard title`() {
+        val json = buildJsonObject {
+            put("title", "My Grafana Dashboard")
+            put("panels", JsonArray(emptyList()))
+        }
+        val result = translator.import(json)
+        assertEquals("My Grafana Dashboard", result.dashboard.title)
+    }
+
+    @Test
+    fun `import uses default title when missing`() {
+        val json = buildJsonObject {
+            put("panels", JsonArray(emptyList()))
+        }
+        val result = translator.import(json)
+        assertEquals("Imported Grafana Dashboard", result.dashboard.title)
+    }
+
+    @Test
+    fun `import maps timeseries panel type`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "CPU Over Time")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 12)
+                                    put("h", 8)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(1, result.dashboard.widgets.size)
+        assertEquals("timeseries", result.dashboard.widgets[0].widgetType)
+    }
+
+    @Test
+    fun `import maps barchart to bar`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "barchart")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("bar", result.dashboard.widgets[0].widgetType)
+    }
+
+    @Test
+    fun `import maps piechart to donut`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "piechart")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("donut", result.dashboard.widgets[0].widgetType)
+    }
+
+    @Test
+    fun `import maps gauge to gauge`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "gauge")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("gauge", result.dashboard.widgets[0].widgetType)
+    }
+
+    @Test
+    fun `import unsupported type produces warning`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "flamegraph")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("text", result.dashboard.widgets[0].widgetType)
+        assertTrue(result.warnings.any { it.contains("unsupported type") })
+    }
+
+    @Test
+    fun `import scales 24-col grid to 12-col`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 12)
+                                    put("y", 0)
+                                    put("w", 12)
+                                    put("h", 9)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val w = result.dashboard.widgets[0]
+        assertEquals(6, w.gridX) // 12 * 12/24 = 6
+        assertEquals(6, w.gridW) // 12 * 12/24 = 6
+        assertEquals(0, w.gridY)
+        assertEquals(9, w.gridH) // 1:1 pass-through preserves exact Grafana height ratios
+    }
+
+    @Test
+    fun `import handles missing gridPos`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(0, result.dashboard.widgets[0].gridX)
+    }
+
+    // ──── parseGrafanaTargets ────
+
+    @Test
+    fun `parseGrafanaTargets with PromQL expr`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(1, dsls.size)
+        val dsl = dsls[0]
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals("cpu_percent", dsl.metrics[0].field)
+        assertEquals("rate(node_cpu_seconds_total{mode=\"idle\"})", dsl.rawQuery)
+    }
+
+    @Test
+    fun `parseGrafanaTargets with rawSql`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("rawSql", "SELECT count() FROM events WHERE level = 'error'")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(1, dsls.size)
+        val dsl = dsls[0]
+        assertEquals("events", dsl.dataSource)
+        assertTrue(dsl.rawQuery != null)
+    }
+
+    @Test
+    fun `parseGrafanaTargets with no targets uses defaults`() {
+        val panel = buildJsonObject {
+            put("targets", JsonArray(emptyList()))
+        }
+        val warnings = mutableListOf<String>()
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(1, dsls.size)
+        val dsl = dsls[0]
+        assertEquals("events", dsl.dataSource)
+        assertEquals(AggFunction.COUNT, dsl.metrics[0].function)
+    }
+
+    @Test
+    fun `parseGrafanaTargets with multiple targets preserves legendFormat`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("expr", "system_cpu_usage{instance=\"host\"}")
+                            put("legendFormat", "System CPU Usage")
+                            put("refId", "A")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("expr", "process_cpu_usage{instance=\"host\"}")
+                            put("legendFormat", "Process CPU Usage")
+                            put("refId", "B")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val dsls = translator.parseGrafanaTargets(panel, warnings, 0)
+        assertEquals(2, dsls.size)
+        assertEquals("A", dsls[0].refId)
+        assertEquals("B", dsls[1].refId)
+        assertEquals("System CPU Usage", dsls[0].metrics[0].alias)
+        assertEquals("Process CPU Usage", dsls[1].metrics[0].alias)
+    }
+
+    // ──── parsePromQL ────
+
+    @Test
+    fun `parsePromQL with rate function`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("rate(http_requests_total{status=\"200\"})", warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(AggFunction.AVG, dsl.metrics[0].function)
+        assertTrue(dsl.filters.any { it.field == "status" && it.value == "200" })
+        assertEquals("rate(http_requests_total{status=\"200\"})", dsl.rawQuery)
+    }
+
+    @Test
+    fun `parsePromQL with sum function`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("sum(container_memory_usage_bytes{})", warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(AggFunction.SUM, dsl.metrics[0].function)
+        assertEquals("sum(container_memory_usage_bytes{})", dsl.rawQuery)
+    }
+
+    @Test
+    fun `parsePromQL with unparseable expression stores rawQuery`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("123 + + invalid{{{", warnings, 0)
+        assertTrue(dsl.rawQuery != null)
+        assertTrue(warnings.any { it.contains("couldn't parse") })
+    }
+
+    @Test
+    fun `parsePromQL with bare metric and labels`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            """process_uptime_seconds{application="myapp", instance="host1"}""",
+            warnings,
+            0
+        )
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(2, dsl.filters.size)
+        assertEquals("application", dsl.filters[0].field)
+        assertEquals("myapp", dsl.filters[0].value)
+        assertTrue(warnings.none { it.contains("couldn't parse") })
+    }
+
+    @Test
+    fun `parsePromQL with bare metric math expression`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("""system_cpu_usage{instance="host1"}*100""", warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(1, dsl.filters.size)
+        assertEquals("instance", dsl.filters[0].field)
+        assertTrue(warnings.none { it.contains("couldn't parse") })
+    }
+
+    @Test
+    fun `parsePromQL with regex label matcher`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL("""http_requests_total{method=~"GET|POST"}""", warnings, 0)
+        assertEquals(1, dsl.filters.size)
+        assertEquals(FilterOp.LIKE, dsl.filters[0].op)
+        assertEquals("GET|POST", dsl.filters[0].value)
+    }
+
+    @Test
+    fun `parsePromQL with sum by aggregation`() {
+        val warnings = mutableListOf<String>()
+        val expr = """sum by (uri, method, status) (
+            increase( http_server_requests_seconds_count{ instance=~"host", application=~"app" }[5m] )
+        )"""
+        val dsl = translator.parsePromQL(expr, warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("couldn't parse") })
+        assertEquals(expr, dsl.rawQuery)
+    }
+
+    @Test
+    fun `parsePromQL with multiline sum by aggregation`() {
+        val warnings = mutableListOf<String>()
+        val expr = """sum by (uri, method, status) (
+            increase(
+              http_server_requests_seconds_count{
+                instance=~"host",
+                application=~"app"
+              }[5m]
+            )
+        )"""
+        val dsl = translator.parsePromQL(expr, warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("couldn't parse") }, "Warnings: $warnings")
+        assertEquals(expr, dsl.rawQuery) // rawQuery preserves original with newlines
+    }
+
+    @Test
+    fun `parsePromQL with dollar-sign template variables`() {
+        val warnings = mutableListOf<String>()
+        val expr = """process_uptime_seconds{application="${'$'}application", instance="${'$'}instance"}"""
+        val dsl = translator.parsePromQL(expr, warnings, 0)
+        assertEquals("__prometheus", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("couldn't parse") }, "Warnings: $warnings")
+        assertEquals(2, dsl.filters.size)
+    }
+
+    // ──── Export ────
+
+    @Test
+    fun `export generates valid Grafana JSON structure`() {
+        val dashboard = DashboardResponse(
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
+            title = "Test",
+            createdBy = USER_RESOURCE_ID,
+            createdAt = "",
+            updatedAt = "",
+            widgets = listOf(
+                WidgetResponse(
+                    id = WIDGET_RESOURCE_ID, dashboardId = DASHBOARD_RESOURCE_ID, title = "CPU",
+                    widgetType = "timeseries",
+                    gridX = 0, gridY = 0, gridW = 6, gridH = 4,
+                    queryConfigs = listOf(
+                        QueryDsl(
+                            dataSource = "metrics",
+                            metrics = listOf(MetricDef(AggFunction.AVG, "cpu_percent", "avg_cpu")),
+                            groupBy = listOf(GroupByDef("timestamp", TIME, "1 HOUR"))
+                        )
+                    ),
+                )
+            )
+        )
+        val exported = translator.export(dashboard)
+        assertEquals("Test", exported["title"]?.jsonPrimitive?.content)
+        assertEquals(39, exported["schemaVersion"]?.jsonPrimitive?.int)
+        val panels = exported["panels"]!!.jsonArray
+        assertEquals(1, panels.size)
+    }
+
+    @Test
+    fun `export scales 12-col grid to 24-col`() {
+        val dashboard = DashboardResponse(
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
+            title = "Test",
+            createdBy = USER_RESOURCE_ID,
+            createdAt = "",
+            updatedAt = "",
+            widgets = listOf(
+                WidgetResponse(
+                    id = WIDGET_RESOURCE_ID,
+                    dashboardId = DASHBOARD_RESOURCE_ID,
+                    widgetType = "stat",
+                    gridX = 3,
+                    gridY = 0,
+                    gridW = 6,
+                    gridH = 4,
+                    queryConfigs = listOf(QueryDsl(dataSource = "events")),
+                )
+            )
+        )
+        val exported = translator.export(dashboard)
+        val gridPos = exported["panels"]!!.jsonArray[0].jsonObject["gridPos"]!!.jsonObject
+        assertEquals(6, gridPos["x"]!!.jsonPrimitive.int) // 3 * 2
+        assertEquals(12, gridPos["w"]!!.jsonPrimitive.int) // 6 * 2
+    }
+
+    @Test
+    fun `export maps toplist to table in Grafana`() {
+        val dashboard = DashboardResponse(
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
+            title = "Test",
+            createdBy = USER_RESOURCE_ID,
+            createdAt = "",
+            updatedAt = "",
+            widgets = listOf(
+                WidgetResponse(
+                    id = WIDGET_RESOURCE_ID,
+                    dashboardId = DASHBOARD_RESOURCE_ID,
+                    widgetType = "toplist",
+                    queryConfigs = listOf(QueryDsl(dataSource = "events")),
+                )
+            )
+        )
+        val exported = translator.export(dashboard)
+        val panelType = exported["panels"]!!.jsonArray[0].jsonObject["type"]!!.jsonPrimitive.content
+        assertEquals("table", panelType)
+    }
+
+    // ──── buildGrafanaSql ────
+
+    @Test
+    fun `buildGrafanaSql generates SQL with time bucket`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+            groupBy = listOf(GroupByDef("timestamp", TIME, "1 HOUR"))
+        )
+        val sql = translator.buildGrafanaSql(dsl)
+        assertContains(sql, "toStartOfInterval")
+        assertContains(sql, "FROM events")
+        assertContains(sql, "GROUP BY time_bucket")
+        assertContains(sql, "ORDER BY time_bucket ASC")
+    }
+
+    @Test
+    fun `buildGrafanaSql uses rawQuery when available`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            rawQuery = "SELECT * FROM events LIMIT 10"
+        )
+        val sql = translator.buildGrafanaSql(dsl)
+        assertEquals("SELECT * FROM events LIMIT 10", sql)
+    }
+
+    @Test
+    fun `buildGrafanaSql includes filters in WHERE clause`() {
+        val dsl = QueryDsl(
+            dataSource = "logs",
+            metrics = listOf(MetricDef(AggFunction.COUNT, alias = "count")),
+            filters = listOf(FilterDef("level", FilterOp.EQ, "error"))
+        )
+        val sql = translator.buildGrafanaSql(dsl)
+        assertContains(sql, "WHERE")
+        assertContains(sql, "level")
+    }
+
+    @Test
+    fun `import and export roundtrip preserves title`() {
+        val original = buildJsonObject {
+            put("title", "Roundtrip Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Request Count")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "sum(http_requests_total{})")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val imported = translator.import(original)
+        val exported = translator.export(imported.dashboard)
+        assertEquals("Roundtrip Test", exported["title"]?.jsonPrimitive?.content)
+    }
+
+    // ──── Row panel handling ────
+
+    @Test
+    fun `import converts row panels to section widgets`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Section Header")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(2, result.dashboard.widgets.size)
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
+        assertEquals("Section Header", result.dashboard.widgets[0].title)
+        assertEquals(12, result.dashboard.widgets[0].gridW)
+        assertEquals(1, result.dashboard.widgets[0].gridH)
+        assertEquals("false", result.dashboard.widgets[0].displayConfig["collapsed"])
+        assertEquals("stat", result.dashboard.widgets[1].widgetType)
+    }
+
+    @Test
+    fun `import maps logs panel type to table`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "logs")
+                            put("title", "Application Logs")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "{compose_service=~\"app-.*\"}")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(1, result.dashboard.widgets.size)
+        assertEquals("table", result.dashboard.widgets[0].widgetType)
+        assertEquals("Application Logs", result.dashboard.widgets[0].title)
+        assertTrue(result.warnings.none { it.contains("unsupported type") })
+    }
+
+    @Test
+    fun `import flattens nested panels from collapsed rows`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Collapsed Section")
+                            put(
+                                "panels",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("type", "timeseries")
+                                            put("title", "Nested Panel")
+                                            put(
+                                                "targets",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("expr", "rate(node_cpu_seconds_total{mode=\"idle\"})")
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "gridPos",
+                                                buildJsonObject {
+                                                    put("x", 0)
+                                                    put("y", 0)
+                                                    put("w", 24)
+                                                    put("h", 8)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(2, result.dashboard.widgets.size)
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
+        assertEquals("Collapsed Section", result.dashboard.widgets[0].title)
+        assertEquals("timeseries", result.dashboard.widgets[1].widgetType)
+        assertEquals("Nested Panel", result.dashboard.widgets[1].title)
+    }
+
+    @Test
+    fun `parseGrafanaSql preserves custom table names`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parseGrafanaSql(
+            "SELECT count() FROM video_recordings WHERE quality = 'hd' GROUP BY created_at",
+            warnings,
+            0
+        )
+        assertEquals("video_recordings", dsl.dataSource)
+        assertTrue(warnings.none { it.contains("unknown table") })
+        assertTrue(warnings.any { it.contains("rawQuery") })
+    }
+
+    @Test
+    fun `parseGrafanaSql maps known Moneat tables`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parseGrafanaSql(
+            "SELECT count() FROM events WHERE level = 'error'",
+            warnings,
+            0
+        )
+        assertEquals("events", dsl.dataSource)
+    }
+
+    // ──── parsePromQL with range vectors ────
+
+    @Test
+    fun `parsePromQL with range vector duration`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            "rate(app_quality_feedback_total{response=\"good\"}[1h])",
+            warnings,
+            0
+        )
+        // Should parse successfully, not fall through to rawQuery
+        assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
+        assertEquals(AggFunction.AVG, dsl.metrics[0].function) // rate → AVG
+        assertTrue(dsl.filters.any { it.field == "response" && it.value == "good" })
+    }
+
+    @Test
+    fun `parsePromQL with rate and 5m range vector`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            "rate(http_requests_total{status=\"200\"}[5m])",
+            warnings,
+            0
+        )
+        assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals(AggFunction.AVG, dsl.metrics[0].function)
+        assertEquals("rate(http_requests_total{status=\"200\"}[5m])", dsl.rawQuery)
+    }
+
+    @Test
+    fun `parsePromQL with irate`() {
+        val warnings = mutableListOf<String>()
+        val dsl = translator.parsePromQL(
+            "irate(node_network_receive_bytes_total{device=\"eth0\"}[5m])",
+            warnings,
+            0
+        )
+        assertTrue(warnings.isEmpty(), "Expected no warnings, got: $warnings")
+        assertEquals("__prometheus", dsl.dataSource)
+        assertEquals("net_recv_bytes", dsl.metrics[0].field)
+        assertEquals("irate(node_network_receive_bytes_total{device=\"eth0\"}[5m])", dsl.rawQuery)
+    }
+
+    // ──── Complex real-world dashboard ────
+
+    @Test
+    fun `import complex dashboard with mixed panel types`() {
+        val json = buildJsonObject {
+            put("title", "Application Overview")
+            put("description", "Real-time application monitoring")
+            put(
+                "panels",
+                buildJsonArray {
+                    // Row panel (should be skipped)
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Overview")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 1)
+                                }
+                            )
+                        }
+                    )
+                    // Stat panel with PromQL + range vector
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Feedback Rate")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(app_quality_feedback_total{response=\"good\"}[1h])")
+                                            put(
+                                                "datasource",
+                                                buildJsonObject {
+                                                    put("type", "prometheus")
+                                                    put("uid", "prom-1")
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 1)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                        }
+                    )
+                    // Timeseries with simple PromQL
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "Request Rate")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(http_requests_total{method=\"GET\"}[5m])")
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 6)
+                                    put("y", 1)
+                                    put("w", 18)
+                                    put("h", 8)
+                                }
+                            )
+                        }
+                    )
+                    // Row panel with collapsed nested panels
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Database")
+                            put(
+                                "panels",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("type", "table")
+                                            put("title", "Slow Queries")
+                                            put(
+                                                "targets",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put(
+                                                                "rawSql",
+                                                                "SELECT query, avg(duration_ms) as avg_duration " +
+                                                                    "FROM app_queries WHERE duration_ms > 1000 " +
+                                                                    "GROUP BY query ORDER BY avg_duration DESC LIMIT 20"
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "gridPos",
+                                                buildJsonObject {
+                                                    put("x", 0)
+                                                    put("y", 10)
+                                                    put("w", 24)
+                                                    put("h", 8)
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                    // Another row (should be skipped)
+                    add(
+                        buildJsonObject {
+                            put("type", "row")
+                            put("title", "Infrastructure")
+                        }
+                    )
+                    // Table with custom data source SQL
+                    add(
+                        buildJsonObject {
+                            put("type", "table")
+                            put("title", "Session Data")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put(
+                                                "rawSql",
+                                                "SELECT user_id, count() as sessions FROM app_sessions " +
+                                                    "GROUP BY user_id ORDER BY sessions DESC LIMIT 50"
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 20)
+                                    put("w", 24)
+                                    put("h", 6)
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+
+        // Row panels imported as text, nested panels flattened
+        // 3 row text widgets + stat + timeseries + table (nested) + table = 7
+        assertEquals(7, result.dashboard.widgets.size)
+
+        // Panel 0 (section) - "Overview"
+        assertEquals("section", result.dashboard.widgets[0].widgetType)
+        assertEquals("Overview", result.dashboard.widgets[0].title)
+
+        // Panel 1 (stat) - should parse PromQL with range vector
+        assertEquals("stat", result.dashboard.widgets[1].widgetType)
+        assertEquals("Feedback Rate", result.dashboard.widgets[1].title)
+        assertEquals(0, result.dashboard.widgets[1].gridX)
+        assertEquals(3, result.dashboard.widgets[1].gridW) // round(6 * 12/24) = 3
+
+        // Panel 2 (timeseries) - PromQL with range vector
+        assertEquals("timeseries", result.dashboard.widgets[2].widgetType)
+        assertEquals("Request Rate", result.dashboard.widgets[2].title)
+
+        // Panel 3 (section) - "Database"
+        assertEquals("section", result.dashboard.widgets[3].widgetType)
+        assertEquals("Database", result.dashboard.widgets[3].title)
+
+        // Panel 4 (nested table from collapsed row) - SQL with custom table name preserved
+        assertEquals("table", result.dashboard.widgets[4].widgetType)
+        assertEquals("Slow Queries", result.dashboard.widgets[4].title)
+        assertEquals(result.dashboard.widgets[4].queryConfigs.first().rawQuery?.contains("duration_ms"), true)
+        assertEquals("app_queries", result.dashboard.widgets[4].queryConfigs.first().dataSource)
+
+        // Panel 5 (section) - "Infrastructure"
+        assertEquals("section", result.dashboard.widgets[5].widgetType)
+        assertEquals("Infrastructure", result.dashboard.widgets[5].title)
+
+        // Panel 6 (table with SQL from custom app_sessions table - name preserved)
+        assertEquals("table", result.dashboard.widgets[6].widgetType)
+        assertEquals("app_sessions", result.dashboard.widgets[6].queryConfigs.first().dataSource)
+
+        // Warnings: SQL queries stored as rawQuery, but no "unknown table" warnings
+        assertTrue(result.warnings.any { it.contains("rawQuery") })
+        assertTrue(result.warnings.none { it.contains("unknown table") })
+    }
+
+    // ──── Variable import ────
+
+    @Test
+    fun `import parses Grafana templating variables`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("panels", JsonArray(emptyList()))
+            put(
+                "templating",
+                buildJsonObject {
+                    put(
+                        "list",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("name", "environment")
+                                    put("label", "Environment")
+                                    put("type", "custom")
+                                    put("current", buildJsonObject { put("value", "production") })
+                                    put(
+                                        "options",
+                                        buildJsonArray {
+                                            add(buildJsonObject { put("value", "production") })
+                                            add(buildJsonObject { put("value", "staging") })
+                                        }
+                                    )
+                                }
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("name", "host")
+                                    put("type", "query")
+                                    put("query", "SELECT DISTINCT host FROM logs")
+                                    put("datasource", "clickhouse")
+                                }
+                            )
+                            add(
+                                buildJsonObject {
+                                    put("name", "search")
+                                    put("type", "textbox")
+                                    put("current", buildJsonObject { put("value", "") })
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(3, result.variables.size)
+
+        assertEquals("environment", result.variables[0].name)
+        assertEquals("Environment", result.variables[0].label)
+        assertEquals("custom", result.variables[0].type)
+        assertEquals("production", result.variables[0].current)
+        assertEquals(listOf("production", "staging"), result.variables[0].options)
+
+        assertEquals("host", result.variables[1].name)
+        assertEquals("query", result.variables[1].type)
+        assertEquals("SELECT DISTINCT host FROM logs", result.variables[1].query)
+        assertEquals("clickhouse", result.variables[1].datasource)
+
+        assertEquals("search", result.variables[2].name)
+        assertEquals("textbox", result.variables[2].type)
+    }
+
+    @Test
+    fun `import returns empty variables when no templating`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put("panels", JsonArray(emptyList()))
+        }
+        val result = translator.import(json)
+        assertTrue(result.variables.isEmpty())
+    }
+
+    @Test
+    fun `export includes variables in templating`() {
+        val dashboard = DashboardResponse(
+            id = DASHBOARD_RESOURCE_ID,
+            orgId = ORG_RESOURCE_ID,
+            title = "Test",
+            createdBy = USER_RESOURCE_ID,
+            createdAt = "",
+            updatedAt = "",
+            variables = listOf(
+                com.moneat.dashboards.models.DashboardVariable(
+                    name = "env",
+                    label = "Environment",
+                    type = "custom",
+                    current = "prod",
+                    options = listOf("prod", "staging")
+                )
+            )
+        )
+        val exported = translator.export(dashboard)
+        val templating = exported["templating"]!!.jsonObject
+        val list = templating["list"]!!.jsonArray
+        assertEquals(1, list.size)
+        assertEquals("env", list[0].jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals("custom", list[0].jsonObject["type"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `import extracts display config with units thresholds and mappings`() {
+        val json = buildJsonObject {
+            put("title", "Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("targets", JsonArray(emptyList()))
+                            put(
+                                "fieldConfig",
+                                buildJsonObject {
+                                    put(
+                                        "defaults",
+                                        buildJsonObject {
+                                            put("unit", "percent")
+                                            put("decimals", 1)
+                                            put(
+                                                "thresholds",
+                                                buildJsonObject {
+                                                    put("mode", "absolute")
+                                                    put(
+                                                        "steps",
+                                                        buildJsonArray {
+                                                            add(buildJsonObject { put("color", "green") })
+                                                            add(
+                                                                buildJsonObject {
+                                                                    put("color", "red")
+                                                                    put("value", 80)
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "mappings",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("type", "special")
+                                                            put(
+                                                                "options",
+                                                                buildJsonObject {
+                                                                    put("match", "null")
+                                                                    put(
+                                                                        "result",
+                                                                        buildJsonObject { put("text", "N/A") }
+                                                                    )
+                                                                }
+                                                            )
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "custom",
+                                                buildJsonObject {
+                                                    put("fillOpacity", 10)
+                                                    put("lineWidth", 2)
+                                                    put(
+                                                        "stacking",
+                                                        buildJsonObject { put("mode", "normal") }
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val dc = result.dashboard.widgets[0].displayConfig
+        assertEquals("percent", dc["unit"])
+        assertEquals("1", dc["decimals"])
+        assertEquals("0.1", dc["fillOpacity"])
+        assertEquals("2", dc["lineWidth"])
+        assertEquals("normal", dc["stackMode"])
+        assertTrue(dc["thresholds"]!!.contains("\"value\":0"))
+        assertTrue(dc["thresholds"]!!.contains("\"color\":\"green\""))
+        assertTrue(dc["thresholds"]!!.contains("\"value\":80"))
+        assertTrue(dc["thresholds"]!!.contains("\"color\":\"red\""))
+        assertTrue(dc["valueMappings"]!!.contains("\"value\":\"null\""))
+        assertTrue(dc["valueMappings"]!!.contains("\"text\":\"N/A\""))
+    }
+
+    @Test
+    fun `parseInputsMap extracts datasource entries from __inputs`() {
+        val json = buildJsonObject {
+            put(
+                "__inputs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_REDIS")
+                            put("label", "Redis")
+                            put("type", "datasource")
+                            put("pluginId", "redis-datasource")
+                            put("pluginName", "Redis")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_PROM")
+                            put("label", "Prometheus")
+                            put("type", "datasource")
+                            put("pluginId", "prometheus")
+                            put("pluginName", "Prometheus")
+                        }
+                    )
+                    add(
+                        buildJsonObject {
+                            put("type", "panel")
+                            put("id", "bargauge")
+                            put("name", "Bar gauge")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.parseInputsMap(json)
+        assertEquals(2, result.size)
+        assertEquals("redis-datasource", result["DS_REDIS"])
+        assertEquals("prometheus", result["DS_PROM"])
+    }
+
+    @Test
+    fun `parseInputsMap returns empty map when no __inputs`() {
+        val json = buildJsonObject {
+            put("title", "test")
+        }
+        assertEquals(emptyMap(), translator.parseInputsMap(json))
+    }
+
+    @Test
+    fun `resolveDatasource resolves template variable via inputsMap`() {
+        val ds = JsonPrimitive("\${DS_REDIS}")
+        val inputsMap = mapOf("DS_REDIS" to "redis-datasource")
+        val result = translator.resolveDatasource(ds, inputsMap)
+        assertEquals("__redis", result)
+    }
+
+    @Test
+    fun `resolveDatasource drops unresolved Grafana datasource placeholders`() {
+        val ds = JsonPrimitive("\${DS_UNKNOWN}")
+        val result = translator.resolveDatasource(ds, emptyMap())
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `resolveDatasource maps known datasource names to Moneat markers`() {
+        val ds = JsonPrimitive("prometheus")
+        val result = translator.resolveDatasource(ds, emptyMap())
+        assertEquals("__prometheus", result)
+    }
+
+    @Test
+    fun `resolveDatasource maps vendor datasource names to Moneat markers`() {
+        val cases = mapOf(
+            "grafana-cloudwatch-datasource" to "__cloudwatch",
+            "elasticsearch" to "__elasticsearch",
+            "graphite" to "__graphite",
+            "influx" to "__influxdb",
+            "influxdb" to "__influxdb",
+            "loki" to "__loki",
+            "postgres" to "__postgresql",
+            "postgresql" to "__postgresql",
+            "redis" to "__redis",
+            "datasource" to null,
+            "grafana" to null,
+            "custom:42" to "custom:42",
+        )
+
+        cases.forEach { (grafanaName, expected) ->
+            assertEquals(expected, translator.resolveDatasource(JsonPrimitive(grafanaName), emptyMap()))
+        }
+    }
+
+    @Test
+    fun `resolveDatasource preserves custom datasource object type`() {
+        val ds = buildJsonObject {
+            put("type", "custom:42")
+        }
+
+        val result = translator.resolveDatasource(ds, emptyMap())
+
+        assertEquals("custom:42", result)
+    }
+
+    @Test
+    fun `import maps variable datasource object to Moneat marker`() {
+        val json = buildJsonObject {
+            put("title", "Variable Datasource")
+            put("panels", JsonArray(emptyList()))
+            put(
+                "templating",
+                buildJsonObject {
+                    put(
+                        "list",
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("name", "pod")
+                                    put("type", "query")
+                                    put("query", "label_values({namespace=\"default\"}, pod)")
+                                    put(
+                                        "datasource",
+                                        buildJsonObject {
+                                            put("type", "loki")
+                                        }
+                                    )
+                                    put(
+                                        "current",
+                                        buildJsonObject {
+                                            put("value", "api-0")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val result = translator.import(json)
+
+        assertEquals("__loki", result.variables.single().datasource)
+    }
+
+    @Test
+    fun `import resolves panel datasource from __inputs`() {
+        val json = buildJsonObject {
+            put("title", "Redis Dashboard")
+            put(
+                "__inputs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_REDIS")
+                            put("type", "datasource")
+                            put("pluginId", "redis-datasource")
+                        }
+                    )
+                }
+            )
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Ops/sec")
+                            put("datasource", "\${DS_REDIS}")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("command", "info")
+                                            put("query", "")
+                                            put("refId", "A")
+                                            put("section", "stats")
+                                            put("type", "command")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        assertEquals("__redis", widget.queryConfigs.first().dataSource)
+    }
+
+    @Test
+    fun `parseTarget stores non-standard target fields as rawQuery JSON`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("command", "info")
+                            put("query", "")
+                            put("refId", "A")
+                            put("section", "stats")
+                            put("type", "command")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val queries = translator.parseGrafanaTargets(panel, warnings, 0)
+        val q = queries.first()
+        val rawQuery = q.rawQuery!!
+        // Redis command targets are translated to executable command strings
+        assertEquals("INFO stats", rawQuery)
+    }
+
+    @Test
+    fun `parseTarget skips empty query string and falls through`() {
+        val panel = buildJsonObject {
+            put(
+                "targets",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("query", "")
+                            put("refId", "A")
+                        }
+                    )
+                }
+            )
+        }
+        val warnings = mutableListOf<String>()
+        val queries = translator.parseGrafanaTargets(panel, warnings, 0)
+        val q = queries.first()
+        // With only refId and empty query, no extra fields → fallback
+        assertContains(warnings.joinToString(), "no recognizable query target")
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info with section`() {
+        val target = buildJsonObject {
+            put("command", "info")
+            put("section", "stats")
+            put("type", "command")
+        }
+        assertEquals("INFO stats", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info with section and field`() {
+        val target = buildJsonObject {
+            put("command", "info")
+            put("section", "server")
+            put("query", "redis_version")
+            put("type", "command")
+        }
+        assertEquals("INFO server redis_version", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info with field but no section`() {
+        val target = buildJsonObject {
+            put("command", "info")
+            put("query", "maxmemory_policy")
+        }
+        assertEquals("INFO maxmemory_policy", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps info without section`() {
+        val target = buildJsonObject { put("command", "info") }
+        assertEquals("INFO", translator.translateGrafanaRedisCommand("info", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps clientList`() {
+        val target = buildJsonObject { put("command", "clientList") }
+        assertEquals("CLIENT LIST", translator.translateGrafanaRedisCommand("clientList", target))
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps slowlogGet`() {
+        val target = buildJsonObject { put("command", "slowlogGet") }
+        assertEquals(
+            "SLOWLOG GET",
+            translator.translateGrafanaRedisCommand("slowlogGet", target)
+        )
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand maps clusterInfo`() {
+        val target = buildJsonObject { put("command", "clusterInfo") }
+        assertEquals(
+            "CLUSTER INFO",
+            translator.translateGrafanaRedisCommand("clusterInfo", target)
+        )
+    }
+
+    @Test
+    fun `translateGrafanaRedisCommand throws for unsupported command`() {
+        val target = buildJsonObject { put("command", "custom") }
+        assertFailsWith<IllegalArgumentException> {
+            translator.translateGrafanaRedisCommand("custom", target)
+        }
+    }
+
+    @Test
+    fun `extractGrafanaTransformations extracts filterFieldsByName`() {
+        val panel = buildJsonObject {
+            put(
+                "transformations",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "filterFieldsByName")
+                            put(
+                                "options",
+                                buildJsonObject {
+                                    put(
+                                        "include",
+                                        buildJsonObject {
+                                            put(
+                                                "names",
+                                                buildJsonArray {
+                                                    add(JsonPrimitive("used_memory"))
+                                                    add(
+                                                        JsonPrimitive("used_memory_peak")
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val config = mutableMapOf<String, String>()
+        translator.extractGrafanaTransformations(panel, config)
+        assertEquals("used_memory,used_memory_peak", config["visibleFields"])
+    }
+
+    @Test
+    fun `extractGrafanaTransformations extracts organize renames`() {
+        val panel = buildJsonObject {
+            put(
+                "transformations",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "organize")
+                            put(
+                                "options",
+                                buildJsonObject {
+                                    put(
+                                        "renameByName",
+                                        buildJsonObject {
+                                            put("used_memory", "Used Memory")
+                                            put("uptime_in_seconds", "Uptime")
+                                            // Empty renames should be skipped
+                                            put("ignored_field", "")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val config = mutableMapOf<String, String>()
+        translator.extractGrafanaTransformations(panel, config)
+        val renames = config["fieldRenames"]!!
+        assertContains(renames, "\"used_memory\":\"Used Memory\"")
+        assertContains(renames, "\"uptime_in_seconds\":\"Uptime\"")
+        // Empty-value rename should not appear
+        assertTrue(!renames.contains("ignored_field"))
+    }
+
+    @Test
+    fun `extractGrafanaTransformations handles missing transforms`() {
+        val panel = buildJsonObject { put("type", "stat") }
+        val config = mutableMapOf<String, String>()
+        translator.extractGrafanaTransformations(panel, config)
+        assertTrue(config.isEmpty())
+    }
+
+    // ──── InfluxDB translator tests ────
+
+    @Test
+    fun `translateGrafanaInfluxTarget with measurement and select`() {
+        val target = buildJsonObject {
+            put("measurement", "cpu")
+            put(
+                "select",
+                buildJsonArray {
+                    add(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "field")
+                                    put(
+                                        "params",
+                                        buildJsonArray { add(JsonPrimitive("usage_idle")) }
+                                    )
+                                }
+                            )
+                            add(buildJsonObject { put("type", "mean") })
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertEquals(
+            "filter(fn: (r) => r._measurement == \"cpu\" and r._field == \"usage_idle\")",
+            result
+        )
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with measurement only`() {
+        val target = buildJsonObject {
+            put("measurement", "disk")
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertEquals("filter(fn: (r) => r._measurement == \"disk\")", result)
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with tags`() {
+        val target = buildJsonObject {
+            put("measurement", "cpu")
+            put(
+                "tags",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("key", "host")
+                            put("operator", "=")
+                            put("value", "server01")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertContains(result, "r._measurement == \"cpu\"")
+        assertContains(result, "r.host == \"server01\"")
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with empty measurement`() {
+        val target = buildJsonObject {
+            put("measurement", "")
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertEquals("filter(fn: (r) => true)", result)
+    }
+
+    @Test
+    fun `translateGrafanaInfluxTarget with multiple select fields`() {
+        val target = buildJsonObject {
+            put("measurement", "net")
+            put(
+                "select",
+                buildJsonArray {
+                    add(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "field")
+                                    put(
+                                        "params",
+                                        buildJsonArray { add(JsonPrimitive("bytes_recv")) }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                    add(
+                        buildJsonArray {
+                            add(
+                                buildJsonObject {
+                                    put("type", "field")
+                                    put(
+                                        "params",
+                                        buildJsonArray { add(JsonPrimitive("bytes_sent")) }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaInfluxTarget(target)
+        assertContains(result, "(r._field == \"bytes_recv\" or r._field == \"bytes_sent\")")
+    }
+
+    // ──── CloudWatch translator tests ────
+
+    @Test
+    fun `translateGrafanaCloudWatchTarget maps keys to PascalCase`() {
+        val target = buildJsonObject {
+            put("namespace", "AWS/EC2")
+            put("metricName", "CPUUtilization")
+            put("period", "300")
+            put(
+                "statistics",
+                buildJsonArray { add(JsonPrimitive("Average")) }
+            )
+            put(
+                "dimensions",
+                buildJsonObject {
+                    put(
+                        "InstanceId",
+                        buildJsonArray { add(JsonPrimitive("i-123")) }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaCloudWatchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals("AWS/EC2", parsed["Namespace"]?.jsonPrimitive?.content)
+        assertEquals("CPUUtilization", parsed["MetricName"]?.jsonPrimitive?.content)
+        assertEquals("300", parsed["Period"]?.jsonPrimitive?.content)
+        assertEquals("Average", parsed["Statistics"]?.jsonArray?.get(0)?.jsonPrimitive?.content)
+        val dims = parsed["Dimensions"]?.jsonArray
+        assertEquals(1, dims?.size)
+        assertEquals("InstanceId", dims?.get(0)?.jsonObject?.get("Name")?.jsonPrimitive?.content)
+        assertEquals("i-123", dims?.get(0)?.jsonObject?.get("Value")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `translateGrafanaCloudWatchTarget with multiple dimension values`() {
+        val target = buildJsonObject {
+            put("namespace", "AWS/ELB")
+            put("metricName", "RequestCount")
+            put(
+                "dimensions",
+                buildJsonObject {
+                    put(
+                        "LoadBalancerName",
+                        buildJsonArray {
+                            add(JsonPrimitive("lb-1"))
+                            add(JsonPrimitive("lb-2"))
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaCloudWatchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        val dims = parsed["Dimensions"]?.jsonArray
+        assertEquals(2, dims?.size)
+    }
+
+    @Test
+    fun `translateGrafanaCloudWatchTarget with minimal fields`() {
+        val target = buildJsonObject {
+            put("namespace", "AWS/S3")
+            put("metricName", "BucketSizeBytes")
+        }
+        val result = translator.translateGrafanaCloudWatchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals("AWS/S3", parsed["Namespace"]?.jsonPrimitive?.content)
+        assertEquals("BucketSizeBytes", parsed["MetricName"]?.jsonPrimitive?.content)
+    }
+
+    // ──── Graphite translator tests ────
+
+    @Test
+    fun `parseTarget detects Graphite target field`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "CPU Average")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "CPU")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put(
+                                                "target",
+                                                "alias(summarize(stats.gauges.*.cpu, '1h', 'avg'), 'CPU')"
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        assertEquals(
+            "alias(summarize(stats.gauges.*.cpu, '1h', 'avg'), 'CPU')",
+            widget.queryConfigs.first().rawQuery
+        )
+    }
+
+    // ──── Elasticsearch translator tests ────
+
+    @Test
+    fun `translateGrafanaElasticsearchTarget with metrics and bucketAggs`() {
+        val target = buildJsonObject {
+            put("query", "status:500")
+            put(
+                "metrics",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "1")
+                            put("type", "avg")
+                            put("field", "response_time")
+                        }
+                    )
+                }
+            )
+            put(
+                "bucketAggs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "2")
+                            put("type", "date_histogram")
+                            put("field", "@timestamp")
+                            put(
+                                "settings",
+                                buildJsonObject { put("interval", "1m") }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaElasticsearchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        // Has query_string with status:500
+        assertEquals(
+            "status:500",
+            parsed["query"]?.jsonObject
+                ?.get("query_string")?.jsonObject
+                ?.get("query")?.jsonPrimitive?.content
+        )
+        // Has aggs
+        val aggs = parsed.getValue("aggs").jsonObject
+        assertTrue(aggs.isNotEmpty())
+        // Bucket agg "2" has date_histogram
+        val bucket = aggs.getValue("2").jsonObject
+        assertTrue(bucket.containsKey("date_histogram"))
+        // Inner aggs has metric "1" with avg
+        val innerAggs = bucket.getValue("aggs").jsonObject
+        val metric = innerAggs.getValue("1").jsonObject
+        assertTrue(metric.containsKey("avg"))
+    }
+
+    @Test
+    fun `translateGrafanaElasticsearchTarget with count only`() {
+        val target = buildJsonObject {
+            put("query", "*")
+            put(
+                "metrics",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "1")
+                            put("type", "count")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaElasticsearchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        val queryStr = parsed["query"]?.jsonObject
+            ?.get("query_string")?.jsonObject
+            ?.get("query")?.jsonPrimitive?.content
+        assertEquals("*", queryStr)
+        // count is implicit — no aggs section needed
+        assertEquals(0, parsed["size"]?.jsonPrimitive?.int)
+    }
+
+    @Test
+    fun `translateGrafanaElasticsearchTarget with no query defaults to star`() {
+        val target = buildJsonObject {
+            put(
+                "metrics",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "1")
+                            put("type", "max")
+                            put("field", "cpu_usage")
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.translateGrafanaElasticsearchTarget(target)
+        val parsed = kotlinx.serialization.json.Json.parseToJsonElement(result).jsonObject
+        assertEquals(
+            "*",
+            parsed["query"]?.jsonObject?.get("query_string")?.jsonObject?.get("query")?.jsonPrimitive?.content
+        )
+        val aggs = parsed["aggs"]?.jsonObject
+        assertTrue(aggs?.containsKey("1") == true)
+    }
+
+    // ──── parseTarget integration tests for new datasource types ────
+
+    @Test
+    fun `parseTarget detects InfluxDB measurement field`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "InfluxDB Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "CPU")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put("measurement", "cpu")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        assertContains(widget.queryConfigs.first().rawQuery ?: "", "_measurement == \"cpu\"")
+    }
+
+    @Test
+    fun `parseTarget detects CloudWatch namespace and metricName`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "CloudWatch Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "EC2 CPU")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put("namespace", "AWS/EC2")
+                                            put("metricName", "CPUUtilization")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        val rawQuery = widget.queryConfigs.first().rawQuery ?: ""
+        assertContains(rawQuery, "Namespace")
+        assertContains(rawQuery, "AWS/EC2")
+    }
+
+    @Test
+    fun `parseTarget detects ES metrics array`() {
+        val grafanaJson = buildJsonObject {
+            put("title", "ES Test")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("title", "Errors")
+                            put("id", 1)
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 24)
+                                    put("h", 8)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("refId", "A")
+                                            put(
+                                                "metrics",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("id", "1")
+                                                            put("type", "count")
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                            put(
+                                                "bucketAggs",
+                                                buildJsonArray {
+                                                    add(
+                                                        buildJsonObject {
+                                                            put("id", "2")
+                                                            put("type", "date_histogram")
+                                                            put("field", "@timestamp")
+                                                        }
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(grafanaJson)
+        val widget = result.dashboard.widgets.first()
+        val rawQuery = widget.queryConfigs.first().rawQuery ?: ""
+        assertContains(rawQuery, "query_string")
+        assertContains(rawQuery, "date_histogram")
+    }
+
+    // ──── Redis dashboard import integration tests ────
+
+    /**
+     * Build a minimal Redis panel with command-style target and
+     * optional filterFieldsByName transformation.
+     */
+    private fun buildRedisPanel(
+        title: String,
+        type: String,
+        command: String,
+        section: String = "",
+        visibleFields: List<String>? = null,
+    ) = buildJsonObject {
+        put("type", type)
+        put("title", title)
+        put("datasource", "\${DS_REDIS}")
+        put(
+            "gridPos",
+            buildJsonObject {
+                put("x", 0)
+                put("y", 0)
+                put("w", 6)
+                put("h", 4)
+            }
+        )
+        put(
+            "targets",
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("command", command)
+                        put("query", "")
+                        put("refId", "A")
+                        put("section", section)
+                        put("type", "command")
+                    }
+                )
+            }
+        )
+        if (visibleFields != null) {
+            put(
+                "transformations",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("id", "filterFieldsByName")
+                            put(
+                                "options",
+                                buildJsonObject {
+                                    put(
+                                        "include",
+                                        buildJsonObject {
+                                            put(
+                                                "names",
+                                                buildJsonArray {
+                                                    visibleFields.forEach { add(JsonPrimitive(it)) }
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        put(
+            "fieldConfig",
+            buildJsonObject {
+                put("defaults", buildJsonObject { put("unit", "ops") })
+            }
+        )
+    }
+
+    private fun buildRedisInputs() = buildJsonArray {
+        add(
+            buildJsonObject {
+                put("name", "DS_REDIS")
+                put("type", "datasource")
+                put("pluginId", "redis-datasource")
+            }
+        )
+    }
+
+    @Test
+    fun `Redis import sets rawQuery for INFO command panels`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildRedisPanel(
+                            "Ops/sec",
+                            "stat",
+                            "info",
+                            "stats",
+                            visibleFields = listOf("instantaneous_ops_per_sec")
+                        )
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        assertEquals("INFO stats", widget.queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import sets visibleFields from filterFieldsByName`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildRedisPanel(
+                            "Network",
+                            "gauge",
+                            "info",
+                            "stats",
+                            visibleFields = listOf(
+                                "instantaneous_input_kbps",
+                                "instantaneous_output_kbps"
+                            )
+                        )
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        assertEquals(
+            "instantaneous_input_kbps,instantaneous_output_kbps",
+            widget.displayConfig["visibleFields"]
+        )
+    }
+
+    @Test
+    fun `Redis import translates clientList command`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildRedisPanel("Clients", "table", "clientList"))
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("CLIENT LIST", result.dashboard.widgets.first().queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import translates slowlogGet command`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildRedisPanel("Slow Queries", "table", "slowlogGet"))
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals("SLOWLOG GET", result.dashboard.widgets.first().queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import translates cluster commands`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildRedisPanel("State", "stat", "clusterInfo"))
+                    add(buildRedisPanel("Nodes", "table", "clusterNodes"))
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widgets = result.dashboard.widgets
+        assertEquals("CLUSTER INFO", widgets[0].queryConfigs.first().rawQuery)
+        assertEquals("CLUSTER NODES", widgets[1].queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import with pre-mapped datasource preserves custom id`() {
+        // Simulates what happens after frontend maps ${DS_REDIS} -> custom:5
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Ops/sec")
+                            put("datasource", "custom:5")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("command", "info")
+                                            put("query", "")
+                                            put("refId", "A")
+                                            put("section", "stats")
+                                            put("type", "command")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        // When frontend already replaced ${DS_REDIS} with custom:5,
+        // backend should preserve it
+        assertEquals("custom:5", widget.queryConfigs.first().dataSource)
+        assertEquals("INFO stats", widget.queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import cli-type target with query field`() {
+        // The "Number of Keys" panel uses type=cli, query=dbsize
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "stat")
+                            put("title", "Number of Keys")
+                            put("datasource", "\${DS_REDIS}")
+                            put(
+                                "gridPos",
+                                buildJsonObject {
+                                    put("x", 0)
+                                    put("y", 0)
+                                    put("w", 6)
+                                    put("h", 4)
+                                }
+                            )
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("query", "dbsize")
+                                            put("refId", "A")
+                                            put("type", "cli")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        val widget = result.dashboard.widgets.first()
+        // "dbsize" comes through via generic query detection
+        assertEquals("dbsize", widget.queryConfigs.first().rawQuery)
+    }
+
+    @Test
+    fun `Redis import commandstats uses INFO commandstats query`() {
+        val json = buildJsonObject {
+            put("title", "Redis Test")
+            put("__inputs", buildRedisInputs())
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildRedisPanel(
+                            "Command Statistics",
+                            "table",
+                            "info",
+                            "commandstats"
+                        )
+                    )
+                }
+            )
+        }
+        val result = translator.import(json)
+        assertEquals(
+            "INFO commandstats",
+            result.dashboard.widgets.first().queryConfigs.first().rawQuery
+        )
+    }
+
+    @Test
+    fun `import maps legacy community panel types to Moneat widgets`() {
+        val json = buildJsonObject {
+            put("title", "Legacy Panels")
+            put(
+                "panels",
+                buildJsonArray {
+                    add(buildJsonObject { put("type", "singlestat") })
+                    add(buildJsonObject { put("type", "table-old") })
+                    add(buildJsonObject { put("type", "grafana-piechart-panel") })
+                }
+            )
+        }
+
+        val result = translator.import(json)
+
+        assertEquals(listOf("stat", "table", "donut"), result.dashboard.widgets.map { it.widgetType })
+        assertTrue(result.warnings.isEmpty())
+    }
+
+    @Test
+    fun `import keeps Prometheus queries on Moneat telemetry source marker`() {
+        val json = buildJsonObject {
+            put("title", "Datasource Test")
+            put(
+                "__inputs",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("name", "DS_PROMETHEUS")
+                            put("type", "datasource")
+                            put("pluginId", "prometheus")
+                        }
+                    )
+                }
+            )
+            put(
+                "panels",
+                buildJsonArray {
+                    add(
+                        buildJsonObject {
+                            put("type", "timeseries")
+                            put("datasource", "\${DS_PROMETHEUS}")
+                            put(
+                                "targets",
+                                buildJsonArray {
+                                    add(
+                                        buildJsonObject {
+                                            put("expr", "rate(http_requests_total[5m])")
+                                            put("refId", "A")
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    )
+                }
+            )
+        }
+
+        val result = translator.import(json)
+
+        assertEquals("__prometheus", result.dashboard.widgets.first().queryConfigs.first().dataSource)
+    }
+}

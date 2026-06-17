@@ -20,6 +20,7 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const ORGANIZATION_RESOURCE_ID = '123e4567-e89b-12d3-a456-426614174401'
 
 describe('Billing API', () => {
   beforeEach(() => {
@@ -51,7 +52,7 @@ describe('Billing API', () => {
 
   it('fetches billing usage', async () => {
     const mockUsage = {
-      organizationId: 1,
+      organizationId: ORGANIZATION_RESOURCE_ID,
       plan: 'PRO',
       status: 'active',
       usedUnits: 1000,
@@ -69,6 +70,130 @@ describe('Billing API', () => {
     expect(result).toEqual(mockUsage)
   })
 
+  it('fetches billing usage insights', async () => {
+    const mockInsights = {
+      organizationId: ORGANIZATION_RESOURCE_ID,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      generatedAt: '2026-01-15T12:00:00Z',
+      billingMode: 'cloud',
+      usage: {
+        organizationId: ORGANIZATION_RESOURCE_ID,
+        plan: 'PRO',
+        status: 'active',
+        usedUnits: 1000,
+        totalLimitUnits: 10000,
+        withinQuota: true,
+      },
+      dimensions: [
+        {
+          key: 'ingestion',
+          label: 'GB-Billed Ingestion',
+          unit: 'bytes',
+          used: 1073741824,
+          baseLimit: 2147483648,
+          effectiveLimit: 2147483648,
+          percentOfBase: 50,
+          percentOfEffective: 50,
+          overageCentsEstimate: 0,
+          overageRateLabel: '$0.40/GB',
+          forecast: {
+            window: '7d',
+            confidence: 'high',
+            dailyRate: 100,
+            projectedPeriodEndUsage: 2147483648,
+            projectedBaseLimitHitDate: null,
+            projectedEffectiveLimitHitDate: null,
+            projectedOverageCents: 0,
+            riskLevel: 'watch',
+            summary: 'Usage is trending below the limit.',
+          },
+          contributors: [],
+          daily: [],
+        },
+      ],
+      apmSpanDebug: null,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage/insights`, () => {
+        return HttpResponse.json(mockInsights)
+      })
+    )
+
+    const result = await api.getBillingUsageInsights()
+    expect(result).toEqual(mockInsights)
+  })
+
+  it('fetches APM span usage debug groups', async () => {
+    const mockDebug = {
+      organizationId: ORGANIZATION_RESOURCE_ID,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      totalSpans: 42,
+      groups: [
+        {
+          source: 'otlp',
+          service: 'api',
+          operation: 'GET /checkout',
+          resource: 'GET /checkout',
+          spanType: '',
+          env: 'prod',
+          kind: 'SERVER',
+          scopeName: 'opentelemetry.instrumentation.ktor',
+          scopeVersion: '1.0.0',
+          projectId: null,
+          projectName: null,
+          projectSlug: null,
+          spanCount: 42,
+          traceCount: 12,
+          errorCount: 1,
+          avgDurationMs: 12.5,
+          maxDurationMs: 200,
+          percentage: 100,
+          sampleTraceId: 'trace-1',
+          latestSpanAt: '2026-01-15 12:00:00',
+        },
+      ],
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage/apm-spans`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('limit')).toBe('20')
+        return HttpResponse.json(mockDebug)
+      })
+    )
+
+    const result = await api.getBillingApmSpanUsageDebug()
+    expect(result).toEqual(mockDebug)
+  })
+
+  it('normalizes APM span usage debug limits', async () => {
+    const seenLimits: string[] = []
+    const mockDebug = {
+      organizationId: ORGANIZATION_RESOURCE_ID,
+      periodStart: '2026-01-01',
+      periodEnd: '2026-01-31',
+      totalSpans: 0,
+      groups: [],
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/billing/usage/apm-spans`, ({ request }) => {
+        const url = new URL(request.url)
+        seenLimits.push(url.searchParams.get('limit') ?? '')
+        return HttpResponse.json(mockDebug)
+      })
+    )
+
+    await api.getBillingApmSpanUsageDebug(3.8)
+    await api.getBillingApmSpanUsageDebug(0)
+    await api.getBillingApmSpanUsageDebug(Number.NaN)
+
+    expect(seenLimits).toEqual(['3', '1', '20'])
+  })
+
   // ──── createBillingCheckoutSession ────
 
   it('creates a billing checkout session', async () => {
@@ -77,12 +202,20 @@ describe('Billing API', () => {
     server.use(
       http.post(`${API_BASE}/v1/billing/checkout`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
-        expect(body.planId).toBe('pro-monthly')
+        expect(body.tierName).toBe('pro')
+        expect(body.billingInterval).toBe('monthly')
+        expect(body.successUrl).toBe('https://app.example.com/settings?checkout=success')
+        expect(body.cancelUrl).toBe('https://app.example.com/settings')
         return HttpResponse.json(mockSession)
       })
     )
 
-    const result = await api.createBillingCheckoutSession({ planId: 'pro-monthly' })
+    const result = await api.createBillingCheckoutSession({
+      tierName: 'pro',
+      billingInterval: 'monthly',
+      successUrl: 'https://app.example.com/settings?checkout=success',
+      cancelUrl: 'https://app.example.com/settings',
+    })
     expect(result).toEqual(mockSession)
   })
 

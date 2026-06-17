@@ -9,8 +9,9 @@ description: Debug live applications without redeploying using dynamic probes fo
 
 Dynamic Instrumentation (also called the Debugger) lets you add observability probes to your running applications without restarting or redeploying them. Insert log probes, metric probes, or snapshot probes at any method or line of code, and the agent captures the data in real time.
 
-:::info[Enterprise feature]
-Dynamic Instrumentation requires the Datadog Agent integration, available on Enterprise plans.
+:::info[Availability]
+Dynamic Instrumentation is included on standard plans. For self-hosted builds that use module licensing,
+enable the `datadog` module to expose the debugger dashboard.
 :::
 
 ## Prerequisites
@@ -18,7 +19,7 @@ Dynamic Instrumentation requires the Datadog Agent integration, available on Ent
 - A supported application runtime (Java, Python, .NET, or Node.js)
 - The Datadog Agent deployed alongside your application (see [Agent Setup](/docs/datadog-agent/agent-setup))
 - The application's tracing library configured with Dynamic Instrumentation support
-- The Enterprise `datadog` module enabled
+- For self-hosted module-licensed builds, the `datadog` module enabled
 
 ## Enable Dynamic Instrumentation
 

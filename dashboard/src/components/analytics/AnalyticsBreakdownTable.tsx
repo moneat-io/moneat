@@ -14,7 +14,7 @@ interface AnalyticsBreakdownTableProps {
 }
 
 export function AnalyticsBreakdownTable({
-  title, icon: Icon, iconColor = 'text-blue-500', data, isLoading, showBounceRate, showDuration, onRowClick,
+  title, icon: Icon, iconColor = 'text-chart-1', data, isLoading, showBounceRate, showDuration, onRowClick,
 }: AnalyticsBreakdownTableProps) {
   if (isLoading) {
     return (
@@ -66,7 +66,7 @@ export function AnalyticsBreakdownTable({
             onClick={() => onRowClick?.(item)}
           >
             <div
-              className="absolute inset-0 bg-blue-500/10 rounded"
+              className="absolute inset-0 bg-chart-1/10 rounded"
               style={{width: `${(item.visitors / maxVisitors) * 100}%`}}
             />
             <span className="relative truncate flex-1 font-medium">{item.name || '(direct / none)'}</span>

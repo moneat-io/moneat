@@ -20,34 +20,40 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.EnvironmentValidator
 import com.moneat.config.configureClickHouse
 import com.moneat.config.configureRedis
-import com.moneat.di.appModules
+import com.moneat.di.buildAppModules
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.configureBackgroundJobs
 import com.moneat.plugins.configureDatabases
 import com.moneat.plugins.configureDemoModeRestrictions
+import com.moneat.plugins.configureHealthRouting
 import com.moneat.plugins.configureHTTP
 import com.moneat.plugins.configureMonitoring
 import com.moneat.plugins.configureRateLimiting
 import com.moneat.plugins.configureRouting
 import com.moneat.plugins.configureSecurity
 import com.moneat.plugins.configureSerialization
+import com.moneat.runtime.MoneatProcessRole
+import com.moneat.runtime.RuntimeMode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.install
 import io.ktor.server.application.log
 import io.ktor.server.netty.EngineMain
+import mu.KotlinLogging
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 
 private const val STACK_TRACE_DEPTH = 20
 
+private val logger = KotlinLogging.logger {}
+
 fun main(args: Array<String>) {
     // Add JVM shutdown hook to log when shutdown is triggered
     Runtime.getRuntime().addShutdownHook(
         Thread {
-            System.err.println("=== JVM SHUTDOWN HOOK TRIGGERED ===")
+            logger.warn { "=== JVM SHUTDOWN HOOK TRIGGERED ===" }
             Thread.currentThread().stackTrace.forEach { frame ->
-                System.err.println("  at $frame")
+                logger.warn { "  at $frame" }
             }
         }
     )
@@ -79,7 +85,14 @@ fun Application.module() {
 
     install(Koin) {
         slf4jLogger()
-        modules(appModules)
+        modules(buildAppModules() + FeatureRegistry.koinModules())
+    }
+    val processRole = RuntimeMode.role()
+    if (FeatureRegistry.shouldStartIsolatedBackgroundJobs(this)) {
+        configureSerialization()
+        FeatureRegistry.startBackgroundJobs(this, startSchedulers = false, startIngestionWorkers = false)
+        log.info("Isolated feature worker startup complete")
+        return
     }
     configureSecurity()
     configureHTTP()
@@ -90,8 +103,30 @@ fun Application.module() {
     configureRedis()
     configureClickHouse()
     configureDatabases()
-    configureBackgroundJobs()
-    log.info("About to configure routing...")
-    configureRouting()
-    log.info("Routing configured successfully, application startup complete")
+    when (processRole) {
+        MoneatProcessRole.ALL -> {
+            configureBackgroundJobs(startSchedulers = true, startIngestionWorkers = true)
+            log.info("About to configure routing...")
+            configureRouting()
+            log.info("Routing configured successfully, application startup complete")
+        }
+        MoneatProcessRole.API -> {
+            configureBackgroundJobs(startSchedulers = false, startIngestionWorkers = false)
+            log.info("Starting API-only process")
+            configureRouting()
+        }
+        MoneatProcessRole.SCHEDULER -> {
+            configureBackgroundJobs(startSchedulers = true, startIngestionWorkers = false)
+            log.info("Starting scheduler-only process")
+            configureHealthRouting()
+        }
+        MoneatProcessRole.INGESTION_WORKER -> {
+            configureBackgroundJobs(startSchedulers = false, startIngestionWorkers = true)
+            log.info("Starting ingestion-worker process")
+            configureHealthRouting()
+        }
+        MoneatProcessRole.WORKFLOW_EGRESS -> {
+            // Handled before full infrastructure startup.
+        }
+    }
 }

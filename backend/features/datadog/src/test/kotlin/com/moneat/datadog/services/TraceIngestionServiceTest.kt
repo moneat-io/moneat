@@ -1,0 +1,771 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.datadog.services
+
+import com.moneat.config.ClickHouseClient
+import com.moneat.datadog.models.DdSpan
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OtelServiceProjectMappings
+import com.moneat.shared.models.Projects
+import com.moneat.testsupport.TestDatabaseHelper
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.Test
+import org.msgpack.core.MessageBufferPacker
+import org.msgpack.core.MessagePack
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class TraceIngestionServiceTest {
+
+    // ──── MSGPACK PARSING TESTS ────
+
+    @Test
+    fun `parseMsgpackTraces parses single trace with one span`() {
+        val bytes = buildMsgpackPayload(
+            listOf(
+                listOf(
+                    buildSpanMap(
+                        traceId = 123L,
+                        spanId = 456L,
+                        parentId = 0L,
+                        name = "web.request",
+                        service = "my-app",
+                        resource = "GET /api/v1/users",
+                        type = "web",
+                        start = 1700000000000000000L,
+                        duration = 50000000L,
+                        error = 0,
+                    )
+                )
+            )
+        )
+
+        val result = TraceIngestionService.parseMsgpackTraces(bytes)
+
+        assertEquals(1, result.size, "Should parse 1 trace")
+        assertEquals(1, result[0].size, "Trace should have 1 span")
+
+        val span = result[0][0]
+        assertEquals(123uL, span.traceId)
+        assertEquals(456uL, span.spanId)
+        assertEquals(0uL, span.parentId)
+        assertEquals("web.request", span.name)
+        assertEquals("my-app", span.service)
+        assertEquals("GET /api/v1/users", span.resource)
+        assertEquals("web", span.type)
+        assertEquals(1700000000000000000L, span.start)
+        assertEquals(50000000L, span.duration)
+        assertEquals(0, span.error)
+    }
+
+    @Test
+    fun `parseMsgpackTraces parses multiple traces with multiple spans`() {
+        val bytes = buildMsgpackPayload(
+            listOf(
+                listOf(
+                    buildSpanMap(traceId = 1L, spanId = 10L, name = "root"),
+                    buildSpanMap(
+                        traceId = 1L,
+                        spanId = 11L,
+                        parentId = 10L,
+                        name = "child"
+                    ),
+                ),
+                listOf(
+                    buildSpanMap(traceId = 2L, spanId = 20L, name = "other"),
+                )
+            )
+        )
+
+        val result = TraceIngestionService.parseMsgpackTraces(bytes)
+
+        assertEquals(2, result.size, "Should parse 2 traces")
+        assertEquals(2, result[0].size, "First trace should have 2 spans")
+        assertEquals(1, result[1].size, "Second trace should have 1 span")
+        assertEquals("root", result[0][0].name)
+        assertEquals("child", result[0][1].name)
+        assertEquals(10uL, result[0][1].parentId)
+    }
+
+    @Test
+    fun `parseMsgpackTraces handles span with meta and metrics`() {
+        val bytes = buildMsgpackPayload(
+            listOf(
+                listOf(
+                    buildSpanMap(
+                        traceId = 100L,
+                        spanId = 200L,
+                        name = "db.query",
+                        meta = mapOf(
+                            "db.type" to "postgresql",
+                            "db.statement" to "SELECT * FROM users"
+                        ),
+                        metrics = mapOf(
+                            "_dd.measured" to 1.0,
+                            "_sampling_priority_v1" to 2.0
+                        ),
+                    )
+                )
+            )
+        )
+
+        val result = TraceIngestionService.parseMsgpackTraces(bytes)
+        val span = result[0][0]
+
+        assertEquals(
+            "postgresql",
+            span.meta["db.type"],
+            "Should parse meta map"
+        )
+        assertEquals(
+            "SELECT * FROM users",
+            span.meta["db.statement"]
+        )
+        assertEquals(1.0, span.metrics["_dd.measured"])
+        assertEquals(2.0, span.metrics["_sampling_priority_v1"])
+    }
+
+    @Test
+    fun `parseMsgpackTraces handles span with error flag`() {
+        val bytes = buildMsgpackPayload(
+            listOf(
+                listOf(
+                    buildSpanMap(
+                        traceId = 1L,
+                        spanId = 1L,
+                        name = "failing.op",
+                        error = 1,
+                        meta = mapOf(
+                            "error.msg" to "NullPointerException"
+                        )
+                    )
+                )
+            )
+        )
+
+        val result = TraceIngestionService.parseMsgpackTraces(bytes)
+        assertEquals(1, result[0][0].error, "Error flag should be 1")
+        assertEquals(
+            "NullPointerException",
+            result[0][0].meta["error.msg"]
+        )
+    }
+
+    @Test
+    fun `parseMsgpackTraces handles empty payload`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packArrayHeader(0)
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackTraces(
+            packer.toByteArray()
+        )
+        assertTrue(result.isEmpty(), "Empty payload should produce no traces")
+    }
+
+    @Test
+    fun `parseMsgpackTraces skips unknown fields`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packArrayHeader(1) // 1 trace
+        packer.packArrayHeader(1) // 1 span
+        packer.packMapHeader(4) // 4 fields
+
+        packer.packString("trace_id")
+        packer.packLong(999L)
+        packer.packString("span_id")
+        packer.packLong(888L)
+        packer.packString("name")
+        packer.packString("test.op")
+        packer.packString("unknown_custom_field")
+        packer.packString("should_be_skipped")
+
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackTraces(
+            packer.toByteArray()
+        )
+
+        assertEquals(999uL, result[0][0].traceId)
+        assertEquals("test.op", result[0][0].name)
+    }
+
+    @Test
+    fun `getApmOverview aggregates filtered trace summaries`() = runBlocking {
+        mockkObject(ClickHouseClient)
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val query = firstArg<String>()
+                queries += query
+                when {
+                    "service_count" in query ->
+                        "{" +
+                            "\"total_traces\":20,\"error_traces\":3,\"error_rate\":0.15,\"service_count\":4," +
+                            "\"source_count\":2,\"p50_duration_ns\":42000000," +
+                            "\"p95_duration_ns\":312000000,\"p99_duration_ns\":842000000," +
+                            "\"avg_spans_per_trace\":18.7}"
+                    "GROUP BY timestamp" in query ->
+                        "{" +
+                            "\"timestamp\":\"2026-05-26T10:00:00.000Z\"," +
+                            "\"p50_duration_ns\":42000000,\"p95_duration_ns\":312000000," +
+                            "\"p99_duration_ns\":842000000}"
+                    "WHERE has_error = 1" in query ->
+                        "{" +
+                            "\"service\":\"checkout-service\",\"resource\":\"POST /checkout\"," +
+                            "\"error_count\":154,\"last_seen\":\"2026-05-26T10:05:00.000Z\"," +
+                            "\"sample_trace_id\":\"abc123\"}"
+                    "GROUP BY root_service, root_resource" in query ->
+                        "{" +
+                            "\"service\":\"checkout-service\",\"resource\":\"POST /checkout\"," +
+                            "\"source\":\"otlp\",\"trace_count\":1234,\"error_count\":154," +
+                            "\"error_rate\":0.1248,\"p95_duration_ns\":612000000}"
+                    "GROUP BY root_service" in query && "facet_type" !in query ->
+                        "{" +
+                            "\"service\":\"checkout-service\",\"source\":\"otlp\",\"trace_count\":5642," +
+                            "\"error_count\":326,\"error_rate\":0.0578,\"p95_duration_ns\":612000000," +
+                            "\"avg_spans_per_trace\":22.4}"
+                    "avg_spans_per_trace" in query && "service_count" !in query ->
+                        "{" +
+                            "\"total_traces\":10,\"error_rate\":0.10,\"p50_duration_ns\":50000000," +
+                            "\"p95_duration_ns\":400000000,\"p99_duration_ns\":900000000," +
+                            "\"avg_spans_per_trace\":15.2}"
+                    "UNION ALL" in query && "facet_type" in query ->
+                        "{\"facet_type\":\"service\",\"value\":\"checkout-service\",\"count\":5642}\n" +
+                            "{\"facet_type\":\"source\",\"value\":\"otlp\",\"count\":5000}\n" +
+                            "{\"facet_type\":\"env\",\"value\":\"production\",\"count\":5000}"
+                    else -> ""
+                }
+            }
+
+            val overview = TraceIngestionService.getApmOverview(
+                organizationId = 10,
+                query = DdTraceListQuery(
+                    service = "checkout-service",
+                    env = "production",
+                    source = "otlp",
+                    status = "error",
+                    search = "checkout",
+                ),
+            )
+
+            assertEquals(20, overview.stats.totalTraces)
+            assertEquals(0.15, overview.stats.errorRate)
+            assertEquals(312000000, overview.stats.p95DurationNs)
+            assertEquals(10, overview.stats.previous.totalTraces)
+            assertEquals("checkout-service", overview.serviceHealth.first().service)
+            assertEquals("POST /checkout", overview.resourceHotspots.first().resource)
+            assertEquals("abc123", overview.errors.first().traceId)
+            assertEquals("production", overview.facets.environments.first().value)
+            assertTrue(queries.any { "service = 'checkout-service'" in it })
+            assertTrue(queries.any { "env = 'production'" in it })
+            assertTrue(queries.any { "source = 'otlp'" in it })
+            assertTrue(queries.any { "has_error = 1" in it })
+            assertTrue(queries.any { "positionCaseInsensitive(root_resource, 'checkout')" in it })
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    @Test
+    fun `getApmOverview skips streamed ClickHouse error lines instead of failing`() = runBlocking {
+        // Regression: ClickHouse can append a non-object line (e.g. a mid-stream Code 159
+        // timeout) after it has already streamed a 200 response. That line slips past the
+        // error check in executeWithFormat and previously crashed `.jsonObject` with
+        // "Element class JsonLiteral is not a JsonObject" -> unhandled 500 on /v1/traces/overview.
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "moneat"
+            coEvery { ClickHouseClient.executeWithFormat(any(), any()) } answers {
+                val query = firstArg<String>()
+                if ("facet_type" in query) {
+                    // Valid rows interleaved with a bare literal and a raw exception fragment.
+                    "{\"facet_type\":\"service\",\"value\":\"web\",\"count\":\"5\"}\n" +
+                        "159\n" +
+                        "Code: 159. DB::Exception: Timeout exceeded\n" +
+                        "{\"facet_type\":\"source\",\"value\":\"otlp\",\"count\":\"3\"}"
+                } else {
+                    ""
+                }
+            }
+
+            val overview = TraceIngestionService.getApmOverview(
+                organizationId = 10,
+                query = DdTraceListQuery(),
+            )
+
+            // The malformed lines are skipped; the surrounding valid facet rows survive.
+            assertEquals("web", overview.facets.services.single().value)
+            assertEquals("otlp", overview.facets.sources.single().value)
+            assertTrue(overview.facets.environments.isEmpty())
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    // ──── JSON PARSING TESTS ────
+
+    @Test
+    fun `parseJsonTraces parses single trace with one span`() {
+        val json = """
+            [[{
+                "trace_id": 123,
+                "span_id": 456,
+                "parent_id": 0,
+                "name": "web.request",
+                "service": "my-app",
+                "resource": "GET /users",
+                "type": "web",
+                "start": 1700000000000000000,
+                "duration": 50000000,
+                "error": 0,
+                "meta": {"http.method": "GET"},
+                "metrics": {"_dd.measured": 1.0}
+            }]]
+        """.trimIndent()
+
+        val result = TraceIngestionService.parseJsonTraces(json)
+
+        assertEquals(1, result.size)
+        assertEquals(1, result[0].size)
+
+        val span = result[0][0]
+        assertEquals(123uL, span.traceId)
+        assertEquals(456uL, span.spanId)
+        assertEquals("web.request", span.name)
+        assertEquals("my-app", span.service)
+        assertEquals("GET", span.meta["http.method"])
+        assertEquals(1.0, span.metrics["_dd.measured"])
+    }
+
+    @Test
+    fun `parseJsonTraces parses multiple traces`() {
+        val json = """
+            [
+              [
+                {"trace_id": 1, "span_id": 10, "name": "a"},
+                {"trace_id": 1, "span_id": 11, "parent_id": 10, "name": "b"}
+              ],
+              [
+                {"trace_id": 2, "span_id": 20, "name": "c"}
+              ]
+            ]
+        """.trimIndent()
+
+        val result = TraceIngestionService.parseJsonTraces(json)
+
+        assertEquals(2, result.size)
+        assertEquals(2, result[0].size)
+        assertEquals(1, result[1].size)
+        assertEquals("a", result[0][0].name)
+        assertEquals("b", result[0][1].name)
+        assertEquals("c", result[1][0].name)
+    }
+
+    @Test
+    fun `parseJsonTraces handles missing optional fields gracefully`() {
+        val json = """
+            [[{
+                "trace_id": 1,
+                "span_id": 2,
+                "name": "minimal"
+            }]]
+        """.trimIndent()
+
+        val result = TraceIngestionService.parseJsonTraces(json)
+        val span = result[0][0]
+
+        assertEquals(1uL, span.traceId)
+        assertEquals(2uL, span.spanId)
+        assertEquals("minimal", span.name)
+        assertEquals("", span.service)
+        assertEquals("", span.resource)
+        assertEquals("", span.type)
+        assertEquals(0L, span.start)
+        assertEquals(0L, span.duration)
+        assertEquals(0, span.error)
+        assertTrue(span.meta.isEmpty())
+        assertTrue(span.metrics.isEmpty())
+    }
+
+    @Test
+    fun `parseJsonTraces handles empty trace array`() {
+        val json = "[]"
+        val result = TraceIngestionService.parseJsonTraces(json)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `parseMsgpackStats maps Agent stats payload`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(4)
+        packer.packString("AgentHostname")
+        packer.packString("agent-host")
+        packer.packString("AgentEnv")
+        packer.packString("staging")
+        packer.packString("AgentVersion")
+        packer.packString("7.72.0")
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packClientStatsPayload(packer)
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals("agent-host", result.hostname)
+        assertEquals("staging", result.env)
+        assertEquals("7.72.0", result.version)
+        val bucket = result.stats.single()
+        assertEquals(1700000000000000000L, bucket.start)
+        assertEquals(10000000000L, bucket.duration)
+        val entry = bucket.stats.single()
+        assertEquals("web.request", entry.name)
+        assertEquals("api", entry.service)
+        assertEquals("GET /health", entry.resource)
+        assertEquals("web", entry.type)
+        assertEquals(200, entry.httpStatusCode)
+        assertEquals(2, entry.hits)
+        assertEquals(1, entry.topLevelHits)
+        assertEquals(0, entry.errors)
+        assertEquals(50000000L, entry.duration)
+        assertEquals(2, entry.okSummary?.count)
+        assertEquals(42.0, entry.okSummary?.sum)
+    }
+
+    @Test
+    fun `parseMsgpackStats skips malformed stats container levels`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(3)
+        packer.packString("skip-client")
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packString("skip-stats")
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(2)
+        packer.packString("skip-bucket")
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packDouble(1234.0)
+        packer.packString("Duration")
+        packer.packNil()
+        packer.packString("Stats")
+        packer.packString("skip-grouped")
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals(2, result.stats.size)
+        assertEquals(0L, result.stats[0].start)
+        assertEquals(1234L, result.stats[1].start)
+        assertEquals(0L, result.stats[1].duration)
+        assertTrue(result.stats[1].stats.isEmpty())
+    }
+
+    @Test
+    fun `parseMsgpackStats coerces invalid grouped stats fields safely`() {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(4)
+        packer.packString("AgentHostname")
+        packer.packNil()
+        packer.packString("AgentEnv")
+        packer.packArrayHeader(0)
+        packer.packString("AgentVersion")
+        packer.packString("7.72.0")
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(2)
+        packer.packString("skip-entry")
+        packWeirdGroupedStatsEntry(packer)
+        packer.close()
+
+        val result = TraceIngestionService.parseMsgpackStats(packer.toByteArray())
+
+        assertEquals("", result.hostname)
+        assertEquals("", result.env)
+        assertEquals("7.72.0", result.version)
+        assertEquals(2, result.stats.single().stats.size)
+        val emptyEntry = result.stats.single().stats.first()
+        assertEquals("", emptyEntry.name)
+        val entry = result.stats.single().stats.last()
+        assertEquals("", entry.name)
+        assertEquals("", entry.service)
+        assertEquals("GET /checkout", entry.resource)
+        assertEquals("web", entry.type)
+        assertEquals(503, entry.httpStatusCode)
+        assertEquals(false, entry.synthetics)
+        assertEquals(0L, entry.hits)
+        assertEquals(0L, entry.topLevelHits)
+        assertEquals(1L, entry.errors)
+        assertEquals(50L, entry.duration)
+        assertEquals(null, entry.okSummary)
+        assertEquals(4L, entry.errorSummary?.count)
+        assertEquals(20.0, entry.errorSummary?.sum)
+    }
+
+    @Test
+    fun `parseTraceId accepts unsigned numeric values`() {
+        val parsed = TraceIngestionService.parseTraceId("18446744073709551615")
+        assertEquals(ULong.MAX_VALUE, parsed)
+    }
+
+    @Test
+    fun `parseTraceId rejects non numeric input`() {
+        assertEquals(null, TraceIngestionService.parseTraceId("0 OR 1=1"))
+        assertEquals(null, TraceIngestionService.parseTraceId("abc"))
+    }
+
+    @Test
+    fun `insertTraces writes mapped service id and release version`() = runBlocking {
+        val db = Database.connect(
+            url = "jdbc:h2:mem:moneat_dd_trace_release;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+            driver = "org.h2.Driver",
+        )
+        TransactionManager.defaultDatabase = db
+        TestDatabaseHelper.resetSchema(Organizations, Projects, OtelServiceProjectMappings)
+        val (orgId, projectId) = transaction {
+            val insertedOrgId = Organizations.insert {
+                it[name] = "Test Org"
+                it[slug] = "test-org"
+            } get Organizations.id
+            val insertedProjectId = Projects.insert {
+                it[organization_id] = insertedOrgId
+                it[name] = "Checkout API"
+                it[slug] = "checkout-api"
+            } get Projects.id
+            insertedOrgId to insertedProjectId
+        }
+
+        val queries = mutableListOf<String>()
+        val response = mockk<HttpResponse>()
+        mockkObject(ClickHouseClient)
+        try {
+            every { ClickHouseClient.getDatabase() } returns "test_db"
+            every { response.status } returns HttpStatusCode.OK
+            coEvery { ClickHouseClient.execute(capture(queries)) } returns response
+
+            TraceIngestionService.insertTraces(
+                organizationId = orgId,
+                traces = listOf(
+                    listOf(
+                        DdSpan(
+                            traceId = 1uL,
+                            spanId = 2uL,
+                            parentId = 0uL,
+                            name = "rack.request",
+                            service = "checkout-api",
+                            resource = "GET /checkout",
+                            type = "web",
+                            start = 1_700_000_000_000_000_000L,
+                            duration = 50_000_000L,
+                            error = 0,
+                            meta = mapOf("version" to "2026.06.04"),
+                            metrics = emptyMap(),
+                        )
+                    )
+                ),
+            )
+
+            val insert = queries.single { it.contains(".apm_spans") && it.contains("INSERT INTO") }
+            assertTrue(insert.contains("service_id, project_id"))
+            assertTrue(Regex("""(?s),\s*$projectId,\s*$projectId,\s*'rack.request'""").containsMatchIn(insert))
+            assertTrue(insert.contains("'2026.06.04'"))
+        } finally {
+            unmockkObject(ClickHouseClient)
+        }
+    }
+
+    // ──── HELPERS ────
+
+    private fun buildMsgpackPayload(
+        traces: List<List<Map<String, Any>>>
+    ): ByteArray {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packArrayHeader(traces.size)
+        for (trace in traces) {
+            packer.packArrayHeader(trace.size)
+            for (spanMap in trace) {
+                packSpanMap(packer, spanMap)
+            }
+        }
+        packer.close()
+        return packer.toByteArray()
+    }
+
+    private fun buildSpanMap(
+        traceId: Long = 0L,
+        spanId: Long = 0L,
+        parentId: Long = 0L,
+        name: String = "",
+        service: String = "",
+        resource: String = "",
+        type: String = "",
+        start: Long = 0L,
+        duration: Long = 0L,
+        error: Int = 0,
+        meta: Map<String, String> = emptyMap(),
+        metrics: Map<String, Double> = emptyMap(),
+    ): Map<String, Any> {
+        val map = mutableMapOf<String, Any>(
+            "trace_id" to traceId,
+            "span_id" to spanId,
+            "parent_id" to parentId,
+            "name" to name,
+            "service" to service,
+            "resource" to resource,
+            "type" to type,
+            "start" to start,
+            "duration" to duration,
+            "error" to error,
+        )
+        if (meta.isNotEmpty()) map["meta"] = meta
+        if (metrics.isNotEmpty()) map["metrics"] = metrics
+        return map
+    }
+
+    @Suppress("CyclomaticComplexity")
+    private fun packSpanMap(
+        packer: MessageBufferPacker,
+        spanMap: Map<String, Any>
+    ) {
+        packer.packMapHeader(spanMap.size)
+        for ((key, value) in spanMap) {
+            packer.packString(key)
+            when (value) {
+                is Long -> packer.packLong(value)
+                is Int -> packer.packInt(value)
+                is String -> packer.packString(value)
+                is Map<*, *> -> packNestedSpanMetaMap(packer, value)
+                else -> packer.packString(value.toString())
+            }
+        }
+    }
+
+    private fun packNestedSpanMetaMap(packer: MessageBufferPacker, value: Map<*, *>) {
+        packer.packMapHeader(value.size)
+        for ((mk, mv) in value) {
+            packer.packString(mk as String)
+            packSpanMetaValue(packer, mv)
+        }
+    }
+
+    private fun packSpanMetaValue(packer: MessageBufferPacker, mv: Any?) {
+        when (mv) {
+            is String -> packer.packString(mv)
+            is Double -> packer.packDouble(mv)
+            else -> packer.packString(mv.toString())
+        }
+    }
+
+    private fun packClientStatsPayload(packer: MessageBufferPacker) {
+        packer.packMapHeader(1)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packer.packMapHeader(3)
+        packer.packString("Start")
+        packer.packLong(1700000000000000000L)
+        packer.packString("Duration")
+        packer.packLong(10000000000L)
+        packer.packString("Stats")
+        packer.packArrayHeader(1)
+        packGroupedStats(packer)
+    }
+
+    private fun packGroupedStats(packer: MessageBufferPacker) {
+        packer.packMapHeader(11)
+        packer.packString("Name")
+        packer.packString("web.request")
+        packer.packString("Service")
+        packer.packString("api")
+        packer.packString("Resource")
+        packer.packString("GET /health")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packInt(200)
+        packer.packString("Hits")
+        packer.packLong(2)
+        packer.packString("TopLevelHits")
+        packer.packLong(1)
+        packer.packString("Errors")
+        packer.packLong(0)
+        packer.packString("Duration")
+        packer.packLong(50000000L)
+        packer.packString("Synthetics")
+        packer.packBoolean(false)
+        packer.packString("OkSummary")
+        packer.packMapHeader(2)
+        packer.packString("Count")
+        packer.packLong(2)
+        packer.packString("Sum")
+        packer.packDouble(42.0)
+    }
+
+    private fun packWeirdGroupedStatsEntry(packer: MessageBufferPacker) {
+        packer.packMapHeader(13)
+        packer.packString("Name")
+        packer.packNil()
+        packer.packString("Service")
+        packer.packArrayHeader(0)
+        packer.packString("Resource")
+        packer.packString("GET /checkout")
+        packer.packString("Type")
+        packer.packString("web")
+        packer.packString("HTTPStatusCode")
+        packer.packDouble(503.0)
+        packer.packString("Synthetics")
+        packer.packString("not-a-boolean")
+        packer.packString("Hits")
+        packer.packNil()
+        packer.packString("TopLevelHits")
+        packer.packString("not-a-number")
+        packer.packString("Errors")
+        packer.packDouble(1.9)
+        packer.packString("Duration")
+        packer.packLong(50L)
+        packer.packString("OkSummary")
+        packer.packString("not-a-map")
+        packer.packString("ErrorSummary")
+        packer.packMapHeader(3)
+        packer.packString("Count")
+        packer.packDouble(4.0)
+        packer.packString("Sum")
+        packer.packLong(20L)
+        packer.packString("Ignored")
+        packer.packString("value")
+        packer.packString("IgnoredField")
+        packer.packString("value")
+    }
+}

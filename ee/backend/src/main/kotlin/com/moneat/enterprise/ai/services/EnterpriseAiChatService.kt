@@ -6,6 +6,7 @@ package com.moneat.enterprise.ai.services
 
 import com.moneat.ai.AiConversations
 import com.moneat.ai.AiMessages
+import com.moneat.billing.services.BillingQuotaService
 import com.moneat.enterprise.ai.llm.CostRegistry
 import com.moneat.enterprise.ai.llm.LlmConfig
 import com.moneat.enterprise.ai.llm.LlmMessage
@@ -30,6 +31,7 @@ import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.Month
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
@@ -48,6 +50,7 @@ class EnterpriseAiChatService(
     private val llmProvider: LlmProvider,
     private val contextAggregator: AiContextAggregator,
     private val snapshotService: AiContextSnapshotService,
+    private val billingQuotaService: BillingQuotaService = BillingQuotaService(),
 ) {
 
     /**
@@ -149,14 +152,14 @@ class EnterpriseAiChatService(
 
         // Save snapshot and notify client, then immediately proceed to LLM
         val estimatedTokens = contextAggregator.estimateTokens(context)
-        val snapshotId = snapshotService.createSnapshot(convId, orgId, userId, context, estimatedTokens)
+        val snapshot = snapshotService.createSnapshot(convId, orgId, userId, context, estimatedTokens)
 
         sendSse(
             writer,
             json.encodeToString(
                 SseContextReady.serializer(),
                 SseContextReady(
-                    snapshotId = snapshotId,
+                    snapshotId = snapshot.resourceId,
                     totalTokens = estimatedTokens,
                     sources = mapOf(
                         "logs" to context.summary.logCount,
@@ -170,7 +173,7 @@ class EnterpriseAiChatService(
         )
 
         // Immediately generate the AI response on the same SSE stream
-        confirmAndGenerate(writer, userId, snapshotId)
+        confirmAndGenerate(writer, userId, snapshot.internalId)
 
         return convId
     }
@@ -249,6 +252,9 @@ class EnterpriseAiChatService(
             )
         }
     }
+
+    fun resolveSnapshotId(snapshotResourceId: Uuid, userId: Int): Int? =
+        snapshotService.resolveSnapshotId(snapshotResourceId, userId)
 
     private fun buildLlmMessages(conversationId: Int, context: AggregatedContext): List<LlmMessage> {
         val messages = mutableListOf<LlmMessage>()
@@ -341,7 +347,7 @@ $contextStr"""
 
     private fun persistAssistantMessage(conversationId: Int, response: LlmResponse, costUsd: BigDecimal) {
         val now = Clock.System.now()
-        transaction {
+        val orgId = transaction {
             AiMessages.insert {
                 it[AiMessages.conversation_id] = conversationId
                 it[AiMessages.role] = "assistant"
@@ -356,6 +362,21 @@ $contextStr"""
             }
             AiConversations.update({ AiConversations.id eq conversationId }) {
                 it[updated_at] = now
+            }
+
+            AiConversations
+                .selectAll()
+                .where { AiConversations.id eq conversationId }
+                .firstOrNull()
+                ?.get(AiConversations.organization_id)
+        }
+
+        if (orgId != null) {
+            val totalTokens = (response.inputTokens + response.outputTokens).toLong()
+            try {
+                billingQuotaService.incrementUsageCounters(orgId, aiTokens = totalTokens)
+            } catch (e: Throwable) {
+                logger.debug(e) { "Failed to increment AI token count for org $orgId" }
             }
         }
     }

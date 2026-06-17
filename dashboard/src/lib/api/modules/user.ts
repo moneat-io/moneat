@@ -14,30 +14,42 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+import { syncDemoEpochFromUser } from '../../demo'
 import type { ApiClientCore } from '../client'
 import type {
   AccountDeletionValidation,
   OrganizationAccountSettings,
   OrganizationDeletionValidation,
+  PushDevice,
+  PushDevicesResponse,
 } from '../types'
+
+type CurrentUserResponse = {
+  id: string
+  email: string
+  name?: string
+  emailVerified: boolean
+  onboardingCompleted: boolean
+  isAdmin?: boolean
+  orgId?: string
+  organizationSlug?: string
+  orgRole?: string
+  demoEpochMs?: number | null
+  sidebarHiddenItems?: string[]
+  timezone?: string | null
+  density?: string | null
+  dateFormat?: string | null
+}
 
 export function userMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getCurrentUser: () =>
-      core.request<{
-        id: number
-        email: string
-        name?: string
-        emailVerified: boolean
-        onboardingCompleted: boolean
-        isAdmin?: boolean
-        organizationSlug?: string
-        demoEpochMs?: number
-        sidebarHiddenItems?: string[]
-        timezone?: string | null
-      }>(`${base}/user`),
+    getCurrentUser: async (): Promise<CurrentUserResponse> => {
+      const user = await core.request<CurrentUserResponse>(`${base}/user`)
+      syncDemoEpochFromUser(user)
+      return user
+    },
 
     updateSidebarPreferences: (hiddenItems: string[]) =>
       core.request<{ hiddenItems: string[] }>(
@@ -54,14 +66,46 @@ export function userMethods(core: ApiClientCore) {
         body: JSON.stringify({ timezone }),
       }),
 
+    // Personal display preferences (density, date format). Persisted server-side
+    // and returned on getCurrentUser; the CSS/format application layer is FE.
+    updateUserPreferences: (
+      preferences: Partial<{ density: string; dateFormat: string }>
+    ) =>
+      core.request<void>(`${base}/user/preferences`, {
+        method: 'PUT',
+        body: JSON.stringify(preferences),
+      }),
+
+    // Registered push devices (display metadata only; never tokens).
+    getPushDevices: async (): Promise<PushDevice[]> => {
+      const res = await core.request<PushDevicesResponse>(
+        `${base}/user/push-devices`
+      )
+      return res.devices ?? []
+    },
+
     getOrganizations: () =>
-      core.request<Array<{ id: number; name: string; slug: string }>>(
+      core.request<Array<{ id: string; name: string; slug: string }>>(
         `${base}/organizations`
       ),
 
-    getOrganizationAccountSettings: (organizationId: number) =>
+    getOrganizationAccountSettings: (organizationId: string) =>
       core.request<OrganizationAccountSettings>(
         `${base}/organizations/${organizationId}`
+      ),
+
+    // Update org-level identity/defaults (workspace name, slug, default timezone).
+    // Backend contract: PATCH /v1/organizations/{id} accepting any subset of fields.
+    updateOrganizationSettings: (
+      organizationId: string,
+      settings: Partial<{ name: string; slug: string; defaultTimezone: string }>
+    ) =>
+      core.request<OrganizationAccountSettings>(
+        `${base}/organizations/${organizationId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(settings),
+        }
       ),
 
     getAccountDeletionValidation: () =>
@@ -69,7 +113,7 @@ export function userMethods(core: ApiClientCore) {
         `${base}/account/deletion-validation`
       ),
 
-    getOrganizationDeletionValidation: (organizationId: number) =>
+    getOrganizationDeletionValidation: (organizationId: string) =>
       core.request<OrganizationDeletionValidation>(
         `${base}/organizations/${organizationId}/deletion-validation`
       ),
@@ -81,7 +125,7 @@ export function userMethods(core: ApiClientCore) {
       }),
 
     deleteOrganization: (
-      organizationId: number,
+      organizationId: string,
       confirmation: string
     ) =>
       core.request<{ message: string }>(

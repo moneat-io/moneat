@@ -14,67 +14,27 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect} from 'react'
-import {VariantA} from './VariantA'
+import {Landing} from './Landing'
 import {LandingNavbar, LandingFooter} from './LandingNavbar'
-import {Helmet} from 'react-helmet-async'
+import {useForceDarkTheme} from './usePublicPageTheme'
+import {SeoHead} from '@/components/SeoHead'
+import {homeSeo} from '@/lib/seo/routes'
 
 export function LandingPage() {
-  // The landing page is always dark regardless of the user's saved theme preference.
-  useEffect(() => {
-    const root = document.documentElement
-    const prev = root.className
-    root.classList.add('dark')
-    return () => { root.className = prev }
-  }, [])
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'Moneat',
-    url: 'https://moneat.io',
-    applicationCategory: 'DeveloperApplication',
-    description: 'The only open-source observability platform that works as a drop-in replacement for both Sentry and Datadog. Errors, logs, infrastructure, APM, AI observability, on-call, and status pages in one platform — compatible with existing Sentry SDKs and the Datadog Agent.',
-    operatingSystem: 'Web',
-    alternateName: ['Sentry alternative', 'Datadog alternative', 'open source Sentry alternative', 'self-hosted Datadog replacement'],
-    offers: {
-      '@type': 'Offer',
-      price: '0',
-      priceCurrency: 'USD',
-    },
-  }
+  // The public home page is dark-first (style-guide).
+  useForceDarkTheme()
 
   return (
-    <article className="min-h-screen bg-background">
-      <Helmet>
-        <title>Moneat | Open-Source Sentry &amp; Datadog Alternative — Drop-In Compatible with Both</title>
-        <meta
-          name="description"
-          content="The only observability platform that works as a drop-in replacement for both Sentry and Datadog. Use your existing Sentry SDKs and Datadog Agent — zero code changes. Open-source errors, logs, APM, infrastructure, on-call, and AI observability in one platform."
-        />
-        <meta name="keywords" content="Sentry alternative, Datadog alternative, open source Sentry alternative, self-hosted Datadog replacement, drop-in Datadog replacement, error monitoring, log management, APM, infrastructure monitoring, observability platform" />
-        <link rel="canonical" href="https://moneat.io" />
+    <article className="min-h-screen bg-[#08090f] font-display text-slate-300">
+      <SeoHead seo={homeSeo} />
 
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://moneat.io" />
-        <meta property="og:title" content="Moneat — The Only Platform That Replaces Both Sentry & Datadog" />
-        <meta property="og:description" content="Stop paying for Sentry and Datadog separately. The only platform that works as a drop-in replacement for both. Use your existing SDKs and agents — zero code changes." />
-        <meta property="og:image" content="https://moneat.io/screenshots/dashboard.png" />
-
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Moneat — The Only Platform That Replaces Both Sentry & Datadog" />
-        <meta name="twitter:description" content="Stop paying for Sentry and Datadog separately. The only platform that works as a drop-in replacement for both. Use your existing SDKs and agents — zero code changes." />
-        <meta name="twitter:image" content="https://moneat.io/screenshots/dashboard.png" />
-
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      </Helmet>
-
-      <LandingNavbar />
+      <LandingNavbar tone="dark" />
 
       <main>
-        <VariantA />
+        <Landing />
       </main>
 
-      <LandingFooter />
+      <LandingFooter tone="dark" />
     </article>
   )
 }

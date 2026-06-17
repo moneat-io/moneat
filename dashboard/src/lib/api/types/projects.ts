@@ -19,12 +19,16 @@ export interface ProjectKey {
   dsn: string
 }
 
+export type ProjectIdentifier = string
+
 export interface Project {
-  id: number
+  id: ProjectIdentifier
   name: string
   slug: string
   framework?: string
   keys: ProjectKey[]
   dsn: string
   issueCount?: number
+  serviceId?: ProjectIdentifier
+  serviceName?: string
 }

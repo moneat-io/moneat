@@ -44,9 +44,9 @@ type DirectionFilter = 'all' | 'incoming' | 'outgoing'
 function directionBadgeClasses(direction: string): string {
   switch (direction?.toLowerCase()) {
     case 'incoming':
-      return 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/20'
+      return 'bg-chart-1/15 text-chart-1 border-chart-1/30'
     case 'outgoing':
-      return 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
+      return 'bg-chart-10/15 text-chart-10 border-chart-10/30'
     default:
       return 'bg-muted text-muted-foreground border-border'
   }
@@ -55,9 +55,9 @@ function directionBadgeClasses(direction: string): string {
 function protocolBadgeClasses(protocol: string): string {
   switch (protocol?.toLowerCase()) {
     case 'tcp':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+      return 'bg-chart-3/15 text-chart-3 border-chart-3/30'
     case 'udp':
-      return 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/20'
+      return 'bg-chart-6/15 text-chart-6 border-chart-6/30'
     default:
       return 'bg-muted text-muted-foreground border-border'
   }
@@ -89,7 +89,7 @@ export function NetworkConnections() {
     refetchInterval: 10000,
   })
 
-  const connections = data?.connections ?? []
+  const connections = useMemo(() => data?.connections ?? [], [data?.connections])
 
   const filtered = useMemo(() => {
     let result = connections
@@ -128,19 +128,19 @@ export function NetworkConnections() {
         {!isLoading && connections.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <Network className="h-3.5 w-3.5 text-blue-500" />
+              <Network className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{connections.length}</span>
               <span className="text-muted-foreground text-xs">connections</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Server className="h-3.5 w-3.5 text-violet-500" />
+              <Server className="h-3.5 w-3.5 text-chart-2" />
               <span className="font-semibold tabular-nums">{uniqueHosts}</span>
               <span className="text-muted-foreground text-xs">{uniqueHosts === 1 ? 'host' : 'hosts'}</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+              <Wifi className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{tcpCount}</span>
               <span className="text-muted-foreground text-xs">TCP</span>
               <span className="text-muted-foreground text-xs">/</span>
@@ -149,13 +149,13 @@ export function NetworkConnections() {
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <ArrowUpFromLine className="h-3.5 w-3.5 text-sky-500" />
+              <ArrowUpFromLine className="h-3.5 w-3.5 text-chart-6" />
               <span className="font-semibold tabular-nums">{formatBytes(totalSent)}</span>
               <span className="text-muted-foreground text-xs">sent</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <ArrowDownToLine className="h-3.5 w-3.5 text-indigo-500" />
+              <ArrowDownToLine className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{formatBytes(totalRecv)}</span>
               <span className="text-muted-foreground text-xs">received</span>
             </div>
@@ -182,13 +182,13 @@ export function NetworkConnections() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 protocolFilter === f
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              {f === 'tcp' && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-              {f === 'udp' && <div className="h-1.5 w-1.5 rounded-full bg-orange-500" />}
-              {f === 'all' && <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+              {f === 'tcp' && <div className="h-1.5 w-1.5 rounded-full bg-chart-3" />}
+              {f === 'udp' && <div className="h-1.5 w-1.5 rounded-full bg-chart-6" />}
+              {f === 'all' && <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
               <span className="uppercase">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">
                 {f === 'all' ? connections.length : f === 'tcp' ? tcpCount : udpCount}
@@ -205,13 +205,13 @@ export function NetworkConnections() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 directionFilter === f
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              {f === 'incoming' && <div className="h-1.5 w-1.5 rounded-full bg-sky-500" />}
-              {f === 'outgoing' && <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />}
-              {f === 'all' && <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+              {f === 'incoming' && <div className="h-1.5 w-1.5 rounded-full bg-chart-1" />}
+              {f === 'outgoing' && <div className="h-1.5 w-1.5 rounded-full bg-chart-10" />}
+              {f === 'all' && <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />}
               <span className="capitalize">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">
                 {f === 'all' ? connections.length : f === 'incoming' ? incomingCount : outgoingCount}
@@ -231,8 +231,8 @@ export function NetworkConnections() {
       ) : connections.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10">
-              <Globe className="h-10 w-10 text-blue-500" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <Globe className="h-10 w-10" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No connections found</h3>
             <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
@@ -246,7 +246,7 @@ export function NetworkConnections() {
           <p className="text-sm mt-1">Try adjusting your search, protocol, or direction filter.</p>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[950px]">
               <TableHeader>
@@ -300,7 +300,7 @@ export function NetworkConnections() {
 
                     <TableCell>
                       <Badge
-                        variant="secondary"
+                        variant="outline"
                         className={cn('text-xs', protocolBadgeClasses(conn.protocol))}
                       >
                         {conn.protocol?.toUpperCase() || '—'}
@@ -310,7 +310,7 @@ export function NetworkConnections() {
                     <TableCell>
                       {conn.direction ? (
                         <Badge
-                          variant="secondary"
+                          variant="outline"
                           className={cn('text-xs gap-1', directionBadgeClasses(conn.direction))}
                         >
                           <DirectionIcon direction={conn.direction} />
@@ -327,11 +327,11 @@ export function NetworkConnections() {
 
                     <TableCell>
                       <div className="text-xs font-medium tabular-nums leading-5">
-                        <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                        <div className="flex items-center gap-1 text-chart-6">
                           <ArrowUpFromLine className="h-3 w-3" />
                           {formatBytes(conn.bytesSent)}
                         </div>
-                        <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                        <div className="flex items-center gap-1 text-chart-3">
                           <ArrowDownToLine className="h-3 w-3" />
                           {formatBytes(conn.bytesRecv)}
                         </div>

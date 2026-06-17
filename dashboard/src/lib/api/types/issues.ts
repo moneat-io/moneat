@@ -35,7 +35,7 @@ export interface Event {
 
 export interface Issue {
   id: string
-  projectId: number
+  projectId: string
   title: string
   culprit: string
   level: string
@@ -47,6 +47,14 @@ export interface Issue {
   status: string
   substatus?: string
   statusDetail?: Record<string, string>
+}
+
+export interface IssueListParams {
+  page?: number
+  limit?: number
+  status?: string
+  services?: string[]
+  serviceIds?: string[]
 }
 
 export interface IssueDetail extends Issue {

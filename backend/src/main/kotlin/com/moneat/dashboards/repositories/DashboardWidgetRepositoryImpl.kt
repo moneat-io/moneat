@@ -18,6 +18,7 @@ package com.moneat.dashboards.repositories
 
 import com.moneat.dashboards.models.CreateWidgetRequest
 import com.moneat.dashboards.models.DashboardWidgets
+import com.moneat.dashboards.models.Dashboards
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.UpdateWidgetRequest
 import kotlinx.serialization.encodeToString
@@ -46,13 +47,20 @@ class DashboardWidgetRepositoryImpl : DashboardWidgetRepository {
 
     override fun listByDashboardId(dashboardId: Long): List<WidgetData> =
         transaction {
+            val dashboardResourceId = Dashboards.selectAll()
+                .where { Dashboards.id eq dashboardId }
+                .first()[Dashboards.resourceId]
+                .toString()
+
             DashboardWidgets.selectAll()
                 .where { DashboardWidgets.dashboardId eq dashboardId }
                 .orderBy(DashboardWidgets.sortOrder, SortOrder.ASC)
                 .map { row ->
                     WidgetData(
                         id = row[DashboardWidgets.id],
+                        resourceId = row[DashboardWidgets.resourceId].toString(),
                         dashboardId = row[DashboardWidgets.dashboardId],
+                        dashboardResourceId = dashboardResourceId,
                         title = row[DashboardWidgets.title],
                         widgetType = row[DashboardWidgets.widgetType],
                         gridX = row[DashboardWidgets.gridX],
@@ -73,19 +81,20 @@ class DashboardWidgetRepositoryImpl : DashboardWidgetRepository {
         now: Instant
     ): Set<Long> =
         transaction {
-            val existingById = DashboardWidgets.selectAll()
+            val existingByResourceId = DashboardWidgets.selectAll()
                 .where { DashboardWidgets.dashboardId eq dashboardId }
-                .associateBy { it[DashboardWidgets.id] }
+                .associateBy { it[DashboardWidgets.resourceId].toString() }
 
             val keptIds = mutableSetOf<Long>()
 
             widgets.forEachIndexed { index, widget ->
                 val requestedId = widget.id
-                val existingWidget = requestedId?.let { existingById[it] }
+                val existingWidget = requestedId?.let { existingByResourceId[it] }
 
                 if (existingWidget != null) {
-                    updateWidget(dashboardId, requestedId, widget, index, now)
-                    keptIds.add(requestedId)
+                    val numericWidgetId = existingWidget[DashboardWidgets.id]
+                    updateWidget(dashboardId, numericWidgetId, widget, index, now)
+                    keptIds.add(numericWidgetId)
                 } else {
                     keptIds.add(insertWidget(dashboardId, widget, index, now))
                 }
@@ -154,6 +163,14 @@ class DashboardWidgetRepositoryImpl : DashboardWidgetRepository {
             }
         }
     }
+
+    override fun deleteById(dashboardId: Long, widgetId: Long): Boolean =
+        transaction {
+            DashboardWidgets.deleteWhere {
+                (DashboardWidgets.dashboardId eq dashboardId) and
+                    (DashboardWidgets.id eq widgetId)
+            } > 0
+        }
 
     override fun insert(dashboardId: Long, widget: CreateWidgetRequest, sortOrder: Int, now: Instant): Long =
         transaction {

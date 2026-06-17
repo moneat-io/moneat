@@ -20,6 +20,8 @@ package com.moneat.config
 
 import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
+import java.util.Locale
+import kotlin.math.abs
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
@@ -47,6 +49,7 @@ internal suspend fun checkFreshDatadogCount(): Long {
                 Triple("profiles", "start_time", "organization_id"),
                 Triple("service_checks", "timestamp", "organization_id"),
                 Triple("containers", "timestamp", "organization_id"),
+                Triple("metrics_latest_by_host", "timestamp", "organization_id"),
             )
         var minCount = Long.MAX_VALUE
         for ((table, timeCol, orgCol) in tablesWithTimeCol) {
@@ -75,6 +78,11 @@ internal suspend fun purgeDatadogDemoData() {
     val tables =
         listOf(
             "apm_spans",
+            "apm_trace_summaries",
+            "apm_error_groups_hourly",
+            "apm_resource_stats_hourly",
+            "apm_service_stats_hourly",
+            "apm_service_edges_hourly",
             "trace_stats",
             "profiles",
             "infra_events",
@@ -82,11 +90,14 @@ internal suspend fun purgeDatadogDemoData() {
             "processes",
             "containers",
             "network_connections",
+            "metrics_latest_by_host",
         )
     for (table in tables) {
         suspendRunCatching {
             requireClickHouse2xx(
-                ClickHouseClient.execute("ALTER TABLE $table DELETE WHERE organization_id = $ORG1"),
+                ClickHouseClient.execute(
+                    "ALTER TABLE $table DELETE WHERE organization_id = $ORG1 SETTINGS mutations_sync = 2"
+                ),
                 "Purge Datadog $table"
             )
         }.onFailure { logger.warn { "Purge $table failed (non-fatal): ${it.message}" } }
@@ -102,8 +113,10 @@ internal suspend fun purgeDatadogDemoData() {
 
 internal suspend fun reseedDatadogData() {
     reseedDatadogHostsPostgres()
+    reseedDatadogHostMetrics()
     reseedDatadogApmRootSpans()
     reseedDatadogApmChildSpans()
+    reseedDatadogServiceMapRollups()
     reseedDatadogProfileRows()
     reseedDatadogInfraEvents()
     reseedDatadogServiceChecks()
@@ -174,17 +187,122 @@ private suspend fun reseedDatadogHostsPostgres() {
                     ),
                 )
             for (h in hostData) {
+                // Leave one host intentionally DOWN for a realistic fleet; DemoLivenessBackgroundService
+                // re-stamps last_seen_at for the rest every minute (it skips this host by name).
+                val isDown = h[0] == DEMO_DD_HOST_PROD_WORKER_01
+                val lastSeen = if (isDown) "NOW() - INTERVAL '25 minutes'" else "NOW() - INTERVAL '30 seconds'"
+                val status = if (isDown) "down" else "up"
                 exec(
                     """
-                    INSERT INTO hosts (organization_id, hostname, os, platform, processor, cpu_cores, memory_total_kb, agent_version, gohai, tags, first_seen_at, last_seen_at)
+                    INSERT INTO hosts (organization_id, hostname, os, platform, processor, cpu_cores, memory_total_kb, agent_version, gohai, tags, first_seen_at, last_seen_at, status)
                     VALUES (-1, '${h[0]}', '${h[1]}', '${h[2]}', '${h[3]}', ${h[4]}, ${h[5]}, '${h[6]}',
-                        '{}', '{"env":"production","service":"acme-shopping"}', NOW() - INTERVAL '14 days', NOW() - INTERVAL '30 seconds')
-                    ON CONFLICT (organization_id, hostname) DO UPDATE SET last_seen_at = NOW() - INTERVAL '30 seconds'
+                        '{}', '{"env":"production","service":"acme-shopping"}', NOW() - INTERVAL '14 days', $lastSeen, '$status')
+                    ON CONFLICT (organization_id, hostname) DO UPDATE SET last_seen_at = $lastSeen, status = '$status'
                     """.trimIndent()
                 )
             }
         }
     }.onFailure { logger.warn { "Reseed hosts failed (non-fatal): ${it.message}" } }
+}
+
+// Host system metrics for the demo fleet. The resource catalog + host views read the latest
+// CPU/memory (and disk/load/network) per host from `metrics_latest_by_host` keyed by the Postgres
+// host id — which only exists after reseedDatadogHostsPostgres has run, so this reads the freshly
+// inserted ids back. Latest snapshot only: the catalog synthesises history from the latest value.
+private const val DEMO_DISK_TOTAL_BYTES = 512L * 1024 * 1024 * 1024
+
+private data class DemoHostMetricRow(val id: Long, val hostname: String, val memTotalKb: Long)
+
+private data class HostMetricAnchors(
+    val cpuPct: Double,
+    val memPct: Double,
+    val diskPct: Double,
+    val load1: Double,
+    val netRecvBytes: Long,
+    val netSentBytes: Long,
+)
+
+/** Deterministic per-host metric values so the seeded fleet looks varied but stable across reseeds. */
+private fun hostMetricAnchors(hostname: String): HostMetricAnchors {
+    val h = abs(hostname.hashCode())
+    return HostMetricAnchors(
+        cpuPct = 25.0 + (h % 55),
+        memPct = 35.0 + (h / 7 % 50),
+        diskPct = 40.0 + (h / 13 % 50),
+        load1 = 0.5 + (h % 400) / 100.0,
+        netRecvBytes = (3L + h % 30) * 1024 * 1024,
+        netSentBytes = (1L + h / 11 % 12) * 1024 * 1024,
+    )
+}
+
+private fun readDemoHostMetricRows(): List<DemoHostMetricRow> =
+    suspendRunCatching {
+        transaction {
+            exec(
+                "SELECT id, hostname, memory_total_kb FROM hosts WHERE organization_id = -1 ORDER BY id"
+            ) { rs ->
+                buildList {
+                    while (rs.next()) {
+                        add(
+                            DemoHostMetricRow(
+                                rs.getLong("id"),
+                                rs.getString("hostname"),
+                                rs.getLong("memory_total_kb")
+                            )
+                        )
+                    }
+                }
+            } ?: emptyList()
+        }
+    }.getOrElse {
+        logger.warn { "Failed to read demo hosts for metric reseed (non-fatal): ${it.message}" }
+        emptyList()
+    }
+
+private fun hostMetricsLatestSql(hosts: List<DemoHostMetricRow>): String {
+    val rows = buildList {
+        for (host in hosts) {
+            val a = hostMetricAnchors(host.hostname)
+            val memTotalBytes = host.memTotalKb * 1024L
+            val memUsedBytes = (memTotalBytes * a.memPct / 100.0).toLong()
+            val diskUsedBytes = (DEMO_DISK_TOTAL_BYTES * a.diskPct / 100.0).toLong()
+            val metrics = listOf(
+                "system.cpu.percent" to fmtMetric(a.cpuPct),
+                "system.mem.total" to memTotalBytes.toString(),
+                "system.mem.used" to memUsedBytes.toString(),
+                "system.disk.total" to DEMO_DISK_TOTAL_BYTES.toString(),
+                "system.disk.used" to diskUsedBytes.toString(),
+                "system.load.1" to fmtMetric(a.load1),
+                "system.net.recv_bytes" to a.netRecvBytes.toString(),
+                "system.net.sent_bytes" to a.netSentBytes.toString(),
+            )
+            for ((name, value) in metrics) {
+                add("($ORG1, ${host.id}, '$name', now64(3), $value, '${host.hostname}', 'datadog')")
+            }
+        }
+    }
+    return """
+        INSERT INTO metrics_latest_by_host
+            (organization_id, host_id, metric_name, timestamp, value, host, source)
+        VALUES
+        ${rows.joinToString(",\n        ")}
+    """.trimIndent()
+}
+
+private fun fmtMetric(value: Double): String = String.format(Locale.US, "%.2f", value)
+
+private suspend fun reseedDatadogHostMetrics() {
+    val hosts = readDemoHostMetricRows()
+    if (hosts.isEmpty()) {
+        logger.warn { "No demo hosts found for host-metric reseed (non-fatal)" }
+        return
+    }
+    suspendRunCatching {
+        requireClickHouse2xx(
+            ClickHouseClient.execute(hostMetricsLatestSql(hosts)),
+            "Reseed host metrics latest"
+        )
+    }.onFailure { logger.warn { "Reseed host metrics latest failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogApmRootSpans() {
@@ -249,6 +367,67 @@ private suspend fun reseedDatadogApmChildSpans() {
     suspendRunCatching {
         requireClickHouse2xx(ClickHouseClient.execute(childSpansSql), "Reseed child spans")
     }.onFailure { logger.warn { "Reseed child spans failed (non-fatal): ${it.message}" } }
+}
+
+// Service-map rollups (apm_service_stats_hourly / apm_service_edges_hourly) are normally written by
+// the live ingest path via ApmServiceMapRollups.insertForSpans — but that helper intentionally skips
+// non-positive org ids, so it never fires for the demo org (-1). Aggregate the seeded apm_spans into
+// the rollups directly so the service map renders. SummingMergeTree means we must purge first (handled
+// in purgeDatadogDemoData) to avoid double-counting across reseeds.
+private suspend fun reseedDatadogServiceMapRollups() {
+    val statsSql =
+        """
+        INSERT INTO apm_service_stats_hourly
+            (organization_id, bucket_start, service, env, source,
+             span_count, error_count, duration_sum, duration_count)
+        SELECT
+            organization_id,
+            toStartOfHour(start) AS bucket_start,
+            service,
+            env,
+            'datadog' AS source,
+            count() AS span_count,
+            sum(error) AS error_count,
+            sum(duration) AS duration_sum,
+            count() AS duration_count
+        FROM apm_spans
+        WHERE organization_id = $ORG1
+        GROUP BY organization_id, bucket_start, service, env
+        """.trimIndent()
+
+    val edgesSql =
+        """
+        INSERT INTO apm_service_edges_hourly
+            (organization_id, bucket_start, from_service, to_service, env, source,
+             call_count, error_count, duration_sum, duration_count)
+        SELECT
+            child.organization_id,
+            toStartOfHour(child.start) AS bucket_start,
+            parent.service AS from_service,
+            child.service AS to_service,
+            child.env AS env,
+            'datadog' AS source,
+            count() AS call_count,
+            sum(child.error) AS error_count,
+            sum(child.duration) AS duration_sum,
+            count() AS duration_count
+        FROM apm_spans AS child
+        INNER JOIN apm_spans AS parent
+            ON child.organization_id = parent.organization_id
+            AND child.trace_id = parent.trace_id
+            AND child.parent_id = parent.span_id
+        WHERE child.organization_id = $ORG1
+            AND child.parent_id != 0
+            AND parent.service != child.service
+        GROUP BY child.organization_id, bucket_start, from_service, to_service, env
+        """.trimIndent()
+
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(statsSql), "Reseed apm_service_stats_hourly")
+    }.onFailure { logger.warn { "Reseed apm_service_stats_hourly failed (non-fatal): ${it.message}" } }
+    suspendRunCatching {
+        requireClickHouse2xx(ClickHouseClient.execute(edgesSql), "Reseed apm_service_edges_hourly")
+    }.onFailure { logger.warn { "Reseed apm_service_edges_hourly failed (non-fatal): ${it.message}" } }
 }
 
 private suspend fun reseedDatadogProfileRows() {

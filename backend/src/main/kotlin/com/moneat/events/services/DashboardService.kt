@@ -17,6 +17,7 @@
 package com.moneat.events.services
 
 import com.moneat.events.models.EventResponse
+import com.moneat.events.models.EventTraceResponse
 import com.moneat.events.models.FeedbackDetailResponse
 import com.moneat.events.models.FeedbackListItem
 import com.moneat.events.models.IssueDetailResponse
@@ -41,12 +42,14 @@ import com.moneat.events.repositories.IssueRepository
 import com.moneat.events.repositories.IssueRepositoryImpl
 import com.moneat.events.repositories.ProjectRepository
 import com.moneat.events.repositories.ProjectRepositoryImpl
+import com.moneat.shared.services.GeoIpService
 import io.sentry.ISpan
 
 class DashboardService(
     private val projectRepository: ProjectRepository,
     private val issueRepository: IssueRepository,
     private val queryHelper: DashboardQueryHelper = DashboardQueryHelper(),
+    private val geoIpService: GeoIpService = GeoIpService(),
 ) {
     companion object {
         fun create(): DashboardService {
@@ -57,12 +60,13 @@ class DashboardService(
                 },
                 issueRepository = IssueRepositoryImpl(queryHelper),
                 queryHelper = queryHelper,
+                geoIpService = GeoIpService(),
             )
         }
     }
     private val feedbackService = FeedbackService(queryHelper)
     private val releaseStatsService = ReleaseStatsService(queryHelper)
-    private val replayService = ReplayService(queryHelper)
+    private val replayService = ReplayService(queryHelper, geoIpService = geoIpService)
     private val projectService = ProjectService(projectRepository, queryHelper)
     private val projectStatsService = ProjectStatsService(queryHelper)
     private val transactionService = TransactionService(queryHelper)
@@ -103,17 +107,23 @@ class DashboardService(
         accessService.getIssueIdForEvent(eventId)
 
     suspend fun getProjects(
-        userId: Int,
+        orgId: Int,
         demoEpochMs: Long? = null
-    ): List<ProjectResponse> = projectService.getProjects(userId, demoEpochMs)
+    ): List<ProjectResponse> = projectService.getProjects(orgId, demoEpochMs)
+
+    fun getServiceIdsForOrganization(orgId: Int): List<Long> =
+        projectRepository.getProjectsForOrganizations(listOf(orgId)).map { it.projectId }
+
+    fun resolveServiceId(orgId: Int, serviceName: String): Long? =
+        projectRepository.resolveServiceId(orgId, serviceName)
 
     suspend fun getProject(projectId: Long): ProjectResponse? =
         projectService.getProject(projectId)
 
     suspend fun createProject(
-        userId: Int,
+        orgId: Int,
         request: com.moneat.events.models.CreateProjectRequest
-    ): ProjectResponse = projectService.createProject(userId, request)
+    ): ProjectResponse = projectService.createProject(orgId, request)
 
     fun addProjectTarget(
         projectId: Long,
@@ -135,6 +145,9 @@ class DashboardService(
         demoEpochMs: Long? = null
     ): List<IssueResponse> =
         issueService.getIssues(projectId, page, limit, status, demoEpochMs)
+
+    suspend fun getIssues(query: IssueListQuery): List<IssueResponse> =
+        issueService.getIssues(query)
 
     suspend fun getIssue(
         issueId: String,
@@ -183,6 +196,12 @@ class DashboardService(
     suspend fun getTransactionSpans(eventId: String): TransactionWithSpansResponse? =
         transactionService.getTransactionSpans(eventId)
 
+    suspend fun getTraceForEvent(eventId: String): EventTraceResponse? =
+        transactionService.getTraceForEvent(eventId)
+
+    suspend fun getTraceForTraceId(projectId: Long, traceId: String): EventTraceResponse? =
+        transactionService.getTraceForTraceId(projectId, traceId)
+
     suspend fun getTraceDetails(
         projectId: Long,
         traceId: String
@@ -213,10 +232,24 @@ class DashboardService(
         parentSpan: ISpan? = null
     ): List<ReleaseListResponse> = releaseStatsService.getReleases(projectId, parentSpan)
 
+    suspend fun getReleasesForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        parentSpan: ISpan? = null
+    ): List<ReleaseListResponse> =
+        releaseStatsService.getReleasesForServices(organizationId, serviceIds, parentSpan)
+
     suspend fun getReleaseStats(
         projectId: Long,
         version: String
     ): ReleaseDetailStats? = releaseStatsService.getReleaseStats(projectId, version)
+
+    suspend fun getReleaseStatsForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        version: String
+    ): ReleaseDetailStats? =
+        releaseStatsService.getReleaseStatsForServices(organizationId, serviceIds, version)
 
     suspend fun getReplays(
         projectId: Long,
@@ -226,6 +259,17 @@ class DashboardService(
         period: String = "7d",
         demoEpochMs: Long? = null
     ): List<ReplayListItem> = replayService.getReplays(projectId, page, limit, environment, period, demoEpochMs)
+
+    suspend fun getReplaysForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        environment: String? = null,
+        period: String = "7d",
+        demoEpochMs: Long? = null
+    ): List<ReplayListItem> =
+        replayService.getReplaysForServices(organizationId, serviceIds, page, limit, environment, period, demoEpochMs)
 
     suspend fun getReplay(
         replayId: String,
@@ -253,6 +297,16 @@ class DashboardService(
         demoEpochMs: Long? = null
     ): List<FeedbackListItem> = feedbackService.getFeedback(projectId, page, limit, status, demoEpochMs)
 
+    suspend fun getFeedbackForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        page: Int = 1,
+        limit: Int = 25,
+        status: String? = null,
+        demoEpochMs: Long? = null
+    ): List<FeedbackListItem> =
+        feedbackService.getFeedbackForServices(organizationId, serviceIds, page, limit, status, demoEpochMs)
+
     suspend fun getFeedbackDetail(feedbackId: String): FeedbackDetailResponse? =
         feedbackService.getFeedbackDetail(feedbackId)
 
@@ -263,6 +317,7 @@ class DashboardService(
 
     suspend fun updateIssue(
         issueId: String,
-        update: com.moneat.events.models.IssueUpdateRequest
-    ) = issueService.updateIssue(issueId, update)
+        update: com.moneat.events.models.IssueUpdateRequest,
+        projectId: Long? = null
+    ) = issueService.updateIssue(issueId, update, projectId)
 }

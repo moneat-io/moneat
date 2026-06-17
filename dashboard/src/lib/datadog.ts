@@ -8,6 +8,7 @@ export interface DatadogInitOptions {
   backendUrl?: string
   service?: string
   env?: string
+  version?: string
 }
 
 export function resolveProxyUrl(proxyUrl?: string, backendUrl?: string): string {
@@ -33,6 +34,7 @@ export function initDatadog(options: DatadogInitOptions): void {
   const ddProxyUrl = resolveProxyUrl(options.proxyUrl, options.backendUrl)
   const service = options.service || 'moneat-dashboard'
   const env = options.env || 'production'
+  const version = isConfigured(options.version) ? options.version : undefined
   const proxyFn = ({path, parameters}: {path: string; parameters: string}) =>
     joinUrl(ddProxyUrl, path) + (parameters ? `?${parameters}` : '')
 
@@ -43,6 +45,7 @@ export function initDatadog(options: DatadogInitOptions): void {
     proxy: proxyFn,
     service,
     env,
+    version,
     sessionSampleRate: 100,
     sessionReplaySampleRate: 100,
     trackUserInteractions: true,
@@ -57,6 +60,7 @@ export function initDatadog(options: DatadogInitOptions): void {
     proxy: proxyFn,
     service,
     env,
+    version,
     forwardErrorsToLogs: true,
     sessionSampleRate: 100,
   })

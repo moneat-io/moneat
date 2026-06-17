@@ -8,9 +8,31 @@ import SdkSetup from './components/SdkSetup'
 
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io').replace(/\/$/, '')
 
+function datadogLogsEndpointAddress(backendUrl: string): string {
+  try {
+    const parsed = new URL(backendUrl)
+    const port = parsed.port || (parsed.protocol === 'http:' ? '80' : '443')
+    return `${parsed.hostname}:${port}`
+  } catch {
+    return backendUrl
+  }
+}
+
+function datadogForwarderEndpoint(backendUrl: string): string {
+  try {
+    const parsed = new URL(backendUrl)
+    const port = parsed.port ? `:${parsed.port}` : ''
+    return parsed.protocol === 'https:' ? `${parsed.hostname}${port}` : backendUrl
+  } catch {
+    return backendUrl
+  }
+}
+
 const DOC_TOKENS: Record<string, string> = {
   '{{BACKEND_URL}}': BACKEND_URL,
+  '{{BACKEND_HOST}}': datadogForwarderEndpoint(BACKEND_URL),
   '{{INGEST_URL}}': BACKEND_URL + '/dd',
+  '{{LOGS_HOST_PORT}}': datadogLogsEndpointAddress(BACKEND_URL),
 }
 
 function interpolateTokens(text: string): string {
@@ -21,7 +43,10 @@ function interpolateTokens(text: string): string {
   return result
 }
 
-export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
+type MdxPreProps = Readonly<ComponentPropsWithoutRef<'pre'>>
+type DocsLinkProps = Readonly<ComponentPropsWithoutRef<'a'>>
+
+export function MdxPre(props: MdxPreProps) {
   const child = props.children
   if (isValidElement(child)) {
     const {className, children} = (child as ReactElement<{className?: string; children?: string}>).props
@@ -37,8 +62,17 @@ export function MdxPre(props: ComponentPropsWithoutRef<'pre'>) {
   return <pre {...props} />
 }
 
-export function DocsLink(props: ComponentPropsWithoutRef<'a'>) {
-  return <a {...props} className={props.className ?? 'text-sky-400 hover:text-sky-300 underline'} />
+export function DocsLink({children, className, href, ...props}: DocsLinkProps) {
+  const content = children ?? <span className="sr-only">{href ?? 'Documentation link'}</span>
+  return (
+    <a
+      {...props}
+      {...(href === undefined ? {} : {href})}
+      className={className ?? 'text-indigo-300 underline underline-offset-2 hover:text-indigo-200'}
+    >
+      {content}
+    </a>
+  )
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- intentional shared utility module

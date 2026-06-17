@@ -1,0 +1,724 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.datadog.decompression
+
+import com.google.protobuf.CodedOutputStream
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class ProtoDecoderTest {
+
+    private fun buildProto(block: CodedOutputStream.() -> Unit): ByteArray {
+        val sizeStream = java.io.ByteArrayOutputStream()
+        val sizeCos = CodedOutputStream.newInstance(sizeStream)
+        sizeCos.block()
+        sizeCos.flush()
+        return sizeStream.toByteArray()
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes empty payload`() {
+        val result = MetricPayloadDecoder.decode(ByteArray(0))
+        assertTrue(result.series.isEmpty())
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes single metric series`() {
+        val seriesBytes = buildProto {
+            writeString(2, "cpu.user")
+            writeString(3, "env:prod")
+        }
+        val payload = buildProto {
+            writeByteArray(1, seriesBytes)
+        }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals(1, result.series.size)
+        assertEquals("cpu.user", result.series[0].metric)
+        assertTrue(result.series[0].tags.contains("env:prod"))
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes host from resource`() {
+        val resourceBytes = buildProto {
+            writeString(1, "host")
+            writeString(2, "web-01")
+        }
+        val seriesBytes = buildProto {
+            writeByteArray(1, resourceBytes)
+            writeString(2, "mem.free")
+        }
+        val payload = buildProto {
+            writeByteArray(1, seriesBytes)
+        }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals("web-01", result.series[0].host)
+        assertEquals("mem.free", result.series[0].metric)
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes metric type`() {
+        val seriesBytes = buildProto {
+            writeString(2, "test.metric")
+            writeEnum(5, 1) // count
+        }
+        val payload = buildProto {
+            writeByteArray(1, seriesBytes)
+        }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals("count", result.series[0].type)
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes unit and source type name`() {
+        val seriesBytes = buildProto {
+            writeString(2, "disk.read")
+            writeString(6, "byte")
+            writeString(7, "system")
+        }
+        val payload = buildProto {
+            writeByteArray(1, seriesBytes)
+        }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals("byte", result.series[0].unit)
+        assertEquals("system", result.series[0].sourceTypeName)
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes metric point`() {
+        val pointBytes = buildProto {
+            writeDouble(1, 42.5)
+            writeInt64(2, 1700000000L)
+        }
+        val seriesBytes = buildProto {
+            writeString(2, "test.metric")
+            writeByteArray(4, pointBytes)
+        }
+        val payload = buildProto {
+            writeByteArray(1, seriesBytes)
+        }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals(1, result.series[0].points.size)
+        assertEquals(1700000000.0, result.series[0].points[0][0])
+        assertEquals(42.5, result.series[0].points[0][1])
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes multiple series`() {
+        val s1 = buildProto { writeString(2, "metric.a") }
+        val s2 = buildProto { writeString(2, "metric.b") }
+        val s3 = buildProto { writeString(2, "metric.c") }
+        val payload = buildProto {
+            writeByteArray(1, s1)
+            writeByteArray(1, s2)
+            writeByteArray(1, s3)
+        }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals(3, result.series.size)
+        assertEquals("metric.a", result.series[0].metric)
+        assertEquals("metric.b", result.series[1].metric)
+        assertEquals("metric.c", result.series[2].metric)
+    }
+
+    @Test
+    fun `MetricPayloadDecoder decodes multiple tags`() {
+        val seriesBytes = buildProto {
+            writeString(2, "test")
+            writeString(3, "env:prod")
+            writeString(3, "service:web")
+            writeString(3, "region:us-east")
+        }
+        val payload = buildProto { writeByteArray(1, seriesBytes) }
+        val result = MetricPayloadDecoder.decode(payload)
+        assertEquals(3, result.series[0].tags.size)
+    }
+
+    @Test
+    fun `SketchPayloadDecoder decodes empty payload`() {
+        val result = SketchPayloadDecoder.decode(ByteArray(0))
+        assertTrue(result.sketches.isEmpty())
+    }
+
+    @Test
+    fun `SketchPayloadDecoder decodes sketch with metric and host`() {
+        val sketchBytes = buildProto {
+            writeString(1, "latency.p99")
+            writeString(2, "api-server")
+            writeString(3, "env:staging")
+        }
+        val payload = buildProto {
+            writeByteArray(1, sketchBytes)
+        }
+        val result = SketchPayloadDecoder.decode(payload)
+        assertEquals(1, result.sketches.size)
+        assertEquals("latency.p99", result.sketches[0].metric)
+        assertEquals("api-server", result.sketches[0].host)
+        assertTrue(result.sketches[0].tags.contains("env:staging"))
+    }
+
+    @Test
+    fun `SketchPayloadDecoder decodes distribution point`() {
+        val distBytes = buildProto {
+            writeInt64(1, 1700000000L) // ts
+            writeInt64(2, 100L) // cnt
+            writeDouble(3, 1.0) // min
+            writeDouble(4, 99.0) // max
+            writeDouble(5, 50.0) // avg
+            writeDouble(6, 5000.0) // sum
+        }
+        val sketchBytes = buildProto {
+            writeString(1, "test.sketch")
+            writeByteArray(4, distBytes)
+        }
+        val payload = buildProto {
+            writeByteArray(1, sketchBytes)
+        }
+        val result = SketchPayloadDecoder.decode(payload)
+        val dist = result.sketches[0].distributions[0]
+        assertEquals(1700000000L, dist.ts)
+        assertEquals(100L, dist.cnt)
+        assertEquals(1.0, dist.min)
+        assertEquals(99.0, dist.max)
+        assertEquals(50.0, dist.avg)
+        assertEquals(5000.0, dist.sum)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder readHeader returns null for too-short data`() {
+        assertNull(ProcessAgentPayloadDecoder.readHeader(ByteArray(10)))
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder readHeader returns null for wrong version`() {
+        val data = ByteArray(16)
+        data[0] = 1 // wrong version
+        assertNull(ProcessAgentPayloadDecoder.readHeader(data))
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder readHeader parses valid header`() {
+        val data = ByteArray(16)
+        data[0] = 3 // version 3
+        data[1] = 2 // encoding: zstd
+        data[2] = 12 // type: proc
+        val header = ProcessAgentPayloadDecoder.readHeader(data)
+        assertNotNull(header)
+        assertEquals(3, header.version)
+        assertEquals(2, header.encoding)
+        assertEquals(12, header.type)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder readHeader for container type`() {
+        val data = ByteArray(16)
+        data[0] = 3
+        data[1] = 0 // protobuf encoding
+        data[2] = 39 // container type
+        val header = ProcessAgentPayloadDecoder.readHeader(data)
+        assertNotNull(header)
+        assertEquals(ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER, header.type)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decompressBody returns raw body for protobuf encoding`() {
+        val body = "hello".toByteArray()
+        val data = ByteArray(16 + body.size)
+        data[0] = 3
+        System.arraycopy(body, 0, data, 16, body.size)
+        val result = ProcessAgentPayloadDecoder.decompressBody(data, 0)
+        assertEquals("hello", String(result))
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorContainer with empty proto`() {
+        val result = ProcessAgentPayloadDecoder.decodeCollectorContainer(ByteArray(0))
+        assertEquals("", result.host)
+        assertTrue(result.containers.isEmpty())
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorContainer with hostname`() {
+        val proto = buildProto {
+            writeString(1, "web-server-01")
+        }
+        val result = ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
+        assertEquals("web-server-01", result.host)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorContainer maps container fields`() {
+        val container = buildProto {
+            writeString(2, "container-123")
+            writeString(3, "checkout")
+            writeString(4, "moneat/checkout:latest")
+            writeUInt64(6, 536870912L)
+            writeEnum(8, 3)
+            writeFloat(16, 128.5f)
+            writeFloat(17, 64.5f)
+            writeFloat(20, 37.25f)
+            writeUInt64(21, 268435456L)
+            writeString(26, "env:stage")
+            writeString(26, "service:checkout")
+        }
+        val proto = buildProto {
+            writeString(1, "node-01")
+            writeByteArray(3, container)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorContainer(proto)
+
+        assertEquals("node-01", result.host)
+        val decoded = result.containers.single()
+        assertEquals("container-123", decoded.containerId)
+        assertEquals("checkout", decoded.name)
+        assertEquals("moneat/checkout:latest", decoded.image)
+        assertEquals("running", decoded.state)
+        assertEquals(37.25, decoded.cpuPercent)
+        assertEquals(268435456L, decoded.memUsage)
+        assertEquals(536870912L, decoded.memLimit)
+        assertEquals(128L, decoded.netRxBytes)
+        assertEquals(64L, decoded.netTxBytes)
+        assertEquals(listOf("env:stage", "service:checkout"), decoded.tags)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProc with empty proto`() {
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProc(ByteArray(0))
+        assertEquals("", result.host)
+        assertTrue(result.processes.isEmpty())
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProc with hostname`() {
+        val proto = buildProto {
+            writeString(2, "worker-01")
+        }
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
+        assertEquals("worker-01", result.host)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProc maps process stats`() {
+        val command = buildProto {
+            writeString(1, "/usr/bin/java")
+            writeString(1, "-jar")
+            writeString(1, "backend.jar")
+            writeString(8, "/usr/bin/java")
+        }
+        val user = buildProto {
+            writeString(1, "moneat")
+        }
+        val memory = buildProto {
+            writeUInt64(1, 123456L)
+            writeUInt64(2, 654321L)
+        }
+        val cpu = buildProto {
+            writeFloat(2, 12.5f)
+            writeInt32(5, 42)
+        }
+        val process = buildProto {
+            writeInt32(2, 9876)
+            writeByteArray(4, command)
+            writeByteArray(5, user)
+            writeByteArray(7, memory)
+            writeByteArray(8, cpu)
+            writeInt32(11, 64)
+            writeEnum(12, 2)
+            writeString(23, "env:stage")
+            writeString(23, "service:backend")
+        }
+        val proto = buildProto {
+            writeString(2, "worker-01")
+            writeByteArray(3, process)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProc(proto)
+
+        val decoded = result.processes.single()
+        assertEquals(9876, decoded.pid)
+        assertEquals("java", decoded.name)
+        assertEquals("/usr/bin/java -jar backend.jar", decoded.command)
+        assertEquals("moneat", decoded.user)
+        assertEquals(12.5, decoded.cpuPercent)
+        assertEquals(123456L, decoded.memRss)
+        assertEquals(654321L, decoded.memVms)
+        assertEquals("R", decoded.state)
+        assertEquals(42, decoded.threadCount)
+        assertEquals(64, decoded.openFdCount)
+        assertEquals(listOf("env:stage", "service:backend"), decoded.tags)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProcDiscovery maps discovered process`() {
+        val command = buildProto {
+            writeString(1, "/usr/bin/java")
+        }
+        val user = buildProto {
+            writeString(1, "app")
+        }
+        val discovery = buildProto {
+            writeInt32(1, 4321)
+            writeByteArray(4, command)
+            writeByteArray(5, user)
+        }
+        val proto = buildProto {
+            writeString(1, "worker-01")
+            writeByteArray(4, discovery)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProcDiscovery(proto)
+
+        assertEquals("worker-01", result.host)
+        val process = result.processes.single()
+        assertEquals(4321, process.pid)
+        assertEquals("java", process.name)
+        assertEquals("/usr/bin/java", process.command)
+        assertEquals("app", process.user)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorProcDiscovery falls back to namespace pid`() {
+        val discovery = buildProto {
+            writeInt32(2, 2468)
+        }
+        val proto = buildProto {
+            writeString(1, "worker-02")
+            writeByteArray(4, discovery)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorProcDiscovery(proto)
+
+        assertEquals(2468, result.processes.single().pid)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder decodeCollectorConnections maps network fields`() {
+        val localAddr = buildProto {
+            writeString(2, "10.0.0.5")
+            writeInt32(3, 8080)
+        }
+        val remoteAddr = buildProto {
+            writeString(2, "2001:db8::1")
+            writeInt32(3, 443)
+        }
+        val connection = buildProto {
+            writeInt32(1, 1234)
+            writeByteArray(5, localAddr)
+            writeByteArray(6, remoteAddr)
+            writeEnum(10, 1)
+            writeEnum(11, 0)
+            writeUInt64(16, 5000)
+            writeUInt64(17, 10000)
+            writeEnum(19, 2)
+        }
+        val proto = buildProto {
+            writeString(2, "web-01")
+            writeByteArray(3, connection)
+        }
+
+        val result = ProcessAgentPayloadDecoder.decodeCollectorConnections(proto)
+
+        assertEquals("web-01", result.host)
+        assertEquals(1, result.connections.size)
+        val decoded = result.connections.single()
+        assertEquals(1234, decoded.pid)
+        assertEquals("10.0.0.5", decoded.localAddr)
+        assertEquals(8080, decoded.localPort)
+        assertEquals("2001:db8::1", decoded.remoteAddr)
+        assertEquals(443, decoded.remotePort)
+        assertEquals("IPv6", decoded.family)
+        assertEquals("tcp6", decoded.protocol)
+        assertEquals("outgoing", decoded.direction)
+        assertEquals(5000, decoded.bytesSent)
+        assertEquals(10000, decoded.bytesRecv)
+    }
+
+    @Test
+    fun `ProtoWireConstants has expected field values`() {
+        assertEquals(3, ProtoWireConstants.FIELD_SHIFT)
+        assertEquals(3, ProtoWireConstants.FIELD_3)
+        assertEquals(4, ProtoWireConstants.FIELD_4)
+        assertEquals(5, ProtoWireConstants.FIELD_5)
+        assertEquals(6, ProtoWireConstants.FIELD_6)
+        assertEquals(7, ProtoWireConstants.FIELD_7)
+        assertEquals(8, ProtoWireConstants.FIELD_8)
+        assertEquals(14, ProtoWireConstants.FIELD_14)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder type constants are correct`() {
+        assertEquals(12, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC)
+        assertEquals(22, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONNECTIONS)
+        assertEquals(23, ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR)
+        assertEquals(39, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_CONTAINER)
+        assertEquals(53, ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC_DISCOVERY)
+    }
+
+    @Test
+    fun `ProcessAgentPayloadDecoder encodeCollectorResponse returns MessageV3 response`() {
+        val response = ProcessAgentPayloadDecoder.encodeCollectorResponse()
+        val header = ProcessAgentPayloadDecoder.readHeader(response)
+
+        assertNotNull(header)
+        assertEquals(3, header.version)
+        assertEquals(ProcessAgentPayloadDecoder.TYPE_RES_COLLECTOR, header.type)
+        assertEquals(0, header.encoding)
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes container image protobuf`() {
+        val os = buildProto {
+            writeString(1, "linux")
+            writeString(3, "amd64")
+        }
+        val layer = buildProto {
+            writeString(3, "sha256:layer")
+        }
+        val image = buildProto {
+            writeString(1, "sha256:image")
+            writeString(2, "registry.example.com/team/api")
+            writeString(3, "registry.example.com")
+            writeString(4, "api")
+            writeString(5, "registry.example.com/team/api:v1")
+            writeString(6, "sha256:digest")
+            writeInt64(7, 123_456L)
+            writeByteArray(9, os)
+            writeByteArray(10, layer)
+            writeString(12, "env:prod")
+        }
+        val payload = buildProto {
+            writeString(2, "host-a")
+            writeByteArray(3, image)
+            writeString(4, "agent")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerImages(payload)
+
+        assertEquals(1, decoded.size)
+        assertEquals("registry.example.com/team/api", decoded[0].imageName)
+        assertEquals("v1", decoded[0].imageTag)
+        assertEquals("sha256:digest", decoded[0].digest)
+        assertEquals("registry.example.com", decoded[0].registry)
+        assertEquals(123_456L, decoded[0].sizeBytes)
+        assertEquals("linux", decoded[0].os)
+        assertEquals("amd64", decoded[0].architecture)
+        assertEquals(1, decoded[0].layers)
+        assertTrue(decoded[0].tags.contains("host:host-a"))
+        assertTrue(decoded[0].tags.contains("source:agent"))
+        assertTrue(decoded[0].tags.contains("env:prod"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes container image fallback fields`() {
+        val image = buildProto {
+            writeString(1, "sha256:image-id")
+            writeString(4, "worker")
+            writeString(5, "worker:latest")
+            writeString(8, "registry.example.com/team/worker@sha256:fallback")
+            writeString(12, "team:infra")
+        }
+        val payload = buildProto {
+            writeByteArray(3, image)
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerImages(payload)
+
+        assertEquals(1, decoded.size)
+        assertEquals("worker", decoded[0].imageName)
+        assertEquals("latest", decoded[0].imageTag)
+        assertEquals("registry.example.com/team/worker@sha256:fallback", decoded[0].digest)
+        assertTrue(decoded[0].tags.contains("image_id:sha256:image-id"))
+        assertTrue(decoded[0].tags.contains("repo_digest:registry.example.com/team/worker@sha256:fallback"))
+        assertTrue(decoded[0].tags.contains("team:infra"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes sbom protobuf packages and CVEs`() {
+        val component = buildProto {
+            writeEnum(1, 3)
+            writeString(3, "pkg-ref")
+            writeString(8, "openssl")
+            writeString(9, "3.0.0")
+            writeString(16, "pkg:deb/openssl@3.0.0")
+        }
+        val affects = buildProto {
+            writeString(1, "pkg-ref")
+        }
+        val vulnerability = buildProto {
+            writeString(2, "CVE-2026-0001")
+            writeByteArray(17, affects)
+        }
+        val cycloneDx = buildProto {
+            writeByteArray(5, component)
+            writeByteArray(10, vulnerability)
+        }
+        val entity = buildProto {
+            writeEnum(1, 1)
+            writeString(2, "sha256:image")
+            writeString(4, "registry.example.com/team/api:v1")
+            writeString(7, "service:api")
+            writeByteArray(10, cycloneDx)
+            writeEnum(11, 0)
+            writeString(14, "registry.example.com/team/api@sha256:image")
+        }
+        val payload = buildProto {
+            writeInt32(1, 1)
+            writeString(2, "host-b")
+            writeString(3, "agent")
+            writeByteArray(4, entity)
+            writeString(5, "prod")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeSbom(payload)
+
+        assertEquals("host-b", decoded.host)
+        assertEquals("sha256:image", decoded.containerId)
+        assertEquals("registry.example.com/team/api", decoded.imageName)
+        assertEquals(1, decoded.packages.size)
+        assertEquals("openssl", decoded.packages[0].name)
+        assertEquals("3.0.0", decoded.packages[0].version)
+        assertEquals("deb", decoded.packages[0].type)
+        assertEquals(listOf("CVE-2026-0001"), decoded.packages[0].cveIds)
+        assertTrue(decoded.tags.contains("service:api"))
+        assertTrue(decoded.tags.contains("env:prod"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes nested sbom components and entity types`() {
+        val childComponent = buildProto {
+            writeEnum(1, 2)
+            writeString(3, "child-ref")
+            writeString(8, "ktor")
+            writeString(9, "3.3.0")
+        }
+        val rootComponent = buildProto {
+            writeEnum(1, 1)
+            writeString(3, "root-ref")
+            writeByteArray(21, childComponent)
+        }
+        val affects = buildProto {
+            writeString(1, "child-ref")
+        }
+        val vulnerability = buildProto {
+            writeString(2, "CVE-2026-4242")
+            writeByteArray(17, affects)
+        }
+        val cycloneDx = buildProto {
+            writeByteArray(5, rootComponent)
+            writeByteArray(10, vulnerability)
+        }
+        val entity = buildProto {
+            writeEnum(1, 3)
+            writeString(2, "host-fs")
+            writeByteArray(10, cycloneDx)
+        }
+        val payload = buildProto {
+            writeString(2, "host-d")
+            writeString(3, "agent")
+            writeByteArray(4, entity)
+        }
+
+        val decoded = MiscPayloadDecoder.decodeSbom(payload)
+
+        assertEquals("host-d", decoded.host)
+        assertEquals("host-fs", decoded.imageName)
+        assertEquals(1, decoded.packages.size)
+        assertEquals("ktor", decoded.packages[0].name)
+        assertEquals("framework", decoded.packages[0].type)
+        assertEquals(listOf("CVE-2026-4242"), decoded.packages[0].cveIds)
+        assertTrue(decoded.tags.contains("source:agent"))
+        assertTrue(decoded.tags.contains("entity_type:host_file_system"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes container lifecycle protobuf events`() {
+        val owner = buildProto {
+            writeEnum(1, 1)
+            writeString(2, "pod-uid")
+        }
+        val container = buildProto {
+            writeString(1, "container-1")
+            writeString(2, "containerd")
+            writeInt32(3, 137)
+            writeInt64(4, 1_700_000_000_123L)
+            writeByteArray(5, owner)
+        }
+        val event = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(2, container)
+        }
+        val payload = buildProto {
+            writeString(2, "host-c")
+            writeEnum(3, 0)
+            writeByteArray(4, event)
+            writeString(5, "cluster-a")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerLifecycleEvents(payload)
+
+        assertEquals(1, decoded.size)
+        assertEquals("host-c", decoded[0].host)
+        assertEquals(1_700_000_000L, decoded[0].dateHappened)
+        assertTrue(decoded[0].title.contains("container container-1"))
+        assertTrue(decoded[0].tags.contains("source:containerd"))
+        assertTrue(decoded[0].tags.contains("cluster_id:cluster-a"))
+        assertTrue(decoded[0].tags.contains("exit_code:137"))
+        assertTrue(decoded[0].tags.contains("owner_uid:pod-uid"))
+    }
+
+    @Test
+    fun `MiscPayloadDecoder decodes pod and task lifecycle protobuf events`() {
+        val pod = buildProto {
+            writeString(1, "pod-1")
+            writeString(2, "kubelet")
+            writeInt64(3, 1_700_000_000_123_000_000L)
+        }
+        val task = buildProto {
+            writeString(1, "task-1")
+            writeString(2, "ecs")
+            writeInt64(3, 1_700_000_123L)
+        }
+        val podEvent = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(3, pod)
+        }
+        val taskEvent = buildProto {
+            writeEnum(1, 0)
+            writeByteArray(4, task)
+        }
+        val payload = buildProto {
+            writeString(2, "host-e")
+            writeByteArray(4, podEvent)
+            writeByteArray(4, taskEvent)
+            writeString(5, "cluster-b")
+        }
+
+        val decoded = MiscPayloadDecoder.decodeContainerLifecycleEvents(payload)
+
+        assertEquals(2, decoded.size)
+        assertEquals("host-e", decoded[0].host)
+        assertEquals(1_700_000_000L, decoded[0].dateHappened)
+        assertTrue(decoded[0].title.contains("pod pod-1"))
+        assertTrue(decoded[0].tags.contains("source:kubelet"))
+        assertTrue(decoded[0].tags.contains("cluster_id:cluster-b"))
+        assertEquals(1_700_000_123L, decoded[1].dateHappened)
+        assertTrue(decoded[1].title.contains("task task-1"))
+        assertTrue(decoded[1].tags.contains("source:ecs"))
+    }
+}

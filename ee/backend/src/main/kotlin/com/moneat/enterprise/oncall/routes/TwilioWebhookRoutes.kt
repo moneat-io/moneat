@@ -5,10 +5,12 @@
 package com.moneat.enterprise.oncall.routes
 
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.services.EscalationEngineHolder
 import com.moneat.enterprise.oncall.services.TwilioService
 import com.moneat.shared.models.OnCallPhoneConsentEvents
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.request.receiveParameters
@@ -73,10 +75,10 @@ fun Route.twilioWebhookRoutes() {
         // DTMF gather: user pressed a digit during the voice call
         post("/gather") {
             val params = call.receiveParameters()
-            val incidentId = call.request.queryParameters["incidentId"]?.toIntOrNull()
+            val incidentResourceId = call.request.queryParameters["incidentId"]
             val signature = call.request.headers["X-Twilio-Signature"] ?: ""
             val baseUrl = "${EnvConfig.get("BACKEND_URL", "https://api.moneat.io")}/v1/webhooks/twilio/gather"
-            val fullUrl = if (incidentId != null) "$baseUrl?incidentId=$incidentId" else baseUrl
+            val fullUrl = if (incidentResourceId != null) "$baseUrl?incidentId=$incidentResourceId" else baseUrl
             val paramMap = params.entries().associate { it.key to (it.value.firstOrNull() ?: "") }
             if (!twilioService.validateSignature(signature, fullUrl, paramMap)) {
                 logger.warn { "Invalid Twilio signature on /gather" }
@@ -84,24 +86,25 @@ fun Route.twilioWebhookRoutes() {
                 return@post
             }
             val digits = params["Digits"]
+            val incidentId = incidentResourceId?.let(::resolveOnCallAlertId)
 
             val twiml =
                 if (digits == "1" && incidentId != null) {
-                    // Acknowledge the incident - use system user 0 as "phone acknowledge"
+                    // Acknowledge the alert - use system user 0 as "phone acknowledge"
                     val escalationEngine = EscalationEngineHolder.instance
                     if (escalationEngine != null) {
                         val acknowledged = escalationEngine.acknowledgeIncidentByPhone(incidentId)
                         if (acknowledged) {
-                            logger.info { "Incident $incidentId acknowledged via phone call" }
-                            """<Response><Say voice="alice">Incident acknowledged. """ +
+                            logger.info { "Alert $incidentId acknowledged via phone call" }
+                            """<Response><Say voice="alice">Alert acknowledged. """ +
                                 """Thank you. Goodbye.</Say></Response>"""
                         } else {
-                            """<Response><Say voice="alice">This incident has already been acknowledged """ +
+                            """<Response><Say voice="alice">This alert has already been acknowledged """ +
                                 """or resolved. Goodbye.</Say></Response>"""
                         }
                     } else {
                         logger.error {
-                            "EscalationEngine not available; cannot acknowledge incident $incidentId via phone"
+                            "EscalationEngine not available; cannot acknowledge alert $incidentId via phone"
                         }
                         """<Response><Say voice="alice">Acknowledgement is temporarily unavailable. """ +
                             """Please try the app. Goodbye.</Say></Response>"""
@@ -177,5 +180,17 @@ fun Route.twilioWebhookRoutes() {
 
             call.respondText(twiml, ContentType.Text.Xml, HttpStatusCode.OK)
         }
+    }
+}
+
+private fun resolveOnCallAlertId(resourceId: String): Int? {
+    val parsed = resourceId.toUuidOrNull() ?: return null
+    return transaction {
+        OnCallAlerts
+            .selectAll()
+            .where { OnCallAlerts.resourceId eq parsed }
+            .firstOrNull()
+            ?.get(OnCallAlerts.id)
+            ?.value
     }
 }

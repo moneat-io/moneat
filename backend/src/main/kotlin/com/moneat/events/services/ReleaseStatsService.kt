@@ -20,7 +20,6 @@ import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ReleaseDetailStats
 import com.moneat.events.models.ReleaseListResponse
 import com.moneat.shared.services.CacheService
-import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import io.ktor.client.statement.bodyAsText
 import io.sentry.ISpan
@@ -41,6 +40,13 @@ private data class ReleaseListRow(
     val userCount: Long
 )
 
+private data class ReleaseQueryContext(
+    val scope: ServiceQueryScope,
+    val retentionDays: Int,
+    val cacheKey: String,
+    val logLabel: String
+)
+
 class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     private val clickhouseDb: String get() = queryHelper.clickhouseDb
     private val json get() = queryHelper.json
@@ -48,27 +54,56 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     companion object {
         private const val RELEASES_CACHE_TTL_SECONDS = 120L
         private const val RELEASE_STATS_INTERVAL_MINUTES = 360
+        private const val APM_TRACE_SOURCE_CLAUSE = "source IN ('datadog', 'otlp')"
     }
 
     suspend fun getReleases(
         projectId: Long,
         parentSpan: ISpan? = null
+    ): List<ReleaseListResponse> {
+        val context =
+            ReleaseQueryContext(
+                scope = ServiceQueryScope.service(projectId),
+                retentionDays = queryHelper.getProjectRetentionDays(projectId),
+                cacheKey = "project:$projectId",
+                logLabel = "project $projectId"
+            )
+        return getReleases(context, parentSpan)
+    }
+
+    suspend fun getReleasesForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        parentSpan: ISpan? = null
+    ): List<ReleaseListResponse> {
+        val scope = ServiceQueryScope.services(serviceIds)
+        val context =
+            ReleaseQueryContext(
+                scope = scope,
+                retentionDays = queryHelper.getOrganizationRetentionDays(organizationId),
+                cacheKey = "org:$organizationId:${scope.cacheKeyPart()}",
+                logLabel = "organization $organizationId"
+            )
+        return getReleases(context, parentSpan)
+    }
+
+    private suspend fun getReleases(
+        context: ReleaseQueryContext,
+        parentSpan: ISpan? = null
     ): List<ReleaseListResponse> =
-        CacheService.cached("cache:releases:$projectId", RELEASES_CACHE_TTL_SECONDS, parentSpan) {
-            val retentionDays = queryHelper.getProjectRetentionDays(projectId)
-            val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        CacheService.cached("cache:releases:${context.cacheKey}", RELEASES_CACHE_TTL_SECONDS, parentSpan) {
+            if (context.scope.serviceIds.isEmpty()) return@cached emptyList()
+            val releaseSignals = releaseSignalSummarySubquery(context.scope, context.retentionDays)
             val releasesQuery =
                 """
             SELECT
-                release as version,
-                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
-                count() as event_count,
-                uniq(user_id) as user_count
-            FROM `$clickhouseDb`.events
-            WHERE $projectIdClause AND release != ''
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
-            GROUP BY release
+                version,
+                formatDateTime(min(first_seen), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(last_seen), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
+                sum(signal_count) as event_count,
+                sum(user_count) as user_count
+            FROM ($releaseSignals)
+            GROUP BY version
             ORDER BY first_seen DESC
             FORMAT JSONEachRow
                 """.trimIndent()
@@ -76,8 +111,10 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             suspendRunCatching {
                 val releases = executeReleasesListQuery(releasesQuery, parentSpan)
                 val versions = releases.map { it.version }
-                val newIssueCountByVersion = getNewIssueCountForReleases(projectId, versions, retentionDays, parentSpan)
-                val crashFreeRateByVersion = getCrashFreeRateForReleases(projectId, versions, retentionDays, parentSpan)
+                val newIssueCountByVersion =
+                    getNewIssueCountForReleases(context.scope, versions, context.retentionDays, parentSpan)
+                val crashFreeRateByVersion =
+                    getCrashFreeRateForReleases(context.scope, versions, context.retentionDays, parentSpan)
                 releases.map { r ->
                     ReleaseListResponse(
                         version = r.version,
@@ -90,7 +127,7 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                     )
                 }
             }.getOrElse { e ->
-                logger.error(e) { "Failed to fetch releases for project $projectId" }
+                logger.error(e) { "Failed to fetch releases for ${context.logLabel}" }
                 emptyList()
             }
         }
@@ -99,18 +136,51 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
         projectId: Long,
         version: String
     ): ReleaseDetailStats? {
-        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
+        val context =
+            ReleaseQueryContext(
+                scope = ServiceQueryScope.service(projectId),
+                retentionDays = queryHelper.getProjectRetentionDays(projectId),
+                cacheKey = "project:$projectId",
+                logLabel = "project $projectId"
+            )
+        return getReleaseStats(context, version)
+    }
+
+    suspend fun getReleaseStatsForServices(
+        organizationId: Int,
+        serviceIds: List<Long>,
+        version: String
+    ): ReleaseDetailStats? {
+        val scope = ServiceQueryScope.services(serviceIds)
+        val context =
+            ReleaseQueryContext(
+                scope = scope,
+                retentionDays = queryHelper.getOrganizationRetentionDays(organizationId),
+                cacheKey = "org:$organizationId:${scope.cacheKeyPart()}",
+                logLabel = "organization $organizationId"
+            )
+        return getReleaseStats(context, version)
+    }
+
+    private suspend fun getReleaseStats(
+        context: ReleaseQueryContext,
+        version: String
+    ): ReleaseDetailStats? {
+        if (context.scope.serviceIds.isEmpty()) return null
         val escapedVersion = escapeSql(version)
+        val projectIdClause = context.scope.projectIdClause()
+        val spanServiceIdClause = context.scope.projectIdClause("service_id")
+        val releaseSignals = releaseSignalSummarySubquery(context.scope, context.retentionDays, escapedVersion)
         val releasesQuery =
             """
             SELECT
-                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
-                formatDateTime(max(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
-                count() as total_events,
-                uniq(user_id) as user_count
-            FROM `$clickhouseDb`.events
-            WHERE project_id = $projectId AND release = '$escapedVersion'
-                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
+                version,
+                formatDateTime(min(first_seen), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as first_seen,
+                formatDateTime(max(last_seen), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as last_seen,
+                sum(signal_count) as total_events,
+                sum(user_count) as user_count
+            FROM ($releaseSignals)
+            GROUP BY version
             FORMAT JSONEachRow
             """.trimIndent()
 
@@ -125,21 +195,42 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
             val totalEvents = obj["total_events"]?.jsonPrimitive?.long ?: 0
             val userCount = obj["user_count"]?.jsonPrimitive?.long ?: 0
 
-            val newIssues = getNewIssueCountForRelease(projectId, version, retentionDays)
+            val newIssues = getNewIssueCountForRelease(context.scope, version, context.retentionDays)
             val resolvedIssues = 0L
-            val crashFreeSessionRate = getCrashFreeRateForRelease(projectId, version, retentionDays)
-            // Crash-free user rate stays null until a user-based ClickHouse query is implemented.
-            val crashFreeUserRate: Double? = null
+            val crashFreeSessionRate = getCrashFreeRateForRelease(context.scope, version, context.retentionDays)
+            val crashFreeUserRate = getCrashFreeUserRateForRelease(context.scope, version, context.retentionDays)
 
             val intervalMinutes = RELEASE_STATS_INTERVAL_MINUTES
             val eventsTimelineQuery =
                 """
                 SELECT
-                    formatDateTime(toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as time,
-                    count() as count
-                FROM `$clickhouseDb`.events
-                WHERE project_id = $projectId AND release = '$escapedVersion'
-                    AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
+                    time,
+                    sum(count) as count
+                FROM (
+                    SELECT
+                        formatDateTime(
+                            toStartOfInterval(timestamp, INTERVAL $intervalMinutes MINUTE),
+                            '%Y-%m-%dT%H:%i:%S.000Z',
+                            'UTC'
+                        ) as time,
+                        count() as count
+                    FROM `$clickhouseDb`.events
+                    WHERE $projectIdClause AND release = '$escapedVersion'
+                        AND ${queryHelper.timestampRetentionClause("timestamp", context.retentionDays)}
+                    GROUP BY time
+                    UNION ALL
+                    SELECT
+                        formatDateTime(
+                            toStartOfInterval(start, INTERVAL $intervalMinutes MINUTE),
+                            '%Y-%m-%dT%H:%i:%S.000Z',
+                            'UTC'
+                        ) as time,
+                        uniq(if(trace_id_hex != '', trace_id_hex, toString(trace_id))) as count
+                    FROM `$clickhouseDb`.apm_spans
+                    WHERE $spanServiceIdClause AND version = '$escapedVersion' AND $APM_TRACE_SOURCE_CLAUSE
+                        AND ${queryHelper.timestampRetentionClause("start", context.retentionDays)}
+                    GROUP BY time
+                )
                 GROUP BY time
                 ORDER BY time
                 FORMAT JSONEachRow
@@ -147,10 +238,19 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
 
             val eventsByLevelQuery =
                 """
-                SELECT level, count() as count
-                FROM `$clickhouseDb`.events
-                WHERE project_id = $projectId AND release = '$escapedVersion'
-                    AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
+                SELECT level, sum(count) as count
+                FROM (
+                    SELECT toString(level) as level, count() as count
+                    FROM `$clickhouseDb`.events
+                    WHERE $projectIdClause AND release = '$escapedVersion'
+                        AND ${queryHelper.timestampRetentionClause("timestamp", context.retentionDays)}
+                    GROUP BY level
+                    UNION ALL
+                    SELECT 'trace' as level, uniq(if(trace_id_hex != '', trace_id_hex, toString(trace_id))) as count
+                    FROM `$clickhouseDb`.apm_spans
+                    WHERE $spanServiceIdClause AND version = '$escapedVersion' AND $APM_TRACE_SOURCE_CLAUSE
+                        AND ${queryHelper.timestampRetentionClause("start", context.retentionDays)}
+                )
                 GROUP BY level
                 FORMAT JSONEachRow
                 """.trimIndent()
@@ -159,8 +259,8 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 """
                 SELECT issue_id, any(message) as title, count() as count
                 FROM `$clickhouseDb`.events
-                WHERE project_id = $projectId AND release = '$escapedVersion' AND event_type = 'error'
-                    AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
+                WHERE $projectIdClause AND release = '$escapedVersion' AND event_type = 'error'
+                    AND ${queryHelper.timestampRetentionClause("timestamp", context.retentionDays)}
                 GROUP BY issue_id
                 ORDER BY count DESC
                 LIMIT 10
@@ -182,9 +282,43 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
                 topIssues = queryHelper.executeTopIssuesQuery(topIssuesQuery)
             )
         }.getOrElse { e ->
-            logger.error(e) { "Failed to fetch release stats for $version" }
+            logger.error(e) { "Failed to fetch release stats for ${context.logLabel} release $version" }
             null
         }
+    }
+
+    private fun releaseSignalSummarySubquery(
+        scope: ServiceQueryScope,
+        retentionDays: Int,
+        escapedVersion: String? = null
+    ): String {
+        val projectIdClause = scope.projectIdClause()
+        val spanServiceIdClause = scope.projectIdClause("service_id")
+        val eventVersionClause = escapedVersion?.let { "release = '$it'" } ?: "release != ''"
+        val spanVersionClause = escapedVersion?.let { "version = '$it'" } ?: "version != ''"
+        return """
+            SELECT
+                release as version,
+                min(timestamp) as first_seen,
+                max(timestamp) as last_seen,
+                count() as signal_count,
+                uniq(user_id) as user_count
+            FROM `$clickhouseDb`.events
+            WHERE $projectIdClause AND $eventVersionClause
+                AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
+            GROUP BY release
+            UNION ALL
+            SELECT
+                version,
+                min(start) as first_seen,
+                max(start) as last_seen,
+                uniq(if(trace_id_hex != '', trace_id_hex, toString(trace_id))) as signal_count,
+                toUInt64(0) as user_count
+            FROM `$clickhouseDb`.apm_spans
+            WHERE $spanServiceIdClause AND $spanVersionClause AND $APM_TRACE_SOURCE_CLAUSE
+                AND ${queryHelper.timestampRetentionClause("start", retentionDays)}
+            GROUP BY version
+        """.trimIndent()
     }
 
     private suspend fun executeReleasesListQuery(
@@ -205,20 +339,21 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     }
 
     private suspend fun getNewIssueCountForReleases(
-        projectId: Long,
+        scope: ServiceQueryScope,
         versions: List<String>,
         retentionDays: Int,
         parentSpan: ISpan? = null
     ): Map<String, Long> {
         if (versions.isEmpty()) return emptyMap()
         val escapedVersions = versions.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
+        val projectIdClause = scope.projectIdClause()
         val query =
             """
             SELECT first_release as version, count() as total
             FROM (
                 SELECT issue_id, argMin(release, timestamp) as first_release
                 FROM `$clickhouseDb`.events
-                WHERE project_id = $projectId AND event_type = 'error' AND issue_id != ''
+                WHERE $projectIdClause AND event_type = 'error' AND issue_id != ''
                     AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY issue_id
                 HAVING first_release IN ($escapedVersions)
@@ -238,18 +373,19 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     }
 
     private suspend fun getCrashFreeRateForReleases(
-        projectId: Long,
+        scope: ServiceQueryScope,
         versions: List<String>,
         retentionDays: Int,
         parentSpan: ISpan? = null
     ): Map<String, Double> {
         if (versions.isEmpty()) return emptyMap()
         val escapedVersions = versions.distinct().map { "'${escapeSql(it)}'" }.joinToString(",")
+        val projectIdClause = scope.projectIdClause()
         val query =
             """
             SELECT release as version, countIf(errors = 0) * 100.0 / count() as rate
             FROM `$clickhouseDb`.sessions
-            WHERE project_id = $projectId AND release IN ($escapedVersions)
+            WHERE $projectIdClause AND release IN ($escapedVersions)
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             GROUP BY release
             FORMAT JSONEachRow
@@ -267,17 +403,18 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     }
 
     private suspend fun getNewIssueCountForRelease(
-        projectId: Long,
+        scope: ServiceQueryScope,
         version: String,
         retentionDays: Int
     ): Long {
         val escapedVersion = escapeSql(version)
+        val projectIdClause = scope.projectIdClause()
         val query =
             """
             SELECT count() as total FROM (
                 SELECT issue_id, argMin(release, timestamp) as first_release
                 FROM `$clickhouseDb`.events
-                WHERE project_id = $projectId AND event_type = 'error' AND issue_id != ''
+                WHERE $projectIdClause AND event_type = 'error' AND issue_id != ''
                     AND ${queryHelper.timestampRetentionClause("timestamp", retentionDays)}
                 GROUP BY issue_id
                 HAVING first_release = '$escapedVersion'
@@ -288,27 +425,61 @@ class ReleaseStatsService(private val queryHelper: DashboardQueryHelper) {
     }
 
     private suspend fun getCrashFreeRateForRelease(
-        projectId: Long,
+        scope: ServiceQueryScope,
         version: String,
         retentionDays: Int
     ): Double? {
         val escapedVersion = escapeSql(version)
+        val projectIdClause = scope.projectIdClause()
         val query =
             """
             SELECT countIf(errors = 0) * 100.0 / count() as rate
             FROM `$clickhouseDb`.sessions
-            WHERE project_id = $projectId AND release = '$escapedVersion'
+            WHERE $projectIdClause AND release = '$escapedVersion'
                 AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
             FORMAT JSONEachRow
             """.trimIndent()
+        return executeNullableRateQuery(query, "crash-free session rate for release $version")
+    }
+
+    private suspend fun getCrashFreeUserRateForRelease(
+        scope: ServiceQueryScope,
+        version: String,
+        retentionDays: Int
+    ): Double? {
+        val escapedVersion = escapeSql(version)
+        val projectIdClause = scope.projectIdClause()
+        val query =
+            """
+            SELECT countIf(errors = 0) * 100.0 / count() as rate
+            FROM (
+                SELECT user_id, sum(errors) as errors
+                FROM `$clickhouseDb`.sessions
+                WHERE $projectIdClause AND release = '$escapedVersion' AND user_id != ''
+                    AND ${queryHelper.timestampRetentionClause("started", retentionDays)}
+                GROUP BY user_id
+            )
+            FORMAT JSONEachRow
+            """.trimIndent()
+        return executeNullableRateQuery(query, "crash-free user rate for release $version")
+    }
+
+    private suspend fun executeNullableRateQuery(
+        query: String,
+        errorContext: String
+    ): Double? {
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = response.bodyAsText()
-            if (body.isBlank()) return null
-            val obj = json.parseToJsonElement(body.lines().first()).jsonObject
-            val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: return null
-            if (rate.isNaN() || rate.isInfinite()) null else rate
-        }.getOrElse { _ ->
+            if (body.isBlank()) {
+                null
+            } else {
+                val obj = json.parseToJsonElement(body.lines().first()).jsonObject
+                val rate = obj["rate"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull()
+                rate?.takeUnless { it.isNaN() || it.isInfinite() }
+            }
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to fetch $errorContext" }
             null
         }
     }

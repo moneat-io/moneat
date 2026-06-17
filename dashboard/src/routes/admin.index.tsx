@@ -123,18 +123,18 @@ function AdminOverviewPage() {
 
       {/* Scaling / Critical Alerts Banner */}
       {(infraData?.scalingTriggerAlerts?.length ?? 0) > 0 && (
-        <Card className="border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20">
+        <Card className="border-danger-border bg-danger-bg/50">
           <CardContent className="pt-5 pb-4">
             <div className="flex gap-3">
-              <div className="rounded-lg bg-red-100 dark:bg-red-950 p-2 h-fit">
-                <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
+              <div className="rounded-lg bg-danger-bg p-2 h-fit">
+                <AlertTriangle className="h-4 w-4 text-danger-fg" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-red-700 dark:text-red-400 mb-1">Active Alerts</p>
+                <p className="text-sm font-semibold text-danger-fg mb-1">Active Alerts</p>
                 <ul className="space-y-0.5">
                   {infraData!.scalingTriggerAlerts.map((msg, i) => (
-                    <li key={i} className="text-sm text-red-600 dark:text-red-400 flex items-start gap-1.5">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                    <li key={i} className="text-sm text-danger-fg flex items-start gap-1.5">
+                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-danger-solid shrink-0" />
                       {msg}
                     </li>
                   ))}
@@ -151,32 +151,32 @@ function AdminOverviewPage() {
           title="Total Organizations"
           value={stats.totalOrganizations.toLocaleString()}
           icon={Building2}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="Total Users"
           value={stats.totalUsers.toLocaleString()}
           subtitle={`~${(stats.totalUsers / Math.max(stats.totalOrganizations, 1)).toFixed(1)} per org`}
           icon={Users}
-          iconColor="text-violet-600 dark:text-violet-400"
-          iconBg="bg-violet-100 dark:bg-violet-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
         <MetricCard
           title="Events (30 days)"
           value={formatNumber(stats.totalEventsLast30Days)}
           subtitle={`${formatNumber(stats.totalEventsAllTime)} all time`}
           icon={Activity}
-          iconColor="text-orange-600 dark:text-orange-400"
-          iconBg="bg-orange-100 dark:bg-orange-950"
+          iconColor="text-chart-7"
+          iconBg="bg-chart-7/15"
         />
         <MetricCard
           title="MRR"
           value={`$${stats.mrr.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`}
           subtitle={`$${(stats.mrr * 12).toLocaleString(undefined, {maximumFractionDigits: 0})} ARR`}
           icon={DollarSign}
-          iconColor="text-emerald-600 dark:text-emerald-400"
-          iconBg="bg-emerald-100 dark:bg-emerald-950"
+          iconColor="text-success-fg"
+          iconBg="bg-success-bg"
         />
       </div>
 
@@ -192,48 +192,48 @@ function AdminOverviewPage() {
               value={formatNumber(usageTotals.error)}
               subtitle={`${((usageTotals.error / Math.max(usageTotals.total, 1)) * 100).toFixed(1)}% of total`}
               icon={AlertCircle}
-              iconColor="text-red-600 dark:text-red-400"
-              iconBg="bg-red-100 dark:bg-red-950"
+              iconColor="text-danger-fg"
+              iconBg="bg-danger-bg"
             />
             <MetricCard
               title="Transactions"
               value={formatNumber(usageTotals.transaction)}
               subtitle={`${((usageTotals.transaction / Math.max(usageTotals.total, 1)) * 100).toFixed(1)}% of total`}
               icon={ArrowRightLeft}
-              iconColor="text-blue-600 dark:text-blue-400"
-              iconBg="bg-blue-100 dark:bg-blue-950"
+              iconColor="text-chart-1"
+              iconBg="bg-chart-1/15"
             />
             <MetricCard
               title="Replays"
               value={formatNumber(usageTotals.replay)}
               subtitle={`${((usageTotals.replay / Math.max(usageTotals.total, 1)) * 100).toFixed(1)}% of total`}
               icon={MonitorPlay}
-              iconColor="text-violet-600 dark:text-violet-400"
-              iconBg="bg-violet-100 dark:bg-violet-950"
+              iconColor="text-chart-4"
+              iconBg="bg-chart-4/15"
             />
             <MetricCard
               title="Feedback"
               value={formatNumber(usageTotals.feedback)}
               subtitle={`${((usageTotals.feedback / Math.max(usageTotals.total, 1)) * 100).toFixed(1)}% of total`}
               icon={MessageSquare}
-              iconColor="text-amber-600 dark:text-amber-400"
-              iconBg="bg-amber-100 dark:bg-amber-950"
+              iconColor="text-chart-5"
+              iconBg="bg-chart-5/15"
             />
             <MetricCard
               title="Logs"
               value={formatNumber(usageTotals.log)}
               subtitle={`${((usageTotals.log / Math.max(usageTotals.total, 1)) * 100).toFixed(1)}% of total`}
               icon={FileText}
-              iconColor="text-cyan-600 dark:text-cyan-400"
-              iconBg="bg-cyan-100 dark:bg-cyan-950"
+              iconColor="text-chart-6"
+              iconBg="bg-chart-6/15"
             />
             <MetricCard
               title="Data Ingested"
               value={formatBytes(usageData?.totalBytes ?? 0)}
               subtitle="30 day total"
               icon={HardDrive}
-              iconColor="text-emerald-600 dark:text-emerald-400"
-              iconBg="bg-emerald-100 dark:bg-emerald-950"
+              iconColor="text-success-fg"
+              iconBg="bg-success-bg"
               className="col-span-2 sm:col-span-1"
             />
           </div>
@@ -254,8 +254,8 @@ function AdminOverviewPage() {
                 <AreaChart data={stats.eventsLast30Days}>
                   <defs>
                     <linearGradient id="eventGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
@@ -280,7 +280,7 @@ function AdminOverviewPage() {
                     type="monotone"
                     dataKey="count"
                     name="Events"
-                    stroke="#3b82f6"
+                    stroke="hsl(var(--chart-1))"
                     strokeWidth={2}
                     fill="url(#eventGradient)"
                     dot={false}
@@ -318,11 +318,11 @@ function AdminOverviewPage() {
                         flex items-center justify-center rounded-full text-xs font-bold tabular-nums shrink-0
                         ${
                           index === 0
-                            ? 'h-7 w-7 bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
+                            ? 'h-7 w-7 bg-warning-bg text-warning-fg'
                             : index === 1
-                              ? 'h-7 w-7 bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                              ? 'h-7 w-7 bg-muted text-muted-foreground'
                               : index === 2
-                                ? 'h-7 w-7 bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400'
+                                ? 'h-7 w-7 bg-chart-7/15 text-chart-7'
                                 : 'h-7 w-7 bg-muted text-muted-foreground'
                         }
                       `}
@@ -369,10 +369,10 @@ function AdminOverviewPage() {
                   {Object.entries(stats.subscriptionsByPlan).map(([plan, count]) => {
                     const pct = (count / totalSubscribers) * 100
                     const colorMap: Record<string, string> = {
-                      free: 'bg-zinc-400 dark:bg-zinc-500',
-                      pro: 'bg-blue-500',
-                      team: 'bg-violet-500',
-                      business: 'bg-amber-500',
+                      free: 'bg-muted-foreground/60',
+                      pro: 'bg-chart-1',
+                      team: 'bg-chart-4',
+                      business: 'bg-chart-5',
                     }
                     return (
                       <div
@@ -387,10 +387,10 @@ function AdminOverviewPage() {
                 <div className="flex flex-wrap gap-x-6 gap-y-2">
                   {Object.entries(stats.subscriptionsByPlan).map(([plan, count]) => {
                     const dotColorMap: Record<string, string> = {
-                      free: 'bg-zinc-400 dark:bg-zinc-500',
-                      pro: 'bg-blue-500',
-                      team: 'bg-violet-500',
-                      business: 'bg-amber-500',
+                      free: 'bg-muted-foreground/60',
+                      pro: 'bg-chart-1',
+                      team: 'bg-chart-4',
+                      business: 'bg-chart-5',
                     }
                     return (
                       <div key={plan} className="flex items-center gap-2 text-sm">
@@ -428,9 +428,9 @@ function AdminOverviewPage() {
                     <div
                       className={`text-xl font-bold tracking-tight ${
                         storageCritical
-                          ? 'text-red-600 dark:text-red-400'
+                          ? 'text-danger-fg'
                           : storageWarning
-                            ? 'text-amber-600 dark:text-amber-400'
+                            ? 'text-warning-fg'
                             : 'text-foreground'
                       }`}
                     >
@@ -604,24 +604,21 @@ function HealthIndicator({
   const statusConfig = {
     healthy: {
       icon: CheckCircle2,
-      className: 'text-emerald-600 dark:text-emerald-400',
-      bgClassName: 'bg-emerald-100 dark:bg-emerald-950',
-      badgeVariant: 'default' as const,
-      badgeClassName: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
+      className: 'text-success-fg',
+      bgClassName: 'bg-success-bg',
+      badgeVariant: 'success' as const,
     },
     warning: {
       icon: AlertTriangle,
-      className: 'text-amber-600 dark:text-amber-400',
-      bgClassName: 'bg-amber-100 dark:bg-amber-950',
-      badgeVariant: 'outline' as const,
-      badgeClassName: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+      className: 'text-warning-fg',
+      bgClassName: 'bg-warning-bg',
+      badgeVariant: 'warning' as const,
     },
     critical: {
       icon: AlertCircle,
-      className: 'text-red-600 dark:text-red-400',
-      bgClassName: 'bg-red-100 dark:bg-red-950',
-      badgeVariant: 'destructive' as const,
-      badgeClassName: '',
+      className: 'text-danger-fg',
+      bgClassName: 'bg-danger-bg',
+      badgeVariant: 'danger' as const,
     },
   }
 
@@ -634,7 +631,7 @@ function HealthIndicator({
         <Icon className={`h-3.5 w-3.5 ${config.className}`} />
       </div>
       <span className="text-sm flex-1">{label}</span>
-      <Badge variant={config.badgeVariant} className={`text-xs ${config.badgeClassName}`}>
+      <Badge variant={config.badgeVariant} size="sm" className="text-xs">
         {detail}
       </Badge>
     </div>

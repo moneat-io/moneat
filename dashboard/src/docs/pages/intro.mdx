@@ -1,34 +1,39 @@
 
 # Moneat Documentation
 
-Moneat is a Sentry-compatible observability platform for error monitoring, performance tracing, session replay, logging, uptime tracking, and incident management. Use any existing Sentry SDK, Datadog Agent, or OpenTelemetry (OTLP) exporter to get started.
+Moneat is an OpenTelemetry-native observability platform for error monitoring, performance tracing, session replay, logging, uptime tracking, and incident management. It supports popular open-source collectors and SDKs, including Sentry-compatible SDKs, the Datadog Agent, and any OTLP exporter.
 
 <Link to="/docs/getting-started" className="inline-block px-6 py-3 bg-sky-500 hover:bg-sky-600 !text-white font-semibold rounded-lg transition-colors no-underline">Get Started</Link>
 
 ## Features
 
-- [Error Monitoring](/docs/error-monitoring) - Capture and track errors using Sentry-compatible SDKs
+- [Error Monitoring](/docs/error-monitoring) - Capture, group, and triage errors from connected sources
 - [Issue Tracking](/docs/issue-tracking) - Group, triage, and resolve issues with automatic fingerprinting
-- [Session Replay](/docs/session-replay) - Record and replay user sessions linked to errors
+- [Session Replay](/docs/session-replay) - Record and replay user sessions linked to errors and traces
 - [Performance Monitoring](/docs/performance-monitoring) - Distributed tracing, transactions, spans, and service maps
-- [Structured Logging](/docs/logging) - Ingest, search, and tail logs via OTLP
-- [OpenTelemetry (OTLP)](/docs/logging) - Ingest logs, traces, and metrics via standard OTLP/HTTP endpoints
+- [Structured Logging](/docs/logging) - Ingest, search, and tail structured logs
+- [OpenTelemetry](/docs/opentelemetry) - Send logs, traces, and metrics from any OTLP exporter or Collector
 - [Releases & Source Maps](/docs/releases) - Track deployments and upload source maps
 - [AI Observability](/docs/ai-observability) - Monitor LLM applications and trace agent executions
 - [Custom Dashboards](/docs/custom-dashboards) - Build dashboards with drag-and-drop widgets and custom data sources
 - [User Feedback](/docs/user-feedback) - Collect and manage user-submitted feedback
-- [Infrastructure Monitoring](/docs/infrastructure-monitoring) - Monitor hosts, containers, processes, and network via the Datadog Agent
+- [Infrastructure Monitoring](/docs/infrastructure-monitoring) - Monitor hosts, containers, processes, and network telemetry
 - [On-Call & Incidents](/docs/on-call) - Schedules, escalation policies, and incident management
 - [Uptime Monitoring](/docs/uptime-monitoring) - HTTP checks and heartbeat monitors
 - [Status Pages](/docs/status-pages) - Public status pages for communicating incidents
 - [Product Analytics](/docs/product-analytics) - Funnels, retention, and event tracking
-- [Datadog Agent](/docs/datadog-agent) - Ingest metrics, traces, logs, and profiles from the Datadog Agent
+- [Datadog Agent Compatibility](/docs/datadog-agent) - Connect existing Datadog Agent fleets to Moneat without code changes
 
 ## Configuration & Account
 
-- [SDK Setup](/docs/sdk-setup) - Install and configure Sentry-compatible SDKs
 - [Integrations](/docs/integrations) - Slack, Discord, and webhook notifications
 - [SSO & Auth](/docs/sso-authentication) - OAuth and SSO providers
 - [API Tokens](/docs/api-tokens) - Create and manage API tokens
 - [MCP Server](/docs/mcp-server/overview) - Model Context Protocol server for AI coding assistants
 - [Billing](/docs/billing) - Plans, usage, and billing
+
+## Source Setup
+
+- [OpenTelemetry](/docs/opentelemetry) - Create OTLP API keys and configure exporters
+- [Sentry-Compatible SDKs](/docs/sdk-setup) - Connect existing Sentry SDK instrumentation
+- [Datadog Agent Compatibility](/docs/datadog-agent) - Connect existing Datadog Agent fleets

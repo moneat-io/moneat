@@ -14,78 +14,257 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {ScrollText} from 'lucide-react'
-import {api, type OtlpApiKey} from '@/lib/api'
-import {backendBaseUrl} from '@/lib/backend-url'
+import type {ReactNode} from 'react'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {Loader2, ScrollText, Trash2} from 'lucide-react'
+import {api, type OtlpApiKey, type OtlpObservedService, type Project} from '@/lib/api'
+import {Badge} from '@/components/ui/badge'
+import {Button} from '@/components/ui/button'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
+import {Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
+import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
+import {useToast} from '@/hooks/useToast'
 import {ApiKeysTabBase} from './ApiKeysTabBase'
+
+const UNMAPPED_SERVICE_VALUE = '__unmapped__'
+
+function serviceLabel(service: OtlpObservedService) {
+  if (!service.serviceNamespace) return service.serviceName
+  return `${service.serviceNamespace}/${service.serviceName}`
+}
+
+function signalBadges(service: OtlpObservedService) {
+  return [
+    service.seenLogs ? 'logs' : null,
+    service.seenTraces ? 'traces' : null,
+    service.seenMetrics ? 'metrics' : null,
+    service.seenFeedback ? 'feedback' : null,
+  ].filter((signal): signal is string => signal != null)
+}
 
 export function OtlpApiKeysTab() {
   return (
-    <ApiKeysTabBase<OtlpApiKey>
-      cardId="otlp-api-keys"
-      cardTitle="OTLP API Keys"
-      cardDescription="Create org-level API keys for OpenTelemetry ingestion (logs, traces, and metrics). Use these keys with OTLP exporters or the ingest API. Keys are shown in full only once when created."
-      icon={ScrollText}
-      emptyTitle="No OTLP API keys yet"
-      emptyDescription="Create a key to send logs, traces, and metrics via OpenTelemetry."
-      queryKey={['otlpApiKeys']}
-      queryFn={() => api.getOtlpApiKeys()}
-      queryEnabled={api.isAuthenticated()}
-      createMutationFn={(name) => api.createOtlpApiKey(name)}
-      deleteMutationFn={(id) => api.deleteOtlpApiKey(id)}
-      createSuccessToast={{
-        title: 'OTLP API key created',
-        description: "Copy the key now—it won't be shown again.",
-      }}
-      revokeSuccessToast={{
-        title: 'Key revoked',
-        description: 'The OTLP API key has been revoked.',
-      }}
-      createDialogTitle="Create OTLP API Key"
-      createDialogDescription='Give this key a name to identify it (e.g. "Production OTLP"). The full key will be shown once and cannot be retrieved later.'
-      inputId="key-name"
-      inputPlaceholder="e.g. Production OTLP"
-      createdDialogTitle="OTLP API Key Created"
-      revokeDialogTitle="Revoke OTLP API Key"
-      revokeDialogDescription={(name) =>
-        `Are you sure you want to revoke "${name}"? Any clients using this key will no longer be able to send data.`
-      }
-      setupInstructions={
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Setup Instructions</CardTitle>
-            <CardDescription>
-              Configure your OpenTelemetry SDK or Collector to send telemetry data to Moneat.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className="text-sm font-medium mb-1">OTLP endpoints</p>
-              <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all">
-                Logs: {backendBaseUrl}/v1/logs/otlp
-              </code>
-              <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
-                Traces: {backendBaseUrl}/v1/traces/otlp
-              </code>
-              <code className="block text-xs bg-muted px-3 py-2 rounded-md break-all mt-1">
-                Metrics: {backendBaseUrl}/v1/metrics/otlp
-              </code>
-            </div>
-            <div>
-              <p className="text-sm font-medium mb-1">Authentication</p>
-              <p className="text-sm text-muted-foreground">
-                Set the <code className="bg-muted px-1 rounded">Authorization</code> header to{' '}
-                <code className="bg-muted px-1 rounded">Bearer YOUR_OTLP_API_KEY</code>
-              </p>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              For OpenTelemetry SDKs, configure the OTLP exporter with the endpoint URL and the
-              Authorization header containing your OTLP API key.
-            </p>
-          </CardContent>
-        </Card>
-      }
-    />
+    <div className="flex flex-col gap-6">
+      <ApiKeysTabBase<OtlpApiKey>
+        cardId="otlp-api-keys"
+        cardTitle="OTLP API Keys"
+        cardDescription={
+          'Create organization credentials for OpenTelemetry ingestion. ' +
+          'Services route to Moneat services by service.name mappings below.'
+        }
+        docsHref="/docs/logging"
+        icon={ScrollText}
+        emptyTitle="No OTLP API keys yet"
+        emptyDescription="Create a key to send logs, traces, and metrics via OpenTelemetry."
+        queryKey={['otlpApiKeys']}
+        queryFn={() => api.getOtlpApiKeys()}
+        queryEnabled={api.isAuthenticated()}
+        createMutationFn={(name) => api.createOtlpApiKey(name)}
+        deleteMutationFn={(id) => api.deleteOtlpApiKey(id)}
+        createSuccessToast={{
+          title: 'OTLP API key created',
+          description: "Copy the key now—it won't be shown again.",
+        }}
+        revokeSuccessToast={{
+          title: 'Key revoked',
+          description: 'The OTLP API key has been revoked.',
+        }}
+        createDialogTitle="Create OTLP API Key"
+        createDialogDescription={
+          'Give this key a name to identify it (e.g. "Production OTLP"). ' +
+          'The full key will be shown once and cannot be retrieved later.'
+        }
+        inputId="key-name"
+        inputPlaceholder="e.g. Production OTLP"
+        createdDialogTitle="OTLP API Key Created"
+        revokeDialogTitle="Revoke OTLP API Key"
+        revokeDialogDescription={(name) =>
+          `Are you sure you want to revoke "${name}"? Any clients using this key will no longer be able to send data.`
+        }
+      />
+      <OtlpServiceRoutingPanel />
+    </div>
+  )
+}
+
+function OtlpServiceRoutingPanel() {
+  const queryClient = useQueryClient()
+  const {toast} = useToast()
+
+  const {data: servicesData, isPending: servicesPending} = useQuery({
+    queryKey: ['otlpObservedServices'],
+    queryFn: () => api.getOtlpObservedServices(),
+    enabled: api.isAuthenticated(),
+  })
+  const {data: moneatServices = []} = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => api.getProjects(),
+    enabled: api.isAuthenticated(),
+  })
+
+  const upsertMapping = useMutation({
+    mutationFn: (input: {service: OtlpObservedService; serviceId: string}) =>
+      api.upsertOtlpServiceMapping(
+        input.service.serviceName,
+        input.serviceId,
+        input.service.serviceNamespace
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['otlpObservedServices']})
+      toast({title: 'Service mapped', description: 'OTLP telemetry will route to the selected service.'})
+    },
+    onError: (error: Error) => {
+      toast({title: 'Failed to map service', description: error.message, variant: 'destructive'})
+    },
+  })
+
+  const deleteMapping = useMutation({
+    mutationFn: (id: string) => api.deleteOtlpServiceMapping(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['otlpObservedServices']})
+      toast({title: 'Mapping removed', description: 'Future telemetry for this service will be unmapped.'})
+    },
+    onError: (error: Error) => {
+      toast({title: 'Failed to remove mapping', description: error.message, variant: 'destructive'})
+    },
+  })
+
+  const services = servicesData?.services ?? []
+  let serviceRoutingContent: ReactNode
+  if (servicesPending) {
+    serviceRoutingContent = (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground py-6">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading services...
+      </div>
+    )
+  } else if (services.length === 0) {
+    serviceRoutingContent = (
+      <div className="border rounded-lg p-8 text-center text-sm text-muted-foreground">
+        Services appear here after OTLP telemetry is received.
+      </div>
+    )
+  } else {
+    serviceRoutingContent = (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Service</TableHead>
+            <TableHead>Signals</TableHead>
+            <TableHead>Environment</TableHead>
+            <TableHead>Moneat service</TableHead>
+            <TableHead className="w-[80px]">
+              <span className="sr-only">Actions</span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {services.map((service) => (
+            <OtlpServiceRoutingRow
+              key={service.id}
+              service={service}
+              moneatServices={moneatServices}
+              upsertMapping={(serviceId) => upsertMapping.mutate({service, serviceId})}
+              deleteMapping={() => {
+                if (service.mappingId != null) deleteMapping.mutate(service.mappingId)
+              }}
+              isPending={upsertMapping.isPending || deleteMapping.isPending}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    )
+  }
+
+  return (
+    <Card id="otlp-service-routing">
+      <CardHeader>
+        <CardTitle className="text-base">Service routing</CardTitle>
+        <CardDescription>
+          Map OpenTelemetry services to Moneat services. Unmapped services continue ingesting at
+          organization scope.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {serviceRoutingContent}
+      </CardContent>
+    </Card>
+  )
+}
+
+function OtlpServiceRoutingRow(props: {
+  readonly service: OtlpObservedService
+  readonly moneatServices: Project[]
+  readonly upsertMapping: (serviceId: string) => void
+  readonly deleteMapping: () => void
+  readonly isPending: boolean
+}) {
+  const {service, moneatServices, upsertMapping, deleteMapping, isPending} = props
+  const selectedMoneatService = service.projectId ?? UNMAPPED_SERVICE_VALUE
+
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">{serviceLabel(service)}</span>
+          {service.projectName == null ? (
+            <Badge variant="outline">Unmapped</Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">Mapped to {service.projectName}</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-wrap gap-1">
+          {signalBadges(service).map((signal) => (
+            <Badge key={signal} variant="secondary">
+              {signal}
+            </Badge>
+          ))}
+        </div>
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground">
+        {service.lastEnvironment || '—'}
+      </TableCell>
+      <TableCell className="min-w-[220px]">
+        <Select
+          value={selectedMoneatService}
+          disabled={isPending || moneatServices.length === 0}
+          onValueChange={(value) => {
+            if (value === UNMAPPED_SERVICE_VALUE) {
+              if (service.mappingId != null) deleteMapping()
+              return
+            }
+            upsertMapping(value)
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select service" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              <SelectItem value={UNMAPPED_SERVICE_VALUE}>Unmapped</SelectItem>
+              {moneatServices.map((moneatService) => (
+                <SelectItem key={moneatService.id} value={moneatService.id}>
+                  {moneatService.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={isPending || service.mappingId == null}
+          onClick={deleteMapping}
+          aria-label={`Remove mapping for ${serviceLabel(service)}`}
+          title="Remove mapping"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </TableCell>
+    </TableRow>
   )
 }

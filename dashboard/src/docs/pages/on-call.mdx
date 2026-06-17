@@ -7,7 +7,12 @@ description: Set up on-call schedules, escalation policies, and manage incidents
 
 ## Overview
 
-Moneat includes a built-in on-call and incident management system. When critical errors or uptime failures are detected, Moneat can automatically create incidents and notify the right people through configurable escalation policies. Notifications are sent via push notifications (mobile app), Slack DMs, and email.
+Moneat includes a built-in on-call and incident management system. When critical errors or uptime failures are detected, Moneat can automatically create incidents and notify the right people through configurable escalation policies. Notifications can be sent via push notifications, Slack DMs, email, SMS, and voice calls.
+
+:::info[Availability]
+On-Call is available on SaaS plans that include on-call seats. Self-hosted deployments require a
+license key with the `oncall` feature enabled.
+:::
 
 ## On-Call Schedules
 
@@ -39,8 +44,9 @@ Escalation policies define what happens when an incident is created. They consis
 | **P0 - Critical** | Immediate escalation. Production is down. |
 | **P1 - High** | Urgent. Major functionality impacted. |
 | **P2 - Medium** | Important. Degraded service or workaround needed. |
-| **P3 - Low** | Minor issue. No immediate user impact. |
-| **P4 - Informational** | Tracked for awareness. |
+| **P3 - Low** | Respond within one business day. |
+| **P4 - Very Low** | Lower urgency. No page by default. |
+| **P5 - Informational** | Tracked for awareness. No page by default. |
 
 ### Escalation Steps
 
@@ -82,6 +88,7 @@ Moneat supports multiple notification channels for on-call alerts:
 - **Push Notifications** - Via the Moneat mobile app (iOS and Android). Responders can acknowledge and resolve from the notification.
 - **Slack DMs** - Direct messages with interactive buttons for acknowledge/resolve actions.
 - **Email** - Notification emails with incident details and action links.
+- **SMS and voice calls** - Twilio-backed fallback channels for urgent escalations.
 
 :::tip[Mobile App]
 Install the Moneat mobile app to receive push notifications for on-call alerts. You can acknowledge and resolve incidents directly from your phone.

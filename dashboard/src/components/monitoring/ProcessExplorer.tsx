@@ -10,6 +10,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type DdProcessResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -42,35 +43,35 @@ function formatBytes(bytes: number): string {
 }
 
 function getCpuColor(value: number): string {
-  if (value >= 80) return 'text-red-500'
-  if (value >= 50) return 'text-orange-500'
-  if (value >= 25) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (value >= 80) return 'text-danger-fg'
+  if (value >= 50) return 'text-chart-6'
+  if (value >= 25) return 'text-warning-fg'
+  return 'text-success-fg'
 }
 
 function getCpuBarColor(value: number): string {
-  if (value >= 80) return 'bg-red-500'
-  if (value >= 50) return 'bg-orange-500'
-  if (value >= 25) return 'bg-yellow-500'
-  return 'bg-emerald-500'
+  if (value >= 80) return 'bg-danger-solid'
+  if (value >= 50) return 'bg-chart-6'
+  if (value >= 25) return 'bg-warning-solid'
+  return 'bg-success-solid'
 }
 
 function getMemColor(rss: number, maxRss: number): string {
   if (maxRss === 0) return 'text-foreground'
   const pct = (rss / maxRss) * 100
-  if (pct >= 80) return 'text-red-500'
-  if (pct >= 50) return 'text-orange-500'
-  if (pct >= 25) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (pct >= 80) return 'text-danger-fg'
+  if (pct >= 50) return 'text-chart-6'
+  if (pct >= 25) return 'text-warning-fg'
+  return 'text-success-fg'
 }
 
 function getMemBarColor(rss: number, maxRss: number): string {
   if (maxRss === 0) return 'bg-muted'
   const pct = (rss / maxRss) * 100
-  if (pct >= 80) return 'bg-red-500'
-  if (pct >= 50) return 'bg-orange-500'
-  if (pct >= 25) return 'bg-yellow-500'
-  return 'bg-emerald-500'
+  if (pct >= 80) return 'bg-danger-solid'
+  if (pct >= 50) return 'bg-chart-6'
+  if (pct >= 25) return 'bg-warning-solid'
+  return 'bg-success-solid'
 }
 
 type StateFilter = 'all' | 'running' | 'sleeping' | 'zombie'
@@ -101,24 +102,20 @@ function stateLabel(state: string): string {
 
 function StateIcon({state}: {state: string}) {
   const s = state?.toLowerCase()
-  if (s === 'r' || s === 'running') return <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
-  if (s === 'z' || s === 'zombie') return <CircleX className="h-3.5 w-3.5 text-red-500" />
-  if (s === 't' || s === 'stopped' || s === 'traced') return <CirclePause className="h-3.5 w-3.5 text-yellow-500" />
-  if (s === 's' || s === 'sleeping' || s === 'idle') return <CircleDot className="h-3.5 w-3.5 text-blue-400" />
+  if (s === 'r' || s === 'running') return <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
+  if (s === 'z' || s === 'zombie') return <CircleX className="h-3.5 w-3.5 text-danger-fg" />
+  if (s === 't' || s === 'stopped' || s === 'traced') return <CirclePause className="h-3.5 w-3.5 text-warning-fg" />
+  if (s === 's' || s === 'sleeping' || s === 'idle') return <CircleDot className="h-3.5 w-3.5 text-info-fg" />
   return <CircleDot className="h-3.5 w-3.5 text-muted-foreground" />
 }
 
-function stateBadgeClasses(state: string): string {
+function stateBadgeVariant(state: string): 'success' | 'danger' | 'warning' | 'info' | 'neutral' {
   const s = state?.toLowerCase()
-  if (s === 'r' || s === 'running')
-    return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-  if (s === 'z' || s === 'zombie')
-    return 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
-  if (s === 't' || s === 'stopped' || s === 'traced')
-    return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/20'
-  if (s === 's' || s === 'sleeping' || s === 'idle')
-    return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
-  return 'bg-muted text-muted-foreground border-border'
+  if (s === 'r' || s === 'running') return 'success'
+  if (s === 'z' || s === 'zombie') return 'danger'
+  if (s === 't' || s === 'stopped' || s === 'traced') return 'warning'
+  if (s === 's' || s === 'sleeping' || s === 'idle') return 'info'
+  return 'neutral'
 }
 
 function isRunning(state: string): boolean {
@@ -155,7 +152,7 @@ export function ProcessExplorer() {
     refetchInterval: 10000,
   })
 
-  const processes = data?.processes ?? []
+  const processes = useMemo(() => data?.processes ?? [], [data?.processes])
 
   const maxRss = useMemo(
     () => Math.max(...processes.map((p) => p.memRss), 1),
@@ -228,31 +225,31 @@ export function ProcessExplorer() {
         {!isLoading && processes.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5 text-blue-500" />
+              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{processes.length}</span>
               <span className="text-muted-foreground text-xs">processes</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Server className="h-3.5 w-3.5 text-emerald-500" />
+              <Server className="h-3.5 w-3.5 text-chart-2" />
               <span className="font-semibold tabular-nums">{uniqueHosts}</span>
               <span className="text-muted-foreground text-xs">{uniqueHosts === 1 ? 'host' : 'hosts'}</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5 text-violet-500" />
+              <Cpu className="h-3.5 w-3.5 text-chart-1" />
               <span className="font-semibold tabular-nums">{totalCpu.toFixed(1)}%</span>
               <span className="text-muted-foreground text-xs">CPU</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <MemoryStick className="h-3.5 w-3.5 text-sky-500" />
+              <MemoryStick className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{formatBytes(totalRss)}</span>
               <span className="text-muted-foreground text-xs">RSS</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Hash className="h-3.5 w-3.5 text-orange-500" />
+              <Hash className="h-3.5 w-3.5 text-chart-6" />
               <span className="font-semibold tabular-nums">{totalThreads.toLocaleString()}</span>
               <span className="text-muted-foreground text-xs">threads</span>
             </div>
@@ -272,10 +269,10 @@ export function ProcessExplorer() {
         </div>
         <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
           {([
-            {key: 'all' as const, color: 'bg-blue-500', count: processes.length},
-            {key: 'running' as const, color: 'bg-emerald-500', count: runningCount},
-            {key: 'sleeping' as const, color: 'bg-blue-400', count: sleepingCount},
-            {key: 'zombie' as const, color: 'bg-red-500', count: zombieCount},
+            {key: 'all' as const, tone: 'neutral' as const, count: processes.length},
+            {key: 'running' as const, tone: 'success' as const, count: runningCount},
+            {key: 'sleeping' as const, tone: 'info' as const, count: sleepingCount},
+            {key: 'zombie' as const, tone: 'danger' as const, count: zombieCount},
           ]).map((f) => (
             <button
               key={f.key}
@@ -283,11 +280,11 @@ export function ProcessExplorer() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 stateFilter === f.key
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              <div className={cn('h-1.5 w-1.5 rounded-full', f.color)} />
+              <StatusDot tone={f.tone} size="sm" />
               <span className="capitalize">{f.key}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">{f.count}</span>
             </button>
@@ -305,8 +302,8 @@ export function ProcessExplorer() {
       ) : processes.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10">
-              <Terminal className="h-10 w-10 text-blue-500" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <Terminal className="h-10 w-10" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No processes found</h3>
             <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
@@ -320,7 +317,7 @@ export function ProcessExplorer() {
           <p className="text-sm mt-1">Try adjusting your search or state filter.</p>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[950px]">
               <TableHeader>
@@ -406,8 +403,8 @@ export function ProcessExplorer() {
 
                       <TableCell>
                         <Badge
-                          variant="secondary"
-                          className={cn('text-[11px] gap-1.5 font-medium', stateBadgeClasses(proc.state))}
+                          variant={stateBadgeVariant(proc.state)}
+                          className="text-[11px] gap-1.5 font-medium"
                         >
                           <StateIcon state={proc.state} />
                           {stateLabel(proc.state)}

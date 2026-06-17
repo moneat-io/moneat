@@ -18,12 +18,12 @@ import { useState, useEffect } from 'react'
 import { api } from '@/lib/api'
 
 interface User {
-  id: number
+  id: string
   email: string
   name?: string
   emailVerified: boolean
   onboardingCompleted: boolean
-  orgId?: number
+  orgId?: string
   orgRole?: string
 }
 
@@ -41,13 +41,15 @@ export function useAuth() {
           name: userData.name,
           emailVerified: userData.emailVerified,
           onboardingCompleted: userData.onboardingCompleted,
+          orgId: userData.orgId,
+          orgRole: userData.orgRole,
         })
         // Keep session flag in sync
-        sessionStorage.setItem('authenticated', 'true')
+        globalThis.sessionStorage?.setItem('authenticated', 'true')
       })
       .catch(() => {
         setUser(null)
-        sessionStorage.removeItem('authenticated')
+        globalThis.sessionStorage?.removeItem('authenticated')
       })
       .finally(() => {
         setIsLoading(false)

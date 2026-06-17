@@ -16,7 +16,9 @@
 
 import type { ApiClientCore } from '../client'
 import type {
+  ApmSpanUsageDebugResponse,
   BillingPlansResponse,
+  BillingUsageInsightsResponse,
   BillingUsage,
   CheckoutSessionRequest,
   CheckoutSessionResponse,
@@ -26,6 +28,7 @@ import type {
   CancelSubscriptionResponse,
   UpdateOnCallSeatsResponse,
 } from '../types'
+import { urlWithQuery } from '../utils'
 
 export function billingMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -36,6 +39,18 @@ export function billingMethods(core: ApiClientCore) {
 
     getBillingUsage: () =>
       core.request<BillingUsage>(`${base}/billing/usage`),
+
+    getBillingUsageInsights: () =>
+      core.request<BillingUsageInsightsResponse>(`${base}/billing/usage/insights`),
+
+    getBillingApmSpanUsageDebug: (limit = 20) => {
+      const numericLimit = Number(limit)
+      const safeLimit = Number.isFinite(numericLimit) ? Math.max(1, Math.floor(numericLimit)) : 20
+      const params = new URLSearchParams({ limit: String(safeLimit) })
+      return core.request<ApmSpanUsageDebugResponse>(
+        urlWithQuery(`${base}/billing/usage/apm-spans`, params.toString())
+      )
+    },
 
     createBillingCheckoutSession: (body: CheckoutSessionRequest) =>
       core.request<CheckoutSessionResponse>(`${base}/billing/checkout`, {

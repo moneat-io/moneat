@@ -1,0 +1,236 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.datadog.routes
+
+import com.moneat.billing.services.BillingQuotaService
+import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.auth.DatadogAuthMiddleware
+import com.moneat.ingest.DecompressionService
+import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.utils.suspendRunCatching
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.call
+import io.ktor.server.request.contentType
+import io.ktor.server.request.receiveChannel
+import io.ktor.server.response.respond
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.get
+import io.ktor.server.routing.head
+import io.ktor.server.routing.post
+import io.ktor.server.routing.put
+import io.ktor.server.routing.route
+import io.ktor.utils.io.toByteArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.put
+import mu.KotlinLogging
+import java.util.Base64
+
+private val logger = KotlinLogging.logger {}
+private val json = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
+
+private const val QUEUE_KEY = "moneat:traces:queue"
+private const val TRACE_V02_PATH = "/v0.2/traces"
+private const val TRACE_STATS_V02_PATH = "/v0.2/stats"
+private const val TRACE_STATS_V06_PATH = "/v0.6/stats"
+private const val SUPPORT_FLARE_PATH = "/flare"
+
+fun Route.traceIngestRoutes(
+    quotaService: BillingQuotaService = BillingQuotaService(),
+) {
+    route("/dd") {
+        get("/_health") { respondAgentDiagnosticOk() }
+        head("/_health") { respondAgentDiagnosticOk() }
+
+        // PUT /dd/v0.3/traces - v0.3 format (msgpack)
+        put("/v0.3/traces") { handleTraceIntake(quotaService) }
+        // PUT /dd/v0.4/traces - v0.4 format (msgpack, primary)
+        put("/v0.4/traces") { handleTraceIntake(quotaService) }
+        // PUT /dd/v0.5/traces - v0.5 format
+        put("/v0.5/traces") { handleTraceIntake(quotaService) }
+        // PUT /dd/v0.7/traces - v0.7 format
+        put("/v0.7/traces") { handleTraceIntake(quotaService) }
+
+        // PUT /dd/v0.6/stats - trace stats (local agent format)
+        put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+
+        // DD agent backend/edge format - sent by dd-agent trace writer when forwarding to
+        // the configured DD_APM_DD_URL (e.g. https://api.moneat.io/dd)
+        route("/api") {
+            post(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+            put(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+            post(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+            put(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+            post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+            put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+        }
+
+        route("/support") {
+            get(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+            head(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+            post(SUPPORT_FLARE_PATH) { respondAgentDiagnosticOk() }
+        }
+    }
+
+    // Some DD agent writers strip path prefixes from configured intake URLs.
+    route("/api") {
+        post(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+        put(TRACE_V02_PATH) { handleTraceIntake(quotaService) }
+        post(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V02_PATH) { handleTraceStats(quotaService) }
+        post(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+        put(TRACE_STATS_V06_PATH) { handleTraceStats(quotaService) }
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.respondAgentDiagnosticOk() {
+    call.respond(HttpStatusCode.OK, mapOf("status" to "ok", "compatibility" to "agent-diagnostic"))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
+    quotaService: BillingQuotaService,
+) {
+    val organizationId = DatadogAuthMiddleware.authenticate(call)
+        ?: return
+
+    val rawBytes = call.receiveChannel().toByteArray()
+    val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
+    val hostname = call.request.headers["X-Datadog-Hostname"] ?: ""
+    val env = call.request.headers["X-Datadog-Env"] ?: ""
+    val version = call.request.headers["X-Datadog-Version"] ?: ""
+
+    val contentType = call.request.contentType()
+    val isJson = contentType.withoutParameters() == ContentType.Application.Json
+    val isProtobuf = contentType.contentSubtype.contains("protobuf")
+    val tracesJsonElement = if (isJson) {
+        suspendRunCatching {
+            json.parseToJsonElement(bytes.decodeToString())
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to parse DD trace payload" }
+            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace payload"))
+            return
+        }
+    } else {
+        null
+    }
+    val requestedUnits = countTraceSpans(bytes, tracesJsonElement, isProtobuf)
+    if (requestedUnits == null) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace payload"))
+        return
+    }
+
+    if (!reserveDatadogQuota(call, quotaService, organizationId, requestedUnits, "dd_trace", bytes.size.toLong())) {
+        return
+    }
+
+    // Enqueue for async processing
+    val queuePayload = when {
+        isJson -> buildJsonObject {
+            put("organization_id", organizationId)
+            put("hostname", hostname)
+            put("env", env)
+            put("version", version)
+            put("format", "json")
+            put("traces", requireNotNull(tracesJsonElement))
+        }.toString()
+        isProtobuf -> buildJsonObject {
+            put("organization_id", organizationId)
+            put("hostname", hostname)
+            put("env", env)
+            put("version", version)
+            put("format", "protobuf")
+            put("data", Base64.getEncoder().encodeToString(bytes))
+        }.toString()
+        else -> buildJsonObject {
+            put("organization_id", organizationId)
+            put("hostname", hostname)
+            put("env", env)
+            put("version", version)
+            put("format", "msgpack")
+            put("data", Base64.getEncoder().encodeToString(bytes))
+        }.toString()
+    }
+
+    IngestionQueueClient.enqueue(IngestionPipeline.DD_TRACES, QUEUE_KEY, queuePayload)
+
+    // Return rate_by_service response (DD agent expects this)
+    call.respond(
+        HttpStatusCode.OK,
+        mapOf("rate_by_service" to mapOf("service:,env:" to 1.0))
+    )
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleTraceStats(
+    quotaService: BillingQuotaService,
+) {
+    val organizationId = DatadogAuthMiddleware.authenticate(call)
+        ?: return
+
+    val rawBytes = call.receiveChannel().toByteArray()
+    val bytes = DecompressionService.decompress(rawBytes, call.request.headers["Content-Encoding"])
+    val isJson = call.request.contentType().withoutParameters() == ContentType.Application.Json
+
+    val payload = suspendRunCatching {
+        if (isJson) {
+            json.decodeFromString<com.moneat.datadog.models.DdStatsPayload>(bytes.decodeToString())
+        } else {
+            TraceIngestionService.parseMsgpackStats(bytes)
+        }
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to parse DD trace stats payload" }
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Unparseable trace stats payload"))
+        return
+    }
+    val requestedUnits = payload.stats.sumOf { it.stats.size }
+    if (!reserveDatadogQuota(call, quotaService, organizationId, requestedUnits, "dd_trace", bytes.size.toLong())) {
+        return
+    }
+
+    TraceIngestionService.insertTraceStats(organizationId, payload)
+
+    call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
+}
+
+private fun countTraceSpans(
+    bytes: ByteArray,
+    tracesJsonElement: JsonElement?,
+    isProtobuf: Boolean,
+): Int? {
+    return runCatching {
+        if (tracesJsonElement != null) {
+            return@runCatching tracesJsonElement.jsonArray.sumOf { trace -> trace.jsonArray.size }
+        }
+
+        val traces = if (isProtobuf) {
+            TraceIngestionService.parseProtobufAgentPayload(bytes)
+        } else {
+            TraceIngestionService.parseMsgpackTraces(bytes)
+        }
+        traces.sumOf { it.size }
+    }.getOrElse { e ->
+        logger.warn(e) { "Failed to parse trace payload for span count" }
+        null
+    }
+}

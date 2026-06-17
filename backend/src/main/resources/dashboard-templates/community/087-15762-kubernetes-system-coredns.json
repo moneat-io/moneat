@@ -1,0 +1,1049 @@
+{
+    "id": "087-15762-kubernetes-system-coredns",
+    "title": "Kubernetes / System / CoreDNS",
+    "description": "Prebuilt Moneat dashboard for Kubernetes / System / CoreDNS telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes",
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 14,
+    "variable_count": 6,
+    "warnings": [
+        "Panel 0: couldn't parse PromQL 'up{job=~\"$job\", instance=~\"$instance\", cluster=~\"$cluster\"}', stored as rawQuery"
+    ],
+    "dashboard": {
+        "title": "Kubernetes / System / CoreDNS",
+        "description": "Prebuilt Moneat dashboard for Kubernetes / System / CoreDNS telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": null,
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "Prometheus",
+                "current": "Prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cluster",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kube_node_info,cluster)",
+                "default_value": "",
+                "current": "",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "instance",
+                "label": "",
+                "type": "query",
+                "query": "label_values(up{job=\"$job\", cluster=\"$cluster\"},instance)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "protocol",
+                "label": "",
+                "type": "query",
+                "query": "label_values(coredns_dns_requests_total{cluster=\"$cluster\"}, proto)",
+                "default_value": "udp",
+                "current": "udp",
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "resolution",
+                "label": null,
+                "type": "custom",
+                "query": "1s, 15s, 30s, 1m, 3m, 5m",
+                "default_value": "30s",
+                "current": "30s",
+                "options": [
+                    "1s",
+                    "15s",
+                    "30s",
+                    "1m",
+                    "3m",
+                    "5m"
+                ],
+                "datasource": null
+            },
+            {
+                "name": "job",
+                "label": null,
+                "type": "query",
+                "query": "label_values(coredns_build_info{cluster=\"$cluster\"},job)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "CoreDNS - Health Status",
+                "widget_type": "stat",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "up{job=~\"$job\", instance=~\"$instance\", cluster=~\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"red\"},{\"value\":1,\"color\":\"green\"}]",
+                    "orientation": "vertical"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "CoreDNS - CPU Usage by instance",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 3,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "cpu_percent",
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "rate(process_cpu_seconds_total{job=~\"$job\", instance=~\"$instance\", cluster=~\"$cluster\"}[$__rate_interval])",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percentunit",
+                    "decimals": "2",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "CoreDNS - Memory Usage by instance",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 3,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "mem_used",
+                                "alias": "{{ instance }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            },
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "process_resident_memory_bytes{job=~\"$job\", instance=~\"$instance\", cluster=~\"$cluster\"}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "CoreDNS - Total DNS Requests ($protocol)",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 11,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "total $protocol requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "proto",
+                                "op": "eq",
+                                "value": "$protocol",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_dns_requests_total{instance=~\"$instance\",proto=\"$protocol\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "CoreDNS - Average Packet Size  ($protocol)",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 11,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "average $protocol packet size"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "proto",
+                                "op": "eq",
+                                "value": "$protocol",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_dns_request_size_bytes_sum{instance=~\"$instance\",proto=\"$protocol\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (proto) / sum(rate(coredns_dns_request_size_bytes_count{instance=~\"$instance\",proto=\"$protocol\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (proto)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "CoreDNS - Requests by type",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 19,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_dns_requests_total{instance=~\"$instance\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (type)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "CoreDNS - Requests by return code",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 19,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ rcode }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_dns_responses_total{instance=~\"$instance\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (rcode)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "CoreDNS - Total Forward Requests",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 27,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "total forward requests"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "proxy_name",
+                                "op": "eq",
+                                "value": "forward",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_proxy_request_duration_seconds_count{proxy_name=\"forward\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval]))",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "CoreDNS - DNS Errors",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 27,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{ rcode }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "proxy_name",
+                                "op": "eq",
+                                "value": "forward",
+                                "values": null
+                            },
+                            {
+                                "field": "rcode",
+                                "op": "like",
+                                "value": "SERVFAIL|REFUSED",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_proxy_request_duration_seconds_count{proxy_name=\"forward\", rcode=~\"SERVFAIL|REFUSED\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (rcode)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "CoreDNS - Cache Hits / Misses",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 35,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_cache_hits_total{instance=~\"$instance\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (type)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "misses"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(rate(coredns_cache_misses_total{instance=~\"$instance\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (type)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "short",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "CoreDNS - Cache Size",
+                "widget_type": "timeseries",
+                "grid_x": 6,
+                "grid_y": 35,
+                "grid_w": 6,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ type }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(coredns_cache_entries{cluster=~\"$cluster\", job=~\"$job\"}) by (type)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "2",
+                    "fillOpacity": "0.25",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "list"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "CoreDNS - DNS request duration",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 43,
+                "grid_w": 6,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": "duration_ms",
+                                "alias": "{{le}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(coredns_dns_request_duration_seconds_bucket{instance=~\"$instance\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "scaleType": "linear"
+                },
+                "sort_order": 11
+            },
+            {
+                "title": "CoreDNS - DNS request size",
+                "widget_type": "heatmap",
+                "grid_x": 6,
+                "grid_y": 43,
+                "grid_w": 6,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{le}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "le",
+                                "op": "neq",
+                                "value": "0",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(coredns_dns_request_size_bytes_bucket{instance=~\"$instance\", le!=\"0\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "scaleType": "linear"
+                },
+                "sort_order": 12
+            },
+            {
+                "title": "CoreDNS - DNS response size",
+                "widget_type": "heatmap",
+                "grid_x": 0,
+                "grid_y": 53,
+                "grid_w": 6,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{le}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "instance",
+                                "op": "like",
+                                "value": "$instance",
+                                "values": null
+                            },
+                            {
+                                "field": "le",
+                                "op": "neq",
+                                "value": "0",
+                                "values": null
+                            },
+                            {
+                                "field": "cluster",
+                                "op": "like",
+                                "value": "$cluster",
+                                "values": null
+                            },
+                            {
+                                "field": "job",
+                                "op": "like",
+                                "value": "$job",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(increase(coredns_dns_response_size_bytes_bucket{instance=~\"$instance\", le!=\"0\", cluster=~\"$cluster\", job=~\"$job\"}[$__rate_interval])) by (le)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "scaleType": "linear"
+                },
+                "sort_order": 13
+            }
+        ]
+    }
+}

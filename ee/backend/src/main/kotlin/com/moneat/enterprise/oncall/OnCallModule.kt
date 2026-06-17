@@ -16,16 +16,22 @@ import com.moneat.enterprise.oncall.routes.notificationPreferencesRoutes
 import com.moneat.enterprise.oncall.routes.onCallRoutes
 import com.moneat.enterprise.oncall.routes.priorityRoutes
 import com.moneat.enterprise.oncall.routes.twilioWebhookRoutes
+import com.moneat.enterprise.oncall.mcp.GetIncidentTool
+import com.moneat.enterprise.oncall.mcp.ListIncidentsTool
+import com.moneat.enterprise.oncall.mcp.ListSchedulesTool
 import com.moneat.enterprise.oncall.services.BusinessHoursService
 import com.moneat.enterprise.oncall.services.EscalationEngine
 import com.moneat.enterprise.oncall.services.EscalationPolicyService
-import com.moneat.enterprise.oncall.services.IncidentManagementService
 import com.moneat.enterprise.oncall.services.OnCallHandoffService
+import com.moneat.enterprise.oncall.services.OnCallAlertService
+import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.enterprise.oncall.services.PriorityService
 import com.moneat.enterprise.oncall.services.PushNotificationService
 import com.moneat.enterprise.oncall.services.ShiftChangeNotifier
 import com.moneat.enterprise.oncall.services.SlackUserGroupSyncService
+import com.moneat.mcp.McpToolContributor
+import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.notifications.services.SlackService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
@@ -42,15 +48,18 @@ private val logger = KotlinLogging.logger {}
  */
 class OnCallModule :
     EnterpriseModule,
+    McpToolContributor,
     OnCallBridge {
     private lateinit var escalationEngine: EscalationEngine
-    private lateinit var incidentManagementService: IncidentManagementService
+    private lateinit var onCallAlertService: OnCallAlertService
     private lateinit var pushNotificationService: PushNotificationService
     private var slackUserGroupSyncService: SlackUserGroupSyncService? = null
     private var onCallHandoffService: OnCallHandoffService? = null
     private var shiftChangeNotifier: ShiftChangeNotifier? = null
     private val priorityService = PriorityService()
     private val businessHoursService = BusinessHoursService()
+    private val escalationPolicyService = EscalationPolicyService()
+    private val onCallIncidentService = OnCallIncidentService()
 
     override val name: String = "On-Call"
     override val licenseFeature: String = "oncall"
@@ -64,10 +73,16 @@ class OnCallModule :
             escalationRoutes()
             priorityRoutes()
             deviceRoutes()
-            incidentRoutes({ incidentManagementService })
+            incidentRoutes({ onCallAlertService })
             twilioWebhookRoutes()
             notificationPreferencesRoutes { pushNotificationService }
         }
+    }
+
+    override fun contributeTools(registry: McpToolRegistry) {
+        registry.register(ListIncidentsTool())
+        registry.register(GetIncidentTool())
+        registry.register(ListSchedulesTool())
     }
 
     override fun startBackgroundJobs(application: Application) {
@@ -86,8 +101,8 @@ class OnCallModule :
                 redisClient = redisClient,
             )
 
-        incidentManagementService =
-            IncidentManagementService(
+        onCallAlertService =
+            OnCallAlertService(
                 escalationEngine = escalationEngine,
             )
 
@@ -130,27 +145,37 @@ class OnCallModule :
 
     override fun resolvePriority(
         organizationId: Int,
-        severity: String,
+        priority: String,
     ): PriorityInfo? {
-        val priority = priorityService.resolvePriority(organizationId, severity) ?: return null
-        return PriorityInfo(priorityLevel = priority.priorityLevel, label = priority.label)
+        val resolved = priorityService.resolvePriority(organizationId, priority) ?: return null
+        return PriorityInfo(priority = resolved.priority, label = resolved.label)
     }
 
     override fun shouldEscalate(
         organizationId: Int,
-        priorityLevel: String,
-    ): Boolean = businessHoursService.shouldEscalate(organizationId, priorityLevel)
+        priority: String,
+    ): Boolean = businessHoursService.shouldEscalate(organizationId, priority)
+
+    override fun resolveEscalationPolicyId(
+        organizationId: Int,
+        escalationPolicyResourceId: String,
+    ): Int? = escalationPolicyService.resolveEscalationPolicyId(organizationId, escalationPolicyResourceId)
+
+    override fun resolveAlertId(
+        organizationId: Int,
+        alertResourceId: String,
+    ): Int? = alertIdForResource(organizationId, alertResourceId)
 
     override suspend fun triggerEscalation(
         organizationId: Int,
         escalationPolicyId: Int,
         title: String,
         description: String?,
-        priorityLevel: String,
+        priority: String,
         alertSource: String,
         deduplicationKey: String?,
         metadata: String?,
-    ): Int? {
+    ): String? {
         val metadataMap: Map<String, JsonElement>? =
             metadata?.let {
                 try {
@@ -159,27 +184,45 @@ class OnCallModule :
                     null
                 }
             }
-        val incident =
+        val alert =
             escalationEngine.triggerEscalation(
                 organizationId = organizationId,
                 escalationPolicyId = escalationPolicyId,
                 title = title,
                 description = description,
-                priorityLevel = priorityLevel,
+                priority = priority,
                 alertSource = alertSource,
                 deduplicationKey = deduplicationKey,
                 metadata = metadataMap,
             )
-        return incident?.id
+        return alert?.id
     }
+
+    override suspend fun declareIncident(
+        organizationId: Int,
+        userId: Int,
+        alertId: Int?,
+        title: String,
+        description: String?,
+        severity: String,
+    ): String =
+        onCallIncidentService
+            .declareIncident(
+                organizationId = organizationId,
+                userId = userId,
+                alertId = alertId,
+                title = title,
+                description = description,
+                severity = severity,
+            ).id
 
     override fun getIncident(
         incidentId: Int,
         userId: Int,
     ): IncidentInfo? {
-        val incident = incidentManagementService.getIncident(incidentId, userId) ?: return null
+        val incident = onCallIncidentService.getIncident(incidentId) ?: return null
         return IncidentInfo(
-            id = incident.id,
+            id = incident.internalId,
             organizationId = incident.organizationId,
             title = incident.title,
             status = incident.status,
@@ -189,5 +232,32 @@ class OnCallModule :
     override fun acknowledgeIncident(
         incidentId: Int,
         userId: Int,
-    ): Boolean = incidentManagementService.acknowledge(incidentId, userId)
+    ): Boolean {
+        val incident = onCallIncidentService.getIncident(incidentId) ?: return false
+        return incident.alerts.fold(false) { acknowledged, alert ->
+            if (alert.status == "TRIGGERED") {
+                onCallAlertService.acknowledge(alert.internalId, userId) || acknowledged
+            } else {
+                acknowledged
+            }
+        }
+    }
+
+    override fun getAlert(
+        alertId: Int,
+        userId: Int,
+    ): IncidentInfo? {
+        val alert = onCallAlertService.getAlert(alertId, userId) ?: return null
+        return IncidentInfo(
+            id = alert.internalId,
+            organizationId = alert.organizationId,
+            title = alert.title,
+            status = alert.status,
+        )
+    }
+
+    override fun acknowledgeAlert(
+        alertId: Int,
+        userId: Int,
+    ): Boolean = onCallAlertService.acknowledge(alertId, userId)
 }

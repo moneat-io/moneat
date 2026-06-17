@@ -15,11 +15,13 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link} from '@tanstack/react-router'
-import {useQuery} from '@tanstack/react-query'
-import {api} from '@/lib/api'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
+import {api, type BillingUsage} from '@/lib/api'
 import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {Input} from '@/components/ui/input'
+import {Label} from '@/components/ui/label'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts'
@@ -33,10 +35,13 @@ import {
     HardDrive,
     MessageSquare,
     MonitorPlay,
+    RotateCcw,
+    SlidersHorizontal,
     Users,
     Zap
 } from 'lucide-react'
 import {useMemo, useState} from 'react'
+import {useToast} from '@/hooks/useToast'
 import {
     AdminSkeleton,
     ChartTooltipContent,
@@ -53,77 +58,238 @@ export const Route = createFileRoute('/admin/organizations/$orgId')({
   component: AdminOrgDetailPage,
 })
 
+const QUOTA_TARGET_PERCENT_MIN = 0
+const QUOTA_TARGET_PERCENT_MAX = 500
+const PERCENT_MULTIPLIER = 100
+
+const QUOTA_RESET_OPTIONS = [
+  {value: 'ingestion_bytes', label: 'Ingestion GB'},
+  {value: 'apm_spans', label: 'APM spans'},
+  {value: 'custom_metrics', label: 'Custom metrics'},
+  {value: 'infra_metrics', label: 'Infrastructure metrics'},
+  {value: 'analytics_pageviews', label: 'Analytics pageviews'},
+  {value: 'errors', label: 'Errors'},
+  {value: 'transactions', label: 'Transactions'},
+  {value: 'replays', label: 'Replays'},
+  {value: 'feedback', label: 'Feedback'},
+  {value: 'llm_events', label: 'LLM events'},
+] as const
+
+type AdminQuotaType = (typeof QUOTA_RESET_OPTIONS)[number]['value']
+
+interface QuotaUsageSnapshot {
+  used: number
+  limit: number
+}
+
+type UsageEventType = 'error' | 'transaction' | 'replay' | 'feedback' | 'log'
+
+interface AdminOrgUsageRow {
+  date: string
+  eventType: string
+  eventCount: number
+  bytesIngested: number
+}
+
+interface UsageByDateRow {
+  date: string
+  error: number
+  transaction: number
+  replay: number
+  feedback: number
+  log: number
+  total: number
+}
+
+interface UsageBreakdown {
+  error: number
+  transaction: number
+  replay: number
+  feedback: number
+  log: number
+  totalEvents: number
+  totalBytes: number
+}
+
+function emptyUsageByDateRow(date: string): UsageByDateRow {
+  return {date, error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, total: 0}
+}
+
+function emptyUsageBreakdown(): UsageBreakdown {
+  return {error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, totalEvents: 0, totalBytes: 0}
+}
+
+function normalizeEventType(eventType: string): UsageEventType | null {
+  switch (eventType) {
+    case 'error':
+    case 'transaction':
+    case 'replay':
+    case 'feedback':
+    case 'log':
+      return eventType
+    case 'logs':
+      return 'log'
+    default:
+      return null
+  }
+}
+
+function buildUsageByDate(usage: AdminOrgUsageRow[] | undefined): UsageByDateRow[] {
+  if (!usage) return []
+  const acc: Record<string, UsageByDateRow> = {}
+  for (const row of usage) {
+    acc[row.date] ??= emptyUsageByDateRow(row.date)
+    const key = normalizeEventType(row.eventType)
+    if (key != null) {
+      acc[row.date][key] += row.eventCount
+    }
+    acc[row.date].total += row.eventCount
+  }
+  return Object.values(acc).sort((a, b) => a.date.localeCompare(b.date))
+}
+
+function buildUsageByType(usage: AdminOrgUsageRow[] | undefined): UsageBreakdown {
+  if (!usage) return emptyUsageBreakdown()
+  return usage.reduce((acc, row) => {
+    const key = normalizeEventType(row.eventType)
+    if (key != null) {
+      acc[key] += row.eventCount
+    }
+    acc.totalEvents += row.eventCount
+    acc.totalBytes += row.bytesIngested
+    return acc
+  }, emptyUsageBreakdown())
+}
+
+function calculateTargetUsage(selectedQuota: QuotaUsageSnapshot | null, parsedTargetPercent: number | null): number | null {
+  if (selectedQuota == null || parsedTargetPercent == null) return null
+  return Math.round(selectedQuota.limit * parsedTargetPercent / PERCENT_MULTIPLIER)
+}
+
+function serviceCountLabel(count: number): string {
+  if (count === 1) return '1 service'
+  return `${count} services`
+}
+
+function getQuotaUsageSnapshot(usage: BillingUsage, quotaType: AdminQuotaType): QuotaUsageSnapshot {
+  switch (quotaType) {
+    case 'ingestion_bytes':
+      return {
+        used: Math.max(0, usage.usedBytes - (usage.usedApmSpanBytes ?? 0) - (usage.usedInfraMetricBytes ?? 0)),
+        limit: usage.bytesLimit,
+      }
+    case 'apm_spans':
+      return {used: usage.usedApmSpans ?? 0, limit: usage.apmSpanLimit ?? 0}
+    case 'custom_metrics':
+      return {used: usage.usedCustomMetrics ?? 0, limit: usage.customMetricLimit ?? 0}
+    case 'infra_metrics':
+      return {used: usage.usedInfraMetricSeriesHours ?? 0, limit: usage.infraMetricSeriesHourLimit ?? 0}
+    case 'analytics_pageviews':
+      return {used: usage.usedAnalyticsPageviews ?? 0, limit: usage.analyticsPageviewLimit ?? 0}
+    case 'errors':
+      return {used: usage.usedErrors, limit: usage.errorLimit}
+    case 'transactions':
+      return {used: usage.usedTransactions, limit: usage.transactionLimit}
+    case 'replays':
+      return {used: usage.usedReplays, limit: usage.replayLimit}
+    case 'feedback':
+      return {used: usage.usedFeedback, limit: usage.feedbackLimit}
+    case 'llm_events':
+      return {used: usage.usedLlmEvents ?? 0, limit: usage.llmEventLimit ?? 0}
+  }
+}
+
+function formatQuotaValue(quotaType: AdminQuotaType, value: number): string {
+  return quotaType === 'ingestion_bytes' ? formatBytes(value) : formatNumber(value)
+}
+
+function parseTargetPercent(value: string): number | null {
+  if (value.trim() === '') return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  if (parsed < QUOTA_TARGET_PERCENT_MIN || parsed > QUOTA_TARGET_PERCENT_MAX) return null
+  return parsed
+}
+
+export const adminOrganizationHelperTestHooks = {
+  buildUsageByDate,
+  buildUsageByType,
+  calculateTargetUsage,
+  getQuotaUsageSnapshot,
+  parseTargetPercent,
+  serviceCountLabel,
+}
+
 function AdminOrgDetailPage() {
   const {orgId} = Route.useParams()
+  const queryClient = useQueryClient()
+  const {toast} = useToast()
   const [usagePeriod, setUsagePeriod] = useState<'7d' | '30d'>('30d')
-
-  const normalizeEventType = (eventType: string): 'error' | 'transaction' | 'replay' | 'feedback' | 'log' | null => {
-    switch (eventType) {
-      case 'error':
-      case 'transaction':
-      case 'replay':
-      case 'feedback':
-      case 'log':
-        return eventType
-      case 'logs':
-        return 'log'
-      default:
-        return null
-    }
-  }
+  const [quotaType, setQuotaType] = useState<AdminQuotaType>('ingestion_bytes')
+  const [targetPercent, setTargetPercent] = useState('80')
 
   const {data: org, isLoading} = useQuery({
     queryKey: ['admin-org', orgId],
-    queryFn: () => api.getAdminOrgDetail(Number(orgId)),
+    queryFn: () => api.getAdminOrgDetail(orgId),
     enabled: !!orgId,
   })
 
   const {data: usage} = useQuery({
     queryKey: ['admin-org-usage', orgId, usagePeriod],
-    queryFn: () => api.getAdminOrgUsage(Number(orgId), usagePeriod),
+    queryFn: () => api.getAdminOrgUsage(orgId, usagePeriod),
     enabled: !!orgId,
   })
 
+  const {data: quotaUsage} = useQuery({
+    queryKey: ['admin-org-quota-usage', orgId],
+    queryFn: () => api.getAdminOrgQuotaUsage(orgId),
+    enabled: !!orgId,
+  })
+
+  const quotaResetMutation = useMutation({
+    mutationFn: (targetPercentValue: number) =>
+      api.resetAdminOrgQuotaUsage(orgId, {
+        quotaType,
+        targetPercent: targetPercentValue,
+      }),
+    onSuccess: (response) => {
+      const responseQuotaType = response.quotaType as AdminQuotaType
+      queryClient.setQueryData(['admin-org-quota-usage', orgId], response.usage)
+      void queryClient.invalidateQueries({queryKey: ['admin-org-quota-usage', orgId]})
+      toast({
+        title: 'Quota usage updated',
+        description:
+          `${formatQuotaValue(responseQuotaType, response.updatedUsed)} ${response.quotaType.replaceAll('_', ' ')}`,
+      })
+    },
+    onError: (error) => {
+      toast({
+        title: 'Quota update failed',
+        description: error instanceof Error ? error.message : 'Unable to update quota usage',
+        variant: 'destructive',
+      })
+    },
+  })
+
   // Aggregate usage by date for chart
-  const usageByDate = useMemo(() => {
-    if (!usage) return []
-    const acc: Record<
-      string,
-      {date: string; error: number; transaction: number; replay: number; feedback: number; log: number; total: number}
-    > = {}
-    for (const u of usage) {
-      if (!acc[u.date]) {
-        acc[u.date] = {date: u.date, error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, total: 0}
-      }
-      const key = normalizeEventType(u.eventType)
-      if (key && key in acc[u.date]) {
-        acc[u.date][key] += u.eventCount
-      }
-      acc[u.date].total += u.eventCount
-    }
-    return Object.values(acc).sort((a, b) => a.date.localeCompare(b.date))
-  }, [usage])
+  const usageByDate = useMemo(() => buildUsageByDate(usage), [usage])
 
   // Aggregate usage by event type for breakdown
-  const usageByType = useMemo(() => {
-    if (!usage) return {error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, totalEvents: 0, totalBytes: 0}
-    return usage.reduce(
-      (acc, u) => {
-        const key = normalizeEventType(u.eventType)
-        if (key && key in acc) acc[key] += u.eventCount
-        acc.totalEvents += u.eventCount
-        acc.totalBytes += u.bytesIngested
-        return acc
-      },
-      {error: 0, transaction: 0, replay: 0, feedback: 0, log: 0, totalEvents: 0, totalBytes: 0}
-    )
-  }, [usage])
+  const usageByType = useMemo(() => buildUsageByType(usage), [usage])
 
   if (isLoading || !org) {
     return <AdminSkeleton />
   }
 
   const periodLabel = usagePeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'
+  const selectedQuota = quotaUsage ? getQuotaUsageSnapshot(quotaUsage, quotaType) : null
+  const parsedTargetPercent = parseTargetPercent(targetPercent)
+  const canResetQuota =
+    selectedQuota != null &&
+    selectedQuota.limit > 0 &&
+    parsedTargetPercent != null &&
+    !quotaResetMutation.isPending
+  const targetUsage = calculateTargetUsage(selectedQuota, parsedTargetPercent)
 
   return (
     <div className="space-y-8">
@@ -141,10 +307,7 @@ function AdminOrgDetailPage() {
             <h2 className="text-2xl font-bold tracking-tight">{org.name}</h2>
             <PlanBadge plan={org.plan} />
             {org.subscriptionStatus && org.subscriptionStatus !== 'active' && (
-              <Badge
-                variant="outline"
-                className="text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700"
-              >
+              <Badge variant="warning">
                 {org.subscriptionStatus}
               </Badge>
             )}
@@ -168,23 +331,23 @@ function AdminOrgDetailPage() {
           title="Events This Month"
           value={formatNumber(org.eventCountThisMonth)}
           icon={Zap}
-          iconColor="text-orange-600 dark:text-orange-400"
-          iconBg="bg-orange-100 dark:bg-orange-950"
+          iconColor="text-chart-7"
+          iconBg="bg-chart-7/15"
         />
         <MetricCard
           title="Bytes Ingested"
           value={formatBytes(org.bytesIngestedThisMonth)}
           subtitle="This month"
           icon={HardDrive}
-          iconColor="text-blue-600 dark:text-blue-400"
-          iconBg="bg-blue-100 dark:bg-blue-950"
+          iconColor="text-chart-1"
+          iconBg="bg-chart-1/15"
         />
         <MetricCard
           title="Members"
           value={org.memberCount}
           icon={Users}
-          iconColor="text-violet-600 dark:text-violet-400"
-          iconBg="bg-violet-100 dark:bg-violet-950"
+          iconColor="text-chart-4"
+          iconBg="bg-chart-4/15"
         />
         <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -199,6 +362,87 @@ function AdminOrgDetailPage() {
         </Card>
       </div>
 
+      {/* Quota Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+            Quota Controls
+          </CardTitle>
+          <CardDescription>
+            {quotaUsage ? `${quotaUsage.periodStart} to ${quotaUsage.periodEnd}` : 'Current billing period'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-end">
+            <div className="space-y-2">
+              <Label htmlFor="quota-type">Type</Label>
+              <Select value={quotaType} onValueChange={(value) => setQuotaType(value as AdminQuotaType)}>
+                <SelectTrigger id="quota-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {QUOTA_RESET_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Current</Label>
+              <div className="h-9 rounded-md border px-3 py-2 text-sm tabular-nums">
+                {selectedQuota ? formatQuotaValue(quotaType, selectedQuota.used) : '\u2014'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quota-target-percent">Target %</Label>
+              <Input
+                id="quota-target-percent"
+                type="number"
+                min={QUOTA_TARGET_PERCENT_MIN}
+                max={QUOTA_TARGET_PERCENT_MAX}
+                step="1"
+                value={targetPercent}
+                onChange={(event) => setTargetPercent(event.target.value)}
+              />
+            </div>
+            <Button
+              type="button"
+              disabled={!canResetQuota}
+              onClick={() => {
+                if (parsedTargetPercent == null) return
+                quotaResetMutation.mutate(parsedTargetPercent)
+              }}
+            >
+              <RotateCcw className="h-4 w-4 mr-2" />
+              Set Usage
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border px-3 py-2">
+              <div className="text-xs text-muted-foreground">Limit</div>
+              <div className="text-sm font-medium tabular-nums">
+                {selectedQuota && selectedQuota.limit > 0 ? formatQuotaValue(quotaType, selectedQuota.limit) : '\u2014'}
+              </div>
+            </div>
+            <div className="rounded-md border px-3 py-2">
+              <div className="text-xs text-muted-foreground">Target</div>
+              <div className="text-sm font-medium tabular-nums">
+                {targetUsage != null ? formatQuotaValue(quotaType, targetUsage) : '\u2014'}
+              </div>
+            </div>
+            <div className="rounded-md border px-3 py-2">
+              <div className="text-xs text-muted-foreground">Status</div>
+              <div className="text-sm font-medium">
+                {quotaUsage ? (quotaUsage.withinQuota ? 'Within quota' : 'Over quota') : '\u2014'}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Event Type Breakdown */}
       <div>
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
@@ -207,7 +451,7 @@ function AdminOrgDetailPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <AlertCircle className="h-3 w-3 text-red-500" />
+              <AlertCircle className="h-3 w-3 text-danger-fg" />
               Errors
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.error)}</div>
@@ -220,7 +464,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <ArrowRightLeft className="h-3 w-3 text-blue-500" />
+              <ArrowRightLeft className="h-3 w-3 text-chart-1" />
               Transactions
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.transaction)}</div>
@@ -233,7 +477,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <MonitorPlay className="h-3 w-3 text-violet-500" />
+              <MonitorPlay className="h-3 w-3 text-chart-4" />
               Replays
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.replay)}</div>
@@ -246,7 +490,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <MessageSquare className="h-3 w-3 text-amber-500" />
+              <MessageSquare className="h-3 w-3 text-chart-5" />
               Feedback
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.feedback)}</div>
@@ -259,7 +503,7 @@ function AdminOrgDetailPage() {
           </Card>
           <Card className="px-4 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <FileText className="h-3 w-3 text-cyan-500" />
+              <FileText className="h-3 w-3 text-chart-6" />
               Logs
             </div>
             <div className="text-lg font-bold tabular-nums">{formatNumber(usageByType.log)}</div>
@@ -333,7 +577,7 @@ function AdminOrgDetailPage() {
         </Card>
       )}
 
-      {/* Members & Projects */}
+      {/* Members & Services */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -415,9 +659,9 @@ function AdminOrgDetailPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Projects</CardTitle>
+            <CardTitle className="text-base">Services</CardTitle>
             <CardDescription>
-              {org.projectCount} project{org.projectCount !== 1 ? 's' : ''}
+              {serviceCountLabel(org.projectCount)}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -449,7 +693,7 @@ function AdminOrgDetailPage() {
                 </TableBody>
               </Table>
             ) : (
-              <EmptyState message="No projects" icon={FolderKanban} />
+              <EmptyState message="No services" icon={FolderKanban} />
             )}
           </CardContent>
         </Card>

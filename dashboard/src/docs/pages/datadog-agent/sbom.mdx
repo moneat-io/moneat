@@ -13,14 +13,15 @@ A **Software Bill of Materials** (SBOM) is an inventory of software packages, li
 
 Moneat's SBOM feature automatically inventories software packages across your hosts and containers. The Datadog Agent scans installed packages and container images, reports them to Moneat, and the dashboard surfaces packages alongside known CVE counts so you can prioritize remediation.
 
-:::info[Enterprise feature]
-SBOM requires the Datadog Agent integration, available on Enterprise plans.
+:::info[Availability]
+SBOM inventory is included on standard plans. For self-hosted builds that use module licensing, enable the
+`datadog` module to expose the SBOM dashboard.
 :::
 
 ## Prerequisites
 
 - The Datadog Agent deployed on your hosts or as a DaemonSet in Kubernetes (see [Agent Setup](/docs/datadog-agent/agent-setup))
-- The Enterprise `datadog` module enabled
+- For self-hosted module-licensed builds, the `datadog` module enabled
 - Container scanning requires access to the container runtime socket
 
 ## Enable SBOM Collection

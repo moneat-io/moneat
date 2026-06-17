@@ -1,34 +1,23 @@
 import {createFileRoute, Outlet} from '@tanstack/react-router'
-import {useEffect} from 'react'
 import {LandingNavbar, LandingFooter} from '@/components/landing/LandingNavbar'
 import {Helmet} from 'react-helmet-async'
+import {useForceDarkTheme} from '@/components/landing/usePublicPageTheme'
 
 export const Route = createFileRoute('/blog')({
   component: BlogLayout,
 })
 
 function BlogLayout() {
-  useEffect(() => {
-    const root = document.documentElement
-    const hadDark = root.classList.contains('dark')
-    const prevColorScheme = root.style.colorScheme
-    root.classList.add('dark')
-    root.style.colorScheme = 'dark'
-    return () => {
-      if (!hadDark) root.classList.remove('dark')
-      root.style.colorScheme = prevColorScheme
-    }
-  }, [])
-
+  useForceDarkTheme()
   return (
     <>
       <Helmet>
-        <meta name="theme-color" content="#020617" />
+        <meta name="theme-color" content="#08090f" />
       </Helmet>
-      <div className="min-h-screen bg-slate-950 text-slate-100">
-        <LandingNavbar />
+      <div className="min-h-screen bg-[#08090f] font-display text-slate-300">
+        <LandingNavbar tone="dark" />
         <Outlet />
-        <LandingFooter />
+        <LandingFooter tone="dark" />
       </div>
     </>
   )

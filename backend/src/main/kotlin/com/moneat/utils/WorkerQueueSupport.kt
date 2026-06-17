@@ -16,22 +16,47 @@
 
 package com.moneat.utils
 
-import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionDlqRequest
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.monitoring.OperationalMetrics
 import kotlinx.coroutines.delay
 import mu.KLogger
 
+private val WORKER_PIPELINES =
+    mapOf(
+        "Event" to IngestionPipeline.EVENTS,
+        "Log" to IngestionPipeline.LOGS,
+        "LLM" to IngestionPipeline.LLM,
+        "Analytics" to IngestionPipeline.ANALYTICS,
+        "Trace" to IngestionPipeline.DD_TRACES,
+        "DD metric" to IngestionPipeline.DD_METRICS,
+        "DD event" to IngestionPipeline.DD_EVENTS,
+        "DD infra" to IngestionPipeline.DD_INFRA,
+        "Orchestrator" to IngestionPipeline.DD_ORCHESTRATOR,
+        "DBM" to IngestionPipeline.DD_DBM,
+        "Debugger" to IngestionPipeline.DD_DEBUGGER,
+        "Misc" to IngestionPipeline.DD_MISC,
+        "NDM" to IngestionPipeline.DD_NDM,
+        "Security" to IngestionPipeline.DD_SECURITY,
+        "Connector event" to IngestionPipeline.CONNECTOR_EVENTS,
+        "Connector import" to IngestionPipeline.CONNECTOR_IMPORTS,
+    )
+
 /**
- * Logs a Redis BRPOP loop failure and backs off. Use after [catch] for
+ * Logs a Redis queue loop failure and backs off. Use after [catch] for
  * [io.lettuce.core.RedisException] or [java.io.IOException].
  */
-suspend fun brpopLoopBackoff(
+suspend fun queueLoopBackoff(
     logger: KLogger,
     workerId: Int,
     scopeLabel: String,
     errorDelayMs: Long,
     e: Throwable,
 ) {
-    logger.error(e) { "$scopeLabel worker $workerId error in BRPOP loop" }
+    logger.error(e) { "$scopeLabel worker $workerId error in queue loop" }
+    OperationalMetrics.recordWorkerQueueLoopFailure(scopeLabel, workerId, e)
     delay(errorDelayMs)
 }
 
@@ -47,15 +72,36 @@ fun pushToDlq(
     workerId: Int,
     workerName: String,
     cause: Throwable,
-) {
-    logger.error(cause) {
-        "$workerName worker $workerId failed, pushing to DLQ"
+): Boolean {
+    val pipeline = workerName.toIngestionPipeline()
+    if (pipeline == null) {
+        logger.error(cause) { "Unknown ingestion pipeline for $workerName worker $workerId" }
+        OperationalMetrics.recordWorkerProcessingFailure(workerName, workerId, cause)
+        return false
     }
-    runCatching {
-        RedisConfig.sync().rpush(dlqKey, payload)
-    }.onFailure { dlqErr ->
-        logger.error(dlqErr) {
-            "Failed to write to DLQ for worker $workerId, dlqKey=$dlqKey"
-        }
-    }
+    val spec = IngestionQueueSettings.spec(
+        pipeline = pipeline,
+        queueKey = queueKeyForDlq(dlqKey),
+        dlqKey = dlqKey,
+        workerCount = 1,
+    )
+    return IngestionQueueClient.pushToDlq(
+        logger = logger,
+        request = IngestionDlqRequest(
+            spec = spec,
+            payload = payload,
+            workerId = workerId,
+            cause = cause,
+        ),
+    )
 }
+
+private fun String.toIngestionPipeline(): IngestionPipeline? =
+    WORKER_PIPELINES[this]
+
+private fun queueKeyForDlq(dlqKey: String): String =
+    when {
+        dlqKey.endsWith(":dlq") -> dlqKey.removeSuffix(":dlq") + ":queue"
+        dlqKey.endsWith(":dead-letter") -> dlqKey.removeSuffix(":dead-letter") + ":queue"
+        else -> "$dlqKey:queue"
+    }

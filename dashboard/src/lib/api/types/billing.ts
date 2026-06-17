@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface BillingTierConfig {
-  id: number
+  id: string
   tierName: string
   version: number
   monthlyUnitLimit: number
@@ -28,6 +28,7 @@ export interface BillingTierConfig {
   retentionDays: number
   replayRetentionDays: number
   llmRetentionDays: number
+  apmTraceRetentionDays?: number
   statusPagesEnabled: boolean
   statusPageCustomDomainEnabled: boolean
   sessionReplayEnabled: boolean
@@ -69,6 +70,8 @@ export interface BillingTierConfig {
   apmSpanOverageRateCentsPer1m?: number
   monthlyCustomMetricLimit?: number
   customMetricOverageRateCentsPer100k?: number
+  monthlyInfraMetricSeriesHourLimit?: number
+  infraMetricOverageRateCentsPer100kSeriesHours?: number
   maxHosts?: number | null
   profilingEnabled?: boolean
   networkMonitoringEnabled?: boolean
@@ -87,13 +90,14 @@ export interface BillingPlansResponse {
 }
 
 export interface BillingUsage {
-  organizationId: number
+  organizationId: string
   periodStart: string
   periodEnd: string
   retentionDays: number
   logRetentionDays?: number
   replayRetentionDays?: number
   llmRetentionDays?: number
+  apmTraceRetentionDays?: number
   usedUnits: number
   usedErrors: number
   errorLimit: number
@@ -113,9 +117,11 @@ export interface BillingUsage {
   usedLlmBytes?: number
   usedProfilerBytes?: number
   usedApmSpanBytes?: number
+  usedInfraMetricBytes?: number
   bytesLimit: number
   baseLimitUnits: number
   paygLimitUnits: number
+  paygLimitBytes?: number
   totalLimitUnits: number
   paygBudgetCents: number
   paygUsedUnits: number
@@ -145,6 +151,10 @@ export interface BillingUsage {
   customMetricLimit?: number
   customMetricOverageCentsEstimate?: number
   customMetricOverageRateCentsPer100k?: number
+  usedInfraMetricSeriesHours?: number
+  infraMetricSeriesHourLimit?: number
+  infraMetricOverageCentsEstimate?: number
+  infraMetricOverageRateCentsPer100kSeriesHours?: number
   ingestionOverageCentsEstimate?: number
   ingestionOverageRateCentsPerGb?: number
   plan: string
@@ -153,6 +163,95 @@ export interface BillingUsage {
   bonusGbBytes?: number
   bonusUnits?: number
   bonusReason?: string
+}
+
+export interface ApmSpanUsageDebugGroup {
+  source: string
+  service: string
+  operation: string
+  resource: string
+  spanType: string
+  env: string
+  kind: string
+  scopeName: string
+  scopeVersion: string
+  projectId?: string | null
+  projectName?: string | null
+  projectSlug?: string | null
+  spanCount: number
+  traceCount: number
+  errorCount: number
+  avgDurationMs: number
+  maxDurationMs: number
+  percentage: number
+  sampleTraceId: string
+  latestSpanAt: string
+}
+
+export interface ApmSpanUsageDebugResponse {
+  organizationId: string
+  periodStart: string
+  periodEnd: string
+  totalSpans: number
+  groups: ApmSpanUsageDebugGroup[]
+}
+
+export interface BillingUsageInsightsResponse {
+  organizationId: string
+  periodStart: string
+  periodEnd: string
+  generatedAt: string
+  billingMode: 'cloud' | 'self_hosted'
+  usage: BillingUsage
+  dimensions: BillingInsightDimension[]
+  apmSpanDebug?: ApmSpanUsageDebugResponse | null
+}
+
+export interface BillingInsightDimension {
+  key: string
+  label: string
+  unit: string
+  used: number
+  baseLimit: number
+  effectiveLimit?: number | null
+  percentOfBase: number
+  percentOfEffective?: number | null
+  overageCentsEstimate: number
+  overageRateLabel?: string | null
+  forecast: BillingForecast
+  contributors: BillingContributor[]
+  daily: BillingInsightDailyPoint[]
+}
+
+export interface BillingForecast {
+  window: '7d' | 'period_to_date' | '30d' | 'insufficient_data' | string
+  confidence: 'high' | 'medium' | 'low' | string
+  dailyRate: number
+  projectedPeriodEndUsage: number
+  projectedBaseLimitHitDate?: string | null
+  projectedEffectiveLimitHitDate?: string | null
+  projectedOverageCents: number
+  riskLevel: 'ok' | 'watch' | 'warning' | 'critical' | string
+  summary: string
+}
+
+export interface BillingContributor {
+  key: string
+  label: string
+  kind: string
+  eventType?: string | null
+  projectId?: string | null
+  projectName?: string | null
+  projectSlug?: string | null
+  units: number
+  bytes: number
+  percentage: number
+}
+
+export interface BillingInsightDailyPoint {
+  date: string
+  value: number
+  bytes: number
 }
 
 export interface CheckoutSessionRequest {
@@ -205,6 +304,7 @@ export interface CreateTierVersionRequest {
   logRetentionDays?: number | null
   replayRetentionDays?: number | null
   llmRetentionDays?: number | null
+  apmTraceRetentionDays?: number | null
   statusPagesEnabled?: boolean | null
   statusPageCustomDomainEnabled?: boolean | null
   sessionReplayEnabled?: boolean | null
@@ -235,6 +335,8 @@ export interface CreateTierVersionRequest {
   analyticsRetentionDays?: number | null
   monthlyAnalyticsPageviewLimit?: number | null
   analyticsPageviewOverageRateCentsPer100k?: number | null
+  monthlyInfraMetricSeriesHourLimit?: number | null
+  infraMetricOverageRateCentsPer100kSeriesHours?: number | null
   stripeBasePriceId?: string | null
   stripeOveragePriceId?: string | null
   stripeYearlyBasePriceId?: string | null

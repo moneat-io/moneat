@@ -69,6 +69,23 @@ describe('initDatadog', () => {
     expect(rumCall.env).toBe('staging')
   })
 
+  it('passes release version to RUM and browser logs', async () => {
+    const {datadogRum} = await import('@datadog/browser-rum')
+    const {datadogLogs} = await import('@datadog/browser-logs')
+
+    initDatadog({
+      applicationId: 'app-123',
+      clientToken: 'tok-456',
+      version: '2026.06.10',
+    })
+
+    const rumCall = vi.mocked(datadogRum.init).mock.calls[0][0]
+    const logsCall = vi.mocked(datadogLogs.init).mock.calls[0][0]
+
+    expect(rumCall.version).toBe('2026.06.10')
+    expect(logsCall.version).toBe('2026.06.10')
+  })
+
   it.each([
     {desc: 'applicationId is empty', applicationId: '', clientToken: 'tok-456'},
     {desc: 'clientToken is empty', applicationId: 'app-123', clientToken: ''},

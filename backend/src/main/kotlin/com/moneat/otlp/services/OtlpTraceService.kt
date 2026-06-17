@@ -17,8 +17,11 @@
 package com.moneat.otlp.services
 
 import com.google.protobuf.InvalidProtocolBufferException
+import com.moneat.apm.services.ApmServiceMapRollups
+import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.otlp.ResourceContext
@@ -61,6 +64,7 @@ private const val OTLP_SPAN_KIND_CLIENT = 3
 private const val OTLP_SPAN_KIND_PRODUCER = 4
 private const val OTLP_SPAN_KIND_CONSUMER = 5
 private const val ERROR_MESSAGE_PREVIEW_LENGTH = 500
+private const val OTLP_SOURCE = "otlp"
 
 @Serializable
 data class OtlpSpanInsert(
@@ -68,7 +72,9 @@ data class OtlpSpanInsert(
     val spanIdHex: String,
     val parentIdHex: String,
     val organizationId: Long,
+    val projectId: Long? = null,
     val name: String,
+    val serviceNamespace: String = "",
     val service: String,
     val resource: String,
     val kind: String,
@@ -166,7 +172,9 @@ class OtlpTraceService(
             spanIdHex = spanId,
             parentIdHex = parentSpanId,
             organizationId = 0,
+            projectId = null,
             name = span.name,
+            serviceNamespace = resourceCtx.serviceNamespace,
             service = resourceCtx.serviceName,
             resource = span.name,
             kind = kind,
@@ -278,7 +286,9 @@ class OtlpTraceService(
             spanIdHex = spanId,
             parentIdHex = parentSpanId,
             organizationId = 0,
+            projectId = null,
             name = name,
+            serviceNamespace = resourceCtx.serviceNamespace,
             service = resourceCtx.serviceName,
             resource = name,
             kind = kind,
@@ -311,7 +321,7 @@ class OtlpTraceService(
             spans = withOrg
         )
         val encoded = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, encoded)
+        IngestionQueueClient.enqueue(IngestionPipeline.OTLP_TRACES, queueKey, encoded)
         return withOrg.size
     }
 
@@ -334,6 +344,8 @@ class OtlpTraceService(
                 $parentIdLow,
                 $parentIdHigh,
                 ${s.organizationId},
+                ${s.projectId ?: 0L},
+                ${s.projectId ?: 0L},
                 '${escapeSql(s.name)}',
                 '${escapeSql(s.service)}',
                 '${escapeSql(s.resource)}',
@@ -349,7 +361,7 @@ class OtlpTraceService(
                 '${escapeSql(s.traceIdHex)}',
                 '${escapeSql(s.spanIdHex)}',
                 '${escapeSql(s.parentIdHex)}',
-                'otlp',
+                '$OTLP_SOURCE',
                 '${escapeSql(s.kind)}',
                 ${s.statusCode},
                 '${escapeSql(s.statusMessage)}',
@@ -363,7 +375,8 @@ class OtlpTraceService(
 
         val insert = """
             INSERT INTO `$clickhouseDb`.apm_spans (
-                span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high, organization_id,
+                span_id, span_id_high, trace_id, trace_id_high, parent_id, parent_id_high,
+                organization_id, service_id, project_id,
                 name, service, resource, type,
                 start, duration, error,
                 meta, metrics, host, env, version,
@@ -377,11 +390,13 @@ class OtlpTraceService(
 
         val response = ClickHouseClient.execute(insert)
         check(response.status.isSuccess()) { "Failed to insert OTLP spans into ClickHouse" }
+        ApmServiceMapRollups.insertForSpans(clickhouseDb, batch.spans.toServiceMapSpans())
 
         val totalBytes = batch.spans.calculateBillableBytes()
         usageTracking.recordOrgUsage(
             batch.organizationId.toInt(),
             "otlp_trace",
+            batch.spans.size,
             totalBytes
         )
     }
@@ -394,6 +409,22 @@ class OtlpTraceService(
         OTLP_SPAN_KIND_CONSUMER -> "CONSUMER"
         else -> ""
     }
+
+    private fun List<OtlpSpanInsert>.toServiceMapSpans(): List<ApmServiceMapSpan> =
+        map { span ->
+            ApmServiceMapSpan(
+                organizationId = span.organizationId,
+                traceKey = span.traceIdHex,
+                spanKey = span.spanIdHex,
+                parentKey = span.parentIdHex,
+                service = span.service,
+                env = span.env,
+                source = OTLP_SOURCE,
+                startNanos = span.startNanos,
+                durationNanos = span.durationNanos,
+                error = span.error,
+            )
+        }
 
     private fun protoEventsToJson(events: List<Span.Event>): String {
         val jsonEvents =

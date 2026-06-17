@@ -24,8 +24,9 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import java.util.*
+import java.util.UUID
 import kotlin.time.Instant
+import kotlin.uuid.Uuid
 
 object UUIDSerializer : KSerializer<UUID> {
     override val descriptor: SerialDescriptor =
@@ -56,8 +57,8 @@ object KotlinInstantSerializer : KSerializer<Instant> {
 // Dashboard-facing models
 @Serializable
 data class HostResponse(
-    val id: Int,
-    @SerialName("project_id") val projectId: Long,
+    val id: String,
+    @SerialName("project_id") val projectId: String? = null,
     val name: String,
     val hostname: String,
     val status: String,
@@ -96,7 +97,7 @@ data class LatestMetrics(
 @Serializable
 data class HistoricalMetricsResponse(
     @SerialName("system_id") val systemId: String,
-    @SerialName("host_id") val hostId: Int? = null,
+    @SerialName("host_id") val hostId: String? = null,
     val from: Long,
     val to: Long,
     @SerialName("interval_seconds") val intervalSeconds: Int,
@@ -127,7 +128,7 @@ data class ContainerStatsResponse(
 @Serializable
 data class ContainerWithSystem(
     @SerialName("system_id") val systemId: String,
-    @SerialName("host_id") val hostId: Int? = null,
+    @SerialName("host_id") val hostId: String? = null,
     @SerialName("system_name") val systemName: String,
     val name: String,
     val id: String,
@@ -181,15 +182,16 @@ data class ContainerMetricDataPoint(
 
 @Serializable
 data class AlertResponse(
-    val id: Int,
+    val id: String,
     @SerialName("system_id") val systemId: String? = null,
-    @SerialName("host_id") val hostId: Int? = null,
+    @SerialName("host_id") val hostId: String? = null,
     val scope: String = "system",
     val metric: String,
     val condition: String,
     val threshold: Double,
     @SerialName("duration_seconds") val durationSeconds: Int,
     val enabled: Boolean,
+    @SerialName("alert_priority") val alertPriority: String? = null,
     @SerialName("last_triggered_at") val lastTriggeredAt: Long?,
     @SerialName("created_at") val createdAt: Long
 )
@@ -208,7 +210,11 @@ data class CreateAlertRequest(
     val condition: String,
     val threshold: Double,
     @SerialName("duration_seconds") val durationSeconds: Int = 0,
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    val alertPriority: String? = null,
+    @SerialName("alert_priority") val alertPrioritySnake: String? = null,
+    val incidentSeverity: String? = null,
+    @SerialName("incident_severity") val legacyIncidentSeveritySnake: String? = null
 )
 
 @Serializable
@@ -222,18 +228,21 @@ data class UpdateAlertRequest(
     val condition: String? = null,
     val threshold: Double? = null,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
-    val enabled: Boolean? = null
+    val enabled: Boolean? = null,
+    val alertPriority: String? = null,
+    @SerialName("alert_priority") val alertPrioritySnake: String? = null,
+    val incidentSeverity: String? = null,
+    @SerialName("incident_severity") val legacyIncidentSeveritySnake: String? = null
 )
 
 // Internal data classes
-@Serializable
 data class HostData(
     val id: Int,
+    val resourceId: Uuid = Uuid.random(),
     val organizationId: Int,
     val hostname: String,
     val displayName: String?,
     val status: String,
-    @Serializable(with = KotlinInstantSerializer::class)
     val lastSeenAt: kotlin.time.Instant?,
     val agentVersion: String?,
     val os: String?,
@@ -242,9 +251,8 @@ data class HostData(
     val processor: String? = null,
     val cpuCores: Int? = null,
     val memoryTotalKb: Long? = null,
-    @Serializable(with = KotlinInstantSerializer::class)
+    val tags: Map<String, String> = emptyMap(),
     val firstSeenAt: kotlin.time.Instant,
-    @Serializable(with = KotlinInstantSerializer::class)
     val createdAt: kotlin.time.Instant
 )
 
@@ -257,12 +265,12 @@ data class CreateSilencePeriodRequest(
 
 @Serializable
 data class SilencePeriodResponse(
-    val id: Int,
-    @SerialName("organization_id") val organizationId: Int,
+    val id: String,
+    @SerialName("organization_id") val organizationId: String,
     val reason: String?,
     @SerialName("starts_at") val startsAt: Long,
     @SerialName("ends_at") val endsAt: Long,
-    @SerialName("created_by") val createdBy: Int,
+    @SerialName("created_by") val createdBy: String,
     @SerialName("created_at") val createdAt: Long
 )
 
@@ -277,6 +285,7 @@ data class AlertData(
     val enabled: Boolean,
     val lastTriggeredAt: kotlin.time.Instant?,
     val createdAt: kotlin.time.Instant,
+    val alertPriority: String? = null,
     val scope: String = "host",
     val templateAlertId: Int? = null
 )
@@ -284,6 +293,7 @@ data class AlertData(
 /** Row returned from HostAlerts or OrganizationAlertTemplates by repository methods. */
 data class AlertRow(
     val id: Int,
+    val resourceId: Uuid = Uuid.random(),
     val hostId: Int,
     val organizationId: Int,
     val metric: String,
@@ -293,6 +303,7 @@ data class AlertRow(
     val enabled: Boolean,
     val lastTriggeredAt: kotlin.time.Instant?,
     val createdAt: kotlin.time.Instant,
+    val alertPriority: String? = null,
     val scope: String = "host"
 )
 
@@ -313,6 +324,7 @@ data class CreateAlertData(
     val threshold: Double,
     val durationSeconds: Int,
     val enabled: Boolean,
+    val alertPriority: String?,
     val scope: String
 )
 
@@ -322,7 +334,8 @@ data class UpdateAlertData(
     val condition: String? = null,
     val threshold: Double? = null,
     val durationSeconds: Int? = null,
-    val enabled: Boolean? = null
+    val enabled: Boolean? = null,
+    val alertPriority: String? = null
 )
 
 @Serializable
@@ -332,7 +345,7 @@ data class CreateAgentApiKeyRequest(
 
 @Serializable
 data class CreateAgentApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("key_prefix") val keyPrefix: String,
     val key: String,
@@ -341,7 +354,7 @@ data class CreateAgentApiKeyResponse(
 
 @Serializable
 data class AgentApiKeyResponse(
-    val id: Int,
+    val id: String,
     val name: String,
     @SerialName("key_prefix") val keyPrefix: String,
     @SerialName("created_at") val createdAt: String,

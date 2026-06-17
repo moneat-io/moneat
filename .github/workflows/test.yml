@@ -29,22 +29,119 @@ env:
   COVERAGE_GATE_PHASE: ${{ github.event.inputs.coverage_gate_phase || 'hard' }}
 
 jobs:
-  # PR-Required: Backend unit and route tests
-  backend-unit:
+  changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.classify.outputs.backend }}
+      frontend: ${{ steps.classify.outputs.frontend }}
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Classify test-relevant changes
+        id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          backend=false
+          frontend=false
+
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            backend=true
+            frontend=true
+          elif ! gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" \
+            --jq '.[].filename' > changed-files.txt; then
+            echo "::warning::Unable to list PR files; running both unit suites."
+            backend=true
+            frontend=true
+          else
+            while IFS= read -r changed_file; do
+              case "$changed_file" in
+                .github/workflows/test.yml|.github/workflows/release.yml|.github/actions/*|sonar-project.properties)
+                  backend=true
+                  frontend=true
+                  ;;
+                .env.example|ESSENTIAL_ENV_VARS.md|docker-compose.yml|docker-compose.*.yml|scripts/*)
+                  backend=true
+                  frontend=true
+                  ;;
+                backend/*|ee/backend/*|clickhouse-config/*)
+                  backend=true
+                  ;;
+                dashboard/*|packages/analytics/*)
+                  frontend=true
+                  ;;
+              esac
+            done < changed-files.txt
+          fi
+
+          echo "backend=${backend}" >> "$GITHUB_OUTPUT"
+          echo "frontend=${frontend}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Test change classification"
+            echo ""
+            echo "| Area | Run unit job |"
+            echo "|------|--------------|"
+            echo "| Backend | ${backend} |"
+            echo "| Frontend | ${frontend} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # PR-Required: Migration version numbering against the target branch
+  migration-versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check migration versions
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${BASE_REF}" ]]; then
+            auth_remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+            git fetch --no-tags "${auth_remote}" "${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+            python3 scripts/check-migration-versions.py --base-ref "origin/${BASE_REF}"
+          else
+            python3 scripts/check-migration-versions.py
+          fi
+
+  # PR-Required: Backend unit and route tests
+  backend-unit:
+    needs: changes
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/.gradle/caches
@@ -53,19 +150,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Run detekt (Kotlin linter)
-        working-directory: backend
-        run: ./gradlew detekt --no-daemon
-
       - name: Run backend unit tests
         working-directory: backend
         run: ./gradlew test --no-daemon
-        env:
-          COVERAGE_GATE_PHASE: ${{ env.COVERAGE_GATE_PHASE }}
-
-      - name: Generate JaCoCo report
-        working-directory: backend
-        run: ./gradlew jacocoTestReport --no-daemon
         env:
           COVERAGE_GATE_PHASE: ${{ env.COVERAGE_GATE_PHASE }}
 
@@ -78,56 +165,562 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: backend-unit-test-results
           path: backend/build/test-results/test/
 
+      - name: Upload AI feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ai-test-results
+          path: backend/features/ai/build/test-results/test/
+
+      - name: Upload Analytics feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-analytics-test-results
+          path: backend/features/analytics/build/test-results/test/
+
+      - name: Upload Account Deletion feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-account-deletion-test-results
+          path: backend/features/account-deletion/build/test-results/test/
+
+      - name: Upload Auth Tokens feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-auth-tokens-test-results
+          path: backend/features/auth-tokens/build/test-results/test/
+
+      - name: Upload Contact feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-contact-test-results
+          path: backend/features/contact/build/test-results/test/
+
+      - name: Upload Incident feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-incident-test-results
+          path: backend/features/incident/build/test-results/test/
+
+      - name: Upload Uptime feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-uptime-test-results
+          path: backend/features/uptime/build/test-results/test/
+
+      - name: Upload Datadog feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-datadog-test-results
+          path: backend/features/datadog/build/test-results/test/
+
+      - name: Upload Feature Flags feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-featureflags-test-results
+          path: backend/features/featureflags/build/test-results/test/
+
+      - name: Upload LLM feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-llm-test-results
+          path: backend/features/llm/build/test-results/test/
+
+      - name: Upload MCP feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-mcp-test-results
+          path: backend/features/mcp/build/test-results/test/
+
+      - name: Upload Monitoring feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-monitoring-test-results
+          path: backend/features/monitoring/build/test-results/test/
+
+      - name: Upload Organization feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-org-test-results
+          path: backend/features/org/build/test-results/test/
+
+      - name: Upload Overview feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-overview-test-results
+          path: backend/features/overview/build/test-results/test/
+
+      - name: Upload Pulse feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-pulse-test-results
+          path: backend/features/pulse/build/test-results/test/
+
+      - name: Upload Releases feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-releases-test-results
+          path: backend/features/releases/build/test-results/test/
+
+      - name: Upload Security feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-security-test-results
+          path: backend/features/security/build/test-results/test/
+
+      - name: Upload SSO feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-sso-test-results
+          path: backend/features/sso/build/test-results/test/
+
+      - name: Upload Status Pages feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-statuspage-test-results
+          path: backend/features/statuspage/build/test-results/test/
+
+      - name: Upload Summary feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-summary-test-results
+          path: backend/features/summary/build/test-results/test/
+
+      - name: Upload Synthetics feature test results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-synthetics-test-results
+          path: backend/features/synthetics/build/test-results/test/
+
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
 
+      - name: Upload AI feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ai-coverage-report
+          path: backend/features/ai/build/reports/jacoco/test/
+
+      - name: Upload Analytics feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-analytics-coverage-report
+          path: backend/features/analytics/build/reports/jacoco/test/
+
+      - name: Upload Account Deletion feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-account-deletion-coverage-report
+          path: backend/features/account-deletion/build/reports/jacoco/test/
+
+      - name: Upload Auth Tokens feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-auth-tokens-coverage-report
+          path: backend/features/auth-tokens/build/reports/jacoco/test/
+
+      - name: Upload Contact feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-contact-coverage-report
+          path: backend/features/contact/build/reports/jacoco/test/
+
+      - name: Upload Incident feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-incident-coverage-report
+          path: backend/features/incident/build/reports/jacoco/test/
+
+      - name: Upload Uptime feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-uptime-coverage-report
+          path: backend/features/uptime/build/reports/jacoco/test/
+
+      - name: Upload Datadog feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-datadog-coverage-report
+          path: backend/features/datadog/build/reports/jacoco/test/
+
+      - name: Upload Feature Flags feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-featureflags-coverage-report
+          path: backend/features/featureflags/build/reports/jacoco/test/
+
+      - name: Upload LLM feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-llm-coverage-report
+          path: backend/features/llm/build/reports/jacoco/test/
+
+      - name: Upload MCP feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-mcp-coverage-report
+          path: backend/features/mcp/build/reports/jacoco/test/
+
+      - name: Upload Monitoring feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-monitoring-coverage-report
+          path: backend/features/monitoring/build/reports/jacoco/test/
+
+      - name: Upload Organization feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-org-coverage-report
+          path: backend/features/org/build/reports/jacoco/test/
+
+      - name: Upload Overview feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-overview-coverage-report
+          path: backend/features/overview/build/reports/jacoco/test/
+
+      - name: Upload Pulse feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-pulse-coverage-report
+          path: backend/features/pulse/build/reports/jacoco/test/
+
+      - name: Upload Releases feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-releases-coverage-report
+          path: backend/features/releases/build/reports/jacoco/test/
+
+      - name: Upload Security feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-security-coverage-report
+          path: backend/features/security/build/reports/jacoco/test/
+
+      - name: Upload SSO feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-sso-coverage-report
+          path: backend/features/sso/build/reports/jacoco/test/
+
+      - name: Upload Status Pages feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-statuspage-coverage-report
+          path: backend/features/statuspage/build/reports/jacoco/test/
+
+      - name: Upload Summary feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-summary-coverage-report
+          path: backend/features/summary/build/reports/jacoco/test/
+
+      - name: Upload Synthetics feature coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-synthetics-coverage-report
+          path: backend/features/synthetics/build/reports/jacoco/test/
+
+  backend-detekt:
+    needs: changes
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.backend == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Run detekt (Kotlin linter)
+        working-directory: backend
+        run: ./gradlew detekt --no-daemon
+
       - name: Upload detekt report (Sonar)
         if: success()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
 
-  # SonarQube: reuse backend-unit artifacts (JaCoCo + detekt); compile only, then scan
+      - name: Upload feature-spi detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-feature-spi-detekt-report
+          path: backend/feature-spi/build/reports/detekt/
+
+      - name: Upload ingest-common detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ingest-common-detekt-report
+          path: backend/ingest-common/build/reports/detekt/
+
+      - name: Upload AI feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-ai-detekt-report
+          path: backend/features/ai/build/reports/detekt/
+
+      - name: Upload Analytics feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-analytics-detekt-report
+          path: backend/features/analytics/build/reports/detekt/
+
+      - name: Upload Account Deletion feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-account-deletion-detekt-report
+          path: backend/features/account-deletion/build/reports/detekt/
+
+      - name: Upload Auth Tokens feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-auth-tokens-detekt-report
+          path: backend/features/auth-tokens/build/reports/detekt/
+
+      - name: Upload Contact feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-contact-detekt-report
+          path: backend/features/contact/build/reports/detekt/
+
+      - name: Upload Incident feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-incident-detekt-report
+          path: backend/features/incident/build/reports/detekt/
+
+      - name: Upload Uptime feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-uptime-detekt-report
+          path: backend/features/uptime/build/reports/detekt/
+
+      - name: Upload Datadog feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-datadog-detekt-report
+          path: backend/features/datadog/build/reports/detekt/
+
+      - name: Upload Feature Flags feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-featureflags-detekt-report
+          path: backend/features/featureflags/build/reports/detekt/
+
+      - name: Upload LLM feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-llm-detekt-report
+          path: backend/features/llm/build/reports/detekt/
+
+      - name: Upload MCP feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-mcp-detekt-report
+          path: backend/features/mcp/build/reports/detekt/
+
+      - name: Upload Monitoring feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-monitoring-detekt-report
+          path: backend/features/monitoring/build/reports/detekt/
+
+      - name: Upload Organization feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-org-detekt-report
+          path: backend/features/org/build/reports/detekt/
+
+      - name: Upload Overview feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-overview-detekt-report
+          path: backend/features/overview/build/reports/detekt/
+
+      - name: Upload Pulse feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-pulse-detekt-report
+          path: backend/features/pulse/build/reports/detekt/
+
+      - name: Upload Releases feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-releases-detekt-report
+          path: backend/features/releases/build/reports/detekt/
+
+      - name: Upload Security feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-security-detekt-report
+          path: backend/features/security/build/reports/detekt/
+
+      - name: Upload SSO feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-sso-detekt-report
+          path: backend/features/sso/build/reports/detekt/
+
+      - name: Upload Status Pages feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-statuspage-detekt-report
+          path: backend/features/statuspage/build/reports/detekt/
+
+      - name: Upload Summary feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-summary-detekt-report
+          path: backend/features/summary/build/reports/detekt/
+
+      - name: Upload Synthetics feature detekt report (Sonar)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: backend-synthetics-detekt-report
+          path: backend/features/synthetics/build/reports/detekt/
+
+  # SonarQube: reuse backend and frontend artifacts, then scan Kotlin and dashboard sources
   sonarqube:
     name: SonarQube Analysis
-    if: github.event_name != 'schedule'
-    needs: [backend-unit]
+    if: >-
+      ${{
+        always() &&
+        github.event_name != 'schedule' &&
+        (needs.backend-unit.result == 'success' || needs.backend-unit.result == 'skipped') &&
+        (needs.backend-detekt.result == 'success' || needs.backend-detekt.result == 'skipped') &&
+        (needs.frontend-unit.result == 'success' || needs.frontend-unit.result == 'skipped') &&
+        (
+          needs.backend-unit.result == 'success' ||
+          needs.backend-detekt.result == 'success' ||
+          needs.frontend-unit.result == 'success'
+        )
+      }}
+    needs: [backend-unit, backend-detekt, frontend-unit]
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Cache SonarQube packages
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/.gradle/caches
@@ -137,35 +730,369 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Download backend coverage (JaCoCo)
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: backend-coverage-report
           path: backend/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download AI feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-ai-coverage-report
+          path: backend/features/ai/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Analytics feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-analytics-coverage-report
+          path: backend/features/analytics/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Account Deletion feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-account-deletion-coverage-report
+          path: backend/features/account-deletion/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Auth Tokens feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-auth-tokens-coverage-report
+          path: backend/features/auth-tokens/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Contact feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-contact-coverage-report
+          path: backend/features/contact/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Incident feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-incident-coverage-report
+          path: backend/features/incident/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Uptime feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-uptime-coverage-report
+          path: backend/features/uptime/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Datadog feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-datadog-coverage-report
+          path: backend/features/datadog/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Feature Flags feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-featureflags-coverage-report
+          path: backend/features/featureflags/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download LLM feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-llm-coverage-report
+          path: backend/features/llm/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download MCP feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-mcp-coverage-report
+          path: backend/features/mcp/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Monitoring feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-monitoring-coverage-report
+          path: backend/features/monitoring/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Organization feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-org-coverage-report
+          path: backend/features/org/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Overview feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-overview-coverage-report
+          path: backend/features/overview/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Pulse feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-pulse-coverage-report
+          path: backend/features/pulse/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Releases feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-releases-coverage-report
+          path: backend/features/releases/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Security feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-security-coverage-report
+          path: backend/features/security/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download SSO feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-sso-coverage-report
+          path: backend/features/sso/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Status Pages feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-statuspage-coverage-report
+          path: backend/features/statuspage/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Summary feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-summary-coverage-report
+          path: backend/features/summary/build/reports/jacoco/test/
+        continue-on-error: true
+
+      - name: Download Synthetics feature coverage (JaCoCo)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-synthetics-coverage-report
+          path: backend/features/synthetics/build/reports/jacoco/test/
+        continue-on-error: true
 
       - name: Download detekt report
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: backend-detekt-report
           path: backend/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download feature-spi detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-feature-spi-detekt-report
+          path: backend/feature-spi/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download ingest-common detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-ingest-common-detekt-report
+          path: backend/ingest-common/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download AI feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-ai-detekt-report
+          path: backend/features/ai/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Analytics feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-analytics-detekt-report
+          path: backend/features/analytics/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Account Deletion feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-account-deletion-detekt-report
+          path: backend/features/account-deletion/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Auth Tokens feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-auth-tokens-detekt-report
+          path: backend/features/auth-tokens/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Contact feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-contact-detekt-report
+          path: backend/features/contact/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Incident feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-incident-detekt-report
+          path: backend/features/incident/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Uptime feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-uptime-detekt-report
+          path: backend/features/uptime/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Datadog feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-datadog-detekt-report
+          path: backend/features/datadog/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Feature Flags feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-featureflags-detekt-report
+          path: backend/features/featureflags/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download LLM feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-llm-detekt-report
+          path: backend/features/llm/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download MCP feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-mcp-detekt-report
+          path: backend/features/mcp/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Monitoring feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-monitoring-detekt-report
+          path: backend/features/monitoring/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Organization feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-org-detekt-report
+          path: backend/features/org/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Overview feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-overview-detekt-report
+          path: backend/features/overview/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Pulse feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-pulse-detekt-report
+          path: backend/features/pulse/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Releases feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-releases-detekt-report
+          path: backend/features/releases/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Security feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-security-detekt-report
+          path: backend/features/security/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download SSO feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-sso-detekt-report
+          path: backend/features/sso/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Status Pages feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-statuspage-detekt-report
+          path: backend/features/statuspage/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Summary feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-summary-detekt-report
+          path: backend/features/summary/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download Synthetics feature detekt report
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: backend-synthetics-detekt-report
+          path: backend/features/synthetics/build/reports/detekt/
+        continue-on-error: true
+
+      - name: Download frontend coverage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: frontend-test-results
+          path: dashboard/coverage/
+        continue-on-error: true
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        run: npm ci
 
       - name: Compile Kotlin (bytecode for Sonar)
         working-directory: backend
         run: ./gradlew testClasses integrationTestClasses --no-daemon
 
+      - name: Resolve Sonar project version
+        id: sonar-version
+        run: |
+          set -euo pipefail
+
+          version="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          if [[ -z "$version" ]]; then
+            version="0.0.0-${GITHUB_SHA::12}"
+          fi
+
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602
         with:
-          projectBaseDir: backend
+          args: >
+            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
 
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
-        uses: sonarsource/sonarqube-quality-gate-action@master
+        uses: sonarsource/sonarqube-quality-gate-action@8e9b0ca0a7273d6f16986388d98393efdfcf56fd
         with:
           pollingTimeoutSec: 600
-          scanMetadataReportFile: backend/.scannerwork/report-task.txt
+          scanMetadataReportFile: .scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
@@ -182,7 +1109,7 @@ jobs:
           SONAR_HOST="https://sonar.moneat.io"
           PROJECT_KEY="moneat"
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          REPORT_FILE="backend/.scannerwork/report-task.txt"
+          REPORT_FILE=".scannerwork/report-task.txt"
 
           if [[ ! -f "$REPORT_FILE" ]]; then
             echo "::warning::$REPORT_FILE not found — skipping PR comment"
@@ -309,14 +1236,18 @@ jobs:
 
   # PR-Required: Frontend unit tests
   frontend-unit:
+    needs: changes
+    if: ${{ always() && (needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -329,6 +1260,18 @@ jobs:
       - name: Run ESLint
         working-directory: dashboard
         run: npm run lint
+
+      - name: Run dead code check
+        working-directory: dashboard
+        run: npm run lint:deadcode
+
+      - name: Run dependency boundary check
+        working-directory: dashboard
+        run: npm run lint:boundaries
+
+      - name: Run TypeScript typecheck
+        working-directory: dashboard
+        run: npm run typecheck
 
       - name: Run frontend tests
         working-directory: dashboard
@@ -343,7 +1286,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: frontend-test-results
           path: dashboard/coverage/
@@ -355,16 +1298,18 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Cache Gradle packages
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
         with:
           path: |
             ~/.gradle/caches
@@ -380,7 +1325,7 @@ jobs:
 
       - name: Upload integration test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: backend-integration-test-results
           path: backend/build/test-results/integrationTest/
@@ -392,7 +1337,7 @@ jobs:
     if: false && always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Analyze test flakiness
         run: |
@@ -478,23 +1423,23 @@ jobs:
   # Coverage verification with staged gates
   coverage-check:
     runs-on: ubuntu-latest
-    needs: [backend-unit, frontend-unit]
+    needs: [changes, backend-unit, frontend-unit]
     if: always()
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
 
       - name: Download backend coverage
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: backend-coverage-report
           path: backend-coverage
         continue-on-error: true
 
       - name: Download frontend coverage
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: frontend-test-results
           path: frontend-coverage
@@ -502,6 +1447,9 @@ jobs:
 
       - name: Parse coverage reports
         id: parse_coverage
+        env:
+          BACKEND_REPORT_EXPECTED: ${{ needs.changes.result != 'success' || needs.changes.outputs.backend == 'true' }}
+          FRONTEND_REPORT_EXPECTED: ${{ needs.changes.result != 'success' || needs.changes.outputs.frontend == 'true' }}
         run: |
           python3 <<'PY'
           import json
@@ -515,6 +1463,12 @@ jobs:
 
           def pct(covered: int, total: int) -> float:
               return round((covered / total) * 100, 1) if total > 0 else 0.0
+
+          def bool_output(value: bool) -> str:
+              return "true" if value else "false"
+
+          backend_report_expected = os.environ["BACKEND_REPORT_EXPECTED"] == "true"
+          frontend_report_expected = os.environ["FRONTEND_REPORT_EXPECTED"] == "true"
 
           backend_report = find_report("backend-coverage", "jacocoTestReport.xml")
           frontend_report = find_report("frontend-coverage", "coverage-summary.json")
@@ -552,11 +1506,27 @@ jobs:
           backend_pct = pct(backend_covered, backend_total)
           frontend_pct = pct(frontend_covered, frontend_total)
 
-          # Keep global coverage behavior consistent with existing gate thresholds.
-          global_pct = round((backend_pct + frontend_pct) / 2, 1)
+          backend_has_report = backend_total > 0
+          frontend_has_report = frontend_total > 0
 
-          has_complete_reports = backend_total > 0 and frontend_total > 0
+          expected_percentages = []
+          if backend_report_expected and backend_has_report:
+              expected_percentages.append(backend_pct)
+          if frontend_report_expected and frontend_has_report:
+              expected_percentages.append(frontend_pct)
 
+          global_pct = round(sum(expected_percentages) / len(expected_percentages), 1) if expected_percentages else 0.0
+          has_expected_reports = (
+              (not backend_report_expected or backend_has_report)
+              and (not frontend_report_expected or frontend_has_report)
+          )
+          has_complete_reports = backend_has_report and frontend_has_report
+
+          print(
+              "Expected reports: "
+              f"backend={backend_report_expected} "
+              f"frontend={frontend_report_expected}"
+          )
           print(f"Backend report: {backend_report or 'missing'}")
           print(f"Frontend report: {frontend_report or 'missing'}")
           print(
@@ -564,14 +1534,19 @@ jobs:
               f"backend={backend_pct:.1f}% "
               f"frontend={frontend_pct:.1f}% "
               f"global={global_pct:.1f}% "
-              f"(complete_reports={has_complete_reports})"
+              f"(expected_reports={has_expected_reports} complete_reports={has_complete_reports})"
           )
 
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"backend_coverage={backend_pct:.1f}\n")
               output.write(f"frontend_coverage={frontend_pct:.1f}\n")
               output.write(f"global_coverage={global_pct:.1f}\n")
-              output.write(f"has_complete_reports={'true' if has_complete_reports else 'false'}\n")
+              output.write(f"backend_report_expected={bool_output(backend_report_expected)}\n")
+              output.write(f"frontend_report_expected={bool_output(frontend_report_expected)}\n")
+              output.write(f"backend_has_report={bool_output(backend_has_report)}\n")
+              output.write(f"frontend_has_report={bool_output(frontend_has_report)}\n")
+              output.write(f"has_expected_reports={bool_output(has_expected_reports)}\n")
+              output.write(f"has_complete_reports={bool_output(has_complete_reports)}\n")
           PY
 
       - name: Update coverage badge endpoint
@@ -618,16 +1593,81 @@ jobs:
           BACKEND_COV: ${{ steps.parse_coverage.outputs.backend_coverage }}
           FRONTEND_COV: ${{ steps.parse_coverage.outputs.frontend_coverage }}
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
+          BACKEND_EXPECTED: ${{ steps.parse_coverage.outputs.backend_report_expected }}
+          FRONTEND_EXPECTED: ${{ steps.parse_coverage.outputs.frontend_report_expected }}
+          BACKEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.backend_has_report }}
+          FRONTEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.frontend_has_report }}
+          HAS_EXPECTED_REPORTS: ${{ steps.parse_coverage.outputs.has_expected_reports }}
         run: |
+          set -euo pipefail
+
+          component_status() {
+            local expected="$1"
+            local has_report="$2"
+            local coverage="$3"
+            local target="$4"
+
+            if [ "$expected" != "true" ]; then
+              echo "Skipped"
+              return
+            fi
+            if [ "$has_report" != "true" ]; then
+              echo "Missing"
+              return
+            fi
+            if [ "$(echo "$coverage >= $target" | bc -l)" -eq 1 ]; then
+              echo "OK"
+            else
+              echo "Below target"
+            fi
+          }
+
+          component_coverage() {
+            local expected="$1"
+            local has_report="$2"
+            local coverage="$3"
+
+            if [ "$expected" != "true" ]; then
+              echo "skipped"
+            elif [ "$has_report" != "true" ]; then
+              echo "missing"
+            else
+              echo "${coverage}%"
+            fi
+          }
+
+          backend_status="$(component_status "$BACKEND_EXPECTED" "$BACKEND_HAS_REPORT" "$BACKEND_COV" "65")"
+          frontend_status="$(component_status "$FRONTEND_EXPECTED" "$FRONTEND_HAS_REPORT" "$FRONTEND_COV" "80")"
+          backend_display="$(component_coverage "$BACKEND_EXPECTED" "$BACKEND_HAS_REPORT" "$BACKEND_COV")"
+          frontend_display="$(component_coverage "$FRONTEND_EXPECTED" "$FRONTEND_HAS_REPORT" "$FRONTEND_COV")"
+
+          any_expected=false
+          if [ "$BACKEND_EXPECTED" = "true" ] || [ "$FRONTEND_EXPECTED" = "true" ]; then
+            any_expected=true
+          fi
+
+          global_display="skipped"
+          global_status="Skipped"
+          if [ "$any_expected" = "true" ]; then
+            global_display="${GLOBAL_COV}%"
+            if [ "$HAS_EXPECTED_REPORTS" != "true" ]; then
+              global_status="Missing expected report"
+            elif [ "$(echo "$GLOBAL_COV >= 60" | bc -l)" -eq 1 ]; then
+              global_status="OK"
+            else
+              global_status="Below target"
+            fi
+          fi
+
           echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Coverage Gate Phase:** \`$PHASE\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Coverage | Target (Week 6) | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|----------|-----------------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend   | $BACKEND_COV% | 65% | $([ $(echo "$BACKEND_COV >= 65" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend  | $FRONTEND_COV% | 80% | $([ $(echo "$FRONTEND_COV >= 80" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
-          echo "| Global    | $GLOBAL_COV% | 60% | $([ $(echo "$GLOBAL_COV >= 60" | bc -l) -eq 1 ] && echo "✅" || echo "⚠️") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend   | $backend_display | 65% | $backend_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend  | $frontend_display | 80% | $frontend_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global    | $global_display | 60% | $global_status |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Phase-specific messaging
@@ -635,17 +1675,20 @@ jobs:
             echo "📌 **Week 3 - Reporting Only:** Coverage tracked but not enforced." >> $GITHUB_STEP_SUMMARY
           elif [ "$PHASE" = "soft" ]; then
             echo "⚠️ **Week 4 - Soft Gate:** Coverage warnings enabled (backend ≥55%, frontend ≥45%)." >> $GITHUB_STEP_SUMMARY
-            if [ $(echo "$BACKEND_COV < 55" | bc -l) -eq 1 ]; then
+            if [ "$BACKEND_EXPECTED" = "true" ] && [ "$BACKEND_HAS_REPORT" != "true" ]; then
+              echo "- Backend coverage report is missing" >> $GITHUB_STEP_SUMMARY
+            elif [ "$BACKEND_EXPECTED" = "true" ] && [ "$(echo "$BACKEND_COV < 55" | bc -l)" -eq 1 ]; then
               echo "- Backend coverage below 55% threshold" >> $GITHUB_STEP_SUMMARY
             fi
-            if [ $(echo "$FRONTEND_COV < 45" | bc -l) -eq 1 ]; then
+            if [ "$FRONTEND_EXPECTED" = "true" ] && [ "$FRONTEND_HAS_REPORT" != "true" ]; then
+              echo "- Frontend coverage report is missing" >> $GITHUB_STEP_SUMMARY
+            elif [ "$FRONTEND_EXPECTED" = "true" ] && [ "$(echo "$FRONTEND_COV < 45" | bc -l)" -eq 1 ]; then
               echo "- Frontend coverage below 45% threshold" >> $GITHUB_STEP_SUMMARY
             fi
           elif [ "$PHASE" = "hard" ]; then
             echo "🚨 **Hard Gate:** Coverage enforced (backend ≥65%, frontend ≥80%, global ≥60%)." >> $GITHUB_STEP_SUMMARY
-            if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ] || [ $(echo "$FRONTEND_COV < 80" | bc -l) -eq 1 ] || [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
-              echo "❌ **Coverage gate failed. Add more tests before merging.**" >> $GITHUB_STEP_SUMMARY
-              exit 1
+            if [ "$any_expected" != "true" ]; then
+              echo "No unit coverage reports were expected for this change set." >> $GITHUB_STEP_SUMMARY
             fi
           fi
 
@@ -655,19 +1698,47 @@ jobs:
           BACKEND_COV: ${{ steps.parse_coverage.outputs.backend_coverage }}
           FRONTEND_COV: ${{ steps.parse_coverage.outputs.frontend_coverage }}
           GLOBAL_COV: ${{ steps.parse_coverage.outputs.global_coverage }}
+          BACKEND_EXPECTED: ${{ steps.parse_coverage.outputs.backend_report_expected }}
+          FRONTEND_EXPECTED: ${{ steps.parse_coverage.outputs.frontend_report_expected }}
+          BACKEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.backend_has_report }}
+          FRONTEND_HAS_REPORT: ${{ steps.parse_coverage.outputs.frontend_has_report }}
+          HAS_EXPECTED_REPORTS: ${{ steps.parse_coverage.outputs.has_expected_reports }}
         run: |
+          set -euo pipefail
+
+          require_component_coverage() {
+            local name="$1"
+            local expected="$2"
+            local has_report="$3"
+            local coverage="$4"
+            local target="$5"
+
+            if [ "$expected" != "true" ]; then
+              echo "ℹ️ ${name} coverage gate skipped for this change set"
+              return
+            fi
+            if [ "$has_report" != "true" ]; then
+              echo "❌ ${name} coverage report is missing"
+              FAIL=1
+              return
+            fi
+            if [ "$(echo "$coverage < $target" | bc -l)" -eq 1 ]; then
+              echo "❌ ${name} coverage ${coverage}% is below ${target}% threshold"
+              FAIL=1
+            fi
+          }
+
           FAIL=0
-          if [ $(echo "$BACKEND_COV < 65" | bc -l) -eq 1 ]; then
-            echo "❌ Backend coverage $BACKEND_COV% is below 65% threshold"
-            FAIL=1
-          fi
-          if [ $(echo "$FRONTEND_COV < 80" | bc -l) -eq 1 ]; then
-            echo "❌ Frontend coverage $FRONTEND_COV% is below 80% threshold"
-            FAIL=1
-          fi
-          if [ $(echo "$GLOBAL_COV < 60" | bc -l) -eq 1 ]; then
-            echo "❌ Global coverage $GLOBAL_COV% is below 60% threshold"
-            FAIL=1
+          require_component_coverage "Backend" "$BACKEND_EXPECTED" "$BACKEND_HAS_REPORT" "$BACKEND_COV" "65"
+          require_component_coverage "Frontend" "$FRONTEND_EXPECTED" "$FRONTEND_HAS_REPORT" "$FRONTEND_COV" "80"
+
+          if [ "$BACKEND_EXPECTED" = "true" ] || [ "$FRONTEND_EXPECTED" = "true" ]; then
+            if [ "$HAS_EXPECTED_REPORTS" = "true" ] && [ "$(echo "$GLOBAL_COV < 60" | bc -l)" -eq 1 ]; then
+              echo "❌ Global coverage $GLOBAL_COV% is below 60% threshold"
+              FAIL=1
+            fi
+          else
+            echo "ℹ️ Global coverage gate skipped for this change set"
           fi
           
           if [ $FAIL -eq 1 ]; then

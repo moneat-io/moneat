@@ -22,6 +22,7 @@ import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.javatime.time
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 /**
  * Exposed table objects for on-call/enterprise database tables.
@@ -33,6 +34,7 @@ import kotlin.time.Clock
  */
 
 object EscalationPolicies : IntIdTable("escalation_policies") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 255)
     val description = text("description").nullable()
@@ -42,6 +44,7 @@ object EscalationPolicies : IntIdTable("escalation_policies") {
 }
 
 object EscalationPolicyAlertSources : IntIdTable("escalation_policy_alert_sources") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val alertSource = varchar("alert_source", 50)
     val escalationPolicyId = integer(
@@ -51,6 +54,7 @@ object EscalationPolicyAlertSources : IntIdTable("escalation_policy_alert_source
 }
 
 object SlackUserMappings : IntIdTable("slack_user_mappings") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
     val slackUserId = varchar("slack_user_id", 100)
     val slackTeamId = varchar("slack_team_id", 100)
@@ -60,6 +64,7 @@ object SlackUserMappings : IntIdTable("slack_user_mappings") {
 
 object SsoConfigurations : Table("sso_configurations") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val providerType = varchar("provider_type", 10)
     val isEnabled = bool("is_enabled").default(false)
@@ -71,6 +76,10 @@ object SsoConfigurations : Table("sso_configurations") {
     val oidcClientId = varchar("oidc_client_id", 256).nullable()
     val oidcClientSecret = varchar("oidc_client_secret", 512).nullable()
     val emailDomain = varchar("email_domain", 256).nullable()
+    val emailDomainVerified = bool("email_domain_verified").default(false)
+    val emailDomainVerificationToken = varchar("email_domain_verification_token", 128).nullable()
+    val emailDomainVerifiedAt = timestamp("email_domain_verified_at").nullable()
+    val emailDomainVerifiedBy = integer("email_domain_verified_by").references(Users.id).nullable()
     val requireSso = bool("require_sso").default(false)
     val createdAt = timestamp("created_at").clientDefault { Clock.System.now() }
     val updatedAt = timestamp("updated_at").clientDefault { Clock.System.now() }
@@ -87,6 +96,7 @@ object UserSsoLinks : Table("user_sso_links") {
 }
 
 object OnCallSchedules : IntIdTable("on_call_schedules") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val name = varchar("name", 255)
     val rotationType = varchar("rotation_type", 20)
@@ -97,10 +107,16 @@ object OnCallSchedules : IntIdTable("on_call_schedules") {
 }
 
 object OnCallParticipants : IntIdTable("on_call_participants") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val scheduleId = integer("schedule_id").references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
     val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
     val position = integer("position")
     val createdAt = timestamp("created_at")
+}
+
+object OnCallIncidents : IntIdTable("on_call_incidents") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
 }
 
 object UserNotificationChannelPreferences : IntIdTable("user_notification_channel_preferences") {

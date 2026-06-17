@@ -18,6 +18,7 @@ package com.moneat.notifications.services
 
 import com.moneat.config.EnvConfig
 import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.workflows.models.WorkflowStepPreview
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
@@ -41,7 +42,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.slf4j.LoggerFactory
-import java.util.*
+import java.util.UUID
 import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 
@@ -115,17 +116,6 @@ class DiscordService(
         val type: Int
     )
 
-    data class HostAlertParams(
-        val hostName: String,
-        val metric: String,
-        val condition: String,
-        val threshold: String,
-        val currentValue: String,
-        val hostId: Int,
-        val baseUrl: String,
-        val timestamp: String = Clock.System.now().toString()
-    )
-
     data class UptimeAlertParams(
         val monitorUrl: String,
         val isDown: Boolean,
@@ -165,13 +155,14 @@ class DiscordService(
         private const val DISCORD_COLOR_RED = 0xE01E5A
         private const val DISCORD_COLOR_GREEN = 0x2EB67D
         private const val DISCORD_COLOR_YELLOW = 0xECB22E
+        private const val DISCORD_COLOR_PURPLE = 0x6366F1
 
         /** Builds embed for host metric alerts. Exposed for unit testing. */
-        internal fun buildHostAlertEmbed(p: DiscordService.HostAlertParams): DiscordEmbed =
+        internal fun buildHostAlertEmbed(p: HostAlertNotification): DiscordEmbed =
             DiscordEmbed(
                 title = "⚠️ Host Alert",
                 description = "**${p.hostName}** triggered an alert",
-                url = "${p.baseUrl}/monitoring/hosts/${p.hostId}",
+                url = "${p.baseUrl}/monitoring/hosts/${p.hostResourceId}",
                 color = DISCORD_COLOR_YELLOW,
                 fields = listOf(
                     DiscordField("Host", p.hostName, true),
@@ -187,14 +178,14 @@ class DiscordService(
         internal fun buildHostDownEmbed(
             hostName: String,
             lastSeen: String,
-            hostId: Int,
+            hostResourceId: String,
             baseUrl: String,
             timestamp: String = Clock.System.now().toString()
         ): DiscordEmbed =
             DiscordEmbed(
                 title = "🔴 Host Down",
                 description = "**$hostName** is not responding",
-                url = "$baseUrl/monitoring/hosts/$hostId",
+                url = "$baseUrl/monitoring/hosts/$hostResourceId",
                 color = DISCORD_COLOR_RED,
                 fields = listOf(
                     DiscordField("Host", hostName, true),
@@ -207,14 +198,14 @@ class DiscordService(
         /** Builds embed for host recovered alerts. Exposed for unit testing. */
         internal fun buildHostUpEmbed(
             hostName: String,
-            hostId: Int,
+            hostResourceId: String,
             baseUrl: String,
             timestamp: String = Clock.System.now().toString()
         ): DiscordEmbed =
             DiscordEmbed(
                 title = "✅ Host Recovered",
                 description = "**$hostName** is back online",
-                url = "$baseUrl/monitoring/hosts/$hostId",
+                url = "$baseUrl/monitoring/hosts/$hostResourceId",
                 color = DISCORD_COLOR_GREEN,
                 fields = listOf(
                     DiscordField("Host", hostName, true),
@@ -387,25 +378,20 @@ class DiscordService(
 
     suspend fun sendHostAlert(
         organizationId: Int,
-        hostName: String,
-        metric: String,
-        condition: String,
-        threshold: String,
-        currentValue: String,
-        hostId: Int,
-        baseUrl: String
+        alert: HostAlertNotification,
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed = buildHostAlertEmbed(
-            HostAlertParams(hostName, metric, condition, threshold, currentValue, hostId, baseUrl)
-        )
+        val embed = buildHostAlertEmbed(alert)
 
+        val fallbackText =
+            "⚠️ Host Alert: ${alert.hostName} - ${alert.metric} ${alert.condition} " +
+                "${alert.threshold} (current: ${alert.currentValue})"
         val (success, _) =
             sendMessage(
                 channelId = config.channelId,
                 embed = embed,
-                fallbackText = "⚠️ Host Alert: $hostName - $metric $condition $threshold (current: $currentValue)"
+                fallbackText = fallbackText
             )
         return success
     }
@@ -414,12 +400,12 @@ class DiscordService(
         organizationId: Int,
         hostName: String,
         lastSeen: String,
-        hostId: Int,
+        hostResourceId: String,
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed = buildHostDownEmbed(hostName, lastSeen, hostId, baseUrl)
+        val embed = buildHostDownEmbed(hostName, lastSeen, hostResourceId, baseUrl)
 
         val (success, _) =
             sendMessage(
@@ -433,12 +419,12 @@ class DiscordService(
     suspend fun sendHostUp(
         organizationId: Int,
         hostName: String,
-        hostId: Int,
+        hostResourceId: String,
         baseUrl: String
     ): Boolean {
         val config = getDiscordConfig(organizationId) ?: return false
 
-        val embed = buildHostUpEmbed(hostName, hostId, baseUrl)
+        val embed = buildHostUpEmbed(hostName, hostResourceId, baseUrl)
 
         val (success, _) =
             sendMessage(
@@ -535,6 +521,91 @@ class DiscordService(
         return success
     }
 
+    suspend fun sendWorkflowMessage(
+        organizationId: Int,
+        title: String,
+        message: String,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getDiscordConfig(organizationId) ?: return skipIfUnconfigured
+        val embed = DiscordEmbed(
+            title = title,
+            description = message,
+            color = DISCORD_COLOR_PURPLE,
+            footer = DiscordFooter("Moneat workflow"),
+            timestamp = Clock.System.now().toString()
+        )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = "$title: $message"
+            )
+        return success
+    }
+
+    suspend fun sendWorkflowAlertMessage(
+        organizationId: Int,
+        preview: WorkflowStepPreview,
+        skipIfUnconfigured: Boolean = false
+    ): Boolean {
+        val config = getDiscordConfig(organizationId) ?: return skipIfUnconfigured
+        val embed =
+            DiscordEmbed(
+                title = discordWorkflowAlertHeaderText(preview),
+                description = discordWorkflowAlertDescription(preview),
+                color = parseHexColor(preview.color),
+                fields = preview.fields.map { field ->
+                    DiscordField(field.label, field.value, inline = true)
+                },
+                footer = DiscordFooter("Added by Moneat"),
+                timestamp = Clock.System.now().toString()
+            )
+        val (success, _) =
+            sendMessage(
+                channelId = config.channelId,
+                embed = embed,
+                fallbackText = preview.fallbackText
+            )
+        return success
+    }
+
+    private fun discordWorkflowAlertDescription(preview: WorkflowStepPreview): String =
+        buildString {
+            if (preview.body.isNotBlank()) {
+                appendLine(preview.body)
+            }
+            if (!preview.ctaUrl.isNullOrBlank()) {
+                appendLine()
+                append("[")
+                append(preview.ctaLabel ?: "View")
+                append("](")
+                append(preview.ctaUrl)
+                append(")")
+            }
+        }.trim()
+
+    private fun discordWorkflowAlertHeaderText(preview: WorkflowStepPreview): String {
+        val emoji =
+            when {
+                discordWorkflowAlertFieldValue(preview, "Status") == "Resolved" -> "✅"
+                parseHexColor(preview.color) == DISCORD_COLOR_RED -> "🔴"
+                else -> "⚠️"
+            }
+        return listOf(emoji, preview.title)
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+    }
+
+    private fun discordWorkflowAlertFieldValue(
+        preview: WorkflowStepPreview,
+        label: String
+    ): String =
+        preview.fields
+            .firstOrNull { it.label.equals(label, ignoreCase = true) }
+            ?.value
+            .orEmpty()
+
     suspend fun testConnection(
         organizationId: Int,
         baseUrl: String
@@ -602,3 +673,10 @@ class DiscordService(
         }
     }
 }
+
+private fun parseHexColor(color: String): Int? {
+    val normalized = color.removePrefix("#")
+    return normalized.toIntOrNull(HEX_RADIX)
+}
+
+private const val HEX_RADIX = 16

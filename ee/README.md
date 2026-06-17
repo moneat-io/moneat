@@ -6,10 +6,10 @@ This directory contains the enterprise modules for Moneat, licensed under the [M
 
 | Module | License Feature | Description |
 |--------|----------------|-------------|
-| SSO | `sso` | SAML 2.0 and OIDC single sign-on |
+| SAML SSO & Enforcement | `sso` | SAML 2.0 single sign-on and SSO enforcement (Require SSO) |
 | On-Call | `oncall` | On-call scheduling, escalation policies, and incident management |
 
-All other features (Datadog ingestion, AI assistant, Analytics, MCP, Synthetics, etc.) are open-source and always available without a license key.
+All other features (Datadog ingestion, AI assistant, Analytics, MCP core, Synthetics, OIDC SSO, etc.) are open-source and always available without a license key.
 
 ---
 
@@ -92,9 +92,8 @@ For urgent cases (e.g. payment failure), issuing a short-lived replacement key a
 |----------|----------|-------------|
 | `SSO_SP_ENTITY_ID` | SAML | Your service provider entity ID |
 | `SSO_ACS_URL` | SAML | Assertion consumer service URL |
-| `OIDC_CLIENT_ID` | OIDC | OAuth2 client ID |
-| `OIDC_CLIENT_SECRET` | OIDC | OAuth2 client secret |
-| `OIDC_ISSUER_URL` | OIDC | Identity provider issuer URL |
+
+OIDC SSO variables (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ISSUER_URL`) are now part of the open-source core and configured via the dashboard under Settings > SSO.
 
 ### On-Call module
 

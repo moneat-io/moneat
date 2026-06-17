@@ -16,8 +16,9 @@
 
 package com.moneat.config
 
-import io.ktor.events.*
-import io.ktor.server.application.*
+import com.moneat.utils.suspendRunCatching
+import io.ktor.server.application.Application
+import io.ktor.server.application.log
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
 import io.lettuce.core.api.StatefulRedisConnection
@@ -27,12 +28,11 @@ import io.lettuce.core.api.sync.RedisCommands
 import io.lettuce.core.resource.ClientResources
 import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
-import com.moneat.utils.suspendRunCatching
 
-const val BRPOP_TIMEOUT_SECONDS = 5L
+private const val BLOCKING_COMMAND_TIMEOUT_SECONDS = 15L
 
-// Blocking command timeout — must exceed BRPOP wait time. Each worker gets its own connection.
-private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BRPOP_TIMEOUT_SECONDS + 10)
+// Blocking command timeout for workers using XREADGROUP BLOCK. Each worker gets its own connection.
+private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BLOCKING_COMMAND_TIMEOUT_SECONDS)
 
 object RedisConfig {
     @Volatile

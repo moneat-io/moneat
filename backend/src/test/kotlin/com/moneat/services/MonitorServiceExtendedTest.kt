@@ -50,6 +50,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.uuid.Uuid
 import kotlin.time.Clock
 
 class MonitorServiceExtendedTest {
@@ -193,12 +194,19 @@ class MonitorServiceExtendedTest {
     }
 
     @Test
-    fun `getLatestMetrics uses FREE retention when null returned`() = runBlocking {
+    fun `getLatestMetrics constrains latest query to recent metric names`() = runBlocking {
         every { hostRepo.getById(1) } returns testHost
-        coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns null
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns ""
+        val queries = mutableListOf<String>()
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            ""
+        }
 
         assertNull(service.getLatestMetrics(1))
+        val query = queries.single()
+        assertTrue(query.contains("metric_name IN ("))
+        assertTrue(query.contains("system.cpu.percent"))
+        assertTrue(query.contains("timestamp >= now64(3) - INTERVAL 6 HOUR"))
     }
 
     // ──── getLatestMetricsForHosts ────
@@ -211,13 +219,34 @@ class MonitorServiceExtendedTest {
 
     @Test
     fun `getLatestMetricsForHosts returns null map for blank response`() = runBlocking {
-        coEvery { retentionPolicyService.getRetentionDaysForOrganization(10) } returns 3
-        coEvery { hostRepo.executeClickHouseQuery(any()) } returns ""
+        val queries = mutableListOf<String>()
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            ""
+        }
 
         val result = service.getLatestMetricsForHosts(listOf(1, 2), 10)
         assertEquals(2, result.size)
         assertNull(result[1])
         assertNull(result[2])
+        val query = queries.single()
+        assertTrue(query.contains("metric_name IN ("))
+        assertTrue(query.contains("system.cpu.percent"))
+        assertTrue(query.contains("timestamp >= now64(3) - INTERVAL 6 HOUR"))
+    }
+
+    @Test
+    fun `getLatestMetricsForHosts uses demo epoch for freshness window`() = runBlocking {
+        val queries = mutableListOf<String>()
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            ""
+        }
+
+        service.getLatestMetricsForHosts(listOf(1, 2), 10, demoEpochMs = 1_709_312_400_000L)
+
+        val query = queries.single()
+        assertTrue(query.contains("timestamp >= toDateTime64(1709312400.000, 3) - INTERVAL 6 HOUR"))
     }
 
     @Test
@@ -345,7 +374,10 @@ class MonitorServiceExtendedTest {
         // Host 1 has one container, Host 2 returns blank (no containers)
         coEvery {
             hostRepo.executeClickHouseQuery(
-                match { it.contains("'1'") }
+                match { query ->
+                    query.contains("containers_latest_by_host") &&
+                        query.contains("host_id = 1")
+                }
             )
         } returns """
             {
@@ -355,7 +387,14 @@ class MonitorServiceExtendedTest {
                 ]
             }
         """.trimIndent()
-        coEvery { hostRepo.executeClickHouseQuery(match { it.contains("'2'") }) } returns ""
+        coEvery {
+            hostRepo.executeClickHouseQuery(
+                match { query ->
+                    query.contains("containers_latest_by_host") &&
+                        query.contains("host_id = 2")
+                }
+            )
+        } returns ""
 
         val result = service.getLatestContainersForOrganizations(listOf(10))
         assertEquals(1, result.size)
@@ -371,7 +410,7 @@ class MonitorServiceExtendedTest {
 
         val result = service.getHistoricalMetrics(999, 1000, 2000, null)
         assertTrue(result.dataPoints.isEmpty())
-        assertEquals(999, result.hostId)
+        assertNull(result.hostId)
     }
 
     @Test
@@ -392,7 +431,7 @@ class MonitorServiceExtendedTest {
         coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
 
         val nowEpoch = Clock.System.now().epochSeconds
-        // 30-minute range => interval should be 10
+        // 30-minute range is served from the 1-minute rollup table.
         coEvery { hostRepo.executeClickHouseQuery(any()) } returns DATA_EMPTY_JSON
 
         val result = service.getHistoricalMetrics(
@@ -401,7 +440,7 @@ class MonitorServiceExtendedTest {
             nowEpoch,
             null
         )
-        assertEquals(10, result.intervalSeconds)
+        assertEquals(60, result.intervalSeconds)
         assertTrue(result.dataPoints.isEmpty())
     }
 
@@ -414,6 +453,27 @@ class MonitorServiceExtendedTest {
 
         val result = service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 120)
         assertEquals(120, result.intervalSeconds)
+    }
+
+    @Test
+    fun `getHistoricalMetrics uses normalized ratio metrics`() = runBlocking {
+        every { hostRepo.getById(1) } returns testHost
+        coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
+        val queries = mutableListOf<String>()
+        val nowEpoch = Clock.System.now().epochSeconds
+        coEvery { hostRepo.executeClickHouseQuery(any()) } coAnswers {
+            queries.add(firstArg())
+            DATA_EMPTY_JSON
+        }
+
+        service.getHistoricalMetrics(1, nowEpoch - 3600, nowEpoch, 120)
+
+        val query = queries.single()
+        assertFalse(query.contains("system.mem.pct_usable"))
+        assertTrue(query.contains("system.mem.available"))
+        assertTrue(query.contains("system.mem.used"))
+        assertFalse(query.contains("system.disk.in_use"))
+        assertTrue(query.indexOf("system.disk.percent") < query.indexOf("system.disk.used"))
     }
 
     @Test
@@ -577,7 +637,7 @@ class MonitorServiceExtendedTest {
     @Test
     fun `ensureOrganizationAlertTemplates creates default templates`() {
         every { alertRepo.listGlobalAlertsForHost(10, -1) } returns emptyList()
-        every { alertRepo.createAlert(any()) } returns 1L
+        every { alertRepo.createAlert(any()) } returns Uuid.parse("00000000-0000-0000-0000-000000000001")
 
         service.ensureOrganizationAlertTemplates(10)
         // Verify 7 default templates were created
@@ -614,7 +674,7 @@ class MonitorServiceExtendedTest {
                 scope = "global"
             )
         )
-        every { alertRepo.createAlert(any()) } returns 1L
+        every { alertRepo.createAlert(any()) } returns Uuid.parse("00000000-0000-0000-0000-000000000001")
 
         service.ensureHostAlertsSeeded(1, 10)
         io.mockk.verify(exactly = 1) { alertRepo.createAlert(any()) }
@@ -624,7 +684,7 @@ class MonitorServiceExtendedTest {
     fun `ensureHostAlertsSeeded seeds defaults when no templates`() {
         every { alertRepo.listByHostAndOrg(1, 10) } returns emptyList()
         every { alertRepo.listGlobalAlertsForHost(10, 1) } returns emptyList()
-        every { alertRepo.createAlert(any()) } returns 1L
+        every { alertRepo.createAlert(any()) } returns Uuid.parse("00000000-0000-0000-0000-000000000001")
 
         service.ensureHostAlertsSeeded(1, 10)
         // 7 default alert templates
@@ -677,7 +737,7 @@ class MonitorServiceExtendedTest {
         val result = agentApiKeyService.createKey(orgId, "test-key", userId)
         assertTrue(result.key.startsWith("magt_"))
         assertEquals("test-key", result.name)
-        assertTrue(result.id > 0)
+        assertEquals(result.id, Uuid.parse(result.id).toString())
         assertEquals(result.key.take(12), result.keyPrefix)
     }
 
@@ -773,7 +833,7 @@ class MonitorServiceExtendedTest {
     fun `AgentApiKeyService deleteKey returns false for non-existent key`() {
         ensureDb()
         val orgId = seedOrg()
-        assertFalse(agentApiKeyService.deleteKey(orgId, 99999))
+        assertFalse(agentApiKeyService.deleteKey(orgId, "99999999-9999-9999-9999-999999999999"))
     }
 
     @Test

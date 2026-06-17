@@ -2,20 +2,17 @@
 
 ## Prerequisites
 
-- Moneat Enterprise edition
-- An API token with appropriate scopes
+- A Moneat backend with MCP enabled
+- A dedicated MCP key with the tools your client should be able to use
 
-## Generating an API Token
+## Generating an MCP Key
 
 1. Log into your Moneat dashboard
-2. Navigate to **Settings → API Tokens**
-3. Click **Create Token**
-4. Give it a descriptive name (e.g., "MCP - Cursor IDE")
-5. Select scopes based on the tools you need:
-  - **Read-only tools**: `project:read`, `event:read`, `org:read`
-  - **Mutating tools** (e.g., `create_dashboard`, `create_host`, `update_issue_status`, `create_uptime_monitor`): also add `project:write`
-  - **Release tools**: also add `releases:read` and/or `releases:write`
-6. Copy the generated token (it won't be shown again)
+2. Navigate to **Settings → API Keys → MCP**
+3. Click **Create Key**
+4. Give it a descriptive name (e.g., "Cursor IDE")
+5. Select the tool sections this client should be able to use
+6. Copy the generated key (it won't be shown again)
 
 ## Connecting from Cursor IDE
 
@@ -25,52 +22,57 @@ Add to your Cursor MCP configuration (`.cursor/mcp.json`):
 {
   "mcpServers": {
     "moneat": {
-      "url": "https://your-moneat-instance/v1/mcp/sse",
+      "url": "https://your-moneat-instance/v1/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_API_TOKEN"
+        "Authorization": "Bearer YOUR_MCP_KEY"
       }
     }
   }
 }
 ```
 
-> **Fallback (not recommended):** Some clients do not support custom headers. In that case you can append `?token=YOUR_API_TOKEN` to the URL, but be aware that the token will appear in server logs, shell history, and screenshots.
-
 ## Connecting from a Custom Agent
 
-Use any MCP-compatible client library. The connection uses SSE transport:
+Use any MCP-compatible client library that supports Streamable HTTP:
 
-1. Connect to `GET /v1/mcp/sse` via SSE, passing `Authorization: Bearer YOUR_TOKEN` as a header
-2. The server sends an `endpoint` event with the session-specific message URL
-3. Send JSON-RPC requests to that message URL via POST
-4. Receive responses via the SSE stream
+1. Initialize a Streamable HTTP MCP session with `POST /v1/mcp`
+2. Pass `Authorization: Bearer YOUR_MCP_KEY` as a header
+3. Include `Accept: application/json, text/event-stream`
+4. Reuse the returned `mcp-session-id` header for subsequent JSON-RPC requests
+5. Receive direct JSON responses
 
 ### Example with curl
 
 ```bash
-# Establish SSE connection (note the endpoint URL printed by the server)
-curl -N -H "Authorization: Bearer YOUR_TOKEN" \
-  "https://your-moneat-instance/v1/mcp/sse"
-# The server emits an "endpoint" event, e.g.:
-# event: endpoint
-# data: https://your-moneat-instance/v1/mcp/message?sessionId=SESSION_ID
+MCP_SESSION_ID=$(
+  curl -i -X POST "https://your-moneat-instance/v1/mcp" \
+    -H "Authorization: Bearer YOUR_MCP_KEY" \
+    -H "Content-Type: application/json" \
+    -H "Accept: application/json, text/event-stream" \
+    -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1.0.0"}}}' \
+    | awk -F': ' 'tolower($1) == "mcp-session-id" {print $2}' \
+    | tr -d '\r'
+)
 
-# In another terminal, send a tools/list request to the session endpoint
-endpoint="https://your-moneat-instance/v1/mcp/message?sessionId=SESSION_ID"
-curl -X POST "$endpoint" \
- -H "Content-Type: application/json" \
- -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+curl -X POST "https://your-moneat-instance/v1/mcp" \
+  -H "Authorization: Bearer YOUR_MCP_KEY" \
+  -H "mcp-session-id: ${MCP_SESSION_ID}" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
 ```
 
 ## Authentication
 
-The MCP server authenticates using Moneat API tokens. The token can be provided:
+The MCP server authenticates using dedicated Moneat MCP keys. Keys must be provided as an Authorization header:
 
-- As a query parameter: `?token=YOUR_TOKEN`
-- As an Authorization header: `Authorization: Bearer YOUR_TOKEN`
+- `Authorization: Bearer YOUR_MCP_KEY`
 
-The token determines which organization's data the MCP session can access.
+Existing Sentry API tokens are still accepted for compatibility, but dedicated MCP keys are recommended.
+
+The key determines which organization's data and which MCP tools the session can access.
 
 ## Available Tools
 
-Once connected, run `tools/list` to see all available tools. See the [Tools Reference](./tools-reference) for the complete list.
+Once connected, run `tools/list` to see all available tools. See the
+[Tools Reference](./tools-reference) for the complete list.

@@ -2,7 +2,6 @@ import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import { ProjectProvider } from '@/contexts/ProjectContext'
 
 const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
@@ -69,6 +68,7 @@ vi.mock('@tanstack/react-router', () => ({
     ...options,
     options,
     useParams: () => ({ issueId: 'issue-123' }),
+    useSearch: () => ({}),
   }),
   Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),
@@ -92,9 +92,7 @@ function renderRoute(Component: React.ComponentType) {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <ProjectProvider>
-        <Component />
-      </ProjectProvider>
+      <Component />
     </QueryClientProvider>
   )
 }
@@ -134,11 +132,11 @@ describe('priority route coverage', () => {
     expect((IssueDetailRoute as { beforeLoad?: unknown }).beforeLoad).toBeUndefined()
   })
 
-  it('issues route renders empty project state', async () => {
+  it('issues route renders empty service state', async () => {
     const Component = (IssuesIndexRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
-    expect(await screen.findByText('No projects yet')).toBeInTheDocument()
+    expect(await screen.findByText('No services yet')).toBeInTheDocument()
     expect(mockApi.getProjects).toHaveBeenCalled()
   })
 
@@ -147,20 +145,22 @@ describe('priority route coverage', () => {
     renderRoute(Component)
 
     expect(await screen.findByText('Issue not found')).toBeInTheDocument()
-    expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', null)
+    expect(mockApi.getIssue).toHaveBeenCalledWith('issue-123', undefined)
   })
 
-  it('performance route renders no projects message when there are no projects', async () => {
-    const Component = (PerformanceRoute as unknown as { component: React.ComponentType }).component
-    renderRoute(Component)
+  it('performance route redirects to traces', async () => {
+    const beforeLoad = (PerformanceRoute as unknown as { beforeLoad: () => Promise<void> }).beforeLoad
 
-    expect(await screen.findByText('No projects yet. Create a project to view performance data.')).toBeInTheDocument()
+    await expect(beforeLoad()).rejects.toMatchObject({
+      __redirect: true,
+      to: '/performance/traces',
+    })
   })
 
-  it('ai route prompts for project selection when no project is selected', () => {
+  it('ai route renders empty service state without global service selection', async () => {
     const Component = (AiRoute as unknown as { component: React.ComponentType }).component
     renderRoute(Component)
 
-    expect(screen.getByText('Select a project to view AI observability data.')).toBeInTheDocument()
+    expect(await screen.findByText('No services yet')).toBeInTheDocument()
   })
 })

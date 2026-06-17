@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import {
+  parseDate,
   formatDateTime,
   formatDate,
   formatMonthDay,
@@ -32,6 +33,36 @@ const ISO = '2025-01-15T14:34:56.789Z'
 const DATE_OBJ = new Date(ISO)
 const EPOCH_MS = DATE_OBJ.getTime()
 const TZ = 'UTC'
+
+// ──── parseDate ────
+
+describe('parseDate', () => {
+  let originalDate: typeof Date
+
+  beforeEach(() => {
+    originalDate = global.Date
+  })
+
+  afterEach(() => {
+    global.Date = originalDate
+  })
+
+  it('handles ClickHouse DateTime64 format in strict mobile date parsers', () => {
+    global.Date = class extends originalDate {
+      constructor(value?: string | number | Date) {
+        if (value === undefined) {
+          super()
+        } else if (typeof value === 'string' && value.includes(' ')) {
+          super(Number.NaN)
+        } else {
+          super(value)
+        }
+      }
+    } as unknown as DateConstructor
+
+    expect(parseDate('2025-01-15 14:34:56.789').toISOString()).toBe(ISO)
+  })
+})
 
 // ──── formatDateTime ────
 

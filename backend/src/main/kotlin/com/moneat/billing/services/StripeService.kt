@@ -71,7 +71,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.util.*
+import java.util.UUID
 import kotlin.time.Clock
 import kotlin.time.Instant
 import com.stripe.param.checkout.SessionCreateParams as CheckoutSessionCreateParams
@@ -525,7 +525,7 @@ class StripeService(
         val subscriptionItems = resolveSubscriptionItems(subscription, resolvedTier)
         val periodEpochs = resolveSubscriptionPeriodEpochs(subscription, subscriptionItems.baseItemId)
         val planName = resolvePlanName(resolvedTier, fallbackTier)
-        val tierId = resolvedTier?.id?.takeIf { it > 0 }
+        val tierId = resolvedTier?.numericId?.takeIf { it > 0 }
 
         val stripeData = StripeSubscriptionData(
             plan = planName,
@@ -913,6 +913,7 @@ class StripeService(
                 it[Subscriptions.organization_id] = organizationId
                 it[plan] = "free"
                 it[status] = "active"
+                it[pricing_tier_config_id] = freeTier?.numericId?.takeIf { id -> id > 0 }
                 it[current_period_start] = Clock.System.now()
                 it[current_period_end] = addDays(Clock.System.now(), FREE_TIER_PERIOD_DAYS)
                 it[payg_budget_cents] = 0
@@ -927,6 +928,12 @@ class StripeService(
                 it[pending_custom_metric_overage_units] = 0
                 it[pending_custom_metric_batch_id] = null
                 it[pending_custom_metric_batch_units] = 0
+                it[pending_infra_metric_overage_units] = 0
+                it[pending_infra_metric_batch_id] = null
+                it[pending_infra_metric_batch_units] = 0
+                it[pending_analytics_pageview_overage_units] = 0
+                it[pending_analytics_pageview_batch_id] = null
+                it[pending_analytics_pageview_batch_units] = 0
             }
         }
     }
@@ -937,6 +944,8 @@ class StripeService(
             ?: "moneat_ingestion_overage_gb"
         val customMetricMeterEventName = config.propertyOrNull("stripe.customMetricMeterEventName")?.getString()
             ?: "moneat_custom_metric_overage_units"
+        val infraMetricMeterEventName = config.propertyOrNull("stripe.infraMetricMeterEventName")?.getString()
+            ?: "moneat_infra_metric_overage_units"
         val apmSpanMeterEventName = config.propertyOrNull("stripe.apmSpanMeterEventName")?.getString()
             ?: "moneat_apm_span_overage_units"
 
@@ -1052,6 +1061,16 @@ class StripeService(
             limit = limit
         )
 
+        // Infrastructure metric overage metering
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_infra_metric_overage_units,
+            batchIdColumn = Subscriptions.pending_infra_metric_batch_id,
+            batchUnitsColumn = Subscriptions.pending_infra_metric_batch_units,
+            meterEventName = infraMetricMeterEventName,
+            batchPrefix = "infra",
+            limit = limit
+        )
+
         // APM span overage metering
         flushed += flushPendingTypeOverage(
             pendingUnitsColumn = Subscriptions.pending_apm_span_overage_units,
@@ -1059,6 +1078,19 @@ class StripeService(
             batchUnitsColumn = Subscriptions.pending_apm_span_batch_units,
             meterEventName = apmSpanMeterEventName,
             batchPrefix = "apmspan",
+            limit = limit
+        )
+
+        // Analytics pageview overage metering
+        val analyticsPageviewMeterEventName =
+            config.propertyOrNull("stripe.analyticsPageviewMeterEventName")?.getString()
+                ?: "moneat_analytics_pageview_overage_units"
+        flushed += flushPendingTypeOverage(
+            pendingUnitsColumn = Subscriptions.pending_analytics_pageview_overage_units,
+            batchIdColumn = Subscriptions.pending_analytics_pageview_batch_id,
+            batchUnitsColumn = Subscriptions.pending_analytics_pageview_batch_units,
+            meterEventName = analyticsPageviewMeterEventName,
+            batchPrefix = "pageview",
             limit = limit
         )
 
@@ -1184,13 +1216,25 @@ class StripeService(
                         it[status] = "active"
                         it[current_period_start] = now
                         it[current_period_end] = addDays(now, FREE_TIER_PERIOD_DAYS)
-                        it[pricing_tier_config_id] = freeTier?.id?.takeIf { id -> id > 0 }
+                        it[pricing_tier_config_id] = freeTier?.numericId?.takeIf { id -> id > 0 }
                         it[payg_budget_cents] = 0
                         it[payg_used_units] = 0
                         it[payg_used_micros] = 0
                         it[pending_meter_units] = 0
                         it[pending_meter_batch_id] = null
                         it[pending_meter_batch_units] = 0
+                        it[pending_apm_span_overage_units] = 0
+                        it[pending_apm_span_batch_id] = null
+                        it[pending_apm_span_batch_units] = 0
+                        it[pending_custom_metric_overage_units] = 0
+                        it[pending_custom_metric_batch_id] = null
+                        it[pending_custom_metric_batch_units] = 0
+                        it[pending_infra_metric_overage_units] = 0
+                        it[pending_infra_metric_batch_id] = null
+                        it[pending_infra_metric_batch_units] = 0
+                        it[pending_analytics_pageview_overage_units] = 0
+                        it[pending_analytics_pageview_batch_id] = null
+                        it[pending_analytics_pageview_batch_units] = 0
                     }
                 }
                 pastDueRows.size

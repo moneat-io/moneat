@@ -55,6 +55,12 @@
     <logger name="Exposed" level="INFO"/>
     <logger name="org.flywaydb" level="INFO"/>
     <logger name="io.opentelemetry" level="WARN"/>
+    <!-- MCP SDK registers features per session and logs each registration at INFO. -->
+    <logger name="io.modelcontextprotocol.kotlin.sdk.server" level="WARN"/>
+    <logger name="FeatureRegistry[Tool]" level="WARN"/>
+    <logger name="FeatureRegistry[Prompt]" level="WARN"/>
+    <logger name="FeatureRegistry[Resource]" level="WARN"/>
+    <logger name="FeatureRegistry[ResourceTemplate]" level="WARN"/>
 
     <!-- Prevent telemetry feedback loops: ingestion/telemetry loggers should not emit back to OTLP -->
     <!-- Use STDOUT_JSON or STDOUT_PLAIN based on LOG_FORMAT for consistent output -->

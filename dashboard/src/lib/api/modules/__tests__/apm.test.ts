@@ -50,18 +50,88 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/traces`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('api-gateway')
+        expect(url.searchParams.get('services')).toBe('api-gateway,worker')
+        expect(url.searchParams.get('source')).toBe('otlp')
+        expect(url.searchParams.get('status')).toBe('error')
         expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('operation')).toBe('POST /checkout')
+        expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('limit')).toBe('20')
         expect(url.searchParams.get('offset')).toBe('10')
+        expect(url.searchParams.get('timeRange')).toBe('7d')
         return HttpResponse.json(mockResponse)
       })
     )
 
     const result = await api.getApmTraces({
       service: 'api-gateway',
+      services: ['api-gateway', 'worker'],
+      source: 'otlp',
+      status: 'error',
       env: 'production',
+      operation: 'POST /checkout',
+      search: 'checkout',
       limit: 20,
       offset: 10,
+      timeRange: '7d',
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
+  // ──── getApmOverview ────
+
+  it('fetches APM overview with filter params', async () => {
+    const mockResponse = {
+      stats: {
+        totalTraces: 10,
+        errorTraces: 1,
+        errorRate: 0.1,
+        serviceCount: 2,
+        sourceCount: 1,
+        p50DurationNs: 42000000,
+        p95DurationNs: 312000000,
+        p99DurationNs: 842000000,
+        avgSpansPerTrace: 18.7,
+        previous: {
+          totalTraces: 8,
+          errorRate: 0,
+          p50DurationNs: 40000000,
+          p95DurationNs: 300000000,
+          p99DurationNs: 800000000,
+          avgSpansPerTrace: 15.2,
+        },
+      },
+      latencySeries: [],
+      serviceHealth: [],
+      resourceHotspots: [],
+      errors: [],
+      facets: { services: [], sources: [], environments: [], operations: [] },
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/traces/overview`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('service')).toBe('api-gateway')
+        expect(url.searchParams.get('services')).toBe('api-gateway,worker')
+        expect(url.searchParams.get('source')).toBe('sentry')
+        expect(url.searchParams.get('status')).toBe('ok')
+        expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('operation')).toBe('GET /orders')
+        expect(url.searchParams.get('search')).toBe('checkout')
+        expect(url.searchParams.get('timeRange')).toBe('24h')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmOverview({
+      service: 'api-gateway',
+      services: ['api-gateway', 'worker'],
+      source: 'sentry',
+      status: 'ok',
+      env: 'production',
+      operation: 'GET /orders',
+      search: 'checkout',
+      timeRange: '24h',
     })
     expect(result).toEqual(mockResponse)
   })
@@ -81,25 +151,239 @@ describe('APM API', () => {
     expect(result).toEqual(mockDetail)
   })
 
+  it('normalizes trace detail span attributes from array payloads', async () => {
+    const mockDetail = {
+      traceId: 'trace-arrays',
+      spans: [
+        {
+          spanId: 'span-1',
+          traceId: 'trace-arrays',
+          parentId: '',
+          name: 'GET /checkout',
+          service: 'checkout-api',
+          resource: 'GET /checkout',
+          type: 'web',
+          startNs: 1,
+          durationNs: 2,
+          error: 0,
+          meta: [
+            {key: 'http.method', value: 'GET'},
+            {key: 'http.status_code', value: 200},
+            {other: 'ignored'},
+          ],
+          metrics: [
+            {key: 'db.rows', value: '12'},
+            {key: 'cache.hit', value: true},
+            {key: 'bad.metric', value: 'NaN'},
+            {other: 'ignored'},
+          ],
+          resourceAttributes: [
+            {key: 'service.namespace', value: 'payments'},
+          ],
+          host: 'localhost',
+          env: 'dev',
+          version: '1.0.0',
+          source: 'otlp',
+        },
+      ],
+      duration: 150,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/traces/trace-arrays`, () => {
+        return HttpResponse.json(mockDetail)
+      })
+    )
+
+    const result = await api.getApmTraceDetail('trace-arrays')
+    expect(result).toMatchObject({
+      traceId: 'trace-arrays',
+      duration: 150,
+      spans: [
+        {
+          meta: {'http.method': 'GET', 'http.status_code': '200'},
+          metrics: {'db.rows': 12, 'cache.hit': 1, 'bad.metric': 0},
+          resourceAttributes: {'service.namespace': 'payments'},
+        },
+      ],
+    })
+  })
+
+  it('normalizes trace detail span attributes from object and empty payloads', async () => {
+    const mockDetail = {
+      traceId: 'trace-objects',
+      spans: [
+        {
+          spanId: 'span-1',
+          traceId: 'trace-objects',
+          parentId: '',
+          name: 'POST /orders',
+          service: 'orders-api',
+          resource: 'POST /orders',
+          type: 'web',
+          startNs: 1,
+          durationNs: 2,
+          error: 1,
+          meta: {'error.type': 'Error', retry: 2, nullable: null},
+          metrics: {attempts: '3', failed: true, empty: null, infinite: 'Infinity'},
+          resourceAttributes: undefined,
+          host: 'localhost',
+          env: 'dev',
+          version: '1.0.0',
+          source: 'otlp',
+        },
+        {
+          spanId: 'span-2',
+          traceId: 'trace-objects',
+          parentId: 'span-1',
+          name: 'queue.publish',
+          service: 'orders-api',
+          resource: 'queue.publish',
+          type: 'queue',
+          startNs: 3,
+          durationNs: 4,
+          error: 0,
+          meta: 'invalid',
+          metrics: 'invalid',
+          resourceAttributes: 'invalid',
+          host: 'localhost',
+          env: 'dev',
+          version: '1.0.0',
+          source: 'otlp',
+        },
+      ],
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/traces/trace-objects`, () => {
+        return HttpResponse.json(mockDetail)
+      })
+    )
+
+    const result = await api.getApmTraceDetail('trace-objects')
+    expect(result.spans[0]).toMatchObject({
+      meta: {'error.type': 'Error', retry: '2', nullable: ''},
+      metrics: {attempts: 3, failed: 1, empty: 0, infinite: 0},
+      resourceAttributes: {},
+    })
+    expect(result.spans[1]).toMatchObject({
+      meta: {},
+      metrics: {},
+      resourceAttributes: {},
+    })
+  })
+
+  // ──── getApmServices ────
+
+  it('fetches APM services with scope params', async () => {
+    const mockResponse = {
+      services: [{name: 'checkout-api', status: 'healthy'}],
+      summary: {total: 1, alerting: 0, degraded: 0},
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/services`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('6h')
+        expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('source')).toBe('otlp')
+        expect(url.searchParams.get('search')).toBe('checkout')
+        expect(url.searchParams.get('limit')).toBe('100')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmServices({
+      timeRange: '6h',
+      env: 'production',
+      source: 'otlp',
+      search: 'checkout',
+      limit: 100,
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
+  it('fetches an APM service detail', async () => {
+    const mockResponse = {name: 'checkout-api', resources: []}
+
+    server.use(
+      http.get(`${API_BASE}/v1/services/checkout-api`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('24h')
+        expect(url.searchParams.get('env')).toBe('production')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmServiceDetail('checkout-api', {
+      timeRange: '24h',
+      env: 'production',
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
+  it('fetches an APM resource detail', async () => {
+    const mockResponse = {serviceName: 'checkout-api', method: 'POST', path: '/checkout/pay'}
+
+    server.use(
+      http.get(`${API_BASE}/v1/services/checkout-api/resources/post-checkout-pay`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('1h')
+        return HttpResponse.json(mockResponse)
+      })
+    )
+
+    const result = await api.getApmResourceDetail('checkout-api', 'post-checkout-pay', {
+      timeRange: '1h',
+    })
+    expect(result).toEqual(mockResponse)
+  })
+
   // ──── getApmServiceMap ────
 
   it('fetches APM service map', async () => {
-    const mockMap = { nodes: [], edges: [] }
+    const mockMap = { services: [], edges: [] }
 
     server.use(
-      http.get(`${API_BASE}/v1/services/map`, () => {
+      http.get(`${API_BASE}/v1/services/map`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('6h')
+        expect(url.searchParams.get('env')).toBe('prod')
+        expect(url.searchParams.get('source')).toBe('otlp')
         return HttpResponse.json(mockMap)
       })
     )
 
-    const result = await api.getApmServiceMap()
+    const result = await api.getApmServiceMap({ timeRange: '6h', env: 'prod', source: 'otlp' })
     expect(result).toEqual(mockMap)
+  })
+
+  it('fetches APM service latency', async () => {
+    const mockLatency = {
+      service: 'checkout',
+      p50DurationNs: 1_000,
+      p90DurationNs: 5_000,
+      p99DurationNs: 9_000,
+      sampleCount: 42,
+    }
+
+    server.use(
+      http.get(`${API_BASE}/v1/services/checkout/latency`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('timeRange')).toBe('24h')
+        expect(url.searchParams.get('env')).toBe('prod')
+        return HttpResponse.json(mockLatency)
+      })
+    )
+
+    const result = await api.getApmServiceLatency('checkout', { timeRange: '24h', env: 'prod' })
+    expect(result).toEqual(mockLatency)
   })
 
   // ──── getApmErrors ────
 
   it('fetches APM errors without params', async () => {
-    const mockResponse = { errors: [], total: 0 }
+    const mockResponse = { errors: [], totalCount: 0, serviceFacets: [] }
 
     server.use(
       http.get(`${API_BASE}/v1/apm-errors`, () => {
@@ -112,22 +396,30 @@ describe('APM API', () => {
   })
 
   it('fetches APM errors with filter params', async () => {
-    const mockResponse = { errors: [{ id: 'err-1' }], total: 1 }
+    const mockResponse = {
+      errors: [{ id: 'err-1' }],
+      totalCount: 1,
+      serviceFacets: [{ service: 'payment-svc', count: 1 }],
+    }
 
     server.use(
       http.get(`${API_BASE}/v1/apm-errors`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('payment-svc')
+        expect(url.searchParams.get('services')).toBe('payment-svc,worker')
         expect(url.searchParams.get('limit')).toBe('50')
         expect(url.searchParams.get('offset')).toBe('0')
+        expect(url.searchParams.get('timeRange')).toBe('90d')
         return HttpResponse.json(mockResponse)
       })
     )
 
     const result = await api.getApmErrors({
       service: 'payment-svc',
+      services: ['payment-svc', 'worker'],
       limit: 50,
       offset: 0,
+      timeRange: '90d',
     })
     expect(result).toEqual(mockResponse)
   })
@@ -154,14 +446,30 @@ describe('APM API', () => {
       http.get(`${API_BASE}/v1/traces/resources`, ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('service')).toBe('user-svc')
+        expect(url.searchParams.get('services')).toBe('user-svc,worker')
+        expect(url.searchParams.get('source')).toBe('otlp')
+        expect(url.searchParams.get('status')).toBe('error')
+        expect(url.searchParams.get('env')).toBe('production')
+        expect(url.searchParams.get('operation')).toBe('POST /users')
+        expect(url.searchParams.get('search')).toBe('checkout')
         expect(url.searchParams.get('limit')).toBe('10')
+        expect(url.searchParams.get('offset')).toBe('20')
+        expect(url.searchParams.get('timeRange')).toBe('30d')
         return HttpResponse.json(mockResponse)
       })
     )
 
     const result = await api.getApmResourceStats({
       service: 'user-svc',
+      services: ['user-svc', 'worker'],
+      source: 'otlp',
+      status: 'error',
+      env: 'production',
+      operation: 'POST /users',
+      search: 'checkout',
       limit: 10,
+      offset: 20,
+      timeRange: '30d',
     })
     expect(result).toEqual(mockResponse)
   })

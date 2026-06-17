@@ -23,6 +23,7 @@ import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
 import com.moneat.events.repositories.models.ReplayRecordingInsertData
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.SpanInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 
@@ -33,10 +34,12 @@ import com.moneat.events.repositories.models.TransactionEventInsertData
 interface EventRepository {
     fun verifyProjectKey(projectId: Long, publicKey: String): ProjectKeyVerification
     fun getOrganizationIdForProject(projectId: Long): Int?
+    fun getServiceNameForProject(projectId: Long): String?
     suspend fun getEventCountForIssue(projectId: Long, issueId: String): Long
 
     suspend fun insertErrorEvent(data: ErrorEventInsertData): Boolean
     suspend fun insertTransaction(data: TransactionEventInsertData): Boolean
+    suspend fun insertSessions(rows: List<SessionInsertData>): Boolean
     suspend fun insertSpans(rows: List<SpanInsertData>)
     suspend fun insertFeedback(data: FeedbackInsertData): Boolean
     suspend fun insertReplayEvent(data: ReplayEventInsertData): Boolean

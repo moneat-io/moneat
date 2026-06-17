@@ -79,9 +79,9 @@ class SlackServiceExtendedTest {
                 }
             slackService.sendOnCallAlert(
                 userId = userId,
-                incidentId = 1,
+                alertResourceId = "f3f01a6b-e6a2-4c6d-8593-2e508dcb2d27",
                 title = "Disk full",
-                priorityLevel = "P1",
+                priority = "P1",
             )
             assertTrue(true)
         }
@@ -109,9 +109,9 @@ class SlackServiceExtendedTest {
             }
             slackService.sendOnCallAlert(
                 userId = userId,
-                incidentId = 2,
+                alertResourceId = "9f3e2a51-9b80-449e-8494-9b9260767187",
                 title = "Outage",
-                priorityLevel = "P2",
+                priority = "P2",
             )
             assertTrue(true)
         }

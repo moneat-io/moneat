@@ -92,7 +92,7 @@ export function AiFloatingPanel() {
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 flex flex-col rounded-xl border border-border bg-background shadow-2xl"
+      className="fixed z-50 flex flex-col rounded-xl border border-border bg-background"
       style={{
         left: pos.x,
         top: pos.y,

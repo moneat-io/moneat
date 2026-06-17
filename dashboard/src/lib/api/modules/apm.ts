@@ -17,66 +17,215 @@
 import type { ApiClientCore } from '../client'
 import { urlWithQuery } from '../utils'
 import type {
+  ApmOverviewResponse,
   ApmTraceListResponse,
   ApmTraceDetailResponse,
+  ApmServiceCatalogResponse,
+  ApmServiceDetail,
   ApmServiceMapResponse,
+  ApmServiceLatency,
+  ApmResourceDetail,
   ApmErrorsResponse,
   ApmResourceStatsResponse,
+  ApmStatusFilter,
+  ApmTimeRange,
 } from '../types'
+
+type ApmListParams = {
+  service?: string
+  services?: string[]
+  source?: string
+  env?: string
+  status?: ApmStatusFilter
+  operation?: string
+  search?: string
+  limit?: number
+  offset?: number
+  timeRange?: ApmTimeRange
+}
+
+function appendApmListParams(searchParams: URLSearchParams, params: ApmListParams): void {
+  if (params.service) searchParams.set('service', params.service)
+  if (params.services?.length) searchParams.set('services', params.services.join(','))
+  if (params.source) searchParams.set('source', params.source)
+  if (params.env) searchParams.set('env', params.env)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.operation) searchParams.set('operation', params.operation)
+  if (params.search) searchParams.set('search', params.search)
+  if (params.limit != null) searchParams.set('limit', String(params.limit))
+  if (params.offset != null) searchParams.set('offset', String(params.offset))
+  if (params.timeRange) searchParams.set('timeRange', params.timeRange)
+}
+
+type ApmServiceMapParams = {
+  timeRange?: ApmTimeRange
+  env?: string
+  source?: string
+}
+
+function appendServiceMapParams(searchParams: URLSearchParams, params: ApmServiceMapParams): void {
+  if (params.timeRange) searchParams.set('timeRange', params.timeRange)
+  if (params.env) searchParams.set('env', params.env)
+  if (params.source) searchParams.set('source', params.source)
+}
+
+function normalizeStringMap(raw: unknown): Record<string, string> {
+  if (!raw) return {}
+  if (Array.isArray(raw)) {
+    const result: Record<string, string> = {}
+    for (const item of raw) {
+      if (item && typeof item === 'object' && 'key' in item && 'value' in item) {
+        result[String(item.key)] = String(item.value)
+      }
+    }
+    return result
+  }
+  if (typeof raw === 'object') {
+    const result: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      result[k] = typeof v === 'string' ? v : String(v ?? '')
+    }
+    return result
+  }
+  return {}
+}
+
+function normalizeNumberMap(raw: unknown): Record<string, number> {
+  if (!raw) return {}
+  if (Array.isArray(raw)) {
+    const result: Record<string, number> = {}
+    for (const item of raw) {
+      if (item && typeof item === 'object' && 'key' in item && 'value' in item) {
+        result[String(item.key)] = toFiniteNumber(item.value)
+      }
+    }
+    return result
+  }
+  if (typeof raw === 'object') {
+    const result: Record<string, number> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      result[k] = toFiniteNumber(v)
+    }
+    return result
+  }
+  return {}
+}
+
+function toFiniteNumber(value: unknown): number {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function normalizeSpan(span: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...span,
+    meta: normalizeStringMap(span.meta),
+    metrics: normalizeNumberMap(span.metrics),
+    resourceAttributes: normalizeStringMap(span.resourceAttributes),
+  }
+}
 
 export function apmMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
     getApmTraces: (
-      params: {
-        service?: string
-        env?: string
-        limit?: number
-        offset?: number
-      } = {}
+      params: ApmListParams = {}
     ) => {
       const searchParams = new URLSearchParams()
-      if (params.service) searchParams.set('service', params.service)
-      if (params.env) searchParams.set('env', params.env)
-      if (params.limit != null) searchParams.set('limit', String(params.limit))
-      if (params.offset != null) searchParams.set('offset', String(params.offset))
+      appendApmListParams(searchParams, params)
       const qs = searchParams.toString()
       return core.request<ApmTraceListResponse>(urlWithQuery(`${base}/traces`, qs))
     },
 
-    getApmTraceDetail: (traceId: string) =>
-      core.request<ApmTraceDetailResponse>(`${base}/traces/${traceId}`),
-
-    getApmServiceMap: () =>
-      core.request<ApmServiceMapResponse>(`${base}/services/map`),
-
-    getApmErrors: (
-      params: {
-        service?: string
-        limit?: number
-        offset?: number
-      } = {}
+    getApmOverview: (
+      params: Omit<ApmListParams, 'limit' | 'offset'> = {}
     ) => {
       const searchParams = new URLSearchParams()
-      if (params.service) searchParams.set('service', params.service)
-      if (params.limit != null) searchParams.set('limit', String(params.limit))
-      if (params.offset != null) searchParams.set('offset', String(params.offset))
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmOverviewResponse>(urlWithQuery(`${base}/traces/overview`, qs))
+    },
+
+    getApmTraceDetail: async (traceId: string): Promise<ApmTraceDetailResponse> => {
+      const raw = await core.request<ApmTraceDetailResponse & {spans?: Record<string, unknown>[]}>(
+        `${base}/traces/${traceId}`
+      )
+      return {
+        ...raw,
+        spans: (raw.spans ?? []).map((s) =>
+          normalizeSpan(s as unknown as Record<string, unknown>)
+        ) as unknown as ApmTraceDetailResponse['spans'],
+      }
+    },
+
+    getApmServices: (
+      params: Omit<ApmListParams, 'service' | 'services' | 'status' | 'operation'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmServiceCatalogResponse>(urlWithQuery(`${base}/services`, qs))
+    },
+
+    getApmServiceDetail: (
+      service: string,
+      params: Omit<ApmListParams, 'service' | 'services' | 'status' | 'operation' | 'limit' | 'offset'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmServiceDetail>(
+        urlWithQuery(`${base}/services/${encodeURIComponent(service)}`, qs)
+      )
+    },
+
+    getApmResourceDetail: (
+      service: string,
+      resource: string,
+      params: Omit<ApmListParams, 'service' | 'services' | 'status' | 'operation' | 'limit' | 'offset'> = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
+      const qs = searchParams.toString()
+      return core.request<ApmResourceDetail>(
+        urlWithQuery(
+          `${base}/services/${encodeURIComponent(service)}/resources/${encodeURIComponent(resource)}`,
+          qs,
+        )
+      )
+    },
+
+    getApmServiceMap: (params: ApmServiceMapParams = {}) => {
+      const searchParams = new URLSearchParams()
+      appendServiceMapParams(searchParams, params)
+      return core.request<ApmServiceMapResponse>(
+        urlWithQuery(`${base}/services/map`, searchParams.toString())
+      )
+    },
+
+    getApmServiceLatency: (service: string, params: ApmServiceMapParams = {}) => {
+      const searchParams = new URLSearchParams()
+      appendServiceMapParams(searchParams, params)
+      return core.request<ApmServiceLatency>(
+        urlWithQuery(`${base}/services/${encodeURIComponent(service)}/latency`, searchParams.toString())
+      )
+    },
+
+    getApmErrors: (
+      params: ApmListParams = {}
+    ) => {
+      const searchParams = new URLSearchParams()
+      appendApmListParams(searchParams, params)
       const qs = searchParams.toString()
       return core.request<ApmErrorsResponse>(urlWithQuery(`${base}/apm-errors`, qs))
     },
 
     getApmResourceStats: (
-      params: {
-        service?: string
-        limit?: number
-        offset?: number
-      } = {}
+      params: ApmListParams = {}
     ) => {
       const searchParams = new URLSearchParams()
-      if (params.service) searchParams.set('service', params.service)
-      if (params.limit != null) searchParams.set('limit', String(params.limit))
-      if (params.offset != null) searchParams.set('offset', String(params.offset))
+      appendApmListParams(searchParams, params)
       const qs = searchParams.toString()
       return core.request<ApmResourceStatsResponse>(
         urlWithQuery(`${base}/traces/resources`, qs)

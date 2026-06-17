@@ -5,12 +5,13 @@
 package com.moneat.enterprise.ai.services
 
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
-import com.moneat.enterprise.mcp.models.McpContext
-import com.moneat.enterprise.mcp.protocol.InputSchema
-import com.moneat.enterprise.mcp.protocol.McpTool
-import com.moneat.enterprise.mcp.protocol.McpToolRegistry
-import com.moneat.enterprise.mcp.protocol.ToolCallResult
-import com.moneat.enterprise.mcp.protocol.ToolContent
+import com.moneat.mcp.auth.McpScopes
+import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.protocol.InputSchema
+import com.moneat.mcp.protocol.McpTool
+import com.moneat.mcp.protocol.McpToolRegistry
+import com.moneat.mcp.protocol.ToolCallResult
+import com.moneat.mcp.protocol.ToolContent
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +33,7 @@ class AiAssistantServiceTest {
 
     @Test
     fun `stream executes read-only tool and emits response`() = runBlocking {
+        var observedScopes = emptySet<String>()
         val registry = McpToolRegistry()
         registry.register(
             object : McpTool {
@@ -39,6 +41,7 @@ class AiAssistantServiceTest {
                 override val description = "List issues"
                 override val inputSchema = InputSchema()
                 override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
+                    observedScopes = context.scopes
                     return ToolCallResult(content = listOf(ToolContent(text = "Found 2 issues")))
                 }
             },
@@ -76,22 +79,25 @@ class AiAssistantServiceTest {
         assertTrue(events.any { it["type"]?.jsonPrimitive?.content == "tool_result" })
         assertTrue(events.any { it["type"]?.jsonPrimitive?.content == "response" })
         assertTrue(events.any { it["type"]?.jsonPrimitive?.content == "done" })
+        assertEquals(setOf(McpScopes.EVENT_READ), observedScopes)
         assertEquals(2, fakeClient.callCount)
     }
 
     @Test
     fun `write tool requires confirmation before execution`() = runBlocking {
         var writeExecutions = 0
+        var observedScopes = emptySet<String>()
         val registry = McpToolRegistry()
         registry.register(
             object : McpTool {
-                override val name = "create_host"
-                override val description = "Create host"
+                override val name = "create_project"
+                override val description = "Create project"
                 override val readOnly = false
                 override val inputSchema = InputSchema()
                 override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
+                    observedScopes = context.scopes
                     writeExecutions += 1
-                    return ToolCallResult(content = listOf(ToolContent(text = "Host created")))
+                    return ToolCallResult(content = listOf(ToolContent(text = "Project created")))
                 }
             },
         )
@@ -103,12 +109,12 @@ class AiAssistantServiceTest {
                     toolCalls = listOf(
                         AssistantToolCall(
                             id = "call-2",
-                            name = "create_host",
-                            arguments = """{"hostname":"edge-01"}""",
+                            name = "create_project",
+                            arguments = """{"name":"edge-01"}""",
                         ),
                     ),
                 ),
-                AssistantCompletion(content = "Done. Host edge-01 has been created.", toolCalls = emptyList()),
+                AssistantCompletion(content = "Done. Project edge-01 has been created.", toolCalls = emptyList()),
             ),
         )
 
@@ -119,7 +125,7 @@ class AiAssistantServiceTest {
             writer = writer,
             userId = 5,
             orgId = 99,
-            message = "Create a host named edge-01",
+            message = "Create a project named edge-01",
             conversationId = null,
         )
 
@@ -142,9 +148,10 @@ class AiAssistantServiceTest {
         )
 
         assertEquals(1, writeExecutions)
+        assertEquals(setOf(McpScopes.PROJECT_WRITE), observedScopes)
         assertTrue(confirmResponse.approved)
-        assertEquals("create_host", confirmResponse.tool)
-        assertTrue(confirmResponse.response.contains("Host edge-01"))
+        assertEquals("create_project", confirmResponse.tool)
+        assertTrue(confirmResponse.response.contains("Project edge-01"))
     }
 
     @Test

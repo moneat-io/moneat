@@ -75,7 +75,7 @@ export async function streamAiAssistant(
   conversationId: string | null,
   onEvent: (event: AssistantStreamEvent) => void,
   signal?: AbortSignal,
-  projectId?: number | null,
+  projectId?: string | null,
 ): Promise<void> {
   const impersonateToken = sessionStorage.getItem('impersonate_token')
   const authHeaders: Record<string, string> = impersonateToken

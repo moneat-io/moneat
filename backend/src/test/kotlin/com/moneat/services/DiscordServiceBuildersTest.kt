@@ -18,11 +18,14 @@ package com.moneat.services
 
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
+import com.moneat.notifications.services.HostAlertNotification
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.respond
+import com.moneat.workflows.models.WorkflowPreviewField
+import com.moneat.workflows.models.WorkflowStepPreview
 import io.mockk.every
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
@@ -50,6 +53,7 @@ class DiscordServiceBuildersTest {
         private const val WIDGET_ERROR_RATE = "Error Rate"
         private const val TIMESTAMP_2024_06_15 = "2024-06-15T10:30:00Z"
         private const val UPTIME_MONITOR_DOWN = "🔴 Uptime Monitor Down"
+        private const val HOST_RESOURCE_ID = "00000000-0000-4000-8000-000000000042"
     }
 
     private lateinit var discordService: DiscordService
@@ -84,6 +88,38 @@ class DiscordServiceBuildersTest {
             } get Organizations.id
         }
 
+    private fun workflowPreview(): WorkflowStepPreview =
+        WorkflowStepPreview(
+            step = "notification.discord",
+            channel = "discord",
+            title = "[P1] Worker failures detected",
+            body = "Worker failures crossed the threshold",
+            textBody = "[P1] Worker failures detected",
+            color = "#E01E5A",
+            fields = listOf(
+                WorkflowPreviewField("Status", "Firing"),
+                WorkflowPreviewField("Priority", "[P1]"),
+                WorkflowPreviewField("Dashboard", "Moneat Backend System Health")
+            ),
+            ctaLabel = "View",
+            ctaUrl = "$BASE_URL_APP/dashboards/13",
+            fallbackText = "[P1] Worker failures detected"
+        )
+
+    private fun seedDiscordIntegration(orgId: Int) {
+        transaction {
+            OrganizationIntegrations.insert {
+                it[organization_id] = orgId
+                it[integration_type] = "discord"
+                it[team_id] = "123"
+                it[channel_id] = "456"
+                it[enabled] = true
+                it[created_at] = Clock.System.now()
+                it[updated_at] = Clock.System.now()
+            }
+        }
+    }
+
     // ── No-config path tests ────────────────────────────────────────────
 
     @Test
@@ -93,13 +129,15 @@ class DiscordServiceBuildersTest {
             assertFalse(
                 discordService.sendHostAlert(
                     organizationId = orgId,
-                    hostName = "api-1",
-                    metric = "CPU",
-                    condition = ">",
-                    threshold = "90%",
-                    currentValue = "95%",
-                    hostId = 1,
-                    baseUrl = BASE_URL_APP
+                    alert = HostAlertNotification(
+                        hostName = "api-1",
+                        metric = "CPU",
+                        condition = ">",
+                        threshold = "90%",
+                        currentValue = "95%",
+                        hostResourceId = HOST_RESOURCE_ID,
+                        baseUrl = BASE_URL_APP,
+                    ),
                 )
             )
         }
@@ -113,10 +151,28 @@ class DiscordServiceBuildersTest {
                     organizationId = orgId,
                     hostName = TEST_HOST_DB_PRIMARY,
                     lastSeen = "2024-01-01T00:00:00Z",
-                    hostId = 2,
+                    hostResourceId = HOST_RESOURCE_ID,
                     baseUrl = BASE_URL_APP
                 )
             )
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage returns false when no integration configured`() =
+        runBlocking {
+            val orgId = seedOrg()
+            assertFalse(discordService.sendWorkflowAlertMessage(orgId, workflowPreview()))
+        }
+
+    @Test
+    fun `sendWorkflowAlertMessage builds rich alert embed with configured integration`() =
+        runBlocking {
+            val orgId = seedOrg("Workflow Discord Org")
+            seedDiscordIntegration(orgId)
+
+            val result = discordService.sendWorkflowAlertMessage(orgId, workflowPreview())
+
+            assertFalse(result)
         }
 
     @Test
@@ -127,7 +183,7 @@ class DiscordServiceBuildersTest {
                 discordService.sendHostUp(
                     organizationId = orgId,
                     hostName = "api-1",
-                    hostId = 1,
+                    hostResourceId = HOST_RESOURCE_ID,
                     baseUrl = BASE_URL_APP
                 )
             )
@@ -205,20 +261,20 @@ class DiscordServiceBuildersTest {
     @Test
     fun `buildHostAlertEmbed returns embed with expected title fields color url`() {
         val embed = DiscordService.buildHostAlertEmbed(
-            DiscordService.HostAlertParams(
+            HostAlertNotification(
                 hostName = "api-prod-1",
                 metric = "Memory Usage",
                 condition = ">",
                 threshold = "85%",
                 currentValue = "92%",
-                hostId = 42,
+                hostResourceId = HOST_RESOURCE_ID,
                 baseUrl = BASE_URL_APP,
                 timestamp = "2024-01-15T10:00:00Z"
             )
         )
         assertEquals("⚠️ Host Alert", embed.title)
         assertEquals("**api-prod-1** triggered an alert", embed.description)
-        assertEquals("https://app.moneat.io/monitoring/hosts/42", embed.url)
+        assertEquals("https://app.moneat.io/monitoring/hosts/$HOST_RESOURCE_ID", embed.url)
         assertEquals(0xECB22E, embed.color)
         val fields = requireNotNull(embed.fields)
         assertEquals(4, fields.size)
@@ -238,12 +294,12 @@ class DiscordServiceBuildersTest {
         val embed = DiscordService.buildHostDownEmbed(
             hostName = TEST_HOST_DB_PRIMARY,
             lastSeen = TIMESTAMP_2024_06_15,
-            hostId = 7,
+            hostResourceId = HOST_RESOURCE_ID,
             baseUrl = BASE_URL_APP
         )
         assertEquals("🔴 Host Down", embed.title)
         assertEquals("**$TEST_HOST_DB_PRIMARY** is not responding", embed.description)
-        assertEquals("https://app.moneat.io/monitoring/hosts/7", embed.url)
+        assertEquals("https://app.moneat.io/monitoring/hosts/$HOST_RESOURCE_ID", embed.url)
         assertEquals(0xE01E5A, embed.color)
         val fields = requireNotNull(embed.fields)
         assertEquals(2, fields.size)
@@ -257,12 +313,12 @@ class DiscordServiceBuildersTest {
     fun `buildHostUpEmbed returns embed with expected title fields color url`() {
         val embed = DiscordService.buildHostUpEmbed(
             hostName = "cache-node-3",
-            hostId = 15,
+            hostResourceId = HOST_RESOURCE_ID,
             baseUrl = BASE_URL_APP
         )
         assertEquals("✅ Host Recovered", embed.title)
         assertEquals("**cache-node-3** is back online", embed.description)
-        assertEquals("https://app.moneat.io/monitoring/hosts/15", embed.url)
+        assertEquals("https://app.moneat.io/monitoring/hosts/$HOST_RESOURCE_ID", embed.url)
         assertEquals(0x2EB67D, embed.color)
         val fields = requireNotNull(embed.fields)
         assertEquals(2, fields.size)
@@ -522,13 +578,15 @@ class DiscordServiceBuildersTest {
             assertFalse(
                 discordService.sendHostAlert(
                     organizationId = orgId,
-                    hostName = "api-1",
-                    metric = "CPU",
-                    condition = ">",
-                    threshold = "90%",
-                    currentValue = "95%",
-                    hostId = 1,
-                    baseUrl = BASE_URL_APP
+                    alert = HostAlertNotification(
+                        hostName = "api-1",
+                        metric = "CPU",
+                        condition = ">",
+                        threshold = "90%",
+                        currentValue = "95%",
+                        hostResourceId = HOST_RESOURCE_ID,
+                        baseUrl = BASE_URL_APP,
+                    ),
                 )
             )
         }

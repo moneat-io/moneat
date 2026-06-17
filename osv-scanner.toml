@@ -1,0 +1,8 @@
+# Accepted OSV Scanner vulnerability exceptions.
+# Each ignored vulnerability must include a package/advisory-specific reason,
+# an owner, and a review date in the reason text.
+
+[[IgnoredVulns]]
+id = "GHSA-h67p-54hq-rp68"
+ignoreUntil = 2026-07-15
+reason = "Owner: platform. Review date: 2026-07-15. @maizzle/framework 5.5.0 depends on gray-matter 4, which calls js-yaml.safeLoad; forcing js-yaml 4 breaks production email builds."

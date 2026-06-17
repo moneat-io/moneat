@@ -22,7 +22,6 @@ import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -57,11 +56,13 @@ class LokiHandler : HttpApiHandler() {
         private const val LOKI_TIMESTAMP_MS_LENGTH = 13
     }
 
+    override val httpAuthDefault = HttpAuthDefault.ORG_ID
+
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port ?: LOKI_DEFAULT_PORT)
             val response = httpClient.get("$baseUrl/ready") {
-                request.apiKey?.let { header("X-Scope-OrgID", it) }
+                applyHttpAuth(request.toCredentials())
             }
             if (response.status.isSuccess()) {
                 TestConnectionResult(true, "Connected successfully")
@@ -96,7 +97,7 @@ class LokiHandler : HttpApiHandler() {
                 parameter("start", fromSec.toString() + "000000000")
                 parameter("end", toSec.toString() + "000000000")
                 parameter("limit", boundedLimit)
-                credentials.apiKey?.let { header("X-Scope-OrgID", it) }
+                applyHttpAuth(credentials)
             }
             if (!response.status.isSuccess()) {
                 logger.error { "Loki query failed: ${response.status}" }
@@ -118,7 +119,7 @@ class LokiHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port ?: LOKI_DEFAULT_PORT)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/loki/api/v1/labels") {
-                credentials.apiKey?.let { header("X-Scope-OrgID", it) }
+                applyHttpAuth(credentials)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -148,7 +149,7 @@ class LokiHandler : HttpApiHandler() {
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/loki/api/v1/label/$labelName/values") {
                 if (matcher.isNotBlank()) parameter("query", matcher)
-                credentials.apiKey?.let { header("X-Scope-OrgID", it) }
+                applyHttpAuth(credentials)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject

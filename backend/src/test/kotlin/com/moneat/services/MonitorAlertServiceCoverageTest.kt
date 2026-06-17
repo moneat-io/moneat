@@ -18,14 +18,13 @@ package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -36,23 +35,30 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.mockkStatic
 import io.mockk.unmockkObject
 import io.mockk.unmockkStatic
+import io.mockk.verify
+import io.lettuce.core.api.sync.RedisCommands
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredFunctions
 import kotlin.reflect.jvm.isAccessible
@@ -60,11 +66,37 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+
+private fun expectedResolvedWorkflowEvent(
+    organizationId: Int,
+    hostId: Int,
+    deduplicationKey: String,
+    hostName: String = "host-alert-workflow",
+): AlertResolvedWorkflowEvent {
+    val hostResourceId = transaction {
+        Hosts
+            .selectAll()
+            .where { Hosts.id eq hostId }
+            .single()[Hosts.resource_id]
+            .toString()
+    }
+    return AlertResolvedWorkflowEvent(
+        organizationId = organizationId,
+        source = AlertSource.HOST_ALERT.name,
+        deduplicationKey = deduplicationKey,
+        title = "$hostName - CPU Usage recovered",
+        description = "The alert for CPU Usage is no longer active.",
+        moneatUrl = "https://moneat.io/monitoring/hosts/$hostResourceId",
+        priority = AlertPriority.P1,
+    )
+}
 
 class MonitorAlertServiceCoverageTest {
 
@@ -72,11 +104,15 @@ class MonitorAlertServiceCoverageTest {
         private var db: Database? = null
     }
 
-    private lateinit var emailService: EmailService
-    private lateinit var slackService: SlackService
-    private lateinit var discordService: DiscordService
     private lateinit var incidentService: IncidentService
+    private lateinit var workflowService: WorkflowService
     private lateinit var service: MonitorAlertService
+
+    private data class HostAlertFixture(
+        val orgId: Int,
+        val hostId: Int,
+        val alert: AlertData
+    )
 
     @BeforeTest
     fun setup() {
@@ -102,16 +138,12 @@ class MonitorAlertServiceCoverageTest {
             HostAlertTemplateStates
         )
 
-        emailService = mockk(relaxed = true)
-        slackService = mockk(relaxed = true)
-        discordService = mockk(relaxed = true)
         incidentService = mockk(relaxed = true)
+        workflowService = mockk(relaxed = true)
         service =
             MonitorAlertService(
-                emailService = emailService,
-                slackService = slackService,
-                discordService = discordService,
                 incidentService = incidentService,
+                workflowService = workflowService,
             )
 
         mockkObject(ClickHouseClient, RedisConfig)
@@ -134,6 +166,67 @@ class MonitorAlertServiceCoverageTest {
         return fn.callSuspend(service, *args)
     }
 
+    private fun callPrivate(name: String, vararg args: Any?): Any? {
+        val fn =
+            MonitorAlertService::class.declaredFunctions.single { f ->
+                f.name == name && f.parameters.drop(1).size == args.size
+            }
+        fn.isAccessible = true
+        return fn.call(service, *args)
+    }
+
+    private fun createHostAlertFixture(alertPriority: String? = "HIGH"): HostAlertFixture {
+        val now = Clock.System.now()
+        return transaction {
+            val orgId =
+                Organizations.insert {
+                    it[name] = "Host Alert Workflow Org"
+                    it[slug] = "host-alert-workflow-org"
+                } get Organizations.id
+            val hostId =
+                Hosts.insert {
+                    it[hostname] = "host-alert-workflow"
+                    it[organization_id] = orgId
+                    it[status] = "up"
+                    it[first_seen_at] = now
+                    it[last_seen_at] = now
+                } get Hosts.id
+            val alertId =
+                HostAlerts.insert {
+                    it[host_id] = hostId
+                    it[organization_id] = orgId
+                    it[metric] = "cpu_percent"
+                    it[condition] = ">"
+                    it[threshold] = 80.0
+                    it[duration_seconds] = 0
+                    it[enabled] = true
+                    it[last_triggered_at] = null
+                    it[alert_priority] = alertPriority
+                    it[created_at] = now
+                } get HostAlerts.id
+
+            HostAlertFixture(
+                orgId = orgId,
+                hostId = hostId,
+                alert =
+                AlertData(
+                    id = alertId,
+                    hostId = hostId,
+                    organizationId = orgId,
+                    metric = "cpu_percent",
+                    condition = ">",
+                    threshold = 80.0,
+                    durationSeconds = 0,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = now,
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+            )
+        }
+    }
+
     @Test
     fun `evaluateAlerts completes with no alerts in database`() =
         runBlocking {
@@ -145,18 +238,288 @@ class MonitorAlertServiceCoverageTest {
         runBlocking {
             val body = """{"data":[["42.25"]]}"""
             val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
             every { http.status } returns HttpStatusCode.OK
             coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+            assertEquals(42.25, v!!, 0.001)
+            assertTrue(
+                queries.single().contains("timestamp >= now64(3) - INTERVAL 10 MINUTE")
+            )
+            assertTrue(queries.single().contains("metrics_latest_by_host"))
+            assertTrue(queries.single().contains("host_id = 1"))
+        }
+
+    @Test
+    fun `currentMetricValueQuery calculates disk percent per disk identity`() {
+        val query = service.currentMetricValueQuery(153, 1, "disk_percent")
+
+        assertNotNull(query)
+        assertTrue(query.contains("metric_name IN ('system.disk.percent','system.disk.used','system.disk.total')"))
+        assertTrue(query.contains("GROUP BY disk_identity"))
+        assertTrue(query.contains("tags['device_name']"))
+        assertTrue(query.contains("max(pct)"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.percent')"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.used')"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.total')"))
+        assertFalse(query.contains("system.disk.in_use"))
+        assertFalse(query.contains("CASE WHEN metric_name='system.disk.used'"))
+    }
+
+    @Test
+    fun `currentMetricValueQuery calculates memory percent with normalized fallback metrics`() {
+        val query = service.currentMetricValueQuery(153, 1, "mem_percent")
+
+        assertNotNull(query)
+        assertFalse(query.contains("system.mem.pct_usable"))
+        assertTrue(query.contains("system.mem.available"))
+        assertTrue(query.contains("system.mem.used"))
+        assertTrue(query.contains("system.mem.total"))
+        assertTrue(query.indexOf("system.mem.available") < query.indexOf("system.mem.used"))
+        assertTrue(query.contains("countIf(metric_name = 'system.mem.available') > 0"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.mem.available')"))
+        assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.mem.used')"))
+    }
+
+    @Test
+    fun `checkSustainedCondition calculates memory percent with normalized fallback metrics`() =
+        runBlocking {
+            val body = """{"data":[["1"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "mem_percent",
+                    condition = ">",
+                    threshold = 80.0,
+                    durationSeconds = 60,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertTrue(result)
+            val query = queries.single()
+            assertTrue(query.contains("metrics_rollup_1m"))
+            assertFalse(query.contains("system.mem.pct_usable"))
+            assertTrue(query.contains("sumIf(value_count, metric_name = 'system.mem.available') > 0"))
+            assertTrue(query.indexOf("system.mem.available") < query.indexOf("system.mem.used"))
+        }
+
+    @Test
+    fun `checkSustainedCondition calculates disk percent with normalized fallback metrics`() =
+        runBlocking {
+            val body = """{"data":[["2"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "disk_percent",
+                    condition = "<=",
+                    threshold = 90.0,
+                    durationSeconds = 120,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertTrue(result)
+            val query = queries.single()
+            assertTrue(query.contains("metrics_rollup_1m"))
+            assertTrue(query.contains("metric_name = 'system.disk.percent'"))
+            assertTrue(query.contains("metric_name = 'system.disk.used'"))
+            assertTrue(query.contains("metric_name = 'system.disk.total'"))
+            assertTrue(query.contains("HAVING pct <= 90.0"))
+            assertFalse(query.contains("system.disk.in_use"))
+        }
+
+    @Test
+    fun `checkSustainedCondition builds scalar sustained condition query`() =
+        runBlocking {
+            val body = """{"data":[["1"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "load_1",
+                    condition = ">=",
+                    threshold = 1.0,
+                    durationSeconds = 60,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertTrue(result)
+            val query = queries.single()
+            assertTrue(query.contains("metric_name = 'system.load.1'"))
+            assertTrue(query.contains("HAVING value >= 1.0"))
+        }
+
+    @Test
+    fun `checkSustainedCondition returns false for invalid condition without querying`() =
+        runBlocking {
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 153,
+                    organizationId = 1,
+                    metric = "mem_percent",
+                    condition = "gt",
+                    threshold = 80.0,
+                    durationSeconds = 60,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            val result = callPrivateSuspend("checkSustainedCondition", alert) as Boolean
+
+            assertFalse(result)
+            coVerify(exactly = 0) { ClickHouseClient.execute(any()) }
+        }
+
+    @Test
+    fun `currentMetricValueQuery builds latest value queries for scalar metrics`() {
+        val metrics =
+            mapOf(
+                "cpu_percent" to "system.cpu.percent",
+                "load_1" to "system.load.1",
+                "load_5" to "system.load.5",
+                "load_15" to "system.load.15",
+                "temp_max" to "system.temp.max",
+                "gpu_percent" to "system.gpu.percent",
+                "battery_percent" to "system.battery.percent",
+            )
+
+        metrics.forEach { (metric, metricName) ->
+            val query = service.currentMetricValueQuery(153, 1, metric)
+
+            assertNotNull(query)
+            assertTrue(query.contains("argMax(value, timestamp)"))
+            assertTrue(query.contains("metric_name = '$metricName'"))
+        }
+    }
+
+    @Test
+    fun `getCurrentMetricValue parses disk_percent JSONCompact response`() =
+        runBlocking {
+            val body = """{"data":[["87.5"]]}"""
+            val http = mockk<HttpResponse>()
+            val queries = mutableListOf<String>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } coAnswers {
+                queries.add(firstArg())
+                http
+            }
+
+            val v = service.getCurrentMetricValue(153, 1, "disk_percent")
+
+            assertEquals(87.5, v!!, 0.001)
+            assertFalse(queries.single().contains("system.disk.in_use"))
+            assertTrue(queries.single().contains("GROUP BY disk_identity"))
+            assertTrue(queries.single().contains("system.disk.percent"))
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null for unsuccessful ClickHouse response`() =
+        runBlocking {
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.InternalServerError
             coEvery { ClickHouseClient.execute(any()) } returns http
 
-            val v = callPrivateSuspend("getCurrentMetricValue", 1, 99, "cpu_percent") as Double?
-            assertEquals(42.25, v!!, 0.001)
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null when ClickHouse execution fails`() =
+        runBlocking {
+            coEvery { ClickHouseClient.execute(any()) } throws IllegalStateException("boom")
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null for blank ClickHouse body`() =
+        runBlocking {
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns ""
+            coEvery { ClickHouseClient.execute(any()) } returns http
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
+        }
+
+    @Test
+    fun `getCurrentMetricValue returns null for missing ClickHouse data`() =
+        runBlocking {
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns """{"data":[]}"""
+            coEvery { ClickHouseClient.execute(any()) } returns http
+
+            val v = service.getCurrentMetricValue(1, 99, "cpu_percent")
+
+            assertNull(v)
         }
 
     @Test
     fun `getCurrentMetricValue returns null for unknown metric`() =
         runBlocking {
-            val v = callPrivateSuspend("getCurrentMetricValue", 1, 1, "not_a_metric") as Double?
+            val v = service.getCurrentMetricValue(1, 1, "not_a_metric")
             assertNull(v)
         }
 
@@ -179,7 +542,235 @@ class MonitorAlertServiceCoverageTest {
                     templateAlertId = null,
                 )
             callPrivateSuspend("sendAlertNotification", alert, "host-a", 1, 91.0)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(any())
+            }
         }
+
+    @Test
+    fun `handleRecoveredAlert publishes workflow and resolves configured incident`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            val deduplicationKey = "moneat-host-alert-${fixture.hostId}-id_${fixture.alert.id}"
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.isConnected() } returns true
+            every { RedisConfig.sync() } returns redis
+            every { redis.get(alertKey) } returns "TRIGGERED"
+            every { redis.del(alertKey) } returns 1L
+
+            callPrivateSuspend("handleRecoveredAlert", fixture.alert, "host-alert-workflow", fixture.orgId, alertKey)
+
+            verify { redis.get(alertKey) }
+            verify { redis.del(alertKey) }
+            val clearedLastTriggeredAt =
+                transaction {
+                    HostAlerts
+                        .selectAll()
+                        .where { HostAlerts.id eq fixture.alert.id }
+                        .first()[HostAlerts.last_triggered_at]
+                }
+            assertNull(clearedLastTriggeredAt)
+            coVerify(exactly = 1) {
+                workflowService.publishAlertResolved(
+                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
+                )
+            }
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    fixture.orgId,
+                    AlertSource.HOST_ALERT,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    false,
+                )
+            }
+        }
+
+    @Test
+    fun `handleRecoveredAlert falls back to persisted trigger state when Redis is empty`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            val deduplicationKey = "moneat-host-alert-${fixture.hostId}-id_${fixture.alert.id}"
+            val triggeredAt = Clock.System.now() - 1.minutes
+            val triggeredAlert = fixture.alert.copy(lastTriggeredAt = triggeredAt)
+            transaction {
+                HostAlerts.update({ HostAlerts.id eq fixture.alert.id }) {
+                    it[last_triggered_at] = triggeredAt
+                }
+            }
+
+            callPrivateSuspend("handleRecoveredAlert", triggeredAlert, "host-alert-workflow", fixture.orgId, alertKey)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertResolved(
+                    expectedResolvedWorkflowEvent(fixture.orgId, fixture.hostId, deduplicationKey),
+                )
+            }
+            val clearedLastTriggeredAt =
+                transaction {
+                    HostAlerts
+                        .selectAll()
+                        .where { HostAlerts.id eq fixture.alert.id }
+                        .first()[HostAlerts.last_triggered_at]
+                }
+            assertNull(clearedLastTriggeredAt)
+        }
+
+    @Test
+    fun `handleRecoveredAlert clears global template trigger state`() =
+        runBlocking {
+            val now = Clock.System.now()
+            val triggeredAt = now - 1.minutes
+            val (orgId, hostId, templateId) =
+                transaction {
+                    val organizationId =
+                        Organizations.insert {
+                            it[name] = "Global Alert Workflow Org"
+                            it[slug] = "global-alert-workflow-org"
+                        } get Organizations.id
+                    val host =
+                        Hosts.insert {
+                            it[hostname] = "global-alert-workflow"
+                            it[organization_id] = organizationId
+                            it[status] = "up"
+                            it[first_seen_at] = now
+                            it[last_seen_at] = now
+                        } get Hosts.id
+                    val template =
+                        OrganizationAlertTemplates.insert {
+                            it[organization_id] = organizationId
+                            it[metric] = "cpu_percent"
+                            it[condition] = ">"
+                            it[threshold] = 80.0
+                            it[duration_seconds] = 0
+                            it[enabled] = true
+                            it[alert_priority] = null
+                            it[created_at] = now
+                            it[updated_at] = now
+                        } get OrganizationAlertTemplates.id
+                    HostAlertTemplateStates.insert {
+                        it[template_alert_id] = template
+                        it[host_id] = host
+                        it[last_triggered_at] = triggeredAt
+                    }
+                    Triple(organizationId, host, template)
+                }
+            val alert =
+                AlertData(
+                    id = templateId,
+                    hostId = hostId,
+                    organizationId = orgId,
+                    metric = "cpu_percent",
+                    condition = ">",
+                    threshold = 80.0,
+                    durationSeconds = 0,
+                    enabled = true,
+                    lastTriggeredAt = triggeredAt,
+                    createdAt = now,
+                    scope = MonitorService.ALERT_SCOPE_GLOBAL,
+                    templateAlertId = templateId,
+                )
+            val alertKey = "alert_state:$hostId:tpl_$templateId"
+            val deduplicationKey = "moneat-host-alert-$hostId-tpl_$templateId"
+
+            callPrivateSuspend("handleRecoveredAlert", alert, "global-alert-workflow", orgId, alertKey)
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertResolved(
+                    expectedResolvedWorkflowEvent(orgId, hostId, deduplicationKey, "global-alert-workflow"),
+                )
+            }
+            val clearedTemplateState =
+                transaction {
+                    HostAlertTemplateStates
+                        .selectAll()
+                        .where {
+                            (HostAlertTemplateStates.template_alert_id eq templateId) and
+                                (HostAlertTemplateStates.host_id eq hostId)
+                        }
+                        .first()[HostAlertTemplateStates.last_triggered_at]
+                }
+            assertNull(clearedTemplateState)
+        }
+
+    @Test
+    fun `triggerAlert records state timestamp and publishes workflow`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            val deduplicationKey = "moneat-host-alert-${fixture.hostId}-id_${fixture.alert.id}"
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.isConnected() } returns true
+            every { RedisConfig.sync() } returns redis
+            every { redis.set(alertKey, "TRIGGERED") } returns "OK"
+
+            callPrivateSuspend(
+                "triggerAlert",
+                fixture.alert,
+                "host-alert-workflow",
+                fixture.orgId,
+                91.0,
+                alertKey,
+                Clock.System.now(),
+            )
+
+            verify { redis.set(alertKey, "TRIGGERED") }
+            val lastTriggeredAt =
+                transaction {
+                    HostAlerts
+                        .selectAll()
+                        .where { HostAlerts.id eq fixture.alert.id }
+                        .first()[HostAlerts.last_triggered_at]
+                }
+            assertNotNull(lastTriggeredAt)
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.source == AlertSource.HOST_ALERT &&
+                            it.deduplicationKey == deduplicationKey &&
+                            it.organizationId == fixture.orgId
+                    }
+                )
+            }
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(any(), false)
+            }
+        }
+
+    // ──── Key helpers ────
+
+    @Test
+    fun `host alert keys use stable alert identity`() {
+        val now = Clock.System.now()
+        val directAlert =
+            AlertData(
+                id = 7,
+                hostId = 42,
+                organizationId = 1,
+                metric = "cpu_percent",
+                condition = ">",
+                threshold = 80.0,
+                durationSeconds = 0,
+                enabled = true,
+                lastTriggeredAt = null,
+                createdAt = now,
+                scope = MonitorService.ALERT_SCOPE_HOST,
+                templateAlertId = null,
+            )
+        val templateAlert = directAlert.copy(id = 8, templateAlertId = 17)
+
+        assertEquals("alert_state:42:id_7", callPrivate("hostAlertRedisKey", directAlert))
+        assertEquals("moneat-host-alert-42-id_7", callPrivate("hostAlertDedupKey", directAlert))
+        assertEquals("alert_state:42:tpl_17", callPrivate("hostAlertRedisKey", templateAlert))
+        assertEquals("moneat-host-alert-42-tpl_17", callPrivate("hostAlertDedupKey", templateAlert))
+    }
+
+    // ──── Host status recovery ────
 
     @Test
     fun `checkHostStatuses transitions stale host to down`() =
@@ -211,6 +802,197 @@ class MonitorAlertServiceCoverageTest {
                 }
             assertEquals("down", status)
         }
+
+    @Test
+    fun `checkHostStatuses resolves host down incident when host recovers`() =
+        runBlocking {
+            val orgId =
+                transaction {
+                    Organizations.insert {
+                        it[name] = "Recovered Host Org"
+                        it[slug] = "recovered-host-org"
+                    } get Organizations.id
+                }
+            val now = Clock.System.now()
+            val hostId =
+                transaction {
+                    Hosts.insert {
+                        it[hostname] = "recovered"
+                        it[organization_id] = orgId
+                        it[status] = "down"
+                        it[first_seen_at] = now - 10.minutes
+                        it[last_seen_at] = now
+                    } get Hosts.id
+                }
+
+            callPrivateSuspend("checkHostStatuses")
+
+            val status =
+                transaction {
+                    Hosts.selectAll().where { Hosts.id eq hostId }.first()[Hosts.status]
+                }
+            assertEquals("up", status)
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    "moneat-host-down-$hostId",
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
+            }
+
+            callPrivateSuspend("checkHostStatuses")
+
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    "moneat-host-down-$hostId",
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
+            }
+        }
+
+    @Test
+    fun `checkHostStatuses resolves recovered host while notifications are silenced`() =
+        runBlocking {
+            val orgId =
+                transaction {
+                    Organizations.insert {
+                        it[name] = "Silenced Recovery Org"
+                        it[slug] = "silenced-recovery-org"
+                    } get Organizations.id
+                }
+            val userId =
+                transaction {
+                    Users.insert {
+                        it[email] = "silenced-recovery@test.com"
+                        it[password_hash] = "x"
+                        it[name] = "Silenced Recovery"
+                        it[email_verified] = true
+                    } get Users.id
+                }
+            val now = Clock.System.now()
+            val hostId =
+                transaction {
+                    AlertSilencePeriods.insert {
+                        it[organization_id] = orgId
+                        it[reason] = "maintenance"
+                        it[starts_at] = now - 1.minutes
+                        it[ends_at] = now + 1.hours
+                        it[created_by] = userId
+                        it[created_at] = now
+                    }
+                    Hosts.insert {
+                        it[hostname] = "silenced-recovery"
+                        it[organization_id] = orgId
+                        it[status] = "down"
+                        it[first_seen_at] = now - 10.minutes
+                        it[last_seen_at] = now
+                    } get Hosts.id
+                }
+
+            callPrivateSuspend("checkHostStatuses")
+
+            val status =
+                transaction {
+                    Hosts.selectAll().where { Hosts.id eq hostId }.first()[Hosts.status]
+                }
+            assertEquals("up", status)
+            coVerify(exactly = 1) {
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    "moneat-host-down-$hostId",
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
+            }
+        }
+
+    @Test
+    fun `checkHostStatuses retries host down incident resolution before marking recovered`() =
+        runBlocking {
+            val orgId =
+                transaction {
+                    Organizations.insert {
+                        it[name] = "Retry Recovery Org"
+                        it[slug] = "retry-recovery-org"
+                    } get Organizations.id
+                }
+            val now = Clock.System.now()
+            val hostId =
+                transaction {
+                    Hosts.insert {
+                        it[hostname] = "retry-recovered"
+                        it[organization_id] = orgId
+                        it[status] = "down"
+                        it[first_seen_at] = now - 10.minutes
+                        it[last_seen_at] = now
+                    } get Hosts.id
+                }
+            val deduplicationKey = "moneat-host-down-$hostId"
+            coEvery {
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
+            } throws RuntimeException("resolve failed")
+
+            callPrivateSuspend("checkHostStatuses")
+
+            val failedStatus =
+                transaction {
+                    Hosts.selectAll().where { Hosts.id eq hostId }.first()[Hosts.status]
+                }
+            assertEquals("down", failedStatus)
+
+            coEvery {
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
+            } returns Unit
+
+            callPrivateSuspend("checkHostStatuses")
+
+            val recoveredStatus =
+                transaction {
+                    Hosts.selectAll().where { Hosts.id eq hostId }.first()[Hosts.status]
+                }
+            assertEquals("up", recoveredStatus)
+            coVerify(exactly = 2) {
+                incidentService.autoResolveAlert(
+                    orgId,
+                    AlertSource.HOST_DOWN,
+                    deduplicationKey,
+                    any(),
+                    any(),
+                    any(),
+                    true,
+                )
+            }
+        }
+
+    // ──── Silence cleanup ────
 
     @Test
     fun `cleanupExpiredSilencePeriods removes ended rows`() {

@@ -10,6 +10,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type DdServiceCheckResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -44,44 +45,44 @@ function statusIcon(status: string) {
   }
 }
 
-function statusBadgeClasses(status: string): string {
+type CheckBadgeVariant = 'success' | 'warning' | 'danger' | 'neutral'
+
+function statusBadgeVariant(status: string): CheckBadgeVariant {
   switch (status) {
     case 'ok':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+      return 'success'
     case 'warning':
-      return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/20'
+      return 'warning'
     case 'critical':
-      return 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
+      return 'danger'
     default:
-      return 'bg-muted text-muted-foreground border-border'
+      return 'neutral'
   }
 }
 
 function statusAccentColor(status: string): string {
   switch (status) {
     case 'ok':
-      return 'border-l-emerald-500'
+      return 'border-l-success-solid'
     case 'warning':
-      return 'border-l-yellow-500'
+      return 'border-l-warning-solid'
     case 'critical':
-      return 'border-l-red-500'
+      return 'border-l-danger-solid'
     default:
       return 'border-l-muted-foreground'
   }
 }
 
-function filterDot(status: StatusFilter): string {
+function filterTone(status: StatusFilter): StatusTone {
   switch (status) {
     case 'ok':
-      return 'bg-emerald-500'
+      return 'success'
     case 'warning':
-      return 'bg-yellow-500'
+      return 'warning'
     case 'critical':
-      return 'bg-red-500'
-    case 'unknown':
-      return 'bg-gray-400'
+      return 'danger'
     default:
-      return 'bg-blue-500'
+      return 'neutral'
   }
 }
 
@@ -101,7 +102,7 @@ export function ServiceCheckList() {
     refetchInterval: 15000,
   })
 
-  const checks = data?.serviceChecks ?? []
+  const checks = useMemo(() => data?.serviceChecks ?? [], [data?.serviceChecks])
 
   const filtered = useMemo(() => {
     let result = checks
@@ -144,31 +145,31 @@ export function ServiceCheckList() {
         {!isLoading && checks.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5 text-blue-500" />
+              <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{uniqueChecks}</span>
               <span className="text-muted-foreground text-xs">checks</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-success-fg" />
               <span className="font-semibold tabular-nums">{okCount}</span>
               <span className="text-muted-foreground text-xs">passing</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+              <AlertTriangle className="h-3.5 w-3.5 text-warning-fg" />
               <span className="font-semibold tabular-nums">{warningCount}</span>
               <span className="text-muted-foreground text-xs">warning</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+              <AlertCircle className="h-3.5 w-3.5 text-danger-fg" />
               <span className="font-semibold tabular-nums">{criticalCount}</span>
               <span className="text-muted-foreground text-xs">critical</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Server className="h-3.5 w-3.5 text-sky-500" />
+              <Server className="h-3.5 w-3.5 text-chart-2" />
               <span className="font-semibold tabular-nums">{uniqueHosts}</span>
               <span className="text-muted-foreground text-xs">{uniqueHosts === 1 ? 'host' : 'hosts'}</span>
             </div>
@@ -194,11 +195,11 @@ export function ServiceCheckList() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 statusFilter === f
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              <div className={cn('h-1.5 w-1.5 rounded-full', filterDot(f))} />
+              <StatusDot tone={filterTone(f)} size="sm" />
               <span className="capitalize">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">{filterCounts[f]}</span>
             </button>
@@ -216,8 +217,8 @@ export function ServiceCheckList() {
       ) : checks.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-emerald-500/10">
-              <ShieldCheck className="h-10 w-10 text-blue-500" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <ShieldCheck className="h-10 w-10" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No service checks found</h3>
             <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
@@ -231,7 +232,7 @@ export function ServiceCheckList() {
           <p className="text-sm mt-1">Try adjusting your search or status filter.</p>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[750px]">
               <TableHeader>
@@ -289,8 +290,8 @@ export function ServiceCheckList() {
 
                       <TableCell>
                         <Badge
-                          variant="secondary"
-                          className={cn('text-[11px] gap-1.5 font-medium', statusBadgeClasses(check.status))}
+                          variant={statusBadgeVariant(check.status)}
+                          className="text-[11px] gap-1.5 font-medium"
                         >
                           {statusIcon(check.status)}
                           {check.status}

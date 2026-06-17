@@ -22,9 +22,6 @@ import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.services.MonitorAlertService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -34,6 +31,7 @@ import com.moneat.shared.models.OrganizationAlertTemplates
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
+import com.moneat.workflows.services.WorkflowService
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -67,10 +65,8 @@ class MonitorAlertServiceExtendedTest {
         private var db: Database? = null
     }
 
-    private lateinit var emailService: EmailService
-    private lateinit var slackService: SlackService
-    private lateinit var discordService: DiscordService
     private lateinit var incidentService: IncidentService
+    private lateinit var workflowService: WorkflowService
     private lateinit var service: MonitorAlertService
 
     @BeforeTest
@@ -95,16 +91,12 @@ class MonitorAlertServiceExtendedTest {
             HostAlertTemplateStates
         )
 
-        emailService = mockk(relaxed = true)
-        slackService = mockk(relaxed = true)
-        discordService = mockk(relaxed = true)
         incidentService = mockk(relaxed = true)
+        workflowService = mockk(relaxed = true)
 
         service = MonitorAlertService(
-            emailService = emailService,
-            slackService = slackService,
-            discordService = discordService,
             incidentService = incidentService,
+            workflowService = workflowService,
         )
     }
 
@@ -124,6 +116,24 @@ class MonitorAlertServiceExtendedTest {
                 it[Users.name] = "Test User"
                 it[email_verified] = true
             } get Users.id
+        }
+
+    private fun organizationResourceId(organizationId: Int): String =
+        transaction {
+            Organizations
+                .selectAll()
+                .where { Organizations.id eq organizationId }
+                .single()[Organizations.resource_id]
+                .toString()
+        }
+
+    private fun userResourceId(userId: Int): String =
+        transaction {
+            Users
+                .selectAll()
+                .where { Users.id eq userId }
+                .single()[Users.resource_id]
+                .toString()
         }
 
     private fun seedHost(orgId: Int, hostname: String = "web-01", status: String = "up"): Int =
@@ -194,8 +204,8 @@ class MonitorAlertServiceExtendedTest {
 
         val created = service.createSilencePeriod(orgId, userId, request)
         assertEquals("Deploy window", created.reason)
-        assertEquals(orgId, created.organizationId)
-        assertEquals(userId, created.createdBy)
+        assertEquals(organizationResourceId(orgId), created.organizationId)
+        assertEquals(userResourceId(userId), created.createdBy)
         assertTrue(created.createdAt > 0)
     }
 
@@ -251,7 +261,7 @@ class MonitorAlertServiceExtendedTest {
     @Test
     fun `deleteSilencePeriod with wrong id returns false`() {
         val orgId = seedOrg()
-        assertFalse(service.deleteSilencePeriod(9999, orgId))
+        assertFalse(service.deleteSilencePeriod("9999", orgId))
     }
 
     @Test
@@ -274,9 +284,9 @@ class MonitorAlertServiceExtendedTest {
         assertEquals(1, periods.size)
         val p = periods.first()
         assertNotNull(p.id)
-        assertEquals(orgId, p.organizationId)
+        assertEquals(organizationResourceId(orgId), p.organizationId)
         assertEquals("Maintenance", p.reason)
-        assertEquals(userId, p.createdBy)
+        assertEquals(userResourceId(userId), p.createdBy)
         assertTrue(p.startsAt > 0)
         assertTrue(p.endsAt > p.startsAt)
         assertTrue(p.createdAt > 0)

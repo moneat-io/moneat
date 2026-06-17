@@ -17,6 +17,7 @@
 package com.moneat.monitor.repositories
 
 import com.moneat.monitor.models.HostData
+import kotlin.uuid.Uuid
 
 /**
  * Repository for host data access.
@@ -26,6 +27,7 @@ interface HostRepository {
     fun getHostCountForOrganization(organizationId: Int): Int
     fun listByOrganizationId(organizationId: Int): List<HostData>
     fun getById(hostId: Int): HostData?
+    fun getByResourceId(resourceId: Uuid, organizationIds: List<Int>): HostData?
     fun delete(hostId: Int, organizationId: Int): Boolean
     suspend fun executeClickHouseQuery(sql: String): String
     suspend fun deleteClickHouseData(sql: String): Boolean

@@ -64,14 +64,12 @@ class CloudWatchHandler : DataSourceHandler {
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         val region = request.region ?: "us-east-1"
-        val accessKey = request.accessKeyId
-        val secretKey = request.secretAccessKey
-        if (accessKey.isNullOrBlank() || secretKey.isNullOrBlank()) {
-            return TestConnectionResult(false, "AWS access key and secret key are required")
-        }
+        val useRole = ConnectionOptions.from(request.extraConfig).useRole
+        val cwClient = buildClient(region, useRole, request.accessKeyId, request.secretAccessKey)
+            ?: return TestConnectionResult(false, "AWS access key and secret key are required")
 
         return suspendRunCatching {
-            createClient(region, accessKey, secretKey).use { client ->
+            cwClient.use { client ->
                 val now = Clock.System.now()
                 val startJava = java.time.Instant.ofEpochMilli(now.minus(1.hours).toEpochMilliseconds())
                 val endJava = java.time.Instant.ofEpochMilli(now.toEpochMilliseconds())
@@ -113,8 +111,9 @@ class CloudWatchHandler : DataSourceHandler {
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
         val region = credentials.region ?: "us-east-1"
-        val accessKey = credentials.accessKeyId ?: return emptyList()
-        val secretKey = credentials.secretAccessKey ?: return emptyList()
+        val cwClient = buildClient(
+            region, credentials.options.useRole, credentials.accessKeyId, credentials.secretAccessKey,
+        ) ?: return emptyList()
 
         val metricSpec = suspendRunCatching {
             json.parseToJsonElement(query).jsonObject
@@ -146,7 +145,7 @@ class CloudWatchHandler : DataSourceHandler {
 
         return suspendRunCatching {
             val normalizedLimit = limit.coerceIn(1, CLOUDWATCH_MAX_DATAPOINTS)
-            createClient(region, accessKey, secretKey).use { client ->
+            cwClient.use { client ->
                 val startJava = java.time.Instant.ofEpochMilli(startTime.toEpochMilliseconds())
                 val endJava = java.time.Instant.ofEpochMilli(endTime.toEpochMilliseconds())
                 val request = GetMetricDataRequest {
@@ -209,11 +208,23 @@ class CloudWatchHandler : DataSourceHandler {
         )
     }
 
-    private fun createClient(region: String, accessKey: String, secretKey: String): CloudWatchClient {
-        return CloudWatchClient {
+    /**
+     * Builds a CloudWatch client. With use_role, omits explicit credentials so the
+     * AWS default provider chain (env / profile / IMDS instance role) is used;
+     * otherwise requires static access keys and returns null when they are missing.
+     */
+    private fun buildClient(
+        region: String,
+        useRole: Boolean,
+        accessKey: String?,
+        secretKey: String?,
+    ): CloudWatchClient? = when {
+        useRole -> CloudWatchClient { this.region = region }
+        !accessKey.isNullOrBlank() && !secretKey.isNullOrBlank() -> CloudWatchClient {
             this.region = region
             credentialsProvider = StaticCredentialsProvider(Credentials(accessKey, secretKey, null))
         }
+        else -> null
     }
 
     private fun resolveTime(expr: String, now: Instant): Instant {

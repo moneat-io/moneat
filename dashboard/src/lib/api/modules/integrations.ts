@@ -68,19 +68,22 @@ export function integrationsMethods(core: ApiClientCore) {
       core.request<SlackUsergroup[]>(`${base}/integrations/slack/usergroups`),
 
     setScheduleSlackUsergroup: (
-      scheduleId: number,
+      scheduleId: string,
       usergroupId: string,
       usergroupHandle: string
     ) =>
-      core.request<void>(`${base}/on-call/schedules/${scheduleId}/slack-usergroup`, {
+      core.request<void>(`${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/slack-usergroup`, {
         method: 'PUT',
         body: JSON.stringify({ usergroupId, usergroupHandle }),
       }),
 
-    removeScheduleSlackUsergroup: (scheduleId: number) =>
-      core.request<void>(`${base}/on-call/schedules/${scheduleId}/slack-usergroup`, {
-        method: 'DELETE',
-      }),
+    removeScheduleSlackUsergroup: (scheduleId: string) =>
+      core.request<void>(
+        `${base}/on-call/schedules/${encodeURIComponent(scheduleId)}/slack-usergroup`,
+        {
+          method: 'DELETE',
+        }
+      ),
 
     startDiscordOAuth: () =>
       core.request<SlackOAuthStartResponse>(`${base}/integrations/discord/oauth/start`),
@@ -113,50 +116,50 @@ export function integrationsMethods(core: ApiClientCore) {
       core.request<IncidentProviderConfig[]>(`${apiBase}/api/incident-providers`),
 
     createIncidentProvider: (data: CreateIncidentProviderRequest) =>
-      core.request<{ id: number }>(`${apiBase}/api/incident-providers`, {
+      core.request<{ id: string }>(`${apiBase}/api/incident-providers`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     updateIncidentProvider: (
-      id: number,
+      id: string,
       data: UpdateIncidentProviderRequest
     ) =>
-      core.request<void>(`${apiBase}/api/incident-providers/${id}`, {
+      core.request<void>(`${apiBase}/api/incident-providers/${encodeURIComponent(id)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
 
-    deleteIncidentProvider: (id: number) =>
-      core.request<void>(`${apiBase}/api/incident-providers/${id}`, {
+    deleteIncidentProvider: (id: string) =>
+      core.request<void>(`${apiBase}/api/incident-providers/${encodeURIComponent(id)}`, {
         method: 'DELETE',
       }),
 
-    testIncidentProvider: (id: number) =>
+    testIncidentProvider: (id: string) =>
       core.request<{ success: boolean; error?: string }>(
-        `${apiBase}/api/incident-providers/${id}/test`,
+        `${apiBase}/api/incident-providers/${encodeURIComponent(id)}/test`,
         {
           method: 'POST',
         }
       ),
 
-    getIncidentProviderRules: (id: number) =>
+    getIncidentProviderRules: (id: string) =>
       core.request<IncidentRoutingRule[]>(
-        `${apiBase}/api/incident-providers/${id}/rules`
+        `${apiBase}/api/incident-providers/${encodeURIComponent(id)}/rules`
       ),
 
     updateIncidentProviderRules: (
-      id: number,
+      id: string,
       rules: UpsertRoutingRuleRequest[]
     ) =>
-      core.request<void>(`${apiBase}/api/incident-providers/${id}/rules`, {
+      core.request<void>(`${apiBase}/api/incident-providers/${encodeURIComponent(id)}/rules`, {
         method: 'PUT',
         body: JSON.stringify(rules),
       }),
 
-    getIncidentProviderEvents: (id: number, limit = 50) =>
+    getIncidentProviderEvents: (id: string, limit = 50) =>
       core.request<IncidentEventLogEntry[]>(
-        `${apiBase}/api/incident-providers/${id}/events?limit=${limit}`
+        `${apiBase}/api/incident-providers/${encodeURIComponent(id)}/events?limit=${limit}`
       ),
   }
 }

@@ -38,10 +38,12 @@ import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
 import com.moneat.events.services.ReleaseService
 import com.moneat.notifications.services.NotificationService
+import com.moneat.otlp.services.OtlpExceptionEvent
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
@@ -123,9 +125,12 @@ class EventServiceCoverageTest {
             ProjectKeyVerification(true, "jvm")
         every { eventRepository.getOrganizationIdForProject(any()) } returns null
         every { eventRepository.getOrganizationIdForProject(testProjectId) } returns testOrgId
+        every { eventRepository.getServiceNameForProject(any()) } returns null
+        every { eventRepository.getServiceNameForProject(testProjectId) } returns "test-project"
 
         coEvery { eventRepository.insertErrorEvent(any()) } returns true
         coEvery { eventRepository.insertTransaction(any()) } returns true
+        coEvery { eventRepository.insertSessions(any()) } returns true
         coEvery { eventRepository.insertSpans(any()) } returns Unit
         coEvery { eventRepository.insertFeedback(any()) } returns true
         coEvery { eventRepository.insertReplayEvent(any()) } returns true
@@ -139,6 +144,120 @@ class EventServiceCoverageTest {
             eventRepository = eventRepository,
             releaseService = releaseService,
         )
+    }
+
+    // ──── OTLP exception storage ────
+
+    @Test
+    fun `storeOtlpException returns false without mapped project`() = runBlocking {
+        val result = eventService.storeOtlpException(otlpException(projectId = null))
+
+        assertEquals(false, result)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+    }
+
+    @Test
+    fun `storeOtlpException inserts event and upserts release`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                environment = "",
+                serviceVersion = "1.2.3",
+                stackTrace = """
+                    Traceback header
+                        at com.example.Checkout.pay(Checkout.kt:42)
+                        at com.example.Checkout.handle(Checkout.kt:21)
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(true, result)
+        val event = eventSlot.captured
+        assertEquals(testProjectId, event.projectId)
+        assertEquals("otel", event.platform)
+        assertEquals("checkout failed", event.message)
+        assertEquals("production", event.environment)
+        assertEquals("1.2.3", event.release)
+        assertEquals("api-host", event.serverName)
+        assertEquals("otlp_trace", event.tags?.get("source"))
+        assertEquals("checkout-api", event.tags?.get("service"))
+        assertTrue(event.fingerprint.contains("java.lang.IllegalStateException"))
+        assertTrue(event.fingerprint.any { it.contains("com.example.Checkout.pay") })
+        assertTrue(event.fingerprint.contains("checkout-api"))
+        assertTrue(event.contexts.contains("\"trace_id\":\"trace-1\""))
+        verify {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        }
+    }
+
+    @Test
+    fun `storeOtlpException continues when release upsert fails`() = runBlocking {
+        every {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        } throws IllegalStateException("release unavailable")
+
+        val result = eventService.storeOtlpException(otlpException(serviceVersion = "1.2.3"))
+
+        assertEquals(true, result)
+        verify {
+            releaseService.upsertReleaseFromEvent(testProjectId, "1.2.3", 1_700_000_000_000L)
+        }
+    }
+
+    @Test
+    fun `storeOtlpException fingerprints message when stack has no frame`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                exceptionMessage = "plain message",
+                stackTrace = "java.lang.IllegalStateException: plain message"
+            )
+        )
+
+        assertEquals(true, result)
+        assertTrue(eventSlot.captured.fingerprint.contains("java.lang.IllegalStateException"))
+        assertTrue(eventSlot.captured.fingerprint.contains("plain message"))
+        assertTrue(eventSlot.captured.fingerprint.contains("checkout-api"))
+    }
+
+    @Test
+    fun `storeOtlpException uses default fingerprint when otlp details are blank`() = runBlocking {
+        val eventSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(eventSlot)) } returns true
+
+        val result = eventService.storeOtlpException(
+            otlpException(
+                environment = "",
+                serviceNamespace = "",
+                service = "",
+                host = "",
+                exceptionType = "",
+                exceptionMessage = "",
+                stackTrace = "exception summary without a frame"
+            )
+        )
+
+        assertEquals(true, result)
+        assertEquals(listOf("{{ default }}"), eventSlot.captured.fingerprint)
+        assertEquals("production", eventSlot.captured.environment)
+        assertEquals(null, eventSlot.captured.tags?.get("service.namespace"))
+        assertEquals(null, eventSlot.captured.tags?.get("host"))
+    }
+
+    @Test
+    fun `storeOtlpException returns false when insert fails`() = runBlocking {
+        coEvery { eventRepository.insertErrorEvent(any()) } returns false
+
+        val result = eventService.storeOtlpException(otlpException())
+
+        assertEquals(false, result)
+        verify(exactly = 0) {
+            releaseService.upsertReleaseFromEvent(any(), any(), any())
+        }
     }
 
     // ===================== processEnvelope routing =====================
@@ -165,6 +284,33 @@ class EventServiceCoverageTest {
 
         coVerify(atLeast = 1) { eventRepository.insertErrorEvent(any()) }
     }
+
+    private fun otlpException(
+        projectId: Long? = testProjectId,
+        environment: String = "staging",
+        serviceVersion: String = "",
+        stackTrace: String = "at com.example.Worker.run(Worker.kt:12)",
+        serviceNamespace: String = "checkout",
+        service: String = "checkout-api",
+        host: String = "api-host",
+        exceptionType: String = "java.lang.IllegalStateException",
+        exceptionMessage: String = "checkout failed",
+    ): OtlpExceptionEvent =
+        OtlpExceptionEvent(
+            traceIdHex = "trace-1",
+            spanIdHex = "span-1",
+            organizationId = testOrgId.toLong(),
+            projectId = projectId,
+            serviceNamespace = serviceNamespace,
+            service = service,
+            environment = environment,
+            host = host,
+            serviceVersion = serviceVersion,
+            exceptionType = exceptionType,
+            exceptionMessage = exceptionMessage,
+            stackTrace = stackTrace,
+            timestampMs = 1_700_000_000_000L
+        )
 
     @Test
     fun `processEnvelope routes transaction item to storeTransaction`() = runBlocking {
@@ -308,6 +454,50 @@ class EventServiceCoverageTest {
     }
 
     @Test
+    fun `processEnvelope stores feedback payload in event item as feedback`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val fbJson =
+            """
+            {
+                "event_id": "44bad9a2e3774046977a21440ddb39b2",
+                "type": "feedback",
+                "level": "info",
+                "message": "User Feedback",
+                "timestamp": 1705329045.123,
+                "platform": "java",
+                "contexts": {
+                    "feedback": {
+                        "message": "The sync button is confusing",
+                        "contact_email": "android-user@example.com",
+                        "name": "Android User",
+                        "associated_event_id": "54bad9a2e3774046977a21440ddb39b2"
+                    }
+                },
+                "sdk": {"name": "sentry.java.android", "version": "8.35.0"}
+            }
+            """.trimIndent()
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "44bad9a2e3774046977a21440ddb39b2",
+                items = listOf(EnvelopeItem("event", fbJson))
+            )
+        )
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("44bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
+        assertEquals("The sync button is confusing", feedbackSlot.captured.message)
+        assertEquals("android-user@example.com", feedbackSlot.captured.contactEmail)
+        assertEquals("Android User", feedbackSlot.captured.name)
+        assertEquals("54bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.associatedEventId)
+        assertEquals("sentry.java.android", feedbackSlot.captured.sdkName)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+    }
+
+    @Test
     fun `processEnvelope routes replay_event and replay_recording`() = runBlocking {
         val replayEventJson = Json.encodeToString(
             SentryReplayEvent(
@@ -397,6 +587,344 @@ class EventServiceCoverageTest {
             )
         )
         // No crash - session items are skipped
+    }
+
+    @Test
+    fun `processEnvelope persists session items`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-2",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "11111111-1111-1111-1111-111111111111",
+                          "did": "user-123",
+                          "started": "2026-01-01T00:00:00Z",
+                          "duration": 1.5,
+                          "status": "ok",
+                          "errors": 0,
+                          "attrs": {
+                            "release": "1.0.0",
+                            "environment": "production"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val row = rowsSlot.captured.single()
+        assertEquals("11111111-1111-1111-1111-111111111111", row.sessionId)
+        assertEquals(testProjectId, row.projectId)
+        assertEquals(1_500.0, row.durationMs)
+        assertEquals("ok", row.status)
+        assertEquals(0, row.errors)
+        assertEquals("1.0.0", row.release)
+        assertEquals("production", row.environment)
+        assertEquals("user-123", row.userId)
+        verify { releaseService.upsertReleaseFromEvent(testProjectId, "1.0.0", row.startedMs) }
+    }
+
+    @Test
+    fun `processEnvelope ignores session without release`() = runBlocking {
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-no-release",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "22222222-2222-2222-2222-222222222222",
+                          "started": "2026-01-01T00:00:00Z",
+                          "status": "ok",
+                          "attrs": {}
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        coVerify(exactly = 0) { eventRepository.insertSessions(any()) }
+    }
+
+    @Test
+    fun `processEnvelope normalizes session defaults and error statuses`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-defaults",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "33333333-3333-3333-3333-333333333333",
+                          "timestamp": "2026-01-01T00:00:01Z",
+                          "duration": -2.0,
+                          "status": "errored",
+                          "errors": -1,
+                          "attrs": {
+                            "release": "1.1.0"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val row = rowsSlot.captured.single()
+        assertEquals("33333333-3333-3333-3333-333333333333", row.sessionId)
+        assertEquals(0.0, row.durationMs)
+        assertEquals("errored", row.status)
+        assertEquals(1, row.errors)
+        assertEquals("1.1.0", row.release)
+        assertEquals("production", row.environment)
+        assertEquals("", row.userId)
+    }
+
+    @Test
+    fun `processEnvelope normalizes unknown session status with errors to abnormal`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-unknown-status",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "33333333-3333-3333-3333-333333333334",
+                          "started": "2026-01-01T00:00:00Z",
+                          "status": "failed",
+                          "errors": 2,
+                          "attrs": {
+                            "release": "1.1.1"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val row = rowsSlot.captured.single()
+        assertEquals("abnormal", row.status)
+        assertEquals(2, row.errors)
+    }
+
+    @Test
+    fun `processEnvelope skips session inserts for invalid project`() = runBlocking {
+        eventService.processEnvelope(
+            0L,
+            SentryEnvelope(
+                eventId = "sess-invalid-project",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "44444444-4444-4444-4444-444444444444",
+                          "started": "2026-01-01T00:00:00Z",
+                          "attrs": {
+                            "release": "1.2.0"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        coVerify(exactly = 0) { eventRepository.insertSessions(any()) }
+    }
+
+    @Test
+    fun `processEnvelope handles session repository failures`() = runBlocking {
+        coEvery { eventRepository.insertSessions(any()) } throws IllegalStateException("clickhouse down")
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-insert-failure",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "55555555-5555-5555-5555-555555555555",
+                          "started": "2026-01-01T00:00:00Z",
+                          "attrs": {
+                            "release": "1.3.0"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        verify(exactly = 0) { releaseService.upsertReleaseFromEvent(any(), any(), any()) }
+    }
+
+    @Test
+    fun `processEnvelope stores session when release upsert fails`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+        every {
+            releaseService.upsertReleaseFromEvent(testProjectId, "warn-release", any())
+        } throws IllegalStateException("release write failed")
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-release-failure",
+                items = listOf(
+                    EnvelopeItem(
+                        "session",
+                        """
+                        {
+                          "sid": "66666666-6666-6666-6666-666666666666",
+                          "started": "2026-01-01T00:00:00Z",
+                          "attrs": {
+                            "release": "warn-release"
+                          }
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        assertEquals("warn-release", rowsSlot.captured.single().release)
+    }
+
+    @Test
+    fun `processEnvelope persists session aggregate items`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-aggregate-1",
+                items = listOf(
+                    EnvelopeItem(
+                        "sessions",
+                        """
+                        {
+                          "aggregates": [
+                            {
+                              "started": "2026-01-01T00:00:00Z",
+                              "exited": 2,
+                              "crashed": 1,
+                              "attrs": {
+                                "release": "2.0.0",
+                                "environment": "production"
+                              }
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val rows = rowsSlot.captured
+        assertEquals(3, rows.size)
+        assertEquals(2, rows.count { it.status == "exited" && it.errors == 0 })
+        assertEquals(1, rows.count { it.status == "crashed" && it.errors == 1 })
+        assertTrue(rows.all { it.release == "2.0.0" })
+        assertTrue(rows.all { it.environment == "production" })
+    }
+
+    @Test
+    fun `processEnvelope persists all session aggregate statuses`() = runBlocking {
+        val rowsSlot = slot<List<SessionInsertData>>()
+        coEvery { eventRepository.insertSessions(capture(rowsSlot)) } returns true
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-aggregate-statuses",
+                items = listOf(
+                    EnvelopeItem(
+                        "sessions",
+                        """
+                        {
+                          "aggregates": [
+                            {
+                              "started": "2026-01-01T00:00:00Z",
+                              "exited": -1,
+                              "errored": 1,
+                              "abnormal": 1,
+                              "ok": 1,
+                              "did": "device-1",
+                              "attrs": {
+                                "release": "3.0.0"
+                              }
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        val rows = rowsSlot.captured
+        assertEquals(3, rows.size)
+        assertEquals(1, rows.count { it.status == "errored" && it.errors == 1 })
+        assertEquals(1, rows.count { it.status == "abnormal" && it.errors == 1 })
+        assertEquals(1, rows.count { it.status == "ok" && it.errors == 0 })
+        assertTrue(rows.all { it.release == "3.0.0" })
+        assertTrue(rows.all { it.environment == "production" })
+        assertTrue(rows.all { it.userId == "device-1" })
+    }
+
+    @Test
+    fun `processEnvelope ignores empty session aggregate rows`() = runBlocking {
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "sess-aggregate-no-release",
+                items = listOf(
+                    EnvelopeItem(
+                        "sessions",
+                        """
+                        {
+                          "aggregates": [
+                            {
+                              "started": "2026-01-01T00:00:00Z",
+                              "exited": 1,
+                              "attrs": {}
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+        )
+
+        coVerify(exactly = 0) { eventRepository.insertSessions(any()) }
     }
 
     @Test
@@ -730,6 +1258,79 @@ class EventServiceCoverageTest {
 
         assertTrue(errorSlot.isCaptured)
         assertEquals("warning", errorSlot.captured.level)
+    }
+
+    @Test
+    fun `storeEvent normalizes service tag to service name and writes organization`() = runBlocking {
+        val errorSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(errorSlot)) } returns true
+
+        val eventJson = Json.encodeToString(
+            SentryEvent(
+                eventId = "service-tag-1",
+                level = "error",
+                message = "Service tag fallback",
+                tags = mapOf("service" to "checkout-api"),
+                exception = ExceptionInfo(
+                    values = listOf(ExceptionValue(type = "ServiceError", value = "failed"))
+                )
+            )
+        )
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(eventId = "service-tag-1", items = listOf(EnvelopeItem("event", eventJson)))
+        )
+
+        assertTrue(errorSlot.isCaptured)
+        assertEquals(testOrgId, errorSlot.captured.organizationId)
+        assertEquals("checkout-api", errorSlot.captured.tags?.get("service"))
+        assertEquals("checkout-api", errorSlot.captured.tags?.get("service.name"))
+    }
+
+    @Test
+    fun `storeEvent adds project service name when service tags are absent`() = runBlocking {
+        val errorSlot = slot<ErrorEventInsertData>()
+        coEvery { eventRepository.insertErrorEvent(capture(errorSlot)) } returns true
+
+        val eventJson = Json.encodeToString(
+            SentryEvent(
+                eventId = "service-fallback-1",
+                level = "error",
+                message = "Project fallback",
+                exception = ExceptionInfo(
+                    values = listOf(ExceptionValue(type = "FallbackError", value = "failed"))
+                )
+            )
+        )
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(eventId = "service-fallback-1", items = listOf(EnvelopeItem("event", eventJson)))
+        )
+
+        assertTrue(errorSlot.isCaptured)
+        assertEquals("test-project", errorSlot.captured.tags?.get("service.name"))
+    }
+
+    @Test
+    fun `storeEvent skips insert when organization is missing`() = runBlocking {
+        every { eventRepository.getOrganizationIdForProject(testProjectId) } returns null
+
+        val eventJson = Json.encodeToString(
+            SentryEvent(
+                eventId = "missing-org-1",
+                level = "error",
+                message = "Missing org",
+                exception = ExceptionInfo(
+                    values = listOf(ExceptionValue(type = "MissingOrgError", value = "failed"))
+                )
+            )
+        )
+
+        eventService.processStoreEvent(testProjectId, eventJson)
+
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
 
     @Test
@@ -1068,6 +1669,34 @@ class EventServiceCoverageTest {
 
         assertTrue(errorSlot.isCaptured)
         assertEquals("IOError", errorSlot.captured.exceptionType)
+    }
+
+    @Test
+    fun `processStoreEvent stores feedback event payload as feedback`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val body =
+            """
+            {
+                "event_id": "64bad9a2e3774046977a21440ddb39b2",
+                "type": "feedback",
+                "contexts": {
+                    "feedback": {
+                        "message": "Legacy store feedback",
+                        "contact_email": "legacy@example.com"
+                    }
+                }
+            }
+            """.trimIndent()
+
+        eventService.processStoreEvent(testProjectId, body)
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("64bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
+        assertEquals("Legacy store feedback", feedbackSlot.captured.message)
+        assertEquals("legacy@example.com", feedbackSlot.captured.contactEmail)
+        coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
 
     // ===================== verifyProjectKey caching =====================

@@ -1,0 +1,106 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.mcp.tools
+
+import com.moneat.mcp.protocol.InputSchema
+import com.moneat.mcp.protocol.ToolCallResult
+import com.moneat.mcp.protocol.ToolContent
+import com.moneat.monitor.services.MonitorService
+import com.moneat.shared.services.ProjectIdResolver
+import com.moneat.shared.services.toUuidOrNull
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.uuid.Uuid
+
+val toolJson = Json {
+    encodeDefaults = true
+    ignoreUnknownKeys = true
+    prettyPrint = true
+}
+
+private val projectIdResolver = ProjectIdResolver()
+
+fun textResult(text: String): ToolCallResult {
+    return ToolCallResult(content = listOf(ToolContent(text = text)))
+}
+
+fun errorResult(message: String): ToolCallResult {
+    return ToolCallResult(
+        content = listOf(ToolContent(text = message)),
+        isError = true
+    )
+}
+
+inline fun <reified T> jsonResult(data: T): ToolCallResult {
+    val text = toolJson.encodeToString(data)
+    return ToolCallResult(content = listOf(ToolContent(text = text)))
+}
+
+fun JsonObject.projectIdArg(name: String = "project_id"): Long? =
+    this[name]?.jsonPrimitive?.contentOrNull?.let(projectIdResolver::resolve)
+
+suspend fun withRequiredProjectId(
+    args: JsonObject,
+    block: suspend (Long) -> ToolCallResult,
+): ToolCallResult {
+    val projectId = args.projectIdArg() ?: return errorResult("project_id is required")
+    return block(projectId)
+}
+
+fun schemaProjectId(description: String = "Project resource ID"): JsonObject = JsonObject(
+    mapOf(
+        "type" to JsonPrimitive("string"),
+        "description" to JsonPrimitive(description)
+    )
+)
+
+fun projectIdInputSchema(description: String = "Project resource ID"): InputSchema =
+    InputSchema(
+        properties = JsonObject(
+            mapOf("project_id" to schemaProjectId(description))
+        ),
+        required = listOf("project_id")
+    )
+
+fun schemaResourceId(description: String): JsonObject = schemaString(description)
+
+fun JsonObject.stringContent(name: String): String? =
+    this[name]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
+
+fun parseResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
+fun resolveHostIdArg(
+    args: JsonObject,
+    contextOrganizationId: Int,
+    monitorService: MonitorService,
+    name: String = "host_id"
+): Result<Int> {
+    val raw = args.stringContent(name) ?: return Result.failure(IllegalArgumentException("$name is required"))
+    val resourceId = parseResourceId(raw)
+        ?: return Result.failure(IllegalArgumentException("Invalid $name format; expected host resource ID"))
+    val host = monitorService.getHostByResourceId(resourceId, listOf(contextOrganizationId))
+        ?: return Result.failure(IllegalArgumentException("Host not found: $raw"))
+    if (host.organizationId != contextOrganizationId) {
+        return Result.failure(IllegalArgumentException("Host not found: $raw"))
+    }
+    return Result.success(host.id)
+}

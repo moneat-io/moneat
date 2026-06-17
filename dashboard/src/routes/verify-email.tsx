@@ -16,13 +16,22 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useEffect, useState} from 'react'
-import {Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card'
-import {Logo} from '@/components/Logo'
+import {Loader2} from 'lucide-react'
 import {api} from '@/lib/api'
+import {Button} from '@/components/ui/button'
+import {AuthAlert, AuthShell} from '@/components/auth/AuthShell'
+import {authPrimaryButtonClass} from '@/components/auth/authStyles'
+import {Helmet} from 'react-helmet-async'
 
 export const Route = createFileRoute('/verify-email')({
   component: VerifyEmail,
 })
+
+const STATUS_COPY = {
+  loading: {kicker: 'Email verification', heading: 'Verifying your email', subheading: 'Hang tight while we confirm your link.'},
+  success: {kicker: 'Email verification', heading: 'Email verified', subheading: "You're all set."},
+  error: {kicker: 'Email verification', heading: 'Verification failed', subheading: "We couldn't verify this link."},
+} as const
 
 function VerifyEmail() {
   const navigate = useNavigate()
@@ -41,8 +50,8 @@ function VerifyEmail() {
       try {
         await api.verifyEmail(token)
         setStatus('success')
-        setMessage('Email verified successfully! Redirecting to login...')
-        
+        setMessage('Email verified successfully! Redirecting to sign in…')
+
         setTimeout(() => {
           navigate({ to: '/login' })
         }, 2000)
@@ -56,46 +65,31 @@ function VerifyEmail() {
     verifyEmail()
   }, [token, navigate])
 
+  const copy = STATUS_COPY[status]
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <Logo className="h-10" />
+    <>
+      <Helmet>
+        <title>Email Verification | Moneat</title>
+        <meta name="robots" content="noindex" />
+      </Helmet>
+      <AuthShell kicker={copy.kicker} heading={copy.heading} subheading={copy.subheading}>
+        {status === 'loading' && (
+          <div className="flex items-center gap-3 text-sm text-slate-400">
+            <Loader2 className="size-4 animate-spin text-indigo-300" />
+            Confirming your verification link…
           </div>
-          <CardTitle>Email Verification</CardTitle>
-          <CardDescription>
-            {status === 'loading' && 'Verifying your email...'}
-            {status === 'success' && 'Verification successful'}
-            {status === 'error' && 'Verification failed'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {status === 'loading' && (
-            <div className="flex justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
-            </div>
-          )}
-          {status === 'success' && (
-            <div className="text-center">
-              <div className="text-green-600 mb-2">✓</div>
-              <p className="text-sm text-muted-foreground">{message}</p>
-            </div>
-          )}
-          {status === 'error' && (
-            <div className="text-center">
-              <div className="text-destructive mb-2">✗</div>
-              <p className="text-sm text-muted-foreground">{message}</p>
-              <button
-                onClick={() => navigate({ to: '/login' })}
-                className="mt-4 text-sm text-primary hover:underline"
-              >
-                Go to login
-              </button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        )}
+        {status === 'success' && <AuthAlert tone="success">{message}</AuthAlert>}
+        {status === 'error' && (
+          <div className="grid gap-5">
+            <AuthAlert tone="danger">{message}</AuthAlert>
+            <Button className={authPrimaryButtonClass} onClick={() => navigate({ to: '/login' })}>
+              Go to sign in
+            </Button>
+          </div>
+        )}
+      </AuthShell>
+    </>
   )
 }

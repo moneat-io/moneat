@@ -16,9 +16,13 @@
 
 package com.moneat.config
 
+import com.moneat.runtime.MoneatProcessRole
+import com.moneat.runtime.RuntimeMode
+import com.moneat.secrets.SecretVaultPurpose
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
+private const val GOOGLE_ADS_CONNECTOR_ENABLED_REASON = "Google Ads connector is enabled"
 
 class EnvironmentValidator {
 
@@ -42,6 +46,7 @@ class EnvironmentValidator {
         validateCriticalSecret("DATABASE_PASSWORD", errors)
         validateCriticalSecret("CLICKHOUSE_PASSWORD", errors)
         validateCriticalSecret("DATA_SOURCE_ENCRYPTION_KEY", errors)
+        validateSecretVaultConfig(errors)
 
         // CRITICAL: Production URLs must be set correctly (relaxed for self-host)
         if (!isSelfHost) {
@@ -108,6 +113,8 @@ class EnvironmentValidator {
             validateRequired("DISCORD_BOT_TOKEN", "Discord integration is enabled", errors)
         }
 
+        validateGoogleAdsConnectorConfig(errors)
+
         // Validate Stripe configuration when enabled
         val stripeEnabled = getConfigValue("STRIPE_ENABLED")?.toBoolean() ?: false
         if (stripeEnabled) {
@@ -144,7 +151,153 @@ class EnvironmentValidator {
                 )
             }
         }
+
+        validateProcessRole(errors)
+        validateWorkflowRuntimeConfig(errors)
     }
+
+    private fun validateGoogleAdsConnectorConfig(errors: MutableList<String>) {
+        val googleAdsEnabled = getConfigValue("GOOGLE_ADS_ENABLED")?.toBoolean() ?: false
+        if (googleAdsEnabled) {
+            validateRequired("GOOGLE_ADS_DEVELOPER_TOKEN", GOOGLE_ADS_CONNECTOR_ENABLED_REASON, errors)
+            validateRequired("GOOGLE_ADS_CLIENT_ID", GOOGLE_ADS_CONNECTOR_ENABLED_REASON, errors)
+            validateRequired("GOOGLE_ADS_CLIENT_SECRET", GOOGLE_ADS_CONNECTOR_ENABLED_REASON, errors)
+        }
+    }
+
+    private fun validateProcessRole(errors: MutableList<String>) {
+        val configuredRole = getConfigValue(RuntimeMode.PROCESS_ROLE_ENV)
+        try {
+            MoneatProcessRole.from(configuredRole)
+        } catch (e: IllegalArgumentException) {
+            errors.add("REQUIRED: ${e.message}")
+        }
+    }
+
+    private fun validateWorkflowRuntimeConfig(errors: MutableList<String>) {
+        val workflowsEnabledRaw = getConfigValue("WORKFLOWS_ENABLED")
+        if (workflowsEnabledRaw == null) {
+            validateEnabledWorkflowRuntimeConfig(errors)
+            return
+        }
+
+        val workflowsEnabled = workflowsEnabledRaw.toBooleanStrictOrNull()
+        if (workflowsEnabled == null) {
+            errors.add("REQUIRED: WORKFLOWS_ENABLED must be either 'true' or 'false' when set.")
+            return
+        }
+
+        if (workflowsEnabled) {
+            validateEnabledWorkflowRuntimeConfig(errors)
+        }
+    }
+
+    private fun validateEnabledWorkflowRuntimeConfig(errors: MutableList<String>) {
+        validateRequired("TEMPORAL_TARGET", "workflows are enabled", errors)
+        validateRequired("TEMPORAL_NAMESPACE", "workflows are enabled", errors)
+        validateWorkflowSecret("WORKFLOWS_CONNECTION_KEK", errors)
+        validateWorkflowSecret("WORKFLOWS_SIGNING_KEY", errors)
+        validateWorkflowSecret("WORKFLOWS_TEMPORAL_PAYLOAD_KEY", errors)
+    }
+
+    private fun validateWorkflowSecret(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)
+        if (value.isNullOrBlank()) {
+            errors.add("REQUIRED: $envVar is not set, but it's required because workflows are enabled.")
+        } else if (value.length < MIN_JWT_SECRET_LENGTH) {
+            errors.add("REQUIRED: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for security.")
+        }
+    }
+
+    private fun validateSecretVaultConfig(errors: MutableList<String>) {
+        SecretVaultPurpose.entries.forEach { purpose ->
+            validateOptionalSecret(purpose.activeSecretEnvVar, errors)
+            validateOptionalPreviousSecrets(purpose.previousSecretsEnvVar, errors)
+        }
+        validateApplicationSecretsDistinct(errors)
+    }
+
+    private fun validateOptionalSecret(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)
+        if (!value.isNullOrBlank() && value.length < MIN_JWT_SECRET_LENGTH) {
+            errors.add("REQUIRED: $envVar must be at least $MIN_JWT_SECRET_LENGTH characters for security.")
+        }
+    }
+
+    private fun validateOptionalPreviousSecrets(
+        envVar: String,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)?.takeIf { it.isNotBlank() } ?: return
+        value.split(",").forEach { entry ->
+            val pair = entry.split("=", limit = 2)
+            if (pair.size != 2) {
+                errors.add("REQUIRED: $envVar entries must be 'keyId=secret'.")
+                return@forEach
+            }
+            val keyId = pair[0].trim()
+            val secret = pair[1].trim()
+            if (keyId.isBlank()) {
+                errors.add("REQUIRED: $envVar keyId must not be blank.")
+            }
+            if (secret.isBlank()) {
+                errors.add("REQUIRED: $envVar secret must not be blank.")
+                return@forEach
+            }
+            if (secret.length < MIN_JWT_SECRET_LENGTH) {
+                errors.add("REQUIRED: $envVar secrets must be at least $MIN_JWT_SECRET_LENGTH characters.")
+            }
+        }
+    }
+
+    private fun validateApplicationSecretsDistinct(errors: MutableList<String>) {
+        val coreSecretKeys =
+            listOf(
+                "JWT_SECRET",
+                "DATA_SOURCE_ENCRYPTION_KEY",
+                "WORKFLOWS_SIGNING_KEY",
+                "WORKFLOWS_TEMPORAL_PAYLOAD_KEY"
+            )
+        val directValues =
+            (coreSecretKeys + SecretVaultPurpose.secretEnvVars).distinct().mapNotNull { key ->
+                getConfigValue(key)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { value -> ConfigSecretValue(key, value) }
+            }
+        val values = directValues + previousSecretValues()
+        values
+            .groupBy { it.value }
+            .filterValues { entries -> entries.size > 1 }
+            .values
+            .forEach { duplicates ->
+                errors.add(
+                    "REQUIRED: Application secrets must be distinct; reused by " +
+                        duplicates.joinToString(", ") { it.name } + "."
+                )
+            }
+    }
+
+    private fun previousSecretValues(): List<ConfigSecretValue> =
+        SecretVaultPurpose.entries.flatMap { purpose ->
+            getConfigValue(purpose.previousSecretsEnvVar)
+                ?.takeIf { it.isNotBlank() }
+                ?.split(",")
+                .orEmpty()
+                .mapNotNull { entry ->
+                    val pair = entry.split("=", limit = 2)
+                    if (pair.size != 2) return@mapNotNull null
+                    val keyId = pair[0].trim()
+                    val secret = pair[1].trim()
+                    if (keyId.isBlank() || secret.isBlank()) return@mapNotNull null
+                    ConfigSecretValue("${purpose.previousSecretsEnvVar}[$keyId]", secret)
+                }
+        }
 
     private fun validateRequired(
         envVar: String,
@@ -161,6 +314,11 @@ class EnvironmentValidator {
         return EnvConfig.get(key)
             ?: System.getProperty(key)
     }
+
+    private data class ConfigSecretValue(
+        val name: String,
+        val value: String
+    )
 
     fun validateAndFailFast() {
         logger.info { "Validating environment variables..." }

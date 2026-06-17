@@ -17,25 +17,18 @@
 import {type ClassValue, clsx} from "clsx"
 import {twMerge} from "tailwind-merge"
 import {getNowDate} from './demo'
-import {browserTimezone, formatDate} from './date-format'
+import {browserTimezone, formatDate, parseDate} from './date-format'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 export function formatRelativeTime(dateValue: string | number | undefined, timezone?: string): string {
-  if (!dateValue) return 'unknown'
-  
-  // Handle ClickHouse DateTime format (YYYY-MM-DD HH:MM:SS) as UTC
-  let date: Date
-  if (typeof dateValue === 'number') {
-    date = new Date(dateValue)
-  } else if (dateValue.includes('T')) {
-    date = new Date(dateValue)
-  } else {
-    date = new Date(dateValue + ' UTC')
-  }
-  
+  if (dateValue === undefined || dateValue === '') return 'unknown'
+
+  const date = parseDate(dateValue)
+  if (!Number.isFinite(date.getTime())) return 'unknown'
+
   const now = getNowDate()
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 

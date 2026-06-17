@@ -1,0 +1,44 @@
+{
+    "id": "059-3063-memcached-pods-monitoring-via-prometheus",
+    "title": "Memcached Pods monitoring (via Prometheus)",
+    "description": "Prebuilt Moneat dashboard for Memcached Pods monitoring (via Prometheus) telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Infrastructure"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 2,
+    "warnings": [],
+    "dashboard": {
+        "title": "Memcached Pods monitoring (via Prometheus)",
+        "description": "Prebuilt Moneat dashboard for Memcached Pods monitoring (via Prometheus) telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "pod",
+                "label": null,
+                "type": "query",
+                "query": "label_values(memcached_up, kubernetes_pod_name)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "namespace",
+                "label": null,
+                "type": "query",
+                "query": "label_values(memcached_up, kubernetes_namespace)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": []
+    }
+}

@@ -15,13 +15,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import type {LogEntry} from '@/lib/api'
 import {cn} from '@/lib/utils'
+import {levelBorderClass, levelTone, logLevelBadgeClass} from '@/lib/severity'
 import {stripAnsi} from '@/lib/ansi'
 import {groupExceptionLogs, type LogGroup} from '@/components/logs/groupExceptionLogs'
 import {getNow} from '@/lib/demo'
 import {useTimezone} from '@/hooks/useTimezone'
-import {formatDateTimeWithMs, formatTimeWithMs} from '@/lib/date-format'
+import {formatDateTimeWithMs, formatTimeWithMs, parseDate} from '@/lib/date-format'
 
 interface LogTableProps {
   logs: LogEntry[]
@@ -33,39 +35,25 @@ interface LogTableProps {
   groupExceptions?: boolean
 }
 
-const levelStyles: Record<string, string> = {
-  trace: 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/25',
-  debug: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/25',
-  info: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/25',
-  warn: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/25',
-  error: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/25',
-  fatal: 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border-rose-500/30',
-}
-
-const levelBorderColors: Record<string, string> = {
-  trace: 'border-l-zinc-400/60',
-  debug: 'border-l-teal-400/60',
-  info: 'border-l-indigo-400/60',
-  warn: 'border-l-amber-400/70',
-  error: 'border-l-red-500/80',
-  fatal: 'border-l-rose-500/90',
-}
+// Level badge / border / dot tones all come from the shared severity helper
+// (@/lib/severity) so log levels read the same everywhere.
+const STACK_TRACE_TAG_KEYS = ['exception.stacktrace', 'exception.stack_trace']
 
 function formatTimestamp(value: string, timezone: string): string {
-  const date = new Date(value)
+  const date = parseDate(value)
   if (Number.isNaN(date.getTime())) return value
   return formatDateTimeWithMs(date, timezone)
 }
 
 function formatMobileTimestamp(value: string, timezone: string): string {
-  const date = new Date(value)
+  const date = parseDate(value)
   if (Number.isNaN(date.getTime())) return value
   return formatTimeWithMs(date, timezone)
 }
 
 function formatRelativeTime(value: string): string {
   const now = getNow()
-  const date = new Date(value)
+  const date = parseDate(value)
   if (Number.isNaN(date.getTime())) return value
   const diffMs = now - date.getTime()
   if (diffMs < 0) return 'just now'
@@ -76,13 +64,39 @@ function formatRelativeTime(value: string): string {
   return `${Math.floor(diffMs / 86_400_000)}d ago`
 }
 
+function hasStackTraceTag(tags: Record<string, string>): boolean {
+  return STACK_TRACE_TAG_KEYS.some((key) => Boolean(tags[key]?.trim()))
+}
+
+function getLogText(log: LogEntry): string {
+  return stripAnsi(log.message || log.body || '').trim()
+}
+
+function getStackTraceLine(log: LogEntry): string {
+  return stripAnsi(log.message || log.body || '').trimEnd()
+}
+
+function getGroupedStackTrace(group: LogGroup): string {
+  return group.logs
+    .slice(1)
+    .map((log) => getStackTraceLine(log))
+    .filter((line) => line.trim())
+    .join('\n')
+}
+
 function toDisplayLog(group: LogGroup): LogEntry {
   const first = group.logs[0]!
   if (group.logs.length === 1) return first
+  const stackTrace = getGroupedStackTrace(group)
+  if (!stackTrace || hasStackTraceTag(first.tags)) return first
+
   return {
     ...first,
-    message: group.mergedMessage,
-    body: '',
+    message: first.message || first.body,
+    tags: {
+      ...first.tags,
+      'exception.stacktrace': stackTrace,
+    },
   }
 }
 
@@ -92,7 +106,9 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
     return null // Empty state is handled by parent
   }
 
-  const groups = groupExceptions ? groupExceptionLogs(logs) : logs.map((log) => ({logs: [log], mergedMessage: (log.message || log.body || '').trim()}))
+  const groups = groupExceptions
+    ? groupExceptionLogs(logs)
+    : logs.map((log) => ({logs: [log], mergedMessage: getLogText(log)}))
 
   return (
     <div className="min-w-0 max-w-full bg-card/80">
@@ -128,13 +144,13 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                     isSelected
                       ? 'bg-primary/[0.06] dark:bg-primary/[0.08]'
                       : 'hover:bg-accent/40',
-                    normalizedLevel === 'error' && !isSelected && 'bg-red-500/[0.02] dark:bg-red-500/[0.03]',
-                    normalizedLevel === 'fatal' && !isSelected && 'bg-rose-500/[0.03] dark:bg-rose-500/[0.04]',
-                    normalizedLevel === 'warn' && !isSelected && 'bg-amber-500/[0.02] dark:bg-amber-500/[0.02]'
+                    normalizedLevel === 'error' && !isSelected && 'bg-danger-bg/40',
+                    normalizedLevel === 'fatal' && !isSelected && 'bg-danger-bg/60',
+                    normalizedLevel === 'warn' && !isSelected && 'bg-warning-bg/40'
                   )}
                   onClick={() => onSelectLog(log)}
                 >
-                  <td className={cn('w-[3px] p-0 border-l-[3px]', levelBorderColors[normalizedLevel] || 'border-l-transparent')} />
+                  <td className={cn('w-[3px] p-0 border-l-[3px]', levelBorderClass(normalizedLevel))} />
                   <td className={cn("whitespace-nowrap px-1.5", compact ? "py-0.5" : "py-1.5")}>
                     {compact ? (
                       <>
@@ -155,7 +171,7 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                       className={cn(
                         'font-mono uppercase px-1 py-0',
                         compact ? 'text-[9px]' : 'text-[10px]',
-                        levelStyles[normalizedLevel] || levelStyles.info
+                        logLevelBadgeClass(normalizedLevel)
                       )}
                     >
                       {normalizedLevel}
@@ -184,15 +200,11 @@ export function LogTable({logs, selectedLogId, onSelectLog, compact = true, grou
                         : 'text-foreground/80'
                     )}>
                       {/* Show colored dot on mobile to indicate level since column is hidden */}
-                      <span className={cn(
-                        "sm:hidden inline-block w-1.5 h-1.5 rounded-full mr-1 mb-0.5",
-                        normalizedLevel === 'trace' && "bg-zinc-500",
-                        normalizedLevel === 'debug' && "bg-teal-500",
-                        normalizedLevel === 'info' && "bg-indigo-500",
-                        normalizedLevel === 'warn' && "bg-amber-500",
-                        normalizedLevel === 'error' && "bg-red-500",
-                        normalizedLevel === 'fatal' && "bg-rose-500"
-                      )} />
+                      <StatusDot
+                        tone={levelTone(normalizedLevel)}
+                        size="sm"
+                        className="sm:hidden mr-1 align-middle"
+                      />
                       {stripAnsi(log.message || log.body) || '-'}
                     </span>
                   </td>

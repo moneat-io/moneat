@@ -17,6 +17,7 @@
 package com.moneat.dashboards
 
 import com.moneat.dashboards.models.AggFunction
+import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.FilterDef
 import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.GroupByDef
@@ -25,15 +26,23 @@ import com.moneat.dashboards.models.MetricDef
 import com.moneat.dashboards.models.OrderByDef
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
+import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardQueryEngine
+import io.mockk.every
+import io.mockk.mockk
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DashboardQueryEngineTest {
+    private companion object {
+        const val ORG_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+        const val USER_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
+    }
 
     private val engine = DashboardQueryEngine()
 
@@ -364,6 +373,41 @@ class DashboardQueryEngineTest {
     }
 
     @Test
+    fun `buildWhereClauses scopes log queries by organization when org id is available`() {
+        val dsl = QueryDsl(dataSource = "logs")
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+        assertTrue(clauses.any { it.contains("organization_id = 456") })
+        assertFalse(clauses.any { it.contains("project_id = 123") })
+    }
+
+    @Test
+    fun `buildWhereClauses scopes log queries by project when org id is unavailable`() {
+        val dsl = QueryDsl(dataSource = "logs")
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90)
+        assertTrue(clauses.any { it.contains("project_id = 123") })
+        assertFalse(clauses.any { it.contains("organization_id =") })
+    }
+
+    @Test
+    fun `buildWhereClauses scopes metrics and containers by organization when org id is available`() {
+        val orgScopedSources = listOf("metrics", "containers")
+        for (source in orgScopedSources) {
+            val dsl = QueryDsl(dataSource = source)
+            val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+            assertTrue(clauses.any { it.contains("organization_id = 456") })
+            assertFalse(clauses.any { it.contains("project_id = 123") })
+        }
+    }
+
+    @Test
+    fun `buildWhereClauses keeps event queries project scoped when org id is available`() {
+        val dsl = QueryDsl(dataSource = "events")
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+        assertTrue(clauses.any { it.contains("project_id = 123") })
+        assertFalse(clauses.any { it.contains("organization_id = 456") })
+    }
+
+    @Test
     fun `buildWhereClauses includes retention clause`() {
         val dsl = QueryDsl(dataSource = "events")
         val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90)
@@ -386,6 +430,26 @@ class DashboardQueryEngineTest {
         )
         val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90)
         assertTrue(clauses.any { it.contains("level = 'error'") })
+    }
+
+    @Test
+    fun `buildWhereClauses applies log raw query through explorer parser`() {
+        val dsl = QueryDsl(
+            dataSource = "logs",
+            rawQuery = "level:error service:api timeout"
+        )
+
+        val clauses = engine.buildWhereClauses(dsl, 123, "timestamp", null, 90, orgId = 456)
+        val rawClause = clauses.single { it.contains("toString(level) = 'error'") }
+
+        assertContains(rawClause, "service = 'api'")
+        assertContains(rawClause, "hasTokenCaseInsensitive(message, 'timeout')")
+    }
+
+    @Test
+    fun `buildLogRawQueryClause ignores non log and blank raw queries`() {
+        assertNull(engine.buildLogRawQueryClause(QueryDsl(dataSource = "events", rawQuery = "level:error")))
+        assertNull(engine.buildLogRawQueryClause(QueryDsl(dataSource = "logs", rawQuery = " ")))
     }
 
     // ──── buildQuery (integration / full SQL) ────
@@ -442,6 +506,38 @@ class DashboardQueryEngineTest {
         sources.forEach { ds ->
             assertTrue(ds.fields.isNotEmpty(), "Data source ${ds.name} should have fields")
         }
+    }
+
+    @Test
+    fun `resolveTemplateDataSource maps marker to enabled custom source`() {
+        val dataSourceService = mockk<CustomDataSourceService>()
+        every { dataSourceService.listDataSources(1L) } returns listOf(
+            customDataSource(id = 42, sourceType = "prometheus", enabled = true)
+        )
+
+        val resolved = engine.resolveTemplateDataSource(
+            QueryDsl(dataSource = "__prometheus", rawQuery = "up"),
+            1L,
+            dataSourceService,
+        )
+
+        assertEquals("custom:11111111-1111-1111-1111-000000000042", resolved.dataSource)
+    }
+
+    @Test
+    fun `resolveTemplateDataSource leaves marker unchanged without enabled source`() {
+        val dataSourceService = mockk<CustomDataSourceService>()
+        every { dataSourceService.listDataSources(1L) } returns listOf(
+            customDataSource(id = 42, sourceType = "prometheus", enabled = false)
+        )
+
+        val resolved = engine.resolveTemplateDataSource(
+            QueryDsl(dataSource = "__prometheus", rawQuery = "up"),
+            1L,
+            dataSourceService,
+        )
+
+        assertEquals("__prometheus", resolved.dataSource)
     }
 
     // ──── applyVariables ────
@@ -511,4 +607,78 @@ class DashboardQueryEngineTest {
         // The raw unescaped single quote should not appear without a preceding backslash
         assertFalse(value.startsWith("';"), "Value should not start with unescaped quote")
     }
+
+    @Test
+    fun `applyVariables expands a multi-value selection into an IN list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.EQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "pod-a,pod-b,pod-c"))
+        assertEquals(1, result.filters.size)
+        assertEquals(FilterOp.IN, result.filters[0].op)
+        assertEquals(listOf("pod-a", "pod-b", "pod-c"), result.filters[0].values)
+        assertNull(result.filters[0].value)
+    }
+
+    @Test
+    fun `applyVariables expands a multi-value NEQ into a NOT IN list`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.NEQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "a,b"))
+        assertEquals(FilterOp.NOT_IN, result.filters[0].op)
+        assertEquals(listOf("a", "b"), result.filters[0].values)
+    }
+
+    @Test
+    fun `applyVariables drops a pure-reference filter when All is selected`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "env", op = FilterOp.EQ, value = "\$env"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("env" to "\$__all"))
+        assertTrue(result.filters.isEmpty())
+    }
+
+    @Test
+    fun `applyVariables renders multi-value as a regex alternation in rawQuery`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            rawQuery = "pod=~\"\$pod\""
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "a,b"))
+        assertEquals("pod=~\"(a|b)\"", result.rawQuery)
+    }
+
+    @Test
+    fun `applyVariables keeps a single value as equality`() {
+        val dsl = QueryDsl(
+            dataSource = "events",
+            filters = listOf(FilterDef(field = "pod", op = FilterOp.EQ, value = "\$pod"))
+        )
+        val result = engine.applyVariables(dsl, mapOf("pod" to "only-one"))
+        assertEquals(FilterOp.EQ, result.filters[0].op)
+        assertEquals("only-one", result.filters[0].value)
+    }
+
+    private fun customDataSource(
+        id: Long,
+        sourceType: String,
+        enabled: Boolean,
+    ): CustomDataSourceResponse =
+        CustomDataSourceResponse(
+            id = "11111111-1111-1111-1111-${id.toString().padStart(12, '0')}",
+            orgId = ORG_RESOURCE_ID,
+            name = sourceType,
+            sourceType = sourceType,
+            host = "localhost",
+            numericId = id,
+            port = 9090,
+            enabled = enabled,
+            createdBy = USER_RESOURCE_ID,
+            createdAt = "2026-01-01T00:00:00Z",
+            updatedAt = "2026-01-01T00:00:00Z",
+        )
 }

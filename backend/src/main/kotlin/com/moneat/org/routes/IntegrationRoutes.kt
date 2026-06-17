@@ -16,6 +16,7 @@
 
 package com.moneat.org.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.config.EnvConfig
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.SlackService
@@ -27,6 +28,7 @@ import com.moneat.utils.MessageResponse
 import io.ktor.http.Headers
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.parseQueryString
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
@@ -56,7 +58,7 @@ import org.slf4j.LoggerFactory
 import java.net.URLEncoder
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.abs
@@ -64,10 +66,12 @@ import kotlin.time.Clock
 import com.moneat.utils.suspendRunCatching
 
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
+private const val NO_ORGANIZATION_FOUND = "No organization found"
+private const val UNAUTHORIZED_MESSAGE = "Unauthorized"
 
 @Serializable
 data class OrganizationIntegrationResponse(
-    val id: Int,
+    val id: String,
     val integrationType: String,
     val teamName: String?,
     val channelId: String?,
@@ -225,9 +229,25 @@ private fun validateAndDecodeState(state: String): Pair<Int, Int>? {
     }
 }
 
+private suspend fun ApplicationCall.integrationOrgIdOrRespond(): Int? {
+    val principal = principal<JWTPrincipal>()
+    if (principal == null) {
+        respond(HttpStatusCode.Unauthorized, MessageResponse(UNAUTHORIZED_MESSAGE))
+        return null
+    }
+
+    val orgId = principal.currentOrgIdOrNull()
+    if (orgId == null) {
+        respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
+        return null
+    }
+    return orgId
+}
+
 fun Route.integrationRoutes() {
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
+    val entitlementService = GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
 
     route("/integrations") {
         // List all integrations for the organization
@@ -242,17 +262,10 @@ fun Route.integrationRoutes() {
                 val userId = principal.payload.getClaim("userId").asInt()
                 logger.info("Fetching integrations for user $userId")
 
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
+                val organizationId = principal.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
                 }
 
                 val integrations =
@@ -262,7 +275,7 @@ fun Route.integrationRoutes() {
                             .where { OrganizationIntegrations.organization_id eq organizationId }
                             .map { row ->
                                 OrganizationIntegrationResponse(
-                                    id = row[OrganizationIntegrations.id],
+                                    id = row[OrganizationIntegrations.resource_id].toString(),
                                     integrationType = row[OrganizationIntegrations.integration_type],
                                     teamName = row[OrganizationIntegrations.team_name],
                                     channelId = row[OrganizationIntegrations.channel_id],
@@ -287,18 +300,17 @@ fun Route.integrationRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
+                val organizationId = principal.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
                 }
+
+                entitlementService.unavailableFeatureMessage(
+                    organizationId,
+                    { it.slackEnabled },
+                    "Slack integration"
+                )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
                 val clientId = EnvConfig.get("SLACK_CLIENT_ID")
                 if (clientId == null) {
@@ -339,17 +351,7 @@ fun Route.integrationRoutes() {
 
         // List available Slack channels
         get("/slack/channels") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@get
 
             val accessToken =
                 transaction {
@@ -368,17 +370,7 @@ fun Route.integrationRoutes() {
 
         // Update channel selection
         put("/slack/channel") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@put
 
             val request = call.receive<SlackChannelSelection>()
 
@@ -398,17 +390,7 @@ fun Route.integrationRoutes() {
 
         // List available Slack user groups
         get("/slack/usergroups") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@get
 
             val accessToken =
                 transaction {
@@ -427,17 +409,7 @@ fun Route.integrationRoutes() {
 
         // Toggle enabled status
         put("/slack/toggle") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@put
 
             val currentEnabled =
                 transaction {
@@ -468,17 +440,7 @@ fun Route.integrationRoutes() {
 
         // Delete Slack integration
         delete("/slack") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@delete call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@delete
 
             val deleted =
                 transaction {
@@ -497,17 +459,7 @@ fun Route.integrationRoutes() {
 
         // Test Slack integration
         post("/slack/test") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@post
 
             val (success, message) = slackService.testConnection(organizationId)
 
@@ -523,18 +475,17 @@ fun Route.integrationRoutes() {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal!!.payload.getClaim("userId").asInt()
 
-                val organizationId =
-                    transaction {
-                        Memberships
-                            .selectAll()
-                            .where { Memberships.user_id eq userId }
-                            .firstOrNull()
-                            ?.get(Memberships.organization_id)
-                    }
+                val organizationId = principal.currentOrgIdOrNull()
 
                 if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
                 }
+
+                entitlementService.unavailableFeatureMessage(
+                    organizationId,
+                    { it.discordEnabled },
+                    "Discord integration"
+                )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
                 val clientId =
                     EnvConfig.get("DISCORD_CLIENT_ID")
@@ -575,17 +526,7 @@ fun Route.integrationRoutes() {
 
         // Get Discord channels
         get("/discord/channels") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@get call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@get
 
             val guildId =
                 transaction {
@@ -613,18 +554,9 @@ fun Route.integrationRoutes() {
 
         // Update Discord channel
         put("/discord/channel") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
             val selection = call.receive<SlackChannelSelection>()
 
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@put
 
             val updated =
                 transaction {
@@ -648,17 +580,7 @@ fun Route.integrationRoutes() {
 
         // Toggle Discord integration
         put("/discord/toggle") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@put call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@put
 
             val updated =
                 transaction {
@@ -690,17 +612,7 @@ fun Route.integrationRoutes() {
 
         // Delete Discord integration
         delete("/discord") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@delete call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@delete
 
             val deleted =
                 transaction {
@@ -719,17 +631,7 @@ fun Route.integrationRoutes() {
 
         // Test Discord integration
         post("/discord/test") {
-            val principal = call.principal<JWTPrincipal>()
-            val userId = principal!!.payload.getClaim("userId").asInt()
-
-            val organizationId =
-                transaction {
-                    Memberships
-                        .selectAll()
-                        .where { Memberships.user_id eq userId }
-                        .firstOrNull()
-                        ?.get(Memberships.organization_id)
-                } ?: return@post call.respond(HttpStatusCode.NotFound, MessageResponse("No organization found"))
+            val organizationId = call.integrationOrgIdOrRespond() ?: return@post
 
             val frontendUrl = EnvConfig.get("FRONTEND_URL") ?: "https://moneat.io"
             val (success, message) = discordService.testConnection(organizationId, frontendUrl)
@@ -746,6 +648,7 @@ fun Route.integrationRoutes() {
 fun Route.integrationCallbackRoutes() {
     val slackService = GlobalContext.get().get<SlackService>()
     val discordService = GlobalContext.get().get<DiscordService>()
+    val entitlementService = GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
 
     route("/integrations") {
         // Slack OAuth callback (no auth required - called by Slack)
@@ -780,6 +683,12 @@ fun Route.integrationCallbackRoutes() {
             if (!hasAccess) {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
             }
+
+            entitlementService.unavailableFeatureMessage(
+                organizationId,
+                { it.slackEnabled },
+                "Slack integration"
+            )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
             val clientId =
                 EnvConfig.get("SLACK_CLIENT_ID")
@@ -891,6 +800,12 @@ fun Route.integrationCallbackRoutes() {
                 return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
             }
 
+            entitlementService.unavailableFeatureMessage(
+                organizationId,
+                { it.discordEnabled },
+                "Discord integration"
+            )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
+
             val clientId =
                 EnvConfig.get("DISCORD_CLIENT_ID")
                     ?: return@get call.respond(
@@ -997,10 +912,10 @@ fun Route.integrationCallbackRoutes() {
                         val action = actions[0].jsonObject
                         val actionId = action["action_id"]?.jsonPrimitive?.content ?: ""
 
-                        // Parse action ID format: "incident_{action}_{incidentId}"
+                        // Parse action ID format: "incident_{action}_{alertResourceId}"
                         if (actionId.startsWith("incident_acknowledge_")) {
-                            val incidentId = actionId.removePrefix("incident_acknowledge_").toIntOrNull()
-                            if (incidentId != null) {
+                            val alertResourceId = actionId.removePrefix("incident_acknowledge_")
+                            if (alertResourceId.isNotBlank()) {
                                 // Get user from Slack user ID
                                 val slackUserId =
                                     payloadJson["user"]
@@ -1030,8 +945,6 @@ fun Route.integrationCallbackRoutes() {
                                             return@post
                                         }
 
-                                        // Verify user's organization matches incident's organization
-                                        val incident = bridge.getIncident(incidentId, userId)
                                         val userOrgId =
                                             transaction {
                                                 Memberships
@@ -1040,35 +953,46 @@ fun Route.integrationCallbackRoutes() {
                                                     .singleOrNull()
                                                     ?.get(Memberships.organization_id)
                                             }
-
-                                        if (incident == null ||
-                                            userOrgId == null ||
-                                            incident.organizationId != userOrgId
-                                        ) {
+                                        if (userOrgId == null) {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
-                                                    "text" to "❌ Incident not found or access denied"
+                                                    "text" to "❌ Alert not found or access denied"
                                                 )
                                             )
                                             return@post
                                         }
 
-                                        val acknowledged = bridge.acknowledgeIncident(incidentId, userId)
+                                        val alertId = bridge.resolveAlertId(userOrgId, alertResourceId)
+                                        val alert = alertId?.let { bridge.getAlert(it, userId) }
+
+                                        if (alert == null ||
+                                            alert.organizationId != userOrgId
+                                        ) {
+                                            call.respond(
+                                                mapOf(
+                                                    "response_type" to "ephemeral",
+                                                    "text" to "❌ Alert not found or access denied"
+                                                )
+                                            )
+                                            return@post
+                                        }
+
+                                        val acknowledged = bridge.acknowledgeAlert(alertId, userId)
 
                                         if (acknowledged) {
                                             // Send success response
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "in_channel",
-                                                    "text" to "✅ Incident acknowledged by <@$slackUserId>"
+                                                    "text" to "✅ Alert acknowledged by <@$slackUserId>"
                                                 )
                                             )
                                         } else {
                                             call.respond(
                                                 mapOf(
                                                     "response_type" to "ephemeral",
-                                                    "text" to "❌ Failed to acknowledge incident"
+                                                    "text" to "❌ Failed to acknowledge alert"
                                                 )
                                             )
                                         }

@@ -34,6 +34,10 @@ class CustomDataSourceExecutorTest {
 
     private companion object {
         private const val PROMETHEUS_EXAMPLE_URL = "https://example.com"
+        private const val CUSTOM_SOURCE_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
+        private const val DISABLED_SOURCE_RESOURCE_ID = "22222222-2222-2222-2222-222222222222"
+        private const val ORG_RESOURCE_ID = "33333333-3333-3333-3333-333333333333"
+        private const val USER_RESOURCE_ID = "44444444-4444-4444-4444-444444444444"
     }
 
     private val executor = CustomDataSourceExecutor()
@@ -398,9 +402,9 @@ class CustomDataSourceExecutorTest {
     }
 
     @Test
-    fun `parseCustomDataSourceId extracts numeric ID`() {
+    fun `parseCustomDataSourceId extracts resource ID`() {
         val engine = com.moneat.dashboards.services.DashboardQueryEngine()
-        assertEquals(42L, engine.parseCustomDataSourceId("custom:42"))
+        assertEquals("source-42", engine.parseCustomDataSourceId("custom:source-42"))
     }
 
     @Test
@@ -413,12 +417,12 @@ class CustomDataSourceExecutorTest {
     fun `getDataSources includes custom sources`() {
         val engine = com.moneat.dashboards.services.DashboardQueryEngine()
         val customSource = CustomDataSourceResponse(
-            id = 1, orgId = 1, name = "My PG", sourceType = "postgresql",
+            id = CUSTOM_SOURCE_RESOURCE_ID, orgId = ORG_RESOURCE_ID, name = "My PG", sourceType = "postgresql",
             host = "localhost", port = 5432, databaseName = "test",
-            enabled = true, createdBy = 1, createdAt = "", updatedAt = ""
+            enabled = true, createdBy = USER_RESOURCE_ID, createdAt = "", updatedAt = "", numericId = 1L
         )
         val sources = engine.getDataSources(listOf(customSource))
-        assertTrue(sources.any { it.name == "custom:1" })
+        assertTrue(sources.any { it.name == "custom:$CUSTOM_SOURCE_RESOURCE_ID" })
         assertTrue(sources.any { it.name == "events" })
     }
 
@@ -426,12 +430,13 @@ class CustomDataSourceExecutorTest {
     fun `getDataSources excludes disabled custom sources`() {
         val engine = com.moneat.dashboards.services.DashboardQueryEngine()
         val disabledSource = CustomDataSourceResponse(
-            id = 2, orgId = 1, name = "Disabled PG", sourceType = "postgresql",
-            host = "localhost", port = 5432, enabled = false, createdBy = 1,
-            createdAt = "", updatedAt = ""
+            id = DISABLED_SOURCE_RESOURCE_ID, orgId = ORG_RESOURCE_ID, name = "Disabled PG",
+            sourceType = "postgresql",
+            host = "localhost", port = 5432, enabled = false, createdBy = USER_RESOURCE_ID,
+            createdAt = "", updatedAt = "", numericId = 2L
         )
         val sources = engine.getDataSources(listOf(disabledSource))
-        assertTrue(sources.none { it.name == "custom:2" })
+        assertTrue(sources.none { it.name == "custom:$DISABLED_SOURCE_RESOURCE_ID" })
     }
 
     // ──── Custom data source model tests ────

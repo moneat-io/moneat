@@ -18,6 +18,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {cn} from '@/lib/utils'
+import {logLevelBadgeClass} from '@/lib/severity'
 import {ChevronDown, Clock, ListFilter, Search, X} from 'lucide-react'
 import {DateTimePicker} from '@/components/ui/datetime-picker'
 import {format} from 'date-fns'
@@ -50,23 +51,70 @@ const TIME_PRESETS: TimeRangePreset[] = [
 
 const LEVEL_OPTIONS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal']
 
-const levelActiveColors: Record<string, string> = {
-  trace: 'bg-zinc-500/30 text-zinc-700 dark:text-zinc-200 border-zinc-500/50 ring-1 ring-zinc-500/20',
-  debug: 'bg-teal-500/30 text-teal-700 dark:text-teal-100 border-teal-500/50 ring-1 ring-teal-500/20',
-  info: 'bg-indigo-500/30 text-indigo-700 dark:text-indigo-100 border-indigo-500/50 ring-1 ring-indigo-500/20',
-  warn: 'bg-amber-500/30 text-amber-700 dark:text-amber-200 border-amber-500/50 ring-1 ring-amber-500/20',
-  error: 'bg-red-500/30 text-red-700 dark:text-red-200 border-red-500/50 ring-1 ring-red-500/20',
-  fatal: 'bg-rose-500/40 text-rose-700 dark:text-rose-200 border-rose-500/50 ring-1 ring-rose-500/20',
-}
-
+// Active level chips reuse the shared soft-badge classes (@/lib/severity).
 const facetChipColors: Record<string, string> = {
-  service: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30',
-  environment: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
-  host: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30',
-  source: 'bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/30',
+  service: 'bg-[hsl(var(--primary)/0.12)] text-primary border-[hsl(var(--primary)/0.3)]',
+  environment: 'bg-success-bg text-success-fg border-success-border',
+  host: 'bg-[hsl(var(--chart-6)/0.15)] text-[hsl(var(--chart-6))] border-[hsl(var(--chart-6)/0.3)]',
+  source: 'bg-[hsl(var(--chart-7)/0.15)] text-[hsl(var(--chart-7))] border-[hsl(var(--chart-7)/0.3)]',
+  trace_id: 'bg-[hsl(var(--chart-3)/0.15)] text-[hsl(var(--chart-3))] border-[hsl(var(--chart-3)/0.3)]',
+  message_pattern: 'bg-[hsl(var(--chart-4)/0.15)] text-[hsl(var(--chart-4))] border-[hsl(var(--chart-4)/0.3)]',
 }
 
-const BUILT_IN_FACETS = ['service', 'environment', 'env', 'level', 'host', 'source']
+const BUILT_IN_FACETS = ['service', 'environment', 'env', 'level', 'host', 'source', 'trace_id', 'message_pattern']
+const SIMPLE_FACET_FILTER_KEYS = new Set(['service', 'environment', 'host', 'source', 'trace_id', 'message_pattern'])
+
+interface ParsedFacetToken {
+  key: string
+  value: string
+  isExclude: boolean
+}
+
+function appendQueryToken(query: string, token: string): string {
+  return query ? `${query} ${token}`.trim() : token.trim()
+}
+
+function hasBooleanOperators(token: string): boolean {
+  let index = 0
+  while (index < token.length) {
+    while (index < token.length && !isFacetWordChar(token[index])) index += 1
+    const wordStart = index
+    while (index < token.length && isFacetWordChar(token[index])) index += 1
+    const word = token.slice(wordStart, index)
+    if (word === 'AND' || word === 'OR') return true
+  }
+  return false
+}
+
+function isFacetWordChar(char: string): boolean {
+  return (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char === '_'
+}
+
+function normalizeFacetKey(key: string): string {
+  const lowerKey = key.toLowerCase()
+  return lowerKey === 'env' ? 'environment' : lowerKey
+}
+
+function parseFacetToken(token: string): ParsedFacetToken | null {
+  const colonIndex = token.indexOf(':')
+  if (colonIndex <= 0) return null
+
+  const isExclude = token.startsWith('-')
+  const rawKey = isExclude ? token.slice(1, colonIndex).trim() : token.slice(0, colonIndex).trim()
+  return {
+    key: normalizeFacetKey(rawKey),
+    value: token.slice(colonIndex + 1).trim(),
+    isExclude,
+  }
+}
+
+function shouldUseQueryParser(value: string): boolean {
+  return !value || value.includes('*') || value.includes('?')
+}
+
+function isSimpleFacetFilter(token: ParsedFacetToken): boolean {
+  return !token.isExclude && SIMPLE_FACET_FILTER_KEYS.has(token.key)
+}
 
 interface LogSearchBarProps {
   query: string
@@ -196,59 +244,58 @@ export function LogSearchBar({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const finishTokenEntry = useCallback(() => {
+    setInputValue('')
+    setShowSuggestions(false)
+  }, [])
+
+  const addTokenToQuery = useCallback(
+    (token: string) => {
+      onQueryChange(appendQueryToken(query, token))
+      finishTokenEntry()
+    },
+    [finishTokenEntry, onQueryChange, query]
+  )
+
   const applyToken = useCallback(
     (token: string) => {
-      // If the input contains Boolean operators, treat the entire input as a query
-      const hasBooleanOps = /\b(AND|OR)\b/.test(token)
-      if (hasBooleanOps) {
-        const newQuery = query ? `${query} ${token}` : token
-        onQueryChange(newQuery.trim())
-        setInputValue('')
-        setShowSuggestions(false)
+      if (hasBooleanOperators(token)) {
+        addTokenToQuery(token)
         return
       }
 
-      const colonIndex = token.indexOf(':')
-      if (colonIndex > 0) {
-        const isExclude = token.startsWith('-')
-        const rawKey = isExclude ? token.slice(1, colonIndex).trim() : token.slice(0, colonIndex).trim()
-        const value = token.slice(colonIndex + 1).trim()
-
-        if (!rawKey) return
-        // Empty value (trailing colon) or wildcards → route to query parser
-        if (!value || value.includes('*') || value.includes('?')) {
-          const newQuery = query ? `${query} ${token}` : token
-          onQueryChange(newQuery.trim())
-          setInputValue('')
-          setShowSuggestions(false)
-          return
-        }
-
-        // Handle special facets
-        const key = rawKey.toLowerCase() === 'env' ? 'environment' : rawKey.toLowerCase()
-
-        if (key === 'level') {
-          if (!levels.includes(value.toLowerCase())) {
-            onToggleLevel(value.toLowerCase())
-          }
-        } else if (!isExclude && ['service', 'environment', 'host', 'source'].includes(key)) {
-          // Only simple includes on known facet fields become facet filters
-          const existing = facetFilters.filter((f) => f.key !== key || f.value !== value)
-          onFacetFiltersChange([...existing, {key, value, exclude: false}])
-        } else {
-          // Negated fields, message:, and custom fields → route to query parser
-          const newQuery = query ? `${query} ${token}` : token
-          onQueryChange(newQuery.trim())
-        }
-      } else {
-        // Free text - append to query
-        const newQuery = query ? `${query} ${token}` : token
-        onQueryChange(newQuery.trim())
+      const parsed = parseFacetToken(token)
+      if (!parsed) {
+        addTokenToQuery(token)
+        return
       }
-      setInputValue('')
-      setShowSuggestions(false)
+
+      if (!parsed.key) return
+
+      if (shouldUseQueryParser(parsed.value)) {
+        addTokenToQuery(token)
+        return
+      }
+
+      if (parsed.key === 'level') {
+        const level = parsed.value.toLowerCase()
+        if (!levels.includes(level)) {
+          onToggleLevel(level)
+        }
+        finishTokenEntry()
+        return
+      }
+
+      if (isSimpleFacetFilter(parsed)) {
+        const existing = facetFilters.filter((f) => f.key !== parsed.key || f.value !== parsed.value)
+        onFacetFiltersChange([...existing, {key: parsed.key, value: parsed.value, exclude: false}])
+        finishTokenEntry()
+        return
+      }
+
+      addTokenToQuery(token)
     },
-    [query, onQueryChange, facetFilters, onFacetFiltersChange, levels, onToggleLevel]
+    [addTokenToQuery, facetFilters, finishTokenEntry, levels, onFacetFiltersChange, onToggleLevel]
   )
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -367,7 +414,7 @@ export function LogSearchBar({
             {query && (
               <Badge
                 variant="secondary"
-                className="gap-1 font-mono text-xs bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 cursor-pointer hover:bg-blue-500/20"
+                className="gap-1 font-mono text-xs bg-info-bg text-info-fg border border-info-border cursor-pointer hover:opacity-80"
                 onClick={() => {
                   setInputValue(query)
                   onQueryChange('')
@@ -381,7 +428,7 @@ export function LogSearchBar({
                     e.stopPropagation()
                     clearQuery()
                   }}
-                  className="ml-0.5 rounded-full hover:bg-blue-500/30"
+                  className="ml-0.5 rounded-full hover:bg-info-border"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -396,7 +443,7 @@ export function LogSearchBar({
                 className={cn(
                   'gap-1 font-mono text-xs cursor-pointer hover:opacity-80',
                   filter.exclude && 'line-through opacity-75',
-                  facetChipColors[filter.key] || 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20'
+                  facetChipColors[filter.key] || 'bg-info-bg text-info-fg border-info-border'
                 )}
                 onClick={() => {
                   const token = `${filter.exclude ? '-' : ''}${filter.key}:${filter.value}`
@@ -458,7 +505,7 @@ export function LogSearchBar({
           {showSuggestions && suggestions.length > 0 && (
             <div
               ref={suggestionsRef}
-              className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover p-1 shadow-lg"
+              className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover p-1"
             >
               {suggestions.map((suggestion, index) => (
                 <button
@@ -511,7 +558,7 @@ export function LogSearchBar({
           </Button>
 
           {showLevelDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-[200px] rounded-lg border bg-popover p-1">
               {LEVEL_OPTIONS.map((level) => {
                 const active = levels.includes(level)
                 return (
@@ -522,7 +569,7 @@ export function LogSearchBar({
                     className={cn(
                       'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-sm transition-colors',
                       active
-                        ? levelActiveColors[level]
+                        ? cn(logLevelBadgeClass(level), 'border')
                         : 'hover:bg-accent/50'
                     )}
                   >
@@ -562,7 +609,7 @@ export function LogSearchBar({
             </Button>
 
           {showTimeDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1 shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1 w-[260px] rounded-lg border bg-popover p-1">
               {TIME_PRESETS.map((preset) => (
                 <button
                   key={preset.value}

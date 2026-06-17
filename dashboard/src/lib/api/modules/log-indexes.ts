@@ -35,13 +35,13 @@ export function logIndexesMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    updateLogIndex: (id: number, request: UpdateLogIndexRequest) =>
+    updateLogIndex: (id: string, request: UpdateLogIndexRequest) =>
       core.request<LogIndex>(`${base}/logs/indexes/${id}`, {
         method: 'PUT',
         body: JSON.stringify(request),
       }),
 
-    deleteLogIndex: (id: number) =>
+    deleteLogIndex: (id: string) =>
       core.request<void>(`${base}/logs/indexes/${id}`, {
         method: 'DELETE',
       }),

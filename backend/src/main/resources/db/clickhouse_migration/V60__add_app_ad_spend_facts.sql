@@ -1,0 +1,50 @@
+CREATE TABLE IF NOT EXISTS app_ad_spend_facts (
+    fact_id UUID,
+    organization_id UInt64,
+    project_id Nullable(UInt64),
+    installation_id UInt64,
+    installation_resource_id UUID,
+    import_run_id UInt64,
+    import_run_resource_id UUID,
+    provider LowCardinality(String),
+    provider_api_version Nullable(String),
+    google_ads_customer_id String,
+    google_ads_login_customer_id Nullable(String),
+    report_date Date,
+    device Nullable(String),
+    geo_target_country Nullable(String),
+    campaign_id Nullable(String),
+    campaign_name Nullable(String),
+    campaign_status Nullable(String),
+    campaign_type Nullable(String),
+    campaign_sub_type Nullable(String),
+    bidding_strategy_type Nullable(String),
+    ad_group_id Nullable(String),
+    ad_group_name Nullable(String),
+    ad_group_status Nullable(String),
+    currency_code Nullable(String),
+    time_zone Nullable(String),
+    impressions UInt64,
+    clicks UInt64,
+    cost_micros Int64,
+    conversions Float64,
+    conversions_value Float64,
+    all_conversions Float64,
+    all_conversions_value Float64,
+    row_identity_hash String,
+    pulled_at DateTime64(3, 'UTC'),
+    inserted_at DateTime64(3, 'UTC') DEFAULT now64(3)
+) ENGINE = ReplacingMergeTree(import_run_id)
+PARTITION BY toYYYYMM(report_date)
+ORDER BY (
+    organization_id,
+    installation_id,
+    google_ads_customer_id,
+    report_date,
+    ifNull(campaign_id, ''),
+    ifNull(ad_group_id, ''),
+    ifNull(geo_target_country, ''),
+    ifNull(device, '')
+)
+TTL pulled_at + INTERVAL 730 DAY
+SETTINGS non_replicated_deduplication_window = 1000;

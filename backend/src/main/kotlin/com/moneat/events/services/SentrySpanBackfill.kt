@@ -50,7 +50,7 @@ object SentrySpanBackfill {
                 span_id, span_id_high,
                 trace_id, trace_id_high,
                 parent_id, parent_id_high,
-                organization_id,
+                organization_id, service_id, project_id,
                 name, service, resource, type,
                 start, duration, error,
                 meta, metrics, host, env, version,
@@ -64,6 +64,8 @@ object SentrySpanBackfill {
                 reinterpretAsUInt64(reverse(unhex(lpad(parent_span_id, 16, '0')))),
                 0,
                 $orgExpr,
+                service_id,
+                project_id,
                 '' AS name,
                 '' AS service,
                 description AS resource,
@@ -75,7 +77,7 @@ object SentrySpanBackfill {
                     tags,
                     map(
                         'sentry.transaction_id', toString(transaction_id),
-                        'sentry.project_id', toString(project_id)
+                        'sentry.project_id', toString(service_id)
                     )
                 ) AS meta,
                 map() AS metrics,
@@ -87,7 +89,7 @@ object SentrySpanBackfill {
                 parent_span_id AS parent_id_hex,
                 'sentry' AS source
             FROM `$db`.spans
-            WHERE project_id IN (${mapping.keys.joinToString(",")})
+            WHERE service_id IN (${mapping.keys.joinToString(",")})
         """.trimIndent()
 
         logger.info { "Starting spans -> apm_spans backfill for ${mapping.size} projects..." }
@@ -117,7 +119,7 @@ object SentrySpanBackfill {
             return mapping.values.first().toString()
         }
         val cases = mapping.entries.joinToString(", ") { (pid, oid) ->
-            "project_id = $pid, $oid"
+            "service_id = $pid, $oid"
         }
         return "multiIf($cases, NULL)"
     }

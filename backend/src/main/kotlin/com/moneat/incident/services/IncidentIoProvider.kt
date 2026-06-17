@@ -16,8 +16,8 @@
 
 package com.moneat.incident.services
 
-import com.moneat.incident.models.IncidentEvent
-import com.moneat.incident.models.IncidentStatus
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.models.ProviderConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -68,7 +68,7 @@ class IncidentIoProvider : IncidentProvider {
     }
 
     override suspend fun sendAlert(
-        event: IncidentEvent,
+        event: AlertLifecycleEvent,
         config: ProviderConfig
     ): Result<String> {
         return suspendRunCatching {
@@ -79,7 +79,7 @@ class IncidentIoProvider : IncidentProvider {
             // Convert metadata JsonElement values to strings for incident.io API
             val baseMetadata =
                 mapOf(
-                    "severity" to event.severity.name.lowercase(),
+                    "priority" to event.priority.wire.lowercase(),
                     "source" to event.source.name,
                     "moneat_url" to event.moneatUrl
                 )
@@ -97,8 +97,8 @@ class IncidentIoProvider : IncidentProvider {
                     deduplicationKey = event.deduplicationKey,
                     status =
                     when (event.status) {
-                        IncidentStatus.FIRING -> "firing"
-                        IncidentStatus.RESOLVED -> "resolved"
+                        AlertStatus.FIRING -> "firing"
+                        AlertStatus.RESOLVED -> "resolved"
                     },
                     title = event.title,
                     description = event.description,

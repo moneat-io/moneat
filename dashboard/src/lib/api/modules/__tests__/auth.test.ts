@@ -20,11 +20,21 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const USER_ID_ALICE = '11111111-1111-4111-8111-111111111111'
+const USER_ID_BOB = '22222222-2222-4222-8222-222222222222'
+const ORGANIZATION_ID = '33333333-3333-4333-8333-333333333333'
+const IMPERSONATED_USER_ID = '44444444-4444-4444-8444-444444444444'
 
 // Test-only credentials – not used in production
 const TEST_PASSWORD = 'pass123'
 const TEST_PASSWORD_BOB = 'pass456'
 const TEST_PASSWORD_RESET = 'newPass123'
+const legalConsent = {
+  acceptTerms: true,
+  acceptPrivacy: true,
+  termsVersion: '1.0',
+  privacyVersion: '1.0',
+}
 
 describe('authMethods', () => {
   beforeEach(() => {
@@ -36,7 +46,7 @@ describe('authMethods', () => {
 
   describe('signup', () => {
     it('signs up without invite token', async () => {
-      const authResponse = { token: 'jwt-token', user: { id: 1, email: 'a@b.com' } }
+      const authResponse = { token: 'jwt-token', user: { id: USER_ID_ALICE, email: 'a@b.com' } }
       server.use(
         http.post(`${API_BASE}/auth/signup`, async ({ request }) => {
           const url = new URL(request.url)
@@ -46,35 +56,35 @@ describe('authMethods', () => {
             email: 'a@b.com',
             password: TEST_PASSWORD,
             name: 'Alice',
-            termsAccepted: true,
-            privacyAccepted: true,
+            ...legalConsent,
           })
           return HttpResponse.json(authResponse)
         })
       )
 
-      const result = await api.signup('a@b.com', TEST_PASSWORD, 'Alice', {
-        termsAccepted: true,
-        privacyAccepted: true,
-      })
+      const result = await api.signup('a@b.com', TEST_PASSWORD, 'Alice', legalConsent)
       expect(result).toEqual(authResponse)
       expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
 
     it('signs up with invite token', async () => {
-      const authResponse = { token: 'jwt-token', user: { id: 2, email: 'b@c.com' } }
+      const authResponse = { token: 'jwt-token', user: { id: USER_ID_BOB, email: 'b@c.com' } }
       server.use(
         http.post(`${API_BASE}/auth/signup`, async ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('inviteToken')).toBe('inv-123')
+          const body = await request.json()
+          expect(body).toEqual({
+            email: 'b@c.com',
+            password: TEST_PASSWORD_BOB,
+            name: 'Bob',
+            ...legalConsent,
+          })
           return HttpResponse.json(authResponse)
         })
       )
 
-      const result = await api.signup('b@c.com', TEST_PASSWORD_BOB, 'Bob', {
-        termsAccepted: true,
-        privacyAccepted: true,
-      }, 'inv-123')
+      const result = await api.signup('b@c.com', TEST_PASSWORD_BOB, 'Bob', legalConsent, 'inv-123')
       expect(result).toEqual(authResponse)
       expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
@@ -84,7 +94,7 @@ describe('authMethods', () => {
 
   describe('login', () => {
     it('logs in and sets authenticated flag', async () => {
-      const authResponse = { token: 'jwt-token', user: { id: 1, email: 'a@b.com' } }
+      const authResponse = { token: 'jwt-token', user: { id: USER_ID_ALICE, email: 'a@b.com' } }
       server.use(
         http.post(`${API_BASE}/auth/login`, async ({ request }) => {
           const body = await request.json()
@@ -138,12 +148,12 @@ describe('authMethods', () => {
       server.use(
         http.get(`${API_BASE}/v1/sso/config`, ({ request }) => {
           const url = new URL(request.url)
-          expect(url.searchParams.get('organizationId')).toBe('42')
+          expect(url.searchParams.get('organizationId')).toBe(ORGANIZATION_ID)
           return HttpResponse.json(config)
         })
       )
 
-      const result = await api.getSsoConfig(42)
+      const result = await api.getSsoConfig(ORGANIZATION_ID)
       expect(result).toEqual(config)
     })
   })
@@ -154,14 +164,33 @@ describe('authMethods', () => {
       server.use(
         http.put(`${API_BASE}/v1/sso/config`, async ({ request }) => {
           const url = new URL(request.url)
-          expect(url.searchParams.get('organizationId')).toBe('42')
+          expect(url.searchParams.get('organizationId')).toBe(ORGANIZATION_ID)
           const body = await request.json()
           expect(body).toEqual(config)
           return HttpResponse.json(config)
         })
       )
 
-      const result = await api.configureSso(42, config as never)
+      const result = await api.configureSso(ORGANIZATION_ID, config as never)
+      expect(result).toEqual(config)
+    })
+  })
+
+  describe('verifySsoDomain', () => {
+    it('verifies SSO domain for organization', async () => {
+      const config = {
+        emailDomain: 'corp.example',
+        emailDomainVerified: true,
+      }
+      server.use(
+        http.post(`${API_BASE}/v1/sso/config/domain/verify`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('organizationId')).toBe(ORGANIZATION_ID)
+          return HttpResponse.json(config)
+        })
+      )
+
+      const result = await api.verifySsoDomain(ORGANIZATION_ID)
       expect(result).toEqual(config)
     })
   })
@@ -171,12 +200,12 @@ describe('authMethods', () => {
       server.use(
         http.delete(`${API_BASE}/v1/sso/config`, ({ request }) => {
           const url = new URL(request.url)
-          expect(url.searchParams.get('organizationId')).toBe('42')
+          expect(url.searchParams.get('organizationId')).toBe(ORGANIZATION_ID)
           return new HttpResponse(null, { status: 204 })
         })
       )
 
-      const result = await api.deleteSsoConfig(42)
+      const result = await api.deleteSsoConfig(ORGANIZATION_ID)
       expect(result).toBeUndefined()
     })
   })
@@ -186,12 +215,12 @@ describe('authMethods', () => {
   describe('impersonateUser', () => {
     it('impersonates a user by id', async () => {
       server.use(
-        http.post(`${API_BASE}/v1/admin/impersonate/7`, () =>
+        http.post(`${API_BASE}/v1/admin/impersonate/${IMPERSONATED_USER_ID}`, () =>
           HttpResponse.json({ token: 'impersonate-jwt' })
         )
       )
 
-      const result = await api.impersonateUser(7)
+      const result = await api.impersonateUser(IMPERSONATED_USER_ID)
       expect(result).toEqual({ token: 'impersonate-jwt' })
     })
   })
@@ -345,11 +374,29 @@ describe('authMethods', () => {
     })
   })
 
+  describe('auth tokens', () => {
+    it('updates and deletes auth tokens with encoded ids', async () => {
+      const tokenId = 'token/id'
+      server.use(
+        http.put(`${API_BASE}/v1/auth-tokens/token%2Fid`, async ({request}) => {
+          await expect(request.json()).resolves.toEqual({name: 'Build token'})
+          return new HttpResponse(null, {status: 204})
+        }),
+        http.delete(`${API_BASE}/v1/auth-tokens/token%2Fid`, () =>
+          new HttpResponse(null, {status: 204})
+        )
+      )
+
+      await expect(api.updateAuthToken(tokenId, {name: 'Build token'})).resolves.toBeUndefined()
+      await expect(api.deleteAuthToken(tokenId)).resolves.toBeUndefined()
+    })
+  })
+
   describe('checkAuth', () => {
     it('returns true when user endpoint responds 200', async () => {
       server.use(
         http.get(`${API_BASE}/v1/user`, () =>
-          HttpResponse.json({ id: 1, email: 'a@b.com' })
+          HttpResponse.json({ id: USER_ID_ALICE, email: 'a@b.com' })
         )
       )
 

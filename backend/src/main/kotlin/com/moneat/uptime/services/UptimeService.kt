@@ -390,7 +390,7 @@ class UptimeService(
 
         return UptimeMonitorResponse(
             id = monitor.id.toString(),
-            organizationId = monitor.organizationId,
+            organizationId = monitor.organizationResourceId,
             name = monitor.name,
             type = monitor.type,
             active = monitor.active,
@@ -433,6 +433,7 @@ class UptimeService(
             lastStatusChangeAt = monitor.lastStatusChangeAt?.toEpochMilliseconds(),
             consecutiveFailures = monitor.consecutiveFailures,
             pushToken = if (monitor.type.lowercase() == "push") monitor.pushToken else null,
+            alertPriority = monitor.alertPriority,
             uptime24h = stats.first,
             uptime7d = stats.second,
             uptime30d = stats.third,

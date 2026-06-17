@@ -16,16 +16,24 @@
 
 package com.moneat.events.services
 
+import com.moneat.apm.services.ApmServiceMapRollups
+import com.moneat.apm.services.ApmServiceMapSpan
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.EnvelopeItem
 import com.moneat.events.models.ExceptionInfo
+import com.moneat.events.models.ExceptionValue
+import com.moneat.events.models.SdkInfo
 import com.moneat.events.models.SentryEnvelope
 import com.moneat.events.models.SentryEvent
 import com.moneat.events.models.SentryFeedback
 import com.moneat.events.models.SentryReplayEvent
+import com.moneat.events.models.SentrySession
+import com.moneat.events.models.SentrySessionAggregate
+import com.moneat.events.models.SentrySessionAggregatesPayload
 import com.moneat.events.models.SentrySpan
 import com.moneat.events.models.SentryTransaction
+import com.moneat.events.models.isFeedbackEventPayload
 import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.models.ErrorEventInsertData
 import com.moneat.events.repositories.models.FeedbackInsertData
@@ -34,14 +42,17 @@ import com.moneat.events.repositories.models.ProfileInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
 import com.moneat.events.repositories.models.ReplayRecordingInsertData
+import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.notifications.services.NotificationService
 import com.moneat.otlp.hexToULongPair
+import com.moneat.otlp.services.OtlpExceptionEvent
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
+import com.moneat.utils.suspendRunCatching
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -52,6 +63,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -63,7 +75,6 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import com.moneat.utils.suspendRunCatching
 
 private val logger = KotlinLogging.logger {}
 
@@ -85,9 +96,14 @@ class EventService(
         private const val UUID_SEG2 = 12
         private const val UUID_SEG3 = 16
         private const val UUID_SEG4 = 20
+        private val OTLP_STACK_FRAME_PATTERN = Regex("""[\w.$/<>-]+\([^)]*\)""")
+        private const val SENTRY_SOURCE = "sentry"
+        private const val SERVICE_TAG = "service"
+        private const val SERVICE_NAME_TAG = "service.name"
 
         /** Keys set by the server for apm_spans; must not be overwritten by SDK tag maps. */
         private val SENTRY_APM_META_RESERVED_KEYS = setOf("sentry.transaction_id", "sentry.project_id")
+        private val SESSION_ERROR_STATUSES = setOf("abnormal", "crashed", "errored")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -111,6 +127,7 @@ class EventService(
 
     private val projectKeyCache = ConcurrentHashMap<String, CachedEntry<ProjectKeyVerification>>()
     private val orgIdCache = ConcurrentHashMap<Long, CachedEntry<Int?>>()
+    private val serviceNameCache = ConcurrentHashMap<Long, CachedEntry<String?>>()
     private val knownIssueIds = ConcurrentHashMap.newKeySet<String>()
     private val cacheTtlMs = 5 * 60 * 1000L // 5 minutes
     private val maxKnownIssues = 100_000
@@ -118,6 +135,63 @@ class EventService(
     // Track replay segment counters for mobile replays that lack a separate replay_event item.
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
     private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
+
+    suspend fun storeOtlpException(exception: OtlpExceptionEvent): Boolean {
+        val projectId = exception.projectId ?: return false
+        val eventId = UUID.randomUUID().toString()
+        val fingerprint = generateOtlpFingerprint(exception)
+        val issueId = generateIssueId(fingerprint)
+        val tags = otlpExceptionTags(exception)
+        val contexts = buildJsonObject {
+            put("trace_id", JsonPrimitive(exception.traceIdHex))
+            put("span_id", JsonPrimitive(exception.spanIdHex))
+            put("service", JsonPrimitive(exception.service))
+            put("service_namespace", JsonPrimitive(exception.serviceNamespace))
+        }.toString()
+        val organizationId = requireOrganizationIdForProject(projectId, "OTLP exception") ?: return false
+
+        val eventData = ErrorEventInsertData(
+            eventId = eventId,
+            projectId = projectId,
+            organizationId = organizationId,
+            timestampMs = exception.timestampMs,
+            level = "error",
+            message = exception.exceptionMessage.ifBlank { exception.exceptionType },
+            platform = "otel",
+            environment = exception.environment.ifBlank { "production" },
+            release = exception.serviceVersion,
+            dist = "",
+            serverName = exception.host,
+            userId = "",
+            userEmail = "",
+            userUsername = "",
+            userIpAddress = "",
+            exceptionType = exception.exceptionType,
+            exceptionValue = exception.exceptionMessage,
+            stackTrace = exception.stackTrace,
+            fingerprint = fingerprint,
+            issueId = issueId,
+            tags = tags,
+            contexts = contexts,
+            breadcrumbs = "[]",
+            request = "{}",
+            sdkName = "opentelemetry",
+            sdkVersion = "",
+        )
+
+        val success = eventRepository.insertErrorEvent(eventData)
+        if (!success) return false
+        CacheService.invalidatePattern("cache:issues:$projectId:*")
+        exception.serviceVersion.takeIf { it.isNotBlank() }?.let { releaseVersion ->
+            suspendRunCatching {
+                releaseService.upsertReleaseFromEvent(projectId, releaseVersion, exception.timestampMs)
+            }.getOrElse { e ->
+                logger.warn(e) { "Failed to upsert OTLP release $releaseVersion for project $projectId" }
+            }
+        }
+        maybeNotifyOtlpIssue(projectId, issueId, eventId, exception, tags)
+        return true
+    }
 
     fun verifyProjectKey(
         projectId: Long,
@@ -141,6 +215,26 @@ class EventService(
         return result
     }
 
+    private fun organizationIdForProject(projectId: Long): Int? =
+        getOrganizationIdForProject(projectId)
+
+    private fun requireOrganizationIdForProject(projectId: Long, signal: String): Int? {
+        val organizationId = organizationIdForProject(projectId)
+        if (organizationId == null) {
+            logger.warn { "Missing organization for projectId $projectId, skipping $signal insert" }
+        }
+        return organizationId
+    }
+
+    private fun getServiceNameForProject(projectId: Long): String? {
+        val now = System.currentTimeMillis()
+        serviceNameCache[projectId]?.let { if (it.expiresAt > now) return it.value }
+
+        val result = eventRepository.getServiceNameForProject(projectId)
+        serviceNameCache[projectId] = CachedEntry(result, now + cacheTtlMs)
+        return result
+    }
+
     suspend fun processEnvelope(
         projectId: Long,
         envelope: SentryEnvelope
@@ -150,13 +244,7 @@ class EventService(
         for (item in envelope.items) {
             logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
-                "event" -> {
-                    logger.debug { "Event payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
-                    val event = json.decodeFromString<SentryEvent>(item.payload)
-                    if (storeEvent(projectId, event)) {
-                        recordUsage(projectId, "error", item)
-                    }
-                }
+                "event" -> handleEventItem(projectId, item)
 
                 "transaction" -> {
                     logger.debug { "Transaction payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
@@ -166,10 +254,9 @@ class EventService(
                     }
                 }
 
-                "session" -> {
-                    // Session envelope items are accepted for usage accounting only; persistence not implemented.
-                    logger.debug { "Received session (not yet implemented)" }
-                }
+                "session" -> handleSessionItem(projectId, item)
+
+                "sessions" -> handleSessionAggregatesItem(projectId, item)
 
                 "replay_event" -> {
                     val replayEvent = parseReplayEventPayload(item.payload)
@@ -208,6 +295,36 @@ class EventService(
                     logger.debug { "Unknown item type: ${item.type}" }
                 }
             }
+        }
+    }
+
+    private suspend fun handleEventItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Event payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        if (item.isFeedbackEventPayload()) {
+            handleFeedbackItem(projectId, item)
+            return
+        }
+
+        val event = json.decodeFromString<SentryEvent>(item.payload)
+        if (storeEvent(projectId, event)) {
+            recordUsage(projectId, "error", item)
+        }
+    }
+
+    private suspend fun handleSessionItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Session payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val session = json.decodeFromString<SentrySession>(item.payload)
+        if (storeSession(projectId, session)) {
+            recordUsage(projectId, "session", item)
+        }
+    }
+
+    private suspend fun handleSessionAggregatesItem(projectId: Long, item: EnvelopeItem) {
+        logger.debug { "Session aggregates payload: ${item.payload.take(LOG_PAYLOAD_PREVIEW_CHARS)}" }
+        val payload = json.decodeFromString<SentrySessionAggregatesPayload>(item.payload)
+        val rows = payload.aggregates.flatMap { aggregate -> aggregate.toSessionRows(projectId) }
+        if (storeSessionRows(projectId, rows)) {
+            recordUsage(projectId, "session", item)
         }
     }
 
@@ -265,6 +382,15 @@ class EventService(
         projectId: Long,
         body: String
     ) {
+        if (EnvelopeItem("event", body).isFeedbackEventPayload()) {
+            val feedback = json.decodeFromString<SentryFeedback>(body)
+            val byteSize = body.toByteArray(StandardCharsets.UTF_8).size
+            if (storeFeedback(projectId, feedback, "event")) {
+                usageTracker.recordUsage(projectId, "feedback", byteSize)
+            }
+            return
+        }
+
         val event = json.decodeFromString<SentryEvent>(body)
         if (storeEvent(projectId, event)) {
             usageTracker.recordUsage(projectId, "error", body.toByteArray(StandardCharsets.UTF_8).size)
@@ -278,6 +404,21 @@ class EventService(
     ) {
         val byteSize = item.payloadBytes?.size ?: item.payload.toByteArray(StandardCharsets.UTF_8).size
         usageTracker.recordUsage(projectId, eventType, byteSize)
+    }
+
+    private fun normalizeSentryServiceTags(
+        projectId: Long,
+        tags: Map<String, String>?
+    ): Map<String, String> {
+        val normalized = tags?.toMutableMap() ?: mutableMapOf()
+        val existingServiceName = normalized[SERVICE_NAME_TAG]?.trim()?.takeIf { it.isNotBlank() }
+        if (existingServiceName != null) return normalized
+
+        val explicitService = normalized[SERVICE_TAG]?.trim()?.takeIf { it.isNotBlank() }
+        normalized[SERVICE_NAME_TAG] = explicitService
+            ?: getServiceNameForProject(projectId)?.trim()?.takeIf { it.isNotBlank() }
+            ?: projectId.toString()
+        return normalized
     }
 
     private suspend fun storeTransaction(
@@ -299,10 +440,13 @@ class EventService(
         val breadcrumbs = transaction.breadcrumbs?.toString() ?: "[]"
         val request = transaction.request?.toString() ?: "{}"
         val message = transaction.transaction ?: transactionOp.ifBlank { "transaction" }
+        val organizationId = requireOrganizationIdForProject(projectId, "transaction") ?: return false
+        val normalizedTags = normalizeSentryServiceTags(projectId, transaction.tags)
 
         val transactionData = TransactionEventInsertData(
             eventId = eventId,
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = endTimestampMs,
             level = transactionLevel,
             message = message,
@@ -318,7 +462,7 @@ class EventService(
             transactionName = transaction.transaction ?: "",
             transactionOp = transactionOp,
             durationMs = durationMs,
-            tags = transaction.tags,
+            tags = normalizedTags,
             contexts = contexts,
             breadcrumbs = breadcrumbs,
             request = request,
@@ -334,15 +478,19 @@ class EventService(
             val spans = transaction.spans.orEmpty()
 
             suspendRunCatching {
-                insertSentrySpansToApm(
+                val apmInput = SentryApmInsertInput(
                     projectId = projectId,
                     eventId = eventId,
-                    traceId = traceId,
-                    transactionOp = transactionOp,
-                    traceStatus = traceStatus,
+                    trace = SentryApmTraceInput(
+                        traceId = traceId,
+                        transactionOp = transactionOp,
+                        traceStatus = traceStatus,
+                    ),
                     transaction = transaction,
-                    childSpans = spans
+                    childSpans = spans,
+                    normalizedTags = normalizedTags,
                 )
+                insertSentrySpansToApm(apmInput)
             }.getOrElse { e ->
                 logger.warn(e) { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
             }
@@ -352,7 +500,7 @@ class EventService(
             // Detect ai.* spans and cross-insert into llm_generations
             val aiSpans = spans.filter { span -> (span.op ?: "").startsWith("ai.") }
             if (aiSpans.isNotEmpty()) {
-                insertAiSpansAsLlmGenerations(projectId, traceId, transaction, aiSpans)
+                insertAiSpansAsLlmGenerations(projectId, organizationId, traceId, transaction, aiSpans)
             }
 
             transaction.release?.takeIf { it.isNotBlank() }?.let { releaseVersion ->
@@ -418,11 +566,14 @@ class EventService(
         val contexts = event.contexts?.toString() ?: "{}"
         val breadcrumbs = event.breadcrumbs?.toString() ?: "[]"
         val request = event.request?.toString() ?: "{}"
+        val organizationId = requireOrganizationIdForProject(projectId, "event") ?: return false
+        val normalizedTags = normalizeSentryServiceTags(projectId, event.tags)
 
         // Build and insert error event via repository
         val eventData = ErrorEventInsertData(
             eventId = eventId,
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = timestamp,
             level = eventLevel,
             message = exceptionValue,
@@ -440,7 +591,7 @@ class EventService(
             stackTrace = stackTrace,
             fingerprint = fingerprint,
             issueId = issueId,
-            tags = event.tags,
+            tags = normalizedTags,
             contexts = contexts,
             breadcrumbs = breadcrumbs,
             request = request,
@@ -517,10 +668,12 @@ class EventService(
         val userEmail = feedback.user?.email ?: contactEmail
         val userUsername = feedback.user?.username ?: ""
         val userIpAddress = feedback.user?.ipAddress ?: ""
+        val organizationId = requireOrganizationIdForProject(projectId, "feedback") ?: return false
 
         val feedbackData = FeedbackInsertData(
             feedbackId = normalizeUuid(feedbackId),
             projectId = projectId,
+            organizationId = organizationId,
             timestampMs = timestamp,
             message = message,
             contactEmail = contactEmail,
@@ -537,7 +690,10 @@ class EventService(
             userIpAddress = userIpAddress,
             sdkName = feedback.sdk?.name ?: "",
             sdkVersion = feedback.sdk?.version ?: "",
-            tags = feedback.tags
+            tags = feedback.tags,
+            sourceType = "sentry",
+            sourceName = "Sentry-compatible SDK",
+            sourceEventName = if (itemType == "event") "feedback" else itemType
         )
 
         suspendRunCatching {
@@ -551,7 +707,148 @@ class EventService(
         }
     }
 
+    private suspend fun storeSession(
+        projectId: Long,
+        session: SentrySession
+    ): Boolean {
+        val row = session.toInsertData(projectId) ?: return false
+        return storeSessionRows(projectId, listOf(row))
+    }
+
+    private suspend fun storeSessionRows(
+        projectId: Long,
+        rows: List<SessionInsertData>
+    ): Boolean {
+        if (projectId == 0L) {
+            logger.error { "Invalid projectId $projectId for session, skipping insert" }
+            return false
+        }
+        if (rows.isEmpty()) return false
+
+        suspendRunCatching {
+            val success = eventRepository.insertSessions(rows)
+            if (!success) return false
+
+            for (row in rows.distinctBy { it.release }) {
+                suspendRunCatching {
+                    releaseService.upsertReleaseFromEvent(projectId, row.release, row.startedMs)
+                }.getOrElse { e ->
+                    logger.warn(e) { "Failed to upsert release ${row.release} for project $projectId" }
+                }
+            }
+
+            logger.debug { "Stored ${rows.size} session rows for project $projectId" }
+            return true
+        }.getOrElse { e ->
+            logger.error(e) { "Error storing sessions in ClickHouse" }
+            return false
+        }
+    }
+
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+
+    private fun SentrySession.toInsertData(projectId: Long): SessionInsertData? {
+        val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return null
+        val organizationId = requireOrganizationIdForProject(projectId, "session") ?: return null
+        val startedMs =
+            started?.let { unixSecondsToMillis(it) }
+                ?: timestamp?.let { unixSecondsToMillis(it) }
+                ?: System.currentTimeMillis()
+        val errors = sessionErrorCount(status, this.errors)
+
+        return SessionInsertData(
+            sessionId = normalizeUuid(sessionId ?: UUID.randomUUID().toString()),
+            projectId = projectId,
+            organizationId = organizationId,
+            startedMs = startedMs,
+            durationMs = durationToMillis(duration),
+            status = normalizeSessionStatus(status, errors),
+            errors = errors,
+            release = release,
+            environment = attrs.environment ?: "production",
+            userId = distinctId ?: "",
+            receivedAtMs = System.currentTimeMillis()
+        )
+    }
+
+    private fun SentrySessionAggregate.toSessionRows(projectId: Long): List<SessionInsertData> {
+        val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return emptyList()
+        val organizationId = requireOrganizationIdForProject(projectId, "session aggregate") ?: return emptyList()
+        val defaults = SessionAggregateDefaults(
+            projectId = projectId,
+            organizationId = organizationId,
+            startedMs = started?.let { unixSecondsToMillis(it) } ?: System.currentTimeMillis(),
+            release = release,
+            environment = attrs.environment ?: "production",
+            userId = distinctId ?: "",
+            receivedAtMs = System.currentTimeMillis()
+        )
+
+        return buildList {
+            addAggregateSessionRows(defaults, status = "exited", count = exited, errors = 0)
+            addAggregateSessionRows(defaults, status = "errored", count = errored, errors = 1)
+            addAggregateSessionRows(defaults, status = "crashed", count = crashed, errors = 1)
+            addAggregateSessionRows(defaults, status = "abnormal", count = abnormal, errors = 1)
+            addAggregateSessionRows(defaults, status = "ok", count = ok, errors = 0)
+        }
+    }
+
+    private fun MutableList<SessionInsertData>.addAggregateSessionRows(
+        defaults: SessionAggregateDefaults,
+        status: String,
+        count: Int,
+        errors: Int
+    ) {
+        repeat(count.coerceAtLeast(0)) {
+            add(
+                SessionInsertData(
+                    sessionId = UUID.randomUUID().toString(),
+                    projectId = defaults.projectId,
+                    organizationId = defaults.organizationId,
+                    startedMs = defaults.startedMs,
+                    durationMs = 0.0,
+                    status = status,
+                    errors = errors,
+                    release = defaults.release,
+                    environment = defaults.environment,
+                    userId = defaults.userId,
+                    receivedAtMs = defaults.receivedAtMs
+                )
+            )
+        }
+    }
+
+    private fun normalizeSessionStatus(status: String?, errors: Int): String {
+        return when (status?.lowercase()) {
+            "ok" -> "ok"
+            "exited" -> "exited"
+            "errored" -> "errored"
+            "crashed" -> "crashed"
+            "abnormal" -> "abnormal"
+            else -> if (errors > 0) "abnormal" else "ok"
+        }
+    }
+
+    private fun sessionErrorCount(status: String?, errors: Int?): Int {
+        val explicitErrors = errors?.coerceAtLeast(0) ?: 0
+        val normalizedStatus = status?.lowercase()
+        val minimumErrors =
+            if (normalizedStatus != null && normalizedStatus in SESSION_ERROR_STATUSES) 1 else 0
+        return maxOf(explicitErrors, minimumErrors)
+    }
+
+    private fun durationToMillis(durationSeconds: Double?): Double =
+        ((durationSeconds ?: 0.0) * MS_PER_SECOND).coerceAtLeast(0.0)
+
+    private data class SessionAggregateDefaults(
+        val projectId: Long,
+        val organizationId: Int,
+        val startedMs: Long,
+        val release: String,
+        val environment: String,
+        val userId: String,
+        val receivedAtMs: Long
+    )
 
     private suspend fun storeReplayEvent(
         projectId: Long,
@@ -591,9 +888,12 @@ class EventService(
                 ?.jsonPrimitive
                 ?.intOrNull ?: 0
 
+        val organizationId = requireOrganizationIdForProject(projectId, "replay event") ?: return false
+
         val replayData = ReplayEventInsertData(
             replayId = normalizeUuid(replayId),
             projectId = projectId,
+            organizationId = organizationId,
             segmentId = segmentId,
             timestampMs = ts,
             replayStartTimestampMs = startTs,
@@ -636,11 +936,13 @@ class EventService(
         segmentId: Int,
         payload: String
     ) {
+        val organizationId = requireOrganizationIdForProject(projectId, "replay recording") ?: return
         suspendRunCatching {
             eventRepository.insertReplayRecording(
                 ReplayRecordingInsertData(
                     replayId = normalizeUuid(replayId),
                     projectId = projectId,
+                    organizationId = organizationId,
                     segmentId = segmentId,
                     timestampMs = System.currentTimeMillis(),
                     recordingData = payload
@@ -666,6 +968,7 @@ class EventService(
 
         val normalizedReplayId = normalizeUuid(replayId)
         val timestamp = System.currentTimeMillis()
+        val organizationId = requireOrganizationIdForProject(projectId, "synthetic replay event") ?: return
 
         // Extract SDK info from envelope header if available
         val sdkName = "sentry.java.android"
@@ -677,6 +980,7 @@ class EventService(
                 ReplayEventInsertData(
                     replayId = normalizedReplayId,
                     projectId = projectId,
+                    organizationId = organizationId,
                     segmentId = segmentId,
                     timestampMs = timestamp,
                     replayStartTimestampMs = timestamp,
@@ -837,6 +1141,75 @@ class EventService(
         return fingerprint.ifEmpty { listOf("{{ default }}") }
     }
 
+    private fun generateOtlpFingerprint(exception: OtlpExceptionEvent): List<String> {
+        val stackFrame = exception.stackTrace
+            .lineSequence()
+            .map { it.trim() }
+            .firstOrNull { isOtlpStackFrame(it) }
+
+        return buildList {
+            exception.exceptionType.takeIf { it.isNotBlank() }?.let { add(it) }
+            stackFrame?.let { add(it) }
+                ?: exception.exceptionMessage.takeIf { it.isNotBlank() }?.let { add(it) }
+            exception.service.takeIf { it.isNotBlank() }?.let { add(it) }
+        }.ifEmpty { listOf("{{ default }}") }
+    }
+
+    private fun isOtlpStackFrame(line: String): Boolean =
+        line.isNotBlank() &&
+            (line.startsWith("at ") || line.startsWith("File \"") || OTLP_STACK_FRAME_PATTERN.containsMatchIn(line))
+
+    private fun otlpExceptionTags(exception: OtlpExceptionEvent): Map<String, String> =
+        buildMap {
+            put("source", "otlp_trace")
+            put("trace_id", exception.traceIdHex)
+            put("span_id", exception.spanIdHex)
+            put("service", exception.service)
+            if (exception.serviceNamespace.isNotBlank()) put("service.namespace", exception.serviceNamespace)
+            if (exception.host.isNotBlank()) put("host", exception.host)
+        }
+
+    private suspend fun maybeNotifyOtlpIssue(
+        projectId: Long,
+        issueId: String,
+        eventId: String,
+        exception: OtlpExceptionEvent,
+        tags: Map<String, String>,
+    ) {
+        scope.launch {
+            suspendRunCatching {
+                if (isNewIssue(projectId, issueId)) {
+                    logger.info { "New OTLP trace issue detected: $issueId for project $projectId" }
+                    notificationService?.onNewIssue(
+                        projectId,
+                        issueId,
+                        SentryEvent(
+                            eventId = eventId,
+                            level = "error",
+                            platform = "otel",
+                            sdk = SdkInfo(name = "opentelemetry", version = ""),
+                            exception = ExceptionInfo(
+                                values = listOf(
+                                    ExceptionValue(
+                                        type = exception.exceptionType,
+                                        value = exception.exceptionMessage,
+                                    )
+                                )
+                            ),
+                            message = exception.exceptionMessage.ifBlank { exception.exceptionType },
+                            environment = exception.environment.ifBlank { "production" },
+                            release = exception.serviceVersion.ifBlank { null },
+                            tags = tags,
+                            serverName = exception.host.ifBlank { null },
+                        )
+                    )
+                }
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to process new OTLP trace issue notification" }
+            }
+        }
+    }
+
     private fun generateIssueId(fingerprint: List<String>): String {
         val combined = fingerprint.joinToString("::")
         val digest = MessageDigest.getInstance("SHA-256")
@@ -861,6 +1234,7 @@ class EventService(
 
     private suspend fun insertAiSpansAsLlmGenerations(
         projectId: Long,
+        organizationId: Int,
         traceId: String,
         transaction: SentryTransaction,
         aiSpans: List<SentrySpan>
@@ -894,6 +1268,7 @@ class EventService(
                 LlmGenerationInsertData(
                     generationId = UUID.randomUUID().toString(),
                     projectId = projectId,
+                    organizationId = organizationId,
                     traceId = traceId,
                     spanId = span.spanId ?: "",
                     parentSpanId = span.parentSpanId ?: "",
@@ -969,15 +1344,33 @@ class EventService(
         val baseMeta: Map<String, String>,
     )
 
+    private class SentryApmTraceInput(
+        val traceId: String,
+        val transactionOp: String,
+        val traceStatus: String?,
+    )
+
+    private class SentryApmInsertInput(
+        val projectId: Long,
+        val eventId: String,
+        val trace: SentryApmTraceInput,
+        val transaction: SentryTransaction,
+        val childSpans: List<SentrySpan>,
+        val normalizedTags: Map<String, String>,
+    )
+
     private suspend fun insertSentrySpansToApm(
-        projectId: Long,
-        eventId: String,
-        traceId: String,
-        transactionOp: String,
-        traceStatus: String?,
-        transaction: SentryTransaction,
-        childSpans: List<SentrySpan>
+        input: SentryApmInsertInput
     ) {
+        val projectId = input.projectId
+        val eventId = input.eventId
+        val traceId = input.trace.traceId
+        val transactionOp = input.trace.transactionOp
+        val traceStatus = input.trace.traceStatus
+        val transaction = input.transaction
+        val childSpans = input.childSpans
+        val normalizedTags = input.normalizedTags
+
         if (traceId.isBlank()) {
             logger.debug { "No trace_id in transaction $eventId, skipping apm_spans insert" }
             return
@@ -993,14 +1386,12 @@ class EventService(
             "sentry.transaction_id" to eventId,
             "sentry.project_id" to projectId.toString()
         )
-        transaction.tags?.let { mergeNonReservedTags(baseMeta, it) }
+        mergeNonReservedTags(baseMeta, normalizedTags)
 
         val ctx = ApmSpanContext(
             orgId = orgId,
             clickhouseDb = ClickHouseClient.getDatabase(),
-            service = transaction.serverName?.takeIf { it.isNotBlank() }
-                ?: transaction.sdk?.name?.takeIf { it.isNotBlank() }
-                ?: "sentry",
+            service = normalizedTags.getValue(SERVICE_NAME_TAG),
             host = transaction.serverName ?: "",
             env = transaction.environment ?: "production",
             version = transaction.release ?: "",
@@ -1009,15 +1400,27 @@ class EventService(
         )
 
         val rows = mutableListOf<String>()
-        buildRootSpanRow(ctx, traceId, transactionOp, traceStatus, transaction)?.let { rows.add(it) }
+        val serviceMapSpans = mutableListOf<ApmServiceMapSpan>()
+        buildRootSpanRow(ctx, traceId, transactionOp, traceStatus, transaction)?.let {
+            rows.add(it.sqlRow)
+            serviceMapSpans.add(it.serviceMapSpan)
+        }
         for (span in childSpans) {
-            buildChildSpanRow(ctx, span, traceId, transaction)?.let { rows.add(it) }
+            buildChildSpanRow(ctx, span, traceId, transaction)?.let {
+                rows.add(it.sqlRow)
+                serviceMapSpans.add(it.serviceMapSpan)
+            }
         }
 
         if (rows.isNotEmpty()) {
-            executeApmSpanInsert(ctx, rows, eventId)
+            executeApmSpanInsert(ctx, rows, serviceMapSpans, eventId)
         }
     }
+
+    private data class ApmSpanInsertRow(
+        val sqlRow: String,
+        val serviceMapSpan: ApmServiceMapSpan,
+    )
 
     private fun buildRootSpanRow(
         ctx: ApmSpanContext,
@@ -1025,17 +1428,20 @@ class EventService(
         transactionOp: String,
         traceStatus: String?,
         transaction: SentryTransaction
-    ): String? {
+    ): ApmSpanInsertRow? {
         val rootSpanId = transaction.contexts?.get("trace")?.jsonObject
             ?.get("span_id")?.jsonPrimitive?.contentOrNull ?: ""
         if (rootSpanId.isBlank()) return null
 
         val startTs = transaction.startTimestamp ?: (System.currentTimeMillis() / MS_PER_SECOND)
+        val startNanos = unixSecondsToNanos(startTs)
+        val duration = durationNanos(transaction.startTimestamp, transaction.timestamp)
+        val error = sentryStatusToError(traceStatus)
         val (traceIdHigh, traceIdLow) = hexToULongPair(traceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(rootSpanId)
         val rootMetrics = extractMeasurementMetrics(transaction)
 
-        return """
+        val sqlRow = """
             (
             $spanIdLow, $spanIdHigh,
             $traceIdLow, $traceIdHigh,
@@ -1045,9 +1451,9 @@ class EventService(
             '${escapeSql(ctx.service)}',
             '${escapeSql(ctx.transactionName)}',
             '${escapeSql(transactionOp)}',
-            fromUnixTimestamp64Nano(${unixSecondsToNanos(startTs)}),
-            ${durationNanos(transaction.startTimestamp, transaction.timestamp)},
-            ${sentryStatusToError(traceStatus)},
+            fromUnixTimestamp64Nano($startNanos),
+            $duration,
+            $error,
             ${mapToSqlMap(ctx.baseMeta)},
             ${doubleMapToSqlMap(rootMetrics)},
             '${escapeSql(ctx.host)}',
@@ -1056,9 +1462,24 @@ class EventService(
             '$traceId',
             '$rootSpanId',
             '',
-            'sentry'
+            '$SENTRY_SOURCE'
             )
         """.trimIndent()
+        return ApmSpanInsertRow(
+            sqlRow = sqlRow,
+            serviceMapSpan = ApmServiceMapSpan(
+                organizationId = ctx.orgId.toLong(),
+                traceKey = traceId,
+                spanKey = rootSpanId,
+                parentKey = "",
+                service = ctx.service,
+                env = ctx.env,
+                source = SENTRY_SOURCE,
+                startNanos = startNanos,
+                durationNanos = duration,
+                error = error,
+            ),
+        )
     }
 
     private fun buildChildSpanRow(
@@ -1066,11 +1487,14 @@ class EventService(
         span: SentrySpan,
         fallbackTraceId: String,
         transaction: SentryTransaction
-    ): String? {
+    ): ApmSpanInsertRow? {
         val spanStart = span.startTimestamp ?: transaction.startTimestamp ?: return null
         val spanEnd = span.timestamp ?: transaction.timestamp ?: spanStart
         val spanId = span.spanId?.ifBlank { null } ?: UUID.randomUUID().toString().replace("-", "")
         val spanTraceId = span.traceId ?: fallbackTraceId
+        val startNanos = unixSecondsToNanos(spanStart)
+        val duration = durationNanos(spanStart, spanEnd)
+        val error = sentryStatusToError(span.status)
 
         val (traceIdHigh, traceIdLow) = hexToULongPair(spanTraceId)
         val (spanIdHigh, spanIdLow) = hexToULongPair(spanId)
@@ -1080,7 +1504,7 @@ class EventService(
         val spanMeta = extractSpanMeta(span, ctx.baseMeta)
         val spanMetrics = extractSpanMetrics(span)
 
-        return """
+        val sqlRow = """
             (
             $spanIdLow, $spanIdHigh,
             $traceIdLow, $traceIdHigh,
@@ -1090,9 +1514,9 @@ class EventService(
             '${escapeSql(ctx.service)}',
             '${escapeSql(span.description ?: "")}',
             '${escapeSql(span.op ?: "")}',
-            fromUnixTimestamp64Nano(${unixSecondsToNanos(spanStart)}),
-            ${durationNanos(spanStart, spanEnd)},
-            ${sentryStatusToError(span.status)},
+            fromUnixTimestamp64Nano($startNanos),
+            $duration,
+            $error,
             ${mapToSqlMap(spanMeta)},
             ${doubleMapToSqlMap(spanMetrics)},
             '${escapeSql(ctx.host)}',
@@ -1101,9 +1525,24 @@ class EventService(
             '${escapeSql(spanTraceId)}',
             '${escapeSql(spanId)}',
             '${escapeSql(parentHex)}',
-            'sentry'
+            '$SENTRY_SOURCE'
             )
         """.trimIndent()
+        return ApmSpanInsertRow(
+            sqlRow = sqlRow,
+            serviceMapSpan = ApmServiceMapSpan(
+                organizationId = ctx.orgId.toLong(),
+                traceKey = spanTraceId,
+                spanKey = spanId,
+                parentKey = parentHex,
+                service = ctx.service,
+                env = ctx.env,
+                source = SENTRY_SOURCE,
+                startNanos = startNanos,
+                durationNanos = duration,
+                error = error,
+            ),
+        )
     }
 
     private fun extractMeasurementMetrics(transaction: SentryTransaction): Map<String, Double> {
@@ -1160,7 +1599,12 @@ class EventService(
         return metrics
     }
 
-    private suspend fun executeApmSpanInsert(ctx: ApmSpanContext, rows: List<String>, eventId: String) {
+    private suspend fun executeApmSpanInsert(
+        ctx: ApmSpanContext,
+        rows: List<String>,
+        serviceMapSpans: List<ApmServiceMapSpan>,
+        eventId: String
+    ) {
         val insert = """
             INSERT INTO `${ctx.clickhouseDb}`.apm_spans (
                 span_id, span_id_high,
@@ -1177,7 +1621,8 @@ class EventService(
 
         val response = ClickHouseClient.execute(insert)
         if (response.status.isSuccess()) {
-            usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.sumOf { it.length })
+            ApmServiceMapRollups.insertForSpans(ctx.clickhouseDb, serviceMapSpans)
+            usageTracker.recordOrgUsage(ctx.orgId, "sentry_trace", rows.size, rows.sumOf { it.length })
         } else {
             logger.error { "Failed to insert Sentry spans into apm_spans for transaction $eventId" }
         }

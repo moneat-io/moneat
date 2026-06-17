@@ -1,0 +1,292 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.datadog.models
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+// --- APM Trace Models ---
+
+/** A single DD span as received from the agent. */
+@Serializable
+data class DdSpan(
+    @SerialName("trace_id") val traceId: ULong = 0u,
+    @SerialName("span_id") val spanId: ULong = 0u,
+    @SerialName("parent_id") val parentId: ULong = 0u,
+    val name: String = "",
+    val service: String = "",
+    val resource: String = "",
+    val type: String = "",
+    val start: Long = 0, // nanoseconds since epoch
+    val duration: Long = 0, // nanoseconds
+    val error: Int = 0,
+    val meta: Map<String, String> = emptyMap(),
+    val metrics: Map<String, Double> = emptyMap(),
+)
+
+/** A trace is a list of spans. A payload contains multiple traces. */
+typealias DdTrace = List<DdSpan>
+typealias DdTracePayload = List<DdTrace>
+
+/** Trace stats bucket from the agent. */
+@Serializable
+data class DdStatsBucket(
+    @SerialName("Start") val start: Long = 0,
+    @SerialName("Duration") val duration: Long = 0,
+    @SerialName("Stats") val stats: List<DdStatsEntry> = emptyList(),
+)
+
+@Serializable
+data class DdStatsEntry(
+    @SerialName("Name") val name: String = "",
+    @SerialName("Service") val service: String = "",
+    @SerialName("Resource") val resource: String = "",
+    @SerialName("Type") val type: String = "",
+    @SerialName("HTTPStatusCode") val httpStatusCode: Int = 0,
+    @SerialName("Synthetics") val synthetics: Boolean = false,
+    @SerialName("Hits") val hits: Long = 0,
+    @SerialName("TopLevelHits") val topLevelHits: Long = 0,
+    @SerialName("Errors") val errors: Long = 0,
+    @SerialName("Duration") val duration: Long = 0,
+    @SerialName("OkSummary") val okSummary: DdSketchSummary? = null,
+    @SerialName("ErrorSummary") val errorSummary: DdSketchSummary? = null,
+)
+
+@Serializable
+data class DdSketchSummary(
+    val count: Long = 0,
+    val sum: Double = 0.0,
+)
+
+@Serializable
+data class DdStatsPayload(
+    @SerialName("Stats") val stats: List<DdStatsBucket> = emptyList(),
+    @SerialName("Hostname") val hostname: String = "",
+    @SerialName("Env") val env: String = "",
+    @SerialName("Version") val version: String = "",
+)
+
+// --- Dashboard API response models ---
+
+@Serializable
+data class DdSpanResponse(
+    val spanId: String,
+    val traceId: String,
+    val parentId: String,
+    val name: String,
+    val service: String,
+    val resource: String,
+    val type: String,
+    val startNs: Long,
+    val durationNs: Long,
+    val error: Int,
+    val meta: Map<String, String>,
+    val metrics: Map<String, Double>,
+    val host: String,
+    val env: String,
+    val version: String,
+    val source: String = "datadog",
+    val kind: String = "",
+    val statusCode: Int = 0,
+    val statusMessage: String = "",
+    val events: String = "[]",
+    val links: String = "[]",
+    val resourceAttributes: Map<String, String> = emptyMap(),
+)
+
+@Serializable
+data class DdTraceDetailResponse(
+    val traceId: String,
+    val spans: List<DdSpanResponse>,
+)
+
+@Serializable
+data class DdTraceListItem(
+    val traceId: String,
+    val rootService: String,
+    val rootResource: String,
+    val rootName: String,
+    val spanCount: Int,
+    val durationNs: Long,
+    val startNs: Long,
+    val hasError: Boolean,
+    val source: String = "datadog",
+)
+
+@Serializable
+data class DdTraceListResponse(
+    val traces: List<DdTraceListItem>,
+    val totalCount: Long,
+)
+
+@Serializable
+data class DdApmOverviewStats(
+    val totalTraces: Long,
+    val errorTraces: Long,
+    val errorRate: Double,
+    val serviceCount: Long,
+    val sourceCount: Long,
+    val p50DurationNs: Long,
+    val p95DurationNs: Long,
+    val p99DurationNs: Long,
+    val avgSpansPerTrace: Double,
+    val previous: DdApmOverviewPreviousStats,
+)
+
+@Serializable
+data class DdApmOverviewPreviousStats(
+    val totalTraces: Long,
+    val errorRate: Double,
+    val p50DurationNs: Long,
+    val p95DurationNs: Long,
+    val p99DurationNs: Long,
+    val avgSpansPerTrace: Double,
+)
+
+@Serializable
+data class DdApmLatencyPoint(
+    val timestamp: String,
+    val p50DurationNs: Long,
+    val p95DurationNs: Long,
+    val p99DurationNs: Long,
+)
+
+@Serializable
+data class DdApmServiceHealthItem(
+    val service: String,
+    val source: String,
+    val traceCount: Long,
+    val errorCount: Long,
+    val errorRate: Double,
+    val p95DurationNs: Long,
+    val avgSpansPerTrace: Double,
+)
+
+@Serializable
+data class DdApmResourceHotspotItem(
+    val service: String,
+    val resource: String,
+    val source: String,
+    val traceCount: Long,
+    val errorCount: Long,
+    val errorRate: Double,
+    val p95DurationNs: Long,
+)
+
+@Serializable
+data class DdApmFacetItem(
+    val value: String,
+    val count: Long,
+)
+
+@Serializable
+data class DdApmOverviewFacets(
+    val services: List<DdApmFacetItem>,
+    val sources: List<DdApmFacetItem>,
+    val environments: List<DdApmFacetItem>,
+    val operations: List<DdApmFacetItem>,
+)
+
+@Serializable
+data class DdApmOverviewResponse(
+    val stats: DdApmOverviewStats,
+    val latencySeries: List<DdApmLatencyPoint>,
+    val serviceHealth: List<DdApmServiceHealthItem>,
+    val resourceHotspots: List<DdApmResourceHotspotItem>,
+    val errors: List<DdApmErrorGroup>,
+    val facets: DdApmOverviewFacets,
+)
+
+@Serializable
+data class DdServiceMapEntry(
+    val service: String,
+    val spanCount: Long,
+    val errorCount: Long,
+    val avgDurationNs: Double,
+    val callsTo: List<String>,
+)
+
+@Serializable
+data class DdServiceEdge(
+    val fromService: String,
+    val toService: String,
+    val callCount: Long,
+    val errorCount: Long,
+    val avgDurationNs: Double,
+)
+
+@Serializable
+data class DdServiceMapResponse(
+    val services: List<DdServiceMapEntry>,
+    val edges: List<DdServiceEdge> = emptyList(),
+)
+
+@Serializable
+data class DdServiceLatencyResponse(
+    val service: String,
+    val p50DurationNs: Long,
+    val p90DurationNs: Long,
+    val p99DurationNs: Long,
+    val sampleCount: Long,
+)
+
+// --- APM Resource Stats Models ---
+
+@Serializable
+data class DdResourceStatsItem(
+    val service: String,
+    val resource: String,
+    val name: String,
+    val type: String,
+    val totalHits: Long,
+    val totalErrors: Long,
+    val avgDurationNs: Long,
+    val errorRate: Double,
+)
+
+@Serializable
+data class DdResourceStatsResponse(
+    val resources: List<DdResourceStatsItem>,
+    val totalCount: Long,
+)
+
+// --- APM Error Models ---
+
+@Serializable
+data class DdApmErrorGroup(
+    val id: String,
+    val service: String,
+    val resource: String,
+    val errorMessage: String,
+    val errorType: String,
+    val count: Long,
+    val lastSeen: String,
+    val traceId: String,
+)
+
+@Serializable
+data class DdApmServiceFacet(
+    val service: String,
+    val count: Long,
+)
+
+@Serializable
+data class DdApmErrorsResponse(
+    val errors: List<DdApmErrorGroup>,
+    val totalCount: Long,
+    val serviceFacets: List<DdApmServiceFacet> = emptyList(),
+)

@@ -20,6 +20,24 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080/v1'
+const PRIORITY_ID = '11111111-1111-4111-8111-111111111111'
+const SCHEDULE_ID_PRIMARY = '22222222-2222-4222-8222-222222222222'
+const SCHEDULE_ID_SECONDARY = '33333333-3333-4333-8333-333333333333'
+const SCHEDULE_ID_CREATED = '44444444-4444-4444-8444-444444444444'
+const OVERRIDE_ID = '55555555-5555-4555-8555-555555555555'
+const POLICY_ID_DEFAULT = '66666666-6666-4666-8666-666666666666'
+const POLICY_ID_URGENT = '77777777-7777-4777-8777-777777777777'
+const POLICY_ID_CREATED = '88888888-8888-4888-8888-888888888888'
+const POLICY_ID_DELETE = '99999999-9999-4999-8999-999999999999'
+const ALERT_ID_PRIMARY = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const ALERT_ID_SECONDARY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const USER_ID_ON_CALL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+const USER_ID_OVERRIDE = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+const USER_ID_REASSIGN = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+const DEVICE_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+const DECLARED_INCIDENT_ID = '12345678-1234-4234-8234-123456789abc'
+const ON_CALL_INCIDENT_ID_PRIMARY = '23456789-2345-4345-8345-23456789abcd'
+const ON_CALL_INCIDENT_ID_SECONDARY = '3456789a-3456-4456-8456-3456789abcde'
 
 describe('onCallMethods', () => {
   beforeEach(() => {
@@ -32,7 +50,7 @@ describe('onCallMethods', () => {
 
   describe('getPriorities', () => {
     it('fetches priorities list', async () => {
-      const mock = [{ id: 1, level: 'P1', label: 'Critical', color: '#ff0000' }]
+      const mock = [{ id: PRIORITY_ID, level: 'P1', label: 'Critical', color: '#ff0000' }]
       server.use(
         http.get(`${API_BASE}/priorities`, () => HttpResponse.json(mock))
       )
@@ -43,12 +61,12 @@ describe('onCallMethods', () => {
 
   describe('updatePriorities', () => {
     it('sends PUT with request body', async () => {
-      const request = { priorities: [{ level: 'P1', label: 'Critical', color: '#ff0000' }] }
-      const mock = [{ id: 1, level: 'P1', label: 'Critical', color: '#ff0000' }]
+      const request = { priorities: [{ priority: 'P1', isPageable: true, label: 'Critical' }] }
+      const mock = [{ id: PRIORITY_ID, level: 'P1', label: 'Critical', color: '#ff0000' }]
       server.use(
         http.put(`${API_BASE}/priorities`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.priorities).toBeDefined()
+          expect(body).toEqual(request)
           return HttpResponse.json(mock)
         })
       )
@@ -72,11 +90,21 @@ describe('onCallMethods', () => {
 
   describe('updateBusinessHours', () => {
     it('sends PUT with business hours config', async () => {
-      const request = { timezone: 'US/Eastern', startHour: 8, endHour: 18, workDays: [1, 2, 3, 4, 5] }
+      const request = {
+        timezone: 'US/Eastern',
+        enabled: true,
+        windows: [
+          {dayOfWeek: 1, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 2, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 3, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 4, startTime: '08:00', endTime: '18:00'},
+          {dayOfWeek: 5, startTime: '08:00', endTime: '18:00'},
+        ],
+      }
       server.use(
         http.put(`${API_BASE}/business-hours`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.timezone).toBe('US/Eastern')
+          expect(body).toEqual(request)
           return HttpResponse.json(request)
         })
       )
@@ -89,7 +117,7 @@ describe('onCallMethods', () => {
 
   describe('getOnCallSchedules', () => {
     it('fetches all schedules', async () => {
-      const mock = [{ id: 1, name: 'Primary', rotationType: 'weekly' }]
+      const mock = [{ id: SCHEDULE_ID_PRIMARY, name: 'Primary', rotationType: 'weekly' }]
       server.use(
         http.get(`${API_BASE}/on-call/schedules`, () => HttpResponse.json(mock))
       )
@@ -100,11 +128,11 @@ describe('onCallMethods', () => {
 
   describe('getOnCallSchedule', () => {
     it('fetches a single schedule by id', async () => {
-      const mock = { id: 5, name: 'Secondary', rotationType: 'daily' }
+      const mock = { id: SCHEDULE_ID_SECONDARY, name: 'Secondary', rotationType: 'daily' }
       server.use(
-        http.get(`${API_BASE}/on-call/schedules/5`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/schedules/${SCHEDULE_ID_SECONDARY}`, () => HttpResponse.json(mock))
       )
-      const result = await api.getOnCallSchedule(5)
+      const result = await api.getOnCallSchedule(SCHEDULE_ID_SECONDARY)
       expect(result).toEqual(mock)
     })
   })
@@ -112,7 +140,7 @@ describe('onCallMethods', () => {
   describe('createOnCallSchedule', () => {
     it('sends POST to create schedule', async () => {
       const request = { name: 'New Schedule', rotationType: 'weekly' }
-      const mock = { id: 10, ...request }
+      const mock = { id: SCHEDULE_ID_CREATED, ...request }
       server.use(
         http.post(`${API_BASE}/on-call/schedules`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
@@ -128,15 +156,15 @@ describe('onCallMethods', () => {
   describe('updateOnCallSchedule', () => {
     it('sends PUT to update schedule', async () => {
       const request = { name: 'Updated Schedule' }
-      const mock = { id: 3, name: 'Updated Schedule', rotationType: 'weekly' }
+      const mock = { id: SCHEDULE_ID_SECONDARY, name: 'Updated Schedule', rotationType: 'weekly' }
       server.use(
-        http.put(`${API_BASE}/on-call/schedules/3`, async ({ request: req }) => {
+        http.put(`${API_BASE}/on-call/schedules/${SCHEDULE_ID_SECONDARY}`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
           expect(body.name).toBe('Updated Schedule')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.updateOnCallSchedule(3, request as never)
+      const result = await api.updateOnCallSchedule(SCHEDULE_ID_SECONDARY, request as never)
       expect(result).toEqual(mock)
     })
   })
@@ -144,11 +172,11 @@ describe('onCallMethods', () => {
   describe('deleteOnCallSchedule', () => {
     it('sends DELETE for schedule', async () => {
       server.use(
-        http.delete(`${API_BASE}/on-call/schedules/3`, () =>
+        http.delete(`${API_BASE}/on-call/schedules/${SCHEDULE_ID_SECONDARY}`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.deleteOnCallSchedule(3)
+      await api.deleteOnCallSchedule(SCHEDULE_ID_SECONDARY)
     })
   })
 
@@ -156,29 +184,29 @@ describe('onCallMethods', () => {
 
   describe('getCurrentOnCall', () => {
     it('fetches current on-call user for schedule', async () => {
-      const mock = { userId: 42, userName: 'alice' }
+      const mock = { userId: USER_ID_ON_CALL, userName: 'alice' }
       server.use(
-        http.get(`${API_BASE}/on-call/schedules/7/current`, () =>
+        http.get(`${API_BASE}/on-call/schedules/${SCHEDULE_ID_PRIMARY}/current`, () =>
           HttpResponse.json(mock)
         )
       )
-      const result = await api.getCurrentOnCall(7)
+      const result = await api.getCurrentOnCall(SCHEDULE_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
   describe('createOverride', () => {
     it('sends POST to create override for schedule', async () => {
-      const request = { userId: 99, startTime: '2025-01-01T00:00:00Z', endTime: '2025-01-02T00:00:00Z' }
-      const mock = { id: 1, scheduleId: 7, ...request }
+      const request = { userId: USER_ID_OVERRIDE, startTime: '2025-01-01T00:00:00Z', endTime: '2025-01-02T00:00:00Z' }
+      const mock = { id: OVERRIDE_ID, scheduleId: SCHEDULE_ID_PRIMARY, ...request }
       server.use(
-        http.post(`${API_BASE}/on-call/schedules/7/overrides`, async ({ request: req }) => {
+        http.post(`${API_BASE}/on-call/schedules/${SCHEDULE_ID_PRIMARY}/overrides`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
-          expect(body.userId).toBe(99)
+          expect(body.userId).toBe(USER_ID_OVERRIDE)
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.createOverride(7, request as never)
+      const result = await api.createOverride(SCHEDULE_ID_PRIMARY, request as never)
       expect(result).toEqual(mock)
     })
   })
@@ -186,11 +214,11 @@ describe('onCallMethods', () => {
   describe('deleteOverride', () => {
     it('sends DELETE for override', async () => {
       server.use(
-        http.delete(`${API_BASE}/on-call/overrides/15`, () =>
+        http.delete(`${API_BASE}/on-call/overrides/${OVERRIDE_ID}`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.deleteOverride(15)
+      await api.deleteOverride(OVERRIDE_ID)
     })
   })
 
@@ -198,7 +226,7 @@ describe('onCallMethods', () => {
 
   describe('getEscalationPolicies', () => {
     it('fetches all escalation policies', async () => {
-      const mock = [{ id: 1, name: 'Default', steps: [] }]
+      const mock = [{ id: POLICY_ID_DEFAULT, name: 'Default', steps: [] }]
       server.use(
         http.get(`${API_BASE}/escalation-policies`, () => HttpResponse.json(mock))
       )
@@ -209,11 +237,11 @@ describe('onCallMethods', () => {
 
   describe('getEscalationPolicy', () => {
     it('fetches single escalation policy', async () => {
-      const mock = { id: 2, name: 'Urgent', steps: [{ delayMinutes: 5 }] }
+      const mock = { id: POLICY_ID_URGENT, name: 'Urgent', steps: [{ delayMinutes: 5 }] }
       server.use(
-        http.get(`${API_BASE}/escalation-policies/2`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/escalation-policies/${POLICY_ID_URGENT}`, () => HttpResponse.json(mock))
       )
-      const result = await api.getEscalationPolicy(2)
+      const result = await api.getEscalationPolicy(POLICY_ID_URGENT)
       expect(result).toEqual(mock)
     })
   })
@@ -221,7 +249,7 @@ describe('onCallMethods', () => {
   describe('createEscalationPolicy', () => {
     it('sends POST to create policy', async () => {
       const request = { name: 'New Policy', steps: [] }
-      const mock = { id: 3, ...request }
+      const mock = { id: POLICY_ID_CREATED, ...request }
       server.use(
         http.post(`${API_BASE}/escalation-policies`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
@@ -237,15 +265,15 @@ describe('onCallMethods', () => {
   describe('updateEscalationPolicy', () => {
     it('sends PUT to update policy', async () => {
       const request = { name: 'Updated Policy', steps: [{ delayMinutes: 10 }] }
-      const mock = { id: 3, ...request }
+      const mock = { id: POLICY_ID_CREATED, ...request }
       server.use(
-        http.put(`${API_BASE}/escalation-policies/3`, async ({ request: req }) => {
+        http.put(`${API_BASE}/escalation-policies/${POLICY_ID_CREATED}`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
           expect(body.name).toBe('Updated Policy')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.updateEscalationPolicy(3, request as never)
+      const result = await api.updateEscalationPolicy(POLICY_ID_CREATED, request as never)
       expect(result).toEqual(mock)
     })
   })
@@ -253,11 +281,11 @@ describe('onCallMethods', () => {
   describe('deleteEscalationPolicy', () => {
     it('sends DELETE for policy', async () => {
       server.use(
-        http.delete(`${API_BASE}/escalation-policies/4`, () =>
+        http.delete(`${API_BASE}/escalation-policies/${POLICY_ID_DELETE}`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.deleteEscalationPolicy(4)
+      await api.deleteEscalationPolicy(POLICY_ID_DELETE)
     })
   })
 
@@ -265,18 +293,18 @@ describe('onCallMethods', () => {
 
   describe('getIncidents', () => {
     it('fetches incidents without filters', async () => {
-      const mock = [{ id: 1, title: 'Server Down', status: 'TRIGGERED' }]
+      const mock = [{ id: ALERT_ID_PRIMARY, title: 'Server Down', status: 'TRIGGERED' }]
       server.use(
-        http.get(`${API_BASE}/incidents`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/alerts`, () => HttpResponse.json(mock))
       )
       const result = await api.getIncidents()
       expect(result).toEqual(mock)
     })
 
     it('fetches incidents with filters', async () => {
-      const mock = [{ id: 2, title: 'High CPU', status: 'ACKNOWLEDGED' }]
+      const mock = [{ id: ALERT_ID_SECONDARY, title: 'High CPU', status: 'ACKNOWLEDGED' }]
       server.use(
-        http.get(`${API_BASE}/incidents`, ({ request }) => {
+        http.get(`${API_BASE}/on-call/alerts`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('status')).toBe('ACKNOWLEDGED')
           expect(url.searchParams.get('priority')).toBe('P1')
@@ -287,9 +315,29 @@ describe('onCallMethods', () => {
       )
       const result = await api.getIncidents({
         status: 'ACKNOWLEDGED',
-        priorityLevel: 'P1',
+        priority: 'P1',
         fromDate: '2025-01-01',
         toDate: '2025-01-31',
+      })
+      expect(result).toEqual(mock)
+    })
+
+    it('fetches incidents with multiple statuses', async () => {
+      const mock = [
+        { id: ALERT_ID_PRIMARY, title: 'Server Down', status: 'TRIGGERED' },
+        { id: ALERT_ID_SECONDARY, title: 'High CPU', status: 'ACKNOWLEDGED' },
+      ]
+      server.use(
+        http.get(`${API_BASE}/on-call/alerts`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.getAll('status')).toEqual(['TRIGGERED', 'ACKNOWLEDGED'])
+          expect(url.searchParams.get('priority')).toBe('P0')
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.getIncidents({
+        status: ['TRIGGERED', 'ACKNOWLEDGED'],
+        priority: 'P0',
       })
       expect(result).toEqual(mock)
     })
@@ -297,11 +345,11 @@ describe('onCallMethods', () => {
 
   describe('getIncident', () => {
     it('fetches single incident', async () => {
-      const mock = { id: 1, title: 'Server Down', status: 'TRIGGERED', timeline: [] }
+      const mock = { id: ALERT_ID_PRIMARY, title: 'Server Down', status: 'TRIGGERED', timeline: [] }
       server.use(
-        http.get(`${API_BASE}/incidents/1`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}`, () => HttpResponse.json(mock))
       )
-      const result = await api.getIncident(1)
+      const result = await api.getIncident(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
@@ -310,50 +358,50 @@ describe('onCallMethods', () => {
     it('fetches incident timeline', async () => {
       const mock = [{ type: 'TRIGGERED', timestamp: '2025-01-01T00:00:00Z' }]
       server.use(
-        http.get(`${API_BASE}/incidents/1/timeline`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/timeline`, () => HttpResponse.json(mock))
       )
-      const result = await api.getIncidentTimeline(1)
+      const result = await api.getIncidentTimeline(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
   describe('acknowledgeIncident', () => {
     it('sends POST to acknowledge', async () => {
-      const mock = { id: 1, status: 'ACKNOWLEDGED' }
+      const mock = { id: ALERT_ID_PRIMARY, status: 'ACKNOWLEDGED' }
       server.use(
-        http.post(`${API_BASE}/incidents/1/acknowledge`, () =>
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/acknowledge`, () =>
           HttpResponse.json(mock)
         )
       )
-      const result = await api.acknowledgeIncident(1)
+      const result = await api.acknowledgeIncident(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
   describe('resolveIncident', () => {
     it('sends POST to resolve', async () => {
-      const mock = { id: 1, status: 'RESOLVED' }
+      const mock = { id: ALERT_ID_PRIMARY, status: 'RESOLVED' }
       server.use(
-        http.post(`${API_BASE}/incidents/1/resolve`, () =>
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/resolve`, () =>
           HttpResponse.json(mock)
         )
       )
-      const result = await api.resolveIncident(1)
+      const result = await api.resolveIncident(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
   describe('reassignIncident', () => {
     it('sends POST with toUserId', async () => {
-      const mock = { id: 1, assignedTo: 50 }
+      const mock = { id: ALERT_ID_PRIMARY, assignedTo: USER_ID_REASSIGN }
       server.use(
-        http.post(`${API_BASE}/incidents/1/reassign`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/reassign`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
-          expect(body.toUserId).toBe(50)
+          expect(body.toUserId).toBe(USER_ID_REASSIGN)
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.reassignIncident(1, 50)
+      const result = await api.reassignIncident(ALERT_ID_PRIMARY, USER_ID_REASSIGN)
       expect(result).toEqual(mock)
     })
   })
@@ -362,13 +410,13 @@ describe('onCallMethods', () => {
     it('sends POST with note body', async () => {
       const mock = { type: 'NOTE', content: 'Investigating' }
       server.use(
-        http.post(`${API_BASE}/incidents/1/notes`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/notes`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.note).toBe('Investigating')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.addIncidentNote(1, 'Investigating')
+      const result = await api.addIncidentNote(ALERT_ID_PRIMARY, 'Investigating')
       expect(result).toEqual(mock)
     })
   })
@@ -376,22 +424,22 @@ describe('onCallMethods', () => {
   describe('viewIncident', () => {
     it('sends POST to mark incident as viewed', async () => {
       server.use(
-        http.post(`${API_BASE}/incidents/1/view`, () =>
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/view`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.viewIncident(1)
+      await api.viewIncident(ALERT_ID_PRIMARY)
     })
   })
 
   describe('markUnavailable', () => {
     it('sends POST to mark unavailable', async () => {
       server.use(
-        http.post(`${API_BASE}/incidents/1/unavailable`, () =>
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/unavailable`, () =>
           new HttpResponse(null, { status: 204 })
         )
       )
-      await api.markUnavailable(1)
+      await api.markUnavailable(ALERT_ID_PRIMARY)
     })
   })
 
@@ -400,7 +448,7 @@ describe('onCallMethods', () => {
   describe('registerDevice', () => {
     it('sends POST with device registration', async () => {
       const request = { token: 'fcm-token-123', platform: 'android' }
-      const mock = { id: 1, token: 'fcm-token-123', platform: 'android' }
+      const mock = { id: DEVICE_ID, token: 'fcm-token-123', platform: 'android' }
       server.use(
         http.post(`${API_BASE}/devices`, async ({ request: req }) => {
           const body = await req.json() as Record<string, unknown>
@@ -429,17 +477,17 @@ describe('onCallMethods', () => {
 
   describe('declareIncident', () => {
     it('sends POST to declare incident from alert', async () => {
-      const data = { title: 'Outage', description: 'Full outage', priorityLevel: 'P1' }
-      const mock = { id: 42 }
+      const data = { title: 'Outage', description: 'Full outage', severity: 'SEV-1' }
+      const mock = { id: DECLARED_INCIDENT_ID }
       server.use(
-        http.post(`${API_BASE}/incidents/10/declare`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/declare-incident`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.title).toBe('Outage')
-          expect(body.priorityLevel).toBe('P1')
+          expect(body.severity).toBe('SEV-1')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.declareIncident(10, data)
+      const result = await api.declareIncident(ALERT_ID_PRIMARY, data)
       expect(result).toEqual(mock)
     })
   })
@@ -448,49 +496,51 @@ describe('onCallMethods', () => {
 
   describe('getOnCallIncidents', () => {
     it('fetches on-call incidents without filters', async () => {
-      const mock = [{ id: 1, title: 'Alert fired' }]
+      const mock = [{ id: ON_CALL_INCIDENT_ID_PRIMARY, title: 'Alert fired' }]
       server.use(
-        http.get(`${API_BASE}/on-call-incidents`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/incidents`, () => HttpResponse.json(mock))
       )
       const result = await api.getOnCallIncidents()
       expect(result).toEqual(mock)
     })
 
     it('fetches on-call incidents with filters', async () => {
-      const mock = [{ id: 2, title: 'Disk full' }]
+      const mock = [{ id: ON_CALL_INCIDENT_ID_SECONDARY, title: 'Disk full' }]
       server.use(
-        http.get(`${API_BASE}/on-call-incidents`, ({ request }) => {
+        http.get(`${API_BASE}/on-call/incidents`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('status')).toBe('TRIGGERED')
-          expect(url.searchParams.get('priorityLevel')).toBe('P2')
+          expect(url.searchParams.get('severity')).toBe('SEV-2')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getOnCallIncidents({ status: 'TRIGGERED', priorityLevel: 'P2' })
+      const result = await api.getOnCallIncidents({ status: 'TRIGGERED', severity: 'SEV-2' })
       expect(result).toEqual(mock)
     })
   })
 
   describe('getOnCallIncident', () => {
     it('fetches single on-call incident', async () => {
-      const mock = { id: 5, title: 'Memory leak', status: 'TRIGGERED' }
+      const mock = { id: ON_CALL_INCIDENT_ID_PRIMARY, title: 'Memory leak', status: 'TRIGGERED' }
       server.use(
-        http.get(`${API_BASE}/on-call-incidents/5`, () => HttpResponse.json(mock))
+        http.get(`${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}`, () => HttpResponse.json(mock))
       )
-      const result = await api.getOnCallIncident(5)
+      const result = await api.getOnCallIncident(ON_CALL_INCIDENT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
   describe('resolveOnCallIncident', () => {
-    it('sends POST to resolve on-call incident', async () => {
-      const mock = { id: 5, status: 'RESOLVED' }
+    it('sends POST with optional note to resolve on-call incident', async () => {
+      const mock = { id: ON_CALL_INCIDENT_ID_PRIMARY, status: 'RESOLVED' }
       server.use(
-        http.post(`${API_BASE}/on-call-incidents/5/resolve`, () =>
-          HttpResponse.json(mock)
-        )
+        http.post(`${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/resolve`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.note).toBe('Restarted workers')
+          return HttpResponse.json(mock)
+        })
       )
-      const result = await api.resolveOnCallIncident(5)
+      const result = await api.resolveOnCallIncident(ON_CALL_INCIDENT_ID_PRIMARY, 'Restarted workers')
       expect(result).toEqual(mock)
     })
   })
@@ -499,11 +549,11 @@ describe('onCallMethods', () => {
     it('fetches on-call incident timeline', async () => {
       const mock = [{ type: 'ESCALATED', timestamp: '2025-06-01T12:00:00Z' }]
       server.use(
-        http.get(`${API_BASE}/on-call-incidents/5/timeline`, () =>
+        http.get(`${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/timeline`, () =>
           HttpResponse.json(mock)
         )
       )
-      const result = await api.getOnCallIncidentTimeline(5)
+      const result = await api.getOnCallIncidentTimeline(ON_CALL_INCIDENT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
@@ -512,13 +562,13 @@ describe('onCallMethods', () => {
     it('sends POST with note', async () => {
       const mock = { message: 'Note added' }
       server.use(
-        http.post(`${API_BASE}/on-call-incidents/5/notes`, async ({ request }) => {
+        http.post(`${API_BASE}/on-call/incidents/${ON_CALL_INCIDENT_ID_PRIMARY}/notes`, async ({ request }) => {
           const body = await request.json() as Record<string, unknown>
           expect(body.note).toBe('Looking into it')
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.addOnCallIncidentNote(5, 'Looking into it')
+      const result = await api.addOnCallIncidentNote(ON_CALL_INCIDENT_ID_PRIMARY, 'Looking into it')
       expect(result).toEqual(mock)
     })
   })

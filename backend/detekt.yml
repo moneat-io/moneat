@@ -7,8 +7,9 @@ comments:
     licenseTemplateFile: 'license-header.txt'
     licenseTemplateIsRegex: false
 
-# Disable rules that have widespread pre-existing violations.
-# These can be enabled incrementally as the codebase is cleaned up.
+# Active rules fail new violations; existing debt is isolated in each module's baseline.
+# Baseline cleanup follows the IDs in the baseline file. For EE that is 22 entries:
+# LongParameterList (14) and CyclomaticComplexMethod (8); no WildcardImport or EmptyCatchBlock debt.
 style:
   MagicNumber:
     active: true
@@ -22,7 +23,7 @@ style:
     ignoreEnums: true
     ignoreRanges: true
   WildcardImport:
-    active: false
+    active: true
   ReturnCount:
     active: false
   ThrowsCount:
@@ -55,9 +56,9 @@ complexity:
   LongMethod:
     active: false
   LongParameterList:
-    active: false
+    active: true
   CyclomaticComplexMethod:
-    active: false
+    active: true
   ComplexCondition:
     active: false
   # Enforced (issue #296): flag types over threshold so large classes are split intentionally.
@@ -118,7 +119,7 @@ performance:
 
 empty-blocks:
   EmptyCatchBlock:
-    active: false
+    active: true
 
 potential-bugs:
   ImplicitDefaultLocale:

@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import type { ApiClientCore } from '../client'
+import {urlWithQuery} from '../utils'
 import type {
   SyntheticTestResponse,
   SyntheticResultListResponse,
@@ -23,6 +24,11 @@ import type {
   SyntheticVariableRequest,
   CreateSyntheticTestPayload,
   UpdateSyntheticTestPayload,
+  SyntheticRunResponse,
+  LocationSummary,
+  SyntheticLocationResponse,
+  CreatePrivateLocationRequest,
+  CreatePrivateLocationResponse,
 } from '../types'
 
 export function syntheticsMethods(core: ApiClientCore) {
@@ -88,20 +94,68 @@ export function syntheticsMethods(core: ApiClientCore) {
       }),
 
     updateSyntheticVariable: (
-      id: number,
+      id: string,
       request: SyntheticVariableRequest
     ) =>
       core.request<SyntheticVariableResponse>(
-        `${base}/synthetics/variables/${id}`,
+        `${base}/synthetics/variables/${encodeURIComponent(id)}`,
         {
           method: 'PUT',
           body: JSON.stringify(request),
         }
       ),
 
-    deleteSyntheticVariable: (id: number) =>
-      core.request<void>(`${base}/synthetics/variables/${id}`, {
+    deleteSyntheticVariable: (id: string) =>
+      core.request<void>(
+        `${base}/synthetics/variables/${encodeURIComponent(id)}`,
+        {
+          method: 'DELETE',
+        }
+      ),
+
+    getSyntheticRunDetail: (testId: string, resultId: string) =>
+      core.request<SyntheticRunResponse>(
+        `${base}/synthetics/tests/${testId}/results/${resultId}`
+      ),
+
+    getSyntheticLocationSummaries: (testId: string) =>
+      core.request<LocationSummary[]>(
+        `${base}/synthetics/tests/${testId}/locations/summary`
+      ),
+
+    previewSyntheticTest: (
+      request: CreateSyntheticTestPayload,
+      location = ''
+    ) => {
+      const query = location ? `location=${encodeURIComponent(location)}` : ''
+      return core.request<SyntheticRunResponse>(
+        urlWithQuery(`${base}/synthetics/preview`, query),
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      )
+    },
+
+    listSyntheticLocations: () =>
+      core.request<SyntheticLocationResponse[]>(`${base}/synthetics/locations`),
+
+    createSyntheticLocation: (request: CreatePrivateLocationRequest) =>
+      core.request<CreatePrivateLocationResponse>(
+        `${base}/synthetics/locations`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      ),
+
+    deleteSyntheticLocation: (id: string) =>
+      core.request<void>(`${base}/synthetics/locations/${id}`, {
         method: 'DELETE',
       }),
+
+    /** URL for a captured browser-step screenshot (org-scoped by key prefix). */
+    syntheticScreenshotUrl: (key: string) =>
+      `${base}/synthetics/screenshots/${key}`,
   }
 }

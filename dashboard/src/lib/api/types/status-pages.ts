@@ -34,7 +34,7 @@ export interface StatusPage {
 }
 
 export interface StatusPageMonitor {
-  id: number
+  id: string
   monitorId: string
   monitorName: string
   displayName?: string
@@ -71,7 +71,7 @@ export interface StatusPageIncident {
 }
 
 export interface CustomDomain {
-  id: number
+  id: string
   domain: string
   verificationToken: string
   verified: boolean

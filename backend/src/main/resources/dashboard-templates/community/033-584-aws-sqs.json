@@ -1,0 +1,385 @@
+{
+    "id": "033-584-aws-sqs",
+    "title": "AWS SQS",
+    "description": "Prebuilt Moneat dashboard for AWS SQS telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 6,
+    "variable_count": 3,
+    "warnings": [],
+    "dashboard": {
+        "title": "AWS SQS",
+        "description": "Prebuilt Moneat dashboard for AWS SQS telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "queue",
+                "label": "QueueName",
+                "type": "query",
+                "query": "dimension_values($region,AWS/SQS,NumberOfMessagesReceived,QueueName)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Messages",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfMessagesDeleted\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfMessagesReceived\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfMessagesSent\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "ApproximateAgeOfOldestMessage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"ApproximateAgeOfOldestMessage\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "s",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "ApproximateNumberOfMessages",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 15,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"ApproximateNumberOfMessagesVisible\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"ApproximateNumberOfMessagesNotVisible\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"ApproximateNumberOfMessagesDelayed\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "NumberOfEmptyReceives",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 22,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"NumberOfEmptyReceives\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "SentMessageSize",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 29,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/SQS\",\"MetricName\":\"SentMessageSize\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"QueueName\",\"Value\":\"$queue\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "Documentation",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 36,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 5
+            }
+        ]
+    }
+}

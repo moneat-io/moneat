@@ -21,24 +21,21 @@ import {Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import type {ReplayTimelineItem as BaseTimelineItem} from '@/lib/api'
 import {api} from '@/lib/api'
-import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Badge} from '@/components/ui/badge'
 import {SpanWaterfall} from '@/components/SpanWaterfall'
 import {cn} from '@/lib/utils'
 import {
     Activity,
-    AlertCircle,
-    ChevronDown,
-    ChevronRight,
+    AlertTriangle,
     Clock,
     DatabaseZap,
     ExternalLink,
-    Layers,
     Loader2,
     MousePointerClick,
     Navigation,
     Network,
     Tag,
+    Terminal,
 } from 'lucide-react'
 
 /** Extended item type that can carry raw breadcrumb payload data */
@@ -49,11 +46,84 @@ export type TimelineItem = BaseTimelineItem & {
 export interface ReplayTimelinePanelProps {
   readonly items: TimelineItem[]
   readonly currentOffsetMs: number
-  readonly projectId?: number
+  /** Project resource ID for replay links. */
+  readonly projectId?: string
   readonly onSeek: (offsetMs: number) => void
 }
 
-type FilterValue = 'all' | 'error' | 'transaction' | 'span'
+type FilterValue = 'all' | 'error' | 'http' | 'ui'
+
+type EventCategory = 'navigation' | 'ui' | 'http' | 'exception' | 'console' | 'other'
+
+/** Behavioral category for an event — drives the colored category label, icon, and filter tabs. */
+function eventCategory(item: TimelineItem): EventCategory {
+  if (item.type === 'error') return 'exception'
+  const c = (item.category ?? '').toLowerCase()
+  if (/exception|crash|fatal|\banr\b|\berror\b/.test(c)) return 'exception'
+  if (/console|logcat|(^|\W)log(\W|$)/.test(c)) return 'console'
+  if (/http|fetch|xhr|network|request|response|\bapi\b|graphql/.test(c)) return 'http'
+  if (/nav|route|page|screen/.test(c)) return 'navigation'
+  if (/\bui\b|click|tap|touch|gesture|input|scroll|press|swipe|key/.test(c)) return 'ui'
+  return 'other'
+}
+
+const CATEGORY_META: Record<EventCategory, { readonly label: string; readonly color: string; readonly Icon: typeof Activity }> = {
+  navigation: { label: 'navigation', color: 'text-success-fg', Icon: Navigation },
+  ui: { label: 'ui', color: 'text-info-fg', Icon: MousePointerClick },
+  http: { label: 'http', color: 'text-accent', Icon: Network },
+  exception: { label: 'exception', color: 'text-danger-fg', Icon: AlertTriangle },
+  console: { label: 'console', color: 'text-warning-fg', Icon: Terminal },
+  other: { label: 'event', color: 'text-muted-foreground', Icon: Activity },
+}
+
+/** HTTP status from the explicit field, else parsed from a "→ 500" style title. */
+function statusOf(item: TimelineItem): number | null {
+  if (typeof item.statusCode === 'number' && Number.isFinite(item.statusCode)) return item.statusCode
+  const m = /→\s*(\d{3})\b/.exec(item.title ?? '')
+  return m ? Number(m[1]) : null
+}
+
+/** A row reads as an error when it's a thrown error/exception or a failed (>=400) network call. */
+function isErrorEvent(item: TimelineItem): boolean {
+  if (item.type === 'error') return true
+  if (eventCategory(item) === 'exception') return true
+  const status = statusOf(item)
+  return status != null && status >= 400
+}
+
+function statusBadgeVariant(status: number): 'success' | 'warning' | 'danger' {
+  if (status >= 400) return 'danger'
+  if (status >= 300) return 'warning'
+  return 'success'
+}
+
+/** Strip a trailing "→ 500" / bare status from the title so we can render the code as a badge instead. */
+function titleWithoutStatus(title: string, status: number | null): string {
+  if (status == null) return title
+  const trimmedTitle = title.trimEnd()
+  const statusText = String(status)
+  if (!trimmedTitle.endsWith(statusText)) return title
+
+  const beforeStatus = trimmedTitle.slice(0, -statusText.length).trimEnd()
+  return beforeStatus.endsWith('→')
+    ? beforeStatus.slice(0, -1).trimEnd()
+    : beforeStatus
+}
+
+/** m:ss clock for the right-aligned time column (matches the player scrubber). */
+function formatClock(offsetMs: number): string {
+  const s = Math.max(0, Math.floor(offsetMs / 1000))
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+
+/** Lowercase + strip non-alphanumerics, for comparing a title against its category label. */
+function normalizeLabel(s: string): string {
+  return s.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
+}
+
+function issueSearch(projectId?: string): { projectId: string | undefined } {
+  return { projectId: projectId === undefined ? undefined : String(projectId) }
+}
 
 function formatOffset(offsetMs: number): string {
   if (offsetMs < 0) return '0:00'
@@ -64,11 +134,6 @@ function formatOffset(offsetMs: number): string {
     return `+${minutes}m ${String(seconds).padStart(2, '0')}s`
   }
   return `+${seconds}.${String(Math.floor((offsetMs % 1000) / 100))}s`
-}
-
-function formatDurationLabel(ms: number): string {
-  if (ms >= 1000) return `${(ms / 1000).toFixed(2)}s`
-  return `${Math.round(ms)}ms`
 }
 
 function formatTimestamp(isoString: string, timezone: string): string {
@@ -101,54 +166,40 @@ function typeColorClasses(type: TimelineItem['type']) {
   switch (type) {
     case 'error':
       return {
-        border: 'border-l-red-500',
-        bg: 'bg-red-500/8 dark:bg-red-500/10',
-        bgActive: 'bg-red-500/15 dark:bg-red-500/20',
-        text: 'text-red-600 dark:text-red-400',
-        badge: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-        dot: 'bg-red-500',
+        border: 'border-l-danger-solid',
+        bg: 'bg-danger-bg/60 dark:bg-danger-bg',
+        bgActive: 'bg-danger-bg dark:bg-danger-bg',
+        text: 'text-danger-fg',
+        badge: 'bg-danger-bg text-danger-fg',
+        dot: 'bg-danger-solid',
       }
     case 'transaction':
       return {
-        border: 'border-l-blue-500',
-        bg: 'bg-blue-500/8 dark:bg-blue-500/10',
-        bgActive: 'bg-blue-500/15 dark:bg-blue-500/20',
-        text: 'text-blue-600 dark:text-blue-400',
-        badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-        dot: 'bg-blue-500',
+        border: 'border-l-chart-2',
+        bg: 'bg-chart-2/[0.08] dark:bg-chart-2/10',
+        bgActive: 'bg-chart-2/15 dark:bg-chart-2/20',
+        text: 'text-chart-2',
+        badge: 'bg-chart-2/15 text-chart-2',
+        dot: 'bg-chart-2',
       }
     case 'span':
       return {
-        border: 'border-l-emerald-500',
-        bg: 'bg-emerald-500/8 dark:bg-emerald-500/10',
-        bgActive: 'bg-emerald-500/15 dark:bg-emerald-500/20',
-        text: 'text-emerald-600 dark:text-emerald-400',
-        badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-        dot: 'bg-emerald-500',
+        border: 'border-l-chart-4',
+        bg: 'bg-chart-4/[0.08] dark:bg-chart-4/10',
+        bgActive: 'bg-chart-4/15 dark:bg-chart-4/20',
+        text: 'text-chart-4',
+        badge: 'bg-chart-4/15 text-chart-4',
+        dot: 'bg-chart-4',
       }
     default:
       return {
-        border: 'border-l-slate-400',
-        bg: 'bg-slate-500/8 dark:bg-slate-500/10',
-        bgActive: 'bg-slate-500/15 dark:bg-slate-500/20',
-        text: 'text-slate-500 dark:text-slate-400',
-        badge: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-        dot: 'bg-slate-400',
+        border: 'border-l-border',
+        bg: 'bg-muted/40 dark:bg-muted/40',
+        bgActive: 'bg-muted dark:bg-muted',
+        text: 'text-muted-foreground',
+        badge: 'bg-muted text-muted-foreground',
+        dot: 'bg-muted-foreground/70',
       }
-  }
-}
-
-function TypeIcon({ type, className }: { readonly type: TimelineItem['type']; readonly className?: string }) {
-  const colors = typeColorClasses(type)
-  switch (type) {
-    case 'error':
-      return <AlertCircle className={cn('h-4 w-4 shrink-0', colors.text, className)} />
-    case 'transaction':
-      return <Layers className={cn('h-4 w-4 shrink-0', colors.text, className)} />
-    case 'span':
-      return <Activity className={cn('h-4 w-4 shrink-0', colors.text, className)} />
-    default:
-      return <Activity className={cn('h-4 w-4 shrink-0', colors.text, className)} />
   }
 }
 
@@ -156,14 +207,14 @@ function TypeIcon({ type, className }: { readonly type: TimelineItem['type']; re
 function CategoryIcon({ category, className }: { readonly category?: string; readonly className?: string }) {
   const cat = (category ?? '').toLowerCase()
   if (cat.includes('http') || cat.includes('network'))
-    return <Network className={cn('h-3.5 w-3.5 text-blue-500', className)} />
+    return <Network className={cn('h-3.5 w-3.5 text-chart-2', className)} />
   if (cat.includes('navigation') || cat.includes('nav'))
-    return <Navigation className={cn('h-3.5 w-3.5 text-indigo-500', className)} />
+    return <Navigation className={cn('h-3.5 w-3.5 text-chart-10', className)} />
   if (cat.includes('ui.click') || cat.includes('touch') || cat.includes('gesture'))
-    return <MousePointerClick className={cn('h-3.5 w-3.5 text-pink-500', className)} />
+    return <MousePointerClick className={cn('h-3.5 w-3.5 text-chart-7', className)} />
   if (cat.includes('ui'))
-    return <Activity className={cn('h-3.5 w-3.5 text-amber-500', className)} />
-  return <Tag className={cn('h-3.5 w-3.5 text-slate-400', className)} />
+    return <Activity className={cn('h-3.5 w-3.5 text-chart-5', className)} />
+  return <Tag className={cn('h-3.5 w-3.5 text-muted-foreground', className)} />
 }
 
 /* ── Does this item have fetchable trace data? ── */
@@ -199,7 +250,13 @@ function serializeValue(value: unknown): string {
   return String(value ?? '')
 }
 
-function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
+function BreadcrumbDetailPanel({
+  item,
+  projectId,
+}: {
+  readonly item: TimelineItem
+  readonly projectId?: string
+}) {
   const { timezone } = useTimezone()
   const colors = typeColorClasses(item.type)
   const data = item.data ?? {}
@@ -277,7 +334,8 @@ function BreadcrumbDetailPanel({ item }: { readonly item: TimelineItem }) {
             <Link
               to="/issues/$issueId"
               params={{ issueId: item.issueId }}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline"
+              search={issueSearch(projectId)}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-fg hover:underline"
             >
               View Issue <ExternalLink className="h-3 w-3" />
             </Link>
@@ -295,7 +353,7 @@ function WaterfallPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: number
+  readonly projectId?: string
 }) {
   const colors = typeColorClasses(item.type)
 
@@ -350,18 +408,19 @@ function WaterfallPanel({
             <Link
               to="/issues/$issueId"
               params={{ issueId: item.issueId }}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-red-600 dark:text-red-400 hover:underline"
+              search={issueSearch(projectId)}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-danger-fg hover:underline"
             >
               View Issue <ExternalLink className="h-3 w-3" />
             </Link>
           )}
-          {item.eventId && item.type === 'transaction' && (
+          {item.traceId && item.type === 'transaction' && (
             <Link
-              to="/performance/$transactionId"
-              params={{ transactionId: item.eventId }}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              to="/performance/traces/$traceId"
+              params={{ traceId: item.traceId }}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-chart-2 hover:underline"
             >
-              Full Transaction <ExternalLink className="h-3 w-3" />
+              Full Trace <ExternalLink className="h-3 w-3" />
             </Link>
           )}
         </div>
@@ -398,44 +457,56 @@ function ExpandedItemPanel({
   projectId,
 }: {
   readonly item: TimelineItem
-  readonly projectId?: number
+  readonly projectId?: string
 }) {
   if (canFetchSpans(item)) {
     return <WaterfallPanel item={item} projectId={projectId} />
   }
-  return <BreadcrumbDetailPanel item={item} />
+  return <BreadcrumbDetailPanel item={item} projectId={projectId} />
 }
 
 /* ── Main component ── */
 
+const FILTERS: { readonly value: FilterValue; readonly label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'error', label: 'Errors' },
+  { value: 'http', label: 'Network' },
+  { value: 'ui', label: 'User' },
+]
+
 export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek }: ReplayTimelinePanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
-  const [tab, setTab] = useState<FilterValue>('all')
+  const [filter, setFilter] = useState<FilterValue>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const activeIndex = useMemo(() => findActiveIndex(items, currentOffsetMs), [items, currentOffsetMs])
 
-  const activeItem = activeIndex >= 0 ? items[activeIndex] : null
-  const errorItems = useMemo(() => items.filter((i) => i.type === 'error'), [items])
-  const transactionItems = useMemo(() => items.filter((i) => i.type === 'transaction'), [items])
-  const spanItems = useMemo(() => items.filter((i) => i.type === 'span'), [items])
-  const activeErrorIndex = activeItem?.type === 'error' ? errorItems.findIndex((it) => it.id === activeItem.id) : -1
-  const activeTransactionIndex = activeItem?.type === 'transaction' ? transactionItems.findIndex((it) => it.id === activeItem.id) : -1
-  const activeSpanIndex = activeItem?.type === 'span' ? spanItems.findIndex((it) => it.id === activeItem.id) : -1
-  let scrollIndex: number
-  if (tab === 'all') {
-    scrollIndex = activeIndex
-  } else if (tab === 'error') {
-    scrollIndex = activeErrorIndex
-  } else if (tab === 'transaction') {
-    scrollIndex = activeTransactionIndex
-  } else {
-    scrollIndex = activeSpanIndex
-  }
+  // Mirror the mockup's All / Errors / Network / User filter over behavioral categories.
+  const visibleItems = useMemo(() => {
+    switch (filter) {
+      case 'error':
+        return items.filter(isErrorEvent)
+      case 'http':
+        return items.filter((i) => eventCategory(i) === 'http')
+      case 'ui':
+        // "User" = user-driven interactions: clicks/taps/inputs plus navigation.
+        return items.filter((i) => {
+          const c = eventCategory(i)
+          return c === 'ui' || c === 'navigation'
+        })
+      default:
+        return items
+    }
+  }, [items, filter])
+
+  // Active row is tracked against the visible list so the highlight + autoscroll stay in sync.
+  const activeIndex = useMemo(
+    () => findActiveIndex(visibleItems, currentOffsetMs),
+    [visibleItems, currentOffsetMs]
+  )
 
   useEffect(() => {
-    if (scrollIndex >= 0 && listRef.current) {
+    if (activeIndex >= 0 && listRef.current) {
       const container = listRef.current
-      const el = container.querySelector<HTMLElement>(`[data-timeline-index="${scrollIndex}"]`)
+      const el = container.querySelector<HTMLElement>(`[data-timeline-index="${activeIndex}"]`)
       if (el) {
         const padding = 8
         const viewTop = container.scrollTop
@@ -450,7 +521,7 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
         }
       }
     }
-  }, [scrollIndex])
+  }, [activeIndex])
 
   const handleItemClick = useCallback((item: TimelineItem) => {
     onSeek(item.offsetMs)
@@ -458,80 +529,40 @@ export function ReplayTimelinePanel({ items, currentOffsetMs, projectId, onSeek 
   }, [onSeek])
 
   return (
-    <div className="h-full min-h-0 rounded-lg border bg-card shadow-sm">
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as FilterValue)}
-        className="w-full h-full min-h-0 flex flex-col"
-      >
-        {/* Colored tab bar */}
-        <div className="px-2 pt-2">
-          <TabsList className="w-full grid grid-cols-4 h-9 gap-1 p-1 bg-muted/50">
-            <TabsTrigger value="all" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm">
-              All <span className="ml-1 text-[10px] font-mono text-muted-foreground">{items.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="error" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-red-600 dark:data-[state=active]:text-red-400">
-              <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500" />Errors
-              </span>
-              <span className="ml-1 text-[10px] font-mono">{errorItems.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="transaction" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-blue-600 dark:data-[state=active]:text-blue-400">
-              <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />Txns
-              </span>
-              <span className="ml-1 text-[10px] font-mono">{transactionItems.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="span" className="text-xs data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400">
-              <span className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Spans
-              </span>
-              <span className="ml-1 text-[10px] font-mono">{spanItems.length}</span>
-            </TabsTrigger>
-          </TabsList>
+    <div className="flex h-full min-h-0 w-full flex-col">
+      {/* Header: title + total count + segmented category filter */}
+      <div className="flex items-center gap-2 border-b px-2.5 py-2">
+        <span className="text-xs font-semibold">Events</span>
+        <Badge variant="neutral" className="text-[10px] tabular-nums">{items.length}</Badge>
+        <span className="flex-1" />
+        <div className="inline-flex items-center gap-0.5 rounded-md border bg-muted/40 p-0.5 text-xs">
+          {FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setFilter(f.value)}
+              aria-pressed={filter === f.value}
+              className={cn(
+                'rounded px-2 py-0.5 font-medium transition-colors',
+                filter === f.value
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
+      </div>
 
-        <TabsContent value="all" className="mt-0 flex-1 min-h-0 px-2 pb-2">
-          <TimelineList
-            ref={listRef}
-            items={items}
-            activeIndex={activeIndex}
-            expandedId={expandedId}
-            projectId={projectId}
-            onItemClick={handleItemClick}
-          />
-        </TabsContent>
-        <TabsContent value="error" className="mt-0 flex-1 min-h-0 px-2 pb-2">
-          <TimelineList
-            ref={listRef}
-            items={errorItems}
-            activeIndex={activeErrorIndex}
-            expandedId={expandedId}
-            projectId={projectId}
-            onItemClick={handleItemClick}
-          />
-        </TabsContent>
-        <TabsContent value="transaction" className="mt-0 flex-1 min-h-0 px-2 pb-2">
-          <TimelineList
-            ref={listRef}
-            items={transactionItems}
-            activeIndex={activeTransactionIndex}
-            expandedId={expandedId}
-            projectId={projectId}
-            onItemClick={handleItemClick}
-          />
-        </TabsContent>
-        <TabsContent value="span" className="mt-0 flex-1 min-h-0 px-2 pb-2">
-          <TimelineList
-            ref={listRef}
-            items={spanItems}
-            activeIndex={activeSpanIndex}
-            expandedId={expandedId}
-            projectId={projectId}
-            onItemClick={handleItemClick}
-          />
-        </TabsContent>
-      </Tabs>
+      <TimelineList
+        ref={listRef}
+        items={visibleItems}
+        activeIndex={activeIndex}
+        expandedId={expandedId}
+        projectId={projectId}
+        onItemClick={handleItemClick}
+      />
     </div>
   )
 }
@@ -542,7 +573,7 @@ interface TimelineListProps {
   readonly items: TimelineItem[]
   readonly activeIndex: number
   readonly expandedId: string | null
-  readonly projectId?: number
+  readonly projectId?: string
   readonly onItemClick: (item: TimelineItem) => void
 }
 
@@ -551,117 +582,86 @@ const TimelineList = React.forwardRef<HTMLDivElement, TimelineListProps>(functio
   ref
 ) {
   return (
-    <div
-      ref={ref}
-      className="h-full min-h-[280px] overflow-y-auto rounded-md border bg-muted/20 mt-2"
-    >
+    <div ref={ref} className="min-h-0 flex-1 overflow-y-auto">
       {items.length === 0 ? (
-        <div className="p-6 text-sm text-muted-foreground text-center">
-          <Activity className="h-8 w-8 mx-auto mb-2 opacity-30" />
-          No timeline items in this category.
+        <div className="flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
+          <Activity className="h-6 w-6 opacity-30" />
+          No events in this category.
         </div>
       ) : (
-        <ul className="divide-y divide-border/50">
+        <ul>
           {items.map((item, index) => {
             const isActive = index === activeIndex
             const isExpanded = expandedId === item.id
-            const colors = typeColorClasses(item.type)
-            let itemBgClass: string
-            if (isActive) {
-              itemBgClass = colors.bgActive
-            } else if (isExpanded) {
-              itemBgClass = colors.bg
+            const meta = CATEGORY_META[eventCategory(item)]
+            const error = isErrorEvent(item)
+            const status = statusOf(item)
+            const rawTitle = titleWithoutStatus(item.title, status)
+            const categoryLabel = item.category && item.category.trim().length > 0 ? item.category : meta.label
+            // The title often just echoes the category ("Navigation", "Logcat") — when it does, promote
+            // the actual detail to the single primary line rather than repeating the category label.
+            const titleRedundant =
+              normalizeLabel(rawTitle).length > 0 && normalizeLabel(rawTitle) === normalizeLabel(categoryLabel)
+            const primary = titleRedundant && item.description ? item.description : rawTitle
+            const secondary = titleRedundant ? undefined : item.description
+
+            let rowClass: string
+            if (isActive && error) {
+              rowClass = 'border-l-danger-solid bg-danger-bg'
+            } else if (isActive) {
+              rowClass = 'border-l-primary bg-muted/60'
+            } else if (error) {
+              rowClass = 'border-l-transparent bg-danger-bg/50 hover:bg-danger-bg'
             } else {
-              itemBgClass = 'hover:bg-muted/40'
+              rowClass = 'border-l-transparent hover:bg-muted/40'
             }
 
             return (
-              <li key={item.id}>
+              <li key={item.id} className="border-b border-border/60 last:border-b-0">
                 <button
                   type="button"
                   data-timeline-index={index}
                   onClick={() => onItemClick(item)}
+                  style={{ gridTemplateColumns: '132px minmax(0, 1fr) auto' }}
                   className={cn(
-                    'w-full text-left flex items-center gap-3 px-3 py-2.5 border-l-[3px] transition-all duration-150',
-                    colors.border,
-                    itemBgClass,
+                    'grid w-full items-center gap-3 border-l-2 px-3 py-2 text-left text-sm transition-colors',
+                    rowClass,
                   )}
                 >
-                  {/* Expand indicator */}
-                  <div className="shrink-0">
-                    {isExpanded ? (
-                      <ChevronDown className={cn('h-3.5 w-3.5', colors.text)} />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-                    )}
-                  </div>
+                  {/* Category */}
+                  <span className={cn('inline-flex items-center gap-1.5 text-xs font-medium', meta.color)}>
+                    <meta.Icon className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{categoryLabel}</span>
+                  </span>
 
-                  <TypeIcon type={item.type} />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[11px] text-muted-foreground shrink-0 tabular-nums">
-                        {formatOffset(item.offsetMs)}
+                  {/* Message: primary detail + status / rage badges, optional secondary line */}
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-foreground">
+                      <span className="truncate" title={item.title}>{primary}</span>
+                      {status != null && (
+                        <Badge variant={statusBadgeVariant(status)} className="h-4 shrink-0 px-1 text-[10px] tabular-nums">
+                          {status}
+                        </Badge>
+                      )}
+                      {item.rage && (
+                        <Badge variant="warning" className="h-4 shrink-0 px-1 text-[10px]">rage</Badge>
+                      )}
+                    </span>
+                    {secondary && (
+                      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground" title={item.description}>
+                        {secondary}
                       </span>
-                      {item.durationMs != null && item.durationMs > 0 && (
-                        <span className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded-full font-mono font-medium',
-                          colors.badge,
-                        )}>
-                          {formatDurationLabel(item.durationMs)}
-                        </span>
-                      )}
-                      {item.category && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
-                          {item.category}
-                        </span>
-                      )}
-                      {isActive && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                      )}
-                    </div>
-                    <div className="text-sm font-medium truncate mt-0.5" title={item.title}>
-                      {item.title}
-                    </div>
-                    {item.description && !isExpanded && (
-                      <div className="text-xs text-muted-foreground truncate" title={item.description}>
-                        {item.description}
-                      </div>
                     )}
-                  </div>
+                  </span>
 
-                  {/* Quick link icons */}
-                  {item.issueId && (
-                    <Link
-                      to="/issues/$issueId"
-                      params={{ issueId: item.issueId }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 p-1.5 rounded-md hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
-                      aria-label="View issue"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                  )}
-                  {item.eventId && !item.issueId && item.type === 'transaction' && (
-                    <Link
-                      to="/performance/$transactionId"
-                      params={{ transactionId: item.eventId }}
-                      onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 p-1.5 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-500 transition-colors"
-                      aria-label="View transaction"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                  )}
+                  {/* Offset clock */}
+                  <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+                    {formatClock(item.offsetMs)}
+                  </span>
                 </button>
 
                 {/* Expanded detail — waterfall or breadcrumb details */}
-                {isExpanded && (
-                  <ExpandedItemPanel
-                    item={item}
-                    projectId={projectId}
-                  />
-                )}
+                {isExpanded && <ExpandedItemPanel item={item} projectId={projectId} />}
               </li>
             )
           })}

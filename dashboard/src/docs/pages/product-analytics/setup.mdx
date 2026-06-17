@@ -15,7 +15,7 @@ Add the following to your website's `<head>`:
 <script
   defer
   data-domain="yoursite.com"
-  data-key="your-project-public-key"
+  data-key="your-service-public-key"
   src="https://your-moneat-instance.com/js/m.js"
 ></script>
 ```
@@ -27,7 +27,7 @@ That's it. The script automatically tracks pageviews, including client-side navi
 | Attribute | Required | Description |
 |-----------|----------|-------------|
 | `data-domain` | Yes | Your website's domain (e.g., `example.com`). Must match the domain you're tracking. |
-| `data-key` | Yes | Your Moneat project's public key. Found in **Project Settings**. |
+| `data-key` | Yes | Your Moneat service public key. Found in **Service settings**. |
 | `data-api` | No | Override the API host if the analytics API runs on a different domain than the script origin. |
 | `src` | Yes | URL to the tracking script served by your Moneat instance. |
 
@@ -57,7 +57,7 @@ import { init } from '@moneat/analytics'
 init({
   domain: 'yoursite.com',
   apiHost: 'https://your-moneat-instance.com',
-  key: 'your-project-public-key',
+  key: 'your-service-public-key',
 })
 ```
 
@@ -67,7 +67,7 @@ init({
 |--------|------|----------|-------------|
 | `domain` | `string` | Yes | Your website's domain |
 | `apiHost` | `string` | Yes | Your Moneat instance URL |
-| `key` | `string` | Yes | Project public key |
+| `key` | `string` | Yes | Service public key |
 | `trackLocalhost` | `boolean` | No | Track events on `localhost` (default: `false`) |
 | `hashMode` | `boolean` | No | Use hash-based routing instead of History API (default: `false`) |
 
@@ -82,7 +82,7 @@ import { init } from '@moneat/analytics'
 init({
   domain: 'yoursite.com',
   apiHost: 'https://your-moneat-instance.com',
-  key: 'your-project-public-key',
+  key: 'your-service-public-key',
 })
 ```
 
@@ -99,7 +99,7 @@ export default function RootLayout({ children }) {
         <Script
           defer
           data-domain="yoursite.com"
-          data-key="your-project-public-key"
+          data-key="your-service-public-key"
           src="https://your-moneat-instance.com/js/m.js"
           strategy="afterInteractive"
         />
@@ -120,18 +120,18 @@ export default defineNuxtPlugin(() => {
   init({
     domain: 'yoursite.com',
     apiHost: 'https://your-moneat-instance.com',
-    key: 'your-project-public-key',
+    key: 'your-service-public-key',
   })
 })
 ```
 
-## Finding Your Project Key
+## Finding Your Service Key
 
 1. Open the Moneat dashboard
-2. Navigate to your project's **Settings** page
-3. Copy the **Public Key** (also called the Sentry key)
+2. Navigate to your service's **Settings** page
+3. Copy the **Public Key**
 
-This is the same key used for error monitoring - one key for both features.
+This is the same service public key used by client-side service ingestion.
 
 ## Verifying Installation
 
@@ -142,7 +142,9 @@ After adding the script or initializing the NPM package:
 3. You should see your visit appear in the **Realtime** badge within seconds
 
 :::tip[Debugging]
-Open your browser's Network tab and look for requests to `/api/{projectId}/analytics/event`. A `202 Accepted` response confirms events are being received.
+Open your browser's Network tab and look for requests to
+`/api/{domain}/analytics/event?sentry_key=...`. A `202 Accepted` response confirms events are being
+received.
 :::
 
 ## Self-Hosted Considerations
@@ -150,7 +152,7 @@ Open your browser's Network tab and look for requests to `/api/{projectId}/analy
 If you self-host Moneat, ensure the following:
 
 - The tracking script is served from your Moneat instance at `/js/m.js`
-- The analytics ingestion endpoint (`/api/{projectId}/analytics/event`) is accessible from client browsers
+- The browser analytics ingestion endpoint (`/api/{domain}/analytics/event?sentry_key=...`) is accessible from client browsers
 - If using a CDN or reverse proxy, ensure the client's real IP is forwarded via `X-Forwarded-For` or `X-Real-IP` headers (required for GeoIP and session hashing)
 
 ### GeoIP Database

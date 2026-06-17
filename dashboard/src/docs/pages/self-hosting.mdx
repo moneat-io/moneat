@@ -5,12 +5,14 @@ description: Deploy Moneat on your own infrastructure with Docker Compose.
 
 # Self-Hosting
 
-Moneat can be self-hosted using Docker Compose. The self-hosted edition includes all core features with no event limits. Enterprise features (On-Call, SSO) require a license.
+Moneat can be self-hosted using Docker Compose. The self-hosted edition includes core observability
+features without SaaS plan limits. OIDC SSO is included; SAML SSO, SSO enforcement, and licensed
+enterprise modules require a license.
 
 ## Requirements
 
 - Docker v20.10+ and Docker Compose v2.0+
-- 2 CPU cores and 2 GB RAM minimum (4 GB recommended)
+- 4 CPU cores and 8 GB RAM recommended for the full Docker Compose stack
 - A Linux server (Ubuntu 22.04+, Debian 12+, or similar)
 
 ## Install
@@ -32,8 +34,8 @@ bash <(wget -qO- https://raw.githubusercontent.com/moneat-io/moneat/main/install
 If you prefer to set things up manually:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/docker-compose.yml -o docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/v1.0.0/.env.example -o .env.example
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/main/docker-compose.yml -o docker-compose.yml
+curl -fsSL https://raw.githubusercontent.com/moneat-io/moneat/main/.env.example -o .env.example
 cp .env.example .env
 ```
 
@@ -46,9 +48,16 @@ Edit `.env` and set these required values:
 | `DATABASE_PASSWORD` | PostgreSQL password. Must match `POSTGRES_PASSWORD` in the compose file. |
 | `CLICKHOUSE_PASSWORD` | ClickHouse password. Must match the compose file. |
 | `REDIS_PASSWORD` | Redis password. The compose file passes this to Redis via `--requirepass` and includes it in the backend connection string automatically. |
+| `TEMPORAL_TARGET` | Workflow runtime address. Use `temporal:7233` for Docker Compose. |
+| `TEMPORAL_NAMESPACE` | Workflow runtime namespace. Use `default` unless you operate a custom Temporal cluster. |
+| `TEMPORAL_DB_PASSWORD` | Workflow runtime database password. Do not leave the Docker Compose default in production. |
+| `WORKFLOWS_CONNECTION_KEK` | Dedicated workflow connection key. Must differ from all other secrets. |
+| `WORKFLOWS_SIGNING_KEY` | Dedicated workflow token signing key. Must differ from all other secrets. |
+| `WORKFLOWS_TEMPORAL_PAYLOAD_KEY` | Dedicated key for encrypted workflow payloads in Temporal history. |
 | `FRONTEND_URL` | Public URL of the dashboard (e.g. `https://moneat.example.com`). |
 | `BACKEND_URL` | Public URL of the API (e.g. `https://api.moneat.example.com`). |
 | `SELF_HOSTED` | Set to `true`. |
+| `MONEAT_LICENSE_KEY` | Optional. Enables licensed self-hosted modules such as SAML SSO, SSO enforcement, and On-Call when the key includes those features. |
 
 Then start:
 
@@ -67,4 +76,8 @@ Database migrations run automatically on backend startup.
 
 ## Telemetry
 
-Self-hosted deployments collect anonymous usage telemetry (aggregate event counts, deployment config). No personal data or event contents are collected. Opt out by setting `TELEMETRY_ENABLED=false` in your `.env`.
+Self-hosted deployments send a periodic telemetry pulse. These are the exact fields included:
+Moneat version, CPU count, memory usage, OS name and architecture, JVM version, aggregate
+service/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
+are included in the telemetry payload. Turn it off by setting
+`TELEMETRY_ENABLED=false` in your `.env`.

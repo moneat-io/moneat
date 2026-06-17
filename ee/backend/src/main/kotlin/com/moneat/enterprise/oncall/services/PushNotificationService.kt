@@ -4,15 +4,19 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.oncall.alertResourceId
 import com.moneat.enterprise.oncall.models.UserDeviceToken
 import com.moneat.enterprise.oncall.models.UserDeviceTokens
+import com.moneat.enterprise.oncall.userResourceId
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
@@ -30,7 +34,7 @@ import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
 import kotlin.time.Clock
 
-private const val TOKEN_LOG_PREFIX_LENGTH = 40
+private const val TOKEN_LOG_SUFFIX_LENGTH = 4
 
 class PushNotificationService {
     private val logger = LoggerFactory.getLogger(PushNotificationService::class.java)
@@ -75,20 +79,24 @@ class PushNotificationService {
         val details: Map<String, String>? = null,
     )
 
-    suspend fun sendIncidentAlert(
+    suspend fun sendOnCallAlert(
         userId: Int,
-        incidentId: Int,
+        alertId: Int,
         title: String,
-        priorityLevel: String,
+        priority: String,
+        payloadType: String = "alert",
+        idKey: String = "alertId",
+        body: String = "Tap to view alert details",
     ) {
         val tokens = getUserDeviceTokens(userId)
 
         if (tokens.isEmpty()) {
-            logger.info("No device tokens found for user $userId — push notification skipped for incident $incidentId")
+            logger.info("No device tokens found for user $userId - push notification skipped for alert $alertId")
             return
         }
 
-        val isCritical = priorityLevel in listOf("P0", "P1")
+        val alertResourceId = transaction { alertResourceId(alertId) }
+        val isCritical = AlertPriority.fromString(priority) in setOf(AlertPriority.P0, AlertPriority.P1)
         val channelId = if (isCritical) "critical" else "default"
         val interruptionLevel = if (isCritical) "critical" else null
 
@@ -96,13 +104,13 @@ class PushNotificationService {
             tokens.map { token ->
                 ExpoMessage(
                     to = token,
-                    title = "[$priorityLevel] $title",
-                    body = "Tap to view incident details",
+                    title = "[$priority] $title",
+                    body = body,
                     data =
                         mapOf(
-                            "type" to "incident",
-                            "incidentId" to incidentId.toString(),
-                            "priority" to priorityLevel,
+                            "type" to payloadType,
+                            idKey to alertResourceId,
+                            "priority" to priority,
                         ),
                     channelId = channelId,
                     interruptionLevel = interruptionLevel,
@@ -119,31 +127,67 @@ class PushNotificationService {
                     setBody(messages)
                 }
 
-            val body = response.bodyAsText()
-            if (response.status.value in 200..299) {
-                val result = Json.decodeFromString<ExpoResponse>(body)
-                result.data?.forEachIndexed { index, ticket ->
-                    if (ticket.status == "error") {
-                        logger.error(
-                            "Push failed for token ${tokens[index]}: ${ticket.message} " +
-                                "(details: ${ticket.details})",
-                        )
-                        if (ticket.details?.get("error") == "DeviceNotRegistered") {
-                            removeDeviceToken(tokens[index])
-                        }
-                    } else {
-                        val prefix = tokens[index].take(TOKEN_LOG_PREFIX_LENGTH)
-                        logger.info(
-                            "Push ticket ok for user $userId, ticketId=${ticket.id}, token prefix=$prefix",
-                        )
-                    }
-                }
-            } else {
-                logger.error("Push request failed HTTP ${response.status}: $body")
-            }
+            handleExpoResponse(userId, tokens, response)
         } catch (e: Exception) {
             logger.error("Failed to send push notification", e)
         }
+    }
+
+    private suspend fun handleExpoResponse(
+        userId: Int,
+        tokens: List<String>,
+        response: HttpResponse,
+    ) {
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299) {
+            logger.error("Push request failed HTTP ${response.status}: $body")
+            return
+        }
+
+        val result = Json.decodeFromString<ExpoResponse>(body)
+        result.data?.forEachIndexed { index, ticket ->
+            handleExpoTicket(userId, tokens[index], ticket)
+        }
+    }
+
+    private fun handleExpoTicket(
+        userId: Int,
+        token: String,
+        ticket: ExpoTicket,
+    ) {
+        if (ticket.status == "error") {
+            logger.error(
+                "Push failed for token ${redactToken(token)}: ${ticket.message} (details: ${ticket.details})",
+            )
+            if (ticket.details?.get("error") == "DeviceNotRegistered") {
+                removeDeviceToken(token)
+            }
+            return
+        }
+
+        logger.info("Push ticket ok for user $userId, ticketId=${ticket.id}, token=${redactToken(token)}")
+    }
+
+    suspend fun sendIncidentAlert(
+        userId: Int,
+        incidentId: Int,
+        title: String,
+        priority: String,
+    ) {
+        sendOnCallAlert(
+            userId = userId,
+            alertId = incidentId,
+            title = title,
+            priority = priority,
+            payloadType = "incident",
+            idKey = "incidentId",
+            body = "Tap to view incident details",
+        )
+    }
+
+    private fun redactToken(token: String): String {
+        if (token.length <= TOKEN_LOG_SUFFIX_LENGTH) return "****"
+        return "****${token.takeLast(TOKEN_LOG_SUFFIX_LENGTH)}"
     }
 
     suspend fun sendOnCallAssignmentAlert(
@@ -306,20 +350,28 @@ class PushNotificationService {
 
     fun getUserDevices(userId: Int): List<UserDeviceToken> =
         transaction {
-            UserDeviceTokens
+            val rows = UserDeviceTokens
                 .selectAll()
                 .where { UserDeviceTokens.userId eq userId }
                 .orderBy(UserDeviceTokens.lastUsedAt to SortOrder.DESC)
-                .map { row ->
+                .toList()
+            if (rows.isEmpty()) {
+                emptyList()
+            } else {
+                val userResourceId = userResourceId(userId)
+                rows.map { row ->
                     UserDeviceToken(
-                        id = row[UserDeviceTokens.id].value,
-                        userId = row[UserDeviceTokens.userId],
+                        id = row[UserDeviceTokens.resourceId].toString(),
+                        userResourceId = userResourceId,
                         deviceToken = row[UserDeviceTokens.deviceToken],
                         platform = row[UserDeviceTokens.platform],
                         deviceName = row[UserDeviceTokens.deviceName],
                         createdAt = row[UserDeviceTokens.createdAt].toString(),
                         lastUsedAt = row[UserDeviceTokens.lastUsedAt].toString(),
+                        internalId = row[UserDeviceTokens.id].value,
+                        userId = row[UserDeviceTokens.userId],
                     )
                 }
+            }
         }
 }

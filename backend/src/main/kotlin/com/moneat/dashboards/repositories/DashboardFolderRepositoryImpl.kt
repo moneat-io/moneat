@@ -18,6 +18,7 @@ package com.moneat.dashboards.repositories
 
 import com.moneat.dashboards.models.DashboardFolders
 import com.moneat.dashboards.repositories.models.DashboardFolderRow
+import com.moneat.shared.services.organizationResourceId
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -29,9 +30,9 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
 class DashboardFolderRepositoryImpl : DashboardFolderRepository {
-
     override fun listByOrgId(orgId: Long): List<DashboardFolderRow> =
         transaction {
+            val orgResourceId = organizationResourceId(orgId)
             DashboardFolders
                 .selectAll()
                 .where { DashboardFolders.orgId eq orgId }
@@ -39,7 +40,9 @@ class DashboardFolderRepositoryImpl : DashboardFolderRepository {
                 .map { row ->
                     DashboardFolderRow(
                         id = row[DashboardFolders.id],
+                        resourceId = row[DashboardFolders.resourceId].toString(),
                         orgId = row[DashboardFolders.orgId],
+                        orgResourceId = orgResourceId,
                         name = row[DashboardFolders.name],
                         color = row[DashboardFolders.color],
                         sortOrder = row[DashboardFolders.sortOrder],
@@ -58,7 +61,9 @@ class DashboardFolderRepositoryImpl : DashboardFolderRepository {
                 ?.let { row ->
                     DashboardFolderRow(
                         id = row[DashboardFolders.id],
+                        resourceId = row[DashboardFolders.resourceId].toString(),
                         orgId = row[DashboardFolders.orgId],
+                        orgResourceId = organizationResourceId(row[DashboardFolders.orgId]),
                         name = row[DashboardFolders.name],
                         color = row[DashboardFolders.color],
                         sortOrder = row[DashboardFolders.sortOrder],

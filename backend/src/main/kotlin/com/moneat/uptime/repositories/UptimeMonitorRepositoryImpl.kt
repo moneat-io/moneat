@@ -16,6 +16,7 @@
 
 package com.moneat.uptime.repositories
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
@@ -39,6 +40,18 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
+    private fun canonicalAlertPriority(alertPriority: String?): String? {
+        if (alertPriority == null) return null
+        return requireNotNull(AlertPriority.fromString(alertPriority)?.wire) {
+            "Parameter alertPriority/incidentSeverity must be P0 through P5"
+        }
+    }
+
+    private fun CreateUptimeMonitorRequest.resolvedAlertPriority(): String? =
+        canonicalAlertPriority(alertPriority ?: legacyIncidentSeverity)
+
+    private fun UpdateUptimeMonitorRequest.resolvedAlertPriority(): String? =
+        canonicalAlertPriority(alertPriority ?: legacyIncidentSeverity)
 
     override fun getMonitorCountForOrganization(organizationId: Int): Int =
         transaction {
@@ -100,6 +113,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
                 it[lastStatusChangeAt] = now
                 it[consecutiveFailures] = 0
                 it[UptimeMonitors.pushToken] = pushToken
+                it[alertPriority] = request.resolvedAlertPriority()
                 it[createdAt] = now
                 it[updatedAt] = now
             }
@@ -147,6 +161,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
                 request.timeoutSeconds?.let { v -> it[timeoutSeconds] = v }
                 request.retries?.let { v -> it[retries] = v }
                 request.retryIntervalSeconds?.let { v -> it[retryIntervalSeconds] = v }
+                request.resolvedAlertPriority()?.let { v -> it[alertPriority] = v }
                 it[updatedAt] = Clock.System.now()
             } > 0
         }
@@ -160,7 +175,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
 
     override fun listByOrganizationId(orgId: Int): List<UptimeMonitorData> =
         transaction {
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { UptimeMonitors.organizationId eq orgId }
                 .map { rowToMonitorData(it) }
@@ -168,7 +183,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
 
     override fun getByIdAndOrg(monitorId: UUID, orgId: Int): UptimeMonitorData? =
         transaction {
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { (UptimeMonitors.id eq monitorId) and (UptimeMonitors.organizationId eq orgId) }
                 .firstOrNull()
@@ -199,7 +214,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
     override fun getMonitorsDueForCheck(): List<UptimeMonitorData> =
         transaction {
             val now = Clock.System.now()
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { UptimeMonitors.active eq true }
                 .filter { row ->
@@ -251,7 +266,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
 
     override fun getByPushToken(token: String): UptimeMonitorData? =
         transaction {
-            UptimeMonitors
+            (UptimeMonitors innerJoin Organizations)
                 .selectAll()
                 .where { UptimeMonitors.pushToken eq token }
                 .firstOrNull()
@@ -289,6 +304,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
         UptimeMonitorData(
             id = row[UptimeMonitors.id],
             organizationId = row[UptimeMonitors.organizationId],
+            organizationResourceId = row[Organizations.resource_id].toString(),
             name = row[UptimeMonitors.name],
             type = row[UptimeMonitors.type],
             active = row[UptimeMonitors.active],
@@ -325,6 +341,7 @@ class UptimeMonitorRepositoryImpl : UptimeMonitorRepository {
             lastStatusChangeAt = row[UptimeMonitors.lastStatusChangeAt],
             consecutiveFailures = row[UptimeMonitors.consecutiveFailures],
             pushToken = row[UptimeMonitors.pushToken],
+            alertPriority = row[UptimeMonitors.alertPriority],
             createdAt = row[UptimeMonitors.createdAt],
             updatedAt = row[UptimeMonitors.updatedAt]
         )

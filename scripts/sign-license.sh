@@ -24,8 +24,10 @@
 #       --features oncall
 #
 # Features:
-#   sso     — SAML/OIDC single sign-on
-#   oncall  — On-call scheduling and incident management
+#   sso                 — SAML/OIDC single sign-on
+#   oncall              — On-call scheduling and incident management
+#   advanced_rbac       — Fine-grained role-based access control
+#   workflows_advanced  — Advanced workflow automation
 #
 # Keep the private key offline and secure. Never commit it to any repository.
 set -euo pipefail
@@ -38,23 +40,41 @@ EXPIRES=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --key)       PRIVATE_KEY="$2"; shift 2 ;;
-    --customer)  CUSTOMER="$2";    shift 2 ;;
-    --plan)      PLAN="$2";        shift 2 ;;
-    --features)  FEATURES="$2";    shift 2 ;;
-    --expires)   EXPIRES="$2";     shift 2 ;;
-    *) echo "Unknown argument: $1" >&2; exit 1 ;;
+  --key)
+    PRIVATE_KEY="$2"
+    shift 2
+    ;;
+  --customer)
+    CUSTOMER="$2"
+    shift 2
+    ;;
+  --plan)
+    PLAN="$2"
+    shift 2
+    ;;
+  --features)
+    FEATURES="$2"
+    shift 2
+    ;;
+  --expires)
+    EXPIRES="$2"
+    shift 2
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    exit 1
+    ;;
   esac
 done
 
 # Defaults
 [[ -z "$PLAN" ]] && PLAN="enterprise"
-[[ -z "$FEATURES" ]] && FEATURES="sso,oncall"
+[[ -z "$FEATURES" ]] && FEATURES="sso,oncall,advanced_rbac,workflows_advanced"
 
 # Validate required args
 missing=()
 [[ -z "$PRIVATE_KEY" ]] && missing+=("--key")
-[[ -z "$CUSTOMER" ]]    && missing+=("--customer")
+[[ -z "$CUSTOMER" ]] && missing+=("--customer")
 if [[ ${#missing[@]} -gt 0 ]]; then
   echo "Missing required arguments: ${missing[*]}" >&2
   exit 1
@@ -66,9 +86,9 @@ if [[ ! -f "$PRIVATE_KEY" ]]; then
 fi
 
 # Validate date format if provided
-if [[ -n "$EXPIRES" ]] && ! date -j -f "%Y-%m-%d" "$EXPIRES" > /dev/null 2>&1; then
+if [[ -n "$EXPIRES" ]] && ! date -j -f "%Y-%m-%d" "$EXPIRES" >/dev/null 2>&1; then
   # Try GNU date as fallback (Linux)
-  if ! date -d "$EXPIRES" > /dev/null 2>&1; then
+  if ! date -d "$EXPIRES" >/dev/null 2>&1; then
     echo "Invalid --expires date (expected yyyy-MM-dd): $EXPIRES" >&2
     exit 1
   fi
@@ -82,16 +102,16 @@ ISSUED_AT=$(date -u +"%Y-%m-%d")
 # Build payload JSON
 if [[ -n "$EXPIRES" ]]; then
   PAYLOAD_JSON=$(jq -cn \
-    --arg customer  "$CUSTOMER" \
-    --arg plan      "$PLAN" \
-    --arg issuedAt  "$ISSUED_AT" \
+    --arg customer "$CUSTOMER" \
+    --arg plan "$PLAN" \
+    --arg issuedAt "$ISSUED_AT" \
     --arg expiresAt "$EXPIRES" \
     --argjson features "$FEATURES_JSON" \
     '{customer: $customer, plan: $plan, features: $features, issuedAt: $issuedAt, expiresAt: $expiresAt}')
 else
   PAYLOAD_JSON=$(jq -cn \
     --arg customer "$CUSTOMER" \
-    --arg plan     "$PLAN" \
+    --arg plan "$PLAN" \
     --arg issuedAt "$ISSUED_AT" \
     --argjson features "$FEATURES_JSON" \
     '{customer: $customer, plan: $plan, features: $features, issuedAt: $issuedAt}')

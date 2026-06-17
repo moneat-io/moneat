@@ -1,0 +1,758 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.otlp.services
+
+import com.google.protobuf.ByteString
+import com.moneat.config.ClickHouseClient
+import com.moneat.shared.services.UsageTrackingService
+import io.ktor.client.statement.HttpResponse
+import io.ktor.http.HttpStatusCode
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.unmockkObject
+import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
+import io.opentelemetry.proto.common.v1.AnyValue
+import io.opentelemetry.proto.common.v1.InstrumentationScope
+import io.opentelemetry.proto.common.v1.KeyValue
+import io.opentelemetry.proto.resource.v1.Resource
+import io.opentelemetry.proto.trace.v1.ResourceSpans
+import io.opentelemetry.proto.trace.v1.ScopeSpans
+import io.opentelemetry.proto.trace.v1.Span
+import io.opentelemetry.proto.trace.v1.Status
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Nested
+import org.junit.jupiter.api.Test
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class OtlpTraceServiceTest {
+
+    companion object {
+        private const val TEST_SPAN_NAME = "test-span"
+        private const val MY_SVC = "my-svc"
+        private const val SERVICE_NAME_ATTR_KEY = "service.name"
+        private const val TRACE_RESOURCE_SERVICE = "my-service"
+        private const val TRACE_RESOURCE_HOST = "web-01"
+        private const val TRACE_HTTP_METHOD_ATTR = "http.method"
+        private const val TRACE_OTEL_SCOPE_NAME = "io.otel.sdk"
+        private const val TRACE_OTEL_SCOPE_VERSION = "1.30.0"
+        private const val TRACE_SPAN_NAME_GET_USERS = "GET /api/users"
+    }
+
+    @BeforeTest
+    fun setup() {
+        mockkObject(ClickHouseClient)
+        every { ClickHouseClient.getDatabase() } returns "test_db"
+    }
+
+    @AfterTest
+    fun teardown() {
+        unmockkObject(ClickHouseClient)
+    }
+
+    private val service by lazy { OtlpTraceService() }
+
+    // ──── BASIC PARSING ────
+
+    @Test
+    fun `parseOtlpTracesJson parses single span`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {
+              "attributes": [
+                {"key": "service.name", "value": {"stringValue": "$TRACE_RESOURCE_SERVICE"}},
+                {"key": "deployment.environment", "value": {"stringValue": "prod"}},
+                {"key": "host.name", "value": {"stringValue": "$TRACE_RESOURCE_HOST"}},
+                {"key": "service.version", "value": {"stringValue": "1.0.0"}}
+              ]
+            },
+            "scopeSpans": [{
+              "scope": {"name": "$TRACE_OTEL_SCOPE_NAME", "version": "$TRACE_OTEL_SCOPE_VERSION"},
+              "spans": [{
+                "traceId": "0af7651916cd43dd8448eb211c80319c",
+                "spanId": "b7ad6b7169203331",
+                "parentSpanId": "",
+                "name": "$TRACE_SPAN_NAME_GET_USERS",
+                "kind": 2,
+                "startTimeUnixNano": 1700000000000000000,
+                "endTimeUnixNano":   1700000000050000000,
+                "status": {"code": 1, "message": "OK"},
+                "attributes": [
+                  {"key": "$TRACE_HTTP_METHOD_ATTR", "value": {"stringValue": "GET"}},
+                  {"key": "http.status_code", "value": {"intValue": "200"}}
+                ],
+                "events": [],
+                "links": []
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertEquals(1, spans.size)
+        val s = spans[0]
+        assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
+        assertEquals("b7ad6b7169203331", s.spanIdHex)
+        assertEquals("", s.parentIdHex)
+        assertEquals(TRACE_SPAN_NAME_GET_USERS, s.name)
+        assertEquals(TRACE_RESOURCE_SERVICE, s.service)
+        assertEquals("SERVER", s.kind)
+        assertEquals(1700000000000000000L, s.startNanos)
+        assertEquals(50000000L, s.durationNanos)
+        assertEquals(1, s.statusCode)
+        assertEquals("OK", s.statusMessage)
+        assertEquals(0, s.error)
+        assertEquals("GET", s.meta[TRACE_HTTP_METHOD_ATTR])
+        assertEquals("200", s.meta["http.status_code"])
+        assertEquals("prod", s.env)
+        assertEquals(TRACE_RESOURCE_HOST, s.host)
+        assertEquals("1.0.0", s.version)
+        assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
+        assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
+        assertEquals(TRACE_RESOURCE_SERVICE, s.resourceAttributes[SERVICE_NAME_ATTR_KEY])
+    }
+
+    // ──── SPAN KIND MAPPING ────
+
+    @Test
+    fun `maps all span kinds correctly`() {
+        val template = { kind: Int ->
+            """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{
+                "traceId": "aa", "spanId": "bb", "name": "test",
+                "kind": $kind,
+                "startTimeUnixNano": 0, "endTimeUnixNano": 0,
+                "status": {}
+              }]
+            }]
+          }]
+        }
+            """.trimIndent()
+        }
+
+        val expected = mapOf(
+            0 to "",
+            1 to "INTERNAL",
+            2 to "SERVER",
+            3 to "CLIENT",
+            4 to "PRODUCER",
+            5 to "CONSUMER"
+        )
+
+        for ((kindInt, kindStr) in expected) {
+            val spans = service.parseOtlpTracesJson(template(kindInt))!!
+            assertEquals(kindStr, spans[0].kind, "Kind $kindInt should map to $kindStr")
+        }
+    }
+
+    // ──── ERROR STATUS ────
+
+    @Test
+    fun `marks error flag for status code 2`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{
+                "traceId": "aa", "spanId": "bb", "name": "fail-op",
+                "startTimeUnixNano": 0, "endTimeUnixNano": 0,
+                "status": {"code": 2, "message": "Internal error"}
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertEquals(1, spans[0].error)
+        assertEquals(2, spans[0].statusCode)
+        assertEquals("Internal error", spans[0].statusMessage)
+    }
+
+    @Test
+    fun `non-error status code does not set error flag`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{
+                "traceId": "aa", "spanId": "bb", "name": "ok-op",
+                "startTimeUnixNano": 0, "endTimeUnixNano": 0,
+                "status": {"code": 0}
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+        assertEquals(0, spans[0].error)
+    }
+
+    // ──── DURATION CLAMPING ────
+
+    @Test
+    fun `clamps negative duration to zero when end is before start`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{
+                "traceId": "aa", "spanId": "bb", "name": "backwards-time",
+                "startTimeUnixNano": 2000000000,
+                "endTimeUnixNano": 1000000000,
+                "status": {}
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertEquals(0L, spans[0].durationNanos)
+    }
+
+    @Test
+    fun `calculates positive duration normally`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{
+                "traceId": "aa", "spanId": "bb", "name": "normal",
+                "startTimeUnixNano": 1000000000,
+                "endTimeUnixNano": 1050000000,
+                "status": {}
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertEquals(50000000L, spans[0].durationNanos)
+    }
+
+    // ──── MULTIPLE RESOURCE SPANS / SCOPE SPANS ────
+
+    @Test
+    fun `parses multiple resource spans and scope spans`() {
+        val payload = """
+        {
+          "resourceSpans": [
+            {
+              "resource": {
+                "attributes": [{"key": "service.name", "value": {"stringValue": "svc-a"}}]
+              },
+              "scopeSpans": [{
+                "spans": [
+                  {"traceId": "aa", "spanId": "11", "name": "span-a1", "startTimeUnixNano": 0, "endTimeUnixNano": 0, "status": {}},
+                  {"traceId": "aa", "spanId": "12", "name": "span-a2", "startTimeUnixNano": 0, "endTimeUnixNano": 0, "status": {}}
+                ]
+              }]
+            },
+            {
+              "resource": {
+                "attributes": [{"key": "service.name", "value": {"stringValue": "svc-b"}}]
+              },
+              "scopeSpans": [{
+                "spans": [
+                  {"traceId": "bb", "spanId": "21", "name": "span-b1", "startTimeUnixNano": 0, "endTimeUnixNano": 0, "status": {}}
+                ]
+              }]
+            }
+          ]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertEquals(3, spans.size)
+        assertEquals("svc-a", spans[0].service)
+        assertEquals("svc-a", spans[1].service)
+        assertEquals("svc-b", spans[2].service)
+    }
+
+    // ──── LEGACY FIELD NAME ────
+
+    @Test
+    fun `supports instrumentationLibrarySpans as legacy field`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "instrumentationLibrarySpans": [{
+              "spans": [{
+                "traceId": "cc", "spanId": "dd", "name": "legacy-span",
+                "startTimeUnixNano": 0, "endTimeUnixNano": 0, "status": {}
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+        assertEquals(1, spans.size)
+        assertEquals("legacy-span", spans[0].name)
+    }
+
+    // ──── EVENTS AND LINKS SERIALIZATION ────
+
+    @Test
+    fun `preserves events and links as JSON strings`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{
+                "traceId": "aa", "spanId": "bb", "name": "with-events",
+                "startTimeUnixNano": 0, "endTimeUnixNano": 0, "status": {},
+                "events": [{"name": "exception", "timeUnixNano": 100}],
+                "links": [{"traceId": "linked-trace", "spanId": "linked-span"}]
+              }]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertTrue(spans[0].events.contains("exception"))
+        assertTrue(spans[0].links.contains("linked-trace"))
+    }
+
+    // ──── EMPTY / INVALID PAYLOADS ────
+
+    @Test
+    fun `returns empty list for valid payload with empty resourceSpans`() {
+        val payload = """{"resourceSpans": []}"""
+        val result = service.parseOtlpTracesJson(payload)
+        assertNotNull(result)
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    fun `returns null for missing resourceSpans`() {
+        val payload = """{"otherField": "value"}"""
+        assertNull(service.parseOtlpTracesJson(payload))
+    }
+
+    @Test
+    fun `returns null for invalid JSON`() {
+        assertNull(service.parseOtlpTracesJson("not json"))
+    }
+
+    @Test
+    fun `returns null for empty string`() {
+        assertNull(service.parseOtlpTracesJson(""))
+    }
+
+    // ──── DEFAULTS FOR MISSING FIELDS ────
+
+    @Test
+    fun `handles span with minimal fields`() {
+        val payload = """
+        {
+          "resourceSpans": [{
+            "resource": {},
+            "scopeSpans": [{
+              "spans": [{"traceId": "aa", "spanId": "bb"}]
+            }]
+          }]
+        }
+        """.trimIndent()
+
+        val spans = service.parseOtlpTracesJson(payload)!!
+
+        assertEquals(1, spans.size)
+        val s = spans[0]
+        assertEquals("aa", s.traceIdHex)
+        assertEquals("bb", s.spanIdHex)
+        assertEquals("", s.parentIdHex)
+        assertEquals("", s.name)
+        assertEquals("", s.kind)
+        assertEquals(0L, s.startNanos)
+        assertEquals(0L, s.durationNanos)
+        assertEquals(0, s.statusCode)
+        assertEquals("", s.statusMessage)
+        assertEquals(0, s.error)
+        assertTrue(s.meta.isEmpty())
+        assertEquals("[]", s.events)
+        assertEquals("[]", s.links)
+    }
+
+    // ──── BATCH DECODE ROUNDTRIP ────
+
+    @Test
+    fun `decodeBatch roundtrips correctly`() {
+        val batch = QueuedOtlpTraceBatch(
+            organizationId = 42L,
+            spans = listOf(
+                OtlpSpanInsert(
+                    traceIdHex = "aabb",
+                    spanIdHex = "ccdd",
+                    parentIdHex = "",
+                    organizationId = 42L,
+                    name = TEST_SPAN_NAME,
+                    service = MY_SVC,
+                    resource = TEST_SPAN_NAME,
+                    kind = "SERVER",
+                    startNanos = 1000000000L,
+                    durationNanos = 500000L,
+                    error = 0,
+                    statusCode = 1,
+                    statusMessage = "OK",
+                    meta = mapOf("key" to "value"),
+                    resourceAttributes = mapOf(SERVICE_NAME_ATTR_KEY to MY_SVC),
+                    host = TRACE_RESOURCE_HOST,
+                    env = "prod",
+                    version = "1.0",
+                    scopeName = "otel-sdk",
+                    scopeVersion = TRACE_OTEL_SCOPE_VERSION,
+                    events = "[]",
+                    links = "[]",
+                )
+            )
+        )
+
+        val encoded = Json.encodeToString(batch)
+        val decoded = service.decodeBatch(encoded)
+
+        assertEquals(batch.organizationId, decoded.organizationId)
+        assertEquals(batch.spans.size, decoded.spans.size)
+        assertEquals(TEST_SPAN_NAME, decoded.spans[0].name)
+        assertEquals(MY_SVC, decoded.spans[0].service)
+        assertEquals("SERVER", decoded.spans[0].kind)
+        assertEquals(mapOf("key" to "value"), decoded.spans[0].meta)
+    }
+
+    @Test
+    fun `insertBatch writes service map rollups`() = runBlocking {
+        val capturedSql = mutableListOf<String>()
+        coEvery { ClickHouseClient.execute(any()) } coAnswers {
+            capturedSql.add(firstArg())
+            val response = mockk<HttpResponse>()
+            every { response.status } returns HttpStatusCode.OK
+            response
+        }
+        val usageTracking = mockk<UsageTrackingService>(relaxed = true)
+        val insertService = OtlpTraceService(usageTracking)
+
+        insertService.insertBatch(
+            QueuedOtlpTraceBatch(
+                organizationId = 42L,
+                spans = listOf(
+                    OtlpSpanInsert(
+                        traceIdHex = "0af7651916cd43dd8448eb211c80319c",
+                        spanIdHex = "0000000000000001",
+                        parentIdHex = "",
+                        organizationId = 42L,
+                        name = "GET /api/users",
+                        service = "api",
+                        resource = "GET /api/users",
+                        kind = "SERVER",
+                        startNanos = 1700000000000000000L,
+                        durationNanos = 50000000L,
+                        error = 0,
+                        statusCode = 1,
+                        statusMessage = "OK",
+                        meta = emptyMap(),
+                        resourceAttributes = emptyMap(),
+                        host = "web-01",
+                        env = "prod",
+                        version = "1.0",
+                        scopeName = TRACE_OTEL_SCOPE_NAME,
+                        scopeVersion = TRACE_OTEL_SCOPE_VERSION,
+                        events = "[]",
+                        links = "[]",
+                    ),
+                    OtlpSpanInsert(
+                        traceIdHex = "0af7651916cd43dd8448eb211c80319c",
+                        spanIdHex = "0000000000000002",
+                        parentIdHex = "0000000000000001",
+                        organizationId = 42L,
+                        name = "SELECT users",
+                        service = "postgres",
+                        resource = "SELECT users",
+                        kind = "CLIENT",
+                        startNanos = 1700000000010000000L,
+                        durationNanos = 10000000L,
+                        error = 1,
+                        statusCode = 2,
+                        statusMessage = "ERROR",
+                        meta = emptyMap(),
+                        resourceAttributes = emptyMap(),
+                        host = "web-01",
+                        env = "prod",
+                        version = "1.0",
+                        scopeName = TRACE_OTEL_SCOPE_NAME,
+                        scopeVersion = TRACE_OTEL_SCOPE_VERSION,
+                        events = "[]",
+                        links = "[]",
+                    ),
+                ),
+            )
+        )
+
+        assertTrue(capturedSql.any { it.contains("INSERT INTO `test_db`.apm_spans") })
+        assertTrue(capturedSql.any { it.contains("INSERT INTO `test_db`.apm_service_stats_hourly") })
+        assertTrue(capturedSql.any { it.contains("INSERT INTO `test_db`.apm_service_edges_hourly") })
+        assertTrue(capturedSql.any { it.contains("'api'") && it.contains("'postgres'") })
+    }
+
+    // ──── PROTOBUF PARSING ────
+
+    @Nested
+    inner class ProtobufParsing {
+
+        private fun traceIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0x0A, 0xF7.toByte(), 0x65, 0x19, 0x16, 0xCD.toByte(), 0x43, 0xDD.toByte(),
+                    0x84.toByte(), 0x48, 0xEB.toByte(), 0x21, 0x1C, 0x80.toByte(), 0x31, 0x9C.toByte(),
+                ),
+            )
+
+        private fun spanIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(0xB7.toByte(), 0xAD.toByte(), 0x6B, 0x71, 0x69, 0x20, 0x33, 0x31)
+            )
+
+        private fun linkedTraceIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88.toByte(),
+                    0x99.toByte(), 0x00, 0xAA.toByte(), 0xBB.toByte(),
+                    0xCC.toByte(), 0xDD.toByte(), 0xEE.toByte(), 0xFF.toByte(),
+                )
+            )
+
+        private fun linkedSpanIdBytes() =
+            ByteString.copyFrom(
+                byteArrayOf(
+                    0xAA.toByte(),
+                    0xBB.toByte(),
+                    0xCC.toByte(),
+                    0xDD.toByte(),
+                    0xEE.toByte(),
+                    0xFF.toByte(),
+                    0x00,
+                    0x11,
+                )
+            )
+
+        private fun buildRequest(
+            spanBuilder: Span.Builder = Span.newBuilder(),
+            resourceAttrs: List<KeyValue> = emptyList(),
+            scopeName: String = "",
+            scopeVersion: String = ""
+        ): ByteArray {
+            val span = spanBuilder.build()
+            val scopeSpans = ScopeSpans.newBuilder()
+                .addSpans(span)
+                .apply {
+                    if (scopeName.isNotEmpty() || scopeVersion.isNotEmpty()) {
+                        scope = InstrumentationScope.newBuilder()
+                            .setName(scopeName)
+                            .setVersion(scopeVersion)
+                            .build()
+                    }
+                }
+                .build()
+            val resourceSpans = ResourceSpans.newBuilder()
+                .setResource(Resource.newBuilder().addAllAttributes(resourceAttrs))
+                .addScopeSpans(scopeSpans)
+                .build()
+            return ExportTraceServiceRequest.newBuilder()
+                .addResourceSpans(resourceSpans)
+                .build()
+                .toByteArray()
+        }
+
+        private fun kv(key: String, value: AnyValue) =
+            KeyValue.newBuilder()
+                .setKey(key)
+                .setValue(value)
+                .build()
+
+        private fun kv(key: String, value: String) =
+            kv(key, AnyValue.newBuilder().setStringValue(value).build())
+
+        @Test
+        fun `parses single span from protobuf`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName(TRACE_SPAN_NAME_GET_USERS)
+                    .setKind(Span.SpanKind.SPAN_KIND_SERVER)
+                    .setStartTimeUnixNano(1700000000000000000L)
+                    .setEndTimeUnixNano(1700000000050000000L)
+                    .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_OK).setMessage("OK"))
+                    .addAttributes(kv(TRACE_HTTP_METHOD_ATTR, "GET")),
+                resourceAttrs = listOf(
+                    kv(SERVICE_NAME_ATTR_KEY, TRACE_RESOURCE_SERVICE),
+                    kv("deployment.environment", "prod"),
+                    kv("host.name", TRACE_RESOURCE_HOST),
+                    kv("service.version", "1.0.0"),
+                ),
+                scopeName = TRACE_OTEL_SCOPE_NAME,
+                scopeVersion = TRACE_OTEL_SCOPE_VERSION
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+
+            assertEquals(1, spans.size)
+            val s = spans[0]
+            assertEquals("0af7651916cd43dd8448eb211c80319c", s.traceIdHex)
+            assertEquals("b7ad6b7169203331", s.spanIdHex)
+            assertEquals(TRACE_SPAN_NAME_GET_USERS, s.name)
+            assertEquals(TRACE_RESOURCE_SERVICE, s.service)
+            assertEquals("SERVER", s.kind)
+            assertEquals(1700000000000000000L, s.startNanos)
+            assertEquals(50000000L, s.durationNanos)
+            assertEquals(0, s.error)
+            assertEquals("GET", s.meta[TRACE_HTTP_METHOD_ATTR])
+            assertEquals("prod", s.env)
+            assertEquals(TRACE_RESOURCE_HOST, s.host)
+            assertEquals("1.0.0", s.version)
+            assertEquals(TRACE_OTEL_SCOPE_NAME, s.scopeName)
+            assertEquals(TRACE_OTEL_SCOPE_VERSION, s.scopeVersion)
+        }
+
+        @Test
+        fun `serializes protobuf events and links into json fields`() {
+            val linkedTraceIdHex = "11223344556677889900aabbccddeeff"
+            val linkedSpanIdHex = "aabbccddeeff0011"
+            val traceState = "congo=t61rcWkgMzE"
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("span-with-events-links")
+                    .setStartTimeUnixNano(1700000000000000000L)
+                    .setEndTimeUnixNano(1700000000050000000L)
+                    .addEvents(
+                        Span.Event.newBuilder()
+                            .setTimeUnixNano(1700000000005000000L)
+                            .setName("exception")
+                            .addAttributes(kv("exception.type", "java.net.ConnectException"))
+                            .addAttributes(kv("exception.message", "Connection refused"))
+                            .addAttributes(kv("retryable", AnyValue.newBuilder().setBoolValue(true).build()))
+                            .setDroppedAttributesCount(2)
+                    )
+                    .addLinks(
+                        Span.Link.newBuilder()
+                            .setTraceId(linkedTraceIdBytes())
+                            .setSpanId(linkedSpanIdBytes())
+                            .addAttributes(kv("link.kind", "follows_from"))
+                            .addAttributes(
+                                kv("sampling.priority", AnyValue.newBuilder().setIntValue(1).build())
+                            )
+                            .setTraceState(traceState)
+                            .setDroppedAttributesCount(3)
+                            .setFlags(1)
+                    )
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(1, spans.size)
+            val span = spans[0]
+            assertTrue(span.events.contains("\"name\":\"exception\""))
+            assertTrue(span.events.contains("\"exception.type\""))
+            assertTrue(span.events.contains("java.net.ConnectException"))
+            assertTrue(span.events.contains("\"exception.message\""))
+            assertTrue(span.events.contains("Connection refused"))
+            assertTrue(span.events.contains("\"retryable\""))
+            assertTrue(span.events.contains("\"value\":true"))
+            assertTrue(span.events.contains("\"droppedAttributesCount\":2"))
+            assertTrue(span.links.contains("\"traceId\":\"$linkedTraceIdHex\""))
+            assertTrue(span.links.contains("\"spanId\":\"$linkedSpanIdHex\""))
+            assertTrue(span.links.contains("\"link.kind\""))
+            assertTrue(span.links.contains("follows_from"))
+            assertTrue(span.links.contains("\"sampling.priority\""))
+            assertTrue(span.links.contains("\"value\":1"))
+            assertTrue(span.links.contains("\"traceState\":\"$traceState\""))
+            assertTrue(span.links.contains("\"droppedAttributesCount\":3"))
+            assertTrue(span.links.contains("\"flags\":1"))
+        }
+
+        @Test
+        fun `marks error for status code ERROR`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setName("fail-op")
+                    .setStatus(Status.newBuilder().setCode(Status.StatusCode.STATUS_CODE_ERROR).setMessage("boom"))
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(1, spans[0].error)
+            assertEquals(2, spans[0].statusCode)
+            assertEquals("boom", spans[0].statusMessage)
+        }
+
+        @Test
+        fun `clamps negative duration to zero`() {
+            val bytes = buildRequest(
+                spanBuilder = Span.newBuilder()
+                    .setTraceId(traceIdBytes())
+                    .setSpanId(spanIdBytes())
+                    .setStartTimeUnixNano(2000000000L)
+                    .setEndTimeUnixNano(1000000000L)
+            )
+
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertEquals(0L, spans[0].durationNanos)
+        }
+
+        @Test
+        fun `returns null for invalid protobuf`() {
+            assertNull(service.parseOtlpTracesProtobuf(byteArrayOf(0xFF.toByte(), 0x00)))
+        }
+
+        @Test
+        fun `returns empty list for empty request`() {
+            val bytes = ExportTraceServiceRequest.getDefaultInstance().toByteArray()
+            val spans = service.parseOtlpTracesProtobuf(bytes)!!
+            assertTrue(spans.isEmpty())
+        }
+    }
+}

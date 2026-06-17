@@ -10,7 +10,8 @@ import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-rou
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
-import {Card, CardContent} from '@/components/ui/card'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Input} from '@/components/ui/input'
 import {AlertTriangle, ArrowRightLeft, Loader2, Router, Search, Wifi} from 'lucide-react'
@@ -51,7 +52,7 @@ function NetworkDevicesLayout() {
     enabled: isIndexPage,
   })
 
-  const devices: NetworkDevice[] = data?.devices ?? []
+  const devices: NetworkDevice[] = useMemo(() => data?.devices ?? [], [data?.devices])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return devices
@@ -99,22 +100,16 @@ function NetworkDevicesLayout() {
             </div>
           </div>
         ) : devices.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="py-16 text-center">
-              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500/10 to-blue-500/10">
-                <Router className="h-8 w-8 text-cyan-500" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">No network devices found</h3>
-              <p className="text-muted-foreground max-w-sm mx-auto">
-                SNMP device data will appear here once collected by the agent.
-              </p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Router}
+            title="No network devices found"
+            description="SNMP device data will appear here once collected by the agent."
+          />
         ) : (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-sm">
-                <Router className="h-3.5 w-3.5 text-cyan-500" />
+                <Router className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="font-semibold tabular-nums">{devices.length}</span>
                 <span className="text-muted-foreground text-xs">devices</span>
               </div>
@@ -131,13 +126,13 @@ function NetworkDevicesLayout() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="font-medium">No devices match your search</p>
-                <p className="text-sm mt-1">Try adjusting your search query.</p>
-              </div>
+              <EmptyState
+                icon={Search}
+                title="No devices match your search"
+                description="Try adjusting your search query."
+              />
             ) : (
-              <Card className="overflow-hidden border-border/60 shadow-sm">
-                <CardContent className="p-0">
+              <SectionCard title="Devices" icon={Router} iconTone="info" count={filtered.length} flushBody>
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent bg-muted/30">
@@ -157,28 +152,12 @@ function NetworkDevicesLayout() {
                           <TableCell className="text-sm">{d.vendor}</TableCell>
                           <TableCell className="text-sm">{d.model}</TableCell>
                           <TableCell>
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                'text-xs',
-                                d.status === 'up'
-                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                  : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
-                              )}
-                            >
+                            <Badge variant={d.status === 'up' ? 'success' : 'danger'} size="sm">
                               {d.status}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right pr-4">
-                            <Badge
-                              variant="secondary"
-                              className={cn(
-                                'text-xs',
-                                d.reachability === 'reachable'
-                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
-                                  : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
-                              )}
-                            >
+                            <Badge variant={d.reachability === 'reachable' ? 'success' : 'danger'} size="sm">
                               {d.reachability}
                             </Badge>
                           </TableCell>
@@ -186,8 +165,7 @@ function NetworkDevicesLayout() {
                       ))}
                     </TableBody>
                   </Table>
-                </CardContent>
-              </Card>
+              </SectionCard>
             )}
           </div>
         )

@@ -1,0 +1,501 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.incident.routes
+
+import com.moneat.auth.requireCurrentOrg
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.incident.models.IncidentEventLog
+import com.moneat.incident.models.IncidentProviderConfigs
+import com.moneat.incident.models.IncidentRoutingRules
+import com.moneat.incident.models.ProviderConfig
+import com.moneat.incident.services.IncidentProviderRegistry
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.utils.BooleanResponse
+import com.moneat.utils.ErrorResponse
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.auth.authenticate
+import io.ktor.server.request.receive
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.response.respond
+import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.put
+import io.ktor.server.routing.route
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import org.jetbrains.exposed.v1.core.BooleanColumnType
+import org.jetbrains.exposed.v1.core.IColumnType
+import org.jetbrains.exposed.v1.core.IntegerColumnType
+import org.jetbrains.exposed.v1.core.SortOrder
+import org.jetbrains.exposed.v1.core.TextColumnType
+import org.jetbrains.exposed.v1.core.VarCharColumnType
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
+import com.moneat.utils.suspendRunCatching
+
+private const val PROVIDER_TYPE_MAX_LENGTH = 50
+private const val PROVIDER_NAME_MAX_LENGTH = 255
+private const val DEFAULT_INCIDENT_PAGE_LIMIT = 50
+
+fun Route.incidentProviderRoutes() {
+    val json =
+        Json {
+            ignoreUnknownKeys = true
+            prettyPrint = false
+        }
+
+    route("/api/incident-providers") {
+        authenticate("auth-jwt") {
+            // List provider configs for organization
+            get {
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
+
+                val configs =
+                    transaction {
+                        IncidentProviderConfigs
+                            .selectAll()
+                            .where {
+                                IncidentProviderConfigs.organizationId eq organizationId
+                            }.map { row ->
+                                ProviderConfigResponse(
+                                    id = row[IncidentProviderConfigs.resourceId].toString(),
+                                    providerType = row[IncidentProviderConfigs.providerType],
+                                    name = row[IncidentProviderConfigs.name],
+                                    configJson =
+                                    suspendRunCatching {
+                                        val jsonStr = row[IncidentProviderConfigs.configJson]
+                                        json.parseToJsonElement(jsonStr).jsonObject.toMap().mapValues {
+                                            it.value.toString().trim('"')
+                                        }
+                                    }.getOrElse { _ ->
+                                        emptyMap()
+                                    },
+                                    enabled = row[IncidentProviderConfigs.enabled],
+                                    createdAt = row[IncidentProviderConfigs.createdAt].toEpochMilliseconds(),
+                                    updatedAt = row[IncidentProviderConfigs.updatedAt].toEpochMilliseconds()
+                                )
+                            }
+                    }
+
+                call.respond(configs)
+            }
+
+            // Create provider config
+            post { handleCreateProviderConfig() }
+
+            // Update provider config
+            put("/{id}") { handleUpdateProviderConfig() }
+
+            // Delete provider config
+            delete("/{id}") { handleDeleteProviderConfig() }
+
+            // Test connection
+            post("/{id}/test") {
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@post
+                val configId =
+                    call.resolveIncidentProviderConfigId(organizationId)
+                        ?: return@post
+
+                val config =
+                    transaction {
+                        IncidentProviderConfigs
+                            .selectAll()
+                            .where {
+                                (IncidentProviderConfigs.id eq configId) and
+                                    (IncidentProviderConfigs.organizationId eq organizationId)
+                            }.firstOrNull()
+                            ?.let { row ->
+                                ProviderConfig(
+                                    id = row[IncidentProviderConfigs.id].value,
+                                    organizationId = row[IncidentProviderConfigs.organizationId],
+                                    providerType = row[IncidentProviderConfigs.providerType],
+                                    name = row[IncidentProviderConfigs.name],
+                                    apiKey = row[IncidentProviderConfigs.apiKey],
+                                    configJson =
+                                    suspendRunCatching {
+                                        val jsonStr = row[IncidentProviderConfigs.configJson]
+                                        json.parseToJsonElement(jsonStr).jsonObject
+                                    }.getOrElse { _ ->
+                                        buildJsonObject {}
+                                    },
+                                    enabled = row[IncidentProviderConfigs.enabled]
+                                )
+                            }
+                    } ?: return@post call.respond(HttpStatusCode.NotFound)
+
+                val provider =
+                    IncidentProviderRegistry.getProvider(config.providerType)
+                        ?: return@post call.respond(HttpStatusCode.BadRequest, ErrorResponse("Provider not registered"))
+
+                val result = provider.testConnection(config)
+
+                result.fold(
+                    onSuccess = { success ->
+                        call.respond(HttpStatusCode.OK, BooleanResponse(success))
+                    },
+                    onFailure = { error ->
+                        call.respond(HttpStatusCode.OK, ErrorResponse(error.message))
+                    }
+                )
+            }
+
+            // Get routing rules
+            get("/{id}/rules") {
+                val organizationId = call.requireCurrentOrg()?.orgId ?: return@get
+                val configId =
+                    call.resolveIncidentProviderConfigId(organizationId)
+                        ?: return@get
+
+                val rules =
+                    transaction {
+                        IncidentRoutingRules
+                            .selectAll()
+                            .where {
+                                IncidentRoutingRules.providerConfigId eq configId
+                            }.map { row ->
+                                RoutingRuleResponse(
+                                    id = row[IncidentRoutingRules.resourceId].toString(),
+                                    alertSource = row[IncidentRoutingRules.alertSource],
+                                    alertType = row[IncidentRoutingRules.alertType],
+                                    alertPriority = row[IncidentRoutingRules.alertPriority]
+                                )
+                            }
+                    }
+
+                call.respond(rules)
+            }
+
+            // Bulk upsert routing rules
+            put("/{id}/rules") { handleUpsertRoutingRules() }
+
+            // Get event log
+            get("/{id}/events") { handleGetEventLog() }
+        }
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleCreateProviderConfig() {
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
+
+    val request = call.receive<CreateProviderConfigRequest>()
+
+    if (request.providerType == "incident_io") {
+        val entitlementService =
+            org.koin.core.context.GlobalContext.get().get<com.moneat.billing.services.EntitlementService>()
+        if (!entitlementService.isFeatureEnabled(organizationId) { it.incidentIoEnabled }) {
+            call.respond(
+                HttpStatusCode.Forbidden,
+                ErrorResponse("Incident.io integration is not available on your current plan")
+            )
+            return
+        }
+    }
+
+    val configId =
+        transaction {
+            // Custom SQL for JSONB insertion
+            val jsonString = request.configJson.toString()
+            val sql =
+                """
+                INSERT INTO incident_provider_configs
+                (organization_id, provider_type, name, api_key, config_json, enabled, created_at, updated_at)
+                VALUES (?, ?, ?, ?, CAST(? AS JSONB), ?, CAST(? AS TIMESTAMP), CAST(? AS TIMESTAMP))
+                RETURNING resource_id
+                """.trimIndent()
+
+            val now = Clock.System.now()
+            val nowStr = now.toString()
+
+            var resultId: String? = null
+            TransactionManager.current().exec(
+                sql,
+                listOf(
+                    IntegerColumnType() to organizationId,
+                    VarCharColumnType(PROVIDER_TYPE_MAX_LENGTH) to request.providerType,
+                    VarCharColumnType(PROVIDER_NAME_MAX_LENGTH) to request.name,
+                    TextColumnType() to request.apiKey,
+                    TextColumnType() to jsonString,
+                    BooleanColumnType() to true,
+                    TextColumnType() to nowStr,
+                    TextColumnType() to nowStr
+                )
+            ) { rs ->
+                if (rs.next()) {
+                    resultId = rs.getString(1)
+                }
+            }
+
+            resultId ?: throw Exception("Failed to insert provider config")
+        }
+
+    call.respond(HttpStatusCode.Created, mapOf("id" to configId))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUpdateProviderConfig() {
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
+
+    val request = call.receive<UpdateProviderConfigRequest>()
+
+    val updated =
+        transaction {
+            val exists =
+                IncidentProviderConfigs
+                    .selectAll()
+                    .where {
+                        (IncidentProviderConfigs.id eq configId) and
+                            (IncidentProviderConfigs.organizationId eq organizationId)
+                    }.count() > 0
+
+            if (!exists) return@transaction false
+
+            // Build update SQL dynamically based on what's provided
+            val setClauses = mutableListOf<String>()
+            val params = mutableListOf<Pair<IColumnType<*>, Any?>>()
+
+            request.name?.let {
+                setClauses.add("name = ?")
+                params.add(VarCharColumnType(PROVIDER_NAME_MAX_LENGTH) to it)
+            }
+            request.apiKey?.let {
+                setClauses.add("api_key = ?")
+                params.add(TextColumnType() to it)
+            }
+            request.configJson?.let {
+                setClauses.add("config_json = CAST(? AS JSONB)")
+                params.add(TextColumnType() to it.toString())
+            }
+            request.enabled?.let {
+                setClauses.add("enabled = ?")
+                params.add(BooleanColumnType() to it)
+            }
+
+            if (setClauses.isNotEmpty()) {
+                setClauses.add("updated_at = CAST(? AS TIMESTAMP)")
+                params.add(TextColumnType() to Clock.System.now().toString())
+                params.add(IntegerColumnType() to configId)
+
+                val updateSql =
+                    """
+                    UPDATE incident_provider_configs
+                    SET ${setClauses.joinToString(", ")}
+                    WHERE id = ?
+                    """.trimIndent()
+
+                TransactionManager.current().exec(updateSql, params) {}
+            }
+
+            true
+        }
+
+    if (updated) {
+        call.respond(HttpStatusCode.OK)
+    } else {
+        call.respond(HttpStatusCode.NotFound)
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleDeleteProviderConfig() {
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
+
+    val deleted =
+        transaction {
+            IncidentProviderConfigs.deleteWhere {
+                (id eq configId) and (IncidentProviderConfigs.organizationId eq organizationId)
+            } > 0
+        }
+
+    if (deleted) {
+        call.respond(HttpStatusCode.OK)
+    } else {
+        call.respond(HttpStatusCode.NotFound)
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleUpsertRoutingRules() {
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
+
+    val request = call.receive<List<UpsertRoutingRuleRequest>>()
+
+    transaction {
+        // Delete existing rules for this provider
+        IncidentRoutingRules.deleteWhere {
+            providerConfigId eq configId
+        }
+
+        // Insert new rules
+        request.forEach { rule ->
+            val alertPriority =
+                AlertPriority.wireValue(rule.alertPriority ?: rule.legacyIncidentSeverity)
+                    ?: throw BadRequestException("Invalid alert priority")
+            IncidentRoutingRules.insert {
+                it[IncidentRoutingRules.providerConfigId] = configId
+                it[IncidentRoutingRules.alertSource] = rule.alertSource
+                it[IncidentRoutingRules.alertType] = rule.alertType
+                it[IncidentRoutingRules.alertPriority] = alertPriority
+                it[IncidentRoutingRules.createdAt] = Clock.System.now()
+                it[IncidentRoutingRules.updatedAt] = Clock.System.now()
+            }
+        }
+    }
+
+    call.respond(HttpStatusCode.OK)
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleGetEventLog() {
+    val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_INCIDENT_PAGE_LIMIT
+    if (limit <= 0) {
+        throw BadRequestException("limit must be a positive integer")
+    }
+
+    val organizationId = call.requireCurrentOrg()?.orgId ?: return
+    val configId =
+        call.resolveIncidentProviderConfigId(organizationId)
+            ?: return
+
+    val events =
+        transaction {
+            IncidentEventLog
+                .selectAll()
+                .where { IncidentEventLog.providerConfigId eq configId }
+                .orderBy(IncidentEventLog.createdAt to SortOrder.DESC)
+                .limit(limit)
+                .map { row ->
+                    EventLogResponse(
+                        id = row[IncidentEventLog.resourceId].toString(),
+                        alertSource = row[IncidentEventLog.alertSource],
+                        deduplicationKey = row[IncidentEventLog.deduplicationKey],
+                        alertPriority = row[IncidentEventLog.alertPriority],
+                        incidentStatus = row[IncidentEventLog.incidentStatus],
+                        title = row[IncidentEventLog.title],
+                        description = row[IncidentEventLog.description],
+                        providerIncidentId = row[IncidentEventLog.providerIncidentId],
+                        success = row[IncidentEventLog.success],
+                        errorMessage = row[IncidentEventLog.errorMessage],
+                        createdAt = row[IncidentEventLog.createdAt].toEpochMilliseconds()
+                    )
+                }
+        }
+
+    call.respond(events)
+}
+
+private suspend fun ApplicationCall.resolveIncidentProviderConfigId(organizationId: Int): Int? {
+    val resourceId = parameters["id"]?.let(::parseIncidentProviderResourceId)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest)
+        return null
+    }
+
+    val configId = transaction {
+        IncidentProviderConfigs
+            .selectAll()
+            .where {
+                (IncidentProviderConfigs.resourceId eq resourceId) and
+                    (IncidentProviderConfigs.organizationId eq organizationId)
+            }
+            .firstOrNull()
+            ?.get(IncidentProviderConfigs.id)
+            ?.value
+    }
+    if (configId == null) {
+        respond(HttpStatusCode.NotFound)
+    }
+    return configId
+}
+
+private fun parseIncidentProviderResourceId(value: String): Uuid? =
+    value.toUuidOrNull()
+
+@Serializable
+data class ProviderConfigResponse(
+    val id: String,
+    val providerType: String,
+    val name: String,
+    val configJson: Map<String, String>,
+    val enabled: Boolean,
+    val createdAt: Long,
+    val updatedAt: Long
+)
+
+@Serializable
+data class CreateProviderConfigRequest(
+    val providerType: String,
+    val name: String,
+    val apiKey: String,
+    val configJson: Map<String, String>
+)
+
+@Serializable
+data class UpdateProviderConfigRequest(
+    val name: String? = null,
+    val apiKey: String? = null,
+    val configJson: Map<String, String>? = null,
+    val enabled: Boolean? = null
+)
+
+@Serializable
+data class RoutingRuleResponse(
+    val id: String,
+    val alertSource: String,
+    val alertType: String?,
+    val alertPriority: String
+)
+
+@Serializable
+data class UpsertRoutingRuleRequest(
+    val alertSource: String,
+    val alertType: String? = null,
+    val alertPriority: String? = null,
+    @SerialName("incidentSeverity") val legacyIncidentSeverity: String? = null
+)
+
+@Serializable
+data class EventLogResponse(
+    val id: String,
+    val alertSource: String,
+    val deduplicationKey: String,
+    val alertPriority: String,
+    val incidentStatus: String,
+    val title: String,
+    val description: String?,
+    val providerIncidentId: String?,
+    val success: Boolean,
+    val errorMessage: String?,
+    val createdAt: Long
+)

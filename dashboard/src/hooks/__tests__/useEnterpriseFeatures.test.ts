@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import React from 'react'
-import { useEnterpriseFeatures, useHasModule } from '../useEnterpriseFeatures'
+import { hasEnterpriseModule, useEnterpriseFeatures, useHasModule } from '../useEnterpriseFeatures'
 import { server } from '../../test/mocks/server'
 import { http, HttpResponse } from 'msw'
 
@@ -33,7 +33,7 @@ describe('useEnterpriseFeatures', () => {
     expect(result.current.data?.modules).toContain('saml')
   })
 
-  it('returns defaults when endpoint fails', async () => {
+  it('reports an error when endpoint fails', async () => {
     server.use(
       http.get('*/features', () =>
         new HttpResponse(null, { status: 500 })
@@ -44,9 +44,8 @@ describe('useEnterpriseFeatures', () => {
       wrapper: createWrapper(),
     })
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data?.enterprise).toBe(false)
-    expect(result.current.data?.modules).toEqual([])
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error?.message).toBe('Unable to load feature availability')
   })
 })
 
@@ -77,5 +76,28 @@ describe('useHasModule', () => {
     })
 
     await waitFor(() => expect(result.current).toBe(false))
+  })
+})
+
+describe('hasEnterpriseModule', () => {
+  it('matches display module names with internal feature keys', () => {
+    const features = {
+      enterprise: true,
+      modules: [
+        'Monitoring',
+        'Analytics',
+        'Datadog',
+        'SSO',
+        'AI',
+        'SAML',
+        'On-Call',
+        'Workflows Advanced',
+        'Advanced RBAC',
+      ],
+      selfHost: false,
+    }
+
+    expect(hasEnterpriseModule(features, 'Workflows Advanced')).toBe(true)
+    expect(hasEnterpriseModule(features, 'workflows_advanced')).toBe(true)
   })
 })

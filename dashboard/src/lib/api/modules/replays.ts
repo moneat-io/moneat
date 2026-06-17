@@ -16,32 +16,58 @@
 
 import type { ApiClientCore } from '../client'
 import type {
+  EventIssueLink,
   Replay,
   ReplayDetail,
   ReplayRecordingResponse,
   ReplayTimelineResponse,
 } from '../types'
+import { urlWithQuery } from '../utils'
+import { appendServiceScopeParams, type ServiceScopeParams } from './service-scope'
+
+interface ReplaysListOptions extends ServiceScopeParams {
+  page?: number
+  limit?: number
+  environment?: string
+  period?: '24h' | '7d' | '30d' | '90d'
+}
+
+function replaysQuery(options: ReplaysListOptions = {}): string {
+  const params = new URLSearchParams()
+  params.set('page', String(options.page ?? 1))
+  params.set('limit', String(options.limit ?? 25))
+  params.set('period', options.period ?? '7d')
+  if (options.environment) params.set('environment', options.environment)
+  appendServiceScopeParams(params, options)
+  return params.toString()
+}
 
 export function replaysMethods(core: ApiClientCore) {
   const base = core.API_BASE
+  const getIssueLinkForEvent = async (eventId: string): Promise<EventIssueLink | null> => {
+    try {
+      return await core.request<EventIssueLink>(
+        `${base}/events/${encodeURIComponent(eventId)}/issue`
+      )
+    } catch {
+      return null
+    }
+  }
 
   return {
     getReplays: (
-      projectId: number,
-      options: {
-        page?: number
-        limit?: number
-        environment?: string
-        period?: '24h' | '7d' | '30d' | '90d'
-      } = {}
+      projectId: string,
+      options: ReplaysListOptions = {}
     ) => {
-      const params = new URLSearchParams()
-      params.set('page', String(options.page ?? 1))
-      params.set('limit', String(options.limit ?? 25))
-      params.set('period', options.period ?? '7d')
-      if (options.environment) params.set('environment', options.environment)
-      return core.request<Replay[]>(`${base}/projects/${projectId}/replays?${params.toString()}`)
+      return core.request<Replay[]>(
+        `${base}/projects/${projectId}/replays?${replaysQuery(options)}`
+      )
     },
+
+    getOrganizationReplays: (options: ReplaysListOptions = {}) =>
+      core.request<Replay[]>(
+        urlWithQuery(`${base}/replays`, replaysQuery(options))
+      ),
 
     getReplay: (replayId: string) =>
       core.request<ReplayDetail>(`${base}/replays/${encodeURIComponent(replayId)}`),
@@ -56,18 +82,14 @@ export function replaysMethods(core: ApiClientCore) {
         `${base}/replays/${encodeURIComponent(replayId)}/timeline`
       ),
 
+    getIssueLinkForEvent,
+
     getIssueIdForEvent: async (eventId: string): Promise<string | null> => {
-      try {
-        const response = await core.request<{ issueId: string }>(
-          `${base}/events/${encodeURIComponent(eventId)}/issue`
-        )
-        return response.issueId
-      } catch {
-        return null
-      }
+      const link = await getIssueLinkForEvent(eventId)
+      return link?.issueId ?? null
     },
 
-    getReplaysForIssue: (issueId: string, limit = 10, projectId?: number | null) => {
+    getReplaysForIssue: (issueId: string, limit = 10, projectId?: string | null) => {
       const params = new URLSearchParams({ limit: String(limit) })
       if (projectId != null) params.set('projectId', String(projectId))
       return core.request<Replay[]>(

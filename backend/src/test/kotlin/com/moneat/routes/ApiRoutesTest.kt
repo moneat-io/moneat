@@ -28,6 +28,7 @@ import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.RouteTestSupport.installApiRouteRateLimits
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.requestBodyText
 import com.moneat.testsupport.respond
@@ -44,19 +45,19 @@ import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.plugins.ratelimit.RateLimit
-import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import java.util.Collections
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 class ApiRoutesTest {
     private val jwtSecret = "test-secret-for-unit-tests"
@@ -109,7 +110,7 @@ class ApiRoutesTest {
             ClickHouseClient.close()
             ClickHouseClient.init(server.baseUrl, "test", "default", "")
 
-            org.jetbrains.exposed.v1.jdbc.transactions.transaction {
+            transaction {
                 Organizations.insert {
                     it[id] = 1
                     it[name] = "Test Org"
@@ -128,6 +129,7 @@ class ApiRoutesTest {
                     it[updated_at] = kotlin.time.Clock.System.now()
                 }
             }
+            val resourceId = projectResourceId(-1)
 
             testApplication {
                 application {
@@ -144,17 +146,12 @@ class ApiRoutesTest {
                             validate { JWTPrincipal(it.payload) }
                         }
                     }
-                    install(RateLimit) {
-                        register(RateLimitName("api")) {
-                            requestKey { "test-user" }
-                            rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                        }
-                    }
+                    installApiRouteRateLimits("test-user")
                     routing { apiRoutes() }
                 }
 
                 val response =
-                    client.get("/v1/projects/-1/issues?page=2&limit=5&status=resolved") {
+                    client.get("/v1/projects/$resourceId/issues?page=2&limit=5&status=resolved") {
                         header(HttpHeaders.Authorization, "Bearer ${demoToken()}")
                     }
 
@@ -194,12 +191,7 @@ class ApiRoutesTest {
                             validate { JWTPrincipal(it.payload) }
                         }
                     }
-                    install(RateLimit) {
-                        register(RateLimitName("api")) {
-                            requestKey { "test-user" }
-                            rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                        }
-                    }
+                    installApiRouteRateLimits("test-user")
                     routing { apiRoutes() }
                 }
 
@@ -214,6 +206,7 @@ class ApiRoutesTest {
 
     @Test
     fun `issues route denies non demo user without project access`() {
+        val resourceId = seedDeniedProject()
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -229,17 +222,12 @@ class ApiRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                install(RateLimit) {
-                    register(RateLimitName("api")) {
-                        requestKey { "test-user" }
-                        rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                    }
-                }
+                installApiRouteRateLimits("test-user")
                 routing { apiRoutes() }
             }
 
             val response =
-                client.get("/v1/projects/99/issues") {
+                client.get("/v1/projects/$resourceId/issues") {
                     header(HttpHeaders.Authorization, "Bearer ${regularToken(userId = 123)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -248,6 +236,7 @@ class ApiRoutesTest {
 
     @Test
     fun `trace route denies non demo user without project access`() {
+        val resourceId = seedDeniedProject()
         testApplication {
             application {
                 install(ContentNegotiation) { json() }
@@ -263,17 +252,12 @@ class ApiRoutesTest {
                         validate { JWTPrincipal(it.payload) }
                     }
                 }
-                install(RateLimit) {
-                    register(RateLimitName("api")) {
-                        requestKey { "test-user" }
-                        rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-                    }
-                }
+                installApiRouteRateLimits("test-user")
                 routing { apiRoutes() }
             }
 
             val response =
-                client.get("/v1/projects/99/traces/trace-1") {
+                client.get("/v1/projects/$resourceId/traces/trace-1") {
                     header(HttpHeaders.Authorization, "Bearer ${regularToken(userId = 555)}")
                 }
             assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -299,6 +283,33 @@ class ApiRoutesTest {
             .withClaim("userId", userId)
             .withClaim("email", "user$userId@test.com")
             .sign(Algorithm.HMAC256(jwtSecret))
+    }
+
+    private fun seedDeniedProject(): String = transaction {
+        Organizations.insert {
+            it[id] = 99
+            it[name] = "Denied Org"
+            it[slug] = "denied-org"
+        }
+        Projects.insert {
+            it[id] = 99
+            it[organization_id] = 99
+            it[name] = "Denied Project"
+            it[slug] = "denied-project"
+        }
+        Projects
+            .selectAll()
+            .where { Projects.id eq 99L }
+            .first()[Projects.resource_id]
+            .toString()
+    }
+
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
     }
 
     @AfterTest

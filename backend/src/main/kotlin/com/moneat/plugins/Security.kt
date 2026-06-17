@@ -30,7 +30,7 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
 import mu.KotlinLogging
 import com.moneat.utils.suspendRunCatching
-import java.util.*
+import java.util.Base64
 
 private val logger = KotlinLogging.logger {}
 

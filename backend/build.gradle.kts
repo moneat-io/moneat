@@ -32,6 +32,33 @@ tasks.shadowJar {
     manifest {
         attributes("Main-Class" to application.mainClass.get())
     }
+    // GraalVM's polyglot language selectors (org.graalvm.polyglot:js, org.graalvm.js:js)
+    // are POM-only meta modules; their resolved artifact is a .pom that shadow cannot
+    // unzip ("Cannot expand ZIP …js-*.pom"). Exclude the meta artifacts — the actual
+    // language jars (js-language, truffle-api, truffle-runtime, regex, icu4j, …) are
+    // separate modules and stay on the classpath.
+    dependencies {
+        exclude(dependency("org.graalvm.polyglot:js:.*"))
+        exclude(dependency("org.graalvm.js:js:.*"))
+    }
+}
+
+val dashboardTemplateSourceDir =
+    providers.gradleProperty("dashboardTemplateSource")
+        .orElse(providers.environmentVariable("DASHBOARD_TEMPLATE_SOURCE_DIR"))
+        .orElse(layout.projectDirectory.dir("../grafana-dashboards").asFile.absolutePath)
+
+tasks.register<JavaExec>("convertDashboardTemplates") {
+    group = "dashboard"
+    description = "Converts community dashboard JSON into Moneat dashboard template resources."
+    dependsOn(tasks.named("testClasses"))
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("com.moneat.dashboards.tools.DashboardTemplateConverterKt")
+    args(
+        dashboardTemplateSourceDir.get(),
+        layout.projectDirectory.dir("src/main/resources/dashboard-templates").asFile.absolutePath,
+        layout.buildDirectory.file("reports/dashboard-template-conversion.json").get().asFile.absolutePath
+    )
 }
 
 repositories {
@@ -58,6 +85,9 @@ tasks.named<ProcessResources>("processIntegrationTestResources") {
 }
 
 dependencies {
+    implementation(project(":feature-spi"))
+    implementation(project(":ingest-common"))
+
     // Ktor Server
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.netty)
@@ -69,6 +99,7 @@ dependencies {
     implementation(libs.ktor.server.rate.limit)
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.status.pages)
+    implementation(libs.ktor.server.metrics.micrometer)
 
     // Ktor Client (for ClickHouse HTTP API)
     implementation(libs.ktor.client.core)
@@ -91,9 +122,16 @@ dependencies {
 
     // Date/Time
     implementation(libs.kotlinx.datetime)
+    implementation(libs.kotlinx.coroutines.core)
 
     // Redis
     implementation(libs.lettuce)
+
+    // Workflow execution
+    implementation(libs.jackson.module.kotlin)
+    implementation(libs.temporal.sdk)
+    implementation(libs.graalvm.polyglot)
+    implementation(libs.graalvm.polyglot.js)
 
     // JDBC drivers for custom datasources
     runtimeOnly(libs.mysql.connector.j)
@@ -113,10 +151,6 @@ dependencies {
     implementation(libs.jbcrypt)
     implementation(libs.commons.codec)
 
-    // SSO
-    implementation(libs.java.saml.core)
-    implementation(libs.oauth2.oidc.sdk)
-
     // Billing
     implementation(libs.stripe.java)
 
@@ -125,6 +159,12 @@ dependencies {
 
     // JSON path query for uptime monitoring
     implementation(libs.jsonpath)
+
+    // YAML parsing for Sigma detection-rule import
+    implementation(libs.snakeyaml)
+
+    // Headless Chromium for synthetic browser/E2E tests
+    implementation(libs.playwright)
 
     // Environment variables
     implementation(libs.dotenv.kotlin)
@@ -140,6 +180,9 @@ dependencies {
     implementation(libs.opentelemetry.sdk)
     implementation(libs.opentelemetry.exporter.otlp)
     implementation(libs.opentelemetry.logback)
+
+    // Micrometer / Prometheus operational metrics
+    implementation(libs.micrometer.registry.prometheus)
 
     // Sentry - Error monitoring
     implementation(libs.sentry.kotlin)
@@ -159,7 +202,9 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testImplementation(libs.h2)
+    testImplementation(libs.konsist)
     testImplementation(libs.mockk)
+    testImplementation(libs.temporal.testing)
     testImplementation(kotlin("reflect"))
 
     // Integration testing dependencies
@@ -173,7 +218,7 @@ dependencies {
     integrationTestImplementation(libs.testcontainers.clickhouse)
 
     // Zstandard decompression for DD agent payloads
-    implementation(libs.zstd.jni)
+    runtimeOnly(libs.zstd.jni)
 
     // Protobuf for decoding DD process-agent binary payloads
     implementation(libs.protobuf.java)
@@ -183,6 +228,34 @@ dependencies {
 
     // Enterprise modules (SSO, On-Call) — always included, license-gated at runtime
     runtimeOnly(project(":ee"))
+    runtimeOnly(project(":features:account-deletion"))
+    runtimeOnly(project(":features:ai"))
+    runtimeOnly(project(":features:analytics"))
+    runtimeOnly(project(":features:auth"))
+    runtimeOnly(project(":features:auth-tokens"))
+    runtimeOnly(project(":features:billing"))
+    runtimeOnly(project(":features:contact"))
+    runtimeOnly(project(":features:connectors"))
+    runtimeOnly(project(":features:dashboards"))
+    runtimeOnly(project(":features:datadog"))
+    runtimeOnly(project(":features:featureflags"))
+    runtimeOnly(project(":features:incident"))
+    runtimeOnly(project(":features:llm"))
+    runtimeOnly(project(":features:logs"))
+    runtimeOnly(project(":features:mcp"))
+    runtimeOnly(project(":features:monitoring"))
+    runtimeOnly(project(":features:org"))
+    runtimeOnly(project(":features:otlp"))
+    runtimeOnly(project(":features:overview"))
+    runtimeOnly(project(":features:pulse"))
+    runtimeOnly(project(":features:releases"))
+    runtimeOnly(project(":features:security"))
+    runtimeOnly(project(":features:sso"))
+    runtimeOnly(project(":features:statuspage"))
+    runtimeOnly(project(":features:summary"))
+    runtimeOnly(project(":features:synthetics"))
+    runtimeOnly(project(":features:uptime"))
+    runtimeOnly(project(":features:workflows"))
 }
 
 // Task to copy email templates into resources
@@ -270,8 +343,40 @@ val integrationTest =
 
 // JaCoCo configuration
 jacoco {
-    toolVersion = "0.8.14"
+    toolVersion = "0.8.15"
 }
+
+val backendFeatureProjects =
+    listOf(
+        ":features:account-deletion",
+        ":features:ai",
+        ":features:analytics",
+        ":features:auth",
+        ":features:auth-tokens",
+        ":features:billing",
+        ":features:contact",
+        ":features:connectors",
+        ":features:dashboards",
+        ":features:datadog",
+        ":features:featureflags",
+        ":features:incident",
+        ":features:llm",
+        ":features:logs",
+        ":features:mcp",
+        ":features:monitoring",
+        ":features:org",
+        ":features:otlp",
+        ":features:overview",
+        ":features:pulse",
+        ":features:releases",
+        ":features:security",
+        ":features:sso",
+        ":features:statuspage",
+        ":features:summary",
+        ":features:synthetics",
+        ":features:uptime",
+        ":features:workflows",
+    ).map(::project)
 
 val jacocoBackendMainExcludes =
     arrayOf(
@@ -280,20 +385,29 @@ val jacocoBackendMainExcludes =
         "**/plugins/**", // Ktor plugin bootstrap — framework wiring, not business logic
         "**/logging/**", // log appender setup
         "**/enterprise/**", // on-call/feature-flag integration stubs in core
+        "**/sso/**", // OIDC/OAuth routes & service — integration-heavy; gate via detekt + manual/E2E
         "**/Application*", // entry point
         "**/di/**", // Koin module assembly — pure wiring, no business logic
-        "**/monitoring/**", // monitoring module hook — framework wiring only
+        "**/monitoring/MonitoringModule*", // enterprise monitoring module hook — framework wiring only
+        "**/analytics/AnalyticsModule*", // analytics route/worker module assembly
+        "**/auth/AuthModule*", // auth route module assembly
+        "**/datadog/DatadogModule*", // datadog route/worker module assembly
+        "**/ingestion/queue/RedisQueueWorker*", // blocking Redis worker loop; covered by queue client tests
+        "**/workflows/services/WorkflowExecutionWorker*", // Redis worker loop; covered by runtime checks
     )
 
 tasks.jacocoTestReport {
     val eeProject = project(":ee")
+    val featureTestTasks = backendFeatureProjects.map { it.tasks.named("test") }
     dependsOn(tasks.test, eeProject.tasks.named("test"))
+    dependsOn(featureTestTasks)
 
-    // Unit tests only — merges core + enterprise SSO execution data. SSO sources live in :ee.
+    // Unit tests only. Feature-module tests still exercise root host code during the extraction.
     executionData.setFrom(
         files(
             layout.buildDirectory.file("jacoco/test.exec"),
             eeProject.layout.buildDirectory.file("jacoco/test.exec"),
+            backendFeatureProjects.map { it.layout.buildDirectory.file("jacoco/test.exec") },
         )
     )
 
@@ -325,6 +439,8 @@ tasks.jacocoTestReport {
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
+
+    executionData.setFrom(tasks.jacocoTestReport.get().executionData)
 
     violationRules {
         rule {
@@ -403,6 +519,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 // Detekt - static analysis
 detekt {
     config.setFrom(files("$projectDir/detekt.yml"))
+    baseline = file("$projectDir/detekt-baseline.xml")
     buildUponDefaultConfig = true
     parallel = true
     source.setFrom(files("src/main/kotlin", "src/test/kotlin", "src/integrationTest/kotlin"))

@@ -19,13 +19,11 @@ package com.moneat.billing.services
 import com.moneat.billing.models.AdminBillingSubscriptionResponse
 import com.moneat.billing.models.BillingPlanResponse
 import com.moneat.billing.models.CreateTierVersionRequest
-import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.models.PricingTierConfigs
 import com.moneat.billing.models.TierMigrationRequest
 import com.moneat.billing.models.TierMigrationResponse
 import com.moneat.billing.models.UpdateStripePriceIdsRequest
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Subscriptions
 import kotlinx.datetime.TimeZone
@@ -60,13 +58,8 @@ private const val DEFAULT_ANALYTICS_RETENTION_DAYS = 1095
 private const val MAX_RETENTION_DAYS = 90
 private const val MAX_TRIAL_DAYS = 60
 private const val MAX_ANALYTICS_RETENTION_DAYS = 3650
-private const val PRO_MONTHLY_PRICE_CENTS = 2900
-private const val TEAM_MONTHLY_PRICE_CENTS = 7900
-private const val BUSINESS_MONTHLY_PRICE_CENTS = 19900
-private const val PRO_YEARLY_PRICE_CENTS = 28800
-private const val TEAM_YEARLY_PRICE_CENTS = 79200
-private const val BUSINESS_YEARLY_PRICE_CENTS = 199200
 private const val DEFAULT_TRIAL_DAYS_NON_FREE = 14
+private const val JS_SAFE_UNLIMITED_QUOTA_LIMIT = 9_007_199_254_740_000L
 
 class PricingTierService {
     private data class DefaultFeatureFlags(
@@ -82,17 +75,6 @@ class PricingTierService {
         val slaEnabled: Boolean,
         val customRetentionEnabled: Boolean
     )
-
-    fun getPrimaryOrganizationIdForUser(userId: Int): Int? {
-        return transaction {
-            Memberships
-                .selectAll()
-                .where { Memberships.user_id eq userId }
-                .orderBy(Memberships.id to SortOrder.ASC)
-                .firstOrNull()
-                ?.get(Memberships.organization_id)
-        }
-    }
 
     fun getCurrentPlans(): List<BillingPlanResponse> {
         return transaction {
@@ -189,7 +171,7 @@ class PricingTierService {
                 if (tierRow != null) {
                     rowToResponse(tierRow)
                 } else {
-                    enumFallbackToResponse(subscription[Subscriptions.plan])
+                    quotaTierFromEnum(subscription[Subscriptions.plan])
                 }
 
             EffectiveTierContext(
@@ -212,12 +194,25 @@ class PricingTierService {
     ): PricingTierConfigResponse {
         val canonicalName = tierName.uppercase()
         validateCreateTierRequest(request)
+        val monthlyUnitLimitFallback = normalizeUnlimitedQuotaLimit(request.monthlyUnitLimit)
         val monthlyErrorLimit =
-            if (request.monthlyErrorLimit > 0) request.monthlyErrorLimit else request.monthlyUnitLimit
-        val monthlyTransactionLimit = request.monthlyTransactionLimit
-        val monthlyReplayLimit = request.monthlyReplayLimit
-        val monthlyFeedbackLimit = request.monthlyFeedbackLimit
-        val monthlyUnitLimit = monthlyErrorLimit + monthlyTransactionLimit + monthlyReplayLimit + monthlyFeedbackLimit
+            if (request.monthlyErrorLimit > 0) {
+                normalizeUnlimitedQuotaLimit(request.monthlyErrorLimit)
+            } else {
+                monthlyUnitLimitFallback
+            }
+        val monthlyTransactionLimit = normalizeUnlimitedQuotaLimit(request.monthlyTransactionLimit)
+        val monthlyReplayLimit =
+            if (request.monthlyReplayLimit < 0) {
+                request.monthlyReplayLimit
+            } else {
+                normalizeUnlimitedQuotaLimit(request.monthlyReplayLimit)
+            }
+        val monthlyFeedbackLimit = normalizeUnlimitedQuotaLimit(request.monthlyFeedbackLimit)
+        val monthlyLlmEventLimit = normalizeUnlimitedQuotaLimit(request.monthlyLlmEventLimit)
+        val monthlyUnitLimit = totalMonthlyUnitLimit(
+            listOf(monthlyErrorLimit, monthlyTransactionLimit, monthlyReplayLimit, monthlyFeedbackLimit)
+        )
         return transaction {
             val current =
                 PricingTierConfigs
@@ -226,6 +221,7 @@ class PricingTierService {
                     .orderBy(PricingTierConfigs.version to SortOrder.DESC)
                     .firstOrNull()
             val currentConfig = current?.let { rowToResponse(it) }
+            val fallbackConfig = quotaTierFromEnum(canonicalName)
             val defaults = defaultFeatureFlagsForTier(canonicalName)
             val nextVersion = (current?.get(PricingTierConfigs.version) ?: 0) + 1
 
@@ -241,6 +237,12 @@ class PricingTierService {
                 request.replayRetentionDays ?: currentConfig?.replayRetentionDays ?: request.retentionDays
             val resolvedLlmRetentionDays =
                 request.llmRetentionDays ?: currentConfig?.llmRetentionDays ?: request.retentionDays
+            val resolvedApmTraceRetentionDays =
+                when {
+                    request.apmTraceRetentionDays != null -> request.apmTraceRetentionDays
+                    currentConfig != null -> currentConfig.apmTraceRetentionDays
+                    else -> request.retentionDays
+                }
             val resolvedErrorOverageRateCentsPer1k =
                 request.errorOverageRateCentsPer1k ?: currentConfig?.errorOverageRateCentsPer1k ?: 0
             val resolvedReplayOverageRateCentsPerGb =
@@ -258,19 +260,35 @@ class PricingTierService {
                     ?: currentConfig?.analyticsRetentionDays
                     ?: DEFAULT_ANALYTICS_RETENTION_DAYS
             val resolvedMonthlyAnalyticsPageviewLimit =
-                request.monthlyAnalyticsPageviewLimit ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
+                request.monthlyAnalyticsPageviewLimit?.let(::normalizeUnlimitedQuotaLimit)
+                    ?: currentConfig?.monthlyAnalyticsPageviewLimit ?: 0
             val resolvedAnalyticsPageviewOverageRateCentsPer100k =
                 request.analyticsPageviewOverageRateCentsPer100k
                     ?: currentConfig?.analyticsPageviewOverageRateCentsPer100k ?: 0
-            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit
+            val resolvedMonthlyApmSpanLimit = request.monthlyApmSpanLimit?.let(::normalizeUnlimitedQuotaLimit)
                 ?: currentConfig?.monthlyApmSpanLimit ?: 0
             val resolvedApmSpanOverageRateCentsPer1m = request.apmSpanOverageRateCentsPer1m
                 ?: currentConfig?.apmSpanOverageRateCentsPer1m ?: 0
-            val resolvedMonthlyCustomMetricLimit = request.monthlyCustomMetricLimit
-                ?: currentConfig?.monthlyCustomMetricLimit ?: 0
+            val resolvedMonthlyCustomMetricLimit =
+                request.monthlyCustomMetricLimit?.let(::normalizeUnlimitedQuotaLimit)
+                    ?: currentConfig?.monthlyCustomMetricLimit ?: 0
             val resolvedCustomMetricOverageRateCentsPer100k =
                 request.customMetricOverageRateCentsPer100k
                     ?: currentConfig?.customMetricOverageRateCentsPer100k ?: 0
+            val resolvedMonthlyInfraMetricSeriesHourLimit =
+                when {
+                    request.monthlyInfraMetricSeriesHourLimit != null ->
+                        normalizeUnlimitedQuotaLimit(request.monthlyInfraMetricSeriesHourLimit)
+                    currentConfig != null -> currentConfig.monthlyInfraMetricSeriesHourLimit
+                    else -> fallbackConfig.monthlyInfraMetricSeriesHourLimit
+                }
+            val resolvedInfraMetricOverageRateCentsPer100k =
+                when {
+                    request.infraMetricOverageRateCentsPer100kSeriesHours != null ->
+                        request.infraMetricOverageRateCentsPer100kSeriesHours
+                    currentConfig != null -> currentConfig.infraMetricOverageRateCentsPer100kSeriesHours
+                    else -> fallbackConfig.infraMetricOverageRateCentsPer100kSeriesHours
+                }
             val resolvedMaxHosts = request.maxHosts
             val resolvedProfilingEnabled = request.profilingEnabled
                 ?: currentConfig?.profilingEnabled ?: true
@@ -347,12 +365,13 @@ class PricingTierService {
                     it[monthly_transaction_limit] = monthlyTransactionLimit
                     it[monthly_replay_limit] = monthlyReplayLimit
                     it[monthly_feedback_limit] = monthlyFeedbackLimit
-                    it[monthly_llm_event_limit] = request.monthlyLlmEventLimit
+                    it[monthly_llm_event_limit] = monthlyLlmEventLimit
                     it[monthly_gb_limit] = resolvedMonthlyGbLimit
                     it[retention_days] = request.retentionDays
                     it[log_retention_days] = resolvedLogRetentionDays
                     it[replay_retention_days] = resolvedReplayRetentionDays
                     it[llm_retention_days] = resolvedLlmRetentionDays
+                    it[apm_trace_retention_days] = resolvedApmTraceRetentionDays
                     it[status_pages_enabled] = resolvedStatusPagesEnabled
                     it[status_page_custom_domain_enabled] = resolvedStatusPageCustomDomainEnabled
                     it[session_replay_enabled] = resolvedSessionReplayEnabled
@@ -388,6 +407,9 @@ class PricingTierService {
                     it[apm_span_overage_rate_cents_per_1m] = resolvedApmSpanOverageRateCentsPer1m
                     it[monthly_custom_metric_limit] = resolvedMonthlyCustomMetricLimit
                     it[custom_metric_overage_rate_cents_per_100k] = resolvedCustomMetricOverageRateCentsPer100k
+                    it[monthly_infra_metric_series_hour_limit] = resolvedMonthlyInfraMetricSeriesHourLimit
+                    it[infra_metric_overage_rate_cents_per_100k_series_hours] =
+                        resolvedInfraMetricOverageRateCentsPer100k
                     it[max_hosts] = resolvedMaxHosts
                     it[profiling_enabled] = resolvedProfilingEnabled
                     it[network_monitoring_enabled] = resolvedNetworkMonitoringEnabled
@@ -410,61 +432,81 @@ class PricingTierService {
         }
     }
 
+    private fun normalizeUnlimitedQuotaLimit(limit: Long): Long {
+        return if (limit >= JS_SAFE_UNLIMITED_QUOTA_LIMIT) Long.MAX_VALUE else limit
+    }
+
+    private fun totalMonthlyUnitLimit(limits: List<Long>): Long {
+        if (limits.any { it < 0 || it == Long.MAX_VALUE }) return Long.MAX_VALUE
+        return limits.fold(0L) { total, limit ->
+            if (Long.MAX_VALUE - total < limit) Long.MAX_VALUE else total + limit
+        }
+    }
+
     private fun validateCreateTierRequest(request: CreateTierVersionRequest) {
         require(request.retentionDays in 1..MAX_RETENTION_DAYS) { "Retention days must be between 1 and 90" }
-        if (request.logRetentionDays != null) {
-            require(request.logRetentionDays in 1..MAX_RETENTION_DAYS) { "Log retention days must be between 1 and 90" }
-        }
+        validateOptionalRetentionDays(request.logRetentionDays, "Log retention days")
         require(request.monthlyUnitLimit >= 0) { "Monthly unit limit must be non-negative" }
         require(request.monthlyErrorLimit >= 0) { "Monthly error limit must be non-negative" }
         require(request.monthlyTransactionLimit >= 0) { "Monthly transaction limit must be non-negative" }
         require(request.monthlyReplayLimit >= -1) { "Monthly replay limit must be -1 (unlimited) or non-negative" }
         require(request.monthlyFeedbackLimit >= 0) { "Monthly feedback limit must be non-negative" }
         require(request.monthlyLlmEventLimit >= 0) { "Monthly LLM event limit must be non-negative" }
-        if (request.replayRetentionDays != null) {
-            require(request.replayRetentionDays in 1..MAX_RETENTION_DAYS) {
-                "Replay retention days must be between 1 and 90"
-            }
-        }
-        if (request.llmRetentionDays != null) {
-            require(request.llmRetentionDays in 1..MAX_RETENTION_DAYS) { "LLM retention days must be between 1 and 90" }
-        }
-        if (request.monthlyGbLimit != null) {
-            require(request.monthlyGbLimit >= 0) { "Monthly GB limit must be non-negative" }
-        }
-        if (request.yearlyPriceCents != null) {
-            require(request.yearlyPriceCents >= 0) { "Yearly price cannot be negative" }
-        }
-        if (request.trialDays != null) {
-            require(request.trialDays in 0..MAX_TRIAL_DAYS) { "Trial days must be between 0 and 60" }
-        }
-        if (request.overageRateCentsPerGb != null) {
-            require(request.overageRateCentsPerGb >= 0) { "Overage rate cannot be negative" }
-        }
-        if (request.errorOverageRateCentsPer1k != null) {
-            require(request.errorOverageRateCentsPer1k >= 0) { "Error overage rate cannot be negative" }
-        }
-        if (request.replayOverageRateCentsPerGb != null) {
-            require(request.replayOverageRateCentsPerGb >= 0) { "Replay overage rate cannot be negative" }
-        }
-        if (request.llmOverageRateCentsPer1k != null) {
-            require(request.llmOverageRateCentsPer1k >= 0) { "LLM overage rate cannot be negative" }
-        }
-        if (request.analyticsRetentionDays != null) {
-            require(request.analyticsRetentionDays in 1..MAX_ANALYTICS_RETENTION_DAYS) {
-                "Analytics retention days must be between 1 and 3650"
-            }
-        }
-        if (request.monthlyAnalyticsPageviewLimit != null) {
-            require(
-                request.monthlyAnalyticsPageviewLimit >= 0
-            ) { "Monthly analytics pageview limit must be non-negative" }
-        }
-        if (request.analyticsPageviewOverageRateCentsPer100k != null) {
-            require(
-                request.analyticsPageviewOverageRateCentsPer100k >= 0
-            ) { "Analytics pageview overage rate cannot be negative" }
-        }
+        validateOptionalRetentionDays(request.replayRetentionDays, "Replay retention days")
+        validateOptionalRetentionDays(request.llmRetentionDays, "LLM retention days")
+        validateOptionalRetentionDays(request.apmTraceRetentionDays, "APM trace retention days")
+        validateOptionalNonNegative(request.monthlyGbLimit, "Monthly GB limit must be non-negative")
+        validateOptionalNonNegative(request.yearlyPriceCents, "Yearly price cannot be negative")
+        validateOptionalTrialDays(request.trialDays)
+        validateOptionalNonNegative(request.overageRateCentsPerGb, "Overage rate cannot be negative")
+        validateOptionalNonNegative(request.errorOverageRateCentsPer1k, "Error overage rate cannot be negative")
+        validateOptionalNonNegative(request.replayOverageRateCentsPerGb, "Replay overage rate cannot be negative")
+        validateOptionalNonNegative(request.llmOverageRateCentsPer1k, "LLM overage rate cannot be negative")
+        validateOptionalRetentionDays(
+            request.analyticsRetentionDays,
+            "Analytics retention days",
+            MAX_ANALYTICS_RETENTION_DAYS
+        )
+        validateOptionalNonNegative(
+            request.monthlyAnalyticsPageviewLimit,
+            "Monthly analytics pageview limit must be non-negative"
+        )
+        validateOptionalNonNegative(
+            request.analyticsPageviewOverageRateCentsPer100k,
+            "Analytics pageview overage rate cannot be negative"
+        )
+        validateOptionalNonNegative(
+            request.monthlyInfraMetricSeriesHourLimit,
+            "Monthly infrastructure metric limit must be non-negative"
+        )
+        validateOptionalNonNegative(
+            request.infraMetricOverageRateCentsPer100kSeriesHours,
+            "Infrastructure metric overage rate cannot be negative"
+        )
+    }
+
+    private fun validateOptionalRetentionDays(
+        value: Int?,
+        label: String,
+        maxDays: Int = MAX_RETENTION_DAYS
+    ) {
+        if (value == null) return
+        require(value in 1..maxDays) { "$label must be between 1 and $maxDays" }
+    }
+
+    private fun validateOptionalTrialDays(value: Int?) {
+        if (value == null) return
+        require(value in 0..MAX_TRIAL_DAYS) { "Trial days must be between 0 and 60" }
+    }
+
+    private fun validateOptionalNonNegative(value: Int?, message: String) {
+        if (value == null) return
+        require(value >= 0) { message }
+    }
+
+    private fun validateOptionalNonNegative(value: Long?, message: String) {
+        if (value == null) return
+        require(value >= 0) { message }
     }
 
     fun migrateSubscribers(
@@ -559,12 +601,12 @@ class PricingTierService {
                 .limit(limit)
                 .map { row ->
                     AdminBillingSubscriptionResponse(
-                        subscriptionId = row[Subscriptions.id],
-                        organizationId = row[Subscriptions.organization_id],
+                        subscriptionId = row[Subscriptions.resource_id].toString(),
+                        organizationId = row[Organizations.resource_id].toString(),
                         organizationName = row[Organizations.name],
                         plan = row[Subscriptions.plan],
                         status = row[Subscriptions.status],
-                        pricingTierConfigId = row[Subscriptions.pricing_tier_config_id],
+                        pricingTierConfigId = pricingTierResourceId(row[Subscriptions.pricing_tier_config_id]),
                         paygBudgetCents = row[Subscriptions.payg_budget_cents],
                         paygUsedUnits = row[Subscriptions.payg_used_units],
                         paygUsedMicros = row[Subscriptions.payg_used_micros],
@@ -585,150 +627,22 @@ class PricingTierService {
                         (PricingTierConfigs.is_current eq true)
                 }.firstOrNull()
         if (row != null) return rowToResponse(row)
-        return enumFallbackToResponse(tierName)
-    }
-
-    private fun enumFallbackToResponse(tierName: String): PricingTierConfigResponse {
-        val tier = PricingTier.entries.find { it.name.equals(tierName, ignoreCase = true) } ?: PricingTier.FREE
-        val monthlyPrice =
-            when (tier) {
-                PricingTier.FREE -> 0
-                PricingTier.PRO -> PRO_MONTHLY_PRICE_CENTS
-                PricingTier.TEAM -> TEAM_MONTHLY_PRICE_CENTS
-                PricingTier.BUSINESS -> BUSINESS_MONTHLY_PRICE_CENTS
-            }
-        val yearlyPrice =
-            when (tier) {
-                PricingTier.FREE -> 0
-
-                PricingTier.PRO -> PRO_YEARLY_PRICE_CENTS
-
-                // $288/yr
-                PricingTier.TEAM -> TEAM_YEARLY_PRICE_CENTS
-
-                // $792/yr
-                PricingTier.BUSINESS -> BUSINESS_YEARLY_PRICE_CENTS // $1992/yr
-            }
-        return PricingTierConfigResponse(
-            id = 0,
-            tierName = tier.name,
-            version = 1,
-            monthlyUnitLimit = tier.monthlyErrorLimit,
-            monthlyErrorLimit = tier.monthlyErrorLimit,
-            monthlyTransactionLimit = 0,
-            monthlyReplayLimit = tier.monthlyReplayLimit,
-            monthlyFeedbackLimit = 0,
-            monthlyLlmEventLimit = tier.monthlyLlmEventLimit,
-            monthlyGbLimit = tier.monthlyGbBytes,
-            retentionDays = tier.retentionDays,
-            logRetentionDays = tier.retentionDays,
-            replayRetentionDays = tier.retentionDays,
-            llmRetentionDays = tier.retentionDays,
-            statusPagesEnabled = true,
-            statusPageCustomDomainEnabled = true,
-            sessionReplayEnabled = true,
-            slackEnabled = true,
-            discordEnabled = true,
-            incidentIoEnabled = true,
-            samlEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
-            oidcEnabled = tier == PricingTier.TEAM || tier == PricingTier.BUSINESS,
-            prioritySupportEnabled = tier == PricingTier.BUSINESS,
-            slaEnabled = tier == PricingTier.BUSINESS,
-            customRetentionEnabled = tier == PricingTier.BUSINESS,
-            maxProjects = tier.maxProjects,
-            maxSystems = tier.maxSystems,
-            monitorIntervalSeconds = tier.monitorIntervalSeconds,
-            monthlyPriceCents = monthlyPrice,
-            yearlyPriceCents = yearlyPrice,
-            trialDays = defaultTrialDaysForTier(tier.name),
-            paygEnabled = tier != PricingTier.FREE,
-            paygRateMicrosPerUnit = if (tier == PricingTier.FREE) 0 else 400000, // $0.40/GB in micros
-            overageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40, // $0.40/GB
-            errorOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 10,
-            replayOverageRateCentsPerGb = if (tier == PricingTier.FREE) 0 else 40,
-            llmOverageRateCentsPer1k = if (tier == PricingTier.FREE) 0 else 100,
-            oncallPerUserMonthlyCents = 500, // Default $5
-            oncallPerUserYearlyCents = 5000, // Default $50
-            oncallEnabled = tier != PricingTier.FREE,
-            stripeBasePriceId = null,
-            stripeOveragePriceId = null,
-            stripeYearlyBasePriceId = null,
-            stripeYearlyOveragePriceId = null,
-            stripeOncallPriceId = null,
-            stripeOncallYearlyPriceId = null,
-            isCurrent = true
-        )
+        return quotaTierFromEnum(tierName)
     }
 
     private fun rowToResponse(row: ResultRow): PricingTierConfigResponse {
-        return PricingTierConfigResponse(
-            id = row[PricingTierConfigs.id],
-            tierName = row[PricingTierConfigs.tier_name],
-            version = row[PricingTierConfigs.version],
-            monthlyUnitLimit = row[PricingTierConfigs.monthly_unit_limit],
-            monthlyErrorLimit = row[PricingTierConfigs.monthly_error_limit],
-            monthlyTransactionLimit = row[PricingTierConfigs.monthly_transaction_limit],
-            monthlyReplayLimit = row[PricingTierConfigs.monthly_replay_limit],
-            monthlyFeedbackLimit = row[PricingTierConfigs.monthly_feedback_limit],
-            monthlyLlmEventLimit = row[PricingTierConfigs.monthly_llm_event_limit],
-            monthlyGbLimit = row[PricingTierConfigs.monthly_gb_limit],
-            retentionDays = row[PricingTierConfigs.retention_days],
-            logRetentionDays = row[PricingTierConfigs.log_retention_days],
-            replayRetentionDays = row[PricingTierConfigs.replay_retention_days],
-            llmRetentionDays = row[PricingTierConfigs.llm_retention_days],
-            statusPagesEnabled = row[PricingTierConfigs.status_pages_enabled],
-            statusPageCustomDomainEnabled = row[PricingTierConfigs.status_page_custom_domain_enabled],
-            sessionReplayEnabled = row[PricingTierConfigs.session_replay_enabled],
-            slackEnabled = row[PricingTierConfigs.slack_enabled],
-            discordEnabled = row[PricingTierConfigs.discord_enabled],
-            incidentIoEnabled = row[PricingTierConfigs.incident_io_enabled],
-            samlEnabled = row[PricingTierConfigs.saml_enabled],
-            oidcEnabled = row[PricingTierConfigs.oidc_enabled],
-            prioritySupportEnabled = row[PricingTierConfigs.priority_support_enabled],
-            slaEnabled = row[PricingTierConfigs.sla_enabled],
-            customRetentionEnabled = row[PricingTierConfigs.custom_retention_enabled],
-            maxProjects = row[PricingTierConfigs.max_projects],
-            maxSystems = row[PricingTierConfigs.max_systems],
-            monitorIntervalSeconds = row[PricingTierConfigs.monitor_interval_seconds],
-            monthlyPriceCents = row[PricingTierConfigs.monthly_price_cents],
-            yearlyPriceCents = row[PricingTierConfigs.yearly_price_cents],
-            trialDays = row[PricingTierConfigs.trial_days],
-            paygEnabled = row[PricingTierConfigs.payg_enabled],
-            paygRateMicrosPerUnit = row[PricingTierConfigs.payg_rate_micros_per_unit],
-            overageRateCentsPerGb = row[PricingTierConfigs.overage_rate_cents_per_gb],
-            errorOverageRateCentsPer1k = row[PricingTierConfigs.error_overage_rate_cents_per_1k],
-            replayOverageRateCentsPerGb = row[PricingTierConfigs.replay_overage_rate_cents_per_gb],
-            llmOverageRateCentsPer1k = row[PricingTierConfigs.llm_overage_rate_cents_per_1k],
-            oncallPerUserMonthlyCents = row[PricingTierConfigs.oncall_per_user_monthly_cents],
-            oncallPerUserYearlyCents = row[PricingTierConfigs.oncall_per_user_yearly_cents],
-            oncallEnabled = row[PricingTierConfigs.oncall_enabled],
-            maxAnalyticsSites = row[PricingTierConfigs.max_analytics_sites],
-            analyticsRetentionDays = row[PricingTierConfigs.analytics_retention_days],
-            monthlyAnalyticsPageviewLimit = row[PricingTierConfigs.monthly_analytics_pageview_limit],
-            analyticsPageviewOverageRateCentsPer100k =
-            row[PricingTierConfigs.analytics_pageview_overage_rate_cents_per_100k],
-            monthlyApmSpanLimit = row[PricingTierConfigs.monthly_apm_span_limit],
-            apmSpanOverageRateCentsPer1m = row[PricingTierConfigs.apm_span_overage_rate_cents_per_1m],
-            monthlyCustomMetricLimit = row[PricingTierConfigs.monthly_custom_metric_limit],
-            customMetricOverageRateCentsPer100k = row[PricingTierConfigs.custom_metric_overage_rate_cents_per_100k],
-            maxHosts = row[PricingTierConfigs.max_hosts],
-            profilingEnabled = row[PricingTierConfigs.profiling_enabled],
-            networkMonitoringEnabled = row[PricingTierConfigs.network_monitoring_enabled],
-            dbmEnabled = row[PricingTierConfigs.dbm_enabled],
-            debuggerEnabled = row[PricingTierConfigs.debugger_enabled],
-            k8sMonitoringEnabled = row[PricingTierConfigs.k8s_monitoring_enabled],
-            dataStreamsEnabled = row[PricingTierConfigs.data_streams_enabled],
-            sbomEnabled = row[PricingTierConfigs.sbom_enabled],
-            syntheticsEnabled = row[PricingTierConfigs.synthetics_enabled],
-            stripeBasePriceId = row[PricingTierConfigs.stripe_base_price_id],
-            stripeOveragePriceId = row[PricingTierConfigs.stripe_overage_price_id],
-            stripeYearlyBasePriceId = row[PricingTierConfigs.stripe_yearly_base_price_id],
-            stripeYearlyOveragePriceId = row[PricingTierConfigs.stripe_yearly_overage_price_id],
-            stripeOncallPriceId = row[PricingTierConfigs.stripe_oncall_price_id],
-            stripeOncallYearlyPriceId = row[PricingTierConfigs.stripe_oncall_yearly_price_id],
-            isCurrent = row[PricingTierConfigs.is_current]
-        )
+        return quotaTierFromRow(row)
     }
+
+    private fun pricingTierResourceId(id: Int?): String? =
+        id?.let {
+            PricingTierConfigs
+                .selectAll()
+                .where { PricingTierConfigs.id eq it }
+                .firstOrNull()
+                ?.get(PricingTierConfigs.resource_id)
+                ?.toString()
+        }
 
     private fun Instant.toLocalDateUtc(): kotlinx.datetime.LocalDate {
         return toLocalDateTime(TimeZone.UTC).date

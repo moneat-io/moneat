@@ -39,27 +39,26 @@ class ProjectService(
     }
 
     suspend fun getProjects(
-        userId: Int,
+        orgId: Int,
         demoEpochMs: Long? = null
     ): List<ProjectResponse> {
-        val orgIds = projectRepository.getOrganizationIdsForUser(userId)
-        if (orgIds.isEmpty()) return emptyList()
+        val projects = projectRepository.getProjectsForOrganizations(listOf(orgId))
 
-        val projects = projectRepository.getProjectsForOrganizations(orgIds)
-
-        return projects.map { (projectId, name, slug, framework, keys, dsn) ->
+        return projects.map { row ->
             val issueCount = projectRepository.getIssueCountForProject(
-                projectId,
-                queryHelper.getProjectRetentionDays(projectId),
+                row.projectId,
+                queryHelper.getProjectRetentionDays(row.projectId),
                 demoEpochMs
             )
             ProjectResponse(
-                id = projectId,
-                name = name,
-                slug = slug,
-                framework = framework,
-                keys = keys,
-                dsn = dsn,
+                id = row.resourceId,
+                name = row.name,
+                slug = row.slug,
+                serviceId = row.resourceId,
+                serviceName = row.serviceName,
+                framework = row.framework,
+                keys = row.keys,
+                dsn = row.dsn,
                 issueCount = issueCount
             )
         }
@@ -73,9 +72,11 @@ class ProjectService(
             null
         )
         return ProjectResponse(
-            id = row.projectId,
+            id = row.resourceId,
             name = row.name,
             slug = row.slug,
+            serviceId = row.resourceId,
+            serviceName = row.serviceName,
             framework = row.framework,
             keys = row.keys,
             dsn = row.dsn,
@@ -84,12 +85,9 @@ class ProjectService(
     }
 
     suspend fun createProject(
-        userId: Int,
+        orgId: Int,
         request: CreateProjectRequest
     ): ProjectResponse {
-        val orgId = pricingTierService.getPrimaryOrganizationIdForUser(userId)
-            ?: throw IllegalStateException("User has no organization")
-
         if (billingQuotaService.isEnforcementEnabled()) {
             val tier = pricingTierService.getEffectiveTierForOrganization(orgId).tier
             tier.maxProjects?.let { max ->

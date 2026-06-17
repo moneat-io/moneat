@@ -11,13 +11,13 @@ import {useContext} from 'react'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {KubernetesPodsSearchContext} from './monitoring.kubernetes.context'
-import {Badge} from '@/components/ui/badge'
-import {Card, CardContent} from '@/components/ui/card'
+import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {SectionCard} from '@/components/ui/section-card'
+import {EmptyState} from '@/components/ui/empty-state'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
 import {Box, Loader2} from 'lucide-react'
 import {useMemo} from 'react'
-import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/monitoring/kubernetes/')({
   component: KubernetesPods,
@@ -32,17 +32,18 @@ interface KubernetesPodResource {
   collectedAt?: string
 }
 
-function statusColor(status: string) {
+// Pod phase mapped onto the shared status language.
+function statusVariant(status: string): BadgeProps['variant'] {
   switch (status) {
     case 'Running':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
+      return 'success'
     case 'Pending':
-      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20'
+      return 'warning'
     case 'Failed':
     case 'CrashLoopBackOff':
-      return 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20'
+      return 'danger'
     default:
-      return ''
+      return 'neutral'
   }
 }
 
@@ -54,7 +55,7 @@ function KubernetesPods() {
     queryFn: () => api.get<{resources?: KubernetesPodResource[]}>('/v1/infra/k8s-resources?resource_type=Pod&limit=100'),
   })
 
-  const resources: KubernetesPodResource[] = data?.resources ?? []
+  const resources: KubernetesPodResource[] = useMemo(() => data?.resources ?? [], [data?.resources])
 
   const filtered = useMemo(() => {
     if (!searchQuery) return resources
@@ -80,30 +81,24 @@ function KubernetesPods() {
 
   if (resources.length === 0) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-16 text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
-            <Box className="h-8 w-8 text-blue-500" />
-          </div>
-          <h3 className="text-lg font-semibold mb-2">No pods found</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto">
-            Kubernetes pod data will appear here once collected by the agent.
-          </p>
-        </CardContent>
-      </Card>
+      <EmptyState
+        icon={Box}
+        title="No pods found"
+        description="Kubernetes pod data will appear here once collected by the agent."
+      />
     )
   }
 
   return (
     <div className="space-y-4">
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No pods match your search</p>
-          <p className="text-sm mt-1">Try adjusting your search query.</p>
-        </div>
+        <EmptyState
+          icon={Box}
+          title="No pods match your search"
+          description="Try adjusting your search query."
+        />
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
-          <CardContent className="p-0">
+        <SectionCard title="Pods" icon={Box} iconTone="info" count={filtered.length} flushBody>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent bg-muted/30">
@@ -130,11 +125,11 @@ function KubernetesPods() {
                       </TooltipProvider>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="text-xs font-normal">{r.namespace}</Badge>
+                      <Badge variant="neutral" size="sm">{r.namespace}</Badge>
                     </TableCell>
                     <TableCell className="text-sm">{r.clusterName}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className={cn('text-xs', statusColor(r.status ?? ''))}>
+                      <Badge variant={statusVariant(r.status ?? '')} size="sm">
                         {r.status || 'Unknown'}
                       </Badge>
                     </TableCell>
@@ -145,8 +140,7 @@ function KubernetesPods() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+        </SectionCard>
       )}
     </div>
   )

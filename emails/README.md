@@ -45,7 +45,7 @@ Sends notifications when new errors are detected.
 - `{{ issueMessage }}` - Full error message
 - `{{ issueCount }}` - Number of occurrences
 - `{{ issueUrl }}` - Link to issue in dashboard
-- `{{ projectName }}` - Project name
+- `{{ projectName }}` - Service name
 - `{{ environment }}` - Environment (production, staging, etc)
 - `{{ timestamp }}` - When error first occurred
 - `{{ stackTrace }}` - Stack trace

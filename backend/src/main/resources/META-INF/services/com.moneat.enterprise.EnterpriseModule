@@ -1,3 +1,0 @@
-com.moneat.monitoring.MonitoringModule
-com.moneat.analytics.AnalyticsModule
-com.moneat.datadog.DatadogModule

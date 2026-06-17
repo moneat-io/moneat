@@ -33,7 +33,7 @@ describe('Analytics API', () => {
   describe('getAnalyticsOverview', () => {
     it('fetches analytics overview for a project', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({
             uniqueVisitors: 500,
             totalPageviews: 1200,
@@ -44,7 +44,7 @@ describe('Analytics API', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.uniqueVisitors).toBe(500)
       expect(result.totalPageviews).toBe(1200)
       expect(result.bounceRate).toBe(45.5)
@@ -54,7 +54,7 @@ describe('Analytics API', () => {
 
     it('normalizes snake_case response fields', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/overview`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/overview`, () => {
           return HttpResponse.json({
             visitors: 100,
             pageviews: 300,
@@ -65,14 +65,14 @@ describe('Analytics API', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(1)
+      const result = await api.getAnalyticsOverview('svc-1')
       expect(result.uniqueVisitors).toBe(100)
       expect(result.totalPageviews).toBe(300)
     })
 
     it('passes analytics query params', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/2/overview`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-2/overview`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('period')).toBe('7d')
           expect(url.searchParams.get('comparison')).toBe('previous_period')
@@ -91,12 +91,38 @@ describe('Analytics API', () => {
         })
       )
 
-      const result = await api.getAnalyticsOverview(2, {
+      const result = await api.getAnalyticsOverview('svc-2', {
         period: '7d',
         comparison: 'previous_period',
       })
       expect(result.comparison).toBeDefined()
       expect(result.comparison!.uniqueVisitors).toBe(40)
+    })
+
+    it('fetches organization analytics overview with service filters', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/overview`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('period')).toBe('7d')
+          expect(url.searchParams.getAll('services')).toEqual(['api', 'worker'])
+          expect(url.searchParams.getAll('serviceIds')).toEqual(['service-1', 'service-2'])
+          return HttpResponse.json({
+            uniqueVisitors: 25,
+            totalPageviews: 80,
+            bounceRate: 10,
+            avgVisitDuration: 30,
+            viewsPerVisit: 3.2,
+          })
+        })
+      )
+
+      const result = await api.getAnalyticsOverview(null, {
+        period: '7d',
+        services: ['api', 'worker'],
+        serviceIds: ['service-1', 'service-2'],
+      })
+      expect(result.uniqueVisitors).toBe(25)
+      expect(result.totalPageviews).toBe(80)
     })
   })
 
@@ -105,7 +131,7 @@ describe('Analytics API', () => {
   describe('getAnalyticsTimeseries', () => {
     it('fetches timeseries data', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/timeseries`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/timeseries`, () => {
           return HttpResponse.json([
             { timestamp: '2024-01-01', visitors: 10, pageviews: 20 },
             { timestamp: '2024-01-02', visitors: 15, pageviews: 30 },
@@ -113,7 +139,7 @@ describe('Analytics API', () => {
         })
       )
 
-      const result = await api.getAnalyticsTimeseries(1)
+      const result = await api.getAnalyticsTimeseries('svc-1')
       expect(result).toHaveLength(2)
       expect(result[0].timestamp).toBe('2024-01-01')
       expect(result[0].visitors).toBe(10)
@@ -122,14 +148,14 @@ describe('Analytics API', () => {
 
     it('normalizes date field to timestamp', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/timeseries`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/timeseries`, () => {
           return HttpResponse.json([
             { date: '2024-06-01', visitors: 5, pageviews: 8 },
           ])
         })
       )
 
-      const result = await api.getAnalyticsTimeseries(1)
+      const result = await api.getAnalyticsTimeseries('svc-1')
       expect(result[0].timestamp).toBe('2024-06-01')
     })
   })
@@ -144,25 +170,25 @@ describe('Analytics API', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/pages`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/pages`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsPages(1)
+      const result = await api.getAnalyticsPages('svc-1')
       expect(result).toEqual(mockData)
     })
 
     it('handles wrapped response format', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/pages`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/pages`, () => {
           return HttpResponse.json({
             results: [{ name: '/home', visitors: 10, pageviews: 20 }],
           })
         })
       )
 
-      const result = await api.getAnalyticsPages(1)
+      const result = await api.getAnalyticsPages('svc-1')
       expect(result).toHaveLength(1)
       expect(result[0].name).toBe('/home')
     })
@@ -175,12 +201,12 @@ describe('Analytics API', () => {
       const mockData = [{ name: '/landing', visitors: 80, pageviews: 80 }]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/entry-pages`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/entry-pages`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsEntryPages(1)
+      const result = await api.getAnalyticsEntryPages('svc-1')
       expect(result).toEqual(mockData)
     })
   })
@@ -192,12 +218,12 @@ describe('Analytics API', () => {
       const mockData = [{ name: '/checkout', visitors: 30, pageviews: 30 }]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/exit-pages`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/exit-pages`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsExitPages(1)
+      const result = await api.getAnalyticsExitPages('svc-1')
       expect(result).toEqual(mockData)
     })
   })
@@ -212,12 +238,12 @@ describe('Analytics API', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/sources`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/sources`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsSources(1)
+      const result = await api.getAnalyticsSources('svc-1')
       expect(result).toEqual(mockData)
     })
   })
@@ -231,12 +257,12 @@ describe('Analytics API', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/utm/campaign`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/utm/campaign`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsUtm(1, 'campaign')
+      const result = await api.getAnalyticsUtm('svc-1', 'campaign')
       expect(result).toEqual(mockData)
     })
   })
@@ -250,12 +276,12 @@ describe('Analytics API', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/locations`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/locations`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsLocations(1)
+      const result = await api.getAnalyticsLocations('svc-1')
       expect(result).toEqual(mockData)
     })
   })
@@ -270,27 +296,27 @@ describe('Analytics API', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/devices`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/devices`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('type')).toBe('browser')
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsDevices(1, 'browser')
+      const result = await api.getAnalyticsDevices('svc-1', 'browser')
       expect(result).toEqual(mockData)
     })
 
     it('fetches OS device breakdown', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/devices`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/devices`, ({ request }) => {
           const url = new URL(request.url)
           expect(url.searchParams.get('type')).toBe('os')
           return HttpResponse.json([{ name: 'macOS', visitors: 150, pageviews: 300 }])
         })
       )
 
-      const result = await api.getAnalyticsDevices(1, 'os')
+      const result = await api.getAnalyticsDevices('svc-1', 'os')
       expect(result).toHaveLength(1)
       expect(result[0].name).toBe('macOS')
     })
@@ -305,12 +331,12 @@ describe('Analytics API', () => {
       ]
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/events`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/events`, () => {
           return HttpResponse.json(mockData)
         })
       )
 
-      const result = await api.getAnalyticsEvents(1)
+      const result = await api.getAnalyticsEvents('svc-1')
       expect(result).toEqual(mockData)
     })
   })
@@ -320,23 +346,23 @@ describe('Analytics API', () => {
   describe('getAnalyticsRealtime', () => {
     it('fetches realtime visitor count', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/realtime`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/realtime`, () => {
           return HttpResponse.json({ currentVisitors: 42 })
         })
       )
 
-      const result = await api.getAnalyticsRealtime(1)
+      const result = await api.getAnalyticsRealtime('svc-1')
       expect(result.currentVisitors).toBe(42)
     })
 
     it('normalizes visitors field to currentVisitors', async () => {
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/realtime`, () => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/realtime`, () => {
           return HttpResponse.json({ visitors: 7 })
         })
       )
 
-      const result = await api.getAnalyticsRealtime(1)
+      const result = await api.getAnalyticsRealtime('svc-1')
       expect(result.currentVisitors).toBe(7)
     })
   })
@@ -347,13 +373,14 @@ describe('Analytics API', () => {
     it('fetches funnel data with steps', async () => {
       const mockFunnel = {
         steps: [
-          { name: '/home', visitors: 100, dropoff: 0 },
-          { name: '/signup', visitors: 60, dropoff: 40 },
+          { name: '/home', visitors: 100, dropoff: 0, conversionRate: 100 },
+          { name: '/signup', visitors: 60, dropoff: 40, conversionRate: 60 },
         ],
+        overallConversion: 60,
       }
 
       server.use(
-        http.get(`${API_BASE}/v1/analytics/1/funnel`, ({ request }) => {
+        http.get(`${API_BASE}/v1/analytics/svc-1/funnel`, ({ request }) => {
           const url = new URL(request.url)
           const steps = url.searchParams.getAll('steps[]')
           expect(steps).toEqual(['/home', '/signup'])
@@ -361,8 +388,81 @@ describe('Analytics API', () => {
         })
       )
 
-      const result = await api.getAnalyticsFunnel(1, ['/home', '/signup'])
+      const result = await api.getAnalyticsFunnel('svc-1', ['/home', '/signup'])
       expect(result.steps).toHaveLength(2)
+    })
+
+    it('passes product funnel options', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/svc-1/funnel`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('source')).toBe('server')
+          expect(url.searchParams.get('group_by')).toBe('user_id')
+          expect(url.searchParams.getAll('steps[]')).toEqual(['signup.completed', 'recording.started'])
+          return HttpResponse.json({ steps: [], overallConversion: 0 })
+        })
+      )
+
+      await api.getAnalyticsFunnel(
+        'svc-1',
+        ['signup.completed', 'recording.started'],
+        { period: '30d' },
+        { source: 'server', groupBy: 'user_id' }
+      )
+    })
+
+    it('fetches organization funnel data with service filters', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/funnel`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('source')).toBe('server')
+          expect(url.searchParams.get('group_by')).toBe('user_id')
+          expect(url.searchParams.getAll('services')).toEqual(['api'])
+          expect(url.searchParams.getAll('steps[]')).toEqual(['signup.completed', 'recording.started'])
+          return HttpResponse.json({ steps: [], overallConversion: 0 })
+        })
+      )
+
+      await api.getAnalyticsFunnel(
+        undefined,
+        ['signup.completed', 'recording.started'],
+        { services: ['api'] },
+        { source: 'server', groupBy: 'user_id' }
+      )
+    })
+  })
+
+  // ──── getAnalyticsRetention ────
+
+  describe('getAnalyticsRetention', () => {
+    it('fetches retention cohorts', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/analytics/svc-1/retention`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('start_event')).toBe('signup.completed')
+          expect(url.searchParams.get('return_event')).toBe('recording.started')
+          expect(url.searchParams.getAll('periods[]')).toEqual(['1', '7', '30'])
+          return HttpResponse.json({
+            startEvent: 'signup.completed',
+            returnEvent: 'recording.started',
+            cohorts: [
+              {
+                cohortWeek: '2026-01-05 00:00:00',
+                users: 10,
+                periods: [{ days: 7, retainedUsers: 4, retentionRate: 40 }],
+              },
+            ],
+          })
+        })
+      )
+
+      const result = await api.getAnalyticsRetention('svc-1', {
+        period: '30d',
+        startEvent: 'signup.completed',
+        returnEvent: 'recording.started',
+        periods: [1, 7, 30],
+      })
+      expect(result.cohorts[0].periods[0].retentionRate).toBe(40)
     })
   })
 })

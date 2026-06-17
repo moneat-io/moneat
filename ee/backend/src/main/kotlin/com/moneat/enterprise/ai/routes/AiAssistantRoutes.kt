@@ -4,20 +4,19 @@
 
 package com.moneat.enterprise.ai.routes
 
+import com.moneat.auth.requireCurrentOrg
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
 import com.moneat.enterprise.ai.models.AiAssistantStreamRequest
 import com.moneat.enterprise.ai.models.AssistantDoneEvent
 import com.moneat.enterprise.ai.models.AssistantErrorEvent
 import com.moneat.enterprise.ai.services.AiAssistantService
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondTextWriter
@@ -43,8 +42,8 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
     authenticate("auth-jwt") {
         route("/v1/ai/assistant") {
             post("/stream") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 val userDetails = getUserDetails(userId)
                 if (!userDetails.isAdmin) {
@@ -55,18 +54,19 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
                     return@post
                 }
 
-                val orgId = getAssistantOrgId(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
+                val orgId = context.orgId
 
                 val request = call.receive<AiAssistantStreamRequest>()
                 if (request.message.isBlank()) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Message cannot be empty"))
                     return@post
                 }
-                val projectId = resolveAssistantProjectId(orgId, request.projectId)
+                val projectResolution = resolveAssistantProjectId(orgId, request.projectId)
+                if (projectResolution.errorStatus != null) {
+                    call.respond(projectResolution.errorStatus, mapOf("error" to projectResolution.errorMessage))
+                    return@post
+                }
+                val projectId = projectResolution.projectId
 
                 call.response.headers.append(HttpHeaders.CacheControl, "no-cache")
                 call.response.headers.append(HttpHeaders.Connection, "keep-alive")
@@ -103,8 +103,8 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
             }
 
             post("/confirm") {
-                val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
+                val context = call.requireCurrentOrg() ?: return@post
+                val userId = context.userId
 
                 if (!getUserDetails(userId).isAdmin) {
                     call.respond(
@@ -114,11 +114,7 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
                     return@post
                 }
 
-                val orgId = getAssistantOrgId(userId)
-                if (orgId == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No organization found"))
-                    return@post
-                }
+                val orgId = context.orgId
 
                 val request = call.receive<AiAssistantConfirmRequest>()
                 if (request.requestId.isBlank()) {
@@ -149,22 +145,48 @@ fun Route.aiAssistantRoutes(service: AiAssistantService) {
     }
 }
 
-private fun resolveAssistantProjectId(orgId: Int, requestedProjectId: Long?): Long? {
-    return transaction {
-        val requestedValid = requestedProjectId?.let { projectId ->
+private fun resolveAssistantProjectId(orgId: Int, requestedProjectId: String?): AssistantProjectResolution {
+    val normalized = requestedProjectId?.trim()?.takeIf { it.isNotBlank() }
+    if (normalized != null) {
+        val resourceId =
+            normalized.toUuidOrNull()
+                ?: return AssistantProjectResolution.badRequest("projectId must be a UUID")
+
+        val projectId = transaction {
             Projects
                 .selectAll()
-                .where { (Projects.id eq projectId) and (Projects.organization_id eq orgId) }
+                .where { (Projects.resource_id eq resourceId) and (Projects.organization_id eq orgId) }
                 .firstOrNull()
                 ?.get(Projects.id)
         }
 
-        requestedValid ?: Projects
-            .selectAll()
-            .where { Projects.organization_id eq orgId }
-            .orderBy(Projects.id to SortOrder.ASC)
-            .firstOrNull()
-            ?.get(Projects.id)
+        return projectId?.let { AssistantProjectResolution(projectId = it) }
+            ?: AssistantProjectResolution.notFound("Project not found")
+    }
+
+    return AssistantProjectResolution(
+        projectId = transaction {
+            Projects
+                .selectAll()
+                .where { Projects.organization_id eq orgId }
+                .orderBy(Projects.id to SortOrder.ASC)
+                .firstOrNull()
+                ?.get(Projects.id)
+        }
+    )
+}
+
+private data class AssistantProjectResolution(
+    val projectId: Long? = null,
+    val errorStatus: HttpStatusCode? = null,
+    val errorMessage: String = ""
+) {
+    companion object {
+        fun badRequest(message: String): AssistantProjectResolution =
+            AssistantProjectResolution(errorStatus = HttpStatusCode.BadRequest, errorMessage = message)
+
+        fun notFound(message: String): AssistantProjectResolution =
+            AssistantProjectResolution(errorStatus = HttpStatusCode.NotFound, errorMessage = message)
     }
 }
 
@@ -180,15 +202,5 @@ private fun getUserDetails(userId: Int): AssistantUserDetails {
             isAdmin = row?.get(Users.is_admin) ?: false,
             timezone = row?.get(Users.timezone),
         )
-    }
-}
-
-private fun getAssistantOrgId(userId: Int): Int? {
-    return transaction {
-        Memberships
-            .selectAll()
-            .where { Memberships.user_id eq userId }
-            .firstOrNull()
-            ?.get(Memberships.organization_id)
     }
 }

@@ -8,6 +8,7 @@
 
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {SourceBadge} from '@/components/apm/SourceBadge'
 
 export interface MergedContainer {
   id: string
@@ -21,11 +22,12 @@ export interface MergedContainer {
   memLimit: number
   netRxBytes: number
   netTxBytes: number
-  source: 'datadog-agent'
+  source?: string | null
   timestamp?: string
 }
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -43,12 +45,13 @@ import {
   Boxes,
 } from 'lucide-react'
 import {useState, useMemo} from 'react'
-import {cn} from '@/lib/utils'
-import {formatRelativeTime} from '@/lib/utils'
+import {cn, formatRelativeTime} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
+import {containerIconClassName, stateFilterCount, type StateFilter} from './ContainerList.helpers'
 
 function parseTimestamp(ts: string | undefined): number {
   if (!ts) return 0
-  const parsed = Date.parse(ts)
+  const parsed = parseDate(ts).getTime()
   return isNaN(parsed) ? 0 : parsed
 }
 
@@ -63,57 +66,91 @@ function formatBytes(bytes: number): string {
 }
 
 function getCpuColor(value: number): string {
-  if (value >= 80) return 'text-red-500'
-  if (value >= 50) return 'text-orange-500'
-  if (value >= 25) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (value >= 80) return 'text-danger-fg'
+  if (value >= 50) return 'text-chart-6'
+  if (value >= 25) return 'text-warning-fg'
+  return 'text-success-fg'
 }
 
 function getCpuBarColor(value: number): string {
-  if (value >= 80) return 'bg-red-500'
-  if (value >= 50) return 'bg-orange-500'
-  if (value >= 25) return 'bg-yellow-500'
-  return 'bg-emerald-500'
+  if (value >= 80) return 'bg-danger-solid'
+  if (value >= 50) return 'bg-chart-6'
+  if (value >= 25) return 'bg-warning-solid'
+  return 'bg-success-solid'
 }
 
 function getMemColor(percent: number): string {
-  if (percent >= 90) return 'text-red-500'
-  if (percent >= 75) return 'text-orange-500'
-  if (percent >= 50) return 'text-yellow-500'
-  return 'text-emerald-500'
+  if (percent >= 90) return 'text-danger-fg'
+  if (percent >= 75) return 'text-chart-6'
+  if (percent >= 50) return 'text-warning-fg'
+  return 'text-success-fg'
 }
 
 function getMemBarColor(percent: number): string {
-  if (percent >= 90) return 'bg-red-500'
-  if (percent >= 75) return 'bg-orange-500'
-  if (percent >= 50) return 'bg-yellow-500'
-  return 'bg-emerald-500'
+  if (percent >= 90) return 'bg-danger-solid'
+  if (percent >= 75) return 'bg-chart-6'
+  if (percent >= 50) return 'bg-warning-solid'
+  return 'bg-success-solid'
 }
-
-type StateFilter = 'all' | 'running' | 'stopped'
 
 function StateIcon({state}: {state: string}) {
   switch (state) {
     case 'running':
-      return <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+      return <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
     case 'exited':
     case 'dead':
-      return <CircleX className="h-3.5 w-3.5 text-red-500" />
+      return <CircleX className="h-3.5 w-3.5 text-danger-fg" />
     default:
-      return <CirclePause className="h-3.5 w-3.5 text-yellow-500" />
+      return <CirclePause className="h-3.5 w-3.5 text-warning-fg" />
   }
 }
 
-function stateBadgeClasses(state: string): string {
+function stateBadgeVariant(state: string): 'success' | 'danger' | 'warning' {
   switch (state) {
     case 'running':
-      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
+      return 'success'
     case 'exited':
     case 'dead':
-      return 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20 hover:bg-red-500/20'
+      return 'danger'
     default:
-      return 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/20 hover:bg-yellow-500/20'
+      return 'warning'
   }
+}
+
+function ContainerLoadingState() {
+  return (
+    <div className="flex items-center justify-center py-16">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="text-muted-foreground text-sm">Loading containers...</p>
+      </div>
+    </div>
+  )
+}
+
+function NoContainersState() {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="py-16 text-center">
+        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+          <Box className="h-10 w-10" />
+        </div>
+        <h3 className="text-xl font-semibold mb-2">No containers found</h3>
+        <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
+          Containers will appear when a monitoring agent with Docker socket access sends container data.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function NoContainerMatchesState() {
+  return (
+    <div className="text-center py-12 text-muted-foreground">
+      <p className="font-medium">No containers match your filters</p>
+      <p className="text-sm mt-1">Try adjusting your search or state filter.</p>
+    </div>
+  )
 }
 
 export function ContainerList() {
@@ -125,7 +162,7 @@ export function ContainerList() {
     queryFn: async () => {
       const res = await api.getContainers({limit: 200})
       const mapped = res.containers.map((c) => ({
-        id: `dd-${c.host}-${c.containerId}`,
+        id: `${c.source ?? 'container'}-${c.host}-${c.containerId}`,
         host: c.host,
         containerId: c.containerId,
         name: c.name,
@@ -136,7 +173,7 @@ export function ContainerList() {
         memLimit: c.memLimit,
         netRxBytes: c.netRxBytes,
         netTxBytes: c.netTxBytes,
-        source: 'datadog-agent' as const,
+        source: c.source,
         timestamp: c.timestamp,
       } satisfies MergedContainer))
       // Deduplicate by (host, containerId), keeping the most recent entry
@@ -154,7 +191,7 @@ export function ContainerList() {
     refetchInterval: 10000,
   })
 
-  const containers: MergedContainer[] = containerData ?? []
+  const containers: MergedContainer[] = useMemo(() => containerData ?? [], [containerData])
 
   const filtered = useMemo(() => {
     let result = containers
@@ -188,31 +225,31 @@ export function ContainerList() {
         {!isLoading && containers.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <Boxes className="h-3.5 w-3.5 text-blue-500" />
+              <Boxes className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{containers.length}</span>
               <span className="text-muted-foreground text-xs">total</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
               <span className="font-semibold tabular-nums">{runningCount}</span>
               <span className="text-muted-foreground text-xs">running</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CircleX className="h-3.5 w-3.5 text-red-500" />
+              <CircleX className="h-3.5 w-3.5 text-danger-fg" />
               <span className="font-semibold tabular-nums">{stoppedCount}</span>
               <span className="text-muted-foreground text-xs">stopped</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5 text-violet-500" />
+              <Cpu className="h-3.5 w-3.5 text-chart-1" />
               <span className="font-semibold tabular-nums">{totalCpu.toFixed(1)}%</span>
               <span className="text-muted-foreground text-xs">CPU</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <MemoryStick className="h-3.5 w-3.5 text-sky-500" />
+              <MemoryStick className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{formatBytes(totalMem)}</span>
               <span className="text-muted-foreground text-xs">memory</span>
             </div>
@@ -238,20 +275,16 @@ export function ContainerList() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 stateFilter === f
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              {f === 'running' && <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />}
-              {f === 'stopped' && <div className="h-1.5 w-1.5 rounded-full bg-red-500" />}
-              {f === 'all' && <div className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+              {f === 'running' && <StatusDot tone="success" size="sm" />}
+              {f === 'stopped' && <StatusDot tone="danger" size="sm" />}
+              {f === 'all' && <StatusDot tone="neutral" size="sm" />}
               <span className="capitalize">{f}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">
-                {f === 'all'
-                  ? containers.length
-                  : f === 'running'
-                    ? runningCount
-                    : stoppedCount}
+                {stateFilterCount(f, containers.length, runningCount, stoppedCount)}
               </span>
             </button>
           ))}
@@ -264,32 +297,11 @@ export function ContainerList() {
       </div>
 
       {/* Table */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-muted-foreground text-sm">Loading containers...</p>
-          </div>
-        </div>
-      ) : containers.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10">
-              <Box className="h-10 w-10 text-blue-500" />
-            </div>
-            <h3 className="text-xl font-semibold mb-2">No containers found</h3>
-            <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
-              Containers will appear when a monitoring agent with Docker socket access sends container data.
-            </p>
-          </CardContent>
-        </Card>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No containers match your filters</p>
-          <p className="text-sm mt-1">Try adjusting your search or state filter.</p>
-        </div>
-      ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+      {isLoading && <ContainerLoadingState />}
+      {!isLoading && containers.length === 0 && <NoContainersState />}
+      {!isLoading && containers.length > 0 && filtered.length === 0 && <NoContainerMatchesState />}
+      {!isLoading && filtered.length > 0 && (
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[980px]">
               <TableHeader>
@@ -317,11 +329,7 @@ export function ContainerList() {
                           <div
                             className={cn(
                               'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                              c.state === 'running'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                : c.state === 'exited' || c.state === 'dead'
-                                  ? 'bg-red-500/10 text-red-600 dark:text-red-400'
-                                  : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                              containerIconClassName(c.state)
                             )}
                           >
                             <Box className="h-4 w-4" />
@@ -348,8 +356,8 @@ export function ContainerList() {
 
                       <TableCell>
                         <Badge
-                          variant="secondary"
-                          className={cn('text-xs gap-1.5', stateBadgeClasses(c.state))}
+                          variant={stateBadgeVariant(c.state)}
+                          className="text-xs gap-1.5"
                         >
                           <StateIcon state={c.state} />
                           {c.state}
@@ -378,15 +386,7 @@ export function ContainerList() {
                       </TableCell>
 
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-[10px] font-medium',
-                            'border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5'
-                          )}
-                        >
-                          Datadog
-                        </Badge>
+                        <SourceBadge source={c.source} className="max-w-[100px] truncate" />
                       </TableCell>
 
                       <TableCell>
@@ -424,11 +424,11 @@ export function ContainerList() {
 
                       <TableCell>
                         <div className="text-xs font-medium tabular-nums leading-5">
-                          <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                          <div className="flex items-center gap-1 text-chart-3">
                             <ArrowDownToLine className="h-3 w-3" />
                             {formatBytes(c.netRxBytes)}
                           </div>
-                          <div className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                          <div className="flex items-center gap-1 text-chart-6">
                             <ArrowUpFromLine className="h-3 w-3" />
                             {formatBytes(c.netTxBytes)}
                           </div>

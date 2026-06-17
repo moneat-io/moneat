@@ -35,7 +35,7 @@ export function BrowserWindowContainer({
     displayUrl.length > 80 ? displayUrl.slice(0, 77) + '...' : displayUrl
 
   return (
-    <div className={cn('rounded-xl border bg-card shadow-sm overflow-hidden', className)}>
+    <div className={cn('rounded-xl border bg-card overflow-hidden', className)}>
       {/* Browser chrome / title bar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/50">
         {/* Traffic light dots */}
@@ -47,7 +47,7 @@ export function BrowserWindowContainer({
 
         {/* Address bar */}
         <div className="flex-1 flex items-center gap-1.5 mx-2 px-3 py-1 rounded-md bg-background border text-xs text-muted-foreground min-w-0">
-          <Lock className="h-3 w-3 shrink-0 text-green-600 dark:text-green-400" />
+          <Lock className="h-3 w-3 shrink-0 text-success-fg" />
           <Globe className="h-3 w-3 shrink-0 opacity-50" />
           <span className="truncate select-all" title={url}>
             {truncatedUrl}

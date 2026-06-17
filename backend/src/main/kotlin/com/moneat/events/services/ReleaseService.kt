@@ -24,6 +24,7 @@ import com.moneat.shared.models.FileBlobs
 import com.moneat.shared.models.IssueStatuses
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.ProjectDebugFiles
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.ReleaseFiles
 import com.moneat.shared.models.Releases
@@ -31,11 +32,13 @@ import com.moneat.shared.services.CacheService
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import mu.KotlinLogging
+import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.plus
+import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -45,14 +48,33 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import com.moneat.utils.suspendRunCatching
-import java.util.*
+import java.util.UUID
+
+/**
+ * A stored project debug information file (e.g. an assembled ProGuard mapping).
+ */
+data class AssembledDif(
+    val resourceId: String,
+    val debugId: String?,
+    val objectName: String,
+    val checksum: String,
+    val size: Long,
+    val dateCreated: String
+)
 
 class ReleaseService {
     private val dateFormatter = DateTimeFormatter.ISO_INSTANT
     private val logger = KotlinLogging.logger {}
+    private val proguardUuidRegex =
+        Regex(
+            "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            RegexOption.IGNORE_CASE
+        )
 
     companion object {
         private const val IO_BUFFER_SIZE = 8192
+        private const val PROGUARD_FILE_TYPE = "proguard"
+        private const val DEFAULT_DIF_NAME = "proguard-mapping"
     }
 
     /**
@@ -146,10 +168,10 @@ class ReleaseService {
                     it[storage_path] = storageKey
                     it[file_type] = if (fileName.endsWith(".map")) "source_map" else "source_file"
                     it[ReleaseFiles.created_at] = createdAt
-                }[ReleaseFiles.id]
+                }[ReleaseFiles.resourceId]
 
             SourceMapFileResponse(
-                id = fileId,
+                id = fileId.toString(),
                 name = fileName,
                 dateCreated = formatTimestamp(createdAt)
             )
@@ -284,7 +306,7 @@ class ReleaseService {
                 .orderBy(ReleaseFiles.created_at, SortOrder.DESC)
                 .map { row ->
                     SourceMapFileResponse(
-                        id = row[ReleaseFiles.id],
+                        id = row[ReleaseFiles.resourceId].toString(),
                         name = row[ReleaseFiles.name],
                         dateCreated = formatTimestamp(row[ReleaseFiles.created_at])
                     )
@@ -510,6 +532,125 @@ class ReleaseService {
                 }
             }
         }
+    }
+
+    /**
+     * Get an already-assembled debug file for (project, checksum), or null.
+     */
+    fun getProjectDif(
+        projectId: Long,
+        checksum: String
+    ): AssembledDif? {
+        return transaction {
+            ProjectDebugFiles
+                .selectAll()
+                .where {
+                    (ProjectDebugFiles.project_id eq projectId) and
+                        (ProjectDebugFiles.checksum eq checksum)
+                }
+                .firstOrNull()
+                ?.let { rowToDif(it) }
+        }
+    }
+
+    /**
+     * List debug files for a project, optionally filtered by checksums and/or debug ids.
+     * Used by sentry-cli to skip difs that are already uploaded.
+     */
+    fun listProjectDifs(
+        projectId: Long,
+        checksums: Set<String> = emptySet(),
+        debugIds: Set<String> = emptySet()
+    ): List<AssembledDif> {
+        return transaction {
+            ProjectDebugFiles
+                .selectAll()
+                .where { ProjectDebugFiles.project_id eq projectId }
+                .map { rowToDif(it) }
+                .filter { dif ->
+                    (checksums.isEmpty() || dif.checksum in checksums) &&
+                        (debugIds.isEmpty() || dif.debugId in debugIds)
+                }
+        }
+    }
+
+    /**
+     * Assemble previously-uploaded chunks into a project debug file (e.g. a ProGuard mapping)
+     * and record it, keyed by the file [checksum]. Idempotent per (project, checksum).
+     */
+    fun assembleProjectDif(
+        projectId: Long,
+        checksum: String,
+        chunks: List<String>,
+        name: String?,
+        debugId: String?
+    ): AssembledDif {
+        getProjectDif(projectId, checksum)?.let { return it }
+
+        val storageKey = "difs/$projectId/$checksum"
+        val storage = StorageConfig.provider
+
+        // Concatenate the (already content-addressed) chunks in order.
+        // copyTo returns the bytes written, giving us the assembled file size.
+        var size = 0L
+        storage.openOutputStream(storageKey).use { out ->
+            for (chunk in chunks) {
+                storage.openInputStream("chunks/$chunk")?.use { size += it.copyTo(out) }
+            }
+        }
+
+        val resolvedDebugId = debugId ?: extractDebugId(name)
+        val objectName = name ?: DEFAULT_DIF_NAME
+        val createdAt = System.currentTimeMillis()
+
+        val resourceId =
+            try {
+                transaction {
+                    ProjectDebugFiles.insert {
+                        it[ProjectDebugFiles.project_id] = projectId
+                        it[ProjectDebugFiles.debug_id] = resolvedDebugId
+                        it[ProjectDebugFiles.checksum] = checksum
+                        it[ProjectDebugFiles.file_type] = PROGUARD_FILE_TYPE
+                        it[ProjectDebugFiles.object_name] = objectName
+                        it[ProjectDebugFiles.size] = size
+                        it[ProjectDebugFiles.storage_path] = storageKey
+                        it[ProjectDebugFiles.created_at] = createdAt
+                    }[ProjectDebugFiles.resourceId]
+                }
+            } catch (e: ExposedSQLException) {
+                // A concurrent request assembled the same (project, checksum) first; the unique
+                // index rejected this insert, so treat it as an idempotent success.
+                logger.debug(e) { "Concurrent DIF assemble for project $projectId; using existing row" }
+                return getProjectDif(projectId, checksum) ?: throw e
+            }
+
+        return AssembledDif(
+            resourceId = resourceId.toString(),
+            debugId = resolvedDebugId,
+            objectName = objectName,
+            checksum = checksum,
+            size = size,
+            dateCreated = formatTimestamp(createdAt)
+        )
+    }
+
+    private fun rowToDif(row: ResultRow): AssembledDif =
+        AssembledDif(
+            resourceId = row[ProjectDebugFiles.resourceId].toString(),
+            debugId = row[ProjectDebugFiles.debug_id],
+            objectName = row[ProjectDebugFiles.object_name] ?: DEFAULT_DIF_NAME,
+            checksum = row[ProjectDebugFiles.checksum],
+            size = row[ProjectDebugFiles.size],
+            dateCreated = formatTimestamp(row[ProjectDebugFiles.created_at])
+        )
+
+    /**
+     * Extract the ProGuard UUID from a DIF file name such as "proguard/<uuid>.txt".
+     */
+    private fun extractDebugId(name: String?): String? {
+        if (name.isNullOrBlank()) return null
+        val base = name.substringAfterLast('/').substringBeforeLast('.')
+        return base.takeIf { it.matches(proguardUuidRegex) }
     }
 
     /**

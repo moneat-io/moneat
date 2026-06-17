@@ -1,78 +1,77 @@
 import {useState} from 'react'
-import {ThumbsUp, ThumbsDown} from 'lucide-react'
 import * as Sentry from '@sentry/react'
-import {Button} from '@/components/ui/button'
-import {Textarea} from '@/components/ui/textarea'
-import {Label} from '@/components/ui/label'
 
 type FeedbackState = 'idle' | 'thumbs-up' | 'thumbs-down' | 'submitted'
 
-export function DocsFeedback({slug}: {slug: string}) {
+type DocsFeedbackProps = Readonly<{
+  slug: string
+}>
+
+export function DocsFeedback({slug}: DocsFeedbackProps) {
   const [state, setState] = useState<FeedbackState>('idle')
   const [comment, setComment] = useState('')
-
-  const handleThumbsDown = () => setState('thumbs-down')
 
   const handleSubmitFeedback = () => {
     Sentry.captureFeedback({
       message: comment || 'Thumbs down (no comment)',
       tags: {slug, type: 'docs-feedback', rating: 'negative'},
-      url: window.location.origin + window.location.pathname,
+      url: globalThis.window.location.origin + globalThis.window.location.pathname,
     })
     setState('submitted')
   }
 
   if (state === 'thumbs-up' || state === 'submitted') {
     return (
-      <div className="mt-12 pt-8 border-t border-slate-800 text-center">
-        <p className="text-sm text-slate-400">
-          {state === 'thumbs-up' ? 'Glad it was helpful!' : 'Thanks for your feedback!'}
+      <div className="mt-16 border-t border-white/10 pt-7">
+        <p className="text-[13.5px] text-slate-400">
+          {state === 'thumbs-up' ? 'Glad it was helpful.' : 'Thanks — your feedback was recorded.'}
         </p>
       </div>
     )
   }
 
   return (
-    <div className="mt-12 pt-8 border-t border-slate-800">
-      <p className="text-sm text-slate-400 text-center mb-3">Was this page helpful?</p>
-
-      <div className="flex justify-center gap-3 mb-4">
-        <Button
-          variant="outline"
-          size="sm"
+    <div className="mt-16 border-t border-white/10 pt-7">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-[13.5px] text-slate-400">Was this page helpful?</span>
+        <button
+          type="button"
           onClick={() => setState('thumbs-up')}
-          className="border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400"
+          className="rounded-lg border border-white/[0.1] bg-white/[0.02] px-3 py-1.5 text-[13px] text-slate-300 transition-colors hover:border-emerald-400/40 hover:text-emerald-200"
         >
-          <ThumbsUp className="h-4 w-4" /> Yes
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleThumbsDown}
+          Yes
+        </button>
+        <button
+          type="button"
+          onClick={() => setState('thumbs-down')}
           aria-expanded={state === 'thumbs-down'}
-          className="border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400"
+          className="rounded-lg border border-white/[0.1] bg-white/[0.02] px-3 py-1.5 text-[13px] text-slate-300 transition-colors hover:border-rose-400/40 hover:text-rose-200"
         >
-          <ThumbsDown className="h-4 w-4" /> No
-        </Button>
+          No
+        </button>
       </div>
 
       {state === 'thumbs-down' && (
-        <div className="max-w-md mx-auto">
-          <Label htmlFor="docs-feedback-comment" className="sr-only">
+        <div className="mt-4 max-w-md">
+          <label htmlFor="docs-feedback-comment" className="sr-only">
             What could be improved?
-          </Label>
-          <Textarea
+          </label>
+          <textarea
             id="docs-feedback-comment"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="What could be improved?"
             rows={3}
-            className="border-slate-700 bg-slate-900 text-slate-200 placeholder:text-slate-500 focus-visible:ring-sky-500 resize-none"
+            className="w-full resize-none rounded-lg border border-white/[0.1] bg-white/[0.02] px-3 py-2 text-[13px] text-slate-100 placeholder:text-slate-500 focus:border-indigo-400/50 focus:outline-none"
           />
-          <div className="flex justify-end mt-2">
-            <Button size="sm" onClick={handleSubmitFeedback}>
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSubmitFeedback}
+              className="rounded-lg bg-indigo-600 px-3.5 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-indigo-500"
+            >
               Submit feedback
-            </Button>
+            </button>
           </div>
         </div>
       )}

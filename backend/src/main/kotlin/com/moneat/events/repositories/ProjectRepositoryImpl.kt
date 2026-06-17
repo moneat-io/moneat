@@ -16,7 +16,6 @@
 
 package com.moneat.events.repositories
 
-import com.moneat.utils.suspendRunCatching
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.ProjectKeyResponse
@@ -25,7 +24,11 @@ import com.moneat.events.repositories.models.ProjectRow
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
+import com.moneat.shared.services.ServiceIdentityResolver
 import com.moneat.utils.ClickHouseQueryUtils
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -45,12 +48,11 @@ import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 
 private val logger = KotlinLogging.logger {}
 
 class ProjectRepositoryImpl(
+    private val serviceIdentityResolver: ServiceIdentityResolver = ServiceIdentityResolver(),
     private val timestampRetentionClause: (String, Int, Long?) -> String
 ) : ProjectRepository {
 
@@ -85,6 +87,15 @@ class ProjectRepositoryImpl(
                 .firstOrNull()
                 ?.let { row -> buildProjectRow(row, getProjectKeys(projectId)) }
         }
+
+    override fun getServiceNameForProject(projectId: Long): String? =
+        serviceIdentityResolver.serviceNameForProject(projectId)
+
+    override fun resolveServiceId(orgId: Int, serviceName: String, serviceNamespace: String): Long? =
+        serviceIdentityResolver.resolveServiceId(orgId, serviceName, serviceNamespace)
+
+    override fun resolveServiceNames(projectIds: List<Long>): Map<Long, String> =
+        serviceIdentityResolver.serviceNamesForProjects(projectIds)
 
     override fun getProjectCountForOrganization(orgId: Int): Int =
         transaction {
@@ -197,11 +208,14 @@ class ProjectRepositoryImpl(
                 .map { row ->
                     ProjectRow(
                         projectId = row[Projects.id],
+                        resourceId = row[Projects.resource_id].toString(),
                         name = row[Projects.name],
                         slug = row[Projects.slug],
                         framework = row[Projects.framework],
                         keys = emptyList(),
                         dsn = "",
+                        serviceId = row[Projects.id],
+                        serviceName = projectServiceName(row),
                     )
                 }
         }
@@ -267,13 +281,22 @@ class ProjectRepositoryImpl(
         val firstDsn = keys.firstOrNull { it.platformTarget == null }?.dsn ?: keys.firstOrNull()?.dsn ?: ""
         return ProjectRow(
             projectId = row[Projects.id],
+            resourceId = row[Projects.resource_id].toString(),
             name = row[Projects.name],
             slug = row[Projects.slug],
             framework = row[Projects.framework],
             keys = keys,
-            dsn = firstDsn
+            dsn = firstDsn,
+            serviceId = row[Projects.id],
+            serviceName = projectServiceName(row),
         )
     }
+
+    private fun projectServiceName(row: ResultRow): String =
+        row[Projects.slug]
+            .trim()
+            .ifBlank { row[Projects.name].trim() }
+            .ifBlank { row[Projects.id].toString() }
 
     private fun buildDsn(publicKey: String, projectId: Long): String {
         val backendUrl = EnvConfig.get("BACKEND_URL", "https://api.moneat.io")

@@ -19,15 +19,14 @@ package com.moneat.auth.services
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.AuthTokenResponse
 import com.moneat.shared.models.AuthTokens
-import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
-import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.isNotNull
 import org.jetbrains.exposed.v1.core.less
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -35,8 +34,9 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
-import java.util.*
+import java.util.Base64
 import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 class AuthTokenService {
@@ -53,7 +53,12 @@ class AuthTokenService {
                 "sourcemaps:read",
                 "sourcemaps:write",
                 "event:read",
-                "org:read"
+                "org:read",
+                "workflow:read",
+                "workflow:write",
+                "workflow:run",
+                "security:read",
+                "security:write"
             )
 
         // sentry-cli compatible org auth token format: sntrys_{base64_payload}_{base64_secret}
@@ -85,6 +90,7 @@ class AuthTokenService {
      */
     fun generateToken(
         userId: Int,
+        orgId: Int,
         name: String,
         scopes: List<String>,
         expiresInDays: Int? = null
@@ -102,9 +108,9 @@ class AuthTokenService {
         // Look up the user's org slug for the token payload
         val orgSlug =
             transaction {
-                (Memberships innerJoin Organizations)
+                Organizations
                     .selectAll()
-                    .where { Memberships.user_id eq userId }
+                    .where { Organizations.id eq orgId }
                     .firstOrNull()
                     ?.get(Organizations.slug)
             } ?: "default"
@@ -125,7 +131,7 @@ class AuthTokenService {
 
         val createdAt = Clock.System.now()
 
-        val tokenId =
+        val tokenRow =
             transaction {
                 AuthTokens.insert {
                     it[user_id] = userId
@@ -135,11 +141,11 @@ class AuthTokenService {
                     it[AuthTokens.expires_at] = expiresAt
                     it[AuthTokens.created_at] = createdAt
                     it[last_used_at] = null
-                }[AuthTokens.id]
+                }
             }
 
         return AuthTokenResponse(
-            id = tokenId,
+            id = tokenRow[AuthTokens.resource_id].toString(),
             name = name,
             token = tokenValue, // Only returned on creation
             scopes = scopes,
@@ -219,7 +225,7 @@ class AuthTokenService {
                 .orderBy(AuthTokens.created_at, SortOrder.DESC)
                 .map { row ->
                     AuthTokenResponse(
-                        id = row[AuthTokens.id],
+                        id = row[AuthTokens.resource_id].toString(),
                         name = row[AuthTokens.name],
                         token = null, // Never return the actual token
                         scopes = row[AuthTokens.scopes],
@@ -236,19 +242,13 @@ class AuthTokenService {
      */
     fun revokeToken(
         userId: Int,
-        tokenId: Int
+        tokenResourceId: Uuid
     ): Boolean {
         return transaction {
-            // Verify the token belongs to the user before revoking
-            val tokenExists =
-                AuthTokens
-                    .selectAll()
-                    .where { (AuthTokens.id eq tokenId) and (AuthTokens.user_id eq userId) }
-                    .empty()
-                    .not()
-            if (!tokenExists) return@transaction false
-
-            AuthTokens.deleteWhere { id eq tokenId } > 0
+            AuthTokens.deleteWhere {
+                (resource_id eq tokenResourceId) and
+                    (user_id eq userId)
+            } > 0
         }
     }
 
@@ -257,7 +257,7 @@ class AuthTokenService {
      */
     fun updateToken(
         userId: Int,
-        tokenId: Int,
+        tokenResourceId: Uuid,
         name: String?,
         scopes: List<String>?
     ): Boolean {
@@ -270,21 +270,13 @@ class AuthTokenService {
         }
 
         return transaction {
-            // Verify the token belongs to the user before updating
-            val tokenExists =
-                AuthTokens
-                    .selectAll()
-                    .where { (AuthTokens.id eq tokenId) and (AuthTokens.user_id eq userId) }
-                    .empty()
-                    .not()
-            if (!tokenExists) return@transaction false
-
-            AuthTokens.update({ AuthTokens.id eq tokenId }) {
+            AuthTokens.update({
+                (AuthTokens.resource_id eq tokenResourceId) and
+                    (AuthTokens.user_id eq userId)
+            }) {
                 name?.let { newName -> it[AuthTokens.name] = newName }
                 scopes?.let { newScopes -> it[AuthTokens.scopes] = newScopes }
-            }
-
-            true
+            } > 0
         }
     }
 

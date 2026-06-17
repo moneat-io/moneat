@@ -1,0 +1,410 @@
+{
+    "id": "032-13968-policyreports",
+    "title": "PolicyReports",
+    "description": "Prebuilt Moneat dashboard for PolicyReports telemetry.",
+    "category": "infrastructure",
+    "tags": [
+        "Prometheus"
+    ],
+    "required_sources": [
+        "Prometheus"
+    ],
+    "widget_count": 5,
+    "variable_count": 7,
+    "warnings": [],
+    "dashboard": {
+        "title": "PolicyReports",
+        "description": "Prebuilt Moneat dashboard for PolicyReports telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "DS_PROMETHEUS",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "prometheus",
+                "default_value": "prometheus",
+                "current": "prometheus",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "policy",
+                "label": "Policy",
+                "type": "query",
+                "query": "label_values({__name__=~ \"policy_report_result|cluster_policy_report_result\", status=~\"fail|error\"}, policy)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "category",
+                "label": "Category",
+                "type": "query",
+                "query": "label_values({__name__=~ \"policy_report_result|cluster_policy_report_result\", status=~\"fail|error\"}, category)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "severity",
+                "label": "Severity",
+                "type": "query",
+                "query": "label_values({__name__=~ \"policy_report_result|cluster_policy_report_result\", status=~\"fail|error\"}, severity)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "namespace",
+                "label": "Namespace",
+                "type": "query",
+                "query": "label_values({__name__= \"policy_report_result\", status=~\"fail|error\"}, namespace)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "kind",
+                "label": "Kind",
+                "type": "query",
+                "query": "label_values({__name__=~ \"policy_report_result|cluster_policy_report_result\", status=~\"fail|error\"}, kind)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "source",
+                "label": "Source",
+                "type": "query",
+                "query": "label_values({__name__=~ \"policy_report_result|cluster_policy_report_result\", status=~\"fail|error\"}, source)",
+                "default_value": "$__all",
+                "current": "$__all",
+                "options": [],
+                "datasource": null
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Failing Policies by Namespace",
+                "widget_type": "bargauge",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 7,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{namespace}}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", namespace=~\"$namespace\", status=~\"fail|error\" } > 0) by (namespace)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":1,\"color\":\"#EAB839\"}]",
+                    "gaugeMin": "0",
+                    "orientation": "horizontal",
+                    "displayMode": "gradient"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Failing ClusterPolicies",
+                "widget_type": "stat",
+                "grid_x": 7,
+                "grid_y": 0,
+                "grid_w": 5,
+                "grid_h": 8,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ status }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=~\"fail|error\" } > 0) by (status)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "decimals": "0",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":3,\"color\":\"#EAB839\"}]",
+                    "gaugeMin": "0",
+                    "orientation": "vertical"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Failing Policies Graph",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 8,
+                "grid_w": 12,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ policy }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=~\"fail|error\" } > 0) by (policy)",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "avg",
+                                "field": null,
+                                "alias": "{{ policy }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", namespace=~\"$namespace\", status=~\"fail|error\" } > 0) by (policy)",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 2
+            },
+            {
+                "title": "Failing PolicyRules",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 18,
+                "grid_w": 12,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{namespace}}: {{ policy }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "namespace",
+                                "op": "like",
+                                "value": "$namespace",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "fail|error",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", namespace=~\"$namespace\", status=~\"fail|error\" }) by (namespace,policy,rule,kind,name,status,category,severity,source)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "fieldRenames": "{\"namespace\":\"namespace\"}"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "Failing ClusterPolicyRules",
+                "widget_type": "table",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 10,
+                "query_configs": [
+                    {
+                        "dataSource": "__prometheus",
+                        "metrics": [
+                            {
+                                "function": "sum",
+                                "field": null,
+                                "alias": "{{ kind }}: {{ name }} - {{ policy }}"
+                            }
+                        ],
+                        "groupBy": [
+                            {
+                                "field": "timestamp",
+                                "type": "time",
+                                "interval": "auto"
+                            }
+                        ],
+                        "filters": [
+                            {
+                                "field": "policy",
+                                "op": "like",
+                                "value": "$policy",
+                                "values": null
+                            },
+                            {
+                                "field": "category",
+                                "op": "like",
+                                "value": "$category",
+                                "values": null
+                            },
+                            {
+                                "field": "severity",
+                                "op": "like",
+                                "value": "$severity",
+                                "values": null
+                            },
+                            {
+                                "field": "source",
+                                "op": "like",
+                                "value": "$source",
+                                "values": null
+                            },
+                            {
+                                "field": "kind",
+                                "op": "like",
+                                "value": "$kind",
+                                "values": null
+                            },
+                            {
+                                "field": "status",
+                                "op": "like",
+                                "value": "fail|error",
+                                "values": null
+                            }
+                        ],
+                        "orderBy": null,
+                        "limit": 5000,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "sum(cluster_policy_report_result{policy=~\"$policy\", category=~\"$category\", severity=~\"$severity\", source=~\"$source\", kind=~\"$kind\", status=~\"fail|error\" }) by (policy,rule,kind,name,status,category,severity,source)",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]"
+                },
+                "sort_order": 4
+            }
+        ]
+    }
+}

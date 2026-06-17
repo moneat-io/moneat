@@ -22,6 +22,24 @@ export interface LlmTimelinePoint {
   errors: number
 }
 
+export interface LlmScopeParams {
+  services?: string[]
+  serviceIds?: string[]
+}
+
+export interface LlmRangeParams extends LlmScopeParams {
+  range?: string
+}
+
+export interface LlmGenerationsParams extends LlmRangeParams {
+  model?: string
+  provider?: string
+  type?: string
+  status?: string
+  page?: number
+  pageSize?: number
+}
+
 export interface LlmModelStats {
   model: string
   provider: string

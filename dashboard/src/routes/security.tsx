@@ -15,16 +15,18 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {ShieldAlert, ShieldCheck} from 'lucide-react'
+import {AlertTriangle, ListFilter, PackageSearch, ShieldAlert, ShieldCheck} from 'lucide-react'
 import {cn} from '@/lib/utils'
-import {BetaBanner} from '@/components/BetaBanner'
 
 export const Route = createFileRoute('/security')({
   component: SecurityLayout,
 })
 
 const tabs = [
-  {id: 'events', label: 'Security Events', href: '/security', icon: ShieldAlert},
+  {id: 'signals', label: 'Signals', href: '/security/signals', icon: AlertTriangle},
+  {id: 'vulnerabilities', label: 'Vulnerabilities', href: '/security/vulnerabilities', icon: PackageSearch},
+  {id: 'detections', label: 'Detections', href: '/security/detections', icon: ListFilter},
+  {id: 'events', label: 'Security Events', href: '/security/events', icon: ShieldAlert},
   {id: 'compliance', label: 'Compliance', href: '/security/compliance', icon: ShieldCheck},
 ]
 
@@ -34,33 +36,30 @@ function SecurityLayout() {
 
   return (
     <div className="space-y-2">
-      <BetaBanner pageKey="security" />
-      <div className="p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 shrink-0">
-          <ShieldAlert className="h-3.5 w-3.5 text-white" />
-        </div>
+      <div className="space-y-3 px-6 py-4">
+      <div className="flex items-center gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-danger-bg">
+          <ShieldAlert className="h-4 w-4 text-danger-fg" />
+        </span>
         <div className="min-w-0">
-          <h2 className="text-lg font-bold">Security</h2>
-          <p className="text-muted-foreground text-xs">Runtime security events and compliance</p>
+          <h1 className="text-xl font-semibold tracking-tight">Security</h1>
+          <p className="text-sm text-muted-foreground">Runtime security events and compliance</p>
         </div>
       </div>
       <div className="border-b">
         <nav className="flex gap-1">
           {tabs.map((tab) => {
-            const isActive = tab.href === '/security'
-              ? currentPath === '/security' || currentPath === '/security/'
-              : currentPath.startsWith(tab.href)
+            const isActive = currentPath.startsWith(tab.href)
             const Icon = tab.icon
             return (
               <Link key={tab.id} to={tab.href}
                 className={cn(
-                  'flex items-center gap-1 px-2 py-1.5 border-b-2 transition-all font-medium text-xs rounded-t-md',
+                  'flex items-center gap-1.5 px-3 py-2 border-b-2 transition-colors font-medium text-sm -mb-px whitespace-nowrap',
                   isActive
-                    ? 'border-primary text-primary bg-primary/5'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    ? 'border-primary text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 )}>
-                <Icon className="h-3 w-3" />
+                <Icon className="h-3.5 w-3.5" />
                 {tab.label}
               </Link>
             )

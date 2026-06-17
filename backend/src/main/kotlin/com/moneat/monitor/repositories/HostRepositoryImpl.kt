@@ -21,16 +21,23 @@ import com.moneat.monitor.models.HostData
 import com.moneat.shared.models.Hosts
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
+private val hostTagsJson = Json { ignoreUnknownKeys = true }
 
 class HostRepositoryImpl : HostRepository {
 
@@ -56,6 +63,23 @@ class HostRepositoryImpl : HostRepository {
                 .firstOrNull()
                 ?.let { rowToHostData(it) }
         }
+
+    override fun getByResourceId(
+        resourceId: Uuid,
+        organizationIds: List<Int>
+    ): HostData? {
+        if (organizationIds.isEmpty()) return null
+        return transaction {
+            Hosts
+                .selectAll()
+                .where {
+                    (Hosts.resource_id eq resourceId) and
+                        (Hosts.organization_id inList organizationIds)
+                }
+                .firstOrNull()
+                ?.let { rowToHostData(it) }
+        }
+    }
 
     override fun delete(hostId: Int, organizationId: Int): Boolean =
         transaction {
@@ -88,6 +112,7 @@ class HostRepositoryImpl : HostRepository {
     private fun rowToHostData(row: ResultRow): HostData =
         HostData(
             id = row[Hosts.id],
+            resourceId = row[Hosts.resource_id],
             organizationId = row[Hosts.organization_id],
             hostname = row[Hosts.hostname],
             displayName = row[Hosts.display_name],
@@ -100,7 +125,25 @@ class HostRepositoryImpl : HostRepository {
             processor = row[Hosts.processor].takeIf { it.isNotBlank() },
             cpuCores = row[Hosts.cpu_cores].takeIf { it > 0 },
             memoryTotalKb = row[Hosts.memory_total_kb].takeIf { it > 0 },
+            tags = parseHostTags(row[Hosts.tags]),
             firstSeenAt = row[Hosts.first_seen_at],
             createdAt = row[Hosts.first_seen_at]
         )
+}
+
+private fun parseHostTags(rawTags: String): Map<String, String> {
+    if (rawTags.isBlank()) return emptyMap()
+    return runCatching {
+        hostTagsJson
+            .parseToJsonElement(rawTags)
+            .jsonObject
+            .entries
+            .mapNotNull { (key, value) ->
+                (value as? JsonPrimitive)
+                    ?.contentOrNull
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { key to it }
+            }
+            .toMap()
+    }.getOrDefault(emptyMap())
 }

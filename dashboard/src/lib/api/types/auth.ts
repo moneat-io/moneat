@@ -18,7 +18,7 @@ export interface AuthResponse {
   token: string
   expiresIn?: number
   user: {
-    id: number
+    id: string
     email: string
     name?: string
     emailVerified: boolean
@@ -34,7 +34,7 @@ export interface SignupLegalConsent {
 }
 
 export interface AuthToken {
-  id: number
+  id: string
   name: string
   token?: string | null
   scopes: string[]
@@ -44,6 +44,7 @@ export interface AuthToken {
 }
 
 export interface SsoConfig {
+  organizationId?: string
   providerType: string
   isEnabled: boolean
   idpEntityId?: string
@@ -53,6 +54,9 @@ export interface SsoConfig {
   oidcClientId?: string
   oidcClientSecret?: string
   emailDomain?: string
+  emailDomainVerified?: boolean
+  emailDomainVerificationRecordName?: string
+  emailDomainVerificationToken?: string
   requireSso?: boolean
   spEntityId?: string
   hasClientSecret?: boolean

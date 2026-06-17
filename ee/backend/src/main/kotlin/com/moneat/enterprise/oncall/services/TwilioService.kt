@@ -5,6 +5,7 @@
 package com.moneat.enterprise.oncall.services
 
 import com.moneat.config.EnvConfig
+import com.moneat.enterprise.oncall.alertResourceId
 import com.moneat.enterprise.oncall.models.TwilioNotificationsSent
 import com.moneat.shared.models.Users
 import io.ktor.client.HttpClient
@@ -26,7 +27,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.slf4j.LoggerFactory
-import java.util.*
+import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.time.Clock
@@ -86,7 +87,7 @@ class TwilioService {
         toNumber: String,
         incidentId: Int,
         incidentTitle: String,
-        priorityLevel: String,
+        priority: String,
         userId: Int,
     ) {
         if (!isEnabled()) {
@@ -108,8 +109,9 @@ class TwilioService {
             return
         }
 
-        val acknowledgeUrl = "$frontendUrl/on-call/incidents/$incidentId"
-        val body = "[$priorityLevel] $incidentTitle - Acknowledge: $acknowledgeUrl"
+        val incidentResourceId = transaction { alertResourceId(incidentId) }
+        val acknowledgeUrl = "$frontendUrl/on-call/alerts/$incidentResourceId"
+        val body = "[$priority] $incidentTitle - Acknowledge alert: $acknowledgeUrl"
         val statusCallback = "$backendUrl/v1/webhooks/twilio/sms-status"
 
         try {
@@ -147,7 +149,7 @@ class TwilioService {
         toNumber: String,
         incidentId: Int,
         incidentTitle: String,
-        priorityLevel: String,
+        priority: String,
         userId: Int,
     ) {
         if (!isEnabled()) {
@@ -169,15 +171,16 @@ class TwilioService {
             return
         }
 
-        val gatherUrl = "$backendUrl/v1/webhooks/twilio/gather?incidentId=$incidentId"
+        val incidentResourceId = transaction { alertResourceId(incidentId) }
+        val gatherUrl = "$backendUrl/v1/webhooks/twilio/gather?incidentId=$incidentResourceId"
         val statusCallback = "$backendUrl/v1/webhooks/twilio/call-status"
 
         val safeTitle = incidentTitle.escapeXml()
-        val safePriority = priorityLevel.escapeXml()
+        val safePriority = priority.escapeXml()
         val twiml = """<Response>
   <Say voice="alice">Moneat on-call alert. Priority $safePriority. $safeTitle.</Say>
   <Gather numDigits="1" action="$gatherUrl" method="POST">
-    <Say voice="alice">Press 1 to acknowledge this incident.</Say>
+    <Say voice="alice">Press 1 to acknowledge this alert.</Say>
   </Gather>
   <Say voice="alice">No input received. Goodbye.</Say>
 </Response>"""
@@ -299,7 +302,7 @@ class TwilioService {
         transaction {
             TwilioNotificationsSent.insert {
                 it[TwilioNotificationsSent.userId] = userId
-                it[TwilioNotificationsSent.incidentId] = incidentId
+                it[TwilioNotificationsSent.alertId] = incidentId
                 it[TwilioNotificationsSent.channel] = channel
                 it[TwilioNotificationsSent.twilioSid] = twilioSid
                 it[TwilioNotificationsSent.status] = status

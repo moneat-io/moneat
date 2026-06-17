@@ -14,8 +14,12 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":feature-spi"))
+
     // Depend on the core Moneat backend
     implementation(project(":"))
+    implementation(project(":features:mcp"))
+    implementation(project(":features:sso"))
 
     // Core's implementation dependencies are not transitive — redeclare needed ones
     implementation(libs.ktor.server.core)
@@ -26,6 +30,7 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.koin.core)
     implementation(libs.exposed.core)
     implementation(libs.exposed.dao)
     implementation(libs.exposed.jdbc)
@@ -46,6 +51,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.sentry.kotlin)
+    implementation(libs.temporal.sdk)
 
     // Detekt formatting (ktlint)
     detektPlugins(libs.detekt.formatting)
@@ -55,6 +61,7 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.h2)
     testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.mockk)
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
@@ -108,6 +115,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 
 detekt {
     config.setFrom(files("$projectDir/detekt.yml"))
+    baseline = file("$projectDir/detekt-baseline.xml")
     buildUponDefaultConfig = true
     parallel = true
     source.setFrom(files("src/main/kotlin", "src/test/kotlin"))

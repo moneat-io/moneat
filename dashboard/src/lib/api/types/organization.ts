@@ -15,9 +15,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 export interface OrganizationAccountSettings {
-  id: number
+  id: string
   name: string
   role: string
+  // Identity/defaults surfaced on the redesigned General page. Optional so the
+  // UI degrades gracefully against backends that don't return them yet.
+  slug?: string | null
+  defaultTimezone?: string | null
+  dataRegion?: string | null
+  createdAt?: string | null
 }
 
 export interface AccountDeletionValidation {
@@ -32,7 +38,7 @@ export interface OrganizationDeletionValidation {
 }
 
 export interface OrgMember {
-  userId: number
+  userId: string
   email: string
   name?: string
   role: string
@@ -40,7 +46,7 @@ export interface OrgMember {
 }
 
 export interface OrgInvitation {
-  id: number
+  id: string
   email: string
   role: string
   status: string

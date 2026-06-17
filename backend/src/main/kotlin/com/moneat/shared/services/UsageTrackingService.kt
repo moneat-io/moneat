@@ -17,6 +17,7 @@
 package com.moneat.shared.services
 
 import com.moneat.billing.services.BillingQuotaService
+import com.moneat.shared.models.IngestionUsageEvents
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.UsageRecords
 import kotlinx.datetime.TimeZone
@@ -29,6 +30,7 @@ import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.select
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -138,17 +140,42 @@ class UsageTrackingService {
     ) {
         if (count <= 0) return
         val today = Clock.System.todayIn(TimeZone.UTC)
-        val key = "$orgId|$projectId|$eventType|$today"
+        val record =
+            UsageRecord(
+                organizationId = orgId,
+                projectId = projectId,
+                eventType = eventType,
+                recordDate = today,
+                eventCount = count,
+                bytesIngested = byteSize.toLong()
+            )
+        val idempotencyKey =
+            IngestionUsageDeduplication.keyFor(
+                organizationId = orgId,
+                projectId = projectId,
+                eventType = eventType,
+                recordDate = today,
+            )
+        if (idempotencyKey != null) {
+            recordDeduplicatedUsage(idempotencyKey, record)
+            return
+        }
+
+        bufferUsage(record)
+    }
+
+    private fun bufferUsage(record: UsageRecord) {
+        val key = "${record.organizationId}|${record.projectId}|${record.eventType}|${record.recordDate}"
 
         buffer.compute(key) { _, pair ->
             if (pair == null) {
                 Pair(
-                    AtomicInteger(count),
-                    java.util.concurrent.atomic.AtomicLong(byteSize.toLong())
+                    AtomicInteger(record.eventCount),
+                    java.util.concurrent.atomic.AtomicLong(record.bytesIngested)
                 )
             } else {
-                pair.first.addAndGet(count)
-                pair.second.addAndGet(byteSize.toLong())
+                pair.first.addAndGet(record.eventCount)
+                pair.second.addAndGet(record.bytesIngested)
                 pair
             }
         }
@@ -157,6 +184,32 @@ class UsageTrackingService {
             flushBuffer()
         }
     }
+
+    private fun recordDeduplicatedUsage(
+        idempotencyKey: String,
+        rec: UsageRecord,
+    ) {
+        transaction {
+            val inserted =
+                IngestionUsageEvents
+                    .insertIgnore {
+                        it[IngestionUsageEvents.idempotency_key] = idempotencyKey
+                        it[IngestionUsageEvents.organization_id] = rec.organizationId
+                        it[IngestionUsageEvents.project_id] = projectIdColumnValue(rec.projectId)
+                        it[IngestionUsageEvents.event_type] = rec.eventType
+                        it[IngestionUsageEvents.event_count] = rec.eventCount
+                        it[IngestionUsageEvents.bytes_ingested] = rec.bytesIngested
+                        it[IngestionUsageEvents.recordDate] = rec.recordDate
+                        it[IngestionUsageEvents.created_at] = Clock.System.now()
+                    }.insertedCount > 0
+            if (inserted) {
+                upsertUsage(rec)
+            }
+        }
+    }
+
+    private fun projectIdColumnValue(projectId: Long): Int? =
+        if (projectId == ORG_PROJECT_ID_SENTINEL) null else projectId.toInt()
 
     private fun getOrganizationId(projectId: Long): Int? {
         orgIdCache[projectId]?.let { return it }
@@ -216,7 +269,7 @@ class UsageTrackingService {
 
     private fun upsertUsage(rec: UsageRecord) {
         // Use null for org-level records (sentinel value) to satisfy the FK constraint on project_id
-        val projectIdInt: Int? = if (rec.projectId == ORG_PROJECT_ID_SENTINEL) null else rec.projectId.toInt()
+        val projectIdInt = projectIdColumnValue(rec.projectId)
         val existing =
             UsageRecords
                 .selectAll()

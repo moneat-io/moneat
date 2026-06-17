@@ -18,10 +18,11 @@ package com.moneat.uptime.models
 
 import com.moneat.shared.models.Organizations
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
-import java.util.*
+import java.util.UUID
 
 // Exposed Table Definition
 object UptimeMonitors : Table("uptime_monitors") {
@@ -86,8 +87,8 @@ object UptimeMonitors : Table("uptime_monitors") {
     // Push monitor token
     val pushToken = varchar("push_token", 64).nullable()
 
-    // Incident severity override
-    val incidentSeverity = varchar("incident_severity", 20).nullable()
+    // Alert priority override
+    val alertPriority = varchar("alert_priority", 20).nullable()
 
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
@@ -146,7 +147,9 @@ data class CreateUptimeMonitorRequest(
     val intervalSeconds: Int = 60,
     val timeoutSeconds: Int = 30,
     val retries: Int = 0,
-    val retryIntervalSeconds: Int = 60
+    val retryIntervalSeconds: Int = 60,
+    val alertPriority: String? = null,
+    @SerialName("incidentSeverity") val legacyIncidentSeverity: String? = null
 )
 
 @Serializable
@@ -198,13 +201,15 @@ data class UpdateUptimeMonitorRequest(
     val intervalSeconds: Int? = null,
     val timeoutSeconds: Int? = null,
     val retries: Int? = null,
-    val retryIntervalSeconds: Int? = null
+    val retryIntervalSeconds: Int? = null,
+    val alertPriority: String? = null,
+    @SerialName("incidentSeverity") val legacyIncidentSeverity: String? = null
 )
 
 @Serializable
 data class UptimeMonitorResponse(
     val id: String,
-    val organizationId: Int,
+    val organizationId: String,
     val name: String,
     val type: String,
     val active: Boolean,
@@ -262,6 +267,7 @@ data class UptimeMonitorResponse(
 
     // Push token (only for push monitors)
     val pushToken: String? = null,
+    val alertPriority: String? = null,
 
     // Stats
     val uptime24h: Float? = null,
@@ -308,6 +314,7 @@ data class CheckResult(
 data class UptimeMonitorData(
     val id: UUID,
     val organizationId: Int,
+    val organizationResourceId: String,
     val name: String,
     val type: String,
     val active: Boolean,
@@ -365,7 +372,7 @@ data class UptimeMonitorData(
     val consecutiveFailures: Int = 0,
 
     val pushToken: String? = null,
-    val incidentSeverity: String? = null,
+    val alertPriority: String? = null,
     val createdAt: kotlin.time.Instant,
     val updatedAt: kotlin.time.Instant
 )

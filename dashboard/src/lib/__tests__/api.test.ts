@@ -246,6 +246,16 @@ describe('ApiClient', () => {
       await expect(api.getProjects()).rejects.toThrow('Project not found')
     })
 
+    it('preserves response status on API errors for retry policy decisions', async () => {
+      server.use(
+        http.get(`${API_BASE}/v1/projects`, () => {
+          return HttpResponse.json({ error: 'Project not found' }, { status: 404 })
+        })
+      )
+
+      await expect(api.getProjects()).rejects.toMatchObject({ status: 404 })
+    })
+
     it('falls back to status text when no error field in response', async () => {
       server.use(
         http.get(`${API_BASE}/v1/projects`, () => {
@@ -268,13 +278,13 @@ describe('ApiClient', () => {
 
     it('handles 204 No Content responses', async () => {
       server.use(
-        http.delete(`${API_BASE}/v1/projects/1`, () => {
+        http.delete(`${API_BASE}/v1/projects/proj-1`, () => {
           return new HttpResponse(null, { status: 204 })
         })
       )
 
       sessionStorage.setItem('authenticated', 'true')
-      const result = await api.deleteProject(1)
+      const result = await api.deleteProject('proj-1')
 
       expect(result).toBeUndefined()
     })

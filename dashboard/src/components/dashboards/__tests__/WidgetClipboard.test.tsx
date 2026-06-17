@@ -20,8 +20,8 @@ import {useWidgetClipboard} from '../useWidgetClipboard'
 import type {DashboardWidget} from '@/lib/api'
 
 const makeWidget = (overrides: Partial<DashboardWidget> = {}): DashboardWidget => ({
-  id: 1,
-  dashboard_id: 10,
+  id: 'widget-1',
+  dashboard_id: 'dashboard-10',
   title: 'Widget A',
   widget_type: 'timeseries',
   grid_x: 0,
@@ -65,7 +65,7 @@ describe('useWidgetClipboard', () => {
   const defaultOpts = {
     isEditing: true,
     widgets: [makeWidget()],
-    selectedWidgetId: 1,
+    selectedWidgetId: 'widget-1',
     onPasteWidget,
     onDatasourceMapping,
     onUndo,

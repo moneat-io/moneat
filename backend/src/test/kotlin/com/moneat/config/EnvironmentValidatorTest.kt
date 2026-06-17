@@ -25,6 +25,8 @@ import kotlin.test.assertTrue
 
 class EnvironmentValidatorTest {
 
+    // ──── Validation Tests ────
+
     @Test
     fun `validate returns ValidationResult`() {
         val validator = EnvironmentValidator()
@@ -43,7 +45,92 @@ class EnvironmentValidatorTest {
 
         assertFalse(result.errors.any { it.contains("SLACK_CLIENT_ID") })
         assertFalse(result.errors.any { it.contains("DISCORD_CLIENT_ID") })
+        assertFalse(result.errors.any { it.contains("GOOGLE_ADS_DEVELOPER_TOKEN") })
         assertFalse(result.errors.any { it.contains("STRIPE_SECRET_KEY") })
+    }
+
+    @Test
+    fun `validate requires Google Ads provider config when enabled`() {
+        withSystemProperty("GOOGLE_ADS_ENABLED", "true") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("GOOGLE_ADS_DEVELOPER_TOKEN") })
+            assertTrue(result.errors.any { it.contains("GOOGLE_ADS_CLIENT_ID") })
+            assertTrue(result.errors.any { it.contains("GOOGLE_ADS_CLIENT_SECRET") })
+        }
+    }
+
+    @Test
+    fun `validate reports malformed WORKFLOWS_ENABLED`() {
+        withSystemProperty("WORKFLOWS_ENABLED", "maybe") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("WORKFLOWS_ENABLED") })
+        }
+    }
+
+    @Test
+    fun `validate skips workflow runtime requirements when workflows disabled`() {
+        withSystemProperty("WORKFLOWS_ENABLED", "false") {
+            val result = EnvironmentValidator().validate()
+
+            assertFalse(result.errors.any { it.contains("TEMPORAL_TARGET") })
+            assertFalse(result.errors.any { it.contains("TEMPORAL_NAMESPACE") })
+            assertFalse(result.errors.any { it.contains("WORKFLOWS_CONNECTION_KEK") })
+            assertFalse(result.errors.any { it.contains("WORKFLOWS_SIGNING_KEY") })
+            assertFalse(result.errors.any { it.contains("WORKFLOWS_TEMPORAL_PAYLOAD_KEY") })
+        }
+    }
+
+    @Test
+    fun `validate rejects reused connector vault secrets`() {
+        val reusedSecret = "connector-secret-value-aaaaaaaaaaaaaaaa"
+        withSystemProperties(
+            mapOf(
+                "DATA_IMPORT_CONNECTOR_KEK" to reusedSecret,
+                "NOTIFICATION_CONNECTOR_KEK" to reusedSecret
+            )
+        ) {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(
+                result.errors.any { error ->
+                    error.contains("Application secrets must be distinct") &&
+                        error.contains("DATA_IMPORT_CONNECTOR_KEK") &&
+                        error.contains("NOTIFICATION_CONNECTOR_KEK")
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `validate rejects reused previous connector vault secrets`() {
+        val reusedSecret = "connector-secret-value-bbbbbbbbbbbbbbbb"
+        withSystemProperties(
+            mapOf(
+                "DATA_IMPORT_CONNECTOR_KEK_PREVIOUS" to "old=$reusedSecret",
+                "NOTIFICATION_CONNECTOR_KEK" to reusedSecret
+            )
+        ) {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(
+                result.errors.any { error ->
+                    error.contains("Application secrets must be distinct") &&
+                        error.contains("DATA_IMPORT_CONNECTOR_KEK_PREVIOUS[old]") &&
+                        error.contains("NOTIFICATION_CONNECTOR_KEK")
+                }
+            )
+        }
+    }
+
+    @Test
+    fun `validate reports invalid process role`() {
+        withSystemProperty("MONEAT_PROCESS_ROLE", "web") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("MONEAT_PROCESS_ROLE") })
+        }
     }
 
     @Test
@@ -137,5 +224,34 @@ class EnvironmentValidatorTest {
             )
         assertEquals(2, result.errors.size)
         assertEquals(3, result.warnings.size)
+    }
+
+    // ──── Test Helpers ────
+
+    private fun withSystemProperty(
+        key: String,
+        value: String,
+        block: () -> Unit
+    ) {
+        withSystemProperties(mapOf(key to value), block)
+    }
+
+    private fun withSystemProperties(
+        properties: Map<String, String>,
+        block: () -> Unit
+    ) {
+        val previous = properties.keys.associateWith { key -> System.getProperty(key) }
+        try {
+            properties.forEach { (key, value) -> System.setProperty(key, value) }
+            block()
+        } finally {
+            previous.forEach { (key, value) ->
+                if (value == null) {
+                    System.clearProperty(key)
+                } else {
+                    System.setProperty(key, value)
+                }
+            }
+        }
     }
 }

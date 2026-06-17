@@ -70,7 +70,7 @@ export function TeamSettings() {
   })
 
   const updateRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: number; role: string }) => 
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.updateMemberRole(userId, role),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
@@ -79,7 +79,7 @@ export function TeamSettings() {
   })
 
   const removeMutation = useMutation({
-    mutationFn: (userId: number) => api.removeMember(userId),
+    mutationFn: (userId: string) => api.removeMember(userId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
       setMemberToRemove(null)
@@ -87,14 +87,14 @@ export function TeamSettings() {
   })
 
   const revokeInviteMutation = useMutation({
-    mutationFn: (invitationId: number) => api.revokeInvitation(invitationId),
+    mutationFn: (invitationId: string) => api.revokeInvitation(invitationId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['org-members'] })
     },
   })
 
   const resendInviteMutation = useMutation({
-    mutationFn: (invitationId: number) => api.resendInvitation(invitationId),
+    mutationFn: (invitationId: string) => api.resendInvitation(invitationId),
   })
 
   const handleInvite = () => {
@@ -217,7 +217,7 @@ export function TeamSettings() {
 
           {inviteMutation.isSuccess && (
             <Alert>
-              <AlertDescription className="text-green-700">
+              <AlertDescription className="text-success-fg">
                 Invitation sent successfully!
               </AlertDescription>
             </Alert>
@@ -276,7 +276,7 @@ export function TeamSettings() {
                             Change Role
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className="text-red-600"
+                            className="text-danger-fg"
                             onClick={() => setMemberToRemove(member)}
                           >
                             <UserMinus className="mr-2 h-4 w-4" />

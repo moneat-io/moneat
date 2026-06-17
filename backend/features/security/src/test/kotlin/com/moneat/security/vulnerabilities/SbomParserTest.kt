@@ -1,0 +1,248 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.security.vulnerabilities
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotNull
+
+class SbomParserTest {
+
+    @Test
+    fun `parses CycloneDX packages and purl ecosystem`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "bomFormat": "CycloneDX",
+              "metadata": {"component": {"name": "checkout-api"}},
+              "components": [
+                {
+                  "type": "library",
+                  "name": "lodash",
+                  "version": "4.17.11",
+                  "purl": "pkg:npm/lodash@4.17.11",
+                  "licenses": [{"license": {"id": "MIT"}}]
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        assertEquals(SbomFormat.CYCLONEDX, parsed.format)
+        assertEquals("checkout-api", parsed.targetName)
+        assertEquals("lodash", parsed.packages.single().name)
+        assertEquals("npm", parsed.packages.single().ecosystem)
+        assertEquals(listOf("MIT"), parsed.packages.single().licenses)
+    }
+
+    @Test
+    fun `parses CycloneDX npm scope from group and purl namespace`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "bomFormat": "CycloneDX",
+              "components": [
+                {
+                  "type": "library",
+                  "group": "@babel",
+                  "name": "core",
+                  "version": "7.24.0",
+                  "purl": "pkg:npm/%40babel/core@7.24.0"
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        val pkg = parsed.packages.single()
+        assertEquals("@babel/core", pkg.name)
+        assertEquals("npm", pkg.ecosystem)
+        assertEquals("npm", pkg.packageType)
+    }
+
+    @Test
+    fun `parses CycloneDX Maven group and artifact as advisory coordinate`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "bomFormat": "CycloneDX",
+              "components": [
+                {
+                  "type": "library",
+                  "group": "org.apache.commons",
+                  "name": "commons-lang3",
+                  "version": "3.9",
+                  "purl": "pkg:maven/org.apache.commons/commons-lang3@3.9"
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        val pkg = parsed.packages.single()
+        assertEquals("org.apache.commons:commons-lang3", pkg.name)
+        assertEquals("maven", pkg.ecosystem)
+        assertEquals("maven", pkg.packageType)
+    }
+
+    @Test
+    fun `parses SPDX package external refs`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "spdxVersion": "SPDX-2.3",
+              "name": "worker-image",
+              "packages": [
+                {
+                  "SPDXID": "SPDXRef-Package-minimist",
+                  "name": "minimist",
+                  "versionInfo": "1.2.5",
+                  "licenseDeclared": "MIT",
+                  "externalRefs": [
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:npm/minimist@1.2.5"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        assertEquals(SbomFormat.SPDX, parsed.format)
+        assertEquals("worker-image", parsed.targetName)
+        assertEquals("minimist", parsed.packages.single().name)
+        assertEquals("1.2.5", parsed.packages.single().version)
+        assertEquals("npm", parsed.packages.single().packageType)
+    }
+
+    @Test
+    fun `SPDX purl selection skips unrelated external refs`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "spdxVersion": "SPDX-2.3",
+              "name": "worker-image",
+              "packages": [
+                {
+                  "SPDXID": "SPDXRef-Package-minimist",
+                  "name": "minimist",
+                  "versionInfo": "1.2.5",
+                  "externalRefs": [
+                    {
+                      "referenceCategory": "OTHER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:generic/ignored@1.2.5"
+                    },
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "cpe23Type",
+                      "referenceLocator": "cpe:2.3:a:minimist:minimist:1.2.5:*:*:*:*:*:*:*"
+                    },
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:npm/minimist@1.2.5"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        assertEquals("pkg:npm/minimist@1.2.5", parsed.packages.single().purl)
+        assertEquals("npm", parsed.packages.single().ecosystem)
+    }
+
+    @Test
+    fun `parses SPDX licenses while dropping assertions and duplicates`() {
+        val parsed = SbomParser.parse(
+            """
+            {
+              "spdxVersion": "SPDX-2.3",
+              "name": "worker-image",
+              "packages": [
+                {
+                  "SPDXID": "SPDXRef-Package-requests",
+                  "name": "requests",
+                  "versionInfo": "2.32.0",
+                  "supplier": "Organization: Python Packaging Authority",
+                  "licenseConcluded": "NOASSERTION",
+                  "licenseDeclared": "Apache-2.0",
+                  "externalRefs": [
+                    {
+                      "referenceCategory": "PACKAGE-MANAGER",
+                      "referenceType": "purl",
+                      "referenceLocator": "pkg:pypi/requests@2.32.0"
+                    }
+                  ]
+                },
+                {
+                  "SPDXID": "SPDXRef-Package-urllib3",
+                  "name": "urllib3",
+                  "versionInfo": "2.2.1",
+                  "licenseConcluded": "MIT",
+                  "licenseDeclared": "MIT"
+                }
+              ]
+            }
+            """.trimIndent().encodeToByteArray()
+        )
+
+        assertEquals(listOf("Apache-2.0"), parsed.packages.first().licenses)
+        assertEquals("Python Packaging Authority", parsed.packages.first().supplier)
+        assertEquals(listOf("MIT"), parsed.packages.last().licenses)
+    }
+
+    @Test
+    fun `rejects malformed SBOMs safely`() {
+        val error = assertFailsWith<SbomValidationException> {
+            SbomParser.parse("""{"components": []}""".encodeToByteArray())
+        }
+        assertEquals("Unsupported SBOM format", error.message)
+    }
+
+    @Test
+    fun `malformed JSON preserves cause behind sanitized validation message`() {
+        val error = assertFailsWith<SbomValidationException> {
+            SbomParser.parse("""{"bomFormat": "CycloneDX", """.encodeToByteArray())
+        }
+
+        assertEquals("Malformed SBOM JSON", error.message)
+        assertNotNull(error.cause)
+    }
+
+    @Test
+    fun `rejects empty and non-object SBOM payloads`() {
+        assertEquals(
+            "SBOM payload is empty",
+            assertFailsWith<SbomValidationException> {
+                SbomParser.parse(ByteArray(0))
+            }.message,
+        )
+        assertEquals(
+            "SBOM JSON root must be an object",
+            assertFailsWith<SbomValidationException> {
+                SbomParser.parse("""["not-an-object"]""".encodeToByteArray())
+            }.message,
+        )
+    }
+}

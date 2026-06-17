@@ -97,16 +97,6 @@ object TestDatabaseHelper {
      * workaround for H2 test compatibility.
      */
     private fun patchJsonbForH2(vararg tables: Table) {
-        val h2TextJson = object : ColumnType<String>() {
-            override fun sqlType(): String = "TEXT"
-            override fun valueFromDB(value: Any): String = when (value) {
-                is String -> value
-                else -> value.toString()
-            }
-            override fun notNullValueToDB(value: String): Any = value
-            override fun nonNullValueToString(value: String): String =
-                "'${value.replace("'", "''")}'"
-        }
         val field = Column::class.java.getDeclaredField("columnType")
         field.isAccessible = true
         val jsonbClassNames = listOf(
@@ -117,9 +107,22 @@ object TestDatabaseHelper {
             table.columns.forEach { col ->
                 val qn = col.columnType::class.qualifiedName
                 if (qn != null && jsonbClassNames.any { qn == it }) {
-                    field.set(col, h2TextJson)
+                    field.set(col, h2TextJson(col.columnType.nullable))
                 }
             }
         }
     }
+
+    private fun h2TextJson(nullableColumn: Boolean): ColumnType<String> =
+        object : ColumnType<String>() {
+            override var nullable: Boolean = nullableColumn
+            override fun sqlType(): String = "TEXT"
+            override fun valueFromDB(value: Any): String = when (value) {
+                is String -> value
+                else -> value.toString()
+            }
+            override fun notNullValueToDB(value: String): Any = value
+            override fun nonNullValueToString(value: String): String =
+                "'${value.replace("'", "''")}'"
+        }
 }

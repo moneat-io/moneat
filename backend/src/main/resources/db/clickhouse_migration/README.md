@@ -30,6 +30,21 @@ Migrations run automatically on application startup before the server starts acc
 2. Write your ClickHouse SQL (CREATE TABLE, ALTER TABLE, etc.)
 3. Restart the app - migration runs automatically
 
+Before opening or updating a pull request, check the migration number against
+the target branch:
+
+```bash
+git fetch origin develop
+python3 scripts/check-migration-versions.py --base-ref origin/develop
+```
+
+If the target branch advanced and your migration is stale, rename added
+migrations automatically:
+
+```bash
+python3 scripts/check-migration-versions.py --base-ref origin/develop --fix
+```
+
 ## Migration Metadata
 
 The migration system tracks applied migrations in the `schema_migrations` table. Never modify this table manually.

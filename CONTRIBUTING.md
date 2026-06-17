@@ -74,9 +74,9 @@ cd dashboard && npm install && npm run dev
 
 ### Working on Enterprise Features
 
-Enterprise modules (On-Call, SSO) live in the `ee/` directory and are licensed under the [Moneat Enterprise License](ee/LICENSE). The `ee/` directory is a Gradle subproject included as a `runtimeOnly` dependency — enterprise classes are on the classpath at runtime but never referenced at compile time from core code (except the `EnterpriseModule` interface in `FeatureRegistry`).
+Enterprise modules (On-Call, SAML SSO) live in the `ee/` directory and are licensed under the [Moneat Enterprise License](ee/LICENSE). OIDC SSO is part of the open core and always available without a license key. The `ee/` directory is a Gradle subproject included as a `runtimeOnly` dependency — enterprise classes are on the classpath at runtime but never referenced at compile time from core code (except the `EnterpriseModule` interface in `FeatureRegistry`).
 
-Enterprise modules are always built with the project. At runtime, the `FeatureRegistry` uses Java `ServiceLoader` to discover `EnterpriseModule` implementations. Licensed modules (SSO, On-Call) only activate when a valid `MONEAT_LICENSE_KEY` is set.
+Enterprise modules are always built with the project. At runtime, the `FeatureRegistry` uses Java `ServiceLoader` to discover `EnterpriseModule` implementations. Licensed modules (SAML SSO, On-Call) only activate when a valid `MONEAT_LICENSE_KEY` is set.
 
 ```bash
 # 1. Start databases
@@ -93,7 +93,7 @@ cd dashboard && npm install && npm run dev
 
 | Variable | Required for |
 |----------|-------------|
-| `MONEAT_LICENSE_KEY` | Activating licensed enterprise modules (SSO, On-Call) |
+| `MONEAT_LICENSE_KEY` | Activating licensed enterprise modules (SAML SSO, On-Call) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | On-Call voice alerts |
 | `SAML_CERT` / `SAML_KEY` / `SAML_ENTITY_ID` | SSO (SAML) |
 

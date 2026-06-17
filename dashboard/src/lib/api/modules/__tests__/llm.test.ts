@@ -36,13 +36,13 @@ describe('LLM API', () => {
     server.use(
       http.get(`${API_BASE}/v1/llm/overview`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('1')
+        expect(url.searchParams.get('projectId')).toBeNull()
         expect(url.searchParams.get('range')).toBe('24h')
         return HttpResponse.json(mockOverview)
       })
     )
 
-    const result = await api.getLlmOverview(1)
+    const result = await api.getLlmOverview()
     expect(result).toEqual(mockOverview)
   })
 
@@ -57,7 +57,26 @@ describe('LLM API', () => {
       })
     )
 
-    const result = await api.getLlmOverview(1, '7d')
+    const result = await api.getLlmOverview({range: '7d'})
+    expect(result).toEqual(mockOverview)
+  })
+
+  it('fetches LLM overview with service filters', async () => {
+    const mockOverview = { totalGenerations: 10, totalTokens: 2000 }
+
+    server.use(
+      http.get(`${API_BASE}/v1/llm/overview`, ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.getAll('services')).toEqual(['API', 'Worker'])
+        expect(url.searchParams.getAll('serviceIds')).toEqual(['svc-api', 'svc-worker'])
+        return HttpResponse.json(mockOverview)
+      })
+    )
+
+    const result = await api.getLlmOverview({
+      services: ['API', 'Worker'],
+      serviceIds: ['svc-api', 'svc-worker'],
+    })
     expect(result).toEqual(mockOverview)
   })
 
@@ -69,36 +88,42 @@ describe('LLM API', () => {
     server.use(
       http.get(`${API_BASE}/v1/llm/generations`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('1')
+        expect(url.searchParams.get('projectId')).toBeNull()
         expect(url.searchParams.get('model')).toBe('gpt-4')
         expect(url.searchParams.get('provider')).toBe('openai')
+        expect(url.searchParams.get('type')).toBe('chat')
+        expect(url.searchParams.get('status')).toBe('success')
         expect(url.searchParams.get('page')).toBe('2')
         expect(url.searchParams.get('pageSize')).toBe('25')
+        expect(url.searchParams.getAll('services')).toEqual(['API'])
         return HttpResponse.json(mockGenerations)
       })
     )
 
-    const result = await api.getLlmGenerations(1, {
+    const result = await api.getLlmGenerations({
       model: 'gpt-4',
       provider: 'openai',
+      type: 'chat',
+      status: 'success',
       page: 2,
       pageSize: 25,
+      services: ['API'],
     })
     expect(result).toEqual(mockGenerations)
   })
 
-  it('fetches LLM generations with no extra params', async () => {
+  it('fetches LLM generations with no params', async () => {
     const mockGenerations = { generations: [{ id: 'gen-1' }], total: 1 }
 
     server.use(
       http.get(`${API_BASE}/v1/llm/generations`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('5')
+        expect(url.searchParams.toString()).toBe('')
         return HttpResponse.json(mockGenerations)
       })
     )
 
-    const result = await api.getLlmGenerations(5)
+    const result = await api.getLlmGenerations()
     expect(result).toEqual(mockGenerations)
   })
 
@@ -110,12 +135,12 @@ describe('LLM API', () => {
     server.use(
       http.get(`${API_BASE}/v1/llm/generations/gen-1`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('1')
+        expect(url.searchParams.getAll('services')).toEqual(['API'])
         return HttpResponse.json(mockDetail)
       })
     )
 
-    const result = await api.getLlmGenerationDetail(1, 'gen-1')
+    const result = await api.getLlmGenerationDetail('gen-1', {services: ['API']})
     expect(result).toEqual(mockDetail)
   })
 
@@ -127,12 +152,12 @@ describe('LLM API', () => {
     server.use(
       http.get(`${API_BASE}/v1/llm/traces/trace-1`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('1')
+        expect(url.searchParams.get('projectId')).toBeNull()
         return HttpResponse.json(mockTrace)
       })
     )
 
-    const result = await api.getLlmTrace(1, 'trace-1')
+    const result = await api.getLlmTrace('trace-1')
     expect(result).toEqual(mockTrace)
   })
 
@@ -144,13 +169,12 @@ describe('LLM API', () => {
     server.use(
       http.get(`${API_BASE}/v1/llm/models`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('1')
         expect(url.searchParams.get('range')).toBe('24h')
         return HttpResponse.json(mockModels)
       })
     )
 
-    const result = await api.getLlmModels(1)
+    const result = await api.getLlmModels()
     expect(result).toEqual(mockModels)
   })
 
@@ -162,13 +186,12 @@ describe('LLM API', () => {
     server.use(
       http.get(`${API_BASE}/v1/llm/costs`, ({ request }) => {
         const url = new URL(request.url)
-        expect(url.searchParams.get('projectId')).toBe('1')
         expect(url.searchParams.get('range')).toBe('24h')
         return HttpResponse.json(mockCosts)
       })
     )
 
-    const result = await api.getLlmCosts(1)
+    const result = await api.getLlmCosts()
     expect(result).toEqual(mockCosts)
   })
 
@@ -183,7 +206,7 @@ describe('LLM API', () => {
       })
     )
 
-    const result = await api.getLlmCosts(1, '30d')
+    const result = await api.getLlmCosts({range: '30d'})
     expect(result).toEqual(mockCosts)
   })
 })

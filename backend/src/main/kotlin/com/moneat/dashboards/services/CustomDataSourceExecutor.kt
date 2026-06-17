@@ -17,6 +17,7 @@
 package com.moneat.dashboards.services
 
 import com.moneat.dashboards.models.CustomDataSourceType
+import com.moneat.dashboards.models.DataSourceField
 import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
@@ -24,6 +25,7 @@ import com.moneat.dashboards.services.handlers.BigQueryHandler
 import com.moneat.dashboards.services.handlers.ClickHouseHandler
 import com.moneat.dashboards.services.handlers.CloudWatchHandler
 import com.moneat.dashboards.services.handlers.CockroachHandler
+import com.moneat.dashboards.services.handlers.ConnectionOptions
 import com.moneat.dashboards.services.handlers.DataSourceHandler
 import com.moneat.dashboards.services.handlers.ElasticsearchHandler
 import com.moneat.dashboards.services.handlers.GraphiteHandler
@@ -93,7 +95,10 @@ class CustomDataSourceExecutor {
         val handler = handlers[sourceType]
             ?: return TestConnectionResult(false, "Unsupported source type: ${request.sourceType}")
 
-        return handler.testConnection(request)
+        // Honor the explicit scheme + base path chosen in the dialog (stored in
+        // extra_config) by folding them into the host the handler connects to.
+        val effectiveHost = ConnectionOptions.effectiveHttpHost(sourceType.name, request.host, request.extraConfig)
+        return handler.testConnection(request.copy(sourceType = sourceType.name, host = effectiveHost))
     }
 
     /**
@@ -117,7 +122,7 @@ class CustomDataSourceExecutor {
 
         return handler.executeQuery(
             sourceId,
-            host,
+            ConnectionOptions.effectiveHttpHost(sourceType.name, host, credentials.options),
             port,
             databaseName,
             credentials,
@@ -136,10 +141,18 @@ class CustomDataSourceExecutor {
         port: Int?,
         databaseName: String?,
         credentials: DataSourceCredentials,
-    ) = handlers[sourceType]?.getSchema(host, port, databaseName, credentials)
-        ?: throw IllegalArgumentException(
-            "No handler registered for data source type: $sourceType"
+    ): List<DataSourceField> {
+        val handler = handlers[sourceType]
+            ?: throw IllegalArgumentException(
+                "No handler registered for data source type: $sourceType"
+            )
+        return handler.getSchema(
+            ConnectionOptions.effectiveHttpHost(sourceType.name, host, credentials.options),
+            port,
+            databaseName,
+            credentials,
         )
+    }
 
     /**
      * Execute a Grafana-style label_values() query (Prometheus, Loki, etc.).
@@ -158,7 +171,12 @@ class CustomDataSourceExecutor {
                 "label_values queries not supported for: $sourceType"
             )
         }
-        return handler.executeLabelValuesQuery(host, port, credentials, query)
+        return handler.executeLabelValuesQuery(
+            ConnectionOptions.effectiveHttpHost(sourceType.name, host, credentials.options),
+            port,
+            credentials,
+            query,
+        )
     }
 
     fun closePool(sourceId: Long) {

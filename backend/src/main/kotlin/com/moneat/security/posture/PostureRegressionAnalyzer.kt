@@ -1,0 +1,226 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.security.posture
+
+import com.moneat.security.encodeStableKeySegments
+import com.moneat.security.signals.SignalSeverity
+import com.moneat.security.signals.SignalSource
+import com.moneat.security.signals.SignalSpec
+import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
+import org.jetbrains.exposed.v1.core.vendors.PostgreSQLDialect
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
+import kotlin.time.Clock
+import kotlin.time.Instant
+
+private const val COMPLIANCE_TABLE = "compliance_findings"
+private const val EVIDENCE_TYPE = "clickhouse_query"
+private val LEGACY_KEY_UNSAFE_CHARS = charArrayOf('|', '=', '\\', '\u0000')
+
+object PostureRegressionAnalyzer {
+
+    fun analyze(organizationId: Int, findings: List<ComplianceFindingInput>): List<SignalSpec> {
+        if (findings.isEmpty()) return emptyList()
+        return transaction {
+            findings.mapNotNull { finding ->
+                val status = ComplianceFindingStatus.normalize(finding.status)
+                val occurred = occurrenceTime(finding.timestampMs)
+                val previous = upsertState(organizationId, finding, status, occurred)
+                if (previous == ComplianceFindingStatus.PASSED && status == ComplianceFindingStatus.FAILED) {
+                    regressionSignal(finding, occurred)
+                } else {
+                    null
+                }
+            }
+        }
+    }
+
+    private fun upsertState(
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+    ): ComplianceFindingStatus? {
+        val existing = selectStateForUpdate(organizationId, finding)
+        val now = Clock.System.now()
+        if (existing == null) {
+            return insertStateOrUpdateConcurrent(organizationId, finding, status, occurred, now)
+        }
+
+        return updateExistingState(existing, finding, status, occurred, now)
+    }
+
+    private fun selectStateForUpdate(organizationId: Int, finding: ComplianceFindingInput): ResultRow? =
+        SecurityComplianceFindingStates
+            .selectAll()
+            .where {
+                (SecurityComplianceFindingStates.organizationId eq organizationId) and
+                    (SecurityComplianceFindingStates.framework eq finding.framework) and
+                    (SecurityComplianceFindingStates.ruleId eq finding.ruleId) and
+                    (SecurityComplianceFindingStates.resourceType eq finding.resourceType) and
+                    (SecurityComplianceFindingStates.resourceId eq finding.resourceId)
+            }
+            .forUpdate()
+            .firstOrNull()
+
+    private fun insertStateOrUpdateConcurrent(
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ): ComplianceFindingStatus? {
+        if (insertNewState(organizationId, finding, status, occurred, now)) return null
+
+        val concurrent = checkNotNull(selectStateForUpdate(organizationId, finding)) {
+            "Compliance finding state insert was ignored without an existing state"
+        }
+        return updateExistingState(concurrent, finding, status, occurred, now)
+    }
+
+    private fun insertNewState(
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ): Boolean {
+        if (!usesPostgreSqlDialect()) {
+            SecurityComplianceFindingStates.insert {
+                assignStateInsert(it, organizationId, finding, status, occurred, now)
+            }
+            return true
+        }
+
+        val insert = SecurityComplianceFindingStates.insertIgnore {
+            assignStateInsert(it, organizationId, finding, status, occurred, now)
+        }
+        return insert.insertedCount > 0
+    }
+
+    private fun assignStateInsert(
+        statement: UpdateBuilder<*>,
+        organizationId: Int,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ) {
+        statement[SecurityComplianceFindingStates.organizationId] = organizationId
+        statement[SecurityComplianceFindingStates.framework] = finding.framework
+        statement[SecurityComplianceFindingStates.ruleId] = finding.ruleId
+        statement[SecurityComplianceFindingStates.ruleName] = finding.ruleName
+        statement[SecurityComplianceFindingStates.resourceType] = finding.resourceType
+        statement[SecurityComplianceFindingStates.resourceId] = finding.resourceId
+        statement[SecurityComplianceFindingStates.resourceName] = finding.resourceName
+        statement[SecurityComplianceFindingStates.status] = status.wire
+        statement[SecurityComplianceFindingStates.firstSeen] = occurred
+        statement[SecurityComplianceFindingStates.lastSeen] = occurred
+        statement[SecurityComplianceFindingStates.lastRegressedAt] = null
+        statement[SecurityComplianceFindingStates.updatedAt] = now
+    }
+
+    private fun usesPostgreSqlDialect(): Boolean =
+        TransactionManager.current().db.dialect is PostgreSQLDialect
+
+    private fun updateExistingState(
+        existing: ResultRow,
+        finding: ComplianceFindingInput,
+        status: ComplianceFindingStatus,
+        occurred: Instant,
+        now: Instant,
+    ): ComplianceFindingStatus {
+        val previous = ComplianceFindingStatus.normalize(existing[SecurityComplianceFindingStates.status])
+        val stateId = existing[SecurityComplianceFindingStates.id].value
+        SecurityComplianceFindingStates.update({ SecurityComplianceFindingStates.id eq stateId }) {
+            it[ruleName] = finding.ruleName
+            it[resourceName] = finding.resourceName
+            it[SecurityComplianceFindingStates.status] = status.wire
+            it[firstSeen] = minOf(existing[SecurityComplianceFindingStates.firstSeen], occurred)
+            it[lastSeen] = maxOf(existing[SecurityComplianceFindingStates.lastSeen], occurred)
+            if (previous == ComplianceFindingStatus.PASSED && status == ComplianceFindingStatus.FAILED) {
+                it[lastRegressedAt] = occurred
+            }
+            it[updatedAt] = now
+        }
+        return previous
+    }
+
+    private fun regressionSignal(finding: ComplianceFindingInput, occurred: Instant): SignalSpec {
+        val key = findingKey(finding)
+        val occurredAtMs = occurred.toEpochMilliseconds()
+        val resourceName = finding.resourceName.ifBlank { finding.resourceId }
+        val entities = buildMap {
+            if (finding.framework.isNotBlank()) put("framework", finding.framework)
+            if (finding.resourceType.isNotBlank()) put("resource_type", finding.resourceType)
+            if (resourceName.isNotBlank()) put("resource", resourceName)
+            if (finding.resourceId.isNotBlank()) put("resource_id", finding.resourceId)
+            put("finding_key", key)
+        }
+        return SignalSpec(
+            source = SignalSource.AGENT_COMPLIANCE,
+            ruleId = finding.ruleId,
+            ruleName = finding.ruleName.ifBlank { finding.ruleId },
+            severity = SignalSeverity.HIGH,
+            dedupKey = key,
+            entities = entities,
+            evidenceType = EVIDENCE_TYPE,
+            evidenceReference = "table=$COMPLIANCE_TABLE finding=$key rule_id=${finding.ruleId} " +
+                "resource_id=${finding.resourceId} previous=passed status=failed " +
+                "occurred_at_ms=$occurredAtMs",
+            occurredAtMs = occurredAtMs,
+            tags = listOf("posture:regression"),
+        )
+    }
+
+    private fun findingKey(finding: ComplianceFindingInput): String {
+        val legacySegments = listOf(
+            finding.framework,
+            finding.ruleId,
+            finding.resourceType,
+            finding.resourceId,
+        )
+        if (legacySegments.none(::containsLegacyKeyUnsafeChar)) {
+            return legacySegments.joinToString("|")
+        }
+
+        return encodeStableKeySegments(
+            listOf(
+                "framework" to finding.framework,
+                "rule_id" to finding.ruleId,
+                "resource_type" to finding.resourceType,
+                "resource_id" to finding.resourceId,
+            )
+        )
+    }
+
+    private fun containsLegacyKeyUnsafeChar(segment: String): Boolean =
+        segment.any { it in LEGACY_KEY_UNSAFE_CHARS }
+
+    private fun occurrenceTime(timestampMs: Long): Instant {
+        val occurred = Instant.fromEpochMilliseconds(timestampMs)
+        val now = Clock.System.now()
+        return if (occurred > now) now else occurred
+    }
+}

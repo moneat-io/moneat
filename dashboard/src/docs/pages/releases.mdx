@@ -1,33 +1,61 @@
 ---
 title: Releases & Source Maps
-description: Track deployments, associate errors with releases, and upload source maps for readable stack traces.
+description: Track release health across telemetry sources and upload source maps for readable stack traces.
 ---
 
 # Releases & Source Maps
 
 ## Overview
 
-Releases let you track which version of your code is deployed and correlate errors with specific deployments. When you create a release in Moneat, errors captured by the SDK are automatically tagged with the release version, giving you visibility into which deployments introduced new issues.
+Releases identify the deployed version of a service. Moneat detects release versions from normalized
+telemetry and uses them to correlate errors, traces, sessions, users, and source map artifacts.
 
-## Creating Releases
+The Releases dashboard is source-neutral. A release can be reported by:
 
-Create releases using the Sentry-compatible release API. This is typically done in your CI/CD pipeline after a successful build.
+- Sentry-compatible SDKs using the `release` field
+- OpenTelemetry SDKs or Collectors using the `service.version` resource attribute
+- Datadog tracers and the Datadog Agent using the `version` tag, usually from `DD_VERSION`
+- CI/CD automation using the release API
 
-**Create a Release (cURL)**
+Use one stable version string for the same deployed artifact across all sources. Common values are
+semantic versions, build numbers, or commit SHAs.
+
+## How Release Detection Works
+
+| Telemetry source | Version field | What Moneat does |
+| --- | --- | --- |
+| Sentry-compatible SDK | `release` | Stores the release on errors, transactions, sessions, replays, and feedback. |
+| OpenTelemetry / OTLP | `service.version` | Stores the version on APM spans and extracted OTLP error events. |
+| Datadog Agent / tracer | `version` / `DD_VERSION` | Stores the version on APM spans forwarded through the Datadog-compatible trace intake. |
+| CI/CD release API | `version` | Creates or updates release metadata and artifact associations. |
+
+For service-scoped release views, the telemetry service identity must map to a Moneat service:
+
+- For OTLP, set `service.name` and map observed services from **Settings -> OTLP API Keys** when needed.
+- For Datadog, set `DD_SERVICE` to the Moneat service slug or service name.
+- For Sentry-compatible SDKs, use the project DSN for the service receiving the telemetry.
+
+## Create Releases from CI/CD
+
+You can create releases before or after telemetry arrives. This is useful for deployment tracking,
+source maps, and release automation.
+
+### Release API
 
 ```bash
 curl -X POST https://api.moneat.io/api/0/organizations/{org_slug}/releases/ \
- -H "Authorization: Bearer <auth_token>" \
- -H "Content-Type: application/json" \
- -d '{
+  -H "Authorization: Bearer <auth_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
     "version": "1.2.3",
-    "projects": ["my-project"]
+    "projects": ["checkout-api"]
   }'
 ```
 
-You can also use the `sentry-cli` tool, which works with Moneat out of the box. Just set the `SENTRY_URL` environment variable to your Moneat instance:
+The endpoint is Sentry-compatible so existing release automation can migrate without changing
+payload shape.
 
-**Using sentry-cli**
+### Compatible sentry-cli Client
 
 ```bash
 export SENTRY_URL=https://api.moneat.io
@@ -39,57 +67,162 @@ sentry-cli releases set-commits 1.2.3 --auto
 sentry-cli releases finalize 1.2.3
 ```
 
-## Source Maps
+## Configure Sentry-Compatible SDKs
 
-### Why Source Maps?
-
-JavaScript and other transpiled/minified languages produce unreadable stack traces in production. Source maps allow Moneat to map minified code back to your original source, giving you readable file names, line numbers, and code context in error reports.
-
-### Uploading Source Maps
-
-Upload source maps as part of your release process. Use the release API or `sentry-cli`:
-
-**Upload with sentry-cli**
-
-```bash
-sentry-cli releases files 1.2.3 upload-sourcemaps ./dist \
- --url-prefix '~/static/js'
-```
-
-Or upload via the API directly:
-
-**Upload via API (cURL)**
-
-```bash
-curl -X POST https://api.moneat.io/api/0/organizations/{org_slug}/releases/1.2.3/files/ \
- -H "Authorization: Bearer <auth_token>" \
- -F file=@./dist/app.js.map \
- -F name="~/static/js/app.js.map"
-```
-
-:::tip[Build tool plugins]
-Most build tools have Sentry plugins that automatically upload source maps during the build process. Look for `@sentry/webpack-plugin`, `@sentry/vite-plugin`, or `@sentry/rollup-plugin` for seamless integration.
-:::
-
-## Release Tracking
-
-Once releases are created, you can view them in the **Releases** section of the dashboard. Each release shows:
-
-- **Version** - The release identifier
-- **New issues** - Issues first seen in this release
-- **Resolved issues** - Issues resolved in this release
-- **Date** - When the release was created and finalized
-
-## SDK Configuration
-
-Make sure your SDK is configured with the release version so events are tagged correctly:
+Set `release` in the SDK initialization so errors, transactions, sessions, and replays are tagged with
+the deployed version.
 
 ```javascript
 Sentry.init({
   dsn: "https://<key>@api.moneat.io/api/<project_id>",
-  release: "1.2.3",
+  release: process.env.RELEASE_VERSION || "1.2.3",
+  environment: "production",
 });
 ```
+
+## Configure OpenTelemetry and OTLP
+
+Set the OpenTelemetry resource attributes that identify the service and deployment. Moneat reads
+`service.version` as the release version and `deployment.environment.name` as the environment.
+
+```bash
+export OTEL_SERVICE_NAME=checkout-api
+export OTEL_RESOURCE_ATTRIBUTES="service.version=${RELEASE_VERSION},deployment.environment.name=production"
+```
+
+Send OTLP traces to Moneat with an OTLP API key:
+
+```text
+POST https://api.moneat.io/v1/traces
+Authorization: Bearer <OTLP_API_KEY>
+Content-Type: application/x-protobuf
+```
+
+For an OpenTelemetry Collector, configure a Moneat OTLP HTTP exporter:
+
+```yaml
+exporters:
+  otlphttp/moneat:
+    endpoint: https://api.moneat.io
+    headers:
+      Authorization: Bearer ${MONEAT_OTLP_API_KEY}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/moneat]
+```
+
+Create OTLP API keys from **Settings -> OTLP API Keys**. If the observed `service.name` does not
+already match a Moneat service, map it from the observed services table so release views can apply
+service filters correctly.
+
+See also:
+
+- [OpenTelemetry service semantic conventions](https://opentelemetry.io/docs/specs/semconv/resource/service/)
+- [OpenTelemetry deployment attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/deployment/)
+- [OpenTelemetry SDK environment variables](https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/)
+
+## Configure the Datadog Agent and Tracers
+
+Moneat reads Datadog APM span versions from the Datadog `version` tag. In most Datadog tracer setups,
+set unified service tagging variables on the application process:
+
+```bash
+export DD_ENV=production
+export DD_SERVICE=checkout-api
+export DD_VERSION=${RELEASE_VERSION}
+```
+
+Then run the Datadog Agent pointed at Moneat as described in
+[Datadog Agent setup](/docs/datadog-agent/agent-setup). The application tracer sends spans to the
+local Agent, and the Agent forwards those spans to Moneat.
+
+For Docker workloads, put the same tags on the application container:
+
+```yaml
+environment:
+  DD_ENV: production
+  DD_SERVICE: checkout-api
+  DD_VERSION: ${RELEASE_VERSION}
+labels:
+  com.datadoghq.tags.env: production
+  com.datadoghq.tags.service: checkout-api
+  com.datadoghq.tags.version: ${RELEASE_VERSION}
+```
+
+For Kubernetes workloads, use pod labels plus downward API environment variables:
+
+```yaml
+metadata:
+  labels:
+    tags.datadoghq.com/env: production
+    tags.datadoghq.com/service: checkout-api
+    tags.datadoghq.com/version: "1.2.3"
+spec:
+  containers:
+    - name: checkout-api
+      env:
+        - name: DD_ENV
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['tags.datadoghq.com/env']
+        - name: DD_SERVICE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['tags.datadoghq.com/service']
+        - name: DD_VERSION
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels['tags.datadoghq.com/version']
+```
+
+Use a `DD_SERVICE` value that matches the Moneat service slug or name. When the service resolves,
+Datadog trace versions appear in the same Releases dashboard as OTLP and Sentry-compatible telemetry.
+
+See also:
+
+- [Datadog unified service tagging](https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/)
+- [Datadog Agent environment variables](https://docs.datadoghq.com/agent/guide/environment-variables/)
+
+## Source Maps
+
+Source maps make minified JavaScript stack traces readable. Upload source maps as part of the same
+release process and use the exact same release version that your telemetry reports.
+
+### Upload with sentry-cli
+
+```bash
+sentry-cli releases files 1.2.3 upload-sourcemaps ./dist \
+  --url-prefix '~/static/js'
+```
+
+### Upload with the API
+
+```bash
+curl -X POST https://api.moneat.io/api/0/projects/{org_slug}/{project_slug}/releases/1.2.3/files/ \
+  -H "Authorization: Bearer <auth_token>" \
+  -F file=@./dist/app.js.map \
+  -F name="~/static/js/app.js.map"
+```
+
+:::tip[Build tool plugins]
+Sentry-compatible build plugins such as `@sentry/webpack-plugin`, `@sentry/vite-plugin`, and
+`@sentry/rollup-plugin` can upload source maps to Moneat when `SENTRY_URL` points at your Moneat
+backend.
+:::
+
+## Release Dashboard
+
+The **Releases** dashboard shows:
+
+- **Version** - The release identifier reported by telemetry or CI/CD
+- **Signals** - Versioned errors, transactions, and APM traces
+- **New issues** - Error issues first seen in the release
+- **Crash-free rate** - Available when session telemetry is present
+- **Users** - Users observed in versioned event/session telemetry
 
 ## Auth Token Scopes
 
@@ -97,5 +230,6 @@ API tokens used for release management need the following scopes:
 
 - `releases:write` - Create and update releases
 - `releases:read` - List and view releases
+- `sourcemaps:write` - Upload source maps and artifact bundles
 
 See [API Tokens](/docs/api-tokens) for how to create tokens with the right scopes.

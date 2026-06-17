@@ -23,6 +23,10 @@ export interface DashboardVariable {
   current?: string | null
   options: string[]
   datasource?: string | null
+  /** Accepts several values at once; the selected value is stored comma-joined. */
+  multi?: boolean
+  /** Offers an "All" choice (selected value `$__all`). */
+  include_all?: boolean
 }
 
 export interface MetricDef {
@@ -67,8 +71,8 @@ export interface QueryDsl {
 }
 
 export interface DashboardWidget {
-  id: number
-  dashboard_id: number
+  id: string
+  dashboard_id: string
   title?: string | null
   widget_type: string
   grid_x: number
@@ -88,34 +92,38 @@ export interface DashboardWidgetAlertNotificationChannels {
 
 export type DashboardAlertCondition = '>' | '<' | '>=' | '<=' | '=='
 
-export type IncidentSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | null
+export type AlertPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | null
+export type DashboardAlertLevel = 'WARNING' | 'ERROR' | null
 
 export interface DashboardWidgetAlert {
-  id: number
-  widget_id: number
-  dashboard_id: number
+  id: string
+  widget_id: string
+  dashboard_id: string
   name: string
   condition: DashboardAlertCondition
   threshold: number
+  warning_threshold: number | null
   metric_index: number
   duration_seconds: number
-  incident_severity: IncidentSeverity
+  alert_priority: AlertPriority
   enabled: boolean
   notification_channels: DashboardWidgetAlertNotificationChannels
   last_triggered_at: string | null
+  last_triggered_level: DashboardAlertLevel
   last_value: number | null
   created_at: string
   updated_at: string
 }
 
 export interface CreateDashboardAlertRequest {
-  widget_id: number
+  widget_id: string
   name: string
   condition: DashboardAlertCondition
   threshold: number
+  warning_threshold?: number | null
   metric_index?: number
   duration_seconds?: number
-  incident_severity?: IncidentSeverity
+  alert_priority?: AlertPriority
   enabled?: boolean
   notification_channels?: DashboardWidgetAlertNotificationChannels
 }
@@ -124,37 +132,45 @@ export interface UpdateDashboardAlertRequest {
   name?: string
   condition?: DashboardAlertCondition
   threshold?: number
+  warning_threshold?: number | null
   metric_index?: number
   duration_seconds?: number
-  incident_severity?: IncidentSeverity
+  alert_priority?: AlertPriority
   enabled?: boolean
   notification_channels?: DashboardWidgetAlertNotificationChannels
 }
 
 export interface BatchQueryResult {
   results: Record<string, Record<string, unknown>[]>
+  metadata?: Record<string, BatchQueryResultMetadata>
+}
+
+export interface BatchQueryResultMetadata {
+  original_ref_id?: string | null
+  query_index: number
 }
 
 export interface CustomDashboard {
-  id: number
-  org_id: number
-  project_id?: number | null
-  folder_id?: number | null
+  id: string
+  org_id: string
+  project_id?: string | null
+  folder_id?: string | null
   title: string
   description?: string | null
   layout_type: string
   is_default: boolean
   is_favorited?: boolean
   variables?: DashboardVariable[]
-  created_by: number
+  owner_name?: string | null
+  created_by: string
   created_at: string
   updated_at: string
   widgets: DashboardWidget[]
 }
 
 export interface DashboardFolder {
-  id: number
-  org_id: number
+  id: string
+  org_id: string
   name: string
   color?: string | null
   sort_order: number
@@ -163,7 +179,7 @@ export interface DashboardFolder {
 }
 
 export interface CreateWidgetRequest {
-  id?: number
+  id?: string
   title?: string | null
   widget_type: string
   grid_x: number
@@ -178,8 +194,8 @@ export interface CreateWidgetRequest {
 export interface CreateDashboardRequest {
   title: string
   description?: string | null
-  project_id?: number | null
-  folder_id?: number | null
+  project_id?: string | null
+  folder_id?: string | null
   layout_type?: string
   is_default?: boolean
   variables?: DashboardVariable[]
@@ -201,7 +217,7 @@ export interface UpdateFolderRequest {
 export interface UpdateDashboardRequest {
   title?: string | null
   description?: string | null
-  folder_id?: number | null
+  folder_id?: string | null
   layout_type?: string | null
   is_default?: boolean | null
   variables?: DashboardVariable[] | null
@@ -214,7 +230,7 @@ export interface SearchResponse {
 }
 
 export interface SearchProjectResponse {
-  id: number
+  id: string
   name: string
 }
 
@@ -230,6 +246,28 @@ export interface DashboardImportResult {
   variables?: DashboardVariable[]
 }
 
+export interface DashboardTemplateSummary {
+  id: string
+  title: string
+  description?: string | null
+  category: string
+  tags: string[]
+  required_sources: string[]
+  widget_count: number
+  variable_count: number
+  resource_path: string
+}
+
+export interface DashboardTemplateDetail extends Omit<DashboardTemplateSummary, 'resource_path'> {
+  warnings: string[]
+  dashboard: CreateDashboardRequest
+}
+
+export interface InstantiateDashboardTemplateRequest {
+  project_id?: string | null
+  folder_id?: string | null
+}
+
 export interface DataSourceField {
   name: string
   type: string
@@ -243,20 +281,21 @@ export interface DataSourceInfo {
 }
 
 export interface CustomDataSourceResponse {
-  id: number
-  org_id: number
+  id: string
+  org_id: string
   name: string
   description?: string
   source_type: string
   host: string
-  port?: number
+  port?: number | null
   database_name?: string
   extra_config: Record<string, string>
   enabled: boolean
-  created_by: number
+  created_by: string
   created_at: string
   updated_at: string
   has_credentials: boolean
+  used_by_dashboard_count?: number
 }
 
 export interface CreateCustomDataSourceRequest {
@@ -269,6 +308,7 @@ export interface CreateCustomDataSourceRequest {
   username?: string
   password?: string
   api_key?: string
+  header_value?: string
   access_key_id?: string
   secret_access_key?: string
   service_account_json?: string
@@ -284,10 +324,13 @@ export interface UpdateCustomDataSourceRequest {
   description?: string
   host?: string
   port?: number
+  /** Clear a previously stored port (omitting `port` is a partial-update no-op). */
+  clear_port?: boolean
   database_name?: string
   username?: string
   password?: string
   api_key?: string
+  header_value?: string
   access_key_id?: string
   secret_access_key?: string
   service_account_json?: string
@@ -307,6 +350,7 @@ export interface TestConnectionRequest {
   username?: string
   password?: string
   api_key?: string
+  header_value?: string
   access_key_id?: string
   secret_access_key?: string
   service_account_json?: string
@@ -314,6 +358,7 @@ export interface TestConnectionRequest {
   connection_string?: string
   project_id?: string
   region?: string
+  extra_config?: Record<string, string>
 }
 
 export interface TestConnectionResult {
@@ -326,7 +371,7 @@ export interface TestConnectionResult {
 }
 
 export interface CustomDataSourceQueryRequest {
-  data_source_id: number
+  data_source_id: string
   query: string
   limit?: number
   time_range?: TimeRangeDef

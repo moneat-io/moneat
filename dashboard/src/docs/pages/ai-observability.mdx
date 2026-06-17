@@ -15,38 +15,19 @@ Moneat captures LLM calls, traces multi-step agent executions, and tracks token 
 - **Error monitoring** - LLM failures, timeouts, and rate limits
 - **Model analytics** - Performance, cost, and error rates across models
 
-## Getting Started with Sentry SDKs
+## Ingestion Sources
 
-If your application uses a Sentry SDK with AI integrations, point your DSN to your Moneat instance to start sending LLM observability data.
+Moneat stores LLM generations in one AI observability model. Today, data can arrive through the
+direct LLM ingestion API or through Sentry-compatible SDK transactions that contain `ai.*` spans.
 
-<StepList
-  steps={[
-    {
-      title: 'Choose your platform',
-      content: <>Visit the <a href="https://sentry.io/solutions/ai-observability/" target="_blank" rel="noopener noreferrer">Sentry AI Observability page</a> and select your platform. Sentry supports OpenAI Agents, Vercel AI, LangChain, and many more frameworks out of the box.</>,
-    },
-    {
-      title: 'Install the Sentry SDK',
-      content: 'Follow the official Sentry setup instructions for your platform to install and configure the SDK with AI integrations enabled.',
-    },
-    {
-      title: 'Point the DSN to Moneat',
-      content: 'Instead of using a Sentry DSN, configure the SDK to point to your Moneat instance. You can find your project DSN in your project settings. It follows this format:',
-    },
-  ]}
-/>
-
-```text
-https://<public_key>@<your-moneat-host>/api/<project_id>
-```
-
-:::info[Automatic detection]
-Moneat automatically detects `ai.*` spans from Sentry SDK transactions (such as `ai.chat_completion`, `ai.embedding`, and `ai.tool_call`) and records them as LLM generations. No additional configuration is required beyond pointing your DSN to Moneat.
-:::
+| Source | Use |
+|--------|-----|
+| Direct LLM ingestion API | Send generation payloads from any application or framework |
+| Sentry-compatible SDKs | Reuse existing SDK AI integrations that emit `ai.*` spans |
 
 ## Direct Ingestion API
 
-If you're not using a Sentry SDK, you can send LLM generation events directly to Moneat's ingestion API.
+If you are not using a Sentry-compatible SDK, send LLM generation events directly to Moneat.
 
 ### Endpoint
 
@@ -54,7 +35,9 @@ If you're not using a Sentry SDK, you can send LLM generation events directly to
 POST /api/{projectId}/llm/
 ```
 
-Authenticate using either the `X-Sentry-Auth` header or the `sentry_key` query parameter with your project's public key. The endpoint accepts gzip-compressed payloads via the `Content-Encoding: gzip` header.
+Authenticate using either the `X-Sentry-Auth` header or the `sentry_key` query parameter with your
+service public key. The endpoint accepts gzip-compressed payloads via the `Content-Encoding: gzip`
+header.
 
 ### Payload Format
 
@@ -86,6 +69,37 @@ Send a JSON object containing a `generations` array. Each generation represents 
 }
 ```
 
+:::tip[Batch ingestion]
+You can send multiple generations in a single request. The endpoint returns the count of accepted
+events in the response.
+:::
+
+## Sentry-Compatible SDKs
+
+If your application uses a Sentry-compatible SDK with AI integrations, point your DSN to your Moneat
+service to start sending LLM observability data.
+
+<StepList
+  steps={[
+    {
+      title: 'Install an SDK integration',
+      content: 'Install the Sentry-compatible integration for your LLM framework, such as OpenAI Agents, Vercel AI, LangChain, or another supported integration.',
+    },
+    {
+      title: 'Use your Moneat DSN',
+      content: 'Configure the SDK with your Moneat service DSN instead of a Sentry DSN. You can find the DSN in service settings.',
+    },
+    {
+      title: 'Send ai.* spans',
+      content: 'Moneat detects ai.* spans from SDK transactions and records them as LLM generations.',
+    },
+  ]}
+/>
+
+```text
+https://<public_key>@<your-moneat-host>/api/<project_id>
+```
+
 ### Generation Fields
 
 | Field | Type | Description |
@@ -108,8 +122,9 @@ Send a JSON object containing a `generations` array. Each generation represents 
 | `tags` | object | Key-value pairs for filtering |
 | `metadata` | JSON | Arbitrary extra data |
 
-:::tip[Batch ingestion]
-You can send multiple generations in a single request. The endpoint returns the count of accepted events in the response.
+:::info[Automatic detection]
+Moneat detects `ai.*` spans from Sentry-compatible SDK transactions, such as `ai.chat_completion`,
+`ai.embedding`, and `ai.tool_call`, and records them as LLM generations.
 :::
 
 ## Supported Generation Types
@@ -134,15 +149,17 @@ For multi-step agent executions, click a trace to view the full trace waterfall 
 
 ## Cost Tracking
 
-Track your LLM spend across models and providers. Set the `cost_usd` field on each generation. When using Sentry SDKs with AI integrations, cost data is typically populated automatically. The cost dashboard shows total spend over time with breakdowns by model and provider.
+Track your LLM spend across models and providers. Set the `cost_usd` field on each generation. When
+using Sentry-compatible SDKs with AI integrations, cost data is typically populated automatically.
+The cost dashboard shows total spend over time with breakdowns by model and provider.
 
 ## Data Retention
 
-LLM generation data is stored in ClickHouse with a 90-day retention period. Check your plan details under [Billing & Plans](/docs/billing) for specific retention limits.
+LLM generation data is stored in ClickHouse with plan-specific retention. Check [Billing & Plans](/docs/billing) for current limits.
 
 ## Next Steps
 
-- [Getting Started](/docs/getting-started) - Set up your account and first project
-- [SDK Setup](/docs/sdk-setup) - Platform-specific SDK configuration
+- [Getting Started](/docs/getting-started) - Set up your account and first service
+- [Sentry-Compatible SDKs](/docs/sdk-setup) - Setup for Sentry-compatible instrumentation
 - [Error Monitoring](/docs/error-monitoring) - Error capture and issue grouping
-- [Billing & Plans](/docs/billing) - Usage quotas and billing
+- [Billing & Plans](/docs/billing) - Usage, budgets, and billing

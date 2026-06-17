@@ -1,63 +1,127 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* Public-pages brand type (style-guide): geometric display + machine mono.
+   Generates `font-display` and `font-brandmono` utilities; scoped to the
+   marketing pages via wrapper classes, so the app keeps its default type. */
+@theme {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-brandmono: "Spline Sans Mono", ui-monospace, "SFMono-Regular", menlo, monospace;
+}
+
 @layer base {
+  /* Default (light) theme — Internal Tools style guide: cyan accent over cool neutrals. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --border: 0 0% 89.8%;
+    /* App chrome geometry — single source of truth so the content header stays
+       locked to the sidebar. Consumed by Sidebar (logo + search rows),
+       ExplorerShell (header + toolbar), and MapExplorerShell. Edit here; never
+       hard-code these pixel heights in components. */
+    --app-header-h: 42px;     /* top band: sidebar logo row · explorer header */
+    --app-subheader-h: 36px;  /* second band: sidebar search row · explorer toolbar */
+    --background: 220 23% 98%;
+    --foreground: 225 21% 11%;
+    --border: 218 16% 87%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 225 21% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --sidebar-active: 0 0% 9%;
-    --sidebar-active-foreground: 0 0% 98%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --popover-foreground: 225 21% 11%;
+    --primary: 201 96% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 21% 95%;
+    --secondary-foreground: 225 21% 11%;
+    --muted: 220 21% 95%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 21% 95%;
+    --accent-foreground: 225 21% 11%;
+    --destructive: 358 73% 47%;
+    --destructive-foreground: 0 0% 100%;
+    --input: 218 16% 87%;
+    --ring: 199 89% 48%;
+    --sidebar-active: 201 96% 32%;
+    --sidebar-active-foreground: 0 0% 100%;
+    /* Semantic status — one status language across the app (fg / bg / border / solid). */
+    --success-fg: 164 83% 25%;
+    --success-bg: 154 47% 94%;
+    --success-border: 158 52% 77%;
+    --success-solid: 164 82% 30%;
+    --warning-fg: 42 100% 24%;
+    --warning-bg: 44 87% 94%;
+    --warning-border: 44 84% 75%;
+    --warning-solid: 43 100% 44%;
+    --danger-fg: 358 74% 39%;
+    --danger-bg: 0 81% 96%;
+    --danger-border: 358 73% 83%;
+    --danger-solid: 358 73% 47%;
+    --info-fg: 221 67% 38%;
+    --info-bg: 217 75% 95%;
+    --info-border: 217 72% 83%;
+    --info-solid: 219 70% 55%;
+    /* Categorical data-viz palette (10-series, adjacent-hue separated). */
+    --chart-1: 198 93% 60%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 184 85% 36%;
+    --chart-4: 153 59% 41%;
+    --chart-5: 43 100% 44%;
+    --chart-6: 20 88% 58%;
+    --chart-7: 344 70% 61%;
+    --chart-8: 358 75% 59%;
+    --chart-9: 189 95% 43%;
+    --chart-10: 201 96% 32%;
+    /* Dense viz canvas: dark in both themes so topology maps read as a field. */
+    --viz-surface: 222 30% 9%;
+    --viz-grid: 220 14% 100%;
     --radius: 0.5rem;
   }
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --sidebar-active: 0 0% 98%;
-    --sidebar-active-foreground: 0 0% 9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --background: 230 13% 9%;
+    --foreground: 220 14% 91%;
+    --border: 223 14% 19%;
+    --card: 227 14% 12%;
+    --card-foreground: 220 14% 91%;
+    --popover: 224 13% 16%;
+    --popover-foreground: 220 14% 91%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 202 82% 11%;
+    --secondary: 224 15% 15%;
+    --secondary-foreground: 220 14% 91%;
+    --muted: 224 15% 15%;
+    --muted-foreground: 220 11% 67%;
+    --accent: 224 15% 15%;
+    --accent-foreground: 220 14% 91%;
+    --destructive: 358 75% 59%;
+    --destructive-foreground: 0 0% 100%;
+    --input: 223 14% 19%;
+    --ring: 198 93% 60%;
+    --sidebar-active: 199 89% 48%;
+    --sidebar-active-foreground: 202 82% 11%;
+    --success-fg: 160 58% 56%;
+    --success-bg: 180 29% 15%;
+    --success-border: 168 51% 21%;
+    --success-solid: 163 74% 36%;
+    --warning-fg: 42 84% 63%;
+    --warning-bg: 42 30% 17%;
+    --warning-border: 43 66% 25%;
+    --warning-solid: 43 100% 44%;
+    --danger-fg: 358 81% 74%;
+    --danger-bg: 341 24% 18%;
+    --danger-border: 354 41% 31%;
+    --danger-solid: 358 75% 59%;
+    --info-fg: 219 73% 70%;
+    --info-bg: 221 35% 19%;
+    --info-border: 219 48% 30%;
+    --info-solid: 219 70% 55%;
+    --chart-1: 198 93% 60%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 184 85% 36%;
+    --chart-4: 153 59% 41%;
+    --chart-5: 43 100% 44%;
+    --chart-6: 20 88% 58%;
+    --chart-7: 344 70% 61%;
+    --chart-8: 358 75% 59%;
+    --chart-9: 189 95% 43%;
+    --chart-10: 201 96% 32%;
+    --viz-surface: 222 33% 7%;
+    --viz-grid: 220 14% 100%;
   }
 
   .theme-midnight {
@@ -333,7 +397,6 @@
   box-shadow: 2px 2px 0px 0px hsl(var(--foreground));
 }
 
-
 /* Gamer theme neon glow effects */
 .theme-gamer *:focus-visible {
   box-shadow: 0 0 8px hsl(var(--ring) / 0.5);
@@ -404,6 +467,19 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Tailwind v4's Preflight no longer sets `cursor: pointer` on buttons, so raw
+     <button>/<select> controls show the default arrow. Restore the pointer for
+     interactive elements globally instead of adding `cursor-pointer` per control. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  label[for],
+  select:not(:disabled),
+  summary {
+    cursor: pointer;
   }
   /* Prevent Radix scroll lock from hiding the scrollbar (causes layout shift). Radix has no prop to disable this. */
   body[data-scroll-locked] {
@@ -521,24 +597,182 @@
 .animation-delay-600 { animation-delay: 0.6s; }
 
 /* React Flow — theme-aware controls */
-.service-map .react-flow__controls {
+.map-canvas .react-flow__controls {
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: 0.5rem;
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
 }
 
-.service-map .react-flow__controls-button {
+.map-canvas .react-flow__controls-button {
   background: hsl(var(--card));
   border-color: hsl(var(--border));
   fill: hsl(var(--foreground));
   color: hsl(var(--foreground));
 }
 
-.service-map .react-flow__controls-button:hover {
+.map-canvas .react-flow__controls-button:hover {
   background: hsl(var(--muted));
 }
 
-.service-map .react-flow__edge-path {
+.map-canvas .react-flow__edge-path {
   stroke-linecap: round;
+}
+
+.workflows-page :is(.shadow, .shadow-sm, .shadow-md, .shadow-lg),
+.workflow-editor-dialog:is(.shadow, .shadow-sm, .shadow-md, .shadow-lg),
+.workflow-editor-dialog :is(.shadow, .shadow-sm, .shadow-md, .shadow-lg) {
+  box-shadow: none;
+}
+
+/* =========================================================================
+   Public docs surface — scoped atmosphere, motion, and brand details.
+   Everything here is namespaced under .docs-surface / .docs-atmos so it
+   never leaks into the app or other marketing pages. Accent: indigo → cyan.
+   ========================================================================= */
+
+/* Fixed atmosphere: top accent glow + faint masked grid behind the panes. */
+.docs-atmos {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.docs-atmos::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(58% 40% at 50% -6%, rgba(99, 102, 241, 0.16), transparent 70%),
+    radial-gradient(40% 30% at 88% 2%, rgba(34, 211, 238, 0.08), transparent 70%);
+}
+.docs-atmos::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(80% 55% at 50% 0%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(80% 55% at 50% 0%, #000 30%, transparent 100%);
+}
+
+/* Keyboard hint chips (⌘K). */
+.docs-surface kbd {
+  font-family: var(--font-brandmono);
+  font-size: 11px;
+  line-height: 1;
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom-color: rgba(0, 0, 0, 0.4);
+  border-radius: 5px;
+  padding: 3px 5px;
+}
+
+/* Thin, unobtrusive scrollbars for the nav / rail / code panels. */
+.docs-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.docs-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.docs-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+.docs-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.docs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Motion: one orchestrated load reveal + the signature EKG pulse draw. */
+@keyframes docs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes docs-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes docs-beat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.docs-surface .rise {
+  opacity: 0;
+  animation: docs-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.docs-surface .d1 {
+  animation-delay: 0.05s;
+}
+.docs-surface .d2 {
+  animation-delay: 0.12s;
+}
+.docs-surface .d3 {
+  animation-delay: 0.19s;
+}
+.docs-surface .d4 {
+  animation-delay: 0.26s;
+}
+.docs-surface .d5 {
+  animation-delay: 0.33s;
+}
+.docs-surface .d6 {
+  animation-delay: 0.4s;
+}
+.docs-surface .pulse-path {
+  stroke-dasharray: 560;
+  stroke-dashoffset: 560;
+  animation: docs-draw 2.1s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
+}
+.docs-surface .pulse-line {
+  stroke-dasharray: 1100;
+  stroke-dashoffset: 1100;
+  animation: docs-draw 2.4s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+.docs-surface .beat {
+  animation: docs-beat 3.2s ease-in-out infinite;
+}
+.docs-surface .card-hover {
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+.docs-surface .card-hover:hover {
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-surface .rise {
+    opacity: 1;
+    animation: none;
+  }
+  .docs-surface .pulse-path,
+  .docs-surface .pulse-line {
+    stroke-dashoffset: 0;
+    animation: none;
+  }
+  .docs-surface .beat {
+    animation: none;
+  }
+  .docs-surface .card-hover:hover {
+    transform: none;
+  }
 }

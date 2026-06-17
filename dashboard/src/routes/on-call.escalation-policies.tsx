@@ -17,9 +17,11 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
 import {api, type EscalationPolicy, type EscalationStep, type EscalationTarget} from '@/lib/api'
-import {Card, CardContent} from '@/components/ui/card'
+import {Card} from '@/components/ui/card'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
+import {PageHeader} from '@/components/ui/page-header'
+import {EmptyState} from '@/components/ui/empty-state'
 import {
   Dialog,
   DialogContent,
@@ -37,13 +39,15 @@ export const Route = createFileRoute('/on-call/escalation-policies')({
   component: EscalationPolicies,
 })
 
+// Step numbers are a categorical sequence — draw from the shared chart palette
+// (literal classes so Tailwind emits them).
 const stepBgColors = [
-  'bg-blue-500/10', 'bg-violet-500/10', 'bg-amber-500/10',
-  'bg-emerald-500/10', 'bg-rose-500/10', 'bg-cyan-500/10',
+  'bg-chart-1/15', 'bg-chart-2/15', 'bg-chart-3/15',
+  'bg-chart-4/15', 'bg-chart-5/15', 'bg-chart-6/15',
 ]
 const stepTextColors = [
-  'text-blue-500', 'text-violet-500', 'text-amber-500',
-  'text-emerald-500', 'text-rose-500', 'text-cyan-500',
+  'text-chart-1', 'text-chart-2', 'text-chart-3',
+  'text-chart-4', 'text-chart-5', 'text-chart-6',
 ]
 
 function EscalationPolicies() {
@@ -94,7 +98,7 @@ function EscalationPolicies() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({id, data}: {id: number; data: EscalationPolicyData}) => api.updateEscalationPolicy(id, {
+    mutationFn: ({id, data}: {id: string; data: EscalationPolicyData}) => api.updateEscalationPolicy(id, {
       name: data.name,
       description: data.description || undefined,
       repeatCount: data.repeatCount,
@@ -118,7 +122,7 @@ function EscalationPolicies() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteEscalationPolicy(id),
+    mutationFn: (id: string) => api.deleteEscalationPolicy(id),
     onSuccess: () => {
       queryClient.invalidateQueries({queryKey: ['escalation-policies']})
       toast({title: 'Policy Deleted', description: 'Escalation policy has been removed.'})
@@ -141,31 +145,32 @@ function EscalationPolicies() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-xl font-bold">Escalation Policies</h2>
-          <p className="text-muted-foreground text-xs">Define how incidents escalate through your team</p>
-        </div>
-        <Button size="sm" onClick={() => {setEditingPolicy(null); setShowEditor(true)}} className="bg-amber-600 hover:bg-amber-700 gap-1.5 shrink-0">
-          <Plus className="h-3 w-3" />
-          Create Policy
-        </Button>
-      </div>
+      <PageHeader
+        icon={ListChecks}
+        title="Escalation policies"
+        description="Define how incidents escalate through your team"
+        actions={
+          <Button size="sm" onClick={() => {setEditingPolicy(null); setShowEditor(true)}} className="gap-1.5 shrink-0">
+            <Plus className="h-4 w-4" />
+            Create policy
+          </Button>
+        }
+      />
 
       {isLoading ? (
         <div className="flex items-center justify-center py-10">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-amber-500" />
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
       ) : policies && policies.length > 0 ? (
         <div className="space-y-3">
           {policies.map((policy) => (
-            <Card key={policy.id} className="overflow-hidden hover:border-amber-500/30 transition-all">
+            <Card key={policy.id} className="overflow-hidden hover:border-primary/30 transition-colors">
               <div className="p-3">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-amber-500/15 flex-shrink-0">
-                        <Zap className="h-4 w-4 text-amber-500" />
+                      <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-warning-bg flex-shrink-0">
+                        <Zap className="h-4 w-4 text-warning-fg" />
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-semibold text-base">{policy.name}</h3>
@@ -175,11 +180,11 @@ function EscalationPolicies() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 mt-2 ml-10">
-                      <Badge variant="outline" className="text-xs gap-1 bg-amber-500/10 text-amber-400 border-amber-500/30">
+                      <Badge variant="warning" size="sm" className="gap-1">
                         {policy.steps.length} step{policy.steps.length !== 1 ? 's' : ''}
                       </Badge>
                       {policy.repeatCount > 0 && (
-                        <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                        <Badge variant="neutral" size="sm" className="gap-1">
                           <Repeat className="h-3 w-3" />
                           Repeat {policy.repeatCount}x
                         </Badge>
@@ -280,21 +285,17 @@ function EscalationPolicies() {
           ))}
         </div>
       ) : (
-        <Card className="border-2 border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-10">
-            <div className="inline-flex items-center justify-center h-12 w-12 rounded-full bg-amber-500/10 mb-3">
-              <ListChecks className="h-6 w-6 text-amber-500" />
-            </div>
-            <h3 className="text-base font-semibold mb-0.5">No Escalation Policies</h3>
-            <p className="text-xs text-muted-foreground text-center mb-4 max-w-md">
-              Define how incidents escalate through your team. Set notification chains with configurable timeouts.
-            </p>
-            <Button size="sm" onClick={() => setShowEditor(true)} className="bg-amber-600 hover:bg-amber-700 gap-1.5">
-              <Plus className="h-3 w-3" />
-              Create Your First Policy
+        <EmptyState
+          icon={ListChecks}
+          title="No escalation policies"
+          description="Define how incidents escalate through your team. Set notification chains with configurable timeouts."
+          action={
+            <Button size="sm" onClick={() => setShowEditor(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Create your first policy
             </Button>
-          </CardContent>
-        </Card>
+          }
+        />
       )}
 
       {/* Policy Editor Dialog */}

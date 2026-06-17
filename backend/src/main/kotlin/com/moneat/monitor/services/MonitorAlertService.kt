@@ -18,21 +18,29 @@ package com.moneat.monitor.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.RedisConfig
+import com.moneat.alerts.models.AlertSource
+import com.moneat.alerts.models.AlertLifecycleEvent
+import com.moneat.alerts.models.AlertPriority
+import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
 import com.moneat.monitor.models.SilencePeriodResponse
-import com.moneat.notifications.services.AlertNotificationPreferencesService
-import com.moneat.notifications.services.DiscordService
-import com.moneat.notifications.services.EmailService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
 import com.moneat.shared.models.HostAlerts
 import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.OrganizationAlertTemplates
+import com.moneat.shared.services.organizationResourceId
+import com.moneat.shared.services.requireResourceId
 import com.moneat.shared.services.TaskLock
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.shared.services.userResourceId
+import com.moneat.shared.services.userResourceIds
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.AlertResolvedWorkflowEvent
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
 import io.ktor.server.config.ApplicationConfig
@@ -62,9 +70,28 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
-import com.moneat.utils.suspendRunCatching
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
+
+private const val CURRENT_METRIC_LOOKBACK_MINUTES = 10
+private const val EMAIL_FRONTEND_URL_CONFIG = "email.frontendUrl"
+private const val LATEST_METRIC_VALUE_EXPR = "argMax(value, timestamp)"
+private const val MEM_AVAILABLE_METRIC = "system.mem.available"
+private const val MEM_USED_METRIC = "system.mem.used"
+private const val MEM_TOTAL_METRIC = "system.mem.total"
+private const val DISK_PERCENT_METRIC = "system.disk.percent"
+private const val DISK_USED_METRIC = "system.disk.used"
+private const val DISK_TOTAL_METRIC = "system.disk.total"
+private const val DISK_ID_EXPRESSION = """
+    multiIf(
+        tags['device_name'] != '', tags['device_name'],
+        tags['device'] != '', tags['device'],
+        tags['mount_point'] != '', tags['mount_point'],
+        tags['filesystem'] != '', tags['filesystem'],
+        'default'
+    )
+"""
 
 private fun String.escapeHtml(): String =
     replace("&", "&amp;")
@@ -73,11 +100,108 @@ private fun String.escapeHtml(): String =
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
 
+private fun memoryPercentMetricFilter(): String =
+    "metric_name IN ('$MEM_AVAILABLE_METRIC','$MEM_USED_METRIC','$MEM_TOTAL_METRIC')"
+
+private fun latestMemoryPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            countIf(metric_name = '$MEM_AVAILABLE_METRIC') > 0 AND
+                countIf(metric_name = '$MEM_TOTAL_METRIC') > 0,
+            (1 - argMaxIf(value, timestamp, metric_name = '$MEM_AVAILABLE_METRIC') /
+                nullIf(argMaxIf(value, timestamp, metric_name = '$MEM_TOTAL_METRIC'), 0)) * 100,
+            NULL
+        ),
+        if(
+            countIf(metric_name = '$MEM_USED_METRIC') > 0 AND countIf(metric_name = '$MEM_TOTAL_METRIC') > 0,
+            argMaxIf(value, timestamp, metric_name = '$MEM_USED_METRIC') /
+                nullIf(argMaxIf(value, timestamp, metric_name = '$MEM_TOTAL_METRIC'), 0) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
+private fun rollupMemoryPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            sumIf(value_count, metric_name = '$MEM_AVAILABLE_METRIC') > 0 AND
+                sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC') > 0,
+            (1 - (
+                sumIf(value_sum, metric_name = '$MEM_AVAILABLE_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_AVAILABLE_METRIC'), 0)
+            ) / nullIf(
+                sumIf(value_sum, metric_name = '$MEM_TOTAL_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC'), 0),
+                0
+            )) * 100,
+            NULL
+        ),
+        if(
+            sumIf(value_count, metric_name = '$MEM_USED_METRIC') > 0 AND
+                sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC') > 0,
+            (
+                sumIf(value_sum, metric_name = '$MEM_USED_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_USED_METRIC'), 0)
+            ) / nullIf(
+                sumIf(value_sum, metric_name = '$MEM_TOTAL_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$MEM_TOTAL_METRIC'), 0),
+                0
+            ) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
+private fun diskPercentMetricFilter(): String =
+    "metric_name IN ('$DISK_PERCENT_METRIC','$DISK_USED_METRIC','$DISK_TOTAL_METRIC')"
+
+private fun latestDiskPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            countIf(metric_name = '$DISK_PERCENT_METRIC') > 0,
+            argMaxIf(value, timestamp, metric_name = '$DISK_PERCENT_METRIC'),
+            NULL
+        ),
+        if(
+            countIf(metric_name = '$DISK_USED_METRIC') > 0 AND countIf(metric_name = '$DISK_TOTAL_METRIC') > 0,
+            argMaxIf(value, timestamp, metric_name = '$DISK_USED_METRIC') /
+                nullIf(argMaxIf(value, timestamp, metric_name = '$DISK_TOTAL_METRIC'), 0) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
+private fun rollupDiskPercentExpr(): String =
+    """
+    coalesce(
+        if(
+            sumIf(value_count, metric_name = '$DISK_PERCENT_METRIC') > 0,
+            sumIf(value_sum, metric_name = '$DISK_PERCENT_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$DISK_PERCENT_METRIC'), 0),
+            NULL
+        ),
+        if(
+            sumIf(value_count, metric_name = '$DISK_USED_METRIC') > 0 AND
+                sumIf(value_count, metric_name = '$DISK_TOTAL_METRIC') > 0,
+            (
+                sumIf(value_sum, metric_name = '$DISK_USED_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$DISK_USED_METRIC'), 0)
+            ) / nullIf(
+                sumIf(value_sum, metric_name = '$DISK_TOTAL_METRIC') /
+                nullIf(sumIf(value_count, metric_name = '$DISK_TOTAL_METRIC'), 0),
+                0
+            ) * 100,
+            NULL
+        )
+    )
+    """.trimIndent()
+
 class MonitorAlertService(
-    private val emailService: EmailService = EmailService(),
-    private val slackService: SlackService = SlackService(),
-    private val discordService: DiscordService = DiscordService(),
     private val incidentService: IncidentService = IncidentService(),
+    private val workflowService: WorkflowService = WorkflowService(),
 ) {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -95,6 +219,14 @@ class MonitorAlertService(
         const val MIN_DATA_POINT_RATIO = 0.8
         private const val SECONDS_PER_MINUTE = 60
     }
+
+    private data class HostStatusSnapshot(
+        val hostId: Int,
+        val hostName: String,
+        val organizationId: Int,
+        val currentStatus: String,
+        val lastSeenAt: Instant
+    )
 
     /**
      * Start the background jobs for alert evaluation and status checking.
@@ -306,177 +438,253 @@ class MonitorAlertService(
         hostName: String,
         organizationId: Int
     ) {
-        val idPart = if (alert.templateAlertId != null) "tpl_${alert.templateAlertId}" else "id_${alert.id}"
-        val alertKey = "alert_state:${alert.hostId}:$idPart"
-
-        // Get recent metrics for the host
+        val alertKey = hostAlertRedisKey(alert)
         val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
-
-        // Check if alert condition is met
         val triggered = isThresholdTriggered(alert.condition, currentValue, alert.threshold)
 
-        // Handle Recovery
         if (!triggered) {
-            // Check if it was previously triggered
-            val wasTriggered =
-                suspendRunCatching {
-                    if (RedisConfig.isConnected()) {
-                        RedisConfig.sync().get(alertKey) == "TRIGGERED"
-                    } else {
-                        false // Fallback if Redis is down
-                    }
-                }.getOrElse { _ ->
-                    false
-                }
-
-            if (wasTriggered) {
-                // Clear state
-                suspendRunCatching {
-                    if (RedisConfig.isConnected()) {
-                        RedisConfig.sync().del(alertKey)
-                    }
-                }.getOrElse { e ->
-                    logger.error(e) { "Failed to clear alert state in Redis" }
-                }
-
-                // Send recovery notification
-                sendRecoveryNotification(alert, hostName, organizationId)
-                // Resolve incident for metric alerts (same dedup key used when firing)
-                val dedupKey =
-                    "moneat-host-alert-${alert.hostId}-$idPart"
-                suspendRunCatching {
-                    incidentService.resolveAlert(
-                        organizationId = organizationId,
-                        source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = dedupKey
-                    )
-                }.getOrElse { e ->
-                    logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
-                }
-                logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
-            }
+            handleRecoveredAlert(alert, hostName, organizationId, alertKey)
             return
         }
 
-        // If triggered, check duration if specified
-        if (alert.durationSeconds > 0) {
-            val isSustained = checkSustainedCondition(alert)
-            if (!isSustained) {
-                return // Condition not sustained for required duration
-            }
+        if (alert.durationSeconds > 0 && !checkSustainedCondition(alert)) {
+            return
         }
 
-        // Check throttling
         val now = Clock.System.now()
         if (isThrottledByInterval(alert.lastTriggeredAt, now)) {
-            // Update Redis state even if throttled to ensure consistency
-            suspendRunCatching {
-                if (RedisConfig.isConnected()) {
-                    RedisConfig.sync().set(alertKey, "TRIGGERED")
-                }
-            }.getOrElse { e ->
-                logger.debug(e) { "Failed to update throttled alert state in Redis" }
-            }
-            return // Don't spam alerts
+            setAlertTriggeredState(alertKey, isThrottled = true)
+            return
         }
 
-        // Check if alerts are silenced for this organization
         if (isAnySilenceActive(organizationId)) {
             return
         }
 
-        // Trigger the alert
+        triggerAlert(alert, hostName, organizationId, currentValue, alertKey, now)
+    }
+
+    private suspend fun handleRecoveredAlert(
+        alert: AlertData,
+        hostName: String,
+        organizationId: Int,
+        alertKey: String
+    ) {
+        if (!wasAlertTriggered(alert, alertKey)) return
+
+        clearAlertState(alert, alertKey)
+
+        val metricLabel = getMetricLabel(alert.metric)
+        val dashboardUrl = hostDashboardUrl(alert.hostId, organizationId)
+        val alertPriorityOverride = hostAlertPriorityOverride(alert)
+        val title = "$hostName - $metricLabel recovered"
+        val description = "The alert for $metricLabel is no longer active."
+        val deduplicationKey = hostAlertDedupKey(alert)
+
+        publishRecoveredHostAlertWorkflow(
+            alert = alert,
+            organizationId = organizationId,
+            deduplicationKey = deduplicationKey,
+            title = title,
+            description = description,
+            dashboardUrl = dashboardUrl,
+            priority = alertPriorityOverride ?: AlertPriority.P1
+        )
+        autoResolveRecoveredHostIncident(
+            alert = alert,
+            organizationId = organizationId,
+            deduplicationKey = deduplicationKey,
+            title = title,
+            description = description,
+            dashboardUrl = dashboardUrl,
+            alertPriorityOverride = alertPriorityOverride
+        )
+        logger.info { "Alert ${alert.id} recovered for host ${alert.hostId}" }
+    }
+
+    private suspend fun publishRecoveredHostAlertWorkflow(
+        alert: AlertData,
+        organizationId: Int,
+        deduplicationKey: String,
+        title: String,
+        description: String,
+        dashboardUrl: String,
+        priority: AlertPriority
+    ) {
+        suspendRunCatching {
+            workflowService.publishAlertResolved(
+                AlertResolvedWorkflowEvent(
+                    organizationId = organizationId,
+                    source = AlertSource.HOST_ALERT.name,
+                    deduplicationKey = deduplicationKey,
+                    title = title,
+                    description = description,
+                    moneatUrl = dashboardUrl,
+                    priority = priority,
+                )
+            )
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to publish recovered host alert workflow ${alert.id}" }
+        }
+    }
+
+    private suspend fun autoResolveRecoveredHostIncident(
+        alert: AlertData,
+        organizationId: Int,
+        deduplicationKey: String,
+        title: String,
+        description: String,
+        dashboardUrl: String,
+        alertPriorityOverride: AlertPriority?
+    ) {
+        if (alertPriorityOverride == null) return
+
+        suspendRunCatching {
+            incidentService.autoResolveAlert(
+                organizationId = organizationId,
+                source = AlertSource.HOST_ALERT,
+                deduplicationKey = deduplicationKey,
+                title = title,
+                description = description,
+                moneatUrl = dashboardUrl,
+                publishWorkflow = false
+            )
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to resolve incident for recovered alert ${alert.id}" }
+        }
+    }
+
+    private suspend fun triggerAlert(
+        alert: AlertData,
+        hostName: String,
+        organizationId: Int,
+        currentValue: Double,
+        alertKey: String,
+        now: Instant
+    ) {
         logger.info {
             "Alert ${alert.id} triggered for host ${alert.hostId}: " +
                 "${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
         }
 
-        // Update Redis state
+        setAlertTriggeredState(alertKey)
+        updateLastTriggeredAt(alert, now)
+        sendAlertNotification(alert, hostName, organizationId, currentValue)
+    }
+
+    private fun wasAlertTriggered(
+        alert: AlertData,
+        alertKey: String
+    ): Boolean =
+        alert.lastTriggeredAt != null || wasAlertTriggeredInRedis(alertKey)
+
+    private fun wasAlertTriggeredInRedis(alertKey: String): Boolean =
+        suspendRunCatching {
+            RedisConfig.isConnected() && RedisConfig.sync().get(alertKey) == "TRIGGERED"
+        }.getOrElse {
+            false
+        }
+
+    private fun clearAlertState(
+        alert: AlertData,
+        alertKey: String
+    ) {
+        suspendRunCatching {
+            if (RedisConfig.isConnected()) {
+                RedisConfig.sync().del(alertKey)
+            }
+        }.getOrElse { e ->
+            logger.error(e) { "Failed to clear alert state in Redis" }
+        }
+        clearPersistedAlertState(alert)
+    }
+
+    private fun clearPersistedAlertState(alert: AlertData) {
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            clearTemplateAlertTriggeredAt(alert)
+            return
+        }
+
+        transaction {
+            HostAlerts.update({ HostAlerts.id eq alert.id }) {
+                it[last_triggered_at] = null
+            }
+        }
+    }
+
+    private fun clearTemplateAlertTriggeredAt(alert: AlertData) {
+        val templateAlertId = alert.templateAlertId ?: return
+        transaction {
+            HostAlertTemplateStates.update({
+                (HostAlertTemplateStates.template_alert_id eq templateAlertId) and
+                    (HostAlertTemplateStates.host_id eq alert.hostId)
+            }) {
+                it[last_triggered_at] = null
+            }
+        }
+    }
+
+    private fun setAlertTriggeredState(
+        alertKey: String,
+        isThrottled: Boolean = false
+    ) {
         suspendRunCatching {
             if (RedisConfig.isConnected()) {
                 RedisConfig.sync().set(alertKey, "TRIGGERED")
             }
         }.getOrElse { e ->
-            logger.error(e) { "Failed to set alert state in Redis" }
+            if (isThrottled) {
+                logger.debug(e) { "Failed to update throttled alert state in Redis" }
+            } else {
+                logger.error(e) { "Failed to set alert state in Redis" }
+            }
+        }
+    }
+
+    private fun updateLastTriggeredAt(alert: AlertData, now: Instant) {
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            upsertTemplateAlertTriggeredAt(alert, now)
+            return
         }
 
-        // Update last triggered timestamp
-        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
-            transaction {
-                val existing =
-                    HostAlertTemplateStates
-                        .selectAll()
-                        .where {
-                            (HostAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                                (HostAlertTemplateStates.host_id eq alert.hostId)
-                        }.firstOrNull()
-
-                if (existing != null) {
-                    HostAlertTemplateStates.update({
-                        (HostAlertTemplateStates.template_alert_id eq alert.templateAlertId) and
-                            (HostAlertTemplateStates.host_id eq alert.hostId)
-                    }) {
-                        it[last_triggered_at] = now
-                    }
-                } else {
-                    HostAlertTemplateStates.insert {
-                        it[HostAlertTemplateStates.template_alert_id] = alert.templateAlertId
-                        it[HostAlertTemplateStates.host_id] = alert.hostId
-                        it[HostAlertTemplateStates.last_triggered_at] = now
-                    }
-                }
+        transaction {
+            HostAlerts.update({ HostAlerts.id eq alert.id }) {
+                it[last_triggered_at] = now
             }
-        } else {
-            transaction {
-                HostAlerts.update({ HostAlerts.id eq alert.id }) {
+        }
+    }
+
+    private fun upsertTemplateAlertTriggeredAt(alert: AlertData, now: Instant) {
+        val templateAlertId = alert.templateAlertId ?: return
+        transaction {
+            val query =
+                (HostAlertTemplateStates.template_alert_id eq templateAlertId) and
+                    (HostAlertTemplateStates.host_id eq alert.hostId)
+            val existing = HostAlertTemplateStates.selectAll().where { query }.firstOrNull()
+
+            if (existing != null) {
+                HostAlertTemplateStates.update({ query }) {
                     it[last_triggered_at] = now
                 }
+            } else {
+                HostAlertTemplateStates.insert {
+                    it[HostAlertTemplateStates.template_alert_id] = templateAlertId
+                    it[HostAlertTemplateStates.host_id] = alert.hostId
+                    it[HostAlertTemplateStates.last_triggered_at] = now
+                }
             }
         }
-
-        // Send notification
-        sendAlertNotification(alert, hostName, organizationId, currentValue)
     }
 
     /**
      * Get the current value of a metric for a host from metrics table.
      */
-    private suspend fun getCurrentMetricValue(
+    internal suspend fun getCurrentMetricValue(
         hostId: Int,
         organizationId: Int,
         metric: String
     ): Double? {
-        val (selectExpr, metricFilter) =
-            when (metric) {
-                "cpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.cpu.percent'"
-                "mem_percent" ->
-                    "(1 - argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp), 0)) * " +
-                        "100" to
-                        "metric_name IN ('system.mem.available','system.mem.total')"
-                "disk_percent" ->
-                    "argMax(CASE WHEN metric_name='system.disk.used' THEN value END, timestamp) / " +
-                        "nullIf(argMax(CASE WHEN metric_name='system.disk.total' THEN value END, timestamp), 0) * " +
-                        "100" to
-                        "metric_name IN ('system.disk.used','system.disk.total')"
-                "load_1" -> "argMax(value, timestamp)" to "metric_name = 'system.load.1'"
-                "load_5" -> "argMax(value, timestamp)" to "metric_name = 'system.load.5'"
-                "load_15" -> "argMax(value, timestamp)" to "metric_name = 'system.load.15'"
-                "temp_max" -> "argMax(value, timestamp)" to "metric_name = 'system.temp.max'"
-                "gpu_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.gpu.percent'"
-                "battery_percent" -> "argMax(value, timestamp)" to "metric_name = 'system.battery.percent'"
-                else -> return null
-            }
-
-        val query =
-            """
-            SELECT $selectExpr as value
-            FROM `$clickhouseDb`.metrics
-            WHERE organization_id = $organizationId
-              AND tags['host_id'] = '$hostId'
-              AND $metricFilter
-            FORMAT JSONCompact
-            """.trimIndent()
+        val query = currentMetricValueQuery(hostId, organizationId, metric) ?: return null
 
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
@@ -500,86 +708,161 @@ class MonitorAlertService(
         }
     }
 
+    internal fun currentMetricValueQuery(
+        hostId: Int,
+        organizationId: Int,
+        metric: String
+    ): String? {
+        if (metric == "disk_percent") {
+            return diskPercentCurrentMetricQuery(hostId, organizationId)
+        }
+
+        val (selectExpr, metricFilter) =
+            when (metric) {
+                "cpu_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.cpu.percent'"
+                "mem_percent" -> latestMemoryPercentExpr() to memoryPercentMetricFilter()
+                "load_1" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.1'"
+                "load_5" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.5'"
+                "load_15" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.load.15'"
+                "temp_max" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.temp.max'"
+                "gpu_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.gpu.percent'"
+                "battery_percent" -> LATEST_METRIC_VALUE_EXPR to "metric_name = 'system.battery.percent'"
+                else -> return null
+            }
+
+        return """
+            SELECT $selectExpr as value
+            FROM `$clickhouseDb`.metrics_latest_by_host
+            WHERE organization_id = $organizationId
+              AND host_id = $hostId
+              AND $metricFilter
+              AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
+
+    private fun diskPercentCurrentMetricQuery(
+        hostId: Int,
+        organizationId: Int
+    ): String =
+        """
+        SELECT
+            max(pct) AS value
+        FROM (
+            SELECT
+                $DISK_ID_EXPRESSION AS disk_identity,
+                ${latestDiskPercentExpr()} AS pct
+            FROM `$clickhouseDb`.metrics_latest_by_host
+            WHERE organization_id = $organizationId
+              AND host_id = $hostId
+              AND ${diskPercentMetricFilter()}
+              AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
+            GROUP BY disk_identity
+        )
+        FORMAT JSONCompact
+        """.trimIndent()
+
+    private fun sustainedConditionQuery(alert: AlertData, baseFilter: String): String? =
+        when (alert.metric) {
+            "mem_percent" -> derivedSustainedConditionQuery(
+                alert = alert,
+                baseFilter = baseFilter,
+                percentExpression = rollupMemoryPercentExpr(),
+                metricFilter = memoryPercentMetricFilter(),
+            )
+            "disk_percent" -> derivedSustainedConditionQuery(
+                alert = alert,
+                baseFilter = baseFilter,
+                percentExpression = rollupDiskPercentExpr(),
+                metricFilter = diskPercentMetricFilter(),
+            )
+            else -> scalarSustainedConditionQuery(alert, baseFilter)
+        }
+
+    private fun derivedSustainedConditionQuery(
+        alert: AlertData,
+        baseFilter: String,
+        percentExpression: String,
+        metricFilter: String
+    ): String? {
+        val havingClause = conditionSql("pct", alert.condition, alert.threshold) ?: return null
+        return """
+            SELECT count(*) as cnt FROM (
+                SELECT bucket_start,
+                    $percentExpression as pct
+                FROM `$clickhouseDb`.metrics_rollup_1m
+                WHERE $baseFilter AND $metricFilter
+                GROUP BY bucket_start
+                HAVING $havingClause
+            )
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
+
+    private fun scalarSustainedConditionQuery(alert: AlertData, baseFilter: String): String? {
+        val metricName = scalarAlertMetricName(alert.metric) ?: return null
+        val conditionSql = conditionSql("value", alert.condition, alert.threshold) ?: return null
+        return """
+            SELECT count(*) as cnt
+            FROM (
+                SELECT bucket_start,
+                    sum(value_sum) / nullIf(sum(value_count), 0) as value
+                FROM `$clickhouseDb`.metrics_rollup_1m
+                WHERE $baseFilter AND metric_name = '$metricName'
+                GROUP BY bucket_start
+                HAVING $conditionSql
+            )
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
+
+    private fun scalarAlertMetricName(metric: String): String? =
+        when (metric) {
+            "cpu_percent" -> "system.cpu.percent"
+            "load_1" -> "system.load.1"
+            "load_5" -> "system.load.5"
+            "load_15" -> "system.load.15"
+            "temp_max" -> "system.temp.max"
+            "gpu_percent" -> "system.gpu.percent"
+            "battery_percent" -> "system.battery.percent"
+            else -> null
+        }
+
+    private fun conditionSql(fieldName: String, condition: String, threshold: Double): String? =
+        when (condition) {
+            ">" -> "$fieldName > $threshold"
+            "<" -> "$fieldName < $threshold"
+            ">=" -> "$fieldName >= $threshold"
+            "<=" -> "$fieldName <= $threshold"
+            "==" -> "$fieldName == $threshold"
+            else -> null
+        }
+
+    private fun sustainedConditionCount(body: String): Long? {
+        if (body.isBlank()) {
+            return null
+        }
+        val json = Json { ignoreUnknownKeys = true }
+        val result = json.parseToJsonElement(body).jsonObject
+        val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
+        return data[0].toString().replace("\"", "").toLongOrNull() ?: 0
+    }
+
+    private fun expectedSustainedDataPoints(durationSeconds: Int): Int {
+        if (durationSeconds == 0) {
+            return 0
+        }
+        return kotlin.math.ceil(durationSeconds.toDouble() / SECONDS_PER_MINUTE).toInt()
+    }
+
     /**
      * Check if the alert condition has been sustained for the required duration.
      */
     private suspend fun checkSustainedCondition(alert: AlertData): Boolean {
         val baseFilter =
-            "organization_id = ${alert.organizationId} AND tags['host_id'] = '${alert.hostId}' " +
-                "AND timestamp >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
-
-        val (query, usesDerived) =
-            when (alert.metric) {
-                "mem_percent", "disk_percent" -> {
-                    val availName = if (alert.metric == "mem_percent") "system.mem.available" else null
-                    val usedName = if (alert.metric == "mem_percent") "system.mem.used" else "system.disk.used"
-                    val totalName = if (alert.metric == "mem_percent") "system.mem.total" else "system.disk.total"
-                    val havingClause =
-                        when (alert.condition) {
-                            ">" -> "pct > ${alert.threshold}"
-                            "<" -> "pct < ${alert.threshold}"
-                            ">=" -> "pct >= ${alert.threshold}"
-                            "<=" -> "pct <= ${alert.threshold}"
-                            "==" -> "pct == ${alert.threshold}"
-                            else -> return false
-                        }
-                    val pctExpr = if (availName != null) {
-                        "(1 - max(CASE WHEN metric_name='$availName' THEN value END) / " +
-                            "nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0)) * 100"
-                    } else {
-                        "max(CASE WHEN metric_name='$usedName' THEN value END) / " +
-                            "nullIf(max(CASE WHEN metric_name='$totalName' THEN value END), 0) * 100"
-                    }
-                    val metricFilter = if (availName != null) {
-                        "metric_name IN ('$availName','$totalName')"
-                    } else {
-                        "metric_name IN ('$usedName','$totalName')"
-                    }
-                    val q =
-                        """
-                        SELECT count(*) as cnt FROM (
-                            SELECT timestamp,
-                                $pctExpr as pct
-                            FROM `$clickhouseDb`.metrics
-                            WHERE $baseFilter AND $metricFilter
-                            GROUP BY timestamp
-                            HAVING $havingClause
-                        )
-                        FORMAT JSONCompact
-                        """.trimIndent()
-                    q to true
-                }
-                else -> {
-                    val metricName =
-                        when (alert.metric) {
-                            "cpu_percent" -> "system.cpu.percent"
-                            "load_1" -> "system.load.1"
-                            "load_5" -> "system.load.5"
-                            "load_15" -> "system.load.15"
-                            "temp_max" -> "system.temp.max"
-                            "gpu_percent" -> "system.gpu.percent"
-                            "battery_percent" -> "system.battery.percent"
-                            else -> return false
-                        }
-                    val conditionSql =
-                        when (alert.condition) {
-                            ">" -> "value > ${alert.threshold}"
-                            "<" -> "value < ${alert.threshold}"
-                            ">=" -> "value >= ${alert.threshold}"
-                            "<=" -> "value <= ${alert.threshold}"
-                            "==" -> "value == ${alert.threshold}"
-                            else -> return false
-                        }
-                    val q =
-                        """
-                        SELECT count(*) as cnt
-                        FROM `$clickhouseDb`.metrics
-                        WHERE $baseFilter AND metric_name = '$metricName' AND $conditionSql
-                        FORMAT JSONCompact
-                        """.trimIndent()
-                    q to false
-                }
-            }
+            "organization_id = ${alert.organizationId} AND host_id = ${alert.hostId} " +
+                "AND bucket_start >= now64(3) - INTERVAL ${alert.durationSeconds} SECOND"
+        val query = sustainedConditionQuery(alert, baseFilter) ?: return false
 
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
@@ -589,21 +872,8 @@ class MonitorAlertService(
                 return false
             }
 
-            val body = response.bodyAsText()
-            if (body.isBlank()) return false
-
-            val json = Json { ignoreUnknownKeys = true }
-            val result = json.parseToJsonElement(body).jsonObject
-            val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return false
-
-            val count = data[0].toString().replace("\"", "").toLongOrNull() ?: 0
-
-            // Check if we have enough data points
-            val expectedDataPoints = if (alert.durationSeconds == 0) {
-                0
-            } else {
-                kotlin.math.ceil(alert.durationSeconds.toDouble() / POLL_INTERVAL_SECONDS).toInt()
-            }
+            val count = sustainedConditionCount(response.bodyAsText()) ?: return false
+            val expectedDataPoints = expectedSustainedDataPoints(alert.durationSeconds)
             count >= expectedDataPoints * MIN_DATA_POINT_RATIO
         }.getOrElse { e ->
             logger.error(e) { "Error checking sustained condition" }
@@ -620,177 +890,70 @@ class MonitorAlertService(
         organizationId: Int,
         currentValue: Double
     ) {
-        val prefsService = AlertNotificationPreferencesService()
-
-        // Get users with email enabled for HOST_ALERT
-        val emailRecipients =
-            prefsService.getUsersWithChannelEnabled(
-                organizationId = organizationId,
-                alertSource = "HOST_ALERT",
-                channel = "email"
-            )
-
         val metricLabel = getMetricLabel(alert.metric)
-        val conditionText = getConditionText(alert.condition)
-        val subject = "⚠️ Alert: $hostName - $metricLabel $conditionText ${alert.threshold}"
-
         val formattedValue = formatMetricValue(alert.metric, currentValue)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
-        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/${alert.hostId}"
+        val hostResourceId = hostResourceId(alert.hostId, organizationId)
+        val dashboardUrl = hostDashboardUrl(alert.hostId, organizationId)
+        val metadata =
+            mutableMapOf(
+                "host_name" to JsonPrimitive(hostName),
+                "metric" to JsonPrimitive(alert.metric),
+                "current_value" to JsonPrimitive(formattedValue),
+                "threshold" to JsonPrimitive(formattedThreshold)
+            )
+        hostResourceId?.let { metadata["host_id"] = JsonPrimitive(it) }
 
-        // Send email notifications
-        for ((_, email) in emailRecipients) {
-            suspendRunCatching {
-                val htmlBody =
-                    loadHostAlertTemplate(
-                        hostName = hostName,
-                        metric = metricLabel,
-                        condition = conditionText,
-                        value = formattedValue,
-                        threshold = formattedThreshold,
-                        dashboardUrl = dashboardUrl
-                    )
+        val alertPriority = hostAlertPriorityOverride(alert)
+        val alertLifecycleEvent =
+            AlertLifecycleEvent(
+                title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
+                description =
+                "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
+                    "\nCurrent Value: $formattedValue",
+                priority = alertPriority ?: AlertPriority.P1,
+                status = AlertStatus.FIRING,
+                source = AlertSource.HOST_ALERT,
+                deduplicationKey = hostAlertDedupKey(alert),
+                organizationId = organizationId,
+                metadata = metadata,
+                moneatUrl = dashboardUrl
+            )
 
-                val textBody =
-                    """
-                    ⚠️ Host Alert
-                    
-                    Heads up, something needs attention.
-                    
-                    We noticed that $metricLabel on $hostName has $conditionText the threshold of $formattedThreshold.
-                    
-                    Current Value: $formattedValue
-                    ${if (alert.durationSeconds > 0) "Duration setting: ${alert.durationSeconds}s" else ""}
-                    
-                    Check Host Health: $dashboardUrl
-                    
-                    ---
-                    Moneat Server Monitoring
-                    """.trimIndent()
-
-                emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_alert")
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send alert notification to $email" }
-            }
-        }
-
-        // Check if Slack is enabled for any user in the org
-        val slackEnabled =
-            prefsService
-                .getUsersWithChannelEnabled(
-                    organizationId = organizationId,
-                    alertSource = "HOST_ALERT",
-                    channel = "slack"
-                ).isNotEmpty()
-
-        if (slackEnabled) {
-            suspendRunCatching {
-                val baseUrl = config.property("email.frontendUrl").getString()
-                slackService.sendHostAlert(
-                    organizationId = organizationId,
-                    hostName = hostName,
-                    metric = metricLabel,
-                    condition = alert.condition,
-                    threshold = formattedThreshold,
-                    currentValue = formattedValue,
-                    hostId = alert.hostId,
-                    baseUrl = baseUrl
-                )
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send Slack notification for host alert" }
-            }
-        }
-
-        // Check if Discord is enabled for any user in the org
-        val discordEnabled =
-            prefsService
-                .getUsersWithChannelEnabled(
-                    organizationId = organizationId,
-                    alertSource = "HOST_ALERT",
-                    channel = "discord"
-                ).isNotEmpty()
-
-        if (discordEnabled) {
-            suspendRunCatching {
-                val baseUrl = config.property("email.frontendUrl").getString()
-                discordService.sendHostAlert(
-                    organizationId = organizationId,
-                    hostName = hostName,
-                    metric = metricLabel,
-                    condition = alert.condition,
-                    threshold = formattedThreshold,
-                    currentValue = formattedValue,
-                    hostId = alert.hostId,
-                    baseUrl = baseUrl
-                )
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send Discord notification for host alert" }
-            }
-        }
-
-        // Fire incident alert
         suspendRunCatching {
-            val incidentSeverity =
-                if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
-                    transaction {
-                        OrganizationAlertTemplates
-                            .selectAll()
-                            .where { OrganizationAlertTemplates.id eq alert.templateAlertId }
-                            .firstOrNull()
-                            ?.get(OrganizationAlertTemplates.incident_severity)
-                            ?.let {
-                                com.moneat.incident.models.IncidentSeverity.fromString(it)
-                            }
-                    }
-                } else {
-                    transaction {
-                        HostAlerts
-                            .selectAll()
-                            .where { HostAlerts.id eq alert.id }
-                            .firstOrNull()
-                            ?.get(HostAlerts.incident_severity)
-                            ?.let {
-                                com.moneat.incident.models.IncidentSeverity.fromString(it)
-                            }
-                    }
-                }
-
-            if (incidentSeverity != null) {
-                val frontendUrl = config.property("email.frontendUrl").getString()
-                val incidentEvent =
-                    com.moneat.incident.models.IncidentEvent(
-                        title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
-                        description =
-                        "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
-                            "\nCurrent Value: $formattedValue",
-                        severity = incidentSeverity,
-                        status = com.moneat.incident.models.IncidentStatus.FIRING,
-                        source = com.moneat.incident.models.AlertSource.HOST_ALERT,
-                        deduplicationKey = run {
-                            val idPart = if (alert.templateAlertId != null) {
-                                "tpl_${alert.templateAlertId}"
-                            } else {
-                                "id_${alert.id}"
-                            }
-                            "moneat-host-alert-${alert.hostId}-$idPart"
-                        },
-                        organizationId = organizationId,
-                        metadata =
-                        mapOf(
-                            "host_id" to JsonPrimitive(alert.hostId.toString()),
-                            "host_name" to JsonPrimitive(hostName),
-                            "metric" to JsonPrimitive(alert.metric),
-                            "current_value" to JsonPrimitive(formattedValue),
-                            "threshold" to JsonPrimitive(formattedThreshold)
-                        ),
-                        moneatUrl = "$frontendUrl/monitoring/hosts/${alert.hostId}"
-                    )
-                incidentService.fireAlert(incidentEvent)
-            }
+            workflowService.publishAlertTriggered(alertLifecycleEvent)
         }.getOrElse { e ->
-            logger.error(e) { "Failed to fire incident alert" }
+            logger.error(e) { "Failed to publish host alert workflow" }
+        }
+        if (alertPriority != null) {
+            suspendRunCatching {
+                incidentService.fireAlert(alertLifecycleEvent, publishWorkflow = false)
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to fire host alert" }
+            }
         }
     }
+
+    private fun hostAlertPriorityOverride(alert: AlertData): AlertPriority? =
+        if (alert.scope == MonitorService.ALERT_SCOPE_GLOBAL && alert.templateAlertId != null) {
+            transaction {
+                OrganizationAlertTemplates
+                    .selectAll()
+                    .where { OrganizationAlertTemplates.id eq alert.templateAlertId }
+                    .firstOrNull()
+                    ?.get(OrganizationAlertTemplates.alert_priority)
+                    ?.let { AlertPriority.fromString(it) }
+            }
+        } else {
+            transaction {
+                HostAlerts
+                    .selectAll()
+                    .where { HostAlerts.id eq alert.id }
+                    .firstOrNull()
+                    ?.get(HostAlerts.alert_priority)
+                    ?.let { AlertPriority.fromString(it) }
+            }
+        }
 
     /**
      * Check host statuses and send down/up notifications.
@@ -799,58 +962,60 @@ class MonitorAlertService(
         val now = Clock.System.now()
         val downThreshold = now - HOST_DOWN_THRESHOLD_SECONDS.seconds
 
-        // Get all hosts and check their last_seen_at
         val hosts =
             transaction {
                 Hosts.selectAll().map { row ->
-                    Triple(
-                        row[Hosts.id],
-                        row[Hosts.display_name] ?: row[Hosts.hostname],
-                        row[Hosts.organization_id]
-                    ) to
-                        Pair(
-                            row[Hosts.status],
-                            row[Hosts.last_seen_at]
-                        )
+                    HostStatusSnapshot(
+                        hostId = row[Hosts.id],
+                        hostName = row[Hosts.display_name] ?: row[Hosts.hostname],
+                        organizationId = row[Hosts.organization_id],
+                        currentStatus = row[Hosts.status],
+                        lastSeenAt = row[Hosts.last_seen_at]
+                    )
                 }
             }
 
-        for ((hostInfo, statusInfo) in hosts) {
-            val (hostId, hostName, organizationId) = hostInfo
-            val (currentStatus, lastSeenAt) = statusInfo
+        for (host in hosts) {
+            checkHostStatus(host, downThreshold)
+        }
+    }
 
-            val isDown = lastSeenAt < downThreshold
+    private suspend fun checkHostStatus(
+        host: HostStatusSnapshot,
+        downThreshold: Instant
+    ) {
+        if (host.currentStatus == "pending") return
 
-            // Skip pending hosts that have never reported
-            if (currentStatus == "pending") {
-                continue
+        val newStatus = if (host.lastSeenAt < downThreshold) "down" else "up"
+        if (host.currentStatus == newStatus) return
+
+        logger.info {
+            "Host ${host.hostId} (${host.hostName}) status changed: ${host.currentStatus} -> $newStatus"
+        }
+
+        if (host.currentStatus == "down" && newStatus == "up" &&
+            !resolveHostDownIncident(host.hostId, host.hostName, host.organizationId)
+        ) {
+            return
+        }
+
+        transaction {
+            Hosts.update({ Hosts.id eq host.hostId }) {
+                it[status] = newStatus
             }
+        }
 
-            val newStatus = if (isDown) "down" else "up"
+        if (isAnySilenceActive(host.organizationId)) return
 
-            // Only send notification if status changed
-            if (currentStatus != newStatus) {
-                logger.info { "Host $hostId ($hostName) status changed: $currentStatus -> $newStatus" }
+        sendHostStatusNotification(host, newStatus)
+    }
 
-                // Update status in database (last_seen_at is only updated by heartbeat/metrics code)
-                transaction {
-                    Hosts.update({ Hosts.id eq hostId }) {
-                        it[status] = newStatus
-                    }
-                }
-
-                // Skip notifications if alerts are silenced for this organization
-                if (isAnySilenceActive(organizationId)) {
-                    continue
-                }
-
-                // Send notification
-                if (newStatus == "down") {
-                    sendHostDownNotification(hostId, hostName, organizationId, lastSeenAt)
-                } else {
-                    sendHostUpNotification(hostId, hostName, organizationId)
-                }
-            }
+    private suspend fun sendHostStatusNotification(
+        host: HostStatusSnapshot,
+        newStatus: String
+    ) {
+        if (newStatus == "down") {
+            sendHostDownNotification(host.hostId, host.hostName, host.organizationId, host.lastSeenAt)
         }
     }
 
@@ -863,202 +1028,77 @@ class MonitorAlertService(
         organizationId: Int,
         lastSeenAt: Instant
     ) {
-        val prefsService = AlertNotificationPreferencesService()
-
-        // Get users with email enabled for HOST_DOWN
-        val emailRecipients =
-            prefsService.getUsersWithChannelEnabled(
-                organizationId = organizationId,
-                alertSource = "HOST_DOWN",
-                channel = "email"
-            )
-
         val lastSeenText =
             run {
                 val minutesAgo = ((Clock.System.now() - lastSeenAt).inWholeSeconds / SECONDS_PER_MINUTE).toInt()
                 "Last seen $minutesAgo minutes ago"
             }
 
-        val hostUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId"
-
-        // Send email notifications
-        for ((_, email) in emailRecipients) {
-            suspendRunCatching {
-                emailService.sendHostDownEmail(email, hostName, lastSeenText, hostUrl)
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send host down notification to $email" }
-            }
-        }
-
-        // Check if Slack is enabled for any user in the org
-        val slackEnabled =
-            prefsService
-                .getUsersWithChannelEnabled(
-                    organizationId = organizationId,
-                    alertSource = "HOST_DOWN",
-                    channel = "slack"
-                ).isNotEmpty()
-
-        if (slackEnabled) {
-            suspendRunCatching {
-                val baseUrl = config.property("email.frontendUrl").getString()
-                slackService.sendHostDown(
-                    organizationId = organizationId,
-                    hostName = hostName,
-                    lastSeen = lastSeenText,
-                    hostId = hostId,
-                    baseUrl = baseUrl
-                )
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send Slack notification for host down" }
-            }
-        }
-
-        // Check if Discord is enabled for any user in the org
-        val discordEnabled =
-            prefsService
-                .getUsersWithChannelEnabled(
-                    organizationId = organizationId,
-                    alertSource = "HOST_DOWN",
-                    channel = "discord"
-                ).isNotEmpty()
-
-        if (discordEnabled) {
-            suspendRunCatching {
-                val baseUrl = config.property("email.frontendUrl").getString()
-                discordService.sendHostDown(
-                    organizationId = organizationId,
-                    hostName = hostName,
-                    lastSeen = lastSeenText,
-                    hostId = hostId,
-                    baseUrl = baseUrl
-                )
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send Discord notification for host down" }
-            }
-        }
-
-        // Fire incident alert for host down
         suspendRunCatching {
-            val frontendUrl = config.property("email.frontendUrl").getString()
-            val incidentEvent =
-                com.moneat.incident.models.IncidentEvent(
+            val dashboardUrl = hostDashboardUrl(hostId, organizationId)
+            val metadata =
+                mutableMapOf(
+                    "host_name" to JsonPrimitive(hostName),
+                    "last_seen" to JsonPrimitive(lastSeenText)
+                )
+            hostResourceId(hostId, organizationId)?.let { metadata["host_id"] = JsonPrimitive(it) }
+            val alertLifecycleEvent =
+                AlertLifecycleEvent(
                     title = "Host Down: $hostName",
                     description = "The monitoring agent has stopped reporting metrics.\nStatus: $lastSeenText",
-                    severity = com.moneat.incident.models.IncidentSeverity.CRITICAL,
-                    status = com.moneat.incident.models.IncidentStatus.FIRING,
-                    source = com.moneat.incident.models.AlertSource.HOST_DOWN,
-                    deduplicationKey = "moneat-host-down-$hostId",
+                    priority = AlertPriority.P0,
+                    status = AlertStatus.FIRING,
+                    source = AlertSource.HOST_DOWN,
+                    deduplicationKey = hostDownDedupKey(hostId),
                     organizationId = organizationId,
-                    metadata =
-                    mapOf(
-                        "host_id" to JsonPrimitive(hostId.toString()),
-                        "host_name" to JsonPrimitive(hostName),
-                        "last_seen" to JsonPrimitive(lastSeenText)
-                    ),
-                    moneatUrl = "$frontendUrl/monitoring/hosts/$hostId"
+                    metadata = metadata,
+                    moneatUrl = dashboardUrl
                 )
-            incidentService.fireAlert(incidentEvent)
+            incidentService.fireAlert(alertLifecycleEvent)
         }.getOrElse { e ->
-            logger.error(e) { "Failed to fire incident alert for host down" }
+            logger.error(e) { "Failed to fire incident provider alert for host down" }
         }
     }
 
-    /**
-     * Send host up notification.
-     */
-    private suspend fun sendHostUpNotification(
+    private suspend fun resolveHostDownIncident(
         hostId: Int,
         hostName: String,
         organizationId: Int
-    ) {
-        val prefsService = AlertNotificationPreferencesService()
-
-        val hostUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/$hostId"
-
-        // Get users with email enabled for HOST_DOWN (recovery uses the same source)
-        val emailRecipients =
-            prefsService.getUsersWithChannelEnabled(
-                organizationId = organizationId,
-                alertSource = "HOST_DOWN",
-                channel = "email"
-            )
-
-        for ((_, email) in emailRecipients) {
-            suspendRunCatching {
-                emailService.sendHostUpEmail(email, hostName, hostUrl)
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send host up notification to $email" }
-            }
-        }
-
-        // Check if Slack is enabled for any user in the org
-        val slackEnabled =
-            prefsService
-                .getUsersWithChannelEnabled(
-                    organizationId = organizationId,
-                    alertSource = "HOST_DOWN",
-                    channel = "slack"
-                ).isNotEmpty()
-
-        if (slackEnabled) {
-            suspendRunCatching {
-                val baseUrl = config.property("email.frontendUrl").getString()
-                slackService.sendHostUp(
-                    organizationId = organizationId,
-                    hostName = hostName,
-                    hostId = hostId,
-                    baseUrl = baseUrl
-                )
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send Slack notification for host up" }
-            }
-        }
-
-        // Check if Discord is enabled for any user in the org
-        val discordEnabled =
-            prefsService
-                .getUsersWithChannelEnabled(
-                    organizationId = organizationId,
-                    alertSource = "HOST_DOWN",
-                    channel = "discord"
-                ).isNotEmpty()
-
-        if (discordEnabled) {
-            suspendRunCatching {
-                val baseUrl = config.property("email.frontendUrl").getString()
-                discordService.sendHostUp(
-                    organizationId = organizationId,
-                    hostName = hostName,
-                    hostId = hostId,
-                    baseUrl = baseUrl
-                )
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send Discord notification for host up" }
-            }
-        }
-
-        // Resolve incident alert for host up
+    ): Boolean =
         suspendRunCatching {
-            incidentService.resolveAlert(
+            val hostUrl = hostDashboardUrl(hostId, organizationId)
+            incidentService.autoResolveAlert(
                 organizationId = organizationId,
-                source = com.moneat.incident.models.AlertSource.HOST_DOWN,
-                deduplicationKey = "moneat-host-down-$hostId"
+                source = AlertSource.HOST_DOWN,
+                deduplicationKey = hostDownDedupKey(hostId),
+                title = "Host Recovered: $hostName",
+                description = "$hostName is reporting metrics again.",
+                moneatUrl = hostUrl
             )
+            true
         }.getOrElse { e ->
             logger.error(e) { "Failed to resolve incident alert for host up" }
+            false
+        }
+
+    private fun hostAlertRedisKey(alert: AlertData): String {
+        return "alert_state:${alert.hostId}:${hostAlertIdPart(alert)}"
+    }
+
+    private fun hostAlertDedupKey(alert: AlertData): String {
+        return "moneat-host-alert-${alert.hostId}-${hostAlertIdPart(alert)}"
+    }
+
+    private fun hostAlertIdPart(alert: AlertData): String {
+        return if (alert.templateAlertId != null) {
+            "tpl_${alert.templateAlertId}"
+        } else {
+            "id_${alert.id}"
         }
     }
 
-    private fun getConditionText(condition: String): String {
-        return when (condition) {
-            ">" -> "exceeded"
-            "<" -> "dropped below"
-            ">=" -> "reached or exceeded"
-            "<=" -> "reached or dropped below"
-            "==" -> "is exactly"
-            else -> condition
-        }
+    private fun hostDownDedupKey(hostId: Int): String {
+        return "moneat-host-down-$hostId"
     }
 
     internal fun isThresholdTriggered(
@@ -1083,118 +1123,6 @@ class MonitorAlertService(
         if (lastTriggeredAt == null) return false
         val timeSinceLastTrigger = now - lastTriggeredAt
         return timeSinceLastTrigger < MIN_ALERT_INTERVAL_MINUTES.minutes
-    }
-
-    private fun loadHostAlertTemplate(
-        hostName: String,
-        metric: String,
-        condition: String,
-        value: String,
-        threshold: String,
-        dashboardUrl: String
-    ): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/host-alert-v1.html")
-
-        val safeHostName = hostName.escapeHtml()
-        return if (templateResource != null) {
-            templateResource
-                .bufferedReader()
-                .use { it.readText() }
-                .replace("{{ hostName }}", safeHostName)
-                .replace("{{ metric }}", metric)
-                .replace("{{ condition }}", condition)
-                .replace("{{ value }}", value)
-                .replace("{{ threshold }}", threshold)
-                .replace("{{ dashboardUrl }}", dashboardUrl)
-        } else {
-            // Fallback inline HTML
-            """
-            <div style="padding: 20px; background: #fff1f2; border: 1px solid #fecaca; border-radius: 8px;">
-                <h2 style="color: #991b1b;">Host Alert</h2>
-                <p><strong>$safeHostName</strong> reported <strong>$metric</strong> at <strong>$value</strong>.</p>
-                <p>Threshold: $condition $threshold</p>
-                <a href="$dashboardUrl">View Dashboard</a>
-            </div>
-            """.trimIndent()
-        }
-    }
-
-    private fun loadHostRecoveredTemplate(
-        hostName: String,
-        metric: String,
-        duration: String,
-        dashboardUrl: String
-    ): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/host-recovered.html")
-
-        val safeHostName = hostName.escapeHtml()
-        return if (templateResource != null) {
-            templateResource
-                .bufferedReader()
-                .use { it.readText() }
-                .replace("{{ hostName }}", safeHostName)
-                .replace("{{ metric }}", metric)
-                .replace("{{ duration }}", duration)
-                .replace("{{ dashboardUrl }}", dashboardUrl)
-        } else {
-            // Fallback inline HTML
-            """
-            <div style="padding: 20px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
-                <h2 style="color: #166534;">Host Recovered</h2>
-                <p><strong>$safeHostName</strong> is back to normal.</p>
-                <p>Metric: $metric</p>
-                <a href="$dashboardUrl">View Dashboard</a>
-            </div>
-            """.trimIndent()
-        }
-    }
-
-    private suspend fun sendRecoveryNotification(
-        alert: AlertData,
-        hostName: String,
-        organizationId: Int
-    ) {
-        val prefsService = AlertNotificationPreferencesService()
-
-        // Get users with email enabled for HOST_ALERT
-        val emailRecipients =
-            prefsService.getUsersWithChannelEnabled(
-                organizationId = organizationId,
-                alertSource = "HOST_ALERT",
-                channel = "email"
-            )
-
-        val metricLabel = getMetricLabel(alert.metric)
-        val subject = "✅ Recovered: $hostName - $metricLabel"
-        val dashboardUrl = "${config.property("email.frontendUrl").getString()}/monitoring/hosts/${alert.hostId}"
-        val durationText = if (alert.durationSeconds > 0) "${alert.durationSeconds}s setting" else "N/A"
-
-        for ((_, email) in emailRecipients) {
-            suspendRunCatching {
-                val htmlBody =
-                    loadHostRecoveredTemplate(
-                        hostName = hostName,
-                        metric = metricLabel,
-                        duration = durationText,
-                        dashboardUrl = dashboardUrl
-                    )
-
-                val textBody =
-                    """
-                    ✅ Issue Resolved
-                    
-                    $hostName has recovered.
-                    
-                    The alert for $metricLabel is no longer active. The metric has returned to normal levels.
-                    
-                    View Dashboard: $dashboardUrl
-                    """.trimIndent()
-
-                emailService.sendEmail(email, subject, htmlBody, textBody, "monitor_recovery")
-            }.getOrElse { e ->
-                logger.error(e) { "Failed to send recovery notification to $email" }
-            }
-        }
     }
 
     private fun getMetricLabel(metric: String): String {
@@ -1252,21 +1180,25 @@ class MonitorAlertService(
 
     fun listSilencePeriods(organizationId: Int): List<SilencePeriodResponse> {
         return transaction {
-            AlertSilencePeriods
+            val rows = AlertSilencePeriods
                 .selectAll()
                 .where {
                     AlertSilencePeriods.organization_id eq organizationId
-                }.map { row ->
-                    SilencePeriodResponse(
-                        id = row[AlertSilencePeriods.id],
-                        organizationId = row[AlertSilencePeriods.organization_id],
-                        reason = row[AlertSilencePeriods.reason],
-                        startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
-                        endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
-                        createdBy = row[AlertSilencePeriods.created_by],
-                        createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
-                    )
                 }
+                .toList()
+            val orgResourceId = organizationResourceId(organizationId)
+            val userResourceIds = userResourceIds(rows.map { row -> row[AlertSilencePeriods.created_by] })
+            rows.map { row ->
+                SilencePeriodResponse(
+                    id = row[AlertSilencePeriods.resource_id].toString(),
+                    organizationId = orgResourceId,
+                    reason = row[AlertSilencePeriods.reason],
+                    startsAt = row[AlertSilencePeriods.starts_at].toEpochMilliseconds(),
+                    endsAt = row[AlertSilencePeriods.ends_at].toEpochMilliseconds(),
+                    createdBy = userResourceIds.requireResourceId(row[AlertSilencePeriods.created_by], "user"),
+                    createdAt = row[AlertSilencePeriods.created_at].toEpochMilliseconds()
+                )
+            }
         }
     }
 
@@ -1280,7 +1212,7 @@ class MonitorAlertService(
         val now = Clock.System.now()
 
         return transaction {
-            val id =
+            val resourceId =
                 AlertSilencePeriods.insert {
                     it[AlertSilencePeriods.organization_id] = organizationId
                     it[AlertSilencePeriods.reason] = request.reason
@@ -1288,31 +1220,63 @@ class MonitorAlertService(
                     it[AlertSilencePeriods.ends_at] = endsAt
                     it[AlertSilencePeriods.created_by] = userId
                     it[AlertSilencePeriods.created_at] = now
-                } get AlertSilencePeriods.id
+                } get AlertSilencePeriods.resource_id
 
             SilencePeriodResponse(
-                id = id,
-                organizationId = organizationId,
+                id = resourceId.toString(),
+                organizationId = organizationResourceId(organizationId),
                 reason = request.reason,
                 startsAt = startsAt.toEpochMilliseconds(),
                 endsAt = endsAt.toEpochMilliseconds(),
-                createdBy = userId,
+                createdBy = userResourceId(userId),
                 createdAt = now.toEpochMilliseconds()
             )
         }
     }
 
     fun deleteSilencePeriod(
-        id: Int,
+        id: String,
+        organizationId: Int
+    ): Boolean =
+        id.toUuidOrNull()
+            ?.let { resourceId -> deleteSilencePeriodByResourceId(resourceId, organizationId) }
+            ?: false
+
+    fun deleteSilencePeriodByResourceId(
+        resourceId: Uuid,
         organizationId: Int
     ): Boolean {
         return transaction {
             AlertSilencePeriods.deleteWhere {
-                (AlertSilencePeriods.id eq id) and
+                (AlertSilencePeriods.resource_id eq resourceId) and
                     (AlertSilencePeriods.organization_id eq organizationId)
             } > 0
         }
     }
+
+    private fun hostDashboardUrl(hostId: Int, organizationId: Int): String {
+        val frontendUrl = config.property(EMAIL_FRONTEND_URL_CONFIG).getString()
+        val hostResourceId = hostResourceId(hostId, organizationId)
+
+        return if (hostResourceId == null) {
+            "$frontendUrl/monitoring/hosts"
+        } else {
+            "$frontendUrl/monitoring/hosts/$hostResourceId"
+        }
+    }
+
+    private fun hostResourceId(hostId: Int, organizationId: Int): String? =
+        transaction {
+            Hosts
+                .selectAll()
+                .where {
+                    (Hosts.id eq hostId) and
+                        (Hosts.organization_id eq organizationId)
+                }
+                .firstOrNull()
+                ?.get(Hosts.resource_id)
+                ?.toString()
+        }
 
     private fun cleanupExpiredSilencePeriods() {
         val now = Clock.System.now()

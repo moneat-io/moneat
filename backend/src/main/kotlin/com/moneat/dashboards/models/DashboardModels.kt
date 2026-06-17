@@ -24,6 +24,7 @@ import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.postgresql.util.PGobject
+import kotlin.uuid.Uuid
 
 // Custom JSONB column type for PostgreSQL
 class JsonbColumnType : ColumnType<String>() {
@@ -56,13 +57,18 @@ data class DashboardVariable(
     @SerialName("default_value") val defaultValue: String? = null,
     val current: String? = null,
     val options: List<String> = emptyList(),
-    val datasource: String? = null
+    val datasource: String? = null,
+    /** When true, the variable accepts several values at once (stored as a comma-joined string). */
+    val multi: Boolean = false,
+    /** When true, an "All" choice is offered (selected value `${'$'}__all`). */
+    @SerialName("include_all") val includeAll: Boolean = false
 )
 
 // Exposed table definitions
 
 object DashboardFolders : Table("dashboard_folders") {
     val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val orgId = long("org_id")
     val name = varchar("name", 100)
     val color = varchar("color", 7).nullable()
@@ -75,6 +81,7 @@ object DashboardFolders : Table("dashboard_folders") {
 
 object Dashboards : Table("dashboards") {
     val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val orgId = long("org_id")
     val projectId = long("project_id").nullable()
     val folderId = long("folder_id").references(DashboardFolders.id).nullable()
@@ -100,6 +107,7 @@ object DashboardFavorites : Table("dashboard_favorites") {
 
 object DashboardWidgets : Table("dashboard_widgets") {
     val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val dashboardId = long("dashboard_id").references(Dashboards.id)
     val title = varchar("title", 255).nullable()
     val widgetType = varchar("widget_type", 50)
@@ -121,26 +129,27 @@ object DashboardWidgets : Table("dashboard_widgets") {
 
 @Serializable
 data class DashboardResponse(
-    val id: Long,
-    @SerialName("org_id") val orgId: Long,
-    @SerialName("project_id") val projectId: Long? = null,
-    @SerialName("folder_id") val folderId: Long? = null,
+    val id: String,
+    @SerialName("org_id") val orgId: String,
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("folder_id") val folderId: String? = null,
     val title: String,
     val description: String? = null,
     @SerialName("layout_type") val layoutType: String = "grid",
     @SerialName("is_default") val isDefault: Boolean = false,
     @SerialName("is_favorited") val isFavorited: Boolean = false,
     val variables: List<DashboardVariable> = emptyList(),
-    @SerialName("created_by") val createdBy: Long,
+    @SerialName("created_by") val createdBy: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
+    @SerialName("owner_name") val ownerName: String? = null,
     val widgets: List<WidgetResponse> = emptyList()
 )
 
 @Serializable
 data class WidgetResponse(
-    val id: Long,
-    @SerialName("dashboard_id") val dashboardId: Long,
+    val id: String,
+    @SerialName("dashboard_id") val dashboardId: String,
     val title: String? = null,
     @SerialName("widget_type") val widgetType: String,
     @SerialName("grid_x") val gridX: Int = 0,
@@ -156,8 +165,8 @@ data class WidgetResponse(
 data class CreateDashboardRequest(
     val title: String,
     val description: String? = null,
-    @SerialName("project_id") val projectId: Long? = null,
-    @SerialName("folder_id") val folderId: Long? = null,
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("folder_id") val folderId: String? = null,
     @SerialName("layout_type") val layoutType: String = "grid",
     @SerialName("is_default") val isDefault: Boolean = false,
     val variables: List<DashboardVariable> = emptyList(),
@@ -168,7 +177,7 @@ data class CreateDashboardRequest(
 data class UpdateDashboardRequest(
     val title: String? = null,
     val description: String? = null,
-    @SerialName("folder_id") val folderId: Long? = null,
+    @SerialName("folder_id") val folderId: String? = null,
     @SerialName("layout_type") val layoutType: String? = null,
     @SerialName("is_default") val isDefault: Boolean? = null,
     val variables: List<DashboardVariable>? = null,
@@ -177,8 +186,8 @@ data class UpdateDashboardRequest(
 
 @Serializable
 data class FolderResponse(
-    val id: Long,
-    @SerialName("org_id") val orgId: Long,
+    val id: String,
+    @SerialName("org_id") val orgId: String,
     val name: String,
     val color: String? = null,
     @SerialName("sort_order") val sortOrder: Int = 0,
@@ -208,13 +217,13 @@ data class SearchResponse(
 
 @Serializable
 data class SearchProjectResponse(
-    val id: Long,
+    val id: String,
     val name: String
 )
 
 @Serializable
 data class MoveToFolderRequest(
-    @SerialName("folder_id") val folderId: Long? = null
+    @SerialName("folder_id") val folderId: String? = null
 )
 
 @Serializable
@@ -232,7 +241,7 @@ data class CreateWidgetRequest(
 
 @Serializable
 data class UpdateWidgetRequest(
-    val id: Long? = null,
+    val id: String? = null,
     val title: String? = null,
     @SerialName("widget_type") val widgetType: String? = null,
     @SerialName("grid_x") val gridX: Int? = null,
@@ -260,7 +269,14 @@ data class ExecuteBatchQueryRequest(
 
 @Serializable
 data class BatchQueryResult(
-    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>
+    val results: Map<String, List<Map<String, kotlinx.serialization.json.JsonElement>>>,
+    val metadata: Map<String, BatchQueryResultMetadata> = emptyMap()
+)
+
+@Serializable
+data class BatchQueryResultMetadata(
+    @SerialName("original_ref_id") val originalRefId: String? = null,
+    @SerialName("query_index") val queryIndex: Int
 )
 
 @Serializable
@@ -274,4 +290,42 @@ data class DashboardImportResult(
     val dashboard: DashboardResponse,
     val warnings: List<String> = emptyList(),
     val variables: List<DashboardVariable> = emptyList()
+)
+
+@Serializable
+data class DashboardTemplateCatalog(
+    val templates: List<DashboardTemplateSummary> = emptyList()
+)
+
+@Serializable
+data class DashboardTemplateSummary(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val category: String = "community",
+    val tags: List<String> = emptyList(),
+    @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
+    @SerialName("widget_count") val widgetCount: Int = 0,
+    @SerialName("variable_count") val variableCount: Int = 0,
+    @SerialName("resource_path") val resourcePath: String
+)
+
+@Serializable
+data class DashboardTemplateDetail(
+    val id: String,
+    val title: String,
+    val description: String? = null,
+    val category: String = "community",
+    val tags: List<String> = emptyList(),
+    @SerialName("required_sources") val requiredSources: List<String> = emptyList(),
+    @SerialName("widget_count") val widgetCount: Int = 0,
+    @SerialName("variable_count") val variableCount: Int = 0,
+    val warnings: List<String> = emptyList(),
+    val dashboard: CreateDashboardRequest
+)
+
+@Serializable
+data class InstantiateDashboardTemplateRequest(
+    @SerialName("project_id") val projectId: String? = null,
+    @SerialName("folder_id") val folderId: String? = null
 )

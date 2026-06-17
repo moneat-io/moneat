@@ -20,6 +20,7 @@ import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.handlers.CloudWatchHandler
+import com.moneat.dashboards.services.handlers.ConnectionOptions
 import com.moneat.dashboards.services.handlers.ElasticsearchHandler
 import com.moneat.dashboards.services.handlers.GraphiteHandler
 import com.moneat.dashboards.services.handlers.InfluxDBHandler
@@ -29,6 +30,7 @@ import com.moneat.dashboards.services.handlers.MySQLHandler
 import com.moneat.dashboards.services.handlers.PostgresHandler
 import com.moneat.dashboards.services.handlers.PrometheusHandler
 import com.moneat.dashboards.services.handlers.UnsupportedHandler
+import com.moneat.monitoring.OperationalMetrics
 import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.respond
 import kotlinx.coroutines.runBlocking
@@ -36,6 +38,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
@@ -93,6 +97,16 @@ class DashboardHandlersTest {
     private val prometheusHandler = PrometheusHandler()
     private val postgresHandler = PostgresHandler(ConcurrentHashMap())
     private val mysqlHandler = MySQLHandler(ConcurrentHashMap())
+
+    @BeforeTest
+    fun resetMetricsBefore() {
+        OperationalMetrics.resetForTest()
+    }
+
+    @AfterTest
+    fun resetMetricsAfter() {
+        OperationalMetrics.resetForTest()
+    }
 
     // ──── UnsupportedHandler ────
 
@@ -407,6 +421,28 @@ class DashboardHandlersTest {
                         null
                     )
                     assertTrue(rows.isEmpty())
+                    assertPrometheusFailureMetric("query", "http_500")
+                }
+            }
+        }
+
+    @Test
+    fun `Prometheus testConnection records server failures`() =
+        withSelfHosted {
+            runBlocking {
+                MockHttpServer { ex ->
+                    ex.respond(503, "unavailable")
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val result = PrometheusHandler().testConnection(
+                        TestConnectionRequest(
+                            sourceType = "prometheus",
+                            host = DEFAULT_HOST,
+                            port = port
+                        )
+                    )
+                    assertFalse(result.success)
+                    assertPrometheusFailureMetric("test_connection", "http_503")
                 }
             }
         }
@@ -430,6 +466,26 @@ class DashboardHandlersTest {
                     assertEquals(2, fields.size)
                     assertEquals("cpu", fields[0].name)
                     assertEquals("gauge", fields[0].type)
+                }
+            }
+        }
+
+    @Test
+    fun `Prometheus getSchema records server failures`() =
+        withSelfHosted {
+            runBlocking {
+                MockHttpServer { ex ->
+                    ex.respond(502, "bad gateway")
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val fields = PrometheusHandler().getSchema(
+                        DEFAULT_HOST,
+                        port,
+                        null,
+                        DataSourceCredentials()
+                    )
+                    assertTrue(fields.isEmpty())
+                    assertPrometheusFailureMetric("schema", "http_502")
                 }
             }
         }
@@ -479,6 +535,27 @@ class DashboardHandlersTest {
         }
 
     @Test
+    fun `Prometheus executeLabelValuesQuery records server failures`() =
+        withSelfHosted {
+            runBlocking {
+                MockHttpServer { ex ->
+                    ex.respond(422, "bad query")
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val vals =
+                        PrometheusHandler().executeLabelValuesQuery(
+                            DEFAULT_HOST,
+                            port,
+                            DataSourceCredentials(),
+                            "label_values(up, instance)"
+                        )
+                    assertTrue(vals.isEmpty())
+                    assertPrometheusFailureMetric("label_values", "http_422")
+                }
+            }
+        }
+
+    @Test
     fun `Prometheus executeLabelValuesQuery invalid returns empty`() =
         runBlocking {
             val vals = prometheusHandler.executeLabelValuesQuery(
@@ -489,6 +566,14 @@ class DashboardHandlersTest {
             )
             assertTrue(vals.isEmpty())
         }
+
+    private fun assertPrometheusFailureMetric(operation: String, failure: String) {
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "moneat_datasource_query_failures_total")
+        assertContains(rendered, "source_type=\"prometheus\"")
+        assertContains(rendered, "operation=\"$operation\"")
+        assertContains(rendered, "failure=\"$failure\"")
+    }
 
     // ──── ElasticsearchHandler ────
 
@@ -922,6 +1007,67 @@ class DashboardHandlersTest {
                         JsonPrimitive("2024-01-01T00:00:00Z"),
                         rows[0]["_time"]
                     )
+                }
+            }
+        }
+
+    @Test
+    fun `InfluxDB v1 testConnection uses query endpoint`() = withSelfHosted {
+        runBlocking {
+            val paths = mutableListOf<String>()
+            MockHttpServer { ex ->
+                paths.add(ex.requestURI.path)
+                ex.respond(200, """{"results":[{"series":[{"name":"cpu"}]}]}""")
+            }.use { server ->
+                val port = extractPort(server.baseUrl)
+                val result = InfluxDBHandler().testConnection(
+                    TestConnectionRequest(
+                        sourceType = "influxdb",
+                        host = DEFAULT_HOST,
+                        port = port,
+                        databaseName = "telegraf",
+                        username = "u",
+                        password = "p",
+                        extraConfig = mapOf("influx_version" to "1")
+                    )
+                )
+
+                assertTrue(result.success)
+                assertEquals("/query", paths.single())
+            }
+        }
+    }
+
+    @Test
+    fun `InfluxDB v1 executeQuery parses series values`() =
+        withSelfHosted {
+            runBlocking {
+                val body =
+                    """{"results":[{"series":[{"name":"cpu","columns":["time","value"],""" +
+                        """"values":[["2024-01-01T00:00:00Z",42.5]]}]}]}"""
+                MockHttpServer { ex ->
+                    ex.respond(200, body)
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val rows = InfluxDBHandler().executeQuery(
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
+                        port,
+                        "telegraf",
+                        DataSourceCredentials(
+                            username = "u",
+                            password = "p",
+                            options = ConnectionOptions(influxVersion = "1")
+                        ),
+                        "SELECT value FROM cpu",
+                        DEFAULT_LIMIT,
+                        null
+                    )
+
+                    assertEquals(1, rows.size)
+                    assertEquals(JsonPrimitive("cpu"), rows[0]["measurement"])
+                    assertEquals(JsonPrimitive("2024-01-01T00:00:00Z"), rows[0]["time"])
+                    assertEquals(JsonPrimitive(42.5), rows[0]["value"])
                 }
             }
         }

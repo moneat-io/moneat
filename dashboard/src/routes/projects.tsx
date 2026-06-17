@@ -16,6 +16,7 @@
 
 import {createFileRoute, Navigate, Outlet, redirect, useMatches} from '@tanstack/react-router'
 import {api} from '@/lib/api'
+import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Code2, Globe, Terminal} from 'lucide-react'
 
 const platformAliases: Record<string, string> = {
@@ -79,7 +80,6 @@ function createMonogramIcon(label: string): React.ComponentType<{ className?: st
 type PlatformCategory = 'mobile' | 'frontend' | 'backend' | 'desktop' | 'gaming'
 
 // Helper function to get platform info (with fallbacks for different naming conventions)
-// eslint-disable-next-line react-refresh/only-export-components
 export function getPlatformInfo(platformId?: string) {
   if (!platformId) return null
   
@@ -115,7 +115,6 @@ export type PlatformType = {
 }
 
 // Platform configurations with custom SVG icons
-// eslint-disable-next-line react-refresh/only-export-components
 export const platforms: PlatformType[] = [
   {
     id: 'android',
@@ -458,7 +457,7 @@ export const platforms: PlatformType[] = [
   {
     id: 'other',
     name: 'Other Platform',
-    description: 'Generic project setup',
+    description: 'Generic service configuration',
     icon: Code2,
     color: '#4b5563',
     category: 'backend',
@@ -477,13 +476,13 @@ export const Route = createFileRoute('/projects')({
 
 function ProjectsLayout() {
   const matches = useMatches()
-  // Check if we're showing a child route (project detail)
+  // Check if we're showing a child route (service detail)
   const showingChild = matches.some(match => match.id.includes('projectId'))
 
   if (showingChild) {
     return <Outlet />
   }
 
-  // /projects base path now redirects to dashboard - project list is in the sidebar
-  return <Navigate to="/" />
+  // /projects base path redirects to the overview; legacy child utility routes still render above.
+  return <Navigate to="/" search={APP_OVERVIEW_SEARCH} />
 }

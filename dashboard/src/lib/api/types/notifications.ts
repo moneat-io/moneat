@@ -19,10 +19,14 @@ export interface NotificationPreference {
   errorAlerts: boolean
   weeklySummary: boolean
   alertFrequencyMinutes: number
+  // Account-level delivery channel toggles. Present on `preferences.global`;
+  // optional because per-project rows don't carry them.
+  emailEnabled?: boolean
+  pushEnabled?: boolean
 }
 
 export interface ProjectNotificationPreference extends NotificationPreference {
-  projectId: number
+  projectId: string
   projectName: string
 }
 
@@ -35,6 +39,7 @@ export type AlertSource =
   | 'HOST_ALERT'
   | 'HOST_DOWN'
   | 'UPTIME_MONITOR'
+  | 'SYNTHETIC_TEST'
   | 'ERROR_ALERT'
   | 'DASHBOARD_ALERT'
 
@@ -47,4 +52,17 @@ export interface AlertNotificationPreference {
 
 export interface AlertNotificationPreferencesResponse {
   preferences: AlertNotificationPreference[]
+}
+
+// Registered mobile devices for push delivery (GET /v1/user/push-devices).
+// The API returns display metadata only — never device tokens.
+export interface PushDevice {
+  id: string
+  label: string
+  platform?: string | null
+  lastActiveAt?: string | null
+}
+
+export interface PushDevicesResponse {
+  devices: PushDevice[]
 }

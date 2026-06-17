@@ -1,0 +1,44 @@
+{
+    "id": "055-741-deployment-metrics",
+    "title": "Kubernetes Deployment metrics",
+    "description": "Prebuilt Moneat dashboard for Kubernetes Deployment metrics telemetry.",
+    "category": "kubernetes",
+    "tags": [
+        "Kubernetes"
+    ],
+    "required_sources": [],
+    "widget_count": 0,
+    "variable_count": 2,
+    "warnings": [],
+    "dashboard": {
+        "title": "Kubernetes Deployment metrics",
+        "description": "Prebuilt Moneat dashboard for Kubernetes Deployment metrics telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "Deployment",
+                "label": null,
+                "type": "query",
+                "query": "label_values(deployment)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            },
+            {
+                "name": "Node",
+                "label": null,
+                "type": "query",
+                "query": "label_values(kubernetes_io_hostname)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__prometheus"
+            }
+        ],
+        "widgets": []
+    }
+}

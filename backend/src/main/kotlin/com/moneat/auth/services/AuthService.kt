@@ -18,6 +18,7 @@ package com.moneat.auth.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.auth.repositories.UserRepository
 import com.moneat.config.EnvConfig
 import com.moneat.events.models.AuthResponse
@@ -34,7 +35,10 @@ import com.moneat.shared.repositories.MembershipRepository
 import com.moneat.shared.repositories.OrganizationRepository
 import com.moneat.shared.services.SidebarPreferenceService
 import com.moneat.utils.SentryUtils
+import com.moneat.utils.suspendRunCatching
+import com.moneat.workflows.services.WorkflowService
 import io.ktor.server.config.ApplicationConfig
+import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -50,7 +54,8 @@ import java.util.Base64
 import java.util.Date
 import java.util.UUID
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
+
+private val logger = KotlinLogging.logger {}
 
 data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
@@ -76,6 +81,7 @@ class AuthService(
     private val organizationRepository: OrganizationRepository,
     private val emailService: EmailService = EmailService(),
     private val refreshTokenService: RefreshTokenService = RefreshTokenService(),
+    private val workflowService: WorkflowService = WorkflowService(),
 ) {
     companion object {
         private const val VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000L
@@ -211,17 +217,31 @@ class AuthService(
                 emailService.sendVerificationEmail(normalizedEmail, verificationToken, request.name)
             }.getOrElse { e ->
                 // Log but don't fail signup if email fails
-                println("Failed to send verification email: ${e.message}")
+                logger.warn(e) { "Failed to send verification email" }
             }
         }
 
         val tokenPair = refreshTokenService.generateRefreshToken(userId, normalizedEmail, orgId, orgRole)
         SentryUtils.breadcrumb("auth", "Signup completed", mapOf("user_id" to userId))
+        val user = userRepository.findById(userId)
+            ?: throw IllegalStateException("Created user could not be reloaded")
+        val organization = organizationRepository.findById(orgId)
+        val organizationSlug = organization?.slug
         return AuthResponse(
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
-            user = UserResponse(userId, normalizedEmail, request.name, emailVerified, false, isAdmin)
+            user = UserResponse(
+                id = user.resourceId,
+                email = normalizedEmail,
+                name = request.name,
+                emailVerified = emailVerified,
+                onboardingCompleted = false,
+                isAdmin = isAdmin,
+                organizationSlug = organizationSlug,
+                orgRole = orgRole,
+                orgId = organization?.resourceId,
+            )
         )
     }
 
@@ -308,6 +328,7 @@ class AuthService(
                     it[name] = "${request.name ?: request.email}'s Organization"
                     it[slug] = "org-${UUID.randomUUID().toString().take(ORG_SLUG_RANDOM_SUFFIX_LENGTH)}"
                 }[Organizations.id]
+            workflowService.ensureDefaultWorkflowsForOrganization(orgId)
             Memberships.insert {
                 it[user_id] = userId
                 it[organization_id] = orgId
@@ -344,7 +365,7 @@ class AuthService(
             userRepository.updateVerificationToken(user.id, verificationToken, expiresAt)
             true
         }.getOrElse { e ->
-            println("Failed to send verification email: ${e.message}")
+            logger.warn(e) { "Failed to send verification email" }
             false
         }
     }
@@ -374,17 +395,22 @@ class AuthService(
         }
 
         val tokenPair = refreshTokenService.generateRefreshToken(user.id, user.email, orgId, orgRole)
+        val organization = organizationRepository.findById(orgId)
+        val organizationSlug = organization?.slug
         return AuthResponse(
             token = tokenPair.accessToken,
             refreshToken = tokenPair.refreshToken,
             expiresIn = tokenPair.expiresIn,
             user = UserResponse(
-                user.id,
-                user.email,
-                user.name,
-                user.emailVerified,
-                user.onboardingCompleted,
-                user.isAdmin
+                id = user.resourceId,
+                email = user.email,
+                name = user.name,
+                emailVerified = user.emailVerified,
+                onboardingCompleted = user.onboardingCompleted,
+                isAdmin = user.isAdmin,
+                organizationSlug = organizationSlug,
+                orgRole = orgRole,
+                orgId = organization?.resourceId,
             )
         )
     }
@@ -466,7 +492,7 @@ class AuthService(
             userRepository.updatePasswordResetToken(user.id, resetToken, expiresAt)
             true
         }.getOrElse { e ->
-            println("Failed to send password reset email: ${e.message}")
+            logger.warn(e) { "Failed to send password reset email" }
             false
         }
     }
@@ -540,16 +566,19 @@ class AuthService(
             emptyList()
         }
 
+        val organization = organizationRepository.findById(membership.organizationId)
         return UserResponse(
-            user.id,
-            user.email,
-            user.name,
-            user.emailVerified,
-            true,
-            user.isAdmin,
-            finalSlug,
-            null,
-            hiddenItems
+            id = user.resourceId,
+            email = user.email,
+            name = user.name,
+            emailVerified = user.emailVerified,
+            onboardingCompleted = true,
+            isAdmin = user.isAdmin,
+            organizationSlug = finalSlug,
+            orgRole = membership.role,
+            demoEpochMs = null,
+            sidebarHiddenItems = hiddenItems,
+            orgId = organization?.resourceId,
         )
     }
 
@@ -572,16 +601,23 @@ class AuthService(
         val decodedJWT = jwtVerifier.verify(tokenPair.accessToken)
         val userId = decodedJWT.getClaim("userId").asInt()
         val email = decodedJWT.getClaim("email").asString()
+        val orgId = decodedJWT.currentOrgIdOrNull()
+        val orgRole = decodedJWT.getClaim("orgRole").asString()
 
         val user = run {
             val userRow = userRepository.findById(userId) ?: return null
+            val organization = orgId?.let { organizationRepository.findById(it) }
+            val organizationSlug = organization?.slug
             UserResponse(
-                userId,
-                email,
-                userRow.name,
-                userRow.emailVerified,
-                userRow.onboardingCompleted,
-                userRow.isAdmin
+                id = userRow.resourceId,
+                email = email,
+                name = userRow.name,
+                emailVerified = userRow.emailVerified,
+                onboardingCompleted = userRow.onboardingCompleted,
+                isAdmin = userRow.isAdmin,
+                organizationSlug = organizationSlug,
+                orgRole = orgRole,
+                orgId = organization?.resourceId,
             )
         }
 

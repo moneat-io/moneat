@@ -24,11 +24,33 @@ import {CopyBlock} from '@/components/ui/copy-block'
 import {AlertTriangle, Check, Download, Upload} from 'lucide-react'
 import {DataSourceMapperModal} from './DataSourceMapperModal'
 
+type DashboardImportFormat = 'grafana' | 'datadog'
+
+const IMPORT_FORMAT_DETAILS: Record<DashboardImportFormat, {
+  title: string
+  description: string
+  uploadLabel: string
+  placeholder: string
+}> = {
+  grafana: {
+    title: 'Grafana Dashboard Import',
+    description: 'Upload or paste your Grafana JSON export',
+    uploadLabel: 'Upload Grafana JSON File',
+    placeholder: '{"title": "My Dashboard", "widgets": [...]}',
+  },
+  datadog: {
+    title: 'Datadog Dashboard Import',
+    description: 'Upload or paste your Datadog dashboard JSON export',
+    uploadLabel: 'Upload Datadog JSON File',
+    placeholder: '{"title": "My Dashboard", "layout_type": "ordered", "widgets": [...]}',
+  },
+}
+
 interface ImportExportModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   mode: 'import' | 'export'
-  dashboardId?: number
+  dashboardId?: string
 }
 
 export function ImportExportModal({open, onOpenChange, mode, dashboardId}: ImportExportModalProps) {
@@ -36,15 +58,16 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [jsonInput, setJsonInput] = useState('')
-  const format = 'grafana' // Only support Grafana for now
+  const [format, setFormat] = useState<DashboardImportFormat>('grafana')
   const [warnings, setWarnings] = useState<string[]>([])
   const [importSuccess, setImportSuccess] = useState(false)
-  const [importedDashboardId, setImportedDashboardId] = useState<number | null>(null)
+  const [importedDashboardId, setImportedDashboardId] = useState<string | null>(null)
   const [exportData, setExportData] = useState<string>('')
   const [showDataSourceMapper, setShowDataSourceMapper] = useState(false)
   const [unmappedDataSources, setUnmappedDataSources] = useState<string[]>([])
   const [pendingImport, setPendingImport] = useState<{format: string; json: string} | null>(null)
   const [autoMappings, setAutoMappings] = useState<Record<string, string>>({})
+  const formatDetails = IMPORT_FORMAT_DETAILS[format]
   
   // Fetch custom data sources for mapping
   const {data: customDataSourcesData} = useQuery({
@@ -66,7 +89,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       {name: 'analytics_events', label: 'Analytics Events', fields: []},
     ]
     
-    const custom = (customDataSourcesData || []).map(ds => ({
+    const custom = (customDataSourcesData ?? []).map(ds => ({
       name: `custom:${ds.id}`,
       label: `${ds.name} (${ds.source_type})`,
       fields: [],
@@ -180,14 +203,14 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
       for (const ds of foundDataSources) {
         // Check if it's a built-in source - these don't need mapping
         if (builtInSources.has(ds)) {
-          console.log(`  ${ds} -> matched built-in, no mapping needed`)
+          console.log(`${ds} -> matched built-in, no mapping needed`)
           continue
         }
         
         // Everything else is external and needs to be mapped to a custom datasource
         // Even if we have a matching source_type, we can't assume which specific
         // custom datasource the user wants (they might have multiple Prometheus sources)
-        console.log(`  ${ds} -> external datasource, needs mapping`)
+        console.log(`${ds} -> external datasource, needs mapping`)
         unmapped.push(ds)
       }
       
@@ -347,20 +370,20 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
-      <div className="relative bg-background border rounded-lg shadow-xl w-[520px] max-h-[80vh] flex flex-col">
+      <div className="relative bg-background border rounded-lg w-[520px] max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="px-5 py-4 border-b">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             {mode === 'import' ? 'Import Dashboard' : 'Export Dashboard'}
             {mode === 'import' && (
-              <span className="text-xs font-normal px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+              <span className="text-xs font-normal px-2 py-0.5 rounded bg-warning-bg text-warning-fg border border-warning-border">
                 Experimental
               </span>
             )}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             {mode === 'import'
-              ? 'Import a dashboard from Grafana JSON format'
+              ? `Import a dashboard from ${format === 'datadog' ? 'Datadog' : 'Grafana'} JSON format`
               : 'Export this dashboard in various formats'}
           </p>
         </div>
@@ -369,7 +392,27 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
         <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
           {mode === 'import' ? (
             <>
-              {/* Grafana logo/info */}
+              <fieldset className="grid grid-cols-2 gap-2">
+                <legend className="sr-only">Import format</legend>
+                <Button
+                  variant={format === 'grafana' ? 'default' : 'outline'}
+                  size="sm"
+                  aria-pressed={format === 'grafana'}
+                  onClick={() => setFormat('grafana')}
+                >
+                  Grafana
+                </Button>
+                <Button
+                  variant={format === 'datadog' ? 'default' : 'outline'}
+                  size="sm"
+                  aria-pressed={format === 'datadog'}
+                  onClick={() => setFormat('datadog')}
+                >
+                  Datadog
+                </Button>
+              </fieldset>
+
+              {/* Format logo/info */}
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
                 <svg className="h-8 w-8" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M57.9 13.4c-.7-2.2-1.8-4.3-3.3-6.1-.8-.9-1.6-1.7-2.6-2.4-1.3-1-2.7-1.8-4.2-2.4-2.2-.9-4.5-1.4-6.9-1.4-2 0-4 .3-5.9.9-1.6.5-3.2 1.2-4.6 2.1-1.1.7-2.1 1.5-3 2.4-1.3 1.3-2.4 2.7-3.3 4.3-1 1.7-1.7 3.6-2.1 5.5-.3 1.3-.4 2.7-.3 4 .1 1.6.4 3.1.9 4.6.6 1.7 1.4 3.3 2.5 4.7.9 1.2 2 2.3 3.2 3.2 1.5 1.2 3.2 2.1 5 2.7 2.1.7 4.3 1 6.5.9 2-.1 3.9-.5 5.7-1.2 1.5-.6 2.9-1.4 4.2-2.4 1-.8 1.9-1.7 2.7-2.7 1.2-1.5 2.1-3.2 2.8-4.9.7-1.9 1.1-3.9 1.1-5.9 0-2-.3-4-.9-5.9z" fill="#F05A28"/>
@@ -377,8 +420,8 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   <circle cx="41.2" cy="22" r="3" fill="#FFF"/>
                 </svg>
                 <div className="flex-1">
-                  <div className="text-sm font-medium">Grafana Dashboard Import</div>
-                  <div className="text-xs text-muted-foreground">Upload or paste your Grafana JSON export</div>
+                  <div className="text-sm font-medium">{formatDetails.title}</div>
+                  <div className="text-xs text-muted-foreground">{formatDetails.description}</div>
                 </div>
               </div>
 
@@ -397,7 +440,7 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   onClick={() => fileInputRef.current?.click()}
                   className="w-full"
                 >
-                  <Upload className="h-4 w-4 mr-2" /> Upload Grafana JSON File
+                  <Upload className="h-4 w-4 mr-2" /> {formatDetails.uploadLabel}
                 </Button>
               </div>
 
@@ -411,17 +454,17 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   rows={10}
                   value={jsonInput}
                   onChange={setJsonInput}
-                  placeholder='{"title": "My Dashboard", "widgets": [...]}'
+                  placeholder={formatDetails.placeholder}
                 />
               </div>
 
               {/* Warnings */}
               {warnings.length > 0 && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950 p-3">
-                  <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 text-xs font-medium mb-1">
+                <div className="rounded-md border border-warning-border bg-warning-bg p-3">
+                  <div className="flex items-center gap-2 text-warning-fg text-xs font-medium mb-1">
                     <AlertTriangle className="h-3.5 w-3.5" /> Import Warnings
                   </div>
-                  <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-0.5">
+                  <ul className="text-xs text-warning-fg/90 space-y-0.5">
                     {warnings.map((w, i) => (
                       <li key={i}>• {w}</li>
                     ))}
@@ -431,10 +474,10 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
 
               {/* Success */}
               {importSuccess && (
-                <div className="rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950 p-3 flex items-center justify-between">
+                <div className="rounded-md border border-success-border bg-success-bg p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <span className="text-xs text-green-700 dark:text-green-300">
+                    <Check className="h-4 w-4 text-success-fg" />
+                    <span className="text-xs text-success-fg">
                       Dashboard imported successfully!
                     </span>
                   </div>
@@ -470,6 +513,9 @@ export function ImportExportModal({open, onOpenChange, mode, dashboardId}: Impor
                   <Download className="h-4 w-4 mr-2" /> Export as Grafana JSON
                 </Button>
               </div>
+              <Button variant="outline" className="w-full justify-start" onClick={() => handleExport('datadog')}>
+                <Download className="h-4 w-4 mr-2" /> Export as Datadog JSON
+              </Button>
 
               {exportData && (
                 <div>

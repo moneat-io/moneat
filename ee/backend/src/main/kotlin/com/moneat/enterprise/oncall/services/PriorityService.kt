@@ -4,6 +4,8 @@
 
 package com.moneat.enterprise.oncall.services
 
+import com.moneat.alerts.models.AlertPriority as AlertPriorityValue
+import com.moneat.enterprise.oncall.organizationResourceId
 import com.moneat.enterprise.oncall.models.AlertPriorities
 import com.moneat.enterprise.oncall.models.AlertPriority
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -16,19 +18,23 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 
 private data class DefaultPriority(
-    val severity: String,
-    val priorityLevel: String,
+    val priority: String,
     val isPageable: Boolean,
     val label: String,
     val description: String,
 )
 
 private val DEFAULT_PRIORITIES = listOf(
-    DefaultPriority("CRITICAL", "P0", true, "P0 - Critical", "Immediate response required"),
-    DefaultPriority("HIGH", "P1", true, "P1 - High", "Urgent, respond within 15 minutes"),
-    DefaultPriority("MEDIUM", "P2", false, "P2 - Medium", "Respond within 1 hour"),
-    DefaultPriority("LOW", "P3", false, "P3 - Low", "Respond within 1 business day"),
+    DefaultPriority("P0", true, "P0", "Immediate response required"),
+    DefaultPriority("P1", true, "P1", "Urgent, respond within 15 minutes"),
+    DefaultPriority("P2", true, "P2", "Respond within 1 hour"),
+    DefaultPriority("P3", false, "P3", "Respond within 1 business day"),
+    DefaultPriority("P4", false, "P4", "Lower urgency, no page by default"),
+    DefaultPriority("P5", false, "P5", "Informational alert, no page by default"),
 )
+
+private fun normalizedPriority(value: String): String =
+    AlertPriorityValue.wireValue(value) ?: value.trim().uppercase()
 
 class PriorityService {
     /** Insert the four default priorities for an org if none exist yet. Must be called inside a transaction. */
@@ -41,8 +47,7 @@ class PriorityService {
         DEFAULT_PRIORITIES.forEach { d ->
             AlertPriorities.insert {
                 it[AlertPriorities.organizationId] = organizationId
-                it[severity] = d.severity
-                it[priorityLevel] = d.priorityLevel
+                it[priority] = d.priority
                 it[isPageable] = d.isPageable
                 it[label] = d.label
                 it[description] = d.description
@@ -54,83 +59,88 @@ class PriorityService {
 
     fun resolvePriority(
         organizationId: Int,
-        severity: String,
-    ): AlertPriority? =
-        transaction {
+        priority: String,
+    ): AlertPriority? {
+        val normalized = normalizedPriority(priority)
+        return transaction {
             seedDefaultsIfEmpty(organizationId)
             AlertPriorities
                 .selectAll()
                 .where {
-                    (AlertPriorities.organizationId eq organizationId) and
-                        (AlertPriorities.severity eq severity.uppercase())
-                }.singleOrNull()
+                    (AlertPriorities.organizationId eq organizationId) and (AlertPriorities.priority eq normalized)
+                }.firstOrNull()
                 ?.let { row ->
                     AlertPriority(
-                        id = row[AlertPriorities.id].value,
-                        organizationId = row[AlertPriorities.organizationId],
-                        severity = row[AlertPriorities.severity],
-                        priorityLevel = row[AlertPriorities.priorityLevel],
+                        id = row[AlertPriorities.resourceId].toString(),
+                        organizationResourceId = organizationResourceId(organizationId),
+                        priority = normalizedPriority(row[AlertPriorities.priority]),
                         isPageable = row[AlertPriorities.isPageable],
                         label = row[AlertPriorities.label],
                         description = row[AlertPriorities.description],
                         createdAt = row[AlertPriorities.createdAt].toString(),
                         updatedAt = row[AlertPriorities.updatedAt].toString(),
+                        internalId = row[AlertPriorities.id].value,
+                        organizationId = row[AlertPriorities.organizationId],
                     )
                 }
         }
+    }
 
     fun isPageable(
         organizationId: Int,
-        priorityLevel: String,
-    ): Boolean =
-        transaction {
+        priority: String,
+    ): Boolean {
+        val normalized = normalizedPriority(priority)
+        return transaction {
             AlertPriorities
                 .selectAll()
                 .where {
                     (AlertPriorities.organizationId eq organizationId) and
-                        (AlertPriorities.priorityLevel eq priorityLevel)
+                        (AlertPriorities.priority eq normalized)
                 }.singleOrNull()
                 ?.get(AlertPriorities.isPageable) ?: false
         }
+    }
 
     fun getAllPriorities(organizationId: Int): List<AlertPriority> =
         transaction {
             seedDefaultsIfEmpty(organizationId)
+            val orgResourceId = organizationResourceId(organizationId)
             AlertPriorities
                 .selectAll()
                 .where { AlertPriorities.organizationId eq organizationId }
-                .orderBy(AlertPriorities.priorityLevel to SortOrder.ASC)
+                .orderBy(AlertPriorities.priority to SortOrder.ASC)
                 .map { row ->
                     AlertPriority(
-                        id = row[AlertPriorities.id].value,
-                        organizationId = row[AlertPriorities.organizationId],
-                        severity = row[AlertPriorities.severity],
-                        priorityLevel = row[AlertPriorities.priorityLevel],
+                        id = row[AlertPriorities.resourceId].toString(),
+                        organizationResourceId = orgResourceId,
+                        priority = normalizedPriority(row[AlertPriorities.priority]),
                         isPageable = row[AlertPriorities.isPageable],
                         label = row[AlertPriorities.label],
                         description = row[AlertPriorities.description],
                         createdAt = row[AlertPriorities.createdAt].toString(),
                         updatedAt = row[AlertPriorities.updatedAt].toString(),
+                        internalId = row[AlertPriorities.id].value,
+                        organizationId = row[AlertPriorities.organizationId],
                     )
                 }
         }
 
     fun updatePriority(
         organizationId: Int,
-        severity: String,
-        priorityLevel: String,
+        priority: String,
         isPageable: Boolean,
         label: String,
         description: String?,
-    ): AlertPriority? =
-        transaction {
+    ): AlertPriority? {
+        val normalizedPriority = normalizedPriority(priority)
+        return transaction {
             val now = Clock.System.now()
 
             val updated = AlertPriorities.update({
                 (AlertPriorities.organizationId eq organizationId) and
-                    (AlertPriorities.severity eq severity.uppercase())
+                    (AlertPriorities.priority eq normalizedPriority)
             }) {
-                it[AlertPriorities.priorityLevel] = priorityLevel
                 it[AlertPriorities.isPageable] = isPageable
                 it[AlertPriorities.label] = label
                 it[AlertPriorities.description] = description
@@ -140,8 +150,7 @@ class PriorityService {
             if (updated == 0) {
                 AlertPriorities.insert {
                     it[AlertPriorities.organizationId] = organizationId
-                    it[AlertPriorities.severity] = severity.uppercase()
-                    it[AlertPriorities.priorityLevel] = priorityLevel
+                    it[AlertPriorities.priority] = normalizedPriority
                     it[AlertPriorities.isPageable] = isPageable
                     it[AlertPriorities.label] = label
                     it[AlertPriorities.description] = description
@@ -150,6 +159,7 @@ class PriorityService {
                 }
             }
 
-            resolvePriority(organizationId, severity)
+            resolvePriority(organizationId, normalizedPriority)
         }
+    }
 }

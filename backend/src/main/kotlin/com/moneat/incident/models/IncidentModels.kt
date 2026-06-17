@@ -20,48 +20,7 @@ import com.moneat.shared.models.Organizations
 import kotlinx.serialization.json.JsonObject
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
-
-// Enums
-enum class IncidentSeverity {
-    CRITICAL, HIGH, MEDIUM, LOW;
-
-    companion object {
-        fun fromString(value: String?): IncidentSeverity? {
-            return value?.let {
-                try {
-                    valueOf(it.uppercase())
-                } catch (e: IllegalArgumentException) {
-                    null
-                }
-            }
-        }
-    }
-}
-
-enum class IncidentStatus {
-    FIRING, RESOLVED
-}
-
-enum class AlertSource {
-    HOST_ALERT,
-    HOST_DOWN,
-    UPTIME_MONITOR,
-    ERROR_ALERT,
-    DASHBOARD_ALERT
-}
-
-// Data class for incident events
-data class IncidentEvent(
-    val title: String,
-    val description: String,
-    val severity: IncidentSeverity,
-    val status: IncidentStatus,
-    val source: AlertSource,
-    val deduplicationKey: String,
-    val organizationId: Int,
-    val metadata: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
-    val moneatUrl: String
-)
+import kotlin.uuid.Uuid
 
 // Provider config data class
 data class ProviderConfig(
@@ -76,6 +35,7 @@ data class ProviderConfig(
 
 // Exposed table objects
 object IncidentProviderConfigs : IntIdTable("incident_provider_configs") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val providerType = varchar("provider_type", 50)
     val name = varchar("name", 255)
@@ -87,20 +47,22 @@ object IncidentProviderConfigs : IntIdTable("incident_provider_configs") {
 }
 
 object IncidentRoutingRules : IntIdTable("incident_routing_rules") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val providerConfigId = integer("provider_config_id").references(IncidentProviderConfigs.id)
     val alertSource = varchar("alert_source", 50)
     val alertType = varchar("alert_type", 100).nullable()
-    val incidentSeverity = varchar("incident_severity", 20)
+    val alertPriority = varchar("alert_priority", 20)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 }
 
 object IncidentEventLog : IntIdTable("incident_event_log") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val providerConfigId = integer("provider_config_id").references(IncidentProviderConfigs.id)
     val alertSource = varchar("alert_source", 50)
     val deduplicationKey = varchar("deduplication_key", 255)
-    val incidentSeverity = varchar("incident_severity", 20)
+    val alertPriority = varchar("alert_priority", 20)
     val incidentStatus = varchar("incident_status", 20)
     val title = text("title")
     val description = text("description").nullable()

@@ -20,6 +20,9 @@ import { server } from '@/test/mocks/server'
 import { api } from '@/lib/api'
 
 const API_BASE = 'http://localhost:8080'
+const LOG_INDEX_ID_MAIN = '11111111-1111-4111-8111-111111111111'
+const LOG_INDEX_ID_ERRORS = '22222222-2222-4222-8222-222222222222'
+const LOG_INDEX_ID_DELETE = '33333333-3333-4333-8333-333333333333'
 
 describe('Log Indexes API', () => {
   beforeEach(() => {
@@ -33,7 +36,7 @@ describe('Log Indexes API', () => {
   it('fetches log indexes', async () => {
     const mockResponse = {
       indexes: [
-        { id: 1, name: 'main', filterQuery: 'service:api', retentionDays: 30 },
+        { id: LOG_INDEX_ID_MAIN, name: 'main', filter_query: 'service:api', retention_days: 30 },
       ],
     }
 
@@ -50,15 +53,15 @@ describe('Log Indexes API', () => {
   // ──── createLogIndex ────
 
   it('creates a log index', async () => {
-    const request = { name: 'errors', filterQuery: 'level:error', retentionDays: 90 }
-    const mockIndex = { id: 2, ...request }
+    const request = { name: 'errors', filter_query: 'level:error', retention_days: 90 }
+    const mockIndex = { id: LOG_INDEX_ID_ERRORS, ...request }
 
     server.use(
       http.post(`${API_BASE}/v1/logs/indexes`, async ({ request: req }) => {
         const body = (await req.json()) as Record<string, unknown>
         expect(body.name).toBe('errors')
-        expect(body.filterQuery).toBe('level:error')
-        expect(body.retentionDays).toBe(90)
+        expect(body.filter_query).toBe('level:error')
+        expect(body.retention_days).toBe(90)
         return HttpResponse.json(mockIndex)
       })
     )
@@ -70,18 +73,18 @@ describe('Log Indexes API', () => {
   // ──── updateLogIndex ────
 
   it('updates a log index', async () => {
-    const updateReq = { name: 'errors-updated', filterQuery: 'level:error OR level:fatal' }
-    const mockIndex = { id: 2, ...updateReq, retentionDays: 90 }
+    const updateReq = { name: 'errors-updated', filter_query: 'level:error OR level:fatal' }
+    const mockIndex = { id: LOG_INDEX_ID_ERRORS, ...updateReq, retention_days: 90 }
 
     server.use(
-      http.put(`${API_BASE}/v1/logs/indexes/2`, async ({ request }) => {
+      http.put(`${API_BASE}/v1/logs/indexes/${LOG_INDEX_ID_ERRORS}`, async ({ request }) => {
         const body = (await request.json()) as Record<string, unknown>
         expect(body.name).toBe('errors-updated')
         return HttpResponse.json(mockIndex)
       })
     )
 
-    const result = await api.updateLogIndex(2, updateReq)
+    const result = await api.updateLogIndex(LOG_INDEX_ID_ERRORS, updateReq)
     expect(result).toEqual(mockIndex)
   })
 
@@ -89,12 +92,12 @@ describe('Log Indexes API', () => {
 
   it('deletes a log index', async () => {
     server.use(
-      http.delete(`${API_BASE}/v1/logs/indexes/3`, () => {
+      http.delete(`${API_BASE}/v1/logs/indexes/${LOG_INDEX_ID_DELETE}`, () => {
         return new HttpResponse(null, { status: 204 })
       })
     )
 
-    await api.deleteLogIndex(3)
+    await api.deleteLogIndex(LOG_INDEX_ID_DELETE)
   })
 
   // ──── testLogIndexFilter ────

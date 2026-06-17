@@ -19,6 +19,7 @@ package com.moneat.monitor.services
 import com.moneat.monitor.models.AgentApiKeyResponse
 import com.moneat.monitor.models.CreateAgentApiKeyResponse
 import com.moneat.shared.models.AgentApiKeys
+import com.moneat.shared.services.toUuidOrNull
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -27,6 +28,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import java.security.MessageDigest
 import java.security.SecureRandom
+import kotlin.uuid.Uuid
 import kotlin.time.Clock
 
 private const val KEY_PREFIX = "magt_"
@@ -41,7 +43,7 @@ class AgentApiKeyService {
         val keyPrefix = rawKey.take(DISPLAY_PREFIX_LENGTH)
         val now = Clock.System.now()
 
-        val id = transaction {
+        val row = transaction {
             AgentApiKeys.insert {
                 it[AgentApiKeys.organization_id] = organizationId
                 it[AgentApiKeys.name] = name
@@ -50,11 +52,11 @@ class AgentApiKeyService {
                 it[AgentApiKeys.created_by] = createdBy
                 it[AgentApiKeys.created_at] = now
                 it[AgentApiKeys.is_active] = true
-            }[AgentApiKeys.id]
+            }
         }
 
         return CreateAgentApiKeyResponse(
-            id = id,
+            id = row[AgentApiKeys.resource_id].toString(),
             name = name,
             keyPrefix = keyPrefix,
             key = rawKey,
@@ -95,7 +97,7 @@ class AgentApiKeyService {
                 }
                 .map { row ->
                     AgentApiKeyResponse(
-                        id = row[AgentApiKeys.id],
+                        id = row[AgentApiKeys.resource_id].toString(),
                         name = row[AgentApiKeys.name],
                         keyPrefix = row[AgentApiKeys.key_prefix],
                         createdAt = row[AgentApiKeys.created_at].toString(),
@@ -105,16 +107,21 @@ class AgentApiKeyService {
         }
     }
 
-    fun deleteKey(organizationId: Int, keyId: Int): Boolean {
+    fun deleteKey(organizationId: Int, keyResourceId: Uuid): Boolean {
         return transaction {
             val updated = AgentApiKeys.update({
-                (AgentApiKeys.id eq keyId) and
+                (AgentApiKeys.resource_id eq keyResourceId) and
                     (AgentApiKeys.organization_id eq organizationId)
             }) {
                 it[AgentApiKeys.is_active] = false
             }
             updated > 0
         }
+    }
+
+    fun deleteKey(organizationId: Int, keyResourceId: String): Boolean {
+        val parsedId = keyResourceId.toUuidOrNull() ?: return false
+        return deleteKey(organizationId, parsedId)
     }
 
     private fun generateKey(): String {

@@ -55,25 +55,26 @@ function formatAbsoluteTime(ns: number): string {
 }
 
 const SERVICE_COLORS = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-violet-500',
-  'bg-amber-500',
-  'bg-cyan-500',
-  'bg-rose-500',
-  'bg-indigo-500',
-  'bg-teal-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-lime-500',
-  'bg-fuchsia-500',
+  'bg-chart-1',
+  'bg-chart-2',
+  'bg-chart-3',
+  'bg-chart-4',
+  'bg-chart-5',
+  'bg-chart-6',
+  'bg-chart-7',
+  'bg-chart-8',
+  'bg-chart-9',
+  'bg-chart-10',
 ]
+
+const TRACE_LIST_COLUMNS_CLASS =
+  'grid-cols-[minmax(160px,1.5fr)_104px_minmax(220px,3fr)_72px_132px_minmax(110px,1fr)_76px]'
 
 function getDurationColor(ns: number, maxNs: number): string {
   if (maxNs === 0) return 'text-foreground'
   const ratio = ns / maxNs
-  if (ratio > 0.8) return 'text-red-500'
-  if (ratio > 0.5) return 'text-amber-500'
+  if (ratio > 0.8) return 'text-danger-fg'
+  if (ratio > 0.5) return 'text-warning-fg'
   return 'text-foreground'
 }
 
@@ -108,7 +109,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
     placeholderData: keepPreviousData,
   })
 
-  const traces = data?.traces ?? []
+  const traces = useMemo(() => data?.traces ?? [], [data?.traces])
 
   const serviceColorMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -199,14 +200,20 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
             <Clock className="h-10 w-10 mb-3 text-muted-foreground/40" />
             <p className="font-medium">No traces found</p>
             <p className="text-sm mt-1">
-              Send traces via a Datadog agent or OpenTelemetry SDK.
+              Send traces via an OpenTelemetry SDK, Collector, or compatible agent.
             </p>
           </div>
         ) : (
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-x-auto">
             {/* Column headers */}
-            <div className="grid grid-cols-[minmax(180px,2fr)_minmax(200px,3fr)_80px_140px_minmax(120px,1.5fr)_80px] gap-px bg-muted/50 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+            <div
+              className={cn(
+                'grid min-w-[930px] gap-px bg-muted/50 border-b px-3 py-2 text-xs font-medium text-muted-foreground',
+                TRACE_LIST_COLUMNS_CLASS
+              )}
+            >
               <div>Service</div>
+              <div>Source</div>
               <div>Resource</div>
               <button
                 onClick={() => toggleSort('spans')}
@@ -239,20 +246,27 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                     key={trace.traceId}
                     to={`${basePath || '/apm-traces'}/$traceId` as '/apm-traces/$traceId'}
                     params={{traceId: trace.traceId}}
-                    className="grid grid-cols-[minmax(180px,2fr)_minmax(200px,3fr)_80px_140px_minmax(120px,1.5fr)_80px] gap-px px-3 py-2 hover:bg-muted/40 transition-colors items-center group"
+                    className={cn(
+                      'grid min-w-[930px] gap-px px-3 py-2 hover:bg-muted/40 transition-colors items-center group',
+                      TRACE_LIST_COLUMNS_CLASS
+                    )}
                   >
                     {/* Service */}
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className={cn(
                           'w-2 h-2 rounded-full shrink-0',
-                          serviceColorMap.get(trace.rootService) ?? 'bg-gray-500'
+                          serviceColorMap.get(trace.rootService) ?? 'bg-muted-foreground'
                         )}
                       />
                       <span className="font-medium text-sm truncate group-hover:text-primary transition-colors">
                         {trace.rootService}
                       </span>
-                      <SourceBadge source={trace.source} />
+                    </div>
+
+                    {/* Source */}
+                    <div className="flex items-center min-w-0">
+                      <SourceBadge source={trace.source} className="max-w-[92px] truncate" />
                     </div>
 
                     {/* Resource */}
@@ -280,10 +294,10 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                           className={cn(
                             'h-full rounded-full transition-all',
                             trace.durationNs / maxDuration > 0.8
-                              ? 'bg-red-500/70'
+                              ? 'bg-danger-solid/70'
                               : trace.durationNs / maxDuration > 0.5
-                                ? 'bg-amber-500/70'
-                                : 'bg-blue-500/60'
+                                ? 'bg-warning-solid/70'
+                                : 'bg-chart-2/60'
                           )}
                           style={{width: `${Math.max(durationPct, 2)}%`}}
                         />
@@ -317,7 +331,7 @@ export function TraceList({serviceFilter: externalService, envFilter, basePath}:
                       ) : (
                         <Badge
                           variant="outline"
-                          className="text-[11px] h-5 text-green-600 border-green-600/30"
+                          className="text-[11px] h-5 text-success-fg border-success-border"
                         >
                           OK
                         </Badge>

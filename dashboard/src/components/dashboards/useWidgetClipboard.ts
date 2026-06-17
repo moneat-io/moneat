@@ -189,7 +189,7 @@ function duplicateWidget(widget: DashboardWidget, yOffset: number): CreateWidget
 export interface UseWidgetClipboardOptions {
   isEditing: boolean
   widgets: DashboardWidget[]
-  selectedWidgetId: number | null
+  selectedWidgetId: string | null
   onPasteWidget: (widget: CreateWidgetRequest) => void
   onDatasourceMapping: (widget: CreateWidgetRequest, unknownSources: string[]) => void
   onUndo: () => void

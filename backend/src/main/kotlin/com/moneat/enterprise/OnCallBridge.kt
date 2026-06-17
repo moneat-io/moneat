@@ -22,45 +22,79 @@ package com.moneat.enterprise
  * provides the real implementation via [FeatureRegistry].
  */
 interface OnCallBridge {
-    /** Resolve priority for a severity level in the given organization. */
+    /** Resolve alert priority settings for the given organization. */
     fun resolvePriority(
         organizationId: Int,
-        severity: String
+        priority: String
     ): PriorityInfo?
 
     /** Check if escalation should proceed based on business hours. */
     fun shouldEscalate(
         organizationId: Int,
-        priorityLevel: String
+        priority: String
     ): Boolean
 
-    /** Trigger the escalation engine and return the incident ID (or null). */
+    /** Resolve a public escalation policy resource ID to its internal ID within the organization. */
+    fun resolveEscalationPolicyId(
+        organizationId: Int,
+        escalationPolicyResourceId: String
+    ): Int?
+
+    /** Resolve a public on-call alert resource ID to its internal ID within the organization. */
+    fun resolveAlertId(
+        organizationId: Int,
+        alertResourceId: String
+    ): Int?
+
+    /** Trigger the escalation engine and return the on-call alert resource ID (or null). */
     suspend fun triggerEscalation(
         organizationId: Int,
         escalationPolicyId: Int,
         title: String,
         description: String?,
-        priorityLevel: String,
+        priority: String,
         alertSource: String,
         deduplicationKey: String?,
         metadata: String?
-    ): Int?
+    ): String?
 
-    /** Get an incident by ID for a user. Returns a map of incident fields or null. */
+    /** Declare an operational incident and return the declared incident resource ID. */
+    suspend fun declareIncident(
+        organizationId: Int,
+        userId: Int,
+        alertId: Int?,
+        title: String,
+        description: String?,
+        severity: String
+    ): String?
+
+    /** Get a declared incident by ID for a user. */
     fun getIncident(
         incidentId: Int,
         userId: Int
     ): IncidentInfo?
 
-    /** Acknowledge an incident. */
+    /** Acknowledge linked alerts for a declared incident. */
     fun acknowledgeIncident(
         incidentId: Int,
+        userId: Int
+    ): Boolean
+
+    /** Get an on-call alert by ID for a user. */
+    fun getAlert(
+        alertId: Int,
+        userId: Int
+    ): IncidentInfo?
+
+    /** Acknowledge an on-call alert. */
+    fun acknowledgeAlert(
+        alertId: Int,
         userId: Int
     ): Boolean
 }
 
 /** Lightweight data carrier for priority info, avoiding enterprise model dependency. */
-data class PriorityInfo(val priorityLevel: String, val label: String?)
+data class PriorityInfo(val priority: String, val label: String?)
 
 /** Lightweight data carrier for incident info, avoiding enterprise model dependency. */
 data class IncidentInfo(val id: Int, val organizationId: Int, val title: String, val status: String)

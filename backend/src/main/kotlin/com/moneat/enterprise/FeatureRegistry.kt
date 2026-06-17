@@ -16,41 +16,22 @@
 
 package com.moneat.enterprise
 
+import com.moneat.authz.PermissionBridge
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.license.LicenseInfo
 import com.moneat.enterprise.license.LicenseValidator
-import io.ktor.server.application.*
-import io.ktor.server.routing.*
-import mu.KotlinLogging
-import java.util.ServiceLoader
+import com.moneat.workflows.WorkflowApprovalBridge
+import com.moneat.workflows.WorkflowConnectionVault
+import com.moneat.workflows.WorkflowPremiumConnectorBridge
 import com.moneat.utils.suspendRunCatching
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.routing.Route
+import mu.KotlinLogging
+import org.koin.core.module.Module
+import java.util.ServiceLoader
 
 private val logger = KotlinLogging.logger {}
-
-/**
- * Service Provider Interface for enterprise feature modules.
- * Enterprise modules implement this interface and register via
- * META-INF/services/com.moneat.enterprise.EnterpriseModule.
- */
-interface EnterpriseModule {
-    /** Human-readable name of the module (e.g., "SSO", "On-Call"). */
-    val name: String
-
-    /**
-     * The license feature name required to activate this module (e.g. "sso", "oncall").
-     * Null means the module is open-source and always loaded.
-     */
-    val licenseFeature: String? get() = null
-
-    /** Register enterprise routes into the core routing tree. */
-    fun registerRoutes(route: Route)
-
-    /** Start enterprise background jobs during application startup. */
-    fun startBackgroundJobs(application: Application)
-
-    /** Stop enterprise background jobs during application shutdown. */
-    fun stopBackgroundJobs()
-}
 
 /**
  * Registry that discovers and manages enterprise modules at runtime.
@@ -124,9 +105,44 @@ object FeatureRegistry {
         }
     }
 
-    fun startBackgroundJobs(application: Application) {
+    fun registerIngestionRoutes(route: Route) {
         for (module in modules) {
-            module.startBackgroundJobs(application)
+            suspendRunCatching {
+                module.registerIngestionRoutes(route)
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to register ingestion routes for enterprise module: ${module.name}" }
+                throw e
+            }
+        }
+    }
+
+    fun koinModules(): List<Module> =
+        modules.flatMap { module ->
+            suspendRunCatching {
+                module.koinModules()
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to collect Koin modules for enterprise module: ${module.name}" }
+                throw e
+            }
+        }
+
+    fun shouldStartIsolatedBackgroundJobs(application: Application): Boolean =
+        modules.any { module ->
+            suspendRunCatching {
+                module.shouldStartIsolatedBackgroundJobs(application)
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to resolve isolated startup state for enterprise module: ${module.name}" }
+                throw e
+            }
+        }
+
+    fun startBackgroundJobs(
+        application: Application,
+        startSchedulers: Boolean = true,
+        startIngestionWorkers: Boolean = true,
+    ) {
+        for (module in modules) {
+            module.startBackgroundJobs(application, startSchedulers, startIngestionWorkers)
         }
     }
 
@@ -144,7 +160,42 @@ object FeatureRegistry {
         return modules.filterIsInstance<OnCallBridge>().firstOrNull()
     }
 
+    /** Get the workflow connection vault if the licensed workflows module is loaded. */
+    fun getWorkflowConnectionVault(): WorkflowConnectionVault? {
+        return modules.filterIsInstance<WorkflowConnectionVault>().firstOrNull()
+    }
+
+    /** Get the workflow approval bridge if the licensed workflows module is loaded. */
+    fun getWorkflowApprovalBridge(): WorkflowApprovalBridge? {
+        return modules.filterIsInstance<WorkflowApprovalBridge>().firstOrNull()
+    }
+
+    /** Get the workflow premium connector bridge if the licensed workflows module is loaded. */
+    fun getWorkflowPremiumConnectorBridge(): WorkflowPremiumConnectorBridge? {
+        return modules.filterIsInstance<WorkflowPremiumConnectorBridge>().firstOrNull()
+    }
+
+    /** Get the cross-cutting permission bridge if the licensed RBAC module is loaded. */
+    fun getPermissionBridge(): PermissionBridge? {
+        return modules.filterIsInstance<PermissionBridge>().firstOrNull()
+    }
+
+    fun resolveIngestionRateLimitKey(rateLimitName: String, call: ApplicationCall): String? =
+        modules
+            .filterIsInstance<IngestionRateLimitKeyResolver>()
+            .firstOrNull { it.rateLimitName == rateLimitName }
+            ?.resolveRateLimitKey(call)
+
     // For testing
+    fun resetForTest() {
+        reset()
+    }
+
+    internal fun registerForTest(vararg enterpriseModules: EnterpriseModule) {
+        modules.addAll(enterpriseModules)
+        initialized = true
+    }
+
     internal fun reset() {
         modules.clear()
         license = null

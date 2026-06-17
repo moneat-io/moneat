@@ -17,11 +17,12 @@
 import {Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {useState, useMemo} from 'react'
-import {ArrowRight, Check, TrendingUp, Sparkles, AlertTriangle} from 'lucide-react'
+import {ArrowRight, Check, TrendingUp, AlertTriangle} from 'lucide-react'
 import {api} from '@/lib/api'
 import {type PricingCardTierInput} from '@/lib/pricing-display'
 import {Button} from '@/components/ui/button'
-import {Card, CardContent, CardHeader, CardTitle, CardDescription} from '@/components/ui/card'
+import {cn} from '@/lib/utils'
+import {GRADIENT_BG, GRADIENT_BAR, GRADIENT_TEXT, SectionHeading} from './Landing'
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -181,10 +182,10 @@ function SliderInput({label, sublabel, value, max, logMin, unit, step = 1, onCha
     <div className="space-y-2.5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-medium leading-tight">{label}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{sublabel}</p>
+          <p className="text-sm font-medium leading-tight text-slate-200">{label}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{sublabel}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5">
           <input
             type="number"
             min={0}
@@ -192,9 +193,9 @@ function SliderInput({label, sublabel, value, max, logMin, unit, step = 1, onCha
             step={step}
             value={value}
             onChange={(e) => onChange(Math.max(0, Math.min(max, Number(e.target.value) || 0)))}
-            className="w-28 rounded-md border border-border/60 bg-background px-3 py-1.5 text-right text-sm font-mono tabular-nums focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500/50"
+            className="w-28 rounded-md border border-white/10 bg-white/[0.03] px-3 py-1.5 text-right font-brandmono text-sm tabular-nums text-slate-100 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/20"
           />
-          {unit && <span className="text-xs text-muted-foreground w-6">{unit}</span>}
+          {unit && <span className="w-6 text-xs text-slate-500">{unit}</span>}
         </div>
       </div>
       <input
@@ -203,9 +204,9 @@ function SliderInput({label, sublabel, value, max, logMin, unit, step = 1, onCha
         max={100}
         value={sliderPos}
         onChange={(e) => handleSlider(Number(e.target.value))}
-        className="w-full h-1.5 accent-sky-500 cursor-pointer rounded-full"
+        className="h-1.5 w-full cursor-pointer rounded-full accent-indigo-400"
       />
-      <div className="flex justify-between text-[10px] text-muted-foreground/50 tabular-nums">
+      <div className="flex justify-between font-brandmono text-[10px] tabular-nums text-slate-600">
         <span>0</span>
         <span>{maxLabel}</span>
       </div>
@@ -224,105 +225,126 @@ interface PlanCardProps {
 function PlanCard({tier, cost, isBest}: PlanCardProps) {
   const name = tier.tierName.charAt(0) + tier.tierName.slice(1).toLowerCase()
   const isFree = tier.monthlyPriceCents === 0
-  const accent = isBest ? 'text-sky-500' : 'text-emerald-500'
-  const accentBg = isBest ? 'bg-sky-500/10' : 'bg-emerald-500/10'
 
   return (
-    <Card
-      className={`flex flex-col ${
-        isBest
-          ? 'relative border-sky-500/50 shadow-lg shadow-sky-500/10'
-          : 'border-border/60'
-      }`}
+    <div
+      className={cn(
+        'relative flex flex-col rounded-lg border bg-[#0c0e16] p-5',
+        isBest ? 'border-indigo-400/40' : 'border-white/[0.08]',
+      )}
     >
-      {isBest && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-          <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-sky-500 to-cyan-400 px-3 py-0.5 text-xs font-semibold text-white shadow-md shadow-sky-500/20 whitespace-nowrap">
-            <Sparkles className="h-3 w-3" />
+      {/* Best-match keyline */}
+      {isBest ? <div className={cn('absolute inset-x-0 top-0 h-px rounded-t-lg', GRADIENT_BAR)} /> : null}
+
+      {/* Violet glow */}
+      {isBest ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-lg"
+          style={{
+            background: 'radial-gradient(50% 60% at 50% 0%, rgba(99,102,241,0.13) 0%, transparent 100%)',
+          }}
+        />
+      ) : null}
+
+      {/* Best-match badge */}
+      {isBest ? (
+        <div className="absolute -top-3 left-1/2 z-10 -translate-x-1/2">
+          <span
+            className={cn(
+              'inline-flex items-center whitespace-nowrap rounded-md px-3 py-0.5 font-brandmono text-[11px] font-semibold uppercase tracking-[0.12em] text-white',
+              GRADIENT_BG,
+            )}
+          >
             Best match
           </span>
         </div>
+      ) : null}
+
+      {/* Plan name */}
+      <p className="text-sm font-semibold text-white">{name}</p>
+
+      {/* Price */}
+      {isFree ? (
+        <div className="mt-2">
+          <span className="font-brandmono text-3xl font-bold text-white">$0</span>
+          <span className="font-brandmono text-sm text-slate-500">/mo</span>
+          <div className="mt-1.5 flex items-center gap-1">
+            {cost.exceedsFreeLimits ? (
+              <>
+                <AlertTriangle className="size-3 text-amber-400" />
+                <span className="font-brandmono text-xs text-amber-400">Upgrade needed</span>
+              </>
+            ) : (
+              <>
+                <Check className="size-3 text-emerald-400" />
+                <span className="font-brandmono text-xs text-emerald-400">Fits your usage</span>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2">
+          <span className={cn('font-brandmono text-3xl font-bold', isBest ? GRADIENT_TEXT : 'text-white')}>
+            {fmtMoney(cost.total)}
+          </span>
+          <span className="font-brandmono text-sm text-slate-500">/mo</span>
+        </div>
       )}
 
-      <CardHeader className="pb-2 pt-5">
-        <CardTitle className="text-base">{name}</CardTitle>
-        {isFree ? (
-          <div className="mt-2">
-            <span className="text-3xl font-bold">$0</span>
-            <span className="text-muted-foreground text-sm">/mo</span>
-            <div className="mt-1.5 flex items-center gap-1">
-              {cost.exceedsFreeLimits ? (
-                <>
-                  <AlertTriangle className="h-3 w-3 text-amber-500" />
-                  <span className="text-xs text-amber-500">Upgrade needed</span>
-                </>
-              ) : (
-                <>
-                  <Check className="h-3 w-3 text-emerald-500" />
-                  <span className="text-xs text-emerald-500">Fits your usage</span>
-                </>
-              )}
-            </div>
+      {/* Cost breakdown */}
+      {!isFree && (
+        <div className="mt-3 flex-1 space-y-1.5 text-xs">
+          <div className="flex justify-between text-slate-500">
+            <span>Base plan</span>
+            <span className="tabular-nums font-brandmono">{fmtMoney(cost.base)}</span>
           </div>
+          {cost.overageLines.map((line) => (
+            <div key={line.label} className="flex justify-between text-slate-500">
+              <span className="flex items-center gap-1">
+                <TrendingUp className="size-3 shrink-0" />
+                {line.label}
+              </span>
+              <span className="tabular-nums font-brandmono">+{fmtMoney(line.cost)}</span>
+            </div>
+          ))}
+          {cost.overageLines.length > 0 && (
+            <div className="flex justify-between border-t border-white/[0.06] pt-2 font-semibold text-indigo-300 font-brandmono">
+              <span>Total</span>
+              <span className="tabular-nums">{fmtMoney(cost.total)}</span>
+            </div>
+          )}
+          {cost.overageLines.length === 0 && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <Check className="size-3 text-emerald-400" />
+              <span className="text-slate-500">No overages</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CTA */}
+      <div className="mt-4">
+        {isBest ? (
+          <Button
+            asChild
+            size="sm"
+            className={cn('w-full border-0 text-white shadow-[0_8px_20px_-8px_#6366F1] hover:brightness-110', GRADIENT_BG)}
+          >
+            <Link to="/signup">{isFree ? 'Start Free' : 'Start Trial'}</Link>
+          </Button>
         ) : (
-          <div className="mt-2">
-            <span className={`text-3xl font-bold ${isBest ? 'text-sky-500' : ''}`}>
-              {fmtMoney(cost.total)}
-            </span>
-            <span className="text-muted-foreground text-sm">/mo</span>
-          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="w-full border-white/15 bg-white/[0.03] text-slate-100 hover:bg-white/[0.07] hover:text-white"
+          >
+            <Link to="/signup">{isFree ? 'Start Free' : 'Start Trial'}</Link>
+          </Button>
         )}
-      </CardHeader>
-
-      <CardContent className="flex-1 space-y-2 text-xs pb-4">
-        {!isFree && (
-          <>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Base plan</span>
-              <span className="tabular-nums">{fmtMoney(cost.base)}</span>
-            </div>
-            {cost.overageLines.map((line) => (
-              <div key={line.label} className="flex justify-between text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <TrendingUp className="h-3 w-3 shrink-0" />
-                  {line.label}
-                </span>
-                <span className="tabular-nums">+{fmtMoney(line.cost)}</span>
-              </div>
-            ))}
-            {cost.overageLines.length > 0 && (
-              <div className={`flex justify-between font-semibold border-t border-border/50 pt-2 ${accent}`}>
-                <span>Total</span>
-                <span className="tabular-nums">{fmtMoney(cost.total)}</span>
-              </div>
-            )}
-            {cost.overageLines.length === 0 && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <div className={`rounded-full p-0.5 ${accentBg}`}>
-                  <Check className={`h-3 w-3 ${accent}`} />
-                </div>
-                <span className="text-muted-foreground">No overages</span>
-              </div>
-            )}
-          </>
-        )}
-
-        <Button
-          asChild
-          size="sm"
-          className={`w-full mt-3 ${
-            isBest
-              ? 'bg-sky-500 hover:bg-sky-400 text-white shadow-md shadow-sky-500/25'
-              : ''
-          }`}
-          variant={isBest ? 'default' : 'outline'}
-        >
-          <Link to="/signup">
-            {isFree ? 'Start Free' : `Start Trial`}
-          </Link>
-        </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 
@@ -380,10 +402,12 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
 
   const tiers: PricingCardTierInput[] = useMemo(
     () =>
-      billingPlans?.plans.map((p) => ({
-        ...p.tier,
-        trialDays: p.trialDays ?? p.tier.trialDays,
-      })) ?? [],
+      billingPlans?.plans
+        .filter((p) => p.tier.tierName !== 'BUSINESS')
+        .map((p) => ({
+          ...p.tier,
+          trialDays: p.trialDays ?? p.tier.trialDays,
+        })) ?? [],
     [billingPlans],
   )
 
@@ -403,51 +427,51 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
   const set = (key: keyof Usage) => (v: number) => setUsage((u) => ({...u, [key]: v}))
 
   const heading = standalone ? (
-    <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-      Pricing Calculator
-    </h1>
+    <SectionHeading
+      kicker="Pricing Calculator"
+      title="See exactly what you'd pay."
+      lead="Dial in your monthly usage and see your cost on each plan — including overages."
+      align="left"
+    />
   ) : (
-    <h2 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-5xl mb-4">
-      <Link
-        to="/pricing-calculator"
-        className="hover:text-sky-500 transition-colors group inline-flex items-center gap-3"
-      >
-        Pricing Calculator
-        <ArrowRight className="h-7 w-7 opacity-30 transition-transform group-hover:translate-x-1 group-hover:opacity-60" />
-      </Link>
-    </h2>
+    <div>
+      <h2 className="mb-4 text-3xl font-bold tracking-[-0.035em] text-white sm:text-4xl">
+        <Link
+          to="/pricing-calculator"
+          className="group inline-flex items-center gap-3 transition-colors hover:opacity-80"
+        >
+          Pricing Calculator
+          <ArrowRight className="size-7 opacity-30 transition-transform group-hover:translate-x-1 group-hover:opacity-60" />
+        </Link>
+      </h2>
+      <p className="text-base leading-7 text-slate-400">
+        Dial in your monthly usage below and see exactly what you'd pay on each plan — including overages.
+      </p>
+    </div>
   )
 
   return (
     <section
       id="pricing-calculator"
-      className={`py-28 px-4 sm:px-6 lg:px-8 scroll-mt-24 ${
-        standalone ? 'bg-background' : 'border-t border-border/40 bg-muted/20'
-      }`}
+      className={cn(
+        'scroll-mt-24 px-4 py-24 sm:px-6 lg:px-8',
+        standalone ? '' : 'border-t border-white/[0.06] bg-[#0a0b12]',
+      )}
     >
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-14">
-          <p className="text-sm font-semibold text-sky-500 tracking-wide uppercase mb-3">
-            Estimate your cost
-          </p>
-          {heading}
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Dial in your monthly usage below and see exactly what you'd pay on each plan — including overages.
-          </p>
-        </div>
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-14 max-w-2xl">{heading}</div>
 
-        {/* Presets — above both columns so sliders and cards align */}
-        <div className="mb-6">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+        {/* Quick presets */}
+        <div className="mb-8">
+          <p className="mb-3 font-brandmono text-[10px] uppercase tracking-[0.12em] text-slate-500">
             Quick presets
           </p>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex flex-wrap gap-2">
             {PRESETS.map((preset) => (
               <button
                 key={preset.label}
                 onClick={() => setUsage(preset.usage)}
-                className="rounded-md border border-border/60 px-4 py-1.5 text-sm hover:border-sky-500/50 hover:text-sky-600 hover:bg-sky-500/5 transition-all"
+                className="rounded-md border border-white/10 bg-white/[0.03] px-4 py-1.5 font-brandmono text-sm text-slate-400 transition-all hover:border-indigo-400/40 hover:bg-indigo-500/10 hover:text-indigo-300"
               >
                 {preset.label}
               </button>
@@ -455,11 +479,11 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-5 gap-10 xl:gap-16 items-start">
-          {/* ── Left: Inputs ── */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Sliders */}
-            <div className="space-y-8 rounded-xl border border-border/50 bg-background p-6">
+        <div className="grid items-start gap-10 lg:grid-cols-5 xl:gap-16">
+          {/* Left column — inputs */}
+          <div className="space-y-6 lg:col-span-2">
+            {/* Usage sliders */}
+            <div className="space-y-8 rounded-lg border border-white/[0.08] bg-[#0c0e16] p-6">
               <SliderInput
                 label="Ingestion per month"
                 sublabel="Total data ingested: errors, logs, replays, AI events, APM spans"
@@ -488,11 +512,16 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
               />
             </div>
 
-            {/* Datadog extras — only affects the Datadog comparison, not Moneat pricing */}
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-6 space-y-5">
+            {/* Datadog surcharges panel */}
+            <div className="space-y-5 rounded-lg border border-amber-400/20 bg-amber-400/[0.04] p-6">
               <div>
-                <p className="text-sm font-semibold">Datadog surcharges</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={cn('h-px w-4 rounded', GRADIENT_BAR)} />
+                  <p className="font-brandmono text-[10px] uppercase tracking-[0.12em] text-amber-400/80">
+                    Datadog surcharges
+                  </p>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
                   These don't add separate line items to your Moneat bill — no per-host fees. APM, profiling, and log data count toward your unified GB ingestion above.
                 </p>
               </div>
@@ -506,7 +535,9 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
               />
               {ddExtras.hosts > 0 && (
                 <div className="space-y-2 pt-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Datadog add-ons (per host)</p>
+                  <p className="font-brandmono text-[10px] uppercase tracking-[0.12em] text-slate-500">
+                    Datadog add-ons (per host)
+                  </p>
                   {(
                     [
                       {key: 'apm', label: 'APM & distributed tracing', cost: DD_APM_PER_HOST},
@@ -515,17 +546,17 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                       {key: 'dbm', label: 'Database monitoring ($70/db host)', cost: DD_DBM_PER_DB_HOST},
                     ] as const
                   ).map(({key, label, cost}) => (
-                    <label key={key} className="flex items-center justify-between gap-3 cursor-pointer group">
+                    <label key={key} className="group flex cursor-pointer items-center justify-between gap-3">
                       <span className="flex items-center gap-2 text-xs">
                         <input
                           type="checkbox"
                           checked={ddExtras[key]}
                           onChange={(e) => setDdExtras((ex) => ({...ex, [key]: e.target.checked}))}
-                          className="accent-amber-500 cursor-pointer"
+                          className="cursor-pointer accent-amber-400"
                         />
-                        <span className="group-hover:text-foreground transition-colors">{label}</span>
+                        <span className="text-slate-400 transition-colors group-hover:text-slate-200">{label}</span>
                       </span>
-                      <span className="text-xs tabular-nums text-amber-600 font-medium shrink-0">
+                      <span className="shrink-0 font-brandmono text-xs font-medium tabular-nums text-amber-400/80">
                         +${cost}/host/mo
                       </span>
                     </label>
@@ -535,41 +566,38 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
             </div>
           </div>
 
-          {/* ── Right: Plan comparison ── */}
+          {/* Right column — plan cards */}
           <div className="lg:col-span-3">
             {isPending && (
               <div className="grid grid-cols-2 gap-4">
                 {Array.from({length: 4}, (_, i) => `loading-plan-${i}`).map((planId) => (
-                  <Card key={planId} className="border-border/60">
-                    <CardHeader>
-                      <div className="h-4 w-16 bg-muted rounded animate-pulse" />
-                      <div className="h-8 w-20 bg-muted rounded animate-pulse mt-2" />
-                    </CardHeader>
-                    <CardContent className="space-y-2">
+                  <div key={planId} className="rounded-lg border border-white/[0.08] bg-[#0c0e16] p-5">
+                    <div className="h-4 w-16 animate-pulse rounded bg-white/[0.06]" />
+                    <div className="mt-3 h-8 w-20 animate-pulse rounded bg-white/[0.06]" />
+                    <div className="mt-4 space-y-2">
                       {Array.from({length: 3}, (_, j) => `loading-feature-${j}`).map((featureId) => (
-                        <div key={featureId} className="h-3 w-full bg-muted rounded animate-pulse" />
+                        <div key={featureId} className="h-3 w-full animate-pulse rounded bg-white/[0.06]" />
                       ))}
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
+
             {!isPending && isError && (
-              <Card className="border-destructive/30">
-                <CardHeader>
-                  <CardTitle>Unable to load pricing right now</CardTitle>
-                  <CardDescription>Please refresh the page in a moment.</CardDescription>
-                </CardHeader>
-              </Card>
+              <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-6">
+                <p className="font-semibold text-rose-300">Unable to load pricing right now</p>
+                <p className="mt-1 text-sm text-slate-500">Please refresh the page in a moment.</p>
+              </div>
             )}
+
             {!isPending && !isError && tiers.length === 0 && (
-              <Card className="border-border/60">
-                <CardHeader>
-                  <CardTitle>Pricing unavailable</CardTitle>
-                  <CardDescription>No plans are currently published.</CardDescription>
-                </CardHeader>
-              </Card>
+              <div className="rounded-lg border border-white/[0.08] bg-[#0c0e16] p-6">
+                <p className="font-semibold text-slate-300">Pricing unavailable</p>
+                <p className="mt-1 text-sm text-slate-500">No plans are currently published.</p>
+              </div>
             )}
+
             {!isPending && !isError && tiers.length > 0 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -579,6 +607,8 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                     </div>
                   ))}
                 </div>
+
+                {/* Datadog comparison banner */}
                 {(() => {
                   const datadogEst = estimateDatadogCost(usage, ddExtras)
                   const freeIdx = tiers.findIndex((t) => t.tierName === 'FREE')
@@ -598,35 +628,31 @@ export function PricingCalculatorSection({standalone = false}: {readonly standal
                     ddExtras.hosts > 0
                   if (!hasUsage || datadogEst < 10) return null
                   return (
-                    <Card className="border-amber-500/30 bg-amber-500/5">
-                      <CardContent className="pt-4 pb-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-semibold">vs Datadog (estimated)</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Same usage would cost ~{fmtMoney(datadogEst)}/mo on Datadog (log ingest at $0.10/GB; indexing &amp; retention billed separately)
-                            </p>
-                          </div>
-                          {displayMoneatCost !== null && datadogEst > 0 && (
-                          <div className="text-right">
-                            <p className="text-2xl font-bold text-emerald-600">
-                              Save ~
-                              {Math.round((1 - displayMoneatCost / datadogEst) * 100)}
-                              %
-                            </p>
-                            <p className="text-xs text-muted-foreground">with Moneat</p>
-                          </div>
-                          )}
+                    <div className="rounded-lg border border-amber-400/20 bg-amber-400/[0.04] p-5">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-200">vs Datadog (estimated)</p>
+                          <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                            Same usage would cost ~{fmtMoney(datadogEst)}/mo on Datadog (log ingest at $0.10/GB; indexing &amp; retention billed separately)
+                          </p>
                         </div>
-                      </CardContent>
-                    </Card>
+                        {displayMoneatCost !== null && datadogEst > 0 && (
+                          <div className="shrink-0 text-right">
+                            <p className={cn('font-brandmono text-2xl font-bold', GRADIENT_TEXT)}>
+                              Save ~{Math.round((1 - displayMoneatCost / datadogEst) * 100)}%
+                            </p>
+                            <p className="font-brandmono text-xs text-slate-500">with Moneat</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )
                 })()}
               </div>
             )}
 
             {!isPending && tiers.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-6 text-center">
+              <p className="mt-6 text-center font-brandmono text-[11px] leading-5 text-slate-600">
                 Estimates are based on monthly billing. Unlimited team members on every plan.<br />
                 Datadog prices verified Feb 27, 2026 from datadoghq.com/pricing (annual commitment rates). Estimates only — actual costs vary by configuration.
               </p>

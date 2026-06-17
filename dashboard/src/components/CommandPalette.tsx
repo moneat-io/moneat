@@ -46,11 +46,13 @@ import {
   Brain,
   Bell,
   Shield,
+  ShieldCheck,
   Settings,
   Folder,
   BarChart3,
   Cpu,
   Flame,
+  Flag,
   Box,
   Terminal,
   Network,
@@ -59,9 +61,11 @@ import {
   Database,
   Bug,
   Router,
+  Map as MapIcon,
   Sparkles,
 } from 'lucide-react'
 import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseFeatures'
+import {APP_OVERVIEW_HREF} from '@/lib/overview-route'
 
 const PAGE_ITEMS: Array<{
   label: string
@@ -70,24 +74,33 @@ const PAGE_ITEMS: Array<{
   icon: React.ComponentType<{className?: string}>
   keywords?: string[]
 }> = [
-  {label: 'Overview', description: 'Project metrics and key stats', href: '/', icon: Home, keywords: ['home']},
+  {
+    label: 'Overview',
+    description: 'Service metrics and key stats',
+    href: APP_OVERVIEW_HREF,
+    icon: Home,
+    keywords: ['home'],
+  },
   {label: 'Issues', description: 'Errors and exceptions', href: '/issues', icon: AlertCircle, keywords: ['errors', 'bugs']},
-  {label: 'Performance', description: 'Traces and transaction timing', href: '/performance', icon: Timer, keywords: ['traces', 'transactions']},
+  {label: 'Traces', description: 'Distributed traces and service latency', href: '/performance/traces', icon: Timer, keywords: ['performance', 'traces', 'services', 'latency']},
   {label: 'APM Traces', description: 'Application performance traces and spans', href: '/apm-traces', icon: Cpu, keywords: ['apm', 'traces', 'spans', 'distributed tracing']},
   {label: 'Profiles', description: 'Continuous profiling and flamegraphs', href: '/profiles', icon: Flame, keywords: ['profiling', 'flamegraph', 'cpu', 'memory']},
   {label: 'Logs', description: 'Search and explore log events', href: '/logs', icon: ScrollText, keywords: ['logging']},
   {label: 'Dashboards', description: 'Custom metrics and visualizations', href: '/dashboards', icon: LayoutDashboard, keywords: ['widgets']},
-  {label: 'Monitoring', description: 'Infrastructure and system health', href: '/monitoring', icon: Server, keywords: ['infrastructure', 'systems', 'servers']},
-  {label: 'Monitoring – Hosts', description: 'Host metrics and system resources', href: '/monitoring/hosts', icon: Server, keywords: ['infrastructure', 'servers', 'cpu', 'memory', 'disk']},
-  {label: 'Monitoring – Containers', description: 'Docker and Kubernetes container metrics', href: '/monitoring/containers', icon: Box, keywords: ['docker', 'kubernetes', 'k8s', 'pods']},
-  {label: 'Monitoring – Processes', description: 'Running process explorer', href: '/monitoring/processes', icon: Terminal, keywords: ['processes', 'pid', 'cpu', 'top']},
-  {label: 'Monitoring – Network', description: 'Network connections and traffic', href: '/monitoring/network', icon: Network, keywords: ['network', 'connections', 'traffic', 'tcp', 'udp']},
-  {label: 'Monitoring – Events', description: 'Infrastructure events and service checks', href: '/monitoring/events', icon: CalendarClock, keywords: ['events', 'service checks', 'alerts', 'datadog']},
-  {label: 'Monitoring – Kubernetes', description: 'Kubernetes clusters, pods and workloads', href: '/monitoring/kubernetes', icon: Ship, keywords: ['kubernetes', 'k8s', 'pods', 'clusters', 'workloads']},
-  {label: 'Monitoring – Databases', description: 'Database performance and query monitoring', href: '/monitoring/databases', icon: Database, keywords: ['databases', 'sql', 'queries', 'db', 'postgres', 'mysql']},
-  {label: 'Monitoring – Debugger', description: 'Live code debugging and profiling', href: '/monitoring/debugger', icon: Bug, keywords: ['debugger', 'debug', 'live debugging', 'breakpoints']},
-  {label: 'Monitoring – Network Devices', description: 'Network device monitoring (SNMP)', href: '/monitoring/network-devices', icon: Router, keywords: ['network devices', 'snmp', 'routers', 'switches']},
-  {label: 'Monitoring – SBOM', description: 'Software bill of materials and vulnerability scanning', href: '/monitoring/sbom', icon: Package, keywords: ['sbom', 'vulnerabilities', 'dependencies', 'security', 'cve']},
+  {label: 'Feature Flags', description: 'OpenFeature flags and experiments', href: '/feature-flags', icon: Flag, keywords: ['flags', 'openfeature', 'ofrep', 'experiments']},
+  {label: 'Resources', description: 'Infrastructure resource catalog', href: '/resources', icon: Server, keywords: ['infrastructure', 'monitoring', 'catalog', 'inventory', 'systems', 'servers', 'hosts', 'containers']},
+  {label: 'Infrastructure – Map', description: 'Visual map for services, hosts, and containers', href: '/monitoring/map?scope=services', icon: MapIcon, keywords: ['infrastructure map', 'host map', 'containers', 'tags', 'topology', 'monitoring']},
+  {label: 'Service Map', description: 'Service dependency topology', href: '/monitoring/map?scope=services', icon: Network, keywords: ['service map', 'dependencies', 'traces', 'topology']},
+  {label: 'Infrastructure – Hosts', description: 'Host metrics and system resources', href: '/monitoring/hosts', icon: Server, keywords: ['infrastructure', 'servers', 'cpu', 'memory', 'disk', 'monitoring']},
+  {label: 'Infrastructure – Containers', description: 'Docker and Kubernetes container metrics', href: '/monitoring/containers', icon: Box, keywords: ['docker', 'kubernetes', 'k8s', 'pods', 'monitoring']},
+  {label: 'Infrastructure – Processes', description: 'Running process explorer', href: '/monitoring/processes', icon: Terminal, keywords: ['processes', 'pid', 'cpu', 'top', 'monitoring']},
+  {label: 'Infrastructure – Network', description: 'Network connections and traffic', href: '/monitoring/network', icon: Network, keywords: ['network', 'connections', 'traffic', 'tcp', 'udp', 'monitoring']},
+  {label: 'Infrastructure – Events', description: 'Infrastructure events and service checks', href: '/monitoring/events', icon: CalendarClock, keywords: ['events', 'service checks', 'alerts', 'datadog', 'monitoring']},
+  {label: 'Infrastructure – Kubernetes', description: 'Kubernetes clusters, pods and workloads', href: '/monitoring/kubernetes', icon: Ship, keywords: ['kubernetes', 'k8s', 'pods', 'clusters', 'workloads', 'monitoring']},
+  {label: 'Infrastructure – Databases', description: 'Database performance and query monitoring', href: '/monitoring/databases', icon: Database, keywords: ['databases', 'sql', 'queries', 'db', 'postgres', 'mysql', 'monitoring']},
+  {label: 'Infrastructure – Debugger', description: 'Live code debugging and profiling', href: '/monitoring/debugger', icon: Bug, keywords: ['debugger', 'debug', 'live debugging', 'breakpoints', 'monitoring']},
+  {label: 'Infrastructure – Network Devices', description: 'Network device monitoring (SNMP)', href: '/monitoring/network-devices', icon: Router, keywords: ['network devices', 'snmp', 'routers', 'switches', 'monitoring']},
+  {label: 'Infrastructure – SBOM', description: 'Software bill of materials and vulnerability scanning', href: '/monitoring/sbom', icon: Package, keywords: ['sbom', 'vulnerabilities', 'dependencies', 'security', 'cve', 'monitoring']},
   {label: 'Uptime', description: 'Uptime monitors and checks', href: '/uptime', icon: Activity, keywords: ['monitors', 'uptime monitors', 'checks']},
   {label: 'Status Pages', description: 'Public status pages', href: '/status-pages', icon: Globe, keywords: ['statuspage']},
   {label: 'Replays', description: 'Session replay recordings', href: '/replays', icon: Play, keywords: ['session replay']},
@@ -117,20 +130,28 @@ const SETTINGS_ITEMS: Array<{
     keywords: ['api', 'tokens', 'keys', 'authentication', 'logs', 'otlp', 'ingestion'],
   },
   {
-    label: 'General Settings',
-    description: 'Display and sidebar preferences',
+    label: 'General',
+    description: 'Workspace name, region, and identity',
     href: '/settings?tab=general',
     tab: 'general',
     icon: Settings,
-    keywords: ['preferences', 'display', 'sidebar', 'navigation'],
+    keywords: ['workspace', 'organization', 'name', 'region', 'identity'],
   },
   {
-    label: 'Integrations',
+    label: 'Preferences',
+    description: 'Theme, density, timezone, and sidebar',
+    href: '/settings?tab=preferences',
+    tab: 'preferences',
+    icon: Settings,
+    keywords: ['preferences', 'theme', 'display', 'sidebar', 'navigation', 'density'],
+  },
+  {
+    label: 'Connectors',
     description: 'Connect Slack, Discord, and more',
-    href: '/settings?tab=integrations',
-    tab: 'integrations',
+    href: '/settings?tab=connectors',
+    tab: 'connectors',
     icon: Globe,
-    keywords: ['slack', 'discord', 'webhooks', 'connect'],
+    keywords: ['slack', 'discord', 'webhooks', 'connect', 'integrations', 'connectors'],
   },
   {
     label: 'Notifications',
@@ -157,6 +178,14 @@ const SETTINGS_ITEMS: Array<{
     keywords: ['users', 'members', 'permissions', 'roles'],
   },
   {
+    label: 'Roles',
+    description: 'Configure custom access roles',
+    href: '/settings?tab=roles',
+    tab: 'roles',
+    icon: ShieldCheck,
+    keywords: ['permissions', 'roles', 'access control', 'rbac'],
+  },
+  {
     label: 'Billing',
     description: 'Plans, payments, and invoices',
     href: '/settings?tab=billing',
@@ -173,20 +202,20 @@ const SETTINGS_ITEMS: Array<{
     keywords: ['quota', 'limits', 'metrics'],
   },
   {
-    label: 'SSO',
+    label: 'Authentication',
     description: 'Single sign-on configuration',
-    href: '/settings?tab=sso',
-    tab: 'sso',
+    href: '/settings?tab=auth',
+    tab: 'auth',
     icon: Shield,
-    keywords: ['saml', 'oauth', 'single sign-on'],
+    keywords: ['saml', 'oauth', 'single sign-on', 'sso'],
   },
   {
-    label: 'Account',
-    description: 'Delete account',
-    href: '/settings?tab=account',
-    tab: 'account',
+    label: 'Danger zone',
+    description: 'Delete account or organization',
+    href: '/settings?tab=danger',
+    tab: 'danger',
     icon: Settings,
-    keywords: ['delete', 'remove'],
+    keywords: ['delete', 'remove', 'account', 'organization'],
   },
 ]
 
@@ -266,13 +295,15 @@ export function CommandPalette() {
   const filteredSettings = useMemo(() => {
     if (!search.trim()) return []
     const q = search.trim().toLowerCase()
-    return SETTINGS_ITEMS.filter(
-      (s) =>
+    return SETTINGS_ITEMS.filter((s) => {
+      if (s.label === 'RBAC' && !hasEnterpriseModule(features, 'advanced_rbac')) return false
+      return (
         s.label.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
         s.keywords?.some((k) => k.toLowerCase().includes(q) || q.includes(k.toLowerCase()))
-    )
-  }, [search])
+      )
+    })
+  }, [features, search])
 
   const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter' && search.startsWith('/')) {
@@ -304,7 +335,7 @@ export function CommandPalette() {
         }
       }}
     >
-      <DialogContent className={cn('overflow-hidden p-0 shadow-lg', showAiMode && 'max-w-3xl')}>
+      <DialogContent className={cn('overflow-hidden p-0', showAiMode && 'max-w-3xl')}>
         <Command
           className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5"
           shouldFilter={false}
@@ -314,7 +345,7 @@ export function CommandPalette() {
             <div className="relative">
               <CommandInput
                 className="pr-24"
-                placeholder="Search dashboards, projects, pages..."
+                placeholder="Search dashboards, services, pages..."
                 value={search}
                 onValueChange={handleSearchChange}
                 onKeyDown={handleInputKeyDown}
@@ -410,7 +441,7 @@ export function CommandPalette() {
                 </CommandGroup>
               )}
               {searchResult?.projects && searchResult.projects.length > 0 && (
-                <CommandGroup heading="Projects">
+                <CommandGroup heading="Services">
                   {searchResult.projects.map((p) => (
                     <CommandItem
                       key={p.id}
@@ -418,7 +449,7 @@ export function CommandPalette() {
                       onSelect={() => {
                         setIsOpen(false)
                         setSearch('')
-                        navigate({to: '/projects/$projectId', params: {projectId: String(p.id)}})
+                        navigate({to: '/services/$service', params: {service: p.id}})
                       }}
                     >
                       <Folder className="mr-2 h-4 w-4" />
@@ -434,4 +465,3 @@ export function CommandPalette() {
     </Dialog>
   )
 }
-

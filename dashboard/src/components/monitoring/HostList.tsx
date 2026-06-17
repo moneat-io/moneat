@@ -10,6 +10,7 @@ import {useQuery} from '@tanstack/react-query'
 import {api, type DdHostResponse} from '@/lib/api'
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from '@/components/ui/table'
 import {Badge} from '@/components/ui/badge'
+import {StatusDot} from '@/components/ui/status-dot'
 import {Card, CardContent} from '@/components/ui/card'
 import {Input} from '@/components/ui/input'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger} from '@/components/ui/tooltip'
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react'
 import {useState, useMemo} from 'react'
 import {cn, formatRelativeTime} from '@/lib/utils'
+import {parseDate} from '@/lib/date-format'
 
 function formatBytes(kb: number): string {
   if (kb < 1024) return `${kb} KB`
@@ -53,7 +55,7 @@ export function HostList() {
     refetchInterval: 30000,
   })
 
-  const hosts = data?.hosts ?? []
+  const hosts = useMemo(() => data?.hosts ?? [], [data?.hosts])
 
   const maxMemory = useMemo(
     () => Math.max(...hosts.map((h) => h.memoryTotalKb), 1),
@@ -86,7 +88,7 @@ export function HostList() {
         case 'memory':
           return ((a.memoryTotalKb || 0) - (b.memoryTotalKb || 0)) * dir
         case 'lastSeen':
-          return (new Date(a.lastSeenAt).getTime() - new Date(b.lastSeenAt).getTime()) * dir
+          return (parseDate(a.lastSeenAt).getTime() - parseDate(b.lastSeenAt).getTime()) * dir
         default:
           return 0
       }
@@ -120,31 +122,31 @@ export function HostList() {
         {!isLoading && hosts.length > 0 && (
           <div className="flex items-center gap-3 text-sm flex-wrap">
             <div className="flex items-center gap-1.5">
-              <HardDrive className="h-3.5 w-3.5 text-blue-500" />
+              <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="font-semibold tabular-nums">{hosts.length}</span>
               <span className="text-muted-foreground text-xs">hosts</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <CircleCheck className="h-3.5 w-3.5 text-success-fg" />
               <span className="font-semibold tabular-nums">{onlineCount}</span>
               <span className="text-muted-foreground text-xs">online</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <CircleX className="h-3.5 w-3.5 text-red-500" />
+              <CircleX className="h-3.5 w-3.5 text-danger-fg" />
               <span className="font-semibold tabular-nums">{offlineCount}</span>
               <span className="text-muted-foreground text-xs">offline</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <Cpu className="h-3.5 w-3.5 text-violet-500" />
+              <Cpu className="h-3.5 w-3.5 text-chart-1" />
               <span className="font-semibold tabular-nums">{totalCores}</span>
               <span className="text-muted-foreground text-xs">cores</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div className="flex items-center gap-1.5">
-              <MemoryStick className="h-3.5 w-3.5 text-sky-500" />
+              <MemoryStick className="h-3.5 w-3.5 text-chart-3" />
               <span className="font-semibold tabular-nums">{formatBytes(totalMemoryKb)}</span>
               <span className="text-muted-foreground text-xs">memory</span>
             </div>
@@ -164,9 +166,9 @@ export function HostList() {
         </div>
         <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
           {([
-            {key: 'all' as const, color: 'bg-blue-500', count: hosts.length},
-            {key: 'online' as const, color: 'bg-emerald-500', count: onlineCount},
-            {key: 'offline' as const, color: 'bg-red-500', count: offlineCount},
+            {key: 'all' as const, tone: 'neutral' as const, count: hosts.length},
+            {key: 'online' as const, tone: 'success' as const, count: onlineCount},
+            {key: 'offline' as const, tone: 'danger' as const, count: offlineCount},
           ]).map((f) => (
             <button
               key={f.key}
@@ -174,11 +176,11 @@ export function HostList() {
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 statusFilter === f.key
-                  ? 'bg-secondary text-secondary-foreground shadow-sm'
+                  ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
               )}
             >
-              <div className={cn('h-1.5 w-1.5 rounded-full', f.color)} />
+              <StatusDot tone={f.tone} size="sm" />
               <span className="capitalize">{f.key}</span>
               <span className="ml-0.5 text-[10px] text-muted-foreground">{f.count}</span>
             </button>
@@ -196,8 +198,8 @@ export function HostList() {
       ) : hosts.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center">
-            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/10 to-violet-500/10">
-              <HardDrive className="h-10 w-10 text-blue-500" />
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+              <HardDrive className="h-10 w-10" />
             </div>
             <h3 className="text-xl font-semibold mb-2">No hosts reporting</h3>
             <p className="text-muted-foreground mb-2 max-w-sm mx-auto">
@@ -211,7 +213,7 @@ export function HostList() {
           <p className="text-sm mt-1">Try adjusting your search or status filter.</p>
         </div>
       ) : (
-        <Card className="overflow-hidden border-border/60 shadow-sm">
+        <Card className="overflow-hidden border-border/60">
           <CardContent className="p-0">
             <Table className="min-w-[900px]">
               <TableHeader>
@@ -258,21 +260,8 @@ export function HostList() {
                   return (
                     <TableRow key={host.id} className="group hover:bg-muted/50 transition-colors">
                       <TableCell className="pl-4">
-                        <Badge
-                          variant="secondary"
-                          className={cn(
-                            'text-xs gap-1.5',
-                            online
-                              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 hover:bg-emerald-500/20'
-                              : 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/20 hover:bg-red-500/20'
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              'h-1.5 w-1.5 rounded-full',
-                              online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'
-                            )}
-                          />
+                        <Badge variant={online ? 'success' : 'danger'} className="text-xs gap-1.5">
+                          <StatusDot tone={online ? 'success' : 'danger'} size="sm" pulse={online} />
                           {online ? 'Online' : 'Offline'}
                         </Badge>
                       </TableCell>
@@ -283,8 +272,8 @@ export function HostList() {
                             className={cn(
                               'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
                               online
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                                : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                                ? 'bg-success-bg text-success-fg'
+                                : 'bg-danger-bg text-danger-fg'
                             )}
                           >
                             {online ? <Server className="h-4 w-4" /> : <ServerOff className="h-4 w-4" />}
@@ -344,7 +333,7 @@ export function HostList() {
 
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          <Cpu className="h-3.5 w-3.5 text-violet-500" />
+                          <Cpu className="h-3.5 w-3.5 text-chart-1" />
                           <span className="text-sm font-medium tabular-nums">
                             {host.cpuCores || '—'}
                           </span>
@@ -359,7 +348,7 @@ export function HostList() {
                           {host.memoryTotalKb > 0 && (
                             <div className="h-1.5 w-full rounded-full bg-muted/80 overflow-hidden">
                               <div
-                                className="h-full rounded-full transition-all duration-500 bg-sky-500"
+                                className="h-full rounded-full transition-all duration-500 bg-chart-3"
                                 style={{width: `${Math.min(100, memPct)}%`}}
                               />
                             </div>
@@ -369,10 +358,7 @@ export function HostList() {
 
                       <TableCell>
                         {host.agentVersion ? (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] font-medium font-mono border-violet-500/30 text-violet-600 dark:text-violet-400 bg-violet-500/5"
-                          >
+                          <Badge variant="neutral" className="text-[10px] font-medium font-mono">
                             v{host.agentVersion}
                           </Badge>
                         ) : (

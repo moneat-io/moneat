@@ -21,11 +21,18 @@ import com.moneat.dashboards.models.TestConnectionRequest
 import com.moneat.dashboards.models.TestConnectionResult
 import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
+import com.moneat.monitoring.OperationalMetrics
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
+import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
+import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
+import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
+import com.moneat.utils.TimeConstants.SECONDS_PER_MONTH_30
+import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
+import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.request.get
-import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -37,14 +44,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
-import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
-import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
-import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
-import com.moneat.utils.TimeConstants.SECONDS_PER_MONTH_30
-import com.moneat.utils.TimeConstants.SECONDS_PER_WEEK
-import com.moneat.utils.TimeConstants.SECONDS_PER_YEAR_365
 
 private val logger = KotlinLogging.logger {}
 
@@ -53,15 +52,19 @@ class PrometheusHandler : HttpApiHandler() {
     companion object {
         private const val PROMETHEUS_LABEL_LIMIT = 20
         private const val SECONDS_SIX_HOURS = 21_600L
+        private const val PROMETHEUS_SOURCE = "prometheus"
+
+        private fun httpStatusLabel(status: Int): String = "http_$status"
     }
 
     override val defaultPort: Int = 9090
+    override val httpAuthDefault = HttpAuthDefault.BEARER
 
     override suspend fun testConnection(request: TestConnectionRequest): TestConnectionResult {
         return suspendRunCatching {
             val baseUrl = buildUrl(request.host, request.port)
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                request.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                applyHttpAuth(request.toCredentials())
                 parameter("limit", PROMETHEUS_LABEL_LIMIT)
             }
             if (response.status.isSuccess()) {
@@ -69,9 +72,15 @@ class PrometheusHandler : HttpApiHandler() {
                 val metrics = body["data"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
                 TestConnectionResult(true, "Connected successfully", metrics = metrics.take(PROMETHEUS_LABEL_LIMIT))
             } else {
+                OperationalMetrics.recordDatasourceQueryFailure(
+                    PROMETHEUS_SOURCE,
+                    "test_connection",
+                    httpStatusLabel(response.status.value)
+                )
                 TestConnectionResult(false, "Prometheus returned ${response.status}")
             }
         }.getOrElse { e ->
+            OperationalMetrics.recordDatasourceQueryFailure(PROMETHEUS_SOURCE, "test_connection", cause = e)
             logger.warn(e) { "Prometheus connection test failed" }
             TestConnectionResult(false, "Connection failed: ${e.message}")
         }
@@ -105,17 +114,23 @@ class PrometheusHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/$labelName/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                applyHttpAuth(credentials)
                 if (!matcher.isNullOrEmpty()) parameter("match[]", matcher)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
                 body["data"]?.jsonArray?.map { it.jsonPrimitive.content }?.sorted() ?: emptyList()
             } else {
+                OperationalMetrics.recordDatasourceQueryFailure(
+                    PROMETHEUS_SOURCE,
+                    "label_values",
+                    httpStatusLabel(response.status.value)
+                )
                 logger.warn { "Prometheus label_values query failed: ${response.status}" }
                 emptyList()
             }
         }.getOrElse { e ->
+            OperationalMetrics.recordDatasourceQueryFailure(PROMETHEUS_SOURCE, "label_values", cause = e)
             logger.warn(e) { "Failed to execute label_values query" }
             emptyList()
         }
@@ -142,7 +157,7 @@ class PrometheusHandler : HttpApiHandler() {
                 val step = resolvePrometheusStep(toSec - fromSec)
 
                 httpClient.get("$baseUrl/api/v1/query_range") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                    applyHttpAuth(credentials)
                     parameter("query", query)
                     parameter("start", fromSec)
                     parameter("end", toSec)
@@ -150,17 +165,23 @@ class PrometheusHandler : HttpApiHandler() {
                 }
             } else {
                 httpClient.get("$baseUrl/api/v1/query") {
-                    credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                    applyHttpAuth(credentials)
                     parameter("query", query)
                 }
             }
 
             if (!response.status.isSuccess()) {
+                OperationalMetrics.recordDatasourceQueryFailure(
+                    PROMETHEUS_SOURCE,
+                    "query",
+                    httpStatusLabel(response.status.value)
+                )
                 logger.error { "Prometheus query failed: ${response.status} | query=$query" }
                 return emptyList()
             }
             parsePrometheusResponse(response.bodyAsText(), promLimit)
         }.getOrElse { e ->
+            OperationalMetrics.recordDatasourceQueryFailure(PROMETHEUS_SOURCE, "query", cause = e)
             logger.error(e) { "Failed to execute Prometheus query" }
             emptyList()
         }
@@ -175,7 +196,7 @@ class PrometheusHandler : HttpApiHandler() {
         val baseUrl = buildUrl(host, port)
         return suspendRunCatching {
             val response = httpClient.get("$baseUrl/api/v1/label/__name__/values") {
-                credentials.apiKey?.let { header(HttpHeaders.Authorization, "Bearer $it") }
+                applyHttpAuth(credentials)
             }
             if (response.status.isSuccess()) {
                 val body = json.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -183,9 +204,15 @@ class PrometheusHandler : HttpApiHandler() {
                     DataSourceField(it.jsonPrimitive.content, "gauge", "Prometheus metric")
                 } ?: emptyList()
             } else {
+                OperationalMetrics.recordDatasourceQueryFailure(
+                    PROMETHEUS_SOURCE,
+                    "schema",
+                    httpStatusLabel(response.status.value)
+                )
                 emptyList()
             }
         }.getOrElse { e ->
+            OperationalMetrics.recordDatasourceQueryFailure(PROMETHEUS_SOURCE, "schema", cause = e)
             logger.error(e) { "Failed to fetch Prometheus metrics" }
             emptyList()
         }

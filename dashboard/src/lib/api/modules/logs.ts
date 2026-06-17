@@ -24,10 +24,14 @@ import type {
   LogAggregateResponse,
   LogTopResponse,
   CreateOtlpApiKeyResponse,
+  LogPatternResponse,
+  OtlpObservedService,
+  OtlpServiceMapping,
   RawLogResponse,
   RawLogFilterResponse,
   RawLogAggregateResponse,
   RawLogTopResponse,
+  RawLogPatternResponse,
 } from '../types'
 
 function mapLogRow(row: Record<string, unknown>): LogEntry {
@@ -48,6 +52,7 @@ function mapLogRow(row: Record<string, unknown>): LogEntry {
     spanId: (row.spanId ?? row.span_id ?? '') as string,
     tags: (row.tags ?? {}) as Record<string, string>,
     resourceAttributes: (row.resourceAttributes ?? row.resource_attributes ?? {}) as Record<string, string>,
+    hostId: (row.hostId ?? row.host_id) as string | null | undefined,
   }
 }
 
@@ -62,11 +67,49 @@ function mapRawLogResponse(response: RawLogResponse): LogQueryResponse {
   }
 }
 
+function mapOtlpObservedService(service: Record<string, unknown>): OtlpObservedService {
+  const projectResourceId = (service.projectResourceId ?? service.project_resource_id) as string | null | undefined
+  return {
+    id: service.id as string,
+    mappingId: (service.mappingId ?? service.mapping_id) as string | null | undefined,
+    serviceNamespace: (service.serviceNamespace ?? service.service_namespace ?? '') as string,
+    serviceName: (service.serviceName ?? service.service_name ?? '') as string,
+    projectId: projectResourceId ?? null,
+    projectName: (service.projectName ?? service.project_name) as string | null | undefined,
+    seenLogs: (service.seenLogs ?? service.seen_logs ?? false) as boolean,
+    seenTraces: (service.seenTraces ?? service.seen_traces ?? false) as boolean,
+    seenMetrics: (service.seenMetrics ?? service.seen_metrics ?? false) as boolean,
+    seenFeedback: (service.seenFeedback ?? service.seen_feedback ?? false) as boolean,
+    lastEnvironment: (service.lastEnvironment ?? service.last_environment) as string | null | undefined,
+    firstSeenAt: (service.firstSeenAt ?? service.first_seen_at) as string,
+    lastSeenAt: (service.lastSeenAt ?? service.last_seen_at) as string,
+  }
+}
+
+function mapOtlpServiceMapping(mapping: Record<string, unknown>): OtlpServiceMapping {
+  const projectResourceId = (mapping.projectResourceId ?? mapping.project_resource_id) as string
+  return {
+    id: mapping.id as string,
+    serviceNamespace: (mapping.serviceNamespace ?? mapping.service_namespace ?? '') as string,
+    serviceName: (mapping.serviceName ?? mapping.service_name ?? '') as string,
+    projectId: projectResourceId,
+    projectName: (mapping.projectName ?? mapping.project_name ?? '') as string,
+    updatedAt: (mapping.updatedAt ?? mapping.updated_at) as string,
+  }
+}
+
+function projectMappingField(projectId: string): {project_resource_id: string} {
+  return {project_resource_id: projectId}
+}
+
 function buildLogFilterParams(options: {
   query?: string
   levels?: string[]
   service?: string
   environment?: string
+  host?: string
+  traceId?: string
+  messagePattern?: string
   from?: string
   to?: string
   tags?: Record<string, string>
@@ -82,6 +125,9 @@ function buildLogFilterParams(options: {
   }
   if (options.service) params.set('service', options.service)
   if (options.environment) params.set('environment', options.environment)
+  if (options.host) params.set('host', options.host)
+  if (options.traceId) params.set('traceId', options.traceId)
+  if (options.messagePattern) params.set('pattern', options.messagePattern)
   if (options.from) params.set('from', options.from)
   if (options.to) params.set('to', options.to)
   if (options.tags) {
@@ -112,6 +158,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         containerName?: string
         from?: string
         to?: string
@@ -193,7 +242,7 @@ export function logsMethods(core: ApiClientCore) {
     getOtlpApiKeys: async (): Promise<{ keys: OtlpApiKey[] }> => {
       const response = await core.request<{ keys: Record<string, unknown>[] }>(`${base}/logs/api-keys`)
       const keys = (response.keys ?? []).map((k) => ({
-        id: k.id as number,
+        id: k.id as string,
         name: k.name as string,
         keyPrefix: (k.keyPrefix ?? k.key_prefix) as string,
         createdAt: (k.createdAt ?? k.created_at) as string,
@@ -208,8 +257,39 @@ export function logsMethods(core: ApiClientCore) {
         body: JSON.stringify({ name }),
       }),
 
-    deleteOtlpApiKey: (id: number) =>
-      core.request<void>(`${base}/logs/api-keys/${id}`, { method: 'DELETE' }),
+    deleteOtlpApiKey: (id: string) =>
+      core.request<void>(`${base}/logs/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+    getOtlpObservedServices: async (): Promise<{ services: OtlpObservedService[] }> => {
+      const response = await core.request<{ services: Record<string, unknown>[] }>(
+        `${base}/otlp/services`
+      )
+      const services = (response.services ?? []).map(mapOtlpObservedService)
+      return { services }
+    },
+
+    upsertOtlpServiceMapping: async (
+      serviceName: string,
+      projectId: string,
+      serviceNamespace = ''
+    ): Promise<OtlpServiceMapping> => {
+      const projectField = projectMappingField(projectId)
+      const response = await core.request<Record<string, unknown>>(`${base}/otlp/service-mappings`, {
+        method: 'POST',
+        body: JSON.stringify({
+          service_name: serviceName,
+          service_namespace: serviceNamespace,
+          ...projectField,
+        }),
+      })
+      return mapOtlpServiceMapping(response)
+    },
+
+    deleteOtlpServiceMapping: (id: string) =>
+      core.request<void>(
+        `${base}/otlp/service-mappings/${encodeURIComponent(id)}`,
+        { method: 'DELETE' }
+      ),
 
     // Backward-compat aliases
     get getLogApiKeys() { return this.getOtlpApiKeys },
@@ -236,16 +316,57 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        containerName?: string
+        tags?: Record<string, string>
+        excludeService?: string
+        excludeEnvironment?: string
+        excludeContainerName?: string
+        excludeTags?: Record<string, string>
       } = {}
     ) => {
-      const params = new URLSearchParams()
-      if (options.query) params.set('q', options.query)
-      if (options.levels && options.levels.length > 0) {
-        options.levels.forEach((level) => { params.append('level', level) })
+      const params = buildLogFilterParams(options)
+      if (options.containerName) params.set('containerName', options.containerName)
+      return new globalThis.EventSource(urlWithQuery(`${base}/logs/tail`, params.toString()), {
+        withCredentials: true,
+      })
+    },
+
+    getLogPattern: async (
+      options: {
+        logId?: string
+        message?: string
+        service?: string
+        from?: string
+        to?: string
       }
+    ): Promise<LogPatternResponse> => {
+      const params = new URLSearchParams()
+      if (options.logId) params.set('logId', options.logId)
+      if (options.message) params.set('message', options.message)
       if (options.service) params.set('service', options.service)
-      if (options.environment) params.set('environment', options.environment)
-      return new EventSource(`${base}/logs/tail?${params.toString()}`, { withCredentials: true })
+      if (options.from) params.set('from', options.from)
+      if (options.to) params.set('to', options.to)
+      const response = await core.request<RawLogPatternResponse>(
+        `${base}/logs/pattern?${params.toString()}`
+      )
+      return {
+        pattern: response.pattern ?? '',
+        level: response.level ?? 'info',
+        count: response.count ?? 0,
+        windowLabel: response.windowLabel ?? response.window_label ?? '24h',
+        firstSeen: response.firstSeen ?? response.first_seen ?? '',
+        lastSeen: response.lastSeen ?? response.last_seen ?? '',
+        trendPct: response.trendPct ?? response.trend_pct ?? null,
+        sparkline: response.sparkline ?? [],
+        topServices: (response.topServices ?? response.top_services ?? []).map((item) => ({
+          value: item.value,
+          count: item.count ?? 0,
+        })),
+        topHosts: (response.topHosts ?? response.top_hosts ?? []).map((item) => ({
+          value: item.value,
+          count: item.count ?? 0,
+        })),
+      }
     },
 
     getLogAggregate: async (
@@ -257,6 +378,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         tags?: Record<string, string>
         excludeService?: string
         excludeEnvironment?: string
@@ -292,6 +416,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         tags?: Record<string, string>
         excludeService?: string
         excludeEnvironment?: string
@@ -323,6 +450,9 @@ export function logsMethods(core: ApiClientCore) {
         levels?: string[]
         service?: string
         environment?: string
+        host?: string
+        traceId?: string
+        messagePattern?: string
         tags?: Record<string, string>
         excludeService?: string
         excludeEnvironment?: string

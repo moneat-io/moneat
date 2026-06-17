@@ -18,16 +18,20 @@ package com.moneat.otlp.services
 
 import com.google.protobuf.InvalidProtocolBufferException
 import com.moneat.config.ClickHouseClient
-import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.monitor.services.InfraMetricRollupRow
+import com.moneat.monitor.services.InfraTelemetryRollups
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpParsingUtils
 import com.moneat.otlp.OtlpProtobufParser
 import com.moneat.shared.services.UsageTrackingService
-import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.formatClickHouseDateTime64MillisUtc
 import io.ktor.http.isSuccess
 import io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest
 import io.opentelemetry.proto.metrics.v1.Metric
 import io.opentelemetry.proto.metrics.v1.NumberDataPoint
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.encodeToString
@@ -52,6 +56,7 @@ private const val ERROR_MESSAGE_PREVIEW_LENGTH = 500
 @Serializable
 data class OtlpMetricInsert(
     val organizationId: Long,
+    val projectId: Long? = null,
     val metricName: String,
     val metricType: String,
     val description: String,
@@ -68,6 +73,7 @@ data class OtlpMetricInsert(
     val histExplicitBounds: List<Double>,
     val tags: Map<String, String>,
     val resourceAttributes: Map<String, String>,
+    val serviceNamespace: String = "",
     val service: String,
     val env: String,
     val host: String,
@@ -77,6 +83,34 @@ data class OtlpMetricInsert(
 data class QueuedOtlpMetricsBatch(
     val organizationId: Long,
     val metrics: List<OtlpMetricInsert>
+)
+
+@Serializable
+private data class OtlpMetricJsonEachRow(
+    @SerialName("organization_id") val organizationId: Long,
+    @SerialName("service_id") val projectId: Long,
+    @SerialName("project_id") val deprecatedProjectId: Long,
+    @SerialName("metric_name") val metricName: String,
+    @SerialName("metric_type") val metricType: String,
+    val timestamp: String,
+    val value: Double,
+    val host: String,
+    val tags: Map<String, String>,
+    val unit: String,
+    @SerialName("source_type_name") val sourceTypeName: String,
+    val source: String,
+    @SerialName("is_monotonic") val isMonotonic: Int,
+    @SerialName("aggregation_temporality") val aggregationTemporality: String,
+    @SerialName("hist_count") val histCount: Long,
+    @SerialName("hist_sum") val histSum: Double?,
+    @SerialName("hist_min") val histMin: Double?,
+    @SerialName("hist_max") val histMax: Double?,
+    @SerialName("hist_bucket_counts") val histBucketCounts: List<Long>,
+    @SerialName("hist_explicit_bounds") val histExplicitBounds: List<Double>,
+    @SerialName("resource_attributes") val resourceAttributes: Map<String, String>,
+    val service: String,
+    val env: String,
+    val description: String,
 )
 
 private data class HistLikeFields(
@@ -574,6 +608,7 @@ class OtlpMetricsService(
         val tsMs = OtlpParsingUtils.nanoToEpochMs(spec.timestampNs) ?: 0L
         return OtlpMetricInsert(
             organizationId = 0,
+            projectId = null,
             metricName = spec.name,
             metricType = spec.type,
             description = spec.description,
@@ -590,6 +625,7 @@ class OtlpMetricsService(
             histExplicitBounds = spec.histExplicitBounds,
             tags = spec.attrs,
             resourceAttributes = spec.resourceCtx.attributes,
+            serviceNamespace = spec.resourceCtx.serviceNamespace,
             service = spec.resourceCtx.serviceName,
             env = spec.resourceCtx.environment,
             host = spec.resourceCtx.hostName,
@@ -608,7 +644,7 @@ class OtlpMetricsService(
             metrics = withOrg
         )
         val encoded = json.encodeToString(batch)
-        RedisConfig.sync().lpush(queueKey, encoded)
+        IngestionQueueClient.enqueue(IngestionPipeline.OTLP_METRICS, queueKey, encoded)
         return withOrg.size
     }
 
@@ -618,51 +654,39 @@ class OtlpMetricsService(
     suspend fun insertBatch(batch: QueuedOtlpMetricsBatch) {
         if (batch.metrics.isEmpty()) return
 
-        val rows = batch.metrics.joinToString(",\n") { m ->
-            val bucketCountsArr = m.histBucketCounts.joinToString(",")
-            val boundsArr = m.histExplicitBounds.joinToString(",")
-
-            """(
-                generateUUIDv4(),
-                ${m.organizationId},
-                '${escapeSql(m.metricName)}',
-                '${escapeSql(m.metricType)}',
-                fromUnixTimestamp64Milli(${m.timestampMs}),
-                ${m.value},
-                '${escapeSql(m.host)}',
-                ${mapToSqlMap(m.tags)},
-                '${escapeSql(m.unit)}',
-                '',
-                'otlp',
-                ${m.isMonotonic},
-                '${escapeSql(m.aggregationTemporality)}',
-                ${m.histCount},
-                ${m.histSum?.let { "$it" } ?: "NULL"},
-                ${m.histMin?.let { "$it" } ?: "NULL"},
-                ${m.histMax?.let { "$it" } ?: "NULL"},
-                [$bucketCountsArr],
-                [$boundsArr],
-                ${mapToSqlMap(m.resourceAttributes)},
-                '${escapeSql(m.service)}',
-                '${escapeSql(m.env)}',
-                '${escapeSql(m.description)}'
-            )"""
+        val rows = batch.metrics.joinToString("\n") { metric ->
+            json.encodeToString(metric.toJsonEachRow())
         }
 
         val insert = """
             INSERT INTO `$clickhouseDb`.metrics (
-                metric_id, organization_id, metric_name, metric_type,
+                organization_id, service_id, project_id, metric_name, metric_type,
                 timestamp, value, host, tags, unit, source_type_name,
                 source, is_monotonic, aggregation_temporality,
                 hist_count, hist_sum, hist_min, hist_max,
                 hist_bucket_counts, hist_explicit_bounds,
                 resource_attributes, service, env, description
-            ) VALUES
+            ) FORMAT JSONEachRow
             $rows
         """.trimIndent()
 
         val response = ClickHouseClient.execute(insert)
         check(response.status.isSuccess()) { "Failed to insert OTLP metrics into ClickHouse" }
+
+        InfraTelemetryRollups.insertMetricRollups(
+            batch.metrics.map { metric ->
+                InfraMetricRollupRow(
+                    organizationId = metric.organizationId,
+                    metricName = metric.metricName,
+                    timestampMs = metric.timestampMs,
+                    value = metric.value,
+                    host = metric.host,
+                    tags = metric.resourceAttributes + metric.tags,
+                    unit = metric.unit,
+                    source = "otlp",
+                )
+            }
+        )
 
         val totalBytes = batch.metrics.sumOf { it.metricName.length + METRIC_BILLABLE_OVERHEAD_BYTES }
         usageTracking.recordOrgUsage(
@@ -672,17 +696,37 @@ class OtlpMetricsService(
         )
     }
 
+    private fun OtlpMetricInsert.toJsonEachRow(): OtlpMetricJsonEachRow =
+        OtlpMetricJsonEachRow(
+            organizationId = organizationId,
+            projectId = projectId ?: 0L,
+            deprecatedProjectId = projectId ?: 0L,
+            metricName = metricName,
+            metricType = metricType,
+            timestamp = formatClickHouseDateTime64MillisUtc(timestampMs),
+            value = value,
+            host = host,
+            tags = tags,
+            unit = unit,
+            sourceTypeName = "",
+            source = "otlp",
+            isMonotonic = isMonotonic,
+            aggregationTemporality = aggregationTemporality,
+            histCount = histCount,
+            histSum = histSum,
+            histMin = histMin,
+            histMax = histMax,
+            histBucketCounts = histBucketCounts,
+            histExplicitBounds = histExplicitBounds,
+            resourceAttributes = resourceAttributes,
+            service = service,
+            env = env,
+            description = description,
+        )
+
     private fun mapAggregationTemporality(value: Int): String = when (value) {
         AGGREGATION_TEMPORALITY_DELTA -> "delta"
         AGGREGATION_TEMPORALITY_CUMULATIVE -> "cumulative"
         else -> ""
-    }
-
-    private fun mapToSqlMap(map: Map<String, String>): String {
-        if (map.isEmpty()) return "map()"
-        val entries = map.entries.joinToString(", ") { (k, v) ->
-            "'${escapeSql(k)}', '${escapeSql(v)}'"
-        }
-        return "map($entries)"
     }
 }

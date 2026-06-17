@@ -38,18 +38,21 @@ import type {
   DataSourceField,
   DataSourceInfo,
   CustomDataSourceQueryRequest,
+  DashboardTemplateSummary,
+  DashboardTemplateDetail,
+  InstantiateDashboardTemplateRequest,
 } from '../types'
 
 export function dashboardsMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getDashboards: (projectId?: number) => {
+    getDashboards: (projectId?: string) => {
       const qs = projectId ? `?projectId=${projectId}` : ''
       return core.request<CustomDashboard[]>(`${base}/dashboards${qs}`)
     },
 
-    getDashboard: (id: number) =>
+    getDashboard: (id: string) =>
       core.request<CustomDashboard>(`${base}/dashboards/${id}`),
 
     createDashboard: (data: CreateDashboardRequest) =>
@@ -59,25 +62,35 @@ export function dashboardsMethods(core: ApiClientCore) {
         body: JSON.stringify(data),
       }),
 
-    updateDashboard: (id: number, data: UpdateDashboardRequest) =>
+    updateDashboard: (id: string, data: UpdateDashboardRequest) =>
       core.request<CustomDashboard>(`${base}/dashboards/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
 
-    deleteDashboard: (id: number) =>
+    deleteDashboard: (id: string) =>
       core.request<void>(`${base}/dashboards/${id}`, {
         method: 'DELETE',
       }),
 
-    toggleDashboardFavorite: (id: number) =>
+    toggleDashboardFavorite: (id: string) =>
       core.request<{ is_favorited: boolean }>(`${base}/dashboards/${id}/favorite`, {
         method: 'POST',
       }),
 
-    moveDashboardToFolder: (id: number, folderId: number | null) =>
-      core.request<{ folder_id: number | null }>(`${base}/dashboards/${id}/folder`, {
+    duplicateDashboard: (id: string) =>
+      core.request<CustomDashboard>(`${base}/dashboards/${id}/duplicate`, {
+        method: 'POST',
+      }),
+
+    setDefaultDashboard: (id: string) =>
+      core.request<{ is_default: boolean }>(`${base}/dashboards/${id}/default`, {
+        method: 'POST',
+      }),
+
+    moveDashboardToFolder: (id: string, folderId: string | null) =>
+      core.request<{ folder_id: string | null }>(`${base}/dashboards/${id}/folder`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_id: folderId }),
@@ -93,14 +106,14 @@ export function dashboardsMethods(core: ApiClientCore) {
         body: JSON.stringify(data),
       }),
 
-    updateDashboardFolder: (id: number, data: UpdateFolderRequest) =>
+    updateDashboardFolder: (id: string, data: UpdateFolderRequest) =>
       core.request<DashboardFolder>(`${base}/dashboards/folders/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
 
-    deleteDashboardFolder: (id: number) =>
+    deleteDashboardFolder: (id: string) =>
       core.request<void>(`${base}/dashboards/folders/${id}`, {
         method: 'DELETE',
       }),
@@ -111,9 +124,9 @@ export function dashboardsMethods(core: ApiClientCore) {
     },
 
     executeWidgetQuery: (
-      dashboardId: number,
+      dashboardId: string,
       queryConfig: QueryDsl,
-      projectId: number,
+      projectId: string,
       timeRange?: TimeRangeDef,
       variables?: Record<string, string>
     ) =>
@@ -131,9 +144,9 @@ export function dashboardsMethods(core: ApiClientCore) {
       ),
 
     executeBatchQuery: (
-      dashboardId: number,
+      dashboardId: string,
       queries: QueryDsl[],
-      projectId: number,
+      projectId: string,
       timeRange?: TimeRangeDef,
       variables?: Record<string, string>
     ) =>
@@ -151,7 +164,7 @@ export function dashboardsMethods(core: ApiClientCore) {
       ),
 
     resolveVariableOptions: (
-      dashboardId: number,
+      dashboardId: string,
       currentValues: Record<string, string>
     ) =>
       core.request<Record<string, string[]>>(
@@ -170,22 +183,40 @@ export function dashboardsMethods(core: ApiClientCore) {
         body: JSON.stringify({ format, json }),
       }),
 
-    exportDashboard: (id: number, format: string) =>
+    exportDashboard: (id: string, format: string) =>
       core.request<unknown>(`${base}/dashboards/${id}/export/${format}`),
 
     getDataSources: () =>
       core.request<DataSourceInfo[]>(`${base}/dashboards/datasources`),
 
     getDashboardTemplates: () =>
-      core.request<CreateDashboardRequest[]>(`${base}/dashboards/templates`),
+      core.request<DashboardTemplateSummary[]>(`${base}/dashboards/templates`),
 
-    listDashboardAlerts: (dashboardId: number) =>
+    getDashboardTemplate: (id: string) =>
+      core.request<DashboardTemplateDetail>(
+        `${base}/dashboards/templates/${encodeURIComponent(id)}`
+      ),
+
+    createDashboardFromTemplate: (
+      id: string,
+      data: InstantiateDashboardTemplateRequest = {}
+    ) =>
+      core.request<CustomDashboard>(
+        `${base}/dashboards/templates/${encodeURIComponent(id)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        }
+      ),
+
+    listDashboardAlerts: (dashboardId: string) =>
       core.request<DashboardWidgetAlert[]>(
         `${base}/dashboards/${dashboardId}/alerts`
       ),
 
     createDashboardAlert: (
-      dashboardId: number,
+      dashboardId: string,
       data: CreateDashboardAlertRequest
     ) =>
       core.request<DashboardWidgetAlert>(
@@ -198,8 +229,8 @@ export function dashboardsMethods(core: ApiClientCore) {
       ),
 
     updateDashboardAlert: (
-      dashboardId: number,
-      alertId: number,
+      dashboardId: string,
+      alertId: string,
       data: UpdateDashboardAlertRequest
     ) =>
       core.request<DashboardWidgetAlert>(
@@ -211,7 +242,7 @@ export function dashboardsMethods(core: ApiClientCore) {
         }
       ),
 
-    deleteDashboardAlert: (dashboardId: number, alertId: number) =>
+    deleteDashboardAlert: (dashboardId: string, alertId: string) =>
       core.request<void>(
         `${base}/dashboards/${dashboardId}/alerts/${alertId}`,
         {
@@ -222,7 +253,7 @@ export function dashboardsMethods(core: ApiClientCore) {
     listCustomDataSources: () =>
       core.request<CustomDataSourceResponse[]>(`${base}/datasources`),
 
-    getCustomDataSource: (id: number) =>
+    getCustomDataSource: (id: string) =>
       core.request<CustomDataSourceResponse>(`${base}/datasources/${id}`),
 
     createCustomDataSource: (request: CreateCustomDataSourceRequest) =>
@@ -232,7 +263,7 @@ export function dashboardsMethods(core: ApiClientCore) {
       }),
 
     updateCustomDataSource: (
-      id: number,
+      id: string,
       request: UpdateCustomDataSourceRequest
     ) =>
       core.request<CustomDataSourceResponse>(`${base}/datasources/${id}`, {
@@ -240,7 +271,7 @@ export function dashboardsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    deleteCustomDataSource: (id: number) =>
+    deleteCustomDataSource: (id: string) =>
       core.request<void>(`${base}/datasources/${id}`, {
         method: 'DELETE',
       }),
@@ -251,11 +282,11 @@ export function dashboardsMethods(core: ApiClientCore) {
         body: JSON.stringify(request),
       }),
 
-    getDataSourceSchema: (id: number) =>
+    getDataSourceSchema: (id: string) =>
       core.request<DataSourceField[]>(`${base}/datasources/${id}/schema`),
 
     queryCustomDataSource: (
-      id: number,
+      id: string,
       request: CustomDataSourceQueryRequest
     ) => {
       // Strip data_source_id from body; the id is authoritative via the URL

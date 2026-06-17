@@ -7,7 +7,14 @@ package com.moneat.enterprise.ai.services
 import com.moneat.enterprise.ai.models.AggregatedContext
 import com.moneat.enterprise.ai.models.AiContextSnapshots
 import com.moneat.enterprise.ai.models.ContextSummary
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
@@ -21,9 +28,15 @@ import org.jetbrains.exposed.v1.jdbc.update
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
+
+data class CreatedAiContextSnapshot(
+    val internalId: Int,
+    val resourceId: String
+)
 
 /**
  * Manages AI context snapshots in PostgreSQL.
@@ -40,14 +53,14 @@ class AiContextSnapshotService {
         userId: Int,
         context: AggregatedContext,
         estimatedTokens: Int,
-    ): Int {
+    ): CreatedAiContextSnapshot {
         val now = Clock.System.now()
         val expiresAt = now.plus(1.hours)
         val contextJson = json.encodeToString(AggregatedContext.serializer(), context)
         val summaryJson = json.encodeToString(ContextSummary.serializer(), context.summary)
 
         return transaction {
-            AiContextSnapshots.insert {
+            val row = AiContextSnapshots.insert {
                 it[AiContextSnapshots.conversation_id] = conversationId
                 it[AiContextSnapshots.org_id] = orgId
                 it[AiContextSnapshots.user_id] = userId
@@ -57,7 +70,24 @@ class AiContextSnapshotService {
                 it[AiContextSnapshots.status] = "pending"
                 it[AiContextSnapshots.created_at] = now
                 it[AiContextSnapshots.expires_at] = expiresAt
-            } get AiContextSnapshots.id
+            }
+            CreatedAiContextSnapshot(
+                internalId = row[AiContextSnapshots.id],
+                resourceId = row[AiContextSnapshots.resource_id].toString()
+            )
+        }
+    }
+
+    fun resolveSnapshotId(snapshotResourceId: Uuid, userId: Int): Int? {
+        return transaction {
+            AiContextSnapshots
+                .selectAll()
+                .where {
+                    (AiContextSnapshots.resource_id eq snapshotResourceId) and
+                        (AiContextSnapshots.user_id eq userId)
+                }
+                .firstOrNull()
+                ?.get(AiContextSnapshots.id)
         }
     }
 

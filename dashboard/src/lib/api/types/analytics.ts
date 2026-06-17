@@ -39,6 +39,25 @@ export interface AnalyticsParams {
   to?: string
   filters?: AnalyticsFilter[]
   comparison?: AnalyticsComparison
+  services?: string[]
+  serviceIds?: string[]
+}
+
+export type AnalyticsScopeId = string | null | undefined
+
+export type AnalyticsEventSource = 'web' | 'server'
+export type AnalyticsGroupBy = 'session_id' | 'user_id'
+
+export interface AnalyticsEventQueryOptions {
+  source?: AnalyticsEventSource
+  groupBy?: AnalyticsGroupBy
+  limit?: number
+}
+
+export interface AnalyticsRetentionQuery extends AnalyticsParams {
+  startEvent: string
+  returnEvent: string
+  periods?: number[]
 }
 
 export interface AnalyticsOverview {
@@ -85,6 +104,25 @@ export interface AnalyticsFunnelStep {
 export interface AnalyticsFunnelResponse {
   steps: AnalyticsFunnelStep[]
   overallConversion: number
+}
+
+export interface AnalyticsRetentionPeriod {
+  days: number
+  retainedUsers: number
+  eligibleUsers?: number
+  retentionRate: number
+}
+
+export interface AnalyticsRetentionCohort {
+  cohortWeek: string
+  users: number
+  periods: AnalyticsRetentionPeriod[]
+}
+
+export interface AnalyticsRetentionResponse {
+  startEvent: string
+  returnEvent: string
+  cohorts: AnalyticsRetentionCohort[]
 }
 
 export interface AnalyticsOverviewApiResponse {

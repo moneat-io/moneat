@@ -6,7 +6,7 @@
 
 <p align="center">
   Open-source, self-hostable observability.<br>
-  Errors, replays, performance, logs, metrics, uptime, and incidents in one place.
+  Errors, replays, performance, logs, metrics, uptime, feature flags, and incidents in one place.
 </p>
 
 <p align="center">
@@ -73,7 +73,7 @@ docker compose up -d postgres clickhouse redis
 # Backend (API at localhost:8080)
 cd backend && ./gradlew run
 
-# Dashboard (UI at localhost:5173)
+# Dashboard (UI at localhost:3000)
 cd dashboard && npm install && npm run dev
 ```
 
@@ -90,17 +90,20 @@ Moneat is Sentry SDK, Datadog Agent, and OpenTelemetry (OTLP) compatible. Point 
 | Performance Monitoring | Distributed tracing with transaction and span breakdowns | [Docs](https://moneat.io/docs) |
 | Continuous Profiling | Flamegraph visualization (pprof, JFR, Sentry formats) | [Docs](https://moneat.io/docs) |
 | Logging | Centralized, searchable log management via OTLP and ClickHouse | [Docs](https://moneat.io/docs) |
-| OpenTelemetry (OTLP) | Ingest logs, traces, and metrics via standard OTLP/HTTP endpoints | [Docs](https://moneat.io/docs) |
+| OpenTelemetry Ingestion | Send logs, traces, and metrics from any OTLP exporter or Collector | [Docs](https://moneat.io/docs) |
 | Uptime & Status Pages | HTTP/TCP/ping checks with public status pages | [Docs](https://moneat.io/docs) |
 | Synthetics | API, multi-step, SSL, DNS, TCP, and UDP synthetic tests | [Docs](https://moneat.io/docs) |
 | Custom Dashboards | Drag-and-drop widgets, Grafana dashboard import | [Docs](https://moneat.io/docs) |
 | Product Analytics | Funnels, retention cohorts, event-based tracking | [Docs](https://moneat.io/docs) |
+| Feature Flags | OpenFeature-compatible flags with environment configs and remote evaluation | [Docs](https://moneat.io/docs/feature-flags) |
 | Releases | Crash-free rates, regression detection, source map upload | [Docs](https://moneat.io/docs) |
 | AI Observability | Trace and debug LLM calls | [Docs](https://moneat.io/docs) |
 | MCP Server | Model Context Protocol endpoint for AI coding assistants | [Docs](https://moneat.io/docs) |
 | User Feedback | Sentry-compatible feedback ingestion with status workflows | [Docs](https://moneat.io/docs) |
-| Datadog Compatibility | Ingest from existing Datadog agents with no code changes | [Docs](https://moneat.io/docs) |
+| Datadog Agent Compatibility | Ingest from existing Datadog agents with no code changes | [Docs](https://moneat.io/docs) |
 | On-Call & Incidents | PagerDuty-style escalations *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
+| SSO (OIDC) | Sign in with any OpenID Connect provider | [Docs](https://moneat.io/docs) |
+| SSO (SAML) & Enforcement | SAML 2.0 and mandatory SSO *(Enterprise)* | [Pricing](https://moneat.io/pricing) |
 | Terraform Provider | Manage Moneat resources as code | [Registry](https://registry.terraform.io/providers/moneat-io/moneat/latest) |
 
 ### Sentry SDK Compatibility
@@ -133,111 +136,111 @@ Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) pa
 ### Core Observability
 
 <p align="center">
-  <img src="dashboard/public/screenshots/dashboard.png" alt="Dashboard Overview" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/dashboard.png" alt="Dashboard Overview" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/issues.png" alt="Error Tracking / Issues" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/issues.png" alt="Error Tracking / Issues" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/performance.png" alt="Performance Monitoring" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/performance.png" alt="Performance Monitoring" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/logs.png" alt="Log Management" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/logs.png" alt="Log Management" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/replays.png" alt="Session Replay" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/replays.png" alt="Session Replay" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/profiles.png" alt="Continuous Profiling" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/profiles.png" alt="Continuous Profiling" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/dashboards.png" alt="Custom Dashboards" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/dashboards.png" alt="Custom Dashboards" width="800">
 </p>
 
 ### Infrastructure & Monitoring
 
 <p align="center">
-  <img src="dashboard/public/screenshots/monitoring-hosts.png" alt="Monitoring Hosts" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/monitoring-hosts.png" alt="Monitoring Hosts" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/uptime.png" alt="Uptime Monitoring" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/status-pages.png" alt="Status Pages" width="800">
 </p>
 
 ### Enterprise: On-Call
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-overview.png" alt="On-Call Overview" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/on-call-overview.png" alt="On-Call Overview" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-schedules.png" alt="On-Call Schedules" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/on-call-schedules.png" alt="On-Call Schedules" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-escalation-policies.png" alt="Escalation Policies" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/on-call-escalation-policies.png" alt="Escalation Policies" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-alerts.png" alt="On-Call Alerts" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/on-call-alerts.png" alt="On-Call Alerts" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/on-call-incidents.png" alt="On-Call Incidents" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/on-call-incidents.png" alt="On-Call Incidents" width="800">
 </p>
 
 ### Status Pages
 
 <p align="center">
-  <img src="dashboard/public/screenshots/status-pages.png" alt="Custom Status Page" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/status-pages.png" alt="Custom Status Page" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/status-page-public.png" alt="Public Status Page" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/status-page-public.png" alt="Public Status Page" width="800">
 </p>
 
 ### Insights & Analytics
 
 <p align="center">
-  <img src="dashboard/public/screenshots/analytics.png" alt="Product Analytics" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/analytics.png" alt="Product Analytics" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/ai.png" alt="AI Observability" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/ai.png" alt="AI Observability" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/feedback.png" alt="User Feedback" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/feedback.png" alt="User Feedback" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/releases.png" alt="Releases" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/releases.png" alt="Releases" width="800">
 </p>
 
 ### APM & Tracing
 
 <p align="center">
-  <img src="dashboard/public/screenshots/apm-traces.png" alt="APM Traces" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/apm-traces.png" alt="APM Traces" width="800">
 </p>
 
 ### Security & Synthetics
 
 <p align="center">
-  <img src="dashboard/public/screenshots/security.png" alt="Security & SBOM" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/security.png" alt="Security & SBOM" width="800">
 </p>
 
 <p align="center">
-  <img src="dashboard/public/screenshots/synthetics.png" alt="Synthetics" width="800">
+  <img src="https://raw.githubusercontent.com/moneat-io/moneat/dfadf856c1ba86cd2f45428444deb80b74653bb7/dashboard/public/screenshots/synthetics.png" alt="Synthetics" width="800">
 </p>
 
 </details>
@@ -245,7 +248,10 @@ Authenticate with an OTLP API key (created in **Settings → OTLP API Keys**) pa
 
 ## Telemetry
 
-Self-hosted deployments collect anonymous usage telemetry (CPU count, memory, aggregate event counts, deployment config). No personal data, event contents, or secrets are collected. [Learn more.](https://moneat.io/docs/self-hosting/telemetry)
+Self-hosted deployments send a periodic telemetry pulse. These are the exact fields included:
+Moneat version, CPU count, memory usage, OS name and architecture, JVM version, aggregate
+project/user/event/issue counts, SSL enabled status, and a random deployment ID. No other fields
+are included in the telemetry payload. [Learn more.](https://moneat.io/docs/self-hosting/telemetry)
 
 Opt out:
 
@@ -268,7 +274,7 @@ Copyright &copy; 2026 Moneat
 | `ee/` | [Moneat Enterprise License](ee/LICENSE) |
 | Everything else | [GNU AGPLv3](LICENSE) |
 
-Enterprise modules are gated by a signed license key (`MONEAT_LICENSE_KEY`). Without a valid key, only the open-source core is active. The AGPL does not apply to files in `ee/`.
+Enterprise modules are gated by a signed license key (`MONEAT_LICENSE_KEY`). Without a valid key, only the open-source core is active. OIDC SSO is part of the open core and always available. SAML SSO and SSO enforcement require an enterprise license. The AGPL does not apply to files in `ee/`.
 
 For licensing questions: [licensing@moneat.io](mailto:licensing@moneat.io)
 

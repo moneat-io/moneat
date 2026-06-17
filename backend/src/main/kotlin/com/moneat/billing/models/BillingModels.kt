@@ -18,12 +18,19 @@ package com.moneat.billing.models
 
 import com.moneat.shared.models.Organizations
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.date
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
+
+const val APM_SPAN_USAGE_DEBUG_DEFAULT_LIMIT = 20
+const val APM_SPAN_USAGE_DEBUG_MIN_LIMIT = 1
+const val APM_SPAN_USAGE_DEBUG_MAX_LIMIT = 100
 
 object PricingTierConfigs : Table("pricing_tier_configs") {
     val id = integer("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
     val tier_name = varchar("tier_name", 50)
     val version = integer("version").default(1)
     val monthly_unit_limit = long("monthly_unit_limit")
@@ -37,6 +44,7 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val replay_retention_days = integer("replay_retention_days").default(0)
     val llm_retention_days = integer("llm_retention_days").default(0)
     val log_retention_days = integer("log_retention_days")
+    val apm_trace_retention_days = integer("apm_trace_retention_days").default(30)
     val status_pages_enabled = bool("status_pages_enabled").default(true)
     val status_page_custom_domain_enabled = bool("status_page_custom_domain_enabled").default(true)
     val session_replay_enabled = bool("session_replay_enabled").default(true)
@@ -74,6 +82,10 @@ object PricingTierConfigs : Table("pricing_tier_configs") {
     val monthly_custom_metric_limit = long("monthly_custom_metric_limit").default(0)
     val custom_metric_overage_rate_cents_per_100k = integer(
         "custom_metric_overage_rate_cents_per_100k"
+    ).default(0)
+    val monthly_infra_metric_series_hour_limit = long("monthly_infra_metric_series_hour_limit").default(0)
+    val infra_metric_overage_rate_cents_per_100k_series_hours = integer(
+        "infra_metric_overage_rate_cents_per_100k_series_hours"
     ).default(0)
     val max_hosts = integer("max_hosts").nullable()
     val profiling_enabled = bool("profiling_enabled").default(false)
@@ -117,6 +129,11 @@ object OrgUsageCounters : Table("org_usage_counters") {
     val used_analytics_pageviews = long("used_analytics_pageviews").default(0)
     val used_apm_spans = long("used_apm_spans").default(0)
     val used_custom_metrics = long("used_custom_metrics").default(0)
+    val used_infra_metric_series_hours = long("used_infra_metric_series_hours").default(0)
+    val used_infra_metric_bytes = long("used_infra_metric_bytes").default(0)
+    val used_synthetic_runs = long("used_synthetic_runs").default(0)
+    val used_uptime_checks = long("used_uptime_checks").default(0)
+    val used_ai_tokens = long("used_ai_tokens").default(0)
     val updated_at = timestamp("updated_at")
     override val primaryKey = PrimaryKey(id)
 }
@@ -148,7 +165,7 @@ object StripeWebhookEvents : Table("stripe_webhook_events") {
 
 @Serializable
 data class PricingTierConfigResponse(
-    val id: Int,
+    val id: String,
     val tierName: String,
     val version: Int,
     val monthlyUnitLimit: Long,
@@ -162,6 +179,7 @@ data class PricingTierConfigResponse(
     val logRetentionDays: Int,
     val replayRetentionDays: Int,
     val llmRetentionDays: Int,
+    val apmTraceRetentionDays: Int,
     val statusPagesEnabled: Boolean,
     val statusPageCustomDomainEnabled: Boolean,
     val sessionReplayEnabled: Boolean,
@@ -196,6 +214,8 @@ data class PricingTierConfigResponse(
     val apmSpanOverageRateCentsPer1m: Int = 0,
     val monthlyCustomMetricLimit: Long = 0,
     val customMetricOverageRateCentsPer100k: Int = 0,
+    val monthlyInfraMetricSeriesHourLimit: Long = 0,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int = 0,
     val maxHosts: Int? = null,
     val profilingEnabled: Boolean = false,
     val networkMonitoringEnabled: Boolean = false,
@@ -211,7 +231,8 @@ data class PricingTierConfigResponse(
     val stripeYearlyOveragePriceId: String? = null,
     val stripeOncallPriceId: String? = null,
     val stripeOncallYearlyPriceId: String? = null,
-    val isCurrent: Boolean
+    val isCurrent: Boolean,
+    @Transient val numericId: Int = 0
 )
 
 @Serializable
@@ -229,13 +250,14 @@ data class BillingPlansListResponse(
 
 @Serializable
 data class BillingUsageResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val periodStart: String,
     val periodEnd: String,
     val retentionDays: Int,
     val logRetentionDays: Int = 0,
     val replayRetentionDays: Int = 0,
     val llmRetentionDays: Int = 0,
+    val apmTraceRetentionDays: Int,
     val usedUnits: Long,
     val usedErrors: Long,
     val errorLimit: Long,
@@ -290,12 +312,133 @@ data class BillingUsageResponse(
     val apmSpanLimit: Long = 0,
     val usedCustomMetrics: Long = 0,
     val customMetricLimit: Long = 0,
+    val usedInfraMetricSeriesHours: Long = 0,
+    val usedInfraMetricBytes: Long = 0,
+    val infraMetricSeriesHourLimit: Long = 0,
+    val infraMetricOverageCentsEstimate: Int = 0,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int = 0,
     val plan: String,
     val status: String,
     val withinQuota: Boolean,
     val bonusGbBytes: Long = 0,
     val bonusUnits: Long = 0,
     val bonusReason: String? = null
+)
+
+@Serializable
+data class AdminQuotaUsageResetRequest(
+    val quotaType: String,
+    val targetPercent: Double? = null,
+    val targetValue: Long? = null
+)
+
+@Serializable
+data class AdminQuotaUsageResetResponse(
+    val organizationId: String,
+    val quotaType: String,
+    val periodStart: String,
+    val periodEnd: String,
+    val previousUsed: Long,
+    val updatedUsed: Long,
+    val limit: Long?,
+    val targetPercent: Double?,
+    val usage: BillingUsageResponse
+)
+
+@Serializable
+data class ApmSpanUsageDebugResponse(
+    val organizationId: String,
+    val periodStart: String,
+    val periodEnd: String,
+    val totalSpans: Long,
+    val groups: List<ApmSpanUsageDebugGroup>
+)
+
+@Serializable
+data class ApmSpanUsageDebugGroup(
+    val source: String,
+    val service: String,
+    val operation: String,
+    val resource: String,
+    val spanType: String,
+    val env: String,
+    val kind: String,
+    val scopeName: String,
+    val scopeVersion: String,
+    val projectId: String?,
+    val projectName: String?,
+    val projectSlug: String?,
+    val spanCount: Long,
+    val traceCount: Long,
+    val errorCount: Long,
+    val avgDurationMs: Double,
+    val maxDurationMs: Double,
+    val percentage: Double,
+    val sampleTraceId: String,
+    val latestSpanAt: String
+)
+
+@Serializable
+data class BillingUsageInsightsResponse(
+    val organizationId: String,
+    val periodStart: String,
+    val periodEnd: String,
+    val generatedAt: String,
+    val billingMode: String,
+    val usage: BillingUsageResponse,
+    val dimensions: List<BillingInsightDimension>,
+    val apmSpanDebug: ApmSpanUsageDebugResponse? = null
+)
+
+@Serializable
+data class BillingInsightDimension(
+    val key: String,
+    val label: String,
+    val unit: String,
+    val used: Long,
+    val baseLimit: Long,
+    val effectiveLimit: Long?,
+    val percentOfBase: Double,
+    val percentOfEffective: Double?,
+    val overageCentsEstimate: Int,
+    val overageRateLabel: String?,
+    val forecast: BillingForecast,
+    val contributors: List<BillingContributor>,
+    val daily: List<BillingInsightDailyPoint>
+)
+
+@Serializable
+data class BillingForecast(
+    val window: String,
+    val confidence: String,
+    val dailyRate: Double,
+    val projectedPeriodEndUsage: Long,
+    val projectedBaseLimitHitDate: String?,
+    val projectedEffectiveLimitHitDate: String?,
+    val projectedOverageCents: Int,
+    val riskLevel: String,
+    val summary: String
+)
+
+@Serializable
+data class BillingContributor(
+    val key: String,
+    val label: String,
+    val kind: String,
+    val eventType: String? = null,
+    val projectId: String? = null,
+    val projectName: String? = null,
+    val projectSlug: String? = null,
+    val units: Long,
+    val bytes: Long,
+    val percentage: Double
+)
+
+@Serializable
+data class BillingInsightDailyPoint(
+    val date: String,
+    val value: Long,
+    val bytes: Long
 )
 
 @Serializable
@@ -365,6 +508,7 @@ data class CreateTierVersionRequest(
     val logRetentionDays: Int? = null,
     val replayRetentionDays: Int? = null,
     val llmRetentionDays: Int? = null,
+    val apmTraceRetentionDays: Int? = null,
     val statusPagesEnabled: Boolean? = null,
     val statusPageCustomDomainEnabled: Boolean? = null,
     val sessionReplayEnabled: Boolean? = null,
@@ -405,6 +549,8 @@ data class CreateTierVersionRequest(
     val apmSpanOverageRateCentsPer1m: Int? = null,
     val monthlyCustomMetricLimit: Long? = null,
     val customMetricOverageRateCentsPer100k: Int? = null,
+    val monthlyInfraMetricSeriesHourLimit: Long? = null,
+    val infraMetricOverageRateCentsPer100kSeriesHours: Int? = null,
     val maxHosts: Int? = null,
     val profilingEnabled: Boolean? = null,
     val networkMonitoringEnabled: Boolean? = null,
@@ -453,12 +599,12 @@ data class TierMigrationResponse(
 
 @Serializable
 data class AdminBillingSubscriptionResponse(
-    val subscriptionId: Int,
-    val organizationId: Int,
+    val subscriptionId: String,
+    val organizationId: String,
     val organizationName: String,
     val plan: String,
     val status: String,
-    val pricingTierConfigId: Int?,
+    val pricingTierConfigId: String?,
     val paygBudgetCents: Int,
     val paygUsedUnits: Long,
     val paygUsedMicros: Long,
@@ -476,7 +622,7 @@ data class GrantPromotionalCreditRequest(
 
 @Serializable
 data class GrantPromotionalCreditResponse(
-    val organizationId: Int,
+    val organizationId: String,
     val bonusGbBytes: Long,
     val bonusUnits: Long,
     val bonusGb: Double, // Human-readable GB value
@@ -486,10 +632,10 @@ data class GrantPromotionalCreditResponse(
 
 @Serializable
 data class PromotionalCreditHistoryItem(
-    val id: Int,
-    val organizationId: Int,
+    val id: String,
+    val organizationId: String,
     val organizationName: String,
-    val grantedBy: Int,
+    val grantedBy: String,
     val grantedByEmail: String,
     val bonusGb: Double,
     val bonusUnits: Long,

@@ -53,7 +53,7 @@ export interface AiLink {
 }
 
 export interface AiChatResponse {
-  conversationId: number
+  conversationId: string
   response: AiChatResponseData
   model?: string
   tokensUsed?: number
@@ -66,14 +66,14 @@ export interface AiActionResult {
 }
 
 export interface AiConversationSummary {
-  id: number
+  id: string
   title: string | null
   createdAt: string
   updatedAt: string
 }
 
 export interface AiMessageDto {
-  id: number
+  id: string
   role: string
   content: string
   pageContext?: string
@@ -83,7 +83,7 @@ export interface AiMessageDto {
 }
 
 export interface AiConversationDetail {
-  id: number
+  id: string
   title: string | null
   messages: AiMessageDto[]
   createdAt: string
@@ -99,7 +99,7 @@ export interface AiSseSearchProgress {
 
 export interface AiSseContextReady {
   phase: 'context_ready'
-  snapshotId: number
+  snapshotId: string
   totalTokens: number
   sources: Record<string, number>
 }

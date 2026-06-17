@@ -88,6 +88,24 @@ describe('Logs API – extended coverage', () => {
         to: '2024-06-02T00:00:00Z',
       })
     })
+
+    it('passes host, traceId, and messagePattern params', async () => {
+      server.use(
+        http.get(`${LOGS_API_BASE}/v1/logs`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('host')).toBe('checkout-1')
+          expect(url.searchParams.get('traceId')).toBe('trace-abc')
+          expect(url.searchParams.get('pattern')).toBe('Order <int> failed')
+          return emptyLogsResponse()
+        })
+      )
+
+      await api.getLogs({
+        host: 'checkout-1',
+        traceId: 'trace-abc',
+        messagePattern: 'Order <int> failed',
+      })
+    })
   })
 
   // ──── getSystemLogs – extended params ────
@@ -123,6 +141,53 @@ describe('Logs API – extended coverage', () => {
       expect(result.hasMore).toBe(true)
       expect(result.nextCursor).toBe('cur456')
       expect(result.totalCount).toBe(50)
+    })
+  })
+
+  // ──── getLogPattern ────
+
+  describe('getLogPattern', () => {
+    it('passes anchor fields and maps snake_case rollups', async () => {
+      server.use(
+        http.get(`${LOGS_API_BASE}/v1/logs/pattern`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('logId')).toBe('log-1')
+          expect(url.searchParams.get('message')).toBe('Order 123 failed')
+          expect(url.searchParams.get('service')).toBe('checkout')
+          expect(url.searchParams.get('from')).toBe('2026-06-01T00:00:00Z')
+          expect(url.searchParams.get('to')).toBe('2026-06-02T00:00:00Z')
+          return HttpResponse.json({
+            pattern: 'Order <int> failed',
+            level: 'error',
+            count: 3,
+            window_label: '24h',
+            first_seen: '2026-06-01T00:00:00Z',
+            last_seen: '2026-06-02T00:00:00Z',
+            trend_pct: 50,
+            sparkline: [1, 0, 2],
+            top_services: [{ value: 'checkout', count: 2 }],
+            top_hosts: [{ value: 'checkout-1', count: 2 }],
+          })
+        })
+      )
+
+      const result = await api.getLogPattern({
+        logId: 'log-1',
+        message: 'Order 123 failed',
+        service: 'checkout',
+        from: '2026-06-01T00:00:00Z',
+        to: '2026-06-02T00:00:00Z',
+      })
+
+      expect(result.pattern).toBe('Order <int> failed')
+      expect(result.count).toBe(3)
+      expect(result.windowLabel).toBe('24h')
+      expect(result.firstSeen).toBe('2026-06-01T00:00:00Z')
+      expect(result.lastSeen).toBe('2026-06-02T00:00:00Z')
+      expect(result.trendPct).toBe(50)
+      expect(result.sparkline).toEqual([1, 0, 2])
+      expect(result.topServices).toEqual([{ value: 'checkout', count: 2 }])
+      expect(result.topHosts).toEqual([{ value: 'checkout-1', count: 2 }])
     })
   })
 

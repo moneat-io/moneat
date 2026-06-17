@@ -31,11 +31,13 @@ import com.moneat.events.models.TransactionSummaryResponse
 import com.moneat.events.models.TransactionWithSpansResponse
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.services.DashboardService
+import com.moneat.events.services.IssueListQuery
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.RouteTestSupport
+import com.moneat.testsupport.RouteTestSupport.installApiRouteRateLimits
 import com.moneat.testsupport.RouteTestSupport.installJwtAuth
 import com.moneat.testsupport.RouteTestSupport.withAuth
 import com.moneat.testsupport.TestDatabaseHelper
@@ -49,17 +51,16 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.plugins.ratelimit.RateLimit
-import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.loadKoinModules
@@ -69,7 +70,6 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 class EventApiRoutesTest {
     companion object {
@@ -87,6 +87,7 @@ class EventApiRoutesTest {
         private const val DB_QUERY = "db.query"
         private const val TIMESTAMP_2026_01_01 = "2026-01-01T00:00:00Z"
         private const val TIMESTAMP_2026_01_02 = "2026-01-02T00:00:00Z"
+        private const val TEST_PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
     }
 
     private lateinit var mockDashboardService: DashboardService
@@ -115,17 +116,18 @@ class EventApiRoutesTest {
 
     private fun Application.installTestApp() {
         installJwtAuth()
-        install(RateLimit) {
-            register(RateLimitName("api")) {
-                requestKey { "test-user" }
-                rateLimiter(limit = 1000, refillPeriod = 1.seconds)
-            }
-        }
+        installApiRouteRateLimits("test-user")
         routing { apiRoutes() }
     }
 
-    private fun token(userId: Int): String =
-        RouteTestSupport.createToken(userId)
+    private data class SeededProjectScope(
+        val userId: Int,
+        val orgId: Int,
+        val projectId: Long
+    )
+
+    private fun token(userId: Int, orgId: Int? = null): String =
+        RouteTestSupport.createToken(userId, orgId)
 
     private fun demoToken(): String =
         JWT.create().withIssuer("moneat").withAudience("moneat-users")
@@ -135,6 +137,11 @@ class EventApiRoutesTest {
             .sign(Algorithm.HMAC256(RouteTestSupport.TEST_JWT_SECRET))
 
     private fun seedUserWithProject(): Pair<Int, Long> {
+        val scope = seedUserWithProjectScope()
+        return Pair(scope.userId, scope.projectId)
+    }
+
+    private fun seedUserWithProjectScope(): SeededProjectScope {
         val orgId = transaction {
             Organizations.insert {
                 it[name] = "Event API Test Org"
@@ -162,8 +169,19 @@ class EventApiRoutesTest {
                 it[slug] = "test-project-${System.nanoTime()}"
             } get Projects.id
         }
-        return Pair(userId, projectId)
+        return SeededProjectScope(userId, orgId, projectId)
     }
+
+    private fun projectResourceId(projectId: Long): String = transaction {
+        Projects
+            .selectAll()
+            .where { Projects.id eq projectId }
+            .first()[Projects.resource_id]
+            .toString()
+    }
+
+    private fun projectApiPath(projectId: Long, suffix: String = ""): String =
+        "/v1/projects/${projectResourceId(projectId)}$suffix"
 
     // ──── Authentication ────
 
@@ -192,11 +210,11 @@ class EventApiRoutesTest {
 
     @Test
     fun `GET issues returns 403 when user lacks project access`() = testApplication {
-        val (userId, _) = seedUserWithProject()
-        every { mockDashboardService.hasProjectAccess(userId, SENTINEL_PROJECT_ID) } returns false
+        val (userId, projectId) = seedUserWithProject()
+        every { mockDashboardService.hasProjectAccess(userId, projectId) } returns false
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$SENTINEL_PROJECT_ID/issues") {
+        val response = client.get(projectApiPath(projectId, "/issues")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.Forbidden, response.status)
@@ -237,11 +255,88 @@ class EventApiRoutesTest {
         } returns listOf(sampleIssue(projectId))
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/issues") {
+        val response = client.get(projectApiPath(projectId, "/issues")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-1"))
+    }
+
+    @Test
+    fun `GET org issues forwards organization and service filters`() = testApplication {
+        val scope = seedUserWithProjectScope()
+        coEvery {
+            mockDashboardService.getIssues(
+                match {
+                    it.organizationId == scope.orgId &&
+                        it.page == 2 &&
+                        it.limit == 5 &&
+                        it.status == "resolved" &&
+                        it.serviceNames == listOf("Test Project") &&
+                        it.serviceIds == listOf(scope.projectId)
+                }
+            )
+        } returns listOf(sampleIssue(scope.projectId))
+
+        application { installTestApp() }
+        val serviceId = projectResourceId(scope.projectId)
+        val url =
+            "/v1/issues?page=2&limit=5&status=resolved" +
+                "&services=Test%20Project&serviceIds=$serviceId"
+        val response = client.get(url) {
+            withAuth(token(scope.userId, scope.orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("issue-1"))
+        coVerify {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
+    }
+
+    @Test
+    fun `GET org issues returns 400 for invalid service id filter`() = testApplication {
+        val scope = seedUserWithProjectScope()
+
+        application { installTestApp() }
+        val response = client.get("/v1/issues?serviceIds=not-a-service-id") {
+            withAuth(token(scope.userId, scope.orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
+    }
+
+    @Test
+    fun `GET org issues returns 400 for non-positive pagination`() = testApplication {
+        val scope = seedUserWithProjectScope()
+
+        application { installTestApp() }
+        val response = client.get("/v1/issues?page=0&limit=-1") {
+            withAuth(token(scope.userId, scope.orgId))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
+    }
+
+    @Test
+    fun `GET org issues returns 404 when user lacks organization access`() = testApplication {
+        val scope = seedUserWithProjectScope()
+
+        application { installTestApp() }
+        val response = client.get("/v1/issues") {
+            withAuth(token(scope.userId, orgId = 99999))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        coVerify(exactly = 0) {
+            mockDashboardService.getIssues(any<IssueListQuery>())
+        }
     }
 
     @Test
@@ -253,7 +348,7 @@ class EventApiRoutesTest {
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/issues?page=3&limit=10&status=resolved") {
+        val response = client.get(projectApiPath(projectId, "/issues?page=3&limit=10&status=resolved")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -381,7 +476,7 @@ class EventApiRoutesTest {
         } returns listOf(sampleTransactionSummary())
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/transactions") {
+        val response = client.get(projectApiPath(projectId, "/transactions")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -397,7 +492,7 @@ class EventApiRoutesTest {
         } returns emptyList()
 
         application { installTestApp() }
-        val url = "/v1/projects/$projectId/transactions?period=30d&environment=production&operation=$HTTP_SERVER"
+        val url = projectApiPath(projectId, "/transactions?period=30d&environment=production&operation=$HTTP_SERVER")
         val response = client.get(url) {
             withAuth(token(userId))
         }
@@ -418,7 +513,7 @@ class EventApiRoutesTest {
         } returns samplePerformanceStats()
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/$projectId/transactions/stats") {
+        val response = client.get(projectApiPath(projectId, "/transactions/stats")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -434,7 +529,7 @@ class EventApiRoutesTest {
         } returns samplePerformanceStats()
 
         application { installTestApp() }
-        val url = "/v1/projects/$projectId/transactions/stats?period=24h&environment=staging&operation=$DB_QUERY"
+        val url = projectApiPath(projectId, "/transactions/stats?period=24h&environment=staging&operation=$DB_QUERY")
         val response = client.get(url) {
             withAuth(token(userId))
         }
@@ -555,6 +650,7 @@ class EventApiRoutesTest {
         }
         assertEquals(HttpStatusCode.OK, response.status)
         assertTrue(response.bodyAsText().contains("issue-found-1"))
+        assertTrue(response.bodyAsText().contains("projectId"))
     }
 
     @Test
@@ -618,12 +714,14 @@ class EventApiRoutesTest {
 
     @Test
     fun `demo user can access issues without explicit project membership`() = testApplication {
+        val (_, projectId) = seedUserWithProject()
+        val resourceId = projectResourceId(projectId)
         coEvery {
             mockDashboardService.getIssues(any(), any(), any(), any(), any())
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/projects/1/issues") {
+        val response = client.get("/v1/projects/$resourceId/issues") {
             withAuth(demoToken())
         }
         assertEquals(HttpStatusCode.OK, response.status)
@@ -631,9 +729,9 @@ class EventApiRoutesTest {
 
     // ──── Helpers ────
 
-    private fun sampleIssue(projectId: Long = 1L) = IssueResponse(
+    private fun sampleIssue(projectId: Long? = null) = IssueResponse(
         id = "issue-1",
-        projectId = projectId,
+        projectId = projectId?.let(::projectResourceId) ?: TEST_PROJECT_RESOURCE_ID,
         title = "NullPointerException",
         culprit = "com.app.Main",
         level = "error",
@@ -647,7 +745,7 @@ class EventApiRoutesTest {
 
     private fun sampleIssueDetail() = IssueDetailResponse(
         id = ISSUE_DETAIL_1,
-        projectId = 1L,
+        projectId = TEST_PROJECT_RESOURCE_ID,
         projectName = "Test Project",
         title = "NullPointerException",
         culprit = "com.app.Main",

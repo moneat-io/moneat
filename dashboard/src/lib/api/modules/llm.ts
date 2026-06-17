@@ -16,66 +16,80 @@
 
 import type { ApiClientCore } from '../client'
 import type {
+  LlmGenerationsParams,
   LlmOverviewResponse,
   LlmGenerationsListResponse,
   LlmGenerationDetail,
+  LlmRangeParams,
+  LlmScopeParams,
   LlmTraceResponse,
   LlmModelStats,
   LlmCostsResponse,
 } from '../types'
+import { urlWithQuery } from '../utils'
+
+function appendListParam(searchParams: URLSearchParams, key: string, values?: string[]) {
+  values?.forEach((value) => searchParams.append(key, String(value)))
+}
+
+function appendScopeParams(searchParams: URLSearchParams, params: LlmScopeParams) {
+  appendListParam(searchParams, 'services', params.services)
+  appendListParam(searchParams, 'serviceIds', params.serviceIds)
+}
+
+function llmQuery(params: LlmGenerationsParams = {}): string {
+  const searchParams = new URLSearchParams()
+  if (params.range) searchParams.set('range', params.range)
+  if (params.model) searchParams.set('model', params.model)
+  if (params.provider) searchParams.set('provider', params.provider)
+  if (params.type) searchParams.set('type', params.type)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.page !== undefined) searchParams.set('page', String(params.page))
+  if (params.pageSize !== undefined) searchParams.set('pageSize', String(params.pageSize))
+  appendScopeParams(searchParams, params)
+  return searchParams.toString()
+}
+
+function rangeQuery(params: LlmRangeParams = {}, defaultRange = '24h'): string {
+  return llmQuery({...params, range: params.range ?? defaultRange})
+}
 
 export function llmMethods(core: ApiClientCore) {
   const base = core.API_BASE
 
   return {
-    getLlmOverview: (projectId: number, range = '24h') =>
+    getLlmOverview: (params: LlmRangeParams = {}) =>
       core.request<LlmOverviewResponse>(
-        `${base}/llm/overview?projectId=${projectId}&range=${encodeURIComponent(range)}`
+        urlWithQuery(`${base}/llm/overview`, rangeQuery(params))
       ),
 
     getLlmGenerations: (
-      projectId: number,
-      params: {
-        range?: string
-        model?: string
-        provider?: string
-        type?: string
-        status?: string
-        page?: number
-        pageSize?: number
-      } = {}
+      params: LlmGenerationsParams = {}
     ) => {
-      const searchParams = new URLSearchParams({ projectId: String(projectId) })
-      if (params.range) searchParams.set('range', params.range)
-      if (params.model) searchParams.set('model', params.model)
-      if (params.provider) searchParams.set('provider', params.provider)
-      if (params.type) searchParams.set('type', params.type)
-      if (params.status) searchParams.set('status', params.status)
-      if (params.page !== undefined) searchParams.set('page', String(params.page))
-      if (params.pageSize !== undefined) searchParams.set('pageSize', String(params.pageSize))
+      const query = llmQuery(params)
       return core.request<LlmGenerationsListResponse>(
-        `${base}/llm/generations?${searchParams}`
+        urlWithQuery(`${base}/llm/generations`, query)
       )
     },
 
-    getLlmGenerationDetail: (projectId: number, generationId: string) =>
+    getLlmGenerationDetail: (generationId: string, params: LlmScopeParams = {}) =>
       core.request<LlmGenerationDetail>(
-        `${base}/llm/generations/${encodeURIComponent(generationId)}?projectId=${projectId}`
+        urlWithQuery(`${base}/llm/generations/${encodeURIComponent(generationId)}`, llmQuery(params))
       ),
 
-    getLlmTrace: (projectId: number, traceId: string) =>
+    getLlmTrace: (traceId: string, params: LlmScopeParams = {}) =>
       core.request<LlmTraceResponse>(
-        `${base}/llm/traces/${encodeURIComponent(traceId)}?projectId=${projectId}`
+        urlWithQuery(`${base}/llm/traces/${encodeURIComponent(traceId)}`, llmQuery(params))
       ),
 
-    getLlmModels: (projectId: number, range = '24h') =>
+    getLlmModels: (params: LlmRangeParams = {}) =>
       core.request<LlmModelStats[]>(
-        `${base}/llm/models?projectId=${projectId}&range=${encodeURIComponent(range)}`
+        urlWithQuery(`${base}/llm/models`, rangeQuery(params))
       ),
 
-    getLlmCosts: (projectId: number, range = '24h') =>
+    getLlmCosts: (params: LlmRangeParams = {}) =>
       core.request<LlmCostsResponse>(
-        `${base}/llm/costs?projectId=${projectId}&range=${encodeURIComponent(range)}`
+        urlWithQuery(`${base}/llm/costs`, rangeQuery(params))
       ),
   }
 }

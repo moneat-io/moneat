@@ -43,7 +43,7 @@ Nothing in your application code changes.
 
 ### Option A: Moneat Cloud
 
-Sign up at [moneat.io](https://moneat.io), create an organization and project, and copy your DSN:
+Sign up at [moneat.io](https://moneat.io), create an organization and service, and copy your DSN:
 
 ```
 https://{public_key}@app.moneat.io/api/{project_id}
@@ -93,9 +93,9 @@ Point DNS at your server, configure SSL, and you're live. Full guide: [moneat.io
 
 ---
 
-## Step 2: Create Projects and Get DSNs (2 minutes)
+## Step 2: Create Services and Get DSNs (2 minutes)
 
-In the Moneat dashboard, go to **Settings → Projects → New Project**, select your platform, and copy the DSN. Create one project per Sentry project you're migrating.
+In the Moneat dashboard, go to **Setup → Services & SDKs**, select your platform, and copy the DSN. Create one service per Sentry project you're migrating.
 
 ---
 
@@ -245,7 +245,7 @@ After deploying with the new DSN:
 
 ## What About Historical Data?
 
-Moneat doesn't import historical Sentry data, but error monitoring data has a short half-life — teams rarely reference errors older than 30 days. Run both platforms in parallel for 1–2 weeks before canceling Sentry, migrating one service at a time since the DSN is per-project.
+Moneat doesn't import historical Sentry data, but error monitoring data has a short half-life — teams rarely reference errors older than 30 days. Run both platforms in parallel for 1–2 weeks before canceling Sentry, migrating one service at a time since the DSN is per-service.
 
 ```javascript
 // Temporarily send to both Sentry and Moneat during transition
@@ -270,7 +270,7 @@ Sentry.init({
 | Step | Time |
 |---|---|
 | Set up Moneat instance | 5-10 minutes |
-| Create projects and copy DSNs | 2 minutes |
+| Create services and copy DSNs | 2 minutes |
 | Update DSN in each service | 1 minute per service |
 | Configure source maps | 5-10 minutes |
 | Set up alerts | 5-10 minutes |

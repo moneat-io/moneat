@@ -33,8 +33,8 @@ export interface LatestMetrics {
 }
 
 export interface MonitorHostResponse {
-  id: number
-  project_id?: number
+  id: string
+  project_id?: string
   name: string
   hostname: string
   status: string
@@ -113,15 +113,15 @@ export interface ContainerMetricsHistory {
 }
 
 export interface HostAlert {
-  id: number
-  hostId?: number
+  id: string
+  hostId?: string
   scope: 'global' | 'host'
   metric: string
   condition: string
   threshold: number
   durationSeconds: number
   enabled: boolean
-  incidentSeverity?: string | null
+  alertPriority?: string | null
   lastTriggeredAt?: number
   createdAt: number
 }
@@ -134,12 +134,12 @@ export interface HostAlertConfig {
 }
 
 export interface SilencePeriod {
-  id: number
-  organizationId: number
+  id: string
+  organizationId: string
   reason: string | null
   startsAt: number
   endsAt: number
-  createdBy: number
+  createdBy: string
   createdAt: number
 }
 
@@ -147,4 +147,76 @@ export interface CreateSilencePeriodRequest {
   reason?: string
   starts_at: number
   ends_at: number
+}
+
+export interface AlertEpisode {
+  id: string
+  organization_id: string
+  source: string
+  deduplication_key: string
+  episode_seq: number
+  episode_key: string
+  status: string
+  opened_at: string
+  last_seen_at: string
+  resolved_at?: string | null
+  last_notification_at?: string | null
+  notification_count: number
+  suppressed_at?: string | null
+  suppressed_by_user_id?: string | null
+  suppress_reason?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AlertLifecycleListParams {
+  status?: string
+  limit?: number
+}
+
+export type CloudSourceProvider = 'aws' | 'gcp' | 'azure'
+
+export interface CloudSourceProviderConfig {
+  accountId?: string | null
+  roleName?: string | null
+  projectId?: string | null
+  tenantId?: string | null
+  subscriptionId?: string | null
+  billingExportTable?: string | null
+}
+
+export interface CloudSourceCreateRequest {
+  provider: CloudSourceProvider
+  displayName: string
+  config: CloudSourceProviderConfig
+  collectMetrics: boolean
+  collectInventory: boolean
+  collectCost: boolean
+  collectLogs: boolean
+}
+
+export interface CloudSourceResponse {
+  id: string
+  provider: CloudSourceProvider
+  displayName: string
+  status: string
+  config: CloudSourceProviderConfig
+  collectMetrics: boolean
+  collectInventory: boolean
+  collectCost: boolean
+  collectLogs: boolean
+  externalId: string
+  lastSyncAt: string | null
+  lastError: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CloudSourceSetupPreview {
+  provider: CloudSourceProvider
+  externalId: string
+  principal: string
+  snippetLabel: string
+  snippetLanguage: string
+  snippet: string
 }

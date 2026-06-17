@@ -18,13 +18,16 @@ package com.moneat.dashboards.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.datetime.timestamp
+import kotlin.uuid.Uuid
 
 // Exposed table definition
 
 object CustomDataSources : Table("custom_data_sources") {
     val id = long("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val orgId = long("org_id")
     val name = varchar("name", 255)
     val description = text("description").nullable()
@@ -105,8 +108,8 @@ enum class CustomDataSourceType {
 
 @Serializable
 data class CustomDataSourceResponse(
-    val id: Long,
-    @SerialName("org_id") val orgId: Long,
+    val id: String,
+    @SerialName("org_id") val orgId: String,
     val name: String,
     val description: String? = null,
     @SerialName("source_type") val sourceType: String,
@@ -115,10 +118,12 @@ data class CustomDataSourceResponse(
     @SerialName("database_name") val databaseName: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
     val enabled: Boolean = true,
-    @SerialName("created_by") val createdBy: Long,
+    @SerialName("created_by") val createdBy: String,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
     @SerialName("has_credentials") val hasCredentials: Boolean = true,
+    @SerialName("used_by_dashboard_count") val usedByDashboardCount: Int = 0,
+    @Transient val numericId: Long = 0,
     // Credentials are NEVER returned
 )
 
@@ -133,6 +138,7 @@ data class CreateCustomDataSourceRequest(
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("header_value") val headerValue: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
     @SerialName("access_key_id") val accessKeyId: String? = null,
     @SerialName("secret_access_key") val secretAccessKey: String? = null,
@@ -149,10 +155,14 @@ data class UpdateCustomDataSourceRequest(
     val description: String? = null,
     val host: String? = null,
     val port: Int? = null,
+    // A null `port` means "leave unchanged" (partial update); this flag is the explicit
+    // opt-in to erase a stored port, e.g. an http source moved behind a reverse proxy.
+    @SerialName("clear_port") val clearPort: Boolean = false,
     @SerialName("database_name") val databaseName: String? = null,
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("header_value") val headerValue: String? = null,
     @SerialName("extra_config") val extraConfig: Map<String, String>? = null,
     val enabled: Boolean? = null,
     @SerialName("access_key_id") val accessKeyId: String? = null,
@@ -173,6 +183,7 @@ data class TestConnectionRequest(
     val username: String? = null,
     val password: String? = null,
     @SerialName("api_key") val apiKey: String? = null,
+    @SerialName("header_value") val headerValue: String? = null,
     @SerialName("access_key_id") val accessKeyId: String? = null,
     @SerialName("secret_access_key") val secretAccessKey: String? = null,
     @SerialName("service_account_json") val serviceAccountJson: String? = null,
@@ -180,6 +191,7 @@ data class TestConnectionRequest(
     @SerialName("connection_string") val connectionString: String? = null,
     @SerialName("project_id") val projectId: String? = null,
     val region: String? = null,
+    @SerialName("extra_config") val extraConfig: Map<String, String> = emptyMap(),
 )
 
 @Serializable
@@ -194,7 +206,7 @@ data class TestConnectionResult(
 
 @Serializable
 data class CustomDataSourceQueryRequest(
-    @SerialName("data_source_id") val dataSourceId: Long,
+    @SerialName("data_source_id") val dataSourceId: String,
     val query: String,
     val limit: Int = 100,
     @SerialName("time_range") val timeRange: TimeRangeDef? = null,

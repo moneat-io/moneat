@@ -22,6 +22,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.java.javaUUID
 import org.jetbrains.exposed.v1.datetime.timestamp
 import java.util.UUID
+import kotlin.uuid.Uuid
 
 const val RETRY_COUNT_DEFAULT = 0
 const val RETRY_INTERVAL_MS_DEFAULT = 300
@@ -54,7 +55,31 @@ object SyntheticTests : Table("synthetic_tests") {
     val alertOnFailure = bool("alert_on_failure").default(ALERT_ON_FAILURE_DEFAULT)
     val alertChannels = text("alert_channels").default("[]")
     val config = text("config").nullable()
+    val service = varchar("service", 255).nullable()
+    val environment = varchar("environment", 255).nullable()
+    val locations = text("locations").default("[]")
+    val alertConfig = text("alert_config").nullable()
+    val alertRecipients = text("alert_recipients").default("[]")
+    val browserSteps = text("browser_steps").nullable()
     val previousStatus = varchar("previous_status", 20).nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+
+    override val primaryKey = PrimaryKey(id)
+}
+
+/** Managed (platform-global, org NULL) + private (per-org) probe locations. */
+object SyntheticLocations : Table("synthetic_locations") {
+    val id = javaUUID("id")
+    val organizationId = integer("organization_id").references(Organizations.id).nullable()
+    val code = varchar("code", 64)
+    val name = varchar("name", 128)
+    val region = varchar("region", 128).default("")
+    val locationType = varchar("location_type", 16).default("managed")
+    val active = bool("active").default(true)
+    val keyHash = varchar("key_hash", 255).nullable()
+    val workerCount = integer("worker_count").default(0)
+    val lastSeenAt = timestamp("last_seen_at").nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 
@@ -63,6 +88,7 @@ object SyntheticTests : Table("synthetic_tests") {
 
 object SyntheticVariables : Table("synthetic_variables") {
     val id = integer("id").autoIncrement()
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id)
     val name = varchar("name", 255)
     val value = text("value").default("")
@@ -107,6 +133,37 @@ data class SyntheticTestConfig(
     val hostname: String? = null
 )
 
+/** Structured alert trigger condition; reduces flapping from a single noisy location. */
+@Serializable
+data class AlertConfig(
+    val consecutiveChecks: Int = 1,
+    val minLocations: Int = 1,
+    val totalLocations: Int = 1,
+    val retestCount: Int = 0,
+    val renotifyMinutes: Int? = null,
+    val notifyOnRecovery: Boolean = true,
+    val slowResponseMs: Int? = null,
+    val slowResponseWindowMin: Int = 10
+)
+
+/** A single alert destination: slack / email / pagerduty / webhook. */
+@Serializable
+data class AlertRecipient(
+    val type: String,
+    val target: String,
+    val label: String = ""
+)
+
+/** One recorded browser-journey step (navigate / click / type / assert / wait). */
+@Serializable
+data class BrowserStep(
+    val action: String,
+    val label: String = "",
+    val selector: String = "",
+    val value: String = "",
+    val assertType: String = ""
+)
+
 @Serializable
 data class CreateSyntheticTestRequest(
     val name: String,
@@ -127,7 +184,13 @@ data class CreateSyntheticTestRequest(
     val retryIntervalMs: Int = RETRY_INTERVAL_MS_DEFAULT,
     val alertOnFailure: Boolean = ALERT_ON_FAILURE_DEFAULT,
     val alertChannels: List<String> = emptyList(),
-    val config: SyntheticTestConfig? = null
+    val config: SyntheticTestConfig? = null,
+    val service: String? = null,
+    val environment: String? = null,
+    val locations: List<String> = emptyList(),
+    val alertConfig: AlertConfig? = null,
+    val alertRecipients: List<AlertRecipient> = emptyList(),
+    val browserSteps: List<BrowserStep> = emptyList()
 )
 
 @Serializable
@@ -150,13 +213,19 @@ data class UpdateSyntheticTestRequest(
     val retryIntervalMs: Int? = null,
     val alertOnFailure: Boolean? = null,
     val alertChannels: List<String>? = null,
-    val config: SyntheticTestConfig? = null
+    val config: SyntheticTestConfig? = null,
+    val service: String? = null,
+    val environment: String? = null,
+    val locations: List<String>? = null,
+    val alertConfig: AlertConfig? = null,
+    val alertRecipients: List<AlertRecipient>? = null,
+    val browserSteps: List<BrowserStep>? = null
 )
 
 @Serializable
 data class SyntheticTestResponse(
     val id: String,
-    val organizationId: Int,
+    val organizationId: String,
     val name: String,
     val testType: String,
     val active: Boolean,
@@ -179,6 +248,12 @@ data class SyntheticTestResponse(
     val alertOnFailure: Boolean = ALERT_ON_FAILURE_DEFAULT,
     val alertChannels: List<String> = emptyList(),
     val config: SyntheticTestConfig? = null,
+    val service: String? = null,
+    val environment: String? = null,
+    val locations: List<String> = emptyList(),
+    val alertConfig: AlertConfig? = null,
+    val alertRecipients: List<AlertRecipient> = emptyList(),
+    val browserSteps: List<BrowserStep> = emptyList(),
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -209,6 +284,12 @@ data class SyntheticTestData(
     val alertOnFailure: Boolean = ALERT_ON_FAILURE_DEFAULT,
     val alertChannels: List<String> = emptyList(),
     val config: String? = null,
+    val service: String? = null,
+    val environment: String? = null,
+    val locations: List<String> = emptyList(),
+    val alertConfig: AlertConfig? = null,
+    val alertRecipients: List<AlertRecipient> = emptyList(),
+    val browserSteps: String? = null,
     val previousStatus: String? = null,
     val createdAt: kotlin.time.Instant,
     val updatedAt: kotlin.time.Instant
@@ -233,8 +314,8 @@ data class SyntheticVariableRequest(
 
 @Serializable
 data class SyntheticVariableResponse(
-    val id: Int,
-    val organizationId: Int,
+    val id: String,
+    val organizationId: String,
     val name: String,
     val value: String,
     val isSecret: Boolean,

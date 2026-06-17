@@ -41,12 +41,23 @@ describe('Replays API - extended coverage', () => {
   it('resolves issue ID for event', async () => {
     server.use(
       http.get(`${API_BASE}/v1/events/evt-1/issue`, () => {
-        return HttpResponse.json({ issueId: 'iss-42' })
+        return HttpResponse.json({ issueId: 'iss-42', projectId: 'proj-1' })
       })
     )
 
     const result = await api.getIssueIdForEvent('evt-1')
     expect(result).toBe('iss-42')
+  })
+
+  it('resolves scoped issue links for event', async () => {
+    server.use(
+      http.get(`${API_BASE}/v1/events/evt-scoped/issue`, () => {
+        return HttpResponse.json({ issueId: 'iss-42', projectId: 'proj-1' })
+      })
+    )
+
+    const result = await api.getIssueLinkForEvent('evt-scoped')
+    expect(result).toEqual({ issueId: 'iss-42', projectId: 'proj-1' })
   })
 
   it('returns null when issue lookup fails', async () => {

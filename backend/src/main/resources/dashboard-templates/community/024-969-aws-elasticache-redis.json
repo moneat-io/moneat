@@ -1,0 +1,874 @@
+{
+    "id": "024-969-aws-elasticache-redis",
+    "title": "AWS ElastiCache Redis",
+    "description": "Prebuilt Moneat dashboard for AWS ElastiCache Redis telemetry.",
+    "category": "cloud",
+    "tags": [
+        "Cloud",
+        "CloudWatch",
+        "Messaging"
+    ],
+    "required_sources": [
+        "CloudWatch"
+    ],
+    "widget_count": 12,
+    "variable_count": 4,
+    "warnings": [],
+    "dashboard": {
+        "title": "AWS ElastiCache Redis",
+        "description": "Prebuilt Moneat dashboard for AWS ElastiCache Redis telemetry.",
+        "project_id": null,
+        "folder_id": null,
+        "layout_type": "grid",
+        "is_default": false,
+        "variables": [
+            {
+                "name": "datasource",
+                "label": "Datasource",
+                "type": "custom",
+                "query": "cloudwatch",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "region",
+                "label": "Region",
+                "type": "query",
+                "query": "regions()",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            },
+            {
+                "name": "cacheclusterId",
+                "label": "CacheClusterId",
+                "type": "query",
+                "query": "dimension_values($region,AWS/ElastiCache,CPUUtilization,CacheClusterId)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": null
+            },
+            {
+                "name": "cachenodeid",
+                "label": "CacheNodeId",
+                "type": "query",
+                "query": "dimension_values($region,AWS/ElastiCache,CPUUtilization,CacheNodeId)",
+                "default_value": null,
+                "current": null,
+                "options": [],
+                "datasource": "__cloudwatch"
+            }
+        ],
+        "widgets": [
+            {
+                "title": "Cache",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 0,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"CacheHits\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"CacheMisses\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"Evictions\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"Reclaimed\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "C"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 0
+            },
+            {
+                "title": "Cmds",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 7,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"GetTypeCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"HashBasedCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "B"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"ListBasedCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "C"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"SetBasedCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "D"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"SetTypeCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "E"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"SortedSetBasedCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "F"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"StringBasedCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "G"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 1
+            },
+            {
+                "title": "Connections",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 14,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"NewConnections\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"CurrConnections\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 2
+            },
+            {
+                "title": "SaveInProgress / CurrItems",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 21,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"SaveInProgress\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"CurrItems\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 3
+            },
+            {
+                "title": "BytesUsedForCache / ReplicationBytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 28,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"BytesUsedForCache\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"ReplicationBytes\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 4
+            },
+            {
+                "title": "HyperLogLogBasedCmds / ReplicationLag",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 35,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"HyperLogLogBasedCmds\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"ReplicationLag\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "none",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 5
+            },
+            {
+                "title": "CacheNodeId $cachenodeid DatabaseMemoryUsagePercentage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 42,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"DatabaseMemoryUsagePercentage\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 6
+            },
+            {
+                "title": "CacheNodeId $cachenodeid CPUUtilization",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 49,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"CPUUtilization\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 7
+            },
+            {
+                "title": "CacheNodeId $cachenodeid EngineCPUUtilization",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 56,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"EngineCPUUtilization\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "A"
+                    }
+                ],
+                "display_config": {
+                    "unit": "percent",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 8
+            },
+            {
+                "title": "CacheNodeId $cachenodeid NetworkBytes",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 63,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"NetworkBytesIn\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"NetworkBytesOut\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 9
+            },
+            {
+                "title": "CacheNodeId $cachenodeid FreeableMemory / SwapUsage",
+                "widget_type": "timeseries",
+                "grid_x": 0,
+                "grid_y": 70,
+                "grid_w": 12,
+                "grid_h": 7,
+                "query_configs": [
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"SwapUsage\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "A"
+                    },
+                    {
+                        "dataSource": "__cloudwatch",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": "{\"Namespace\":\"AWS/ElastiCache\",\"MetricName\":\"FreeableMemory\",\"Period\":\"\",\"Dimensions\":[{\"Name\":\"CacheClusterId\",\"Value\":\"$cacheclusterId\"},{\"Name\":\"CacheNodeId\",\"Value\":\"$cachenodeid\"}]}",
+                        "ref_id": "B"
+                    }
+                ],
+                "display_config": {
+                    "unit": "bytes",
+                    "thresholds": "[{\"value\":0,\"color\":\"green\"},{\"value\":80,\"color\":\"red\"}]",
+                    "drawStyle": "line",
+                    "lineWidth": "1",
+                    "fillOpacity": "0.1",
+                    "stackMode": "none",
+                    "scaleType": "linear",
+                    "legendPlacement": "bottom",
+                    "legendMode": "table",
+                    "gaugeMin": "0"
+                },
+                "sort_order": 10
+            },
+            {
+                "title": "Documentation",
+                "widget_type": "text",
+                "grid_x": 0,
+                "grid_y": 77,
+                "grid_w": 12,
+                "grid_h": 3,
+                "query_configs": [
+                    {
+                        "dataSource": "events",
+                        "metrics": [
+                            {
+                                "function": "count",
+                                "field": null,
+                                "alias": "count"
+                            }
+                        ],
+                        "groupBy": [],
+                        "filters": [],
+                        "orderBy": null,
+                        "limit": 100,
+                        "timeRange": {
+                            "from": "now-24h",
+                            "to": "now"
+                        },
+                        "rawQuery": null,
+                        "ref_id": null
+                    }
+                ],
+                "display_config": {},
+                "sort_order": 11
+            }
+        ]
+    }
+}

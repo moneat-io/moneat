@@ -40,8 +40,20 @@ Create a temporary override.
 | startTime | string | yes | Override start (ISO 8601) |
 | endTime | string | yes | Override end (ISO 8601) |
 
-### GET /v1/on-call-incidents
-List on-call incidents.
+### GET /v1/on-call/alerts
+List on-call alerts. Alerts carry `priority` values `P0` through `P5`.
 
-### POST /v1/on-call-incidents/{id}/resolve
-Resolve an on-call incident.
+### POST /v1/on-call/alerts/{id}/acknowledge
+Acknowledge an on-call alert.
+
+### POST /v1/on-call/alerts/{id}/resolve
+Resolve an on-call alert.
+
+### POST /v1/on-call/alerts/{id}/declare-incident
+Declare an incident from an alert. The request must include incident `severity` (`SEV-0` through `SEV-4`).
+
+### GET /v1/on-call/incidents
+List declared incidents. Incidents carry `severity` values `SEV-0` through `SEV-4`.
+
+### POST /v1/on-call/incidents/{id}/resolve
+Resolve a declared incident.

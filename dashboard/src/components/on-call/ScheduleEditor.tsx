@@ -35,11 +35,11 @@ export interface OnCallScheduleData {
   rotationType: 'DAILY' | 'WEEKLY' | 'CUSTOM'
   handoffTime: string
   timezone: string
-  participantIds: number[]
+  participantIds: string[]
 }
 
 interface ScheduleUser {
-  id: number
+  id: string
   name: string
 }
 
@@ -64,14 +64,14 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
   const availableUsers = users.filter((u) => !schedule.participantIds.includes(u.id))
   const hasCurrentTimezoneOption = TIMEZONES.some((tz) => tz.value === schedule.timezone)
 
-  const addParticipant = (userId: number) => {
+  const addParticipant = (userId: string) => {
     setSchedule((prev) => ({
       ...prev,
       participantIds: [...prev.participantIds, userId],
     }))
   }
 
-  const removeParticipant = (userId: number) => {
+  const removeParticipant = (userId: string) => {
     setSchedule((prev) => ({
       ...prev,
       participantIds: prev.participantIds.filter((id) => id !== userId),
@@ -229,7 +229,7 @@ export function ScheduleEditor({ initialData, users, onSave, onCancel }: Schedul
           })}
 
           {availableUsers.length > 0 && (
-            <Select onValueChange={(value) => addParticipant(parseInt(value))}>
+            <Select onValueChange={(value) => addParticipant(value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Add participant" />
               </SelectTrigger>

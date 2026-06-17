@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.oncall.services.PushNotificationService
 import com.moneat.enterprise.oncall.services.TwilioService
 import com.moneat.enterprise.oncall.services.UserNotificationPreferencesService
@@ -152,8 +153,7 @@ fun Route.notificationPreferencesRoutes(
                             )
                             return@post
                         }
-                        // Send a minimal test SMS (reuses existing sendSms which validates consent again)
-                        twilioService.sendSms(phone, 0, "Test Notification", "TEST", userId)
+                        twilioService.sendTestSms(phone)
                         call.respond(MessageResponse("Test SMS sent"))
                     }
 
@@ -169,7 +169,7 @@ fun Route.notificationPreferencesRoutes(
                             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Slack account not linked"))
                             return@post
                         }
-                        slackService.sendOnCallAlert(userId, 0, "Test Notification", "TEST")
+                        slackService.sendOnCallAlert(userId, null, "Test Notification", "TEST")
                         call.respond(MessageResponse("Test Slack DM sent"))
                     }
 
@@ -245,7 +245,7 @@ fun Route.notificationPreferencesRoutes(
             put("/{category}") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = principal?.currentOrgIdOrNull()
                 val category = call.parameters["category"]
 
                 if (userId == null || organizationId == null) {

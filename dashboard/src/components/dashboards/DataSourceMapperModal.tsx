@@ -98,10 +98,10 @@ export function DataSourceMapperModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background w-full max-w-md rounded-lg border p-6 shadow-lg">
+      <div className="bg-background w-full max-w-md rounded-lg border p-6">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-500/10">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-warning-bg">
+            <AlertTriangle className="h-5 w-5 text-warning-fg" />
           </div>
           <div>
             <h3 className="font-semibold">

@@ -16,44 +16,28 @@
 
 package com.moneat.plugins
 
-import com.moneat.ai.aiChatRoutes
-import com.moneat.auth.routes.authRoutes
-import com.moneat.auth.routes.authTokenRoutes
-import com.moneat.billing.routes.stripeWebhookRoutes
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
-import com.moneat.dashboards.routes.customDashboardRoutes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.events.routes.apiRoutes
 import com.moneat.events.routes.ingestRoutes
-import com.moneat.events.routes.releaseRoutes
-import com.moneat.events.routes.telemetryIngestRoutes
-import com.moneat.incident.routes.incidentProviderRoutes
-import com.moneat.llm.routes.llmIngestRoutes
-import com.moneat.llm.routes.llmRoutes
-import com.moneat.logs.routes.logIngestRoutes
-import com.moneat.logs.routes.logRoutes
-import com.moneat.monitor.routes.infraRoutes
-import com.moneat.monitor.routes.monitorRoutes
-import com.moneat.org.routes.adminRoutes
-import com.moneat.org.routes.orgManagementRoutes
-import com.moneat.otlp.routes.otlpMetricsRoutes
-import com.moneat.otlp.routes.otlpTraceRoutes
-import com.moneat.statuspage.routes.statusPageRoutes
-import com.moneat.summary.routes.summaryRoutes
-import com.moneat.uptime.routes.uptimeRoutes
+import com.moneat.monitoring.OperationalMetrics
+import com.moneat.notifications.routes.pushDeviceRoutes
+import com.moneat.utils.suspendRunCatching
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.plugins.ratelimit.RateLimitName
 import io.ktor.server.plugins.ratelimit.rateLimit
+import io.ktor.server.request.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import com.moneat.utils.suspendRunCatching
 
 @Serializable
 data class HealthResponse(
@@ -72,33 +56,19 @@ data class FeaturesResponse(
 )
 
 private suspend fun respondWithFullHealth(call: io.ktor.server.application.ApplicationCall) {
-    val postgresStatus =
-        suspendRunCatching {
-            transaction {
-                exec("SELECT phone_number FROM users LIMIT 1")
-                exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
-            }
-            "ok"
-        }.getOrElse { _ ->
-            "error"
+    val postgresStatus = dependencyStatus("postgres") {
+        transaction {
+            exec("SELECT phone_number FROM users LIMIT 1")
+            exec("SELECT pending_meter_batch_id, pending_meter_batch_units FROM subscriptions LIMIT 1")
         }
-    val clickhouseStatus =
-        suspendRunCatching {
-            if (ClickHouseClient.ping()) "ok" else "error"
-        }.getOrElse { _ ->
-            "error"
-        }
-    val redisStatus =
-        suspendRunCatching {
-            if (RedisConfig.isConnected()) {
-                RedisConfig.sync().ping()
-                "ok"
-            } else {
-                "error"
-            }
-        }.getOrElse { _ ->
-            "error"
-        }
+        true
+    }
+    val clickhouseStatus = dependencyStatus("clickhouse") {
+        ClickHouseClient.ping()
+    }
+    val redisStatus = dependencyStatus("redis") {
+        RedisConfig.isConnected() && RedisConfig.sync().ping().equals("PONG", ignoreCase = true)
+    }
     val ingestQueueDepth =
         suspendRunCatching {
             if (RedisConfig.isConnected()) {
@@ -106,6 +76,7 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
                     call.application.environment.config
                         .property("ingest.queueKey")
                         .getString()
+                OperationalMetrics.registerQueue("Event", queueKey, "primary")
                 RedisConfig.sync().llen(queueKey)
             } else {
                 0L
@@ -122,7 +93,29 @@ private suspend fun respondWithFullHealth(call: io.ktor.server.application.Appli
     }
 }
 
+private suspend fun dependencyStatus(
+    dependency: String,
+    check: suspend () -> Boolean,
+): String {
+    val startedAt = System.nanoTime()
+    val result = suspendRunCatching { check() }
+    val durationSeconds = (System.nanoTime() - startedAt).toDouble() / NANOS_PER_SECOND
+    return result.fold(
+        onSuccess = { healthy ->
+            OperationalMetrics.recordDependencyHealth(dependency, healthy, durationSeconds)
+            if (healthy) "ok" else "error"
+        },
+        onFailure = { cause ->
+            OperationalMetrics.recordDependencyHealth(dependency, healthy = false, durationSeconds, cause)
+            "error"
+        }
+    )
+}
+
 private val routingLogger = mu.KotlinLogging.logger("Routing")
+private const val METRICS_CONTENT_TYPE = "text/plain; version=0.0.4"
+private const val METRICS_SCRAPE_TOKEN = "metrics.scrapeToken"
+private const val NANOS_PER_SECOND = 1_000_000_000.0
 
 fun Application.configureRouting() {
     routing {
@@ -167,84 +160,75 @@ fun Application.configureRouting() {
             respondWithFullHealth(call)
         }
 
+        get("/metrics") {
+            respondWithOperationalMetrics(call)
+        }
+
+        get("/metrics/") {
+            respondWithOperationalMetrics(call)
+        }
+
         routingLogger.info { "Registering ingestion routes..." }
         // Sentry-compatible ingestion endpoints (rate limited per project key)
         rateLimit(RateLimitName("ingestion")) {
             ingestRoutes()
-            llmIngestRoutes()
+            FeatureRegistry.registerIngestionRoutes(this)
         }
         routingLogger.info { "Ingestion routes registered" }
 
-        // Telemetry pulse receiver — rate-limited by IP (unauthenticated, anonymous heartbeats)
-        rateLimit(RateLimitName("telemetry")) {
-            telemetryIngestRoutes()
-        }
-
-        // Stripe webhooks
-        stripeWebhookRoutes()
-
         // Dashboard API endpoints
         apiRoutes()
+        pushDeviceRoutes()
 
-        // LLM observability API endpoints
-        llmRoutes()
-
-        // Authentication endpoints
-        authRoutes()
-
-        // Auth token management endpoints
-        authTokenRoutes()
-
-        // Release and source map endpoints
-        releaseRoutes()
-
-        // Admin dashboard endpoints
-        adminRoutes()
-
-        // Server monitoring endpoints
-        monitorRoutes()
-
-        // Infra endpoints (containers, processes — deduplicated)
-        infraRoutes()
-
-        // Logging ingestion and query endpoints
-        rateLimit(RateLimitName("log-ingestion")) {
-            logIngestRoutes()
-        }
-        logRoutes()
-
-        // OTLP trace and metrics ingestion endpoints
-        rateLimit(RateLimitName("otlp-ingestion")) {
-            otlpTraceRoutes()
-            otlpMetricsRoutes()
-        }
-
-        // Uptime monitoring endpoints
-        uptimeRoutes()
-
-        // Status page endpoints
-        statusPageRoutes()
-
-        // Summary and report endpoints
-        summaryRoutes()
-
-        // Incident provider integration endpoints
-        incidentProviderRoutes()
-
-        // Organization team management endpoints
-        orgManagementRoutes()
-
-        routingLogger.info { "Registering enterprise routes..." }
-        // Enterprise modules (SSO, On-Call, etc.) — registered via ServiceLoader
+        routingLogger.info { "Registering feature routes..." }
+        // Feature modules (SSO, MCP, On-Call, etc.) — registered via ServiceLoader
         FeatureRegistry.registerRoutes(this)
-        routingLogger.info { "Enterprise routes registered" }
-
-        // AI chat assistant endpoints
-        aiChatRoutes()
-
-        // Custom dashboard builder endpoints
-        customDashboardRoutes()
+        routingLogger.info { "Feature routes registered" }
 
         routingLogger.info { "All routes registered successfully" }
     }
+}
+
+fun Application.configureHealthRouting() {
+    routing {
+        get("/") {
+            call.respondText("Moneat worker")
+        }
+
+        get("/health/live") {
+            call.respond(mapOf("status" to "ok"))
+        }
+
+        get("/health/ready") {
+            respondWithFullHealth(call)
+        }
+
+        get("/health") {
+            respondWithFullHealth(call)
+        }
+
+        get("/metrics") {
+            respondWithOperationalMetrics(call)
+        }
+
+        get("/metrics/") {
+            respondWithOperationalMetrics(call)
+        }
+    }
+}
+
+private suspend fun respondWithOperationalMetrics(call: io.ktor.server.application.ApplicationCall) {
+    val scrapeToken = call.application.environment.config.propertyOrNull(METRICS_SCRAPE_TOKEN)?.getString()
+    if (!scrapeToken.isNullOrBlank()) {
+        val authorization = call.request.header(HttpHeaders.Authorization)
+        if (authorization != "Bearer $scrapeToken") {
+            call.respondText("Unauthorized", status = HttpStatusCode.Unauthorized)
+            return
+        }
+    }
+
+    call.respondText(
+        OperationalMetrics.scrape(),
+        ContentType.parse(METRICS_CONTENT_TYPE)
+    )
 }

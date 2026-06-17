@@ -5,7 +5,10 @@ description: Step-by-step guide to migrate from highlight.io to Moneat using an 
 
 # Migrate from Highlight.io
 
-Moneat is Sentry-protocol compatible, which means migrating from highlight.io is straightforward: swap the SDK and point your DSN at Moneat. This guide provides a copy-paste AI prompt you can use to automate the migration across your codebase.
+Moneat supports Sentry-compatible SDKs, OpenTelemetry ingestion, and Product Analytics. Migrating
+from highlight.io usually starts by swapping Highlight error/replay instrumentation to a
+Sentry-compatible SDK and pointing the DSN at Moneat, then mapping analytics and metrics calls to
+Moneat's native ingestion paths.
 
 ## Overview
 
@@ -14,11 +17,13 @@ The migration involves:
 1. **Replacing packages** - swap `@highlight-run/*` / `highlight.io` packages for the equivalent `@sentry/*` packages
 2. **Updating initialization** - convert `H.init(projectID, opts)` to `Sentry.init({ dsn, ... })`
 3. **Converting API calls** - map highlight.io methods to their Sentry equivalents
-4. **Updating environment variables** - replace `HIGHLIGHT_PROJECT_ID` with a Sentry DSN
+4. **Updating environment variables** - replace `HIGHLIGHT_PROJECT_ID` with a Sentry-compatible DSN
+5. **Mapping analytics and metrics** - use Moneat Product Analytics and OTLP metrics instead of dropping those signals
 
 ## Finding Your DSN
 
-Before running the migration, grab your Moneat DSN from **Projects → [Your Project] → Settings**:
+Before running the migration, grab your Moneat DSN from **Setup → Services & SDKs** or
+**Service settings** page:
 
 ```text
 https://<public_key>@api.moneat.io/api/<project_id>
@@ -72,7 +77,7 @@ In `package.json`, replace:
 | `@highlight-run/cloudflare`     | `@sentry/cloudflare`                       |
 | `@highlight-run/hono`           | `@sentry/node` (Hono middleware included)  |
 | `highlight.run`                 | `@sentry/browser`                          |
-| `@highlight-run/opentelemetry`  | `@sentry/opentelemetry`                    |
+| `@highlight-run/opentelemetry`  | `@sentry/opentelemetry` or direct OTLP export to Moneat |
 
 After editing `package.json`, run the appropriate install command (`npm install`, `yarn`, or `pnpm install`).
 
@@ -426,7 +431,8 @@ Sentry.startSpan({ name: 'my-span' }, async () => { /* work */ });
 ```ts
 // Old
 H.track('button_clicked', { buttonId: 'cta' });
-// TODO: No direct Sentry equivalent. Use a custom analytics tool or Sentry.captureMessage() as a workaround.
+// New - Moneat Product Analytics
+moneat.track('button_clicked', { buttonId: 'cta' });
 
 // Old
 const url = await H.getSessionURL();
@@ -436,7 +442,7 @@ const url = await H.getSessionURL();
 H.recordMetric('latency', 42);
 H.recordCount('requests', 1);
 H.recordHistogram('response_size', 1024);
-// TODO: Sentry does not have a built-in metrics API equivalent for these calls. Consider using a dedicated metrics service.
+// TODO: Map these to OpenTelemetry metrics and export them to Moneat's OTLP metrics endpoint.
 
 // Old
 H.start();
@@ -559,9 +565,9 @@ with sentry_sdk.start_span(op='task', description='do_work'):
 
 Add the following TODO comments wherever these features were used, as they have no direct Sentry equivalent:
 
-- **`H.track(event, metadata)`** - Sentry does not have a client-side event tracking API. Use `Sentry.captureMessage()` as a rough substitute, or integrate a dedicated analytics tool (e.g. PostHog, Amplitude).
+- **`H.track(event, metadata)`** - Map to Moneat Product Analytics with `moneat.track()` or `trackEvent()`.
 - **`H.getSessionURL()`** - Sentry Replay does not expose a public URL for the current session. Remove or replace.
-- **`H.recordMetric()` / `H.recordCount()` / `H.recordHistogram()`** - No direct SDK equivalent. Consider StatsD, Prometheus, or a dedicated metrics service.
+- **`H.recordMetric()` / `H.recordCount()` / `H.recordHistogram()`** - Map to OpenTelemetry metrics and export to Moneat.
 - **`H.parseHeaders()` `sessionId` / `requestId`** - Sentry uses trace IDs instead of highlight-specific session/request IDs. Update downstream code to use `Sentry.getActiveSpan()` if needed.
 - **Session replay network body recording** - Configure via `replayIntegration({ networkDetailAllowUrls, networkCaptureBodies: true })` in the browser SDK.
 ````
@@ -578,13 +584,13 @@ Quick-reference tables for the most common migrations.
 |---|---|
 | `H.init(projectID, opts)` | `Sentry.init({ dsn, integrations: [replayIntegration(), browserTracingIntegration()], ... })` |
 | `H.identify(id, metadata)` | `Sentry.setUser({ id, ...metadata })` |
-| `H.track(event, metadata)` | N/A No direct equivalent - see TODO note above |
+| `H.track(event, metadata)` | `moneat.track(event, metadata)` or `trackEvent(event, metadata)` |
 | `H.consumeError(err, msg, payload)` | `Sentry.captureException(err, { extra: { message: msg, ...payload } })` |
 | `H.error(msg, payload)` | `Sentry.captureMessage(msg, { level: 'error', extra: payload })` |
 | `H.addSessionFeedback({...})` | `Sentry.captureFeedback({...})` |
 | `H.startSpan(name, opts, ctx, fn)` | `Sentry.startSpan({ name, ...opts }, fn)` |
 | `H.getSessionURL()` | N/A No equivalent |
-| `H.recordMetric/Count/Histogram()` | N/A No equivalent |
+| `H.recordMetric/Count/Histogram()` | OpenTelemetry metrics exported to Moneat |
 
 ### Node.js
 

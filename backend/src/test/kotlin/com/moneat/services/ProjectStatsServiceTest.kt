@@ -104,10 +104,11 @@ class ProjectStatsServiceTest {
             exchange.respond(200, customResponse, TEXT_PLAIN)
         } else {
             val body = when {
-                query.contains("count() as total") && query.contains("event_type = 'error'") &&
-                    !query.contains("DISTINCT") && !query.contains("issues") ->
+                query.contains("sum(event_count) as total") &&
+                    query.contains("event_project_rollup_1h") ->
                     """{"total":$totalEvents}"""
-                query.contains("count(DISTINCT issue_id) as total") ->
+                query.contains("uniqExact(issue_id) as total") &&
+                    query.contains("event_issue_rollup_1h") ->
                     """{"total":$totalIssues}"""
                 query.contains("status = 'unresolved'") && query.contains("issues FINAL") ->
                     """{"total":$unresolvedIssues}"""
@@ -117,19 +118,19 @@ class ProjectStatsServiceTest {
                     """{"time":"2026-01-01T00:00:00Z","count":5}"""
                 query.contains("toStartOfInterval") ->
                     """{"time":"2026-01-01T00:00:00Z","count":10}"""
-                query.contains("level, count()") ->
+                query.contains("level, sum(event_count)") ->
                     """{"level":"error","count":30}
 {"level":"warning","count":12}"""
-                query.contains("platform, count()") ->
+                query.contains("platform, sum(event_count)") ->
                     """{"platform":"kotlin","count":25}"""
-                query.contains("browser_name, count()") ->
+                query.contains("browser_name, sum(event_count)") ->
                     """{"browser_name":"Chrome","count":20}"""
-                query.contains("environment, count()") ->
+                query.contains("environment, sum(event_count)") ->
                     """{"environment":"production","count":35}"""
                 query.contains("status, count()") && query.contains("GROUP BY status") ->
                     """{"status":"unresolved","count":3}
 {"status":"resolved","count":2}"""
-                query.contains("issue_id, any(message) as title") ->
+                query.contains("issue_id, any(title) as title") ->
                     """{"issue_id":"iss-1","title":"NullPointerException","count":15}"""
                 query.contains("release as version") ->
                     """{"version":"1.0.0","timestamp":"2026-01-01T12:00:00.000Z"}"""
@@ -253,9 +254,10 @@ class ProjectStatsServiceTest {
             val query = exchange.requestBodyText()
             queries += query
             val body = when {
-                query.contains("count() as total") && !query.contains("DISTINCT") && !query.contains("issues") ->
+                query.contains("sum(event_count) as total") &&
+                    query.contains("event_project_rollup_1h") ->
                     """{"total":10}"""
-                query.contains("count(DISTINCT issue_id)") ->
+                query.contains("uniqExact(issue_id)") ->
                     """{"total":2}"""
                 query.contains("status = 'unresolved'") ->
                     """{"total":1}"""

@@ -1,0 +1,9 @@
+title = "Moneat gitleaks configuration"
+
+[allowlist]
+description = "Ignore vendored and generated dependency trees."
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)build/''',
+  '''(^|/)dist/''',
+]

@@ -27,7 +27,7 @@ internal suspend fun checkFreshLlmDataCount(): Long {
         """
         SELECT count() as cnt
         FROM llm_generations
-        WHERE project_id IN ($P1, $P2, $P3)
+        WHERE service_id IN ($P1, $P2, $P3)
             AND timestamp >= now() - INTERVAL 12 HOUR
         """.trimIndent()
     return suspendRunCatching {
@@ -44,7 +44,7 @@ internal suspend fun checkFreshLlmDataCount(): Long {
 }
 internal suspend fun purgeLlmDemoData() {
     suspendRunCatching {
-        ClickHouseClient.execute("ALTER TABLE llm_generations DELETE WHERE project_id IN ($P1, $P2, $P3)")
+        ClickHouseClient.execute("ALTER TABLE llm_generations DELETE WHERE service_id IN ($P1, $P2, $P3)")
     }.onFailure { logger.warn { "Purge llm_generations failed (non-fatal): ${it.message}" } }
 
     // SummingMergeTree materialized rows need explicit cleanup.
@@ -57,6 +57,7 @@ internal suspend fun reseedLlmGenerations() {
         """
         INSERT INTO llm_generations (
             generation_id,
+            service_id,
             project_id,
             trace_id,
             span_id,
@@ -89,6 +90,11 @@ internal suspend fun reseedLlmGenerations() {
         )
         SELECT
             generateUUIDv4() AS generation_id,
+            CASE intDiv(number, 4) % 3
+                WHEN 0 THEN $P1
+                WHEN 1 THEN $P2
+                ELSE $P3
+            END AS service_id,
             CASE intDiv(number, 4) % 3
                 WHEN 0 THEN $P1
                 WHEN 1 THEN $P2

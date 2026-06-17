@@ -27,24 +27,27 @@ import com.moneat.dashboards.models.FilterOp
 import com.moneat.dashboards.models.GroupByType
 import com.moneat.dashboards.models.QueryDsl
 import com.moneat.dashboards.models.TimeRangeDef
+import com.moneat.logs.services.LogQueryParser
 import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils
+import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
+import com.moneat.utils.TimeConstants.MILLIS_PER_HOUR
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.collections.filter
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.TimeConstants.MILLIS_PER_DAY
-import com.moneat.utils.TimeConstants.MILLIS_PER_HOUR
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
+private const val CUSTOM_DATA_SOURCE_PREFIX = "custom:"
 
 class DashboardQueryEngine {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val json = Json { ignoreUnknownKeys = true }
+    private val logQueryParser = LogQueryParser()
 
     private val allowedTables = setOf(
         "events",
@@ -75,6 +78,13 @@ class DashboardQueryEngine {
         )
 
         private val TIME_RANGE_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
+        private val ORG_SCOPED_TABLES = setOf("logs", "metrics", "containers")
+
+        /** Multi-select variable values arrive comma-joined (e.g. "pod-a,pod-b"). */
+        private const val MULTI_VALUE_SEPARATOR = ","
+
+        /** Filter operators a multi-value selection can be expanded into an IN / NOT IN list. */
+        private val MULTI_EXPANDABLE_OPS = setOf(FilterOp.EQ, FilterOp.IN, FilterOp.NEQ, FilterOp.NOT_IN)
 
         private const val MILLIS_PER_MINUTE = 60_000L
         private const val MILLIS_PER_WEEK = 604_800_000L
@@ -89,6 +99,22 @@ class DashboardQueryEngine {
         private const val MAX_QUERY_RESULT_LIMIT = 10000
         private const val EPOCH_MS_TO_SECONDS_DIVISOR = 1000.0
         private const val DATETIME64_MILLIS_PRECISION = 3
+        private const val QUERY_PREVIEW_LENGTH = 80
+        private const val LOGS_TABLE_NAME = "logs"
+        private val TEMPLATE_DATA_SOURCE_MARKERS = mapOf(
+            "__prometheus" to "prometheus",
+            "__cloudwatch" to "cloudwatch",
+            "__elasticsearch" to "elasticsearch",
+            "__graphite" to "graphite",
+            "__influxdb" to "influxdb",
+            "__loki" to "loki",
+            "__postgresql" to "postgresql",
+            "__postgres" to "postgresql",
+            "__redis" to "redis"
+        )
+
+        fun templateDataSourceType(marker: String?): String =
+            marker?.let(TEMPLATE_DATA_SOURCE_MARKERS::get) ?: "prometheus"
 
         fun resolveTimeInterval(from: String, to: String): String {
             val rangeMs = parseRelativeTime(to) - parseRelativeTime(from)
@@ -128,46 +154,113 @@ class DashboardQueryEngine {
      */
     fun applyVariables(dsl: QueryDsl, variables: Map<String, String>): QueryDsl {
         if (variables.isEmpty()) return dsl
-
-        // Sort by name length descending to prevent greedy matching
-        // (e.g., $instance matching inside $instance_id)
+        // Sort by name length descending to prevent greedy matching ($instance vs $instance_id).
         val sortedVars = variables.entries.sortedByDescending { it.key.length }
-
-        fun substituteVars(input: String?): String? {
-            if (input == null) return null
-            var result: String = input
-            for ((name, value) in sortedVars) {
-                // Grafana's $__all means "match all" — use regex wildcard in PromQL
-                val substitution = if (value == "\$__all") ".*" else ClickHouseSqlUtils.escapeSql(value)
-                result = result
-                    .replace("\${$name}", substitution)
-                // Use word-boundary-aware replacement for bare $name
-                result = Regex("""\$${Regex.escape(name)}(?![a-zA-Z0-9_])""")
-                    .replace(result, Regex.escapeReplacement(substitution))
-            }
-            // When $__all produced .*, upgrade exact match to regex match in PromQL label selectors
-            if (result.contains("=\".*\"")) {
-                result = result.replace("=\".*\"", "=~\".*\"")
-            }
-            return result
-        }
-
         return dsl.copy(
-            filters = dsl.filters.map { f ->
-                f.copy(
-                    value = substituteVars(f.value),
-                    values = f.values?.map { substituteVars(it) ?: it }
-                )
-            },
-            rawQuery = substituteVars(dsl.rawQuery)
+            filters = dsl.filters.flatMap { expandFilterVariables(it, variables, sortedVars) },
+            rawQuery = substituteVariables(dsl.rawQuery, sortedVars)
         )
+    }
+
+    /** Name of the variable a value references outright ("$name" / "${name}"), if any. */
+    private fun referencedVariable(input: String?, sortedVars: List<Map.Entry<String, String>>): String? {
+        val trimmed = input?.trim() ?: return null
+        return sortedVars.firstOrNull { (name, _) -> trimmed == "\$$name" || trimmed == "\${$name}" }?.key
+    }
+
+    private fun multiValues(raw: String): List<String> =
+        raw.split(MULTI_VALUE_SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }
+
+    private fun variableSubstitution(value: String): String = when {
+        value == "\$__all" -> ".*"
+        value.contains(MULTI_VALUE_SEPARATOR) ->
+            "(" + multiValues(value).joinToString("|") { ClickHouseSqlUtils.escapeSql(it) } + ")"
+        else -> ClickHouseSqlUtils.escapeSql(value)
+    }
+
+    /** Inline substitution for embedded references and raw queries. */
+    private fun substituteVariables(input: String?, sortedVars: List<Map.Entry<String, String>>): String? {
+        if (input == null) return null
+        var result: String = input
+        for ((name, value) in sortedVars) {
+            val substitution = variableSubstitution(value)
+            result = result.replace("\${$name}", substitution)
+            // Word-boundary-aware replacement for bare $name.
+            result = Regex("""\$${Regex.escape(name)}(?![a-zA-Z0-9_])""")
+                .replace(result, Regex.escapeReplacement(substitution))
+        }
+        // When a wildcard was produced, upgrade exact match to regex match in PromQL selectors.
+        if (result.contains("=\".*\"")) {
+            result = result.replace("=\".*\"", "=~\".*\"")
+        }
+        return result
+    }
+
+    private fun multiSelectOp(op: FilterOp): FilterOp =
+        if (op == FilterOp.NEQ || op == FilterOp.NOT_IN) FilterOp.NOT_IN else FilterOp.IN
+
+    /** Expands a pure variable-reference filter for multi-value / "All" selections. */
+    private fun expandFilterVariables(
+        filter: FilterDef,
+        variables: Map<String, String>,
+        sortedVars: List<Map.Entry<String, String>>,
+    ): List<FilterDef> {
+        val varName = referencedVariable(filter.value, sortedVars)
+        val rawValue = varName?.let { variables[it] }
+        return when {
+            // "All" selected on a pure reference: drop the constraint (match everything).
+            rawValue == "\$__all" -> emptyList()
+            // Several values selected: turn equality/membership into an IN / NOT IN list.
+            rawValue != null && filter.op in MULTI_EXPANDABLE_OPS && multiValues(rawValue).size > 1 ->
+                listOf(filter.copy(op = multiSelectOp(filter.op), value = null, values = multiValues(rawValue)))
+            else ->
+                listOf(
+                    filter.copy(
+                        value = substituteVariables(filter.value, sortedVars),
+                        values = filter.values?.map { substituteVariables(it, sortedVars) ?: it },
+                    )
+                )
+        }
+    }
+
+    fun isTemplateDataSourceMarker(dataSource: String): Boolean =
+        dataSource in TEMPLATE_DATA_SOURCE_MARKERS
+
+    fun resolveTemplateDataSource(
+        dsl: QueryDsl,
+        orgId: Long,
+        dataSourceService: CustomDataSourceService,
+        logMissing: Boolean = true,
+    ): QueryDsl {
+        val sourceType = TEMPLATE_DATA_SOURCE_MARKERS[dsl.dataSource] ?: return dsl
+        val sources = dataSourceService.listDataSources(orgId)
+        val matchingSource = sources.firstOrNull {
+            it.enabled && it.sourceType.equals(sourceType, ignoreCase = true)
+        }
+        if (matchingSource == null && logMissing) {
+            logger.warn {
+                val sourcesList = sources.map { "${it.id}:${it.sourceType}" }
+                val shortQuery = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH) ?: ""
+                "No enabled $sourceType datasource found for org $orgId (${sources.size} sources: $sourcesList), " +
+                    "cannot resolve ${dsl.dataSource} for rawQuery=$shortQuery"
+            }
+        }
+        if (matchingSource == null) {
+            return dsl
+        }
+        val rawQueryPreview = dsl.rawQuery?.take(QUERY_PREVIEW_LENGTH)
+        logger.debug {
+            "Resolved ${dsl.dataSource} -> custom:${matchingSource.id} for rawQuery=$rawQueryPreview"
+        }
+        return dsl.copy(dataSource = "custom:${matchingSource.id}")
     }
 
     fun buildQuery(
         dsl: QueryDsl,
         projectId: Long,
         demoEpochMs: Long? = null,
-        retentionDays: Int = 90
+        retentionDays: Int = 90,
+        orgId: Long? = null
     ): String {
         val dataSource = DataSource.fromString(dsl.dataSource)
             ?: throw IllegalArgumentException("Unknown data source: ${dsl.dataSource}")
@@ -180,7 +273,7 @@ class DashboardQueryEngine {
         val tsCol = TIMESTAMP_COLUMNS[dataSource.tableName] ?: "timestamp"
 
         val selectClauses = buildSelectClauses(dsl, tsCol)
-        val whereClauses = buildWhereClauses(dsl, projectId, tsCol, demoEpochMs, retentionDays)
+        val whereClauses = buildWhereClauses(dsl, projectId, tsCol, demoEpochMs, retentionDays, orgId)
         val groupByClauses = buildGroupByClauses(dsl)
         val orderByClause = buildOrderByClause(dsl)
 
@@ -247,19 +340,39 @@ class DashboardQueryEngine {
         projectId: Long,
         tsCol: String,
         demoEpochMs: Long?,
-        retentionDays: Int
+        retentionDays: Int,
+        orgId: Long? = null
     ): List<String> {
         val clauses = mutableListOf<String>()
 
-        clauses.add(ClickHouseQueryUtils.projectIdClause(projectId))
+        clauses.add(buildScopeClause(dsl, projectId, orgId))
         clauses.add(ClickHouseQueryUtils.timestampRetentionClause(tsCol, retentionDays, demoEpochMs))
         clauses.addAll(buildTimeRangeClauses(dsl.timeRange, tsCol, demoEpochMs))
 
         for (filter in dsl.filters) {
             clauses.add(buildFilterClause(filter))
         }
+        buildLogRawQueryClause(dsl)?.let { clauses.add(it) }
 
         return clauses
+    }
+
+    internal fun buildLogRawQueryClause(dsl: QueryDsl): String? {
+        val rawQuery = dsl.rawQuery?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        if (!dsl.isLogsDataSource()) return null
+        val root = logQueryParser.parse(rawQuery).rootNode ?: return null
+        val condition = logQueryParser.toClickHouseSql(root) { value -> ClickHouseSqlUtils.escapeSql(value) }
+        return condition
+            .takeIf { it.isNotBlank() && it != "1=1" }
+            ?.let { "($it)" }
+    }
+
+    internal fun buildScopeClause(dsl: QueryDsl, projectId: Long, orgId: Long?): String {
+        val tableName = DataSource.fromString(dsl.dataSource)?.tableName
+        if (orgId != null && tableName != null && tableName in ORG_SCOPED_TABLES) {
+            return ClickHouseQueryUtils.orgIdClause(orgId)
+        }
+        return ClickHouseQueryUtils.projectIdClause(projectId)
     }
 
     internal fun buildTimeRangeClauses(
@@ -353,14 +466,15 @@ class DashboardQueryEngine {
         dsl: QueryDsl,
         projectId: Long,
         demoEpochMs: Long? = null,
-        retentionDays: Int = 90
+        retentionDays: Int = 90,
+        orgId: Long? = null
     ): List<Map<String, JsonElement>> {
-        if (dsl.rawQuery != null) {
+        if (dsl.rawQuery != null && !dsl.isLogsDataSource()) {
             logger.warn { "Skipping raw query execution for security - use query DSL" }
             return emptyList()
         }
 
-        val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays)
+        val sql = buildQuery(dsl, projectId, demoEpochMs, retentionDays, orgId)
         logger.debug {
             "Executing dashboard query dataSource=${dsl.dataSource} " +
                 "metrics=${dsl.metrics.size} filters=${dsl.filters.size} groupBy=${dsl.groupBy.size}"
@@ -393,7 +507,7 @@ class DashboardQueryEngine {
         val builtIn = getBuiltInDataSources()
         val custom = customSources.filter { it.enabled }.map { src ->
             DataSourceInfo(
-                name = "custom:${src.id}",
+                name = "$CUSTOM_DATA_SOURCE_PREFIX${src.id}",
                 label = "${src.name} (${src.sourceType})",
                 fields = emptyList() // Fields fetched on demand via schema endpoint
             )
@@ -401,10 +515,13 @@ class DashboardQueryEngine {
         return builtIn + custom
     }
 
-    fun isCustomDataSource(dataSource: String): Boolean = dataSource.startsWith("custom:")
+    fun isCustomDataSource(dataSource: String): Boolean = dataSource.startsWith(CUSTOM_DATA_SOURCE_PREFIX)
 
-    fun parseCustomDataSourceId(dataSource: String): Long? =
-        if (dataSource.startsWith("custom:")) dataSource.removePrefix("custom:").toLongOrNull() else null
+    fun parseCustomDataSourceId(dataSource: String): String? =
+        dataSource.takeIf { it.startsWith(CUSTOM_DATA_SOURCE_PREFIX) }?.removePrefix(CUSTOM_DATA_SOURCE_PREFIX)
+
+    private fun QueryDsl.isLogsDataSource(): Boolean =
+        DataSource.fromString(dataSource)?.tableName == LOGS_TABLE_NAME
 
     private fun getBuiltInDataSources(): List<DataSourceInfo> = listOf(
         DataSourceInfo(

@@ -20,6 +20,8 @@ import {type Layout, type LayoutItem, Responsive as ResponsiveGridLayout} from '
 import type {CreateWidgetRequest, DashboardWidget, TimeRangeDef} from '@/lib/api'
 import {api} from '@/lib/api'
 import {WidgetRenderer} from './WidgetRenderer'
+import {isOverviewWidgetType} from './extendedWidgetTypes'
+import {overviewWidgetDef} from '@/components/overview/overviewWidgetTypes'
 import {Bell, ChevronDown, ChevronRight, GripVertical, Trash2} from 'lucide-react'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
@@ -27,24 +29,53 @@ import 'react-resizable/css/styles.css'
 const GRID_BREAKPOINTS = {lg: 1200, md: 996, sm: 768, xs: 480}
 const GRID_COLS = {lg: 12, md: 12, sm: 12, xs: 6}
 const GRID_MARGIN: [number, number] = [12, 12]
+const LEGACY_SMALL_WIDGET_TYPES = new Set(['stat', 'gauge', 'bargauge'])
 
 interface DashboardGridProps {
   widgets: DashboardWidget[]
   isEditing: boolean
-  dashboardId: number
-  projectId?: number
+  dashboardId: string
+  projectId?: string
   timeRange: TimeRangeDef
   autoRefresh: boolean
   variableValues?: Record<string, string>
   onLayoutChange: (widgets: CreateWidgetRequest[]) => void
   onWidgetClick: (widget: DashboardWidget) => void
-  onWidgetDelete: (widgetId: number) => void
+  onWidgetDelete: (widgetId: string) => void
 }
 
-function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
+type WidgetCardAlert = {
+  widget_id: string
+  enabled: boolean
+  last_triggered_at: string | null
+  last_triggered_level?: string | null
+  alert_priority: string | null
+}
+
+type WidgetCardProps = Readonly<{
+  widget: DashboardWidget
+  isEditing: boolean
+  dashboardId: string
+  projectId?: string
+  timeRange: TimeRangeDef
+  autoRefresh: boolean
+  variableValues?: Record<string, string>
+  alerts: WidgetCardAlert[]
+  onWidgetClick: (widget: DashboardWidget) => void
+  onWidgetDelete: (widgetId: string) => void
+}>
+
+function widgetMinHeight(widgetType: DashboardWidget['widget_type']): number {
+  if (widgetType === 'section') return 1
+  if (isOverviewWidgetType(widgetType)) return overviewWidgetDef(widgetType)?.minH ?? 4
+  if (LEGACY_SMALL_WIDGET_TYPES.has(widgetType)) return 4
+  return 6
+}
+
+function getSectionMembership(widgets: DashboardWidget[]): Map<string, string> {
   const sorted = [...widgets].sort((a, b) => a.grid_y - b.grid_y || a.sort_order - b.sort_order)
-  const membership = new Map<number, number>()
-  let currentSectionId: number | null = null
+  const membership = new Map<string, string>()
+  let currentSectionId: string | null = null
   for (const w of sorted) {
     if (w.widget_type === 'section') {
       currentSectionId = w.id
@@ -53,6 +84,17 @@ function getSectionMembership(widgets: DashboardWidget[]): Map<number, number> {
     }
   }
   return membership
+}
+
+function alertDotColor(
+  firing: boolean,
+  level: string | null | undefined,
+  priority: string | null | undefined,
+): string {
+  if (!firing) return 'bg-muted-foreground/40'
+  if (level === 'ERROR') return 'bg-danger-solid'
+  if (level === 'WARNING') return 'bg-warning-solid'
+  return priority === 'P0' || priority === 'P1' ? 'bg-danger-solid' : 'bg-warning-solid'
 }
 
 export function DashboardGrid({
@@ -69,8 +111,8 @@ export function DashboardGrid({
 }: DashboardGridProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(1200)
-  const [collapsedSections, setCollapsedSections] = useState<Set<number>>(() => {
-    const initial = new Set<number>()
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
     for (const w of widgets) {
       if (w.widget_type === 'section' && w.display_config?.collapsed === 'true') {
         initial.add(w.id)
@@ -118,7 +160,7 @@ export function DashboardGrid({
     })
   }, [widgets, collapsedSections, sectionMembership])
 
-  const toggleSection = useCallback((sectionId: number) => {
+  const toggleSection = useCallback((sectionId: string) => {
     setCollapsedSections((prev) => {
       const next = new Set(prev)
       if (next.has(sectionId)) {
@@ -137,6 +179,8 @@ export function DashboardGrid({
       w.widget_type !== 'gauge' &&
       w.widget_type !== 'bargauge' &&
       w.widget_type !== 'text' &&
+      w.widget_type !== 'system_status' &&
+      w.widget_type !== 'kpi' &&
       w.grid_h <= 4
     ),
     [visibleWidgets]
@@ -160,7 +204,7 @@ export function DashboardGrid({
           isDraggable: isEditing,
           isResizable: isEditing && w.widget_type !== 'section',
           minW: w.widget_type === 'section' ? 12 : 2,
-          minH: w.widget_type === 'section' ? 1 : (['stat', 'gauge', 'bargauge'].includes(w.widget_type) ? 4 : 6),
+          minH: widgetMinHeight(w.widget_type),
           maxH: w.widget_type === 'section' ? 1 : undefined,
         }
       })
@@ -191,7 +235,7 @@ export function DashboardGrid({
         const layoutItem = newLayout.find((l) => l.i === String(widget.id))
         // Reverse the scaling transform before persisting canonical coordinates
         return {
-          ...(widget.id > 0 ? {id: widget.id} : {}),
+          id: widget.id,
           title: widget.title,
           widget_type: widget.widget_type,
           grid_x: layoutItem?.x ?? widget.grid_x,
@@ -219,7 +263,7 @@ export function DashboardGrid({
   }
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="relative z-0 isolate w-full">
       <ResponsiveGridLayout
         className="layout"
         layouts={{lg: layout}}
@@ -329,18 +373,42 @@ function WidgetCard({
   alerts,
   onWidgetClick,
   onWidgetDelete,
-}: {
-  widget: DashboardWidget
-  isEditing: boolean
-  dashboardId: number
-  projectId?: number
-  timeRange: TimeRangeDef
-  autoRefresh: boolean
-  variableValues?: Record<string, string>
-  alerts: {widget_id: number; enabled: boolean; last_triggered_at: string | null; incident_severity: string | null}[]
-  onWidgetClick: (widget: DashboardWidget) => void
-  onWidgetDelete: (widgetId: number) => void
-}) {
+}: WidgetCardProps) {
+  // Overview widgets are full-bleed: they render their own panel chrome, so the
+  // grid card stays chromeless and only overlays drag/delete affordances in edit mode.
+  if (isOverviewWidgetType(widget.widget_type)) {
+    return (
+      <div className="relative h-full" style={{contain: 'style'}}>
+        {isEditing && (
+          <div className="absolute right-1 top-1 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <div className="drag-handle cursor-grab rounded border bg-background/90 p-1 shadow-sm active:cursor-grabbing">
+              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+            <button
+              type="button"
+              aria-label={`Delete ${widget.title ?? 'widget'}`}
+              title={`Delete ${widget.title ?? 'widget'}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                onWidgetDelete(widget.id)
+              }}
+              className="rounded border bg-background/90 p-1 text-destructive shadow-sm hover:bg-destructive/10"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+        <WidgetRenderer
+          widget={widget}
+          dashboardId={dashboardId}
+          projectId={projectId}
+          timeRange={timeRange}
+          autoRefresh={autoRefresh}
+          variables={variableValues}
+        />
+      </div>
+    )
+  }
   return (
     <div
       className={`h-full rounded-lg border bg-card overflow-visible flex flex-col ${
@@ -369,11 +437,14 @@ function WidgetCard({
           {(() => {
             const widgetAlerts = alerts.filter((a) => a.widget_id === widget.id && a.enabled)
             if (widgetAlerts.length === 0) return null
-            const firing = widgetAlerts.some((a) => a.last_triggered_at)
-            const severity = widgetAlerts.find((a) => a.last_triggered_at)?.incident_severity
-            const dotColor = firing
-              ? severity === 'CRITICAL' || severity === 'HIGH' ? 'bg-red-500' : 'bg-orange-500'
-              : 'bg-muted-foreground/40'
+            const firingAlert = widgetAlerts.reduce<(typeof widgetAlerts)[number] | null>((latest, alert) => {
+              if (!alert.last_triggered_at) return latest
+              if (!latest?.last_triggered_at) return alert
+              return Date.parse(alert.last_triggered_at) > Date.parse(latest.last_triggered_at) ? alert : latest
+            }, null)
+            const firing = firingAlert != null
+            const priority = firingAlert?.alert_priority
+            const dotColor = alertDotColor(firing, firingAlert?.last_triggered_level, priority)
             return (
               <span className="relative shrink-0" title={firing ? `Alert firing` : `${widgetAlerts.length} alert(s) configured`}>
                 <Bell className="h-3 w-3 text-muted-foreground" />

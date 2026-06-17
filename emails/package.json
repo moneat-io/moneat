@@ -11,5 +11,8 @@
   },
   "dependencies": {
     "@maizzle/framework": "^5.0.0"
+  },
+  "overrides": {
+    "markdown-it": "14.2.0"
   }
 }

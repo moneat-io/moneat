@@ -16,9 +16,12 @@
 
 package com.moneat.shared.services
 
-import com.moneat.utils.suspendRunCatching
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Projects
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
+import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,11 +32,18 @@ import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
-import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
+
+private const val PROJECT_ID_COLUMN = "project_id"
+private const val SERVICE_ID_COLUMN = "service_id"
+private const val LLM_GENERATIONS_HOURLY_TABLE = "llm_generations_hourly_mv"
+
+private data class ProjectScopedRetentionTable(
+    val name: String,
+    val timeColumn: String,
+    val idColumn: String = SERVICE_ID_COLUMN
+)
 
 class RetentionBackgroundService(
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService()
@@ -91,6 +101,7 @@ class RetentionBackgroundService(
         val logRetentionByOrg = retentionPolicyService.getLogRetentionDaysByOrganization()
         val replayRetentionByOrg = retentionPolicyService.getReplayRetentionDaysByOrganization()
         val llmRetentionByOrg = retentionPolicyService.getLlmRetentionDaysByOrganization()
+        val apmTraceRetentionByOrg = retentionPolicyService.getApmTraceRetentionDaysByOrganization()
         val analyticsRetentionByOrg = retentionPolicyService.getAnalyticsRetentionDaysByOrganization()
 
         if (retentionByOrg.isEmpty()) {
@@ -130,6 +141,12 @@ class RetentionBackgroundService(
             tableMutationCount += submitLlmDeletes(projectIds, llmRetentionDays)
         }
 
+        // APM trace retention (per-surface, org-scoped)
+        val groupedApmTraceOrgIds = apmTraceRetentionByOrg.entries.groupBy({ it.value }, { it.key })
+        for ((apmTraceRetentionDays, orgIds) in groupedApmTraceOrgIds) {
+            tableMutationCount += submitApmTraceDeletes(orgIds, apmTraceRetentionDays)
+        }
+
         // Analytics retention (per-surface)
         val groupedAnalyticsOrgIds = analyticsRetentionByOrg.entries.groupBy({ it.value }, { it.key })
         for ((analyticsRetentionDays, orgIds) in groupedAnalyticsOrgIds) {
@@ -157,11 +174,11 @@ class RetentionBackgroundService(
         if (projectIds.isEmpty()) return 0
         val tables =
             listOf(
-                "events" to "timestamp",
-                "spans" to "start_timestamp",
-                "sessions" to "started",
-                "user_feedback" to "timestamp",
-                "issues" to "last_seen"
+                ProjectScopedRetentionTable("events", "timestamp"),
+                ProjectScopedRetentionTable("spans", "start_timestamp"),
+                ProjectScopedRetentionTable("sessions", "started"),
+                ProjectScopedRetentionTable("user_feedback", "timestamp"),
+                ProjectScopedRetentionTable("issues", "last_seen")
             )
         return submitProjectScopedDeletes(projectIds, tables, retentionDays)
     }
@@ -172,8 +189,8 @@ class RetentionBackgroundService(
     ): Int {
         if (projectIds.isEmpty()) return 0
         val tables = listOf(
-            "replay_events" to "timestamp",
-            "replay_segments" to "timestamp"
+            ProjectScopedRetentionTable("replay_events", "timestamp"),
+            ProjectScopedRetentionTable("replay_segments", "timestamp")
         )
         return submitProjectScopedDeletes(projectIds, tables, replayRetentionDays)
     }
@@ -184,8 +201,8 @@ class RetentionBackgroundService(
     ): Int {
         if (projectIds.isEmpty()) return 0
         val tables = listOf(
-            "llm_generations" to "timestamp",
-            "llm_generations_hourly_mv" to "hour"
+            ProjectScopedRetentionTable("llm_generations", "timestamp"),
+            ProjectScopedRetentionTable(LLM_GENERATIONS_HOURLY_TABLE, "hour", PROJECT_ID_COLUMN)
         )
         return submitProjectScopedDeletes(projectIds, tables, llmRetentionDays)
     }
@@ -196,28 +213,44 @@ class RetentionBackgroundService(
     ): Int {
         if (projectIds.isEmpty()) return 0
         val tables = listOf(
-            "analytics_events" to "timestamp",
-            "analytics_sessions_hourly" to "hour"
+            ProjectScopedRetentionTable("analytics_events", "timestamp"),
+            ProjectScopedRetentionTable("analytics_sessions_hourly", "hour")
         )
         return submitProjectScopedDeletes(projectIds, tables, analyticsRetentionDays)
     }
 
+    private suspend fun submitApmTraceDeletes(
+        orgIds: List<Int>,
+        apmTraceRetentionDays: Int
+    ): Int {
+        if (orgIds.isEmpty()) return 0
+        val tables = listOf(
+            "apm_spans" to "start",
+            "trace_stats" to "start",
+            "apm_trace_summaries" to "bucket_start",
+            "apm_traces_final" to "trace_bucket",
+            "apm_error_groups_hourly" to "bucket_start",
+            "apm_resource_stats_hourly" to "bucket_start"
+        )
+        return submitOrgScopedDeletes(orgIds, tables, apmTraceRetentionDays, "apm-traces")
+    }
+
     private suspend fun submitProjectScopedDeletes(
         projectIds: List<Long>,
-        tables: List<Pair<String, String>>,
+        tables: List<ProjectScopedRetentionTable>,
         retentionDays: Int
     ): Int {
         var mutations = 0
         for (chunk in projectIds.chunked(idChunkSize)) {
             val projectList = chunk.joinToString(",")
-            for ((table, timeColumn) in tables) {
+            for (table in tables) {
                 val query =
                     """
-                    ALTER TABLE `$clickhouseDb`.`$table`
-                    DELETE WHERE project_id IN ($projectList)
-                        AND $timeColumn < now() - INTERVAL $retentionDays DAY
+                    ALTER TABLE `$clickhouseDb`.`${table.name}`
+                    DELETE WHERE ${table.idColumn} IN ($projectList)
+                        AND ${table.timeColumn} < now() - INTERVAL $retentionDays DAY
                     """.trimIndent()
-                if (submitMutation(query, "$table(project)")) {
+                if (submitMutation(query, "${table.name}(project)")) {
                     mutations++
                 }
             }
@@ -229,13 +262,21 @@ class RetentionBackgroundService(
         orgIds: List<Int>,
         retentionDays: Int
     ): Int {
-        if (orgIds.isEmpty()) return 0
-
         val tables =
             listOf(
                 "metrics" to "timestamp",
                 "containers" to "timestamp"
             )
+        return submitOrgScopedDeletes(orgIds, tables, retentionDays, "org")
+    }
+
+    private suspend fun submitOrgScopedDeletes(
+        orgIds: List<Int>,
+        tables: List<Pair<String, String>>,
+        retentionDays: Int,
+        labelSuffix: String
+    ): Int {
+        if (orgIds.isEmpty()) return 0
 
         var mutations = 0
         for (chunk in orgIds.chunked(idChunkSize)) {
@@ -247,7 +288,7 @@ class RetentionBackgroundService(
                     DELETE WHERE organization_id IN ($orgList)
                         AND $timeColumn < now64(3) - INTERVAL $retentionDays DAY
                     """.trimIndent()
-                if (submitMutation(query, "$table(org)")) {
+                if (submitMutation(query, "$table($labelSuffix)")) {
                     mutations++
                 }
             }
@@ -267,7 +308,7 @@ class RetentionBackgroundService(
             val query =
                 """
                 ALTER TABLE `$clickhouseDb`.logs
-                DELETE WHERE project_id IN ($projectList)
+                DELETE WHERE service_id IN ($projectList)
                     AND timestamp < now() - INTERVAL $logRetentionDays DAY
                 """.trimIndent()
             if (submitMutation(query, "logs(project)")) {

@@ -16,6 +16,7 @@
 
 package com.moneat.monitor.services
 
+import com.moneat.alerts.models.AlertPriority
 import com.moneat.billing.models.PricingTier
 import com.moneat.billing.models.PricingTierConfigResponse
 import com.moneat.billing.services.PricingTierService
@@ -39,16 +40,20 @@ import com.moneat.monitor.repositories.HostAlertRepository
 import com.moneat.monitor.repositories.HostRepository
 import com.moneat.shared.services.CacheService
 import com.moneat.shared.services.RetentionPolicyService
+import com.moneat.shared.services.toUuidOrNull
+import com.moneat.utils.ClickHouseQueryUtils
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import com.moneat.utils.suspendRunCatching
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.time.Clock
-import com.moneat.utils.suspendRunCatching
-import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
+import kotlin.uuid.Uuid
 
 private val logger = KotlinLogging.logger {}
 
@@ -58,6 +63,28 @@ class MonitorService(
     private val pricingTierService: PricingTierService = PricingTierService(),
     private val retentionPolicyService: RetentionPolicyService = RetentionPolicyService(),
 ) {
+    private fun clickHouseOrgClause(organizationId: Int): String =
+        ClickHouseQueryUtils.orgIdClause(organizationId.toLong())
+
+    private fun resolvedAlertPriority(request: CreateAlertRequest): String? =
+        canonicalAlertPriority(
+            request.alertPriority
+                ?: request.alertPrioritySnake
+                ?: request.incidentSeverity
+                ?: request.legacyIncidentSeveritySnake
+        )
+
+    private fun resolvedAlertPriority(request: UpdateAlertRequest): String? =
+        canonicalAlertPriority(
+            request.alertPriority
+                ?: request.alertPrioritySnake
+                ?: request.incidentSeverity
+                ?: request.legacyIncidentSeveritySnake
+        )
+
+    private fun canonicalAlertPriority(priority: String?): String? =
+        priority?.let { AlertPriority.fromString(it)?.wire }
+
     private data class DefaultAlertTemplate(
         val metric: String,
         val condition: String,
@@ -72,6 +99,14 @@ class MonitorService(
         const val ALERT_SCOPE_HOST = "host"
         const val INFRA_LOOKBACK_DAYS = 7
         const val MONITOR_HISTORY_CACHE_TTL_SECONDS = 30L
+
+        private const val LATEST_METRICS_LOOKBACK_HOURS = 6
+        private const val LATEST_METRIC_NAMES_SQL =
+            "'system.cpu.percent','system.cpu.user','system.cpu.system','system.cpu.idle'," +
+                "'system.mem.total','system.mem.used','system.mem.available'," +
+                "'system.disk.percent','system.disk.total','system.disk.used'," +
+                "'system.net.recv_bytes','system.net.sent_bytes'," +
+                "'system.load.1','system.temp.max','system.gpu.percent','system.battery.percent'"
 
         // Time-range thresholds for historical downsampling (in seconds)
         private const val ONE_HOUR_SECONDS = 3600L
@@ -94,7 +129,7 @@ class MonitorService(
         // JSONCompact column indices — single-host latest metrics query
         // SELECT: cpu_percent(0), mem_total(1), mem_used(2), mem_available(3),
         //         disk_total(4), disk_used(5), net_recv_bytes(6), net_sent_bytes(7),
-        //         load_1(8), temp_max(9), gpu_percent(10), battery_percent(11)
+        //         load_1(8), temp_max(9), gpu_percent(10), battery_percent(11), disk_percent(12)
         private const val LATEST_COL_MEM_AVAILABLE = 3
         private const val LATEST_COL_DISK_TOTAL = 4
         private const val LATEST_COL_DISK_USED = 5
@@ -104,12 +139,13 @@ class MonitorService(
         private const val LATEST_COL_TEMP_MAX = 9
         private const val LATEST_COL_GPU_PERCENT = 10
         private const val LATEST_COL_BATTERY_PERCENT = 11
+        private const val LATEST_COL_DISK_PERCENT = 12
 
         // JSONCompact column indices — multi-host batch latest metrics query
         // SELECT: host_id(0), cpu_percent(1), mem_total(2), mem_used(3),
         //         mem_available(4), disk_total(5), disk_used(6), net_recv_bytes(7),
         //         net_sent_bytes(8), load_1(9), temp_max(10), gpu_percent(11),
-        //         battery_percent(12)
+        //         battery_percent(12), disk_percent(13)
         private const val BATCH_COL_MEM_USED = 3
         private const val BATCH_COL_MEM_AVAILABLE = 4
         private const val BATCH_COL_DISK_TOTAL = 5
@@ -120,6 +156,7 @@ class MonitorService(
         private const val BATCH_COL_TEMP_MAX = 10
         private const val BATCH_COL_GPU_PERCENT = 11
         private const val BATCH_COL_BATTERY_PERCENT = 12
+        private const val BATCH_COL_DISK_PERCENT = 13
 
         // JSONCompact column indices — historical metrics query
         // SELECT: ts(0), cpu(1), mem(2), disk(3), net_recv(4), net_sent(5),
@@ -163,6 +200,7 @@ class MonitorService(
         private const val CONT_HIST_COL_NET_SENT = 5
 
         private const val PERCENT_MULTIPLIER = 100
+        private const val DATETIME64_MILLIS_PRECISION = 3
     }
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -200,6 +238,12 @@ class MonitorService(
     fun getHostById(hostId: Int): HostData? =
         hostRepository.getById(hostId)
 
+    fun getHostByResourceId(
+        resourceId: Uuid,
+        organizationIds: List<Int>
+    ): HostData? =
+        hostRepository.getByResourceId(resourceId, organizationIds)
+
     /**
      * Delete a host and all its metrics.
      */
@@ -208,12 +252,25 @@ class MonitorService(
         organizationId: Int
     ): Boolean {
         // Delete telemetry from ClickHouse before removing the host row
+        val orgClause = clickHouseOrgClause(organizationId)
         val metricsDelete =
-            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.metrics DELETE WHERE $orgClause" +
                 " AND tags['host_id'] = '$hostId'"
         val containersDelete =
-            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE organization_id = $organizationId" +
+            "ALTER TABLE `$clickhouseDb`.containers DELETE WHERE $orgClause" +
                 " AND tags['host_id'] = '$hostId'"
+        val metricsLatestDelete =
+            "ALTER TABLE `$clickhouseDb`.metrics_latest_by_host DELETE WHERE $orgClause" +
+                " AND host_id = $hostId"
+        val metricsRollupDelete =
+            "ALTER TABLE `$clickhouseDb`.metrics_rollup_1m DELETE WHERE $orgClause" +
+                " AND host_id = $hostId"
+        val containersLatestDelete =
+            "ALTER TABLE `$clickhouseDb`.containers_latest_by_host DELETE WHERE $orgClause" +
+                " AND host_id = $hostId"
+        val containersRollupDelete =
+            "ALTER TABLE `$clickhouseDb`.containers_rollup_1m DELETE WHERE $orgClause" +
+                " AND host_id = $hostId"
 
         if (!hostRepository.deleteClickHouseData(metricsDelete)) {
             logger.error { "Failed to delete ClickHouse metrics for hostId=$hostId" }
@@ -222,6 +279,22 @@ class MonitorService(
         if (!hostRepository.deleteClickHouseData(containersDelete)) {
             logger.error { "Failed to delete ClickHouse containers for hostId=$hostId" }
             throw Exception("Failed to delete host telemetry (containers)")
+        }
+        if (!hostRepository.deleteClickHouseData(metricsLatestDelete)) {
+            logger.error { "Failed to delete ClickHouse latest metrics for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (metrics latest)")
+        }
+        if (!hostRepository.deleteClickHouseData(metricsRollupDelete)) {
+            logger.error { "Failed to delete ClickHouse metrics rollups for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (metrics rollup)")
+        }
+        if (!hostRepository.deleteClickHouseData(containersLatestDelete)) {
+            logger.error { "Failed to delete ClickHouse latest containers for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (containers latest)")
+        }
+        if (!hostRepository.deleteClickHouseData(containersRollupDelete)) {
+            logger.error { "Failed to delete ClickHouse container rollups for hostId=$hostId" }
+            throw Exception("Failed to delete host telemetry (containers rollup)")
         }
 
         return hostRepository.delete(hostId, organizationId)
@@ -232,11 +305,24 @@ class MonitorService(
      */
     suspend fun getLatestMetrics(hostId: Int): LatestMetrics? {
         val host = getHostById(hostId) ?: return null
-        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val query =
             """
             SELECT
-                argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
+                coalesce(
+                    argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp),
+                    if(
+                        countIf(metric_name IN ('system.cpu.user', 'system.cpu.system')) > 0,
+                        least(
+                            coalesce(argMax(CASE WHEN metric_name='system.cpu.user' THEN value END, timestamp), 0) +
+                                coalesce(
+                                    argMax(CASE WHEN metric_name='system.cpu.system' THEN value END, timestamp),
+                                    0
+                                ),
+                            100
+                        ),
+                        NULL
+                    )
+                ) as cpu_percent,
                 argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
                 argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
                 argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
@@ -247,11 +333,13 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.load.1' THEN value END, timestamp) as load_1,
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
-                argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
-            FROM `$clickhouseDb`.metrics
-            WHERE organization_id = ${host.organizationId}
-              AND tags['host_id'] = '$hostId'
-              AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+                argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent,
+                argMax(CASE WHEN metric_name='system.disk.percent' THEN value END, timestamp) as disk_percent
+            FROM `$clickhouseDb`.metrics_latest_by_host
+            WHERE ${clickHouseOrgClause(host.organizationId)}
+              AND host_id = $hostId
+              AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
+              AND timestamp >= now64(3) - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
             FORMAT JSONCompact
             """.trimIndent()
 
@@ -310,16 +398,19 @@ class MonitorService(
             val tempMax = data.getOrNull(LATEST_COL_TEMP_MAX)?.toString()?.toFloatOrNull()
             val gpuPercent = data.getOrNull(LATEST_COL_GPU_PERCENT)?.toString()?.toFloatOrNull()
             val batteryPercent = data.getOrNull(LATEST_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
+            val diskPercentMetric = data.getOrNull(LATEST_COL_DISK_PERCENT)?.toString()?.toFloatOrNull()
 
             val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
+            val memPercent = percent(effectiveMemUsed, memTotal)
+            val diskPercent = diskPercent(diskPercentMetric, diskUsed, diskTotal)
             return LatestMetrics(
                 cpuPercent = cpuPercent,
                 memTotal = memTotal,
                 memUsed = effectiveMemUsed,
-                memPercent = if (memTotal > 0) (effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER) else 0f,
+                memPercent = memPercent,
                 diskTotal = diskTotal,
                 diskUsed = diskUsed,
-                diskPercent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
+                diskPercent = diskPercent,
                 netRecvBytes = netRecvBytes,
                 netSentBytes = netSentBytes,
                 netRecvMbps = null,
@@ -339,15 +430,33 @@ class MonitorService(
      * Get latest metrics for multiple hosts in a single ClickHouse query (avoids N+1).
      * Returns a map from hostId to LatestMetrics (null if no data for that host).
      */
-    suspend fun getLatestMetricsForHosts(hostIds: List<Int>, organizationId: Int): Map<Int, LatestMetrics?> {
+    suspend fun getLatestMetricsForHosts(
+        hostIds: List<Int>,
+        organizationId: Int,
+        demoEpochMs: Long? = null,
+    ): Map<Int, LatestMetrics?> {
         if (hostIds.isEmpty()) return emptyMap()
-        val retentionDays = retentionPolicyService.getRetentionDaysForOrganization(organizationId)
         val hostIdList = hostIds.joinToString(",")
+        val freshnessNow = latestMetricsNowClause(demoEpochMs)
         val query =
             """
             SELECT
-                toInt32OrZero(tags['host_id']) as host_id,
-                argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp) as cpu_percent,
+                toInt32(host_id) as host_id,
+                coalesce(
+                    argMax(CASE WHEN metric_name='system.cpu.percent' THEN value END, timestamp),
+                    if(
+                        countIf(metric_name IN ('system.cpu.user', 'system.cpu.system')) > 0,
+                        least(
+                            coalesce(argMax(CASE WHEN metric_name='system.cpu.user' THEN value END, timestamp), 0) +
+                                coalesce(
+                                    argMax(CASE WHEN metric_name='system.cpu.system' THEN value END, timestamp),
+                                    0
+                                ),
+                            100
+                        ),
+                        NULL
+                    )
+                ) as cpu_percent,
                 argMax(CASE WHEN metric_name='system.mem.total' THEN value END, timestamp) as mem_total,
                 argMax(CASE WHEN metric_name='system.mem.used' THEN value END, timestamp) as mem_used,
                 argMax(CASE WHEN metric_name='system.mem.available' THEN value END, timestamp) as mem_available,
@@ -358,11 +467,13 @@ class MonitorService(
                 argMax(CASE WHEN metric_name='system.load.1' THEN value END, timestamp) as load_1,
                 argMax(CASE WHEN metric_name='system.temp.max' THEN value END, timestamp) as temp_max,
                 argMax(CASE WHEN metric_name='system.gpu.percent' THEN value END, timestamp) as gpu_percent,
-                argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent
-            FROM `$clickhouseDb`.metrics
-            WHERE organization_id = $organizationId
-              AND toInt32OrZero(tags['host_id']) IN ($hostIdList)
-              AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
+                argMax(CASE WHEN metric_name='system.battery.percent' THEN value END, timestamp) as battery_percent,
+                argMax(CASE WHEN metric_name='system.disk.percent' THEN value END, timestamp) as disk_percent
+            FROM `$clickhouseDb`.metrics_latest_by_host
+            WHERE ${clickHouseOrgClause(organizationId)}
+              AND host_id IN ($hostIdList)
+              AND metric_name IN ($LATEST_METRIC_NAMES_SQL)
+              AND timestamp >= $freshnessNow - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
             GROUP BY host_id
             FORMAT JSONCompact
             """.trimIndent()
@@ -376,52 +487,71 @@ class MonitorService(
                 ?: return hostIds.associateWith { null }
             val result = mutableMapOf<Int, LatestMetrics?>()
             for (row in rows) {
-                val arr = row.jsonArray
-                val rowHostId = arr.getOrNull(0)?.toString()?.replace("\"", "")?.toIntOrNull() ?: continue
-                val cpuPercent = arr.getOrNull(1)?.toString()?.toFloatOrNull() ?: 0f
-                val memTotal = arr.getOrNull(2)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val memUsed =
-                    arr.getOrNull(BATCH_COL_MEM_USED)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val memAvailable =
-                    arr.getOrNull(BATCH_COL_MEM_AVAILABLE)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val diskTotal =
-                    arr.getOrNull(BATCH_COL_DISK_TOTAL)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val diskUsed =
-                    arr.getOrNull(BATCH_COL_DISK_USED)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val netRecvBytes =
-                    arr.getOrNull(BATCH_COL_NET_RECV_BYTES)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val netSentBytes =
-                    arr.getOrNull(BATCH_COL_NET_SENT_BYTES)?.toString()?.replace("\"", "")?.toLongOrNull() ?: 0L
-                val load1 = arr.getOrNull(BATCH_COL_LOAD_1)?.toString()?.toFloatOrNull() ?: 0f
-                val tempMax = arr.getOrNull(BATCH_COL_TEMP_MAX)?.toString()?.toFloatOrNull()
-                val gpuPercent = arr.getOrNull(BATCH_COL_GPU_PERCENT)?.toString()?.toFloatOrNull()
-                val batteryPercent = arr.getOrNull(BATCH_COL_BATTERY_PERCENT)?.toString()?.toFloatOrNull()
-                val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
-                result[rowHostId] = LatestMetrics(
-                    cpuPercent = cpuPercent,
-                    memTotal = memTotal,
-                    memUsed = effectiveMemUsed,
-                    memPercent = if (memTotal > 0) {
-                        effectiveMemUsed.toFloat() / memTotal * PERCENT_MULTIPLIER
-                    } else { 0f },
-                    diskTotal = diskTotal,
-                    diskUsed = diskUsed,
-                    diskPercent = if (diskTotal > 0) (diskUsed.toFloat() / diskTotal * PERCENT_MULTIPLIER) else 0f,
-                    netRecvBytes = netRecvBytes,
-                    netSentBytes = netSentBytes,
-                    netRecvMbps = null,
-                    netSentMbps = null,
-                    load1 = load1,
-                    tempMax = tempMax,
-                    gpuPercent = gpuPercent,
-                    batteryPercent = batteryPercent
-                )
+                latestMetricsFromBatchRow(row.jsonArray)?.let { (hostId, metrics) ->
+                    result[hostId] = metrics
+                }
             }
             hostIds.associateWith { result[it] }
         }.getOrElse { e ->
             logger.warn(e) { "Failed to parse batch latest metrics response" }
             hostIds.associateWith { null }
         }
+    }
+
+    private fun latestMetricsFromBatchRow(arr: JsonArray): Pair<Int, LatestMetrics>? {
+        val rowHostId = arr.stringAt(0).toIntOrNull() ?: return null
+        val memTotal = arr.longAt(2)
+        val memUsed = arr.longAt(BATCH_COL_MEM_USED)
+        val memAvailable = arr.longAt(BATCH_COL_MEM_AVAILABLE)
+        val diskTotal = arr.longAt(BATCH_COL_DISK_TOTAL)
+        val diskUsed = arr.longAt(BATCH_COL_DISK_USED)
+        val diskPercentMetric = arr.floatAt(BATCH_COL_DISK_PERCENT)
+        val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
+        return rowHostId to LatestMetrics(
+            cpuPercent = arr.floatAt(1) ?: 0f,
+            memTotal = memTotal,
+            memUsed = effectiveMemUsed,
+            memPercent = percent(effectiveMemUsed, memTotal),
+            diskTotal = diskTotal,
+            diskUsed = diskUsed,
+            diskPercent = diskPercent(diskPercentMetric, diskUsed, diskTotal),
+            netRecvBytes = arr.longAt(BATCH_COL_NET_RECV_BYTES),
+            netSentBytes = arr.longAt(BATCH_COL_NET_SENT_BYTES),
+            netRecvMbps = null,
+            netSentMbps = null,
+            load1 = arr.floatAt(BATCH_COL_LOAD_1) ?: 0f,
+            tempMax = arr.floatAt(BATCH_COL_TEMP_MAX),
+            gpuPercent = arr.floatAt(BATCH_COL_GPU_PERCENT),
+            batteryPercent = arr.floatAt(BATCH_COL_BATTERY_PERCENT),
+        )
+    }
+
+    private fun JsonArray.stringAt(index: Int): String =
+        getOrNull(index)?.toString()?.replace("\"", "") ?: ""
+
+    private fun JsonArray.longAt(index: Int): Long =
+        stringAt(index).toLongOrNull() ?: 0L
+
+    private fun JsonArray.floatAt(index: Int): Float? =
+        stringAt(index).toFloatOrNull()
+
+    private fun percent(value: Long, total: Long): Float =
+        if (total > 0L) value.toFloat() / total * PERCENT_MULTIPLIER else 0f
+
+    private fun diskPercent(diskPercent: Float?, used: Long, total: Long): Float =
+        diskPercent ?: percent(used, total)
+
+    private fun latestMetricsNowClause(demoEpochMs: Long?): String =
+        if (demoEpochMs != null) {
+            "toDateTime64(${formatEpochSeconds(demoEpochMs)}, $DATETIME64_MILLIS_PRECISION)"
+        } else {
+            "now64($DATETIME64_MILLIS_PRECISION)"
+        }
+
+    private fun formatEpochSeconds(epochMs: Long): String {
+        val seconds = epochMs / MILLIS_PER_SECOND_LONG
+        val millis = epochMs % MILLIS_PER_SECOND_LONG
+        return "$seconds.${millis.toString().padStart(DATETIME64_MILLIS_PRECISION, '0')}"
     }
 
     /**
@@ -439,7 +569,7 @@ class MonitorService(
         ) {
             val host = getHostById(hostId) ?: return@cached HistoricalMetricsResponse(
                 systemId = "",
-                hostId = hostId,
+                hostId = null,
                 from = fromTimestamp,
                 to = toTimestamp,
                 intervalSeconds = intervalSeconds ?: 3600,
@@ -449,7 +579,7 @@ class MonitorService(
             if (clampedWindow == null) {
                 return@cached HistoricalMetricsResponse(
                     systemId = "",
-                    hostId = hostId,
+                    hostId = host.resourceId.toString(),
                     from = fromTimestamp,
                     to = toTimestamp,
                     intervalSeconds = intervalSeconds ?: 3600,
@@ -468,29 +598,85 @@ class MonitorService(
                     timeRange <= ONE_WEEK_SECONDS -> INTERVAL_THIRTY_MINUTES
                     else -> INTERVAL_ONE_HOUR
                 }
+            val rollupInterval = max(calculatedInterval, INTERVAL_ONE_MINUTE)
 
             val query =
                 """
             SELECT
-                toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
-                avg(CASE WHEN metric_name='system.cpu.percent' THEN value END) as cpu,
-                (1 - avg(CASE WHEN metric_name='system.mem.available' THEN value END) /
-                    nullIf(avg(CASE WHEN metric_name='system.mem.total' THEN value END), 0)) * 100 as mem,
-                avg(CASE WHEN metric_name='system.disk.used' THEN value END) /
-                    nullIf(avg(CASE WHEN metric_name='system.disk.total' THEN value END), 0) * 100 as disk,
-                sum(CASE WHEN metric_name='system.net.recv_bytes' THEN value ELSE 0 END) as net_recv,
-                sum(CASE WHEN metric_name='system.net.sent_bytes' THEN value ELSE 0 END) as net_sent,
-                avg(CASE WHEN metric_name='system.load.1' THEN value END) as load1,
-                avg(CASE WHEN metric_name='system.load.5' THEN value END) as load5,
-                avg(CASE WHEN metric_name='system.load.15' THEN value END) as load15,
-                max(CASE WHEN metric_name='system.temp.max' THEN value END) as temp,
-                avg(CASE WHEN metric_name='system.gpu.percent' THEN value END) as gpu,
-                avg(CASE WHEN metric_name='system.battery.percent' THEN value END) as battery
-            FROM `$clickhouseDb`.metrics
-            WHERE organization_id = ${host.organizationId}
-              AND tags['host_id'] = '$hostId'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+                toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
+                coalesce(
+                    sumIf(value_sum, metric_name='system.cpu.percent') /
+                        nullIf(sumIf(value_count, metric_name='system.cpu.percent'), 0),
+                    if(
+                        sumIf(value_count, metric_name IN ('system.cpu.user', 'system.cpu.system')) > 0,
+                        least(
+                            coalesce(
+                                sumIf(value_sum, metric_name='system.cpu.user') /
+                                    nullIf(sumIf(value_count, metric_name='system.cpu.user'), 0),
+                                0
+                            ) +
+                                coalesce(
+                                    sumIf(value_sum, metric_name='system.cpu.system') /
+                                        nullIf(sumIf(value_count, metric_name='system.cpu.system'), 0),
+                                    0
+                                ),
+                            100
+                        ),
+                        NULL
+                    )
+                ) as cpu,
+                coalesce(
+                    (1 - (
+                        sumIf(value_sum, metric_name='system.mem.available') /
+                        nullIf(sumIf(value_count, metric_name='system.mem.available'), 0)
+                    ) / nullIf(
+                        sumIf(value_sum, metric_name='system.mem.total') /
+                        nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
+                        0
+                    )) * 100,
+                    (
+                        sumIf(value_sum, metric_name='system.mem.used') /
+                        nullIf(sumIf(value_count, metric_name='system.mem.used'), 0)
+                    ) / nullIf(
+                        sumIf(value_sum, metric_name='system.mem.total') /
+                        nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
+                        0
+                    ) * 100
+                ) as mem,
+                coalesce(
+                    if(
+                        sumIf(value_count, metric_name='system.disk.percent') > 0,
+                        sumIf(value_sum, metric_name='system.disk.percent') /
+                            nullIf(sumIf(value_count, metric_name='system.disk.percent'), 0),
+                        NULL
+                    ),
+                    (
+                        sumIf(value_sum, metric_name='system.disk.used') /
+                        nullIf(sumIf(value_count, metric_name='system.disk.used'), 0)
+                    ) / nullIf(
+                        sumIf(value_sum, metric_name='system.disk.total') /
+                        nullIf(sumIf(value_count, metric_name='system.disk.total'), 0),
+                        0
+                    ) * 100
+                ) as disk,
+                sumIf(value_sum, metric_name='system.net.recv_bytes') as net_recv,
+                sumIf(value_sum, metric_name='system.net.sent_bytes') as net_sent,
+                sumIf(value_sum, metric_name='system.load.1') /
+                    nullIf(sumIf(value_count, metric_name='system.load.1'), 0) as load1,
+                sumIf(value_sum, metric_name='system.load.5') /
+                    nullIf(sumIf(value_count, metric_name='system.load.5'), 0) as load5,
+                sumIf(value_sum, metric_name='system.load.15') /
+                    nullIf(sumIf(value_count, metric_name='system.load.15'), 0) as load15,
+                maxIf(value_sum / value_count, metric_name='system.temp.max') as temp,
+                sumIf(value_sum, metric_name='system.gpu.percent') /
+                    nullIf(sumIf(value_count, metric_name='system.gpu.percent'), 0) as gpu,
+                sumIf(value_sum, metric_name='system.battery.percent') /
+                    nullIf(sumIf(value_count, metric_name='system.battery.percent'), 0) as battery
+            FROM `$clickhouseDb`.metrics_rollup_1m
+            WHERE ${clickHouseOrgClause(host.organizationId)}
+              AND host_id = $hostId
+              AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -504,10 +690,10 @@ class MonitorService(
                     val data =
                         result["data"]?.jsonArray ?: return@cached HistoricalMetricsResponse(
                             systemId = "",
-                            hostId = hostId,
+                            hostId = host.resourceId.toString(),
                             from = effectiveFrom,
                             to = effectiveTo,
-                            intervalSeconds = calculatedInterval,
+                            intervalSeconds = rollupInterval,
                             dataPoints = emptyList()
                         )
 
@@ -544,11 +730,11 @@ class MonitorService(
                 }
 
             HistoricalMetricsResponse(
-                systemId = "",
-                hostId = hostId,
+                systemId = host.resourceId.toString(),
+                hostId = host.resourceId.toString(),
                 from = effectiveFrom,
                 to = effectiveTo,
-                intervalSeconds = calculatedInterval,
+                intervalSeconds = rollupInterval,
                 dataPoints = dataPoints
             )
         }
@@ -558,7 +744,6 @@ class MonitorService(
      */
     suspend fun getLatestContainers(hostId: Int): List<ContainerStats> {
         val host = getHostById(hostId) ?: return emptyList()
-        val retentionDays = retentionPolicyService.getRetentionDaysForHost(hostId) ?: PricingTier.FREE.retentionDays
         val monitorIntervalSeconds = getTierConfig(host.organizationId).monitorIntervalSeconds
         val freshnessWindowSeconds = max(
             monitorIntervalSeconds * FRESHNESS_MONITOR_MULTIPLIER,
@@ -567,16 +752,22 @@ class MonitorService(
 
         val query =
             """
-            SELECT name, container_id, image, state, cpu_percent, mem_usage, mem_limit, net_rx_bytes, net_tx_bytes
-            FROM (
-                SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY host, container_id ORDER BY timestamp DESC) as rn
-                FROM `$clickhouseDb`.containers
-                WHERE organization_id = ${host.organizationId}
-                  AND tags['host_id'] = '$hostId'
-                  AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
-            ) WHERE rn = 1
+            SELECT
+                argMax(name, timestamp) as name,
+                container_id,
+                argMax(image, timestamp) as image,
+                argMax(state, timestamp) as state,
+                argMax(cpu_percent, timestamp) as cpu_percent,
+                argMax(mem_usage, timestamp) as mem_usage,
+                argMax(mem_limit, timestamp) as mem_limit,
+                argMax(net_rx_bytes, timestamp) as net_rx_bytes,
+                argMax(net_tx_bytes, timestamp) as net_tx_bytes
+            FROM `$clickhouseDb`.containers_latest_by_host
+            WHERE ${clickHouseOrgClause(host.organizationId)}
+              AND host_id = $hostId
               AND timestamp >= now64(3) - INTERVAL $freshnessWindowSeconds SECOND
+            GROUP BY container_id
+            ORDER BY max(timestamp) DESC
             FORMAT JSONCompact
             """.trimIndent()
 
@@ -628,8 +819,8 @@ class MonitorService(
                 for (c in containers) {
                     allContainers.add(
                         ContainerWithSystem(
-                            systemId = host.id.toString(),
-                            hostId = host.id,
+                            systemId = host.resourceId.toString(),
+                            hostId = host.resourceId.toString(),
                             systemName = host.displayName ?: host.hostname,
                             name = c.name,
                             id = c.id,
@@ -650,9 +841,7 @@ class MonitorService(
     }
 
     /**
-     * Get latest container stats per host+container_id from the containers table.
-     * Deduplicates time-series rows so each container appears once (fixes inflated
-     * counts when raw rows are returned to MCP/API consumers).
+     * Get latest container stats per host+container_id from the live latest table.
      */
     suspend fun getLatestInfraContainers(
         organizationIds: List<Int>,
@@ -665,16 +854,24 @@ class MonitorService(
         val hostClause = if (escapedHost != null) "AND host = '$escapedHost'" else ""
         val query =
             """
-            SELECT host, container_id, name, image, state, cpu_percent, mem_usage, mem_limit,
-                   net_rx_bytes, net_tx_bytes, tags, timestamp
-            FROM (
-                SELECT *,
-                    ROW_NUMBER() OVER (PARTITION BY organization_id, host, container_id ORDER BY timestamp DESC) as rn
-                FROM `$clickhouseDb`.containers
-                WHERE organization_id IN ($orgList)
-                  AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
-                  $hostClause
-            ) WHERE rn = 1
+            SELECT
+                host,
+                container_id,
+                argMax(name, timestamp) as name,
+                argMax(image, timestamp) as image,
+                argMax(state, timestamp) as state,
+                argMax(cpu_percent, timestamp) as cpu_percent,
+                argMax(mem_usage, timestamp) as mem_usage,
+                argMax(mem_limit, timestamp) as mem_limit,
+                argMax(net_rx_bytes, timestamp) as net_rx_bytes,
+                argMax(net_tx_bytes, timestamp) as net_tx_bytes,
+                argMax(tags, timestamp) as tags,
+                max(timestamp) as timestamp
+            FROM `$clickhouseDb`.containers_latest_by_host
+            WHERE organization_id IN ($orgList)
+              AND timestamp >= now64(3) - INTERVAL $INFRA_LOOKBACK_DAYS DAY
+              $hostClause
+            GROUP BY organization_id, host_id, host, container_id
             ORDER BY host, name
             LIMIT $limit
             FORMAT JSONCompact
@@ -768,23 +965,24 @@ class MonitorService(
                 timeRange <= ONE_WEEK_SECONDS -> INTERVAL_THIRTY_MINUTES
                 else -> INTERVAL_ONE_HOUR
             }
+        val rollupInterval = max(calculatedInterval, INTERVAL_ONE_MINUTE)
 
         val escapedName = escapeSql(containerName)
         val query =
             """
             SELECT
-                toUnixTimestamp(toStartOfInterval(timestamp, INTERVAL $calculatedInterval second)) as ts,
-                avg(cpu_percent) as cpu,
-                avg(mem_usage) as mem_used,
-                avg(mem_limit) as mem_limit,
-                sum(net_rx_bytes) as net_recv,
-                sum(net_tx_bytes) as net_sent
-            FROM `$clickhouseDb`.containers
-            WHERE organization_id = ${host.organizationId}
-              AND tags['host_id'] = '$hostId'
+                toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
+                sum(cpu_sum) / nullIf(sum(cpu_count), 0) as cpu,
+                sum(mem_usage_sum) / nullIf(sum(cpu_count), 0) as mem_used,
+                sum(mem_limit_sum) / nullIf(sum(cpu_count), 0) as mem_limit,
+                sum(net_rx_bytes_sum) as net_recv,
+                sum(net_tx_bytes_sum) as net_sent
+            FROM `$clickhouseDb`.containers_rollup_1m
+            WHERE ${clickHouseOrgClause(host.organizationId)}
+              AND host_id = $hostId
               AND name = '$escapedName'
-              AND timestamp >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
-              AND timestamp <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+              AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+              AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
@@ -800,7 +998,7 @@ class MonitorService(
                         containerName = containerName,
                         from = effectiveFrom,
                         to = effectiveTo,
-                        intervalSeconds = calculatedInterval,
+                        intervalSeconds = rollupInterval,
                         dataPoints = emptyList()
                     )
 
@@ -844,7 +1042,7 @@ class MonitorService(
             containerName = containerName,
             from = effectiveFrom,
             to = effectiveTo,
-            intervalSeconds = calculatedInterval,
+            intervalSeconds = rollupInterval,
             dataPoints = dataPoints
         )
     }
@@ -855,6 +1053,23 @@ class MonitorService(
     fun listAlerts(hostId: Int, organizationId: Int): List<AlertResponse> {
         return listHostAlerts(hostId, organizationId)
     }
+
+    fun getAlertByInternalId(alertId: Int): AlertResponse? =
+        hostAlertRepository.findAlertById(alertId.toLong())?.let { row ->
+            AlertResponse(
+                id = row.resourceId.toString(),
+                hostId = hostRepository.getById(row.hostId)?.resourceId?.toString(),
+                scope = row.scope,
+                metric = row.metric,
+                condition = row.condition,
+                threshold = row.threshold,
+                durationSeconds = row.durationSeconds,
+                enabled = row.enabled,
+                alertPriority = row.alertPriority,
+                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                createdAt = row.createdAt.toEpochMilliseconds()
+            )
+        }
 
     fun getAlertConfig(
         hostId: Int,
@@ -904,7 +1119,8 @@ class MonitorService(
         if (scope == ALERT_SCOPE_GLOBAL) {
             ensureOrganizationAlertTemplates(organizationId)
             val now = Clock.System.now()
-            val alertId = hostAlertRepository.createAlert(
+            val alertPriority = resolvedAlertPriority(request)
+            val alertResourceId = hostAlertRepository.createAlert(
                 CreateAlertData(
                     hostId = hostId,
                     organizationId = organizationId,
@@ -913,18 +1129,20 @@ class MonitorService(
                     threshold = request.threshold,
                     durationSeconds = request.durationSeconds,
                     enabled = request.enabled,
+                    alertPriority = alertPriority,
                     scope = ALERT_SCOPE_GLOBAL
                 )
             )
             return AlertResponse(
-                id = alertId.toInt(),
-                hostId = hostId,
+                id = alertResourceId.toString(),
+                hostId = hostRepository.getById(hostId)?.resourceId?.toString(),
                 scope = ALERT_SCOPE_GLOBAL,
                 metric = request.metric,
                 condition = request.condition,
                 threshold = request.threshold,
                 durationSeconds = request.durationSeconds,
                 enabled = request.enabled,
+                alertPriority = alertPriority,
                 lastTriggeredAt = null,
                 createdAt = now.toEpochMilliseconds()
             )
@@ -932,7 +1150,8 @@ class MonitorService(
 
         ensureHostAlertsSeeded(hostId, organizationId)
         val now = Clock.System.now()
-        val alertId = hostAlertRepository.createAlert(
+        val alertPriority = resolvedAlertPriority(request)
+        val alertResourceId = hostAlertRepository.createAlert(
             CreateAlertData(
                 hostId = hostId,
                 organizationId = organizationId,
@@ -941,18 +1160,20 @@ class MonitorService(
                 threshold = request.threshold,
                 durationSeconds = request.durationSeconds,
                 enabled = request.enabled,
+                alertPriority = alertPriority,
                 scope = ALERT_SCOPE_HOST
             )
         )
         return AlertResponse(
-            id = alertId.toInt(),
-            hostId = hostId,
+            id = alertResourceId.toString(),
+            hostId = hostRepository.getById(hostId)?.resourceId?.toString(),
             scope = ALERT_SCOPE_HOST,
             metric = request.metric,
             condition = request.condition,
             threshold = request.threshold,
             durationSeconds = request.durationSeconds,
             enabled = request.enabled,
+            alertPriority = alertPriority,
             lastTriggeredAt = null,
             createdAt = now.toEpochMilliseconds()
         )
@@ -961,6 +1182,18 @@ class MonitorService(
     /**
      * Update an alert.
      */
+    fun updateAlert(
+        alertId: String,
+        hostId: Int,
+        organizationId: Int,
+        request: UpdateAlertRequest,
+        scope: String = ALERT_SCOPE_HOST
+    ): Boolean {
+        val alertResourceId = parseResourceId(alertId) ?: return false
+        val internalAlertId = resolveAlertId(alertResourceId, hostId, organizationId, scope) ?: return false
+        return updateAlert(internalAlertId, hostId, organizationId, request, scope)
+    }
+
     fun updateAlert(
         alertId: Int,
         hostId: Int,
@@ -977,7 +1210,8 @@ class MonitorService(
                 condition = request.condition,
                 threshold = request.threshold,
                 durationSeconds = request.durationSeconds,
-                enabled = request.enabled
+                enabled = request.enabled,
+                alertPriority = resolvedAlertPriority(request)
             ),
             scope
         )
@@ -986,12 +1220,34 @@ class MonitorService(
      * Delete an alert.
      */
     fun deleteAlert(
+        alertId: String,
+        hostId: Int,
+        organizationId: Int,
+        scope: String = ALERT_SCOPE_HOST
+    ): Boolean {
+        val alertResourceId = parseResourceId(alertId) ?: return false
+        val internalAlertId = resolveAlertId(alertResourceId, hostId, organizationId, scope) ?: return false
+        return deleteAlert(internalAlertId, hostId, organizationId, scope)
+    }
+
+    fun deleteAlert(
         alertId: Int,
         hostId: Int,
         organizationId: Int,
         scope: String = ALERT_SCOPE_HOST
     ): Boolean =
         hostAlertRepository.deleteAlert(alertId.toLong(), hostId, organizationId, scope)
+
+    fun resolveAlertId(
+        alertResourceId: Uuid,
+        hostId: Int,
+        organizationId: Int,
+        scope: String
+    ): Int? =
+        hostAlertRepository.resolveAlertId(alertResourceId, hostId, organizationId, scope)
+
+    private fun parseResourceId(value: String): Uuid? =
+        value.toUuidOrNull()
 
     // Helper functions
 
@@ -1013,6 +1269,7 @@ class MonitorService(
                     threshold = template.threshold,
                     durationSeconds = template.durationSeconds,
                     enabled = template.enabled,
+                    alertPriority = null,
                     scope = ALERT_SCOPE_GLOBAL
                 )
             )
@@ -1037,6 +1294,7 @@ class MonitorService(
                     threshold = template.threshold,
                     durationSeconds = template.durationSeconds,
                     enabled = template.enabled,
+                    alertPriority = null,
                     scope = ALERT_SCOPE_HOST
                 )
             }
@@ -1050,6 +1308,7 @@ class MonitorService(
                     threshold = template.threshold,
                     durationSeconds = template.durationSeconds,
                     enabled = template.enabled,
+                    alertPriority = template.alertPriority,
                     scope = ALERT_SCOPE_HOST
                 )
             }
@@ -1069,38 +1328,46 @@ class MonitorService(
     }
 
     private fun listHostAlerts(hostId: Int, organizationId: Int): List<AlertResponse> =
-        hostAlertRepository.listByHostAndOrg(hostId, organizationId).map { row ->
-            AlertResponse(
-                id = row.id,
-                hostId = hostId,
-                scope = ALERT_SCOPE_HOST,
-                metric = row.metric,
-                condition = row.condition,
-                threshold = row.threshold,
-                durationSeconds = row.durationSeconds,
-                enabled = row.enabled,
-                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
-                createdAt = row.createdAt.toEpochMilliseconds()
-            )
+        hostAlertRepository.listByHostAndOrg(hostId, organizationId).let { rows ->
+            val hostResourceId = hostRepository.getById(hostId)?.resourceId?.toString()
+            rows.map { row ->
+                AlertResponse(
+                    id = row.resourceId.toString(),
+                    hostId = hostResourceId,
+                    scope = ALERT_SCOPE_HOST,
+                    metric = row.metric,
+                    condition = row.condition,
+                    threshold = row.threshold,
+                    durationSeconds = row.durationSeconds,
+                    enabled = row.enabled,
+                    alertPriority = row.alertPriority,
+                    lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                    createdAt = row.createdAt.toEpochMilliseconds()
+                )
+            }
         }
 
     private fun listGlobalAlertsForHost(
         hostId: Int,
         organizationId: Int
     ): List<AlertResponse> =
-        hostAlertRepository.listGlobalAlertsForHost(organizationId, hostId).map { row ->
-            AlertResponse(
-                id = row.id,
-                hostId = hostId,
-                scope = ALERT_SCOPE_GLOBAL,
-                metric = row.metric,
-                condition = row.condition,
-                threshold = row.threshold,
-                durationSeconds = row.durationSeconds,
-                enabled = row.enabled,
-                lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
-                createdAt = row.createdAt.toEpochMilliseconds()
-            )
+        hostAlertRepository.listGlobalAlertsForHost(organizationId, hostId).let { rows ->
+            val hostResourceId = hostRepository.getById(hostId)?.resourceId?.toString()
+            rows.map { row ->
+                AlertResponse(
+                    id = row.resourceId.toString(),
+                    hostId = hostResourceId,
+                    scope = ALERT_SCOPE_GLOBAL,
+                    metric = row.metric,
+                    condition = row.condition,
+                    threshold = row.threshold,
+                    durationSeconds = row.durationSeconds,
+                    enabled = row.enabled,
+                    alertPriority = row.alertPriority,
+                    lastTriggeredAt = row.lastTriggeredAt?.toEpochMilliseconds(),
+                    createdAt = row.createdAt.toEpochMilliseconds()
+                )
+            }
         }
 
     private fun getTierConfig(organizationId: Int): PricingTierConfigResponse {

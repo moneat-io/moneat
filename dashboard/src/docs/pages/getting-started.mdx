@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Create your account, set up a project, and capture your first error in minutes.
+description: Create your account, create a service, and connect your first telemetry source.
 ---
 
 # Getting Started
@@ -15,93 +15,85 @@ description: Create your account, set up a project, and capture your first error
     },
     {
       title: 'Complete onboarding',
-      content: 'After signing up, follow the onboarding flow to create your organization and first project.',
+      content: 'Create your organization and first service. A service is the application, worker, job, or system that will send telemetry to Moneat.',
     },
     {
-      title: 'Get your DSN',
-      content: "Once your project is created, you'll receive a DSN (Data Source Name). This is the connection string your SDK uses to send events to Moneat. It looks like:",
+      title: 'Choose a telemetry source',
+      content: 'For new services, start with OpenTelemetry. If you already have Sentry-compatible SDKs or a Datadog Agent fleet, connect those sources without changing your application model.',
     },
   ]}
 />
+
+## Choose a Source
+
+Moneat stores errors, traces, metrics, logs, replays, releases, and feedback in one telemetry model.
+The source you connect only decides how data gets into Moneat.
+
+| Source | Best for | Setup |
+|--------|----------|-------|
+| OpenTelemetry | New services, vendor-neutral logs/traces/metrics, Collector pipelines | [OpenTelemetry setup](/docs/opentelemetry) |
+| Sentry-compatible SDKs | Existing Sentry SDK instrumentation, errors, replays, release/source-map workflows | [Sentry-compatible SDKs](/docs/sdk-setup) |
+| Datadog Agent | Existing Datadog Agent fleets, host/container telemetry, APM/log/profile intake | [Datadog Agent setup](/docs/datadog-agent/agent-setup) |
+
+## Start with OpenTelemetry
+
+Create an OTLP API key from **Settings -> API Keys -> OpenTelemetry**, then configure your SDK or
+Collector to send data to Moneat. Use `https://api.moneat.io` for Moneat Cloud, or your self-hosted
+backend URL.
+
+```bash
+export OTEL_SERVICE_NAME=checkout-api
+export OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=production,service.version=1.2.3"
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=https://api.moneat.io/v1/traces
+export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=https://api.moneat.io/v1/metrics
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=https://api.moneat.io/v1/logs
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <MONEAT_OTLP_API_KEY>"
+```
+
+After the service sends its first spans, metrics, or logs, check **Performance**, **Logs**, and
+**Services** in the dashboard. Moneat uses OpenTelemetry resource attributes such as `service.name`,
+`service.version`, and `deployment.environment.name` for service and release correlation.
+
+:::tip[Service mapping]
+If an observed `service.name` does not match an existing Moneat service, map it from
+**Settings -> API Keys -> OpenTelemetry** so dashboards and filters route telemetry correctly.
+:::
+
+## Keep Existing Sentry-Compatible SDKs
+
+If your application already uses a Sentry SDK, keep it and replace the DSN with the Moneat service
+DSN from service settings:
 
 ```text
 https://<public_key>@api.moneat.io/api/<project_id>
 ```
 
-## Install an SDK
+This source is the richest path for exception events, breadcrumbs, session replay, and source-map
+upload workflows. See [Sentry-compatible SDKs](/docs/sdk-setup) for platform-specific setup.
 
-Moneat is compatible with Sentry SDKs. Use the official Sentry SDK for your platform. Over 90 platforms are supported including JavaScript, Python, Java, Kotlin, Swift, Go, Ruby, and more.
+## Connect a Datadog Agent
 
-**JavaScript / Node.js**
+If you already run Datadog Agents, create an agent key from **Settings -> API Keys -> Datadog** and
+point the agent intake URLs at Moneat. This keeps host, container, log, APM, profile, and supported
+infrastructure telemetry flowing while Moneat normalizes it into the same service views.
 
-```bash
-npm install @sentry/node
-```
+See [Datadog Agent setup](/docs/datadog-agent/agent-setup) for the full agent configuration.
 
-**Python**
+## Verify Ingestion
 
-```bash
-pip install sentry-sdk
-```
+Use the dashboard views that match the signal you sent:
 
-**Kotlin / Android**
-
-```groovy
-// build.gradle.kts
-implementation("io.sentry:sentry-android:7.0.0")
-```
-
-## Configure the SDK
-
-Point the SDK to your Moneat instance by setting the DSN from your project settings.
-
-**JavaScript**
-
-```javascript
-import * as Sentry from "@sentry/node";
-
-Sentry.init({
-  dsn: "https://<public_key>@api.moneat.io/api/<project_id>",
-  tracesSampleRate: 1.0,
-});
-```
-
-**Python**
-
-```python
-import sentry_sdk
-
-sentry_sdk.init(
-    dsn="https://<public_key>@api.moneat.io/api/<project_id>",
-    traces_sample_rate=1.0,
-)
-```
-
-## Capture Your First Error
-
-Once the SDK is initialized, errors are automatically captured. You can also manually capture exceptions and messages.
-
-**JavaScript**
-
-```javascript
-// Automatic - unhandled errors are captured
-throw new Error("Something went wrong!");
-
-// Manual capture
-Sentry.captureException(new Error("Manual error"));
-Sentry.captureMessage("Something noteworthy happened");
-```
-
-:::tip[Verify your setup]
-After initializing the SDK, trigger a test error and check the Moneat dashboard. Your error should appear within seconds under the Issues tab.
-:::
+- **Services** - Confirm the service appears with the expected telemetry sources.
+- **Performance** - Confirm traces and spans appear for OTLP, Sentry-compatible, or Datadog APM traffic.
+- **Logs** - Search for structured logs by service, level, and attributes.
+- **Issues** - Trigger a test exception if you are using a Sentry-compatible SDK.
+- **Monitoring** - Confirm host, container, database, or network telemetry from compatible agents.
 
 ## Next Steps
 
-Now that you're capturing errors, explore these features:
-
-- [Error Monitoring](/docs/error-monitoring) - Event ingestion, grouping, and context
-- [Issue Tracking](/docs/issue-tracking) - Triage and resolve issues
-- [On-Call & Incidents](/docs/on-call) - Alerting and escalation policies
-- [SDK Setup](/docs/sdk-setup) - Platform-specific SDK configuration
-- [Integrations](/docs/integrations) - Slack, Discord, and webhooks
+- [OpenTelemetry](/docs/opentelemetry) - OTLP endpoints, API keys, and service mapping
+- [Structured Logging](/docs/logging) - Search, filter, and live-tail logs
+- [Performance Monitoring](/docs/performance-monitoring) - Distributed traces, spans, and service maps
+- [Error Monitoring](/docs/error-monitoring) - Error grouping, issue creation, and fingerprints
+- [Datadog Agent Compatibility](/docs/datadog-agent) - Agent intake and compatibility guides
+- [Billing](/docs/billing) - Plans, included usage, overages, and budgets

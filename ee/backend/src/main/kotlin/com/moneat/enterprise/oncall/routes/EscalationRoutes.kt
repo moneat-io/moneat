@@ -4,7 +4,13 @@
 
 package com.moneat.enterprise.oncall.routes
 
+import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.oncall.services.EscalationPolicyService
+import com.moneat.shared.models.EscalationPolicies
+import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import com.moneat.utils.ErrorResponse
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
@@ -19,6 +25,13 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.v1.core.and
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import kotlin.uuid.Uuid
+
+private const val POLICY_NOT_FOUND_MESSAGE = "Policy not found"
 
 @Serializable
 data class CreatePolicyRequest(
@@ -39,7 +52,7 @@ data class CreatePolicyStepRequest(
 @Serializable
 data class CreatePolicyTargetRequest(
     val targetType: String, // USER or ON_CALL_SCHEDULE
-    val targetId: Int,
+    val targetId: String,
 )
 
 @Serializable
@@ -57,7 +70,7 @@ fun Route.escalationRoutes() {
         authenticate("auth-jwt") {
             get {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -70,7 +83,7 @@ fun Route.escalationRoutes() {
 
             post {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
+                val organizationId = principal?.currentOrgIdOrNull()
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
@@ -90,7 +103,7 @@ fun Route.escalationRoutes() {
                                     step.targets.map { target ->
                                         EscalationPolicyService.CreateTargetData(
                                             targetType = target.targetType,
-                                            targetId = target.targetId,
+                                            targetId = resolvePolicyTargetId(organizationId, target),
                                         )
                                     },
                             )
@@ -112,45 +125,39 @@ fun Route.escalationRoutes() {
 
             get("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                val policyId = call.parameters["id"]?.toIntOrNull()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@get
                 }
 
-                if (policyId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
-                    return@get
-                }
+                if (policyId == null) return@get
 
                 val policy = policyService.getPolicy(policyId)
                 if (policy != null && policy.organizationId == organizationId) {
                     call.respond(policy)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                 }
             }
 
             put("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                val policyId = call.parameters["id"]?.toIntOrNull()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@put
                 }
 
-                if (policyId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
-                    return@put
-                }
+                if (policyId == null) return@put
 
                 val existingPolicy = policyService.getPolicy(policyId)
                 if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                     return@put
                 }
 
@@ -167,7 +174,7 @@ fun Route.escalationRoutes() {
                                     step.targets.map { target ->
                                         EscalationPolicyService.CreateTargetData(
                                             targetType = target.targetType,
-                                            targetId = target.targetId,
+                                            targetId = resolvePolicyTargetId(organizationId, target),
                                         )
                                     },
                             )
@@ -185,7 +192,7 @@ fun Route.escalationRoutes() {
                     if (policy != null) {
                         call.respond(policy)
                     } else {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                        call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                     }
                 } catch (e: Exception) {
                     call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
@@ -194,22 +201,19 @@ fun Route.escalationRoutes() {
 
             delete("/{id}") {
                 val principal = call.principal<JWTPrincipal>()
-                val organizationId = principal?.payload?.getClaim("orgId")?.asInt()
-                val policyId = call.parameters["id"]?.toIntOrNull()
+                val organizationId = principal?.currentOrgIdOrNull()
+                val policyId = call.resolvePolicyId(call.parameters["id"], organizationId)
 
                 if (organizationId == null) {
                     call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid token"))
                     return@delete
                 }
 
-                if (policyId == null) {
-                    call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
-                    return@delete
-                }
+                if (policyId == null) return@delete
 
                 val existingPolicy = policyService.getPolicy(policyId)
                 if (existingPolicy == null || existingPolicy.organizationId != organizationId) {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                     return@delete
                 }
 
@@ -217,9 +221,75 @@ fun Route.escalationRoutes() {
                 if (deleted) {
                     call.respond(HttpStatusCode.NoContent)
                 } else {
-                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Policy not found"))
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
                 }
             }
         }
     }
+}
+
+private suspend fun io.ktor.server.application.ApplicationCall.resolvePolicyId(
+    raw: String?,
+    organizationId: Int?,
+): Int? {
+    if (organizationId == null) return null
+    val resourceId = parseEscalationResourceId(raw)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid policy ID"))
+        return null
+    }
+    val policyId =
+        transaction {
+            EscalationPolicies
+                .selectAll()
+                .where {
+                    (EscalationPolicies.organizationId eq organizationId) and
+                        (EscalationPolicies.resourceId eq resourceId)
+                }
+                .firstOrNull()
+                ?.get(EscalationPolicies.id)
+                ?.value
+        }
+    if (policyId == null) {
+        respond(HttpStatusCode.NotFound, ErrorResponse(POLICY_NOT_FOUND_MESSAGE))
+    }
+    return policyId
+}
+
+private fun parseEscalationResourceId(raw: String?): Uuid? =
+    raw?.toUuidOrNull()
+
+private fun resolvePolicyTargetId(
+    organizationId: Int,
+    target: CreatePolicyTargetRequest,
+): Int {
+    val resourceId =
+        target.targetId.toUuidOrNull() ?: throw IllegalArgumentException("Invalid target ID")
+    return transaction {
+        when (target.targetType) {
+            "USER" ->
+                Users
+                    .innerJoin(Memberships)
+                    .selectAll()
+                    .where {
+                        (Users.resource_id eq resourceId) and
+                            (Memberships.organization_id eq organizationId)
+                    }
+                    .firstOrNull()
+                    ?.get(Users.id)
+
+            "ON_CALL_SCHEDULE" ->
+                OnCallSchedules
+                    .selectAll()
+                    .where {
+                        (OnCallSchedules.resourceId eq resourceId) and
+                            (OnCallSchedules.organizationId eq organizationId)
+                    }
+                    .firstOrNull()
+                    ?.get(OnCallSchedules.id)
+                    ?.value
+
+            else -> throw IllegalArgumentException("Unsupported target type")
+        }
+    } ?: throw IllegalArgumentException("Target not found")
 }

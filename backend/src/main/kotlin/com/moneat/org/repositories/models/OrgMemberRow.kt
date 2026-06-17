@@ -21,6 +21,7 @@ package com.moneat.org.repositories.models
  */
 data class OrgMemberRow(
     val userId: Int,
+    val userResourceId: String,
     val email: String,
     val name: String?,
     val role: String

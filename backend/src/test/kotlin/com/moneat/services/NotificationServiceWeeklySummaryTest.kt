@@ -17,10 +17,8 @@
 package com.moneat.services
 
 import com.moneat.config.ClickHouseClient
-import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.NotificationService
-import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.AlertNotificationPreferences
 import com.moneat.shared.models.EmailsSent
 import com.moneat.shared.models.Memberships
@@ -71,16 +69,19 @@ class NotificationServiceWeeklySummaryTest {
         private const val LARGE_K_EVENTS = 1500L
         private const val LARGE_M_EVENTS = 2_000_000L
         private const val DEFAULT_CRASH_FREE = 99.0
+        private const val CLICKHOUSE_ERROR_STATUS = 500
+        private const val TOP_ISSUE_EVENTS = 12L
+        private const val TOP_ISSUE_ID = "issue-top-1"
+        private const val TOP_ISSUE_TITLE = "Payment failed"
+        private const val TOP_ISSUE_CULPRIT = "IllegalStateException"
     }
 
     private val emailService = mockk<EmailService>(relaxed = true)
-    private val slackService = mockk<SlackService>(relaxed = true)
-    private val discordService = mockk<DiscordService>(relaxed = true)
 
     // ──── Setup & Helpers ────
     @BeforeTest
     fun setupDatabase() {
-        clearMocks(emailService, slackService, discordService)
+        clearMocks(emailService)
 
         if (db == null) {
             db = Database.connect(
@@ -148,6 +149,20 @@ class NotificationServiceWeeklySummaryTest {
         { exchange ->
             val query = exchange.requestBodyText()
             when {
+                query.contains("any(culprit)") -> {
+                    exchange.respond(
+                        CLICKHOUSE_ERROR_STATUS,
+                        "Code: 47. Unknown expression identifier culprit",
+                        TEXT_PLAIN
+                    )
+                }
+                query.contains("any(project_id) as project_id") -> {
+                    exchange.respond(
+                        CLICKHOUSE_ERROR_STATUS,
+                        "Code: 184. Aggregate function any(project_id) AS project_id is found in WHERE",
+                        TEXT_PLAIN
+                    )
+                }
                 query.contains("GROUP BY project_id") -> {
                     exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
                 }
@@ -193,6 +208,18 @@ class NotificationServiceWeeklySummaryTest {
             when {
                 query.contains("GROUP BY project_id") ->
                     exchange.respond(200, emptyData, TEXT_PLAIN)
+                query.contains("any(culprit)") ->
+                    exchange.respond(
+                        CLICKHOUSE_ERROR_STATUS,
+                        "Code: 47. Unknown expression identifier culprit",
+                        TEXT_PLAIN
+                    )
+                query.contains("any(project_id) as project_id") ->
+                    exchange.respond(
+                        CLICKHOUSE_ERROR_STATUS,
+                        "Code: 184. Aggregate function any(project_id) AS project_id is found in WHERE",
+                        TEXT_PLAIN
+                    )
                 query.contains("count() as total_events") -> {
                     call++
                     val body = if (call == 1) {
@@ -226,11 +253,7 @@ class NotificationServiceWeeklySummaryTest {
             "default",
             "",
         )
-        val service = NotificationService(
-            emailService,
-            slackService,
-            discordService,
-        )
+        val service = NotificationService(emailService)
         try {
             block(service)
         } finally {
@@ -255,7 +278,7 @@ class NotificationServiceWeeklySummaryTest {
             ).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(emailService, slackService, discordService)
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyuser@moneat.io")
                 } finally {
@@ -290,7 +313,7 @@ class NotificationServiceWeeklySummaryTest {
             ).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(emailService, slackService, discordService)
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyuser2@moneat.io")
                 } finally {
@@ -322,7 +345,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(failHandler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(emailService, slackService, discordService)
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(userId, "weeklyskip@moneat.io")
                 } finally {
@@ -385,11 +408,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(
-                    emailService,
-                    slackService,
-                    discordService,
-                )
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(
                         userId,
@@ -453,11 +472,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(
-                    emailService,
-                    slackService,
-                    discordService,
-                )
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(
                         userId,
@@ -473,6 +488,90 @@ class NotificationServiceWeeklySummaryTest {
             verify(exactly = 0) {
                 emailService.sendWeeklySummaryEmail(any(), any())
             }
+        }
+
+    @Test
+    fun `sendWeeklySummaryForUser maps top issues without aggregate alias collision`() =
+        runBlocking {
+            val orgId = seedOrg()
+            val userId = seedUser("topalias@moneat.io", "TopAlias User")
+            seedMembership(userId, orgId)
+            val projectId = seedProject(orgId, "TopAlias Project")
+
+            val handler: (HttpExchange) -> Unit = { exchange ->
+                val query = exchange.requestBodyText()
+                when {
+                    query.contains("any(project_id) as project_id") -> {
+                        exchange.respond(
+                            CLICKHOUSE_ERROR_STATUS,
+                            "Code: 184. Aggregate function any(project_id) AS project_id is found in WHERE",
+                            TEXT_PLAIN
+                        )
+                    }
+                    query.contains("GROUP BY project_id") -> {
+                        val body = """{"data":[{""" +
+                            """"project_id":$projectId,""" +
+                            """"total_events":$STATS_TOTAL_EVENTS,""" +
+                            """"unique_issues":$STATS_UNIQUE_ISSUES,""" +
+                            """"unique_users":$STATS_UNIQUE_USERS""" +
+                            """}]}"""
+                        exchange.respond(200, body, TEXT_PLAIN)
+                    }
+                    query.contains("countIf(errors = 0)") -> {
+                        exchange.respond(
+                            200,
+                            """{"data":[{"rate":$DEFAULT_CRASH_FREE}]}""",
+                            TEXT_PLAIN
+                        )
+                    }
+                    query.contains("any(message) as title") -> {
+                        val body = """{"data":[{""" +
+                            """"issue_id":"$TOP_ISSUE_ID",""" +
+                            """"title":"$TOP_ISSUE_TITLE",""" +
+                            """"culprit":"$TOP_ISSUE_CULPRIT",""" +
+                            """"top_issue_project_id":$projectId,""" +
+                            """"event_count":$TOP_ISSUE_EVENTS""" +
+                            """}]}"""
+                        exchange.respond(200, body, TEXT_PLAIN)
+                    }
+                    query.contains("count() as total_events") -> {
+                        exchange.respond(
+                            200,
+                            statsJson(
+                                STATS_TOTAL_EVENTS,
+                                STATS_UNIQUE_ISSUES,
+                                STATS_UNIQUE_USERS,
+                            ),
+                            TEXT_PLAIN
+                        )
+                    }
+                    else -> {
+                        exchange.respond(200, """{"data":[]}""", TEXT_PLAIN)
+                    }
+                }
+            }
+
+            val result = withMockClickHouse(handler) { service ->
+                service.sendWeeklySummaryForUser(
+                    userId,
+                    "topalias@moneat.io",
+                )
+            }
+
+            assertEquals(WeeklySummaryResult.SENT, result)
+            val dataSlot = slot<EmailService.WeeklySummaryData>()
+            verify(exactly = 1) {
+                emailService.sendWeeklySummaryEmail(
+                    "topalias@moneat.io",
+                    capture(dataSlot),
+                )
+            }
+
+            val topIssue = dataSlot.captured.topIssues.single()
+            assertEquals(TOP_ISSUE_TITLE, topIssue.title)
+            assertEquals(TOP_ISSUE_CULPRIT, topIssue.culprit)
+            assertEquals("TopAlias Project", topIssue.project)
+            assertEquals(TOP_ISSUE_EVENTS.toString(), topIssue.count)
         }
 
     @Test
@@ -513,11 +612,7 @@ class NotificationServiceWeeklySummaryTest {
             val result = MockHttpServer(handler).use { server ->
                 ClickHouseClient.close()
                 ClickHouseClient.init(server.baseUrl, "test", "default", "")
-                val service = NotificationService(
-                    emailService,
-                    slackService,
-                    discordService,
-                )
+                val service = NotificationService(emailService)
                 try {
                     service.sendWeeklySummaryForUser(
                         userId,
@@ -543,7 +638,7 @@ class NotificationServiceWeeklySummaryTest {
             val userId = seedUser("noproj@moneat.io", "No Proj User")
             seedMembership(userId, orgId)
 
-            val service = NotificationService(emailService, slackService, discordService)
+            val service = NotificationService(emailService)
             try {
                 val result = service.sendWeeklySummaryForUser(
                     userId,
