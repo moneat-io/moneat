@@ -1,7 +1,7 @@
 {
     "id": "020-13332-kube-state-metrics-v2",
-    "title": "kube-state-metrics-v2",
-    "description": "Prebuilt Moneat dashboard for kube-state-metrics-v2 telemetry.",
+    "title": "Kube State Metrics",
+    "description": "Object-level state of Kubernetes deployments, pods, and nodes from kube-state-metrics.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "kube-state-metrics-v2",
-        "description": "Prebuilt Moneat dashboard for kube-state-metrics-v2 telemetry.",
+        "title": "Kube State Metrics",
+        "description": "Object-level state of Kubernetes deployments, pods, and nodes from kube-state-metrics.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "087-15762-kubernetes-system-coredns",
-    "title": "Kubernetes / System / CoreDNS",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / System / CoreDNS telemetry.",
+    "title": "Kubernetes CoreDNS View",
+    "description": "Query rate, cache performance, and errors for CoreDNS in the Kubernetes cluster.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -16,8 +16,8 @@
         "Panel 0: couldn't parse PromQL 'up{job=~\"$job\", instance=~\"$instance\", cluster=~\"$cluster\"}', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Kubernetes / System / CoreDNS",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / System / CoreDNS telemetry.",
+        "title": "Kubernetes CoreDNS View",
+        "description": "Query rate, cache performance, and errors for CoreDNS in the Kubernetes cluster.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

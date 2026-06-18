@@ -1,7 +1,7 @@
 {
     "id": "098-20398-karpenter",
     "title": "Karpenter",
-    "description": "Prebuilt Moneat dashboard for Karpenter telemetry.",
+    "description": "Node provisioning, consolidation, and capacity decisions for the Karpenter autoscaler.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -17,7 +17,7 @@
     ],
     "dashboard": {
         "title": "Karpenter",
-        "description": "Prebuilt Moneat dashboard for Karpenter telemetry.",
+        "description": "Node provisioning, consolidation, and capacity decisions for the Karpenter autoscaler.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

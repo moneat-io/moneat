@@ -1,7 +1,7 @@
 {
     "id": "006-7639-istio-mesh-dashboard",
-    "title": "Istio Mesh Dashboard",
-    "description": "Prebuilt Moneat dashboard for Istio Mesh Dashboard telemetry.",
+    "title": "Istio Mesh",
+    "description": "Global traffic, success rates, and health across the Istio service mesh.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -14,8 +14,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "Istio Mesh Dashboard",
-        "description": "Prebuilt Moneat dashboard for Istio Mesh Dashboard telemetry.",
+        "title": "Istio Mesh",
+        "description": "Global traffic, success rates, and health across the Istio service mesh.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

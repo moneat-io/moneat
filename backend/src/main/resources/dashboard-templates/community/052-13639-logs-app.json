@@ -1,7 +1,7 @@
 {
     "id": "052-13639-logs-app",
-    "title": "Logs / App",
-    "description": "Prebuilt Moneat dashboard for Logs / App telemetry.",
+    "title": "Application Logs",
+    "description": "Application log volume, severity breakdown, and error trends from Loki.",
     "category": "logs",
     "tags": [
         "Logs",
@@ -16,8 +16,8 @@
         "Panel 1: couldn't parse PromQL '{job=\"$app\"} |= \"$search\" | logfmt', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Logs / App",
-        "description": "Prebuilt Moneat dashboard for Logs / App telemetry.",
+        "title": "Application Logs",
+        "description": "Application log volume, severity breakdown, and error trends from Loki.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

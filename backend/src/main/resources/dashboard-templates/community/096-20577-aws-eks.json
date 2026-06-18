@@ -1,7 +1,7 @@
 {
     "id": "096-20577-aws-eks",
-    "title": "AWS - EKS",
-    "description": "Prebuilt Moneat dashboard for AWS - EKS telemetry.",
+    "title": "AWS EKS",
+    "description": "Control plane, node group, and pod metrics for AWS EKS clusters.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -14,8 +14,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "AWS - EKS",
-        "description": "Prebuilt Moneat dashboard for AWS - EKS telemetry.",
+        "title": "AWS EKS",
+        "description": "Control plane, node group, and pod metrics for AWS EKS clusters.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

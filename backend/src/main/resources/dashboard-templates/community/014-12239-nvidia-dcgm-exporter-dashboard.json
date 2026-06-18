@@ -1,7 +1,7 @@
 {
     "id": "014-12239-nvidia-dcgm-exporter-dashboard",
-    "title": "NVIDIA DCGM Exporter Dashboard",
-    "description": "Prebuilt Moneat dashboard for NVIDIA DCGM Exporter Dashboard telemetry.",
+    "title": "NVIDIA GPU (DCGM)",
+    "description": "GPU utilization, temperature, power, and memory usage from the NVIDIA DCGM exporter.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "NVIDIA DCGM Exporter Dashboard",
-        "description": "Prebuilt Moneat dashboard for NVIDIA DCGM Exporter Dashboard telemetry.",
+        "title": "NVIDIA GPU (DCGM)",
+        "description": "GPU utilization, temperature, power, and memory usage from the NVIDIA DCGM exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

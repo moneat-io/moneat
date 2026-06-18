@@ -1,7 +1,7 @@
 {
     "id": "036-11264-amazon-rds",
     "title": "Amazon RDS",
-    "description": "Prebuilt Moneat dashboard for Amazon RDS telemetry.",
+    "description": "CPU, connections, storage, and IOPS for Amazon RDS instances via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Amazon RDS",
-        "description": "Prebuilt Moneat dashboard for Amazon RDS telemetry.",
+        "description": "CPU, connections, storage, and IOPS for Amazon RDS instances via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

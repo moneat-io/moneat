@@ -1,7 +1,7 @@
 {
     "id": "030-13996-clusterpolicyreport-details",
-    "title": "ClusterPolicyReport Details",
-    "description": "Prebuilt Moneat dashboard for ClusterPolicyReport Details telemetry.",
+    "title": "Cluster Policy Reports",
+    "description": "Cluster-scoped policy pass, fail, and warning results from Kubernetes ClusterPolicyReports.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 6,
     "warnings": [],
     "dashboard": {
-        "title": "ClusterPolicyReport Details",
-        "description": "Prebuilt Moneat dashboard for ClusterPolicyReport Details telemetry.",
+        "title": "Cluster Policy Reports",
+        "description": "Cluster-scoped policy pass, fail, and warning results from Kubernetes ClusterPolicyReports.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

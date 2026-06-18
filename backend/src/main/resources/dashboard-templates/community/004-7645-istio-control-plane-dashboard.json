@@ -1,7 +1,7 @@
 {
     "id": "004-7645-istio-control-plane-dashboard",
-    "title": "Istio Control Plane Dashboard",
-    "description": "Prebuilt Moneat dashboard for Istio Control Plane Dashboard telemetry.",
+    "title": "Istio Control Plane",
+    "description": "Health, resource usage, and configuration sync for the Istio control plane.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -14,8 +14,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "Istio Control Plane Dashboard",
-        "description": "Prebuilt Moneat dashboard for Istio Control Plane Dashboard telemetry.",
+        "title": "Istio Control Plane",
+        "description": "Health, resource usage, and configuration sync for the Istio control plane.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "100-11455-k8s-storage-volumes-namespace",
-    "title": "K8s / Storage / Volumes / Namespace",
-    "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Namespace telemetry.",
+    "title": "Kubernetes Volumes (Namespace)",
+    "description": "Per-namespace persistent volume capacity, usage, and inode consumption.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -41,8 +41,8 @@
         "Panel 22: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes {namespace=\"$namespace\", persistentvolumeclaim=\"$persistentvolumeclaim\"}))', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "K8s / Storage / Volumes / Namespace",
-        "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Namespace telemetry.",
+        "title": "Kubernetes Volumes (Namespace)",
+        "description": "Per-namespace persistent volume capacity, usage, and inode consumption.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

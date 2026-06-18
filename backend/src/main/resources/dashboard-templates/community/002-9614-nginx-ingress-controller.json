@@ -1,7 +1,7 @@
 {
     "id": "002-9614-nginx-ingress-controller",
-    "title": "NGINX Ingress controller",
-    "description": "Prebuilt Moneat dashboard for NGINX Ingress controller telemetry.",
+    "title": "NGINX Ingress Controller",
+    "description": "Request throughput, latency, and error rates for the NGINX ingress controller on Kubernetes.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -16,8 +16,8 @@
         "Panel 7: couldn't parse PromQL '- sum (irate (nginx_ingress_controller_response_size_sum{controller_pod=~\"$controller\",controller_class=~\"$controller_class\",controller_namespace=~\"$namespace\"}[2m]))', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "NGINX Ingress controller",
-        "description": "Prebuilt Moneat dashboard for NGINX Ingress controller telemetry.",
+        "title": "NGINX Ingress Controller",
+        "description": "Request throughput, latency, and error rates for the NGINX ingress controller on Kubernetes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

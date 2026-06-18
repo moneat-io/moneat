@@ -1,7 +1,7 @@
 {
     "id": "097-20223-eth-docker-logs",
-    "title": "ETH Docker Logs",
-    "description": "Prebuilt Moneat dashboard for ETH Docker Logs telemetry.",
+    "title": "Ethereum Node Logs",
+    "description": "Log volume, severity, and errors for Ethereum clients running under eth-docker.",
     "category": "logs",
     "tags": [
         "Logs",
@@ -19,8 +19,8 @@
         "Panel 3: couldn't parse PromQL '{container_name=~\".+-mev-boost-1\"}', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "ETH Docker Logs",
-        "description": "Prebuilt Moneat dashboard for ETH Docker Logs telemetry.",
+        "title": "Ethereum Node Logs",
+        "description": "Log volume, severity, and errors for Ethereum clients running under eth-docker.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

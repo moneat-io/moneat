@@ -1,7 +1,7 @@
 {
     "id": "027-11159-nodejs-application-dashboard",
-    "title": "NodeJS Application Dashboard",
-    "description": "Prebuilt Moneat dashboard for NodeJS Application Dashboard telemetry.",
+    "title": "Node.js Application",
+    "description": "Event loop lag, memory, and HTTP request metrics for Node.js applications.",
     "category": "applications",
     "tags": [
         "Applications",
@@ -15,8 +15,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "NodeJS Application Dashboard",
-        "description": "Prebuilt Moneat dashboard for NodeJS Application Dashboard telemetry.",
+        "title": "Node.js Application",
+        "description": "Event loop lag, memory, and HTTP request metrics for Node.js applications.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

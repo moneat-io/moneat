@@ -1,7 +1,7 @@
 {
     "id": "062-16032-aws-cni-metrics",
-    "title": "AWS CNI Metrics",
-    "description": "Prebuilt Moneat dashboard for AWS CNI Metrics telemetry.",
+    "title": "AWS VPC CNI",
+    "description": "IP address allocation, ENI usage, and warm-pool health for the AWS VPC CNI.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -14,8 +14,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "AWS CNI Metrics",
-        "description": "Prebuilt Moneat dashboard for AWS CNI Metrics telemetry.",
+        "title": "AWS VPC CNI",
+        "description": "IP address allocation, ENI usage, and warm-pool health for the AWS VPC CNI.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

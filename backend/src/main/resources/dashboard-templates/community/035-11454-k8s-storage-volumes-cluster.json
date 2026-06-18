@@ -1,7 +1,7 @@
 {
     "id": "035-11454-k8s-storage-volumes-cluster",
-    "title": "K8s / Storage / Volumes / Cluster",
-    "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Cluster telemetry.",
+    "title": "Kubernetes Volumes (Cluster)",
+    "description": "Cluster-wide persistent volume capacity, usage, and inode consumption.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -29,8 +29,8 @@
         "Panel 20: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes )) / (max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_capacity_bytes )) * 100', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "K8s / Storage / Volumes / Cluster",
-        "description": "Prebuilt Moneat dashboard for K8s / Storage / Volumes / Cluster telemetry.",
+        "title": "Kubernetes Volumes (Cluster)",
+        "description": "Cluster-wide persistent volume capacity, usage, and inode consumption.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

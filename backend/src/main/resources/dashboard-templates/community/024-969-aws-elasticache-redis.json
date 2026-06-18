@@ -1,7 +1,7 @@
 {
     "id": "024-969-aws-elasticache-redis",
-    "title": "AWS ElastiCache Redis",
-    "description": "Prebuilt Moneat dashboard for AWS ElastiCache Redis telemetry.",
+    "title": "Amazon ElastiCache for Redis",
+    "description": "Cache hit rate, memory usage, and connections for Amazon ElastiCache for Redis.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -15,8 +15,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "AWS ElastiCache Redis",
-        "description": "Prebuilt Moneat dashboard for AWS ElastiCache Redis telemetry.",
+        "title": "Amazon ElastiCache for Redis",
+        "description": "Cache hit rate, memory usage, and connections for Amazon ElastiCache for Redis.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

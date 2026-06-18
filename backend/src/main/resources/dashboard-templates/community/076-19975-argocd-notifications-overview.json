@@ -1,7 +1,7 @@
 {
     "id": "076-19975-argocd-notifications-overview",
-    "title": "ArgoCD / Notifications / Overview",
-    "description": "Prebuilt Moneat dashboard for ArgoCD / Notifications / Overview telemetry.",
+    "title": "Argo CD Notifications",
+    "description": "Delivery success, failures, and throughput for Argo CD notifications.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 5,
     "warnings": [],
     "dashboard": {
-        "title": "ArgoCD / Notifications / Overview",
-        "description": "Prebuilt Moneat dashboard for ArgoCD / Notifications / Overview telemetry.",
+        "title": "Argo CD Notifications",
+        "description": "Delivery success, failures, and throughput for Argo CD notifications.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

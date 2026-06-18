@@ -1,7 +1,7 @@
 {
     "id": "033-584-aws-sqs",
-    "title": "AWS SQS",
-    "description": "Prebuilt Moneat dashboard for AWS SQS telemetry.",
+    "title": "Amazon SQS",
+    "description": "Queue depth, message age, and send and receive throughput for Amazon SQS.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -14,8 +14,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "AWS SQS",
-        "description": "Prebuilt Moneat dashboard for AWS SQS telemetry.",
+        "title": "Amazon SQS",
+        "description": "Queue depth, message age, and send and receive throughput for Amazon SQS.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

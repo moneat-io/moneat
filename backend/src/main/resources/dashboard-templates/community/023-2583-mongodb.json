@@ -1,7 +1,7 @@
 {
     "id": "023-2583-mongodb",
     "title": "MongoDB",
-    "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+    "description": "Operations, connections, and replication lag for MongoDB databases.",
     "category": "databases",
     "tags": [
         "Databases"
@@ -12,7 +12,7 @@
     "warnings": [],
     "dashboard": {
         "title": "MongoDB",
-        "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+        "description": "Operations, connections, and replication lag for MongoDB databases.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

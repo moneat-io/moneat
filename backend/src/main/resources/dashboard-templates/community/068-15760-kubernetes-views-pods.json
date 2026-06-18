@@ -1,7 +1,7 @@
 {
     "id": "068-15760-kubernetes-views-pods",
-    "title": "Kubernetes / Views / Pods",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Pods telemetry.",
+    "title": "Kubernetes Pod View",
+    "description": "Detailed CPU, memory, network, and storage metrics for a selected Kubernetes pod.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -14,8 +14,8 @@
     "variable_count": 6,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes / Views / Pods",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Pods telemetry.",
+        "title": "Kubernetes Pod View",
+        "description": "Detailed CPU, memory, network, and storage metrics for a selected Kubernetes pod.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

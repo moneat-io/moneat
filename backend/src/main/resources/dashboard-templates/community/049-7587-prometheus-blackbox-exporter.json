@@ -1,7 +1,7 @@
 {
     "id": "049-7587-prometheus-blackbox-exporter",
     "title": "Prometheus Blackbox Exporter",
-    "description": "Prebuilt Moneat dashboard for Prometheus Blackbox Exporter telemetry.",
+    "description": "Endpoint availability and probe duration across HTTP, TCP, ICMP, and DNS checks.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Prometheus Blackbox Exporter",
-        "description": "Prebuilt Moneat dashboard for Prometheus Blackbox Exporter telemetry.",
+        "description": "Endpoint availability and probe duration across HTTP, TCP, ICMP, and DNS checks.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

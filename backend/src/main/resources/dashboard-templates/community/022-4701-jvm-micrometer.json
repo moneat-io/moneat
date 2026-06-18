@@ -1,7 +1,7 @@
 {
     "id": "022-4701-jvm-micrometer",
     "title": "JVM (Micrometer)",
-    "description": "Prebuilt Moneat dashboard for JVM (Micrometer) telemetry.",
+    "description": "Heap usage, garbage collection, and thread activity for JVM applications instrumented with Micrometer.",
     "category": "applications",
     "tags": [
         "Applications"
@@ -12,7 +12,7 @@
     "warnings": [],
     "dashboard": {
         "title": "JVM (Micrometer)",
-        "description": "Prebuilt Moneat dashboard for JVM (Micrometer) telemetry.",
+        "description": "Heap usage, garbage collection, and thread activity for JVM applications instrumented with Micrometer.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

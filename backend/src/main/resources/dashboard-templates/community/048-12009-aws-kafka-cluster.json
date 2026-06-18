@@ -1,7 +1,7 @@
 {
     "id": "048-12009-aws-kafka-cluster",
-    "title": "AWS Kafka Cluster",
-    "description": "Prebuilt Moneat dashboard for AWS Kafka Cluster telemetry.",
+    "title": "Amazon MSK Cluster",
+    "description": "Broker throughput, partitions, and cluster health for Amazon MSK (managed Kafka) via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -15,8 +15,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "AWS Kafka Cluster",
-        "description": "Prebuilt Moneat dashboard for AWS Kafka Cluster telemetry.",
+        "title": "Amazon MSK Cluster",
+        "description": "Broker throughput, partitions, and cluster health for Amazon MSK (managed Kafka) via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

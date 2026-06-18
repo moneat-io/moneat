@@ -1,7 +1,7 @@
 {
     "id": "053-11023-contour",
     "title": "Contour",
-    "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+    "description": "Request rate, latency, and HTTPProxy health for the Contour ingress controller.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Contour",
-        "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+        "description": "Request rate, latency, and HTTPProxy health for the Contour ingress controller.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "079-15757-kubernetes-views-global",
-    "title": "Kubernetes / Views / Global",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Global telemetry.",
+    "title": "Kubernetes Cluster View",
+    "description": "Cluster-wide resource usage and workload distribution across Kubernetes namespaces and nodes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -14,8 +14,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes / Views / Global",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Global telemetry.",
+        "title": "Kubernetes Cluster View",
+        "description": "Cluster-wide resource usage and workload distribution across Kubernetes namespaces and nodes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

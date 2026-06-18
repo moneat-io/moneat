@@ -1,7 +1,7 @@
 {
     "id": "078-14191-elasticsearch-overview",
-    "title": "Elasticsearch Exporter Quickstart and Dashboard",
-    "description": "Prebuilt Moneat dashboard for Elasticsearch Exporter Quickstart and Dashboard telemetry.",
+    "title": "Elasticsearch",
+    "description": "Cluster health, indexing rate, and query latency for Elasticsearch via the Prometheus exporter.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -15,8 +15,8 @@
         "Panel 31: couldn't parse PromQL '1-(elasticsearch_filesystem_data_available_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"}/elasticsearch_filesystem_data_size_bytes{job=\"$job\",instance=~\"$instance\",cluster=\"$cluster\",name=~\"$name\"})', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Elasticsearch Exporter Quickstart and Dashboard",
-        "description": "Prebuilt Moneat dashboard for Elasticsearch Exporter Quickstart and Dashboard telemetry.",
+        "title": "Elasticsearch",
+        "description": "Cluster health, indexing rate, and query latency for Elasticsearch via the Prometheus exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

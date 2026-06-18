@@ -1,7 +1,7 @@
 {
     "id": "086-17846-home-staking-dashboard",
-    "title": "Home Staking Dashboard",
-    "description": "Prebuilt Moneat dashboard for Home Staking Dashboard telemetry.",
+    "title": "Ethereum Home Staking",
+    "description": "Validator balances, attestation effectiveness, and rewards for a home Ethereum staking setup.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -16,8 +16,8 @@
         "Panel 24: couldn't parse PromQL '(validator_performance_expected_attestations-validator_performance_included_attestations)', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Home Staking Dashboard",
-        "description": "Prebuilt Moneat dashboard for Home Staking Dashboard telemetry.",
+        "title": "Ethereum Home Staking",
+        "description": "Validator balances, attestation effectiveness, and rewards for a home Ethereum staking setup.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

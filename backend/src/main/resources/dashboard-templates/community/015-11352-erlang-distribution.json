@@ -1,7 +1,7 @@
 {
     "id": "015-11352-erlang-distribution",
-    "title": "Erlang-Distribution",
-    "description": "Prebuilt Moneat dashboard for Erlang-Distribution telemetry.",
+    "title": "Erlang Distribution",
+    "description": "Inter-node distribution traffic and link health across an Erlang cluster.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 5,
     "warnings": [],
     "dashboard": {
-        "title": "Erlang-Distribution",
-        "description": "Prebuilt Moneat dashboard for Erlang-Distribution telemetry.",
+        "title": "Erlang Distribution",
+        "description": "Inter-node distribution traffic and link health across an Erlang cluster.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

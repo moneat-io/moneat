@@ -1,7 +1,7 @@
 {
     "id": "042-8171-kubernetes-nodes",
     "title": "Kubernetes Nodes",
-    "description": "Prebuilt Moneat dashboard for Kubernetes Nodes telemetry.",
+    "description": "Per-node CPU, memory, disk, and network usage across the Kubernetes cluster.",
     "category": "kubernetes",
     "tags": [
         "Infrastructure",
@@ -18,7 +18,7 @@
     ],
     "dashboard": {
         "title": "Kubernetes Nodes",
-        "description": "Prebuilt Moneat dashboard for Kubernetes Nodes telemetry.",
+        "description": "Per-node CPU, memory, disk, and network usage across the Kubernetes cluster.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

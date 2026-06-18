@@ -1,7 +1,7 @@
 {
     "id": "047-13041-website-monitoring",
-    "title": "Website monitoring",
-    "description": "Prebuilt Moneat dashboard for Website monitoring telemetry.",
+    "title": "Website Monitoring",
+    "description": "Uptime, response time, and SSL certificate status for monitored websites.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "Website monitoring",
-        "description": "Prebuilt Moneat dashboard for Website monitoring telemetry.",
+        "title": "Website Monitoring",
+        "description": "Uptime, response time, and SSL certificate status for monitored websites.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

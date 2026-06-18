@@ -1,7 +1,7 @@
 {
     "id": "011-14055-loki-stack-monitoring-promtail-loki",
-    "title": "Loki stack monitoring (Promtail, Loki)",
-    "description": "Prebuilt Moneat dashboard for Loki stack monitoring (Promtail, Loki) telemetry.",
+    "title": "Loki & Promtail",
+    "description": "Ingestion rate, query performance, and health for the Loki and Promtail logging stack.",
     "category": "logs",
     "tags": [
         "Logs",
@@ -19,8 +19,8 @@
         "Panel 5: couldn't parse PromQL '{app=\"promtail\"} | logfmt | level=\"warn\" or level=\"error\"', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Loki stack monitoring (Promtail, Loki)",
-        "description": "Prebuilt Moneat dashboard for Loki stack monitoring (Promtail, Loki) telemetry.",
+        "title": "Loki & Promtail",
+        "description": "Ingestion rate, query performance, and health for the Loki and Promtail logging stack.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

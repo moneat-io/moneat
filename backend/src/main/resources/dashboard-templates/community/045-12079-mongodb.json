@@ -1,7 +1,7 @@
 {
     "id": "045-12079-mongodb",
-    "title": "MongoDB",
-    "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+    "title": "MongoDB (Prometheus Exporter)",
+    "description": "Throughput, connections, and replication health for MongoDB via the Prometheus exporter.",
     "category": "databases",
     "tags": [
         "Databases",
@@ -14,8 +14,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "MongoDB",
-        "description": "Prebuilt Moneat dashboard for MongoDB telemetry.",
+        "title": "MongoDB (Prometheus Exporter)",
+        "description": "Throughput, connections, and replication health for MongoDB via the Prometheus exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

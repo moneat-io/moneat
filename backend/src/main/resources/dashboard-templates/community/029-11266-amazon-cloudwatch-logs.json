@@ -1,7 +1,7 @@
 {
     "id": "029-11266-amazon-cloudwatch-logs",
     "title": "Amazon CloudWatch Logs",
-    "description": "Prebuilt Moneat dashboard for Amazon CloudWatch Logs telemetry.",
+    "description": "Ingestion volume, stored bytes, and incoming events from Amazon CloudWatch Logs.",
     "category": "logs",
     "tags": [
         "Cloud",
@@ -16,7 +16,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Amazon CloudWatch Logs",
-        "description": "Prebuilt Moneat dashboard for Amazon CloudWatch Logs telemetry.",
+        "description": "Ingestion volume, stored bytes, and incoming events from Amazon CloudWatch Logs.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

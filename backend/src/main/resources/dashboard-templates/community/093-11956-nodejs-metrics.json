@@ -1,7 +1,7 @@
 {
     "id": "093-11956-nodejs-metrics",
-    "title": "Nodejs Metrics",
-    "description": "Prebuilt Moneat dashboard for Nodejs Metrics telemetry.",
+    "title": "Node.js Runtime",
+    "description": "Event loop lag, heap usage, and garbage collection for Node.js processes.",
     "category": "applications",
     "tags": [
         "Applications",
@@ -17,8 +17,8 @@
         "Panel 4: couldn't parse PromQL '(process_start_time_seconds{service=~\"$service\", stack=~\"$stack\"})*1000', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Nodejs Metrics",
-        "description": "Prebuilt Moneat dashboard for Nodejs Metrics telemetry.",
+        "title": "Node.js Runtime",
+        "description": "Event loop lag, heap usage, and garbage collection for Node.js processes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

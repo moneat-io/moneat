@@ -1,7 +1,7 @@
 {
     "id": "044-14900-nginx",
-    "title": "Nginx",
-    "description": "Prebuilt Moneat dashboard for Nginx telemetry.",
+    "title": "NGINX",
+    "description": "Active connections, request rate, and response status for NGINX web servers.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -17,8 +17,8 @@
         "Panel 2: couldn't parse PromQL '100 - (cpu_usage_idle{instance=~ \"$instance*\",cpu=\"cpu-total\"})', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Nginx",
-        "description": "Prebuilt Moneat dashboard for Nginx telemetry.",
+        "title": "NGINX",
+        "description": "Active connections, request rate, and response status for NGINX web servers.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

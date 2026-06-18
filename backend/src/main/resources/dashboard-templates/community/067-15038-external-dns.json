@@ -1,7 +1,7 @@
 {
     "id": "067-15038-external-dns",
-    "title": "External DNS",
-    "description": "Prebuilt Moneat dashboard for External DNS telemetry.",
+    "title": "ExternalDNS",
+    "description": "Record synchronization, registry updates, and errors for ExternalDNS.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -16,8 +16,8 @@
         "Panel 5: couldn't parse PromQL '1000 * (external_dns_controller_last_sync_timestamp_seconds{pod=~\".*external-dns.*\",pod=~\"$pod\"})', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "External DNS",
-        "description": "Prebuilt Moneat dashboard for External DNS telemetry.",
+        "title": "ExternalDNS",
+        "description": "Record synchronization, registry updates, and errors for ExternalDNS.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

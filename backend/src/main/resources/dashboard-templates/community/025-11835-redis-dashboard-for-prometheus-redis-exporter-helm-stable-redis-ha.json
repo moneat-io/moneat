@@ -1,7 +1,7 @@
 {
     "id": "025-11835-redis-dashboard-for-prometheus-redis-exporter-helm-stable-redis-ha",
-    "title": "Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha)",
-    "description": "Prebuilt Moneat dashboard for Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha) telemetry.",
+    "title": "Redis (Prometheus Exporter)",
+    "description": "Command rates, memory, and replication for Redis scraped by the Prometheus Redis exporter.",
     "category": "infrastructure",
     "tags": [
         "Messaging",
@@ -16,8 +16,8 @@
         "Panel 2: couldn't parse PromQL '100 * (redis_memory_used_bytes{instance=~\"$instance\"}  / redis_memory_max_bytes{instance=~\"$instance\"} )', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha)",
-        "description": "Prebuilt Moneat dashboard for Redis Dashboard for Prometheus Redis Exporter (helm stable/redis-ha) telemetry.",
+        "title": "Redis (Prometheus Exporter)",
+        "description": "Command rates, memory, and replication for Redis scraped by the Prometheus Redis exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

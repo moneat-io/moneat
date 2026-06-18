@@ -1,7 +1,7 @@
 {
     "id": "099-9852-stians-disk-graphs",
-    "title": "node-exporter disk graphs",
-    "description": "Prebuilt Moneat dashboard for node-exporter disk graphs telemetry.",
+    "title": "Disk I/O (Node Exporter)",
+    "description": "Disk throughput, IOPS, and latency per device from Prometheus Node Exporter.",
     "category": "infrastructure",
     "tags": [
         "Infrastructure",
@@ -14,8 +14,8 @@
     "variable_count": 5,
     "warnings": [],
     "dashboard": {
-        "title": "node-exporter disk graphs",
-        "description": "Prebuilt Moneat dashboard for node-exporter disk graphs telemetry.",
+        "title": "Disk I/O (Node Exporter)",
+        "description": "Disk throughput, IOPS, and latency per device from Prometheus Node Exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

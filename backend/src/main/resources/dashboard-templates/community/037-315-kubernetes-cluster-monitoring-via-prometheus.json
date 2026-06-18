@@ -1,7 +1,7 @@
 {
     "id": "037-315-kubernetes-cluster-monitoring-via-prometheus",
-    "title": "Kubernetes cluster monitoring (via Prometheus)",
-    "description": "Prebuilt Moneat dashboard for Kubernetes cluster monitoring (via Prometheus) telemetry.",
+    "title": "Kubernetes Cluster Monitoring",
+    "description": "Cluster-wide CPU, memory, and network usage with pod and deployment health from Prometheus.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes"
@@ -11,8 +11,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes cluster monitoring (via Prometheus)",
-        "description": "Prebuilt Moneat dashboard for Kubernetes cluster monitoring (via Prometheus) telemetry.",
+        "title": "Kubernetes Cluster Monitoring",
+        "description": "Cluster-wide CPU, memory, and network usage with pod and deployment health from Prometheus.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",
