@@ -1,7 +1,7 @@
 {
     "id": "019-10441-keycloak-metrics-dashboard",
     "title": "Keycloak",
-    "description": "Login, token, and session activity for Keycloak identity and access management.",
+    "description": "Login, registration, error, latency, and resource metrics for Keycloak identity and access management.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Keycloak",
-        "description": "Login, token, and session activity for Keycloak identity and access management.",
+        "description": "Login, registration, error, latency, and resource metrics for Keycloak identity and access management.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

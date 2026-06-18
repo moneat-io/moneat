@@ -1,7 +1,7 @@
 {
     "id": "052-13639-logs-app",
     "title": "Application Logs",
-    "description": "Application log volume, severity breakdown, and error trends from Loki.",
+    "description": "Application log search, table views, and volume trends from Loki.",
     "category": "logs",
     "tags": [
         "Logs",
@@ -17,7 +17,7 @@
     ],
     "dashboard": {
         "title": "Application Logs",
-        "description": "Application log volume, severity breakdown, and error trends from Loki.",
+        "description": "Application log search, table views, and volume trends from Loki.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

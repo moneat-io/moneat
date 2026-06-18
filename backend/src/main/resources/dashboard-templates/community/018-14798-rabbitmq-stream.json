@@ -1,7 +1,7 @@
 {
     "id": "018-14798-rabbitmq-stream",
     "title": "RabbitMQ Streams",
-    "description": "Publishing rate, consumer activity, and storage for RabbitMQ streams.",
+    "description": "Publishing rate, consumer activity, confirmations, and error rates for RabbitMQ streams.",
     "category": "infrastructure",
     "tags": [
         "Messaging",
@@ -22,7 +22,7 @@
     ],
     "dashboard": {
         "title": "RabbitMQ Streams",
-        "description": "Publishing rate, consumer activity, and storage for RabbitMQ streams.",
+        "description": "Publishing rate, consumer activity, confirmations, and error rates for RabbitMQ streams.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

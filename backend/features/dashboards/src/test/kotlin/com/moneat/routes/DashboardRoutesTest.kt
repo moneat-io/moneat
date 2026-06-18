@@ -1653,7 +1653,7 @@ class DashboardRoutesTest {
                     withAuth(token(userId, orgId))
                 }
             assertEquals(HttpStatusCode.OK, r.status)
-            assertTrue(r.bodyAsText().contains("Node Exporter Full"))
+            assertTrue(r.bodyAsText().contains("Node Exporter"))
         }
 
     @Test
@@ -1692,7 +1692,7 @@ class DashboardRoutesTest {
             assertEquals(HttpStatusCode.Created, r.status)
             assertEquals("project-77", requestSlot.captured.projectId)
             assertEquals("folder-88", requestSlot.captured.folderId)
-            assertEquals("Node Exporter Full", requestSlot.captured.title)
+            assertEquals("Node Exporter", requestSlot.captured.title)
             assertTrue(requestSlot.captured.widgets.isNotEmpty())
         }
 

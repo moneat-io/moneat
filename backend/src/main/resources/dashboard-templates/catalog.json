@@ -271,7 +271,7 @@
         {
             "id": "018-14798-rabbitmq-stream",
             "title": "RabbitMQ Streams",
-            "description": "Publishing rate, consumer activity, and storage for RabbitMQ streams.",
+            "description": "Publishing rate, consumer activity, confirmations, and error rates for RabbitMQ streams.",
             "category": "infrastructure",
             "tags": [
                 "Messaging",
@@ -287,7 +287,7 @@
         {
             "id": "019-10441-keycloak-metrics-dashboard",
             "title": "Keycloak",
-            "description": "Login, token, and session activity for Keycloak identity and access management.",
+            "description": "Login, registration, error, latency, and resource metrics for Keycloak identity and access management.",
             "category": "infrastructure",
             "tags": [
                 "Prometheus"
@@ -302,7 +302,7 @@
         {
             "id": "020-13332-kube-state-metrics-v2",
             "title": "Kube State Metrics",
-            "description": "Object-level state of Kubernetes deployments, pods, and nodes from kube-state-metrics.",
+            "description": "Object-level state of Kubernetes deployments, statefulsets, jobs, pods, containers, HPAs, PVCs, and nodes from kube-state-metrics.",
             "category": "infrastructure",
             "tags": [
                 "Prometheus"
@@ -331,8 +331,8 @@
         },
         {
             "id": "022-4701-jvm-micrometer",
-            "title": "JVM (Micrometer)",
-            "description": "Heap usage, garbage collection, and thread activity for JVM applications instrumented with Micrometer.",
+            "title": "Application Runtime Metrics",
+            "description": "Runtime heap, garbage collection, thread, event loop, and process memory metrics from Micrometer and Node.js exporters.",
             "category": "applications",
             "tags": [
                 "Applications"
@@ -345,7 +345,7 @@
         {
             "id": "023-2583-mongodb",
             "title": "MongoDB",
-            "description": "Operations, connections, and replication lag for MongoDB databases.",
+            "description": "Starter template for MongoDB database telemetry.",
             "category": "databases",
             "tags": [
                 "Databases"
@@ -736,7 +736,7 @@
         {
             "id": "048-12009-aws-kafka-cluster",
             "title": "Amazon MSK Cluster",
-            "description": "Broker throughput, partitions, and cluster health for Amazon MSK (managed Kafka) via CloudWatch.",
+            "description": "Controller count, ZooKeeper latency, partition count, and topic count for Amazon MSK via CloudWatch.",
             "category": "cloud",
             "tags": [
                 "Cloud",
@@ -753,7 +753,7 @@
         {
             "id": "049-7587-prometheus-blackbox-exporter",
             "title": "Prometheus Blackbox Exporter",
-            "description": "Endpoint availability and probe duration across HTTP, TCP, ICMP, and DNS checks.",
+            "description": "Endpoint availability and probe duration across HTTP, ICMP, and DNS checks.",
             "category": "infrastructure",
             "tags": [
                 "Prometheus"
@@ -768,7 +768,7 @@
         {
             "id": "050-11022-envoy-global",
             "title": "Envoy Global",
-            "description": "Fleet-wide request volume, connections, and resource usage across Envoy proxies.",
+            "description": "Fleet-wide request volume, connections, latency, and traffic across Envoy proxies.",
             "category": "infrastructure",
             "tags": [
                 "Network",
@@ -784,7 +784,7 @@
         {
             "id": "051-6693-envoy",
             "title": "Envoy Proxy",
-            "description": "Downstream and upstream traffic, latency, and error rates for an Envoy proxy.",
+            "description": "Downstream and upstream traffic, latency, connections, and membership health for an Envoy proxy.",
             "category": "infrastructure",
             "tags": [
                 "Network",
@@ -800,7 +800,7 @@
         {
             "id": "052-13639-logs-app",
             "title": "Application Logs",
-            "description": "Application log volume, severity breakdown, and error trends from Loki.",
+            "description": "Application log search, table views, and volume trends from Loki.",
             "category": "logs",
             "tags": [
                 "Logs",
@@ -816,7 +816,7 @@
         {
             "id": "053-11023-contour",
             "title": "Contour",
-            "description": "Request rate, latency, and HTTPProxy health for the Contour ingress controller.",
+            "description": "IngressRoute counts and LDS, CDS, and RDS update health for Contour.",
             "category": "infrastructure",
             "tags": [
                 "Prometheus"
@@ -1224,7 +1224,7 @@
         {
             "id": "080-13646-kubernetes-persistent-volumes",
             "title": "Kubernetes Persistent Volume Usage",
-            "description": "Per-claim usage, inode consumption, and growth for Kubernetes persistent volumes.",
+            "description": "Per-claim capacity, usage, and growth for Kubernetes persistent volumes.",
             "category": "kubernetes",
             "tags": [
                 "Kubernetes",

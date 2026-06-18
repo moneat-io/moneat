@@ -1,7 +1,7 @@
 {
     "id": "022-4701-jvm-micrometer",
-    "title": "JVM (Micrometer)",
-    "description": "Heap usage, garbage collection, and thread activity for JVM applications instrumented with Micrometer.",
+    "title": "Application Runtime Metrics",
+    "description": "Runtime heap, garbage collection, thread, event loop, and process memory metrics from Micrometer and Node.js exporters.",
     "category": "applications",
     "tags": [
         "Applications"
@@ -11,8 +11,8 @@
     "variable_count": 5,
     "warnings": [],
     "dashboard": {
-        "title": "JVM (Micrometer)",
-        "description": "Heap usage, garbage collection, and thread activity for JVM applications instrumented with Micrometer.",
+        "title": "Application Runtime Metrics",
+        "description": "Runtime heap, garbage collection, thread, event loop, and process memory metrics from Micrometer and Node.js exporters.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

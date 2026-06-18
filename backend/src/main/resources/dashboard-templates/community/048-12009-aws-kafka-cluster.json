@@ -1,7 +1,7 @@
 {
     "id": "048-12009-aws-kafka-cluster",
     "title": "Amazon MSK Cluster",
-    "description": "Broker throughput, partitions, and cluster health for Amazon MSK (managed Kafka) via CloudWatch.",
+    "description": "Controller count, ZooKeeper latency, partition count, and topic count for Amazon MSK via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -16,7 +16,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Amazon MSK Cluster",
-        "description": "Broker throughput, partitions, and cluster health for Amazon MSK (managed Kafka) via CloudWatch.",
+        "description": "Controller count, ZooKeeper latency, partition count, and topic count for Amazon MSK via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

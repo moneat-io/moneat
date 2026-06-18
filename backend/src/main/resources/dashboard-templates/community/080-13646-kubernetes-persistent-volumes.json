@@ -1,7 +1,7 @@
 {
     "id": "080-13646-kubernetes-persistent-volumes",
     "title": "Kubernetes Persistent Volume Usage",
-    "description": "Per-claim usage, inode consumption, and growth for Kubernetes persistent volumes.",
+    "description": "Per-claim capacity, usage, and growth for Kubernetes persistent volumes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -17,7 +17,7 @@
     ],
     "dashboard": {
         "title": "Kubernetes Persistent Volume Usage",
-        "description": "Per-claim usage, inode consumption, and growth for Kubernetes persistent volumes.",
+        "description": "Per-claim capacity, usage, and growth for Kubernetes persistent volumes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",
