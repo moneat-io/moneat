@@ -30,6 +30,7 @@ dependencies {
     implementation(project(":feature-spi"))
     implementation(project(":ingest-common"))
     implementation(project(":features:logs"))
+    implementation(project(":features:monitoring"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.auth)
