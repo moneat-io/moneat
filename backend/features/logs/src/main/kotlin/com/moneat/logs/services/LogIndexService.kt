@@ -323,7 +323,10 @@ class LogIndexService {
     ): List<QueuedLogEntry> {
         if (entries.isEmpty()) return entries
         val quotaIndexes = indexes
-            .filter { it.dailyQuotaGb != null && it.dailyQuotaGb > 0f }
+            .filter { index ->
+                val dailyQuotaGb = index.dailyQuotaGb
+                dailyQuotaGb != null && dailyQuotaGb > 0f
+            }
             .associateBy { it.name }
         if (quotaIndexes.isEmpty()) return entries
 
