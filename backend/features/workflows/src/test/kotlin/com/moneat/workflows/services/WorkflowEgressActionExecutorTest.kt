@@ -87,13 +87,12 @@ class WorkflowEgressActionExecutorTest {
 
     @Test
     fun `transform rejects output larger than the cap`() {
-        val oversizedPayload = "x".repeat(64001)
         val error =
             assertFailsWith<IllegalArgumentException> {
                 executor.execute(
                     stepName = TRANSFORM_GRAALJS_ACTION,
-                    params = mapOf("script" to "return scope.payload;"),
-                    scope = mapOf("payload" to oversizedPayload)
+                    params = mapOf("script" to "return 'x'.repeat(64001);"),
+                    scope = emptyMap()
                 )
             }
         assertTrue(error.message.orEmpty().contains("exceeds"))
