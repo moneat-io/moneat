@@ -1,7 +1,7 @@
 {
     "id": "058-1471-kubernetes-apps",
-    "title": "Kubernetes App Metrics",
-    "description": "Prebuilt Moneat dashboard for Kubernetes App Metrics telemetry.",
+    "title": "Kubernetes Applications",
+    "description": "Resource usage, replicas, and availability for application workloads on Kubernetes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes"
@@ -11,8 +11,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes App Metrics",
-        "description": "Prebuilt Moneat dashboard for Kubernetes App Metrics telemetry.",
+        "title": "Kubernetes Applications",
+        "description": "Resource usage, replicas, and availability for application workloads on Kubernetes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

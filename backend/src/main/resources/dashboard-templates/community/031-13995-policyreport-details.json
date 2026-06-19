@@ -1,7 +1,7 @@
 {
     "id": "031-13995-policyreport-details",
-    "title": "PolicyReport Details",
-    "description": "Prebuilt Moneat dashboard for PolicyReport Details telemetry.",
+    "title": "Policy Report Details",
+    "description": "Per-namespace policy pass, fail, and warning results from Kubernetes PolicyReports.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 7,
     "warnings": [],
     "dashboard": {
-        "title": "PolicyReport Details",
-        "description": "Prebuilt Moneat dashboard for PolicyReport Details telemetry.",
+        "title": "Policy Report Details",
+        "description": "Per-namespace policy pass, fail, and warning results from Kubernetes PolicyReports.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "021-13502-minio-dashboard",
-    "title": "MinIO Dashboard",
-    "description": "Prebuilt Moneat dashboard for MinIO Dashboard telemetry.",
+    "title": "MinIO",
+    "description": "Capacity, throughput, and API request performance for MinIO object storage.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "MinIO Dashboard",
-        "description": "Prebuilt Moneat dashboard for MinIO Dashboard telemetry.",
+        "title": "MinIO",
+        "description": "Capacity, throughput, and API request performance for MinIO object storage.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "019-10441-keycloak-metrics-dashboard",
-    "title": "Keycloak Metrics Dashboard",
-    "description": "Prebuilt Moneat dashboard for Keycloak Metrics Dashboard telemetry.",
+    "title": "Keycloak",
+    "description": "Login, registration, error, latency, and resource metrics for Keycloak identity and access management.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "Keycloak Metrics Dashboard",
-        "description": "Prebuilt Moneat dashboard for Keycloak Metrics Dashboard telemetry.",
+        "title": "Keycloak",
+        "description": "Login, registration, error, latency, and resource metrics for Keycloak identity and access management.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

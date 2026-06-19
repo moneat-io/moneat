@@ -1,7 +1,7 @@
 {
     "id": "092-11378-justai-system-monitor",
-    "title": "Spring Boot 2.1 System Monitor",
-    "description": "Prebuilt Moneat dashboard for Spring Boot 2.1 System Monitor telemetry.",
+    "title": "Spring Boot System Monitor",
+    "description": "JVM memory, CPU, and HTTP endpoint metrics for Spring Boot services.",
     "category": "applications",
     "tags": [
         "Applications",
@@ -14,8 +14,8 @@
     "variable_count": 5,
     "warnings": [],
     "dashboard": {
-        "title": "Spring Boot 2.1 System Monitor",
-        "description": "Prebuilt Moneat dashboard for Spring Boot 2.1 System Monitor telemetry.",
+        "title": "Spring Boot System Monitor",
+        "description": "JVM memory, CPU, and HTTP endpoint metrics for Spring Boot services.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

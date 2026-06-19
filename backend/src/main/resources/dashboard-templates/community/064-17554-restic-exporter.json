@@ -1,7 +1,7 @@
 {
     "id": "064-17554-restic-exporter",
-    "title": "Restic Exporter",
-    "description": "Prebuilt Moneat dashboard for Restic Exporter telemetry.",
+    "title": "Restic Backups",
+    "description": "Snapshot age, repository size, and backup success from the Restic exporter.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 0,
     "warnings": [],
     "dashboard": {
-        "title": "Restic Exporter",
-        "description": "Prebuilt Moneat dashboard for Restic Exporter telemetry.",
+        "title": "Restic Backups",
+        "description": "Snapshot age, repository size, and backup success from the Restic exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

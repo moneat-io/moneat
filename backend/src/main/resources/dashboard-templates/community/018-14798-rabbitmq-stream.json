@@ -1,7 +1,7 @@
 {
     "id": "018-14798-rabbitmq-stream",
-    "title": "RabbitMQ-Stream",
-    "description": "Prebuilt Moneat dashboard for RabbitMQ-Stream telemetry.",
+    "title": "RabbitMQ Streams",
+    "description": "Publishing rate, consumer activity, confirmations, and error rates for RabbitMQ streams.",
     "category": "infrastructure",
     "tags": [
         "Messaging",
@@ -21,8 +21,8 @@
         "Panel 16: non-standard query target stored as rawQuery"
     ],
     "dashboard": {
-        "title": "RabbitMQ-Stream",
-        "description": "Prebuilt Moneat dashboard for RabbitMQ-Stream telemetry.",
+        "title": "RabbitMQ Streams",
+        "description": "Publishing rate, consumer activity, confirmations, and error rates for RabbitMQ streams.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

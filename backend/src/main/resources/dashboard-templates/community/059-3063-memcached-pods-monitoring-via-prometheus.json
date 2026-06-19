@@ -1,7 +1,7 @@
 {
     "id": "059-3063-memcached-pods-monitoring-via-prometheus",
-    "title": "Memcached Pods monitoring (via Prometheus)",
-    "description": "Prebuilt Moneat dashboard for Memcached Pods monitoring (via Prometheus) telemetry.",
+    "title": "Memcached",
+    "description": "Hit ratio, evictions, connections, and memory for Memcached scraped by Prometheus.",
     "category": "infrastructure",
     "tags": [
         "Infrastructure"
@@ -11,8 +11,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "Memcached Pods monitoring (via Prometheus)",
-        "description": "Prebuilt Moneat dashboard for Memcached Pods monitoring (via Prometheus) telemetry.",
+        "title": "Memcached",
+        "description": "Hit ratio, evictions, connections, and memory for Memcached scraped by Prometheus.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

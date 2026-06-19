@@ -1,7 +1,7 @@
 {
     "id": "017-15661-k8s-dashboard-en-20250125",
-    "title": "K8S Dashboard",
-    "description": "Prebuilt Moneat dashboard for K8S Dashboard telemetry.",
+    "title": "Kubernetes Overview",
+    "description": "Cluster-wide workload, resource usage, and node health for Kubernetes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -16,8 +16,8 @@
         "Panel 32: couldn't parse PromQL '- sum (rate (container_network_transmit_bytes_total{origin_prometheus=~\"$origin_prometheus\",pod=~\"$Pod\",image!=\"\",name=~\"^k8s_.*\",node=~\"^$Node$\",namespace=~\"$NameSpace\",pod=~\".*$Container.*\"}[2m])) by (pod)', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "K8S Dashboard",
-        "description": "Prebuilt Moneat dashboard for K8S Dashboard telemetry.",
+        "title": "Kubernetes Overview",
+        "description": "Cluster-wide workload, resource usage, and node health for Kubernetes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

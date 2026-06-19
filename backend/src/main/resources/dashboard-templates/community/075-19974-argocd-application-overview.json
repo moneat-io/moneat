@@ -1,7 +1,7 @@
 {
     "id": "075-19974-argocd-application-overview",
-    "title": "ArgoCD / Application / Overview",
-    "description": "Prebuilt Moneat dashboard for ArgoCD / Application / Overview telemetry.",
+    "title": "Argo CD Applications",
+    "description": "Sync and health status for applications managed by Argo CD.",
     "category": "applications",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 8,
     "warnings": [],
     "dashboard": {
-        "title": "ArgoCD / Application / Overview",
-        "description": "Prebuilt Moneat dashboard for ArgoCD / Application / Overview telemetry.",
+        "title": "Argo CD Applications",
+        "description": "Sync and health status for applications managed by Argo CD.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

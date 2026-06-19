@@ -1,7 +1,7 @@
 {
     "id": "041-7362-mysql-overview",
-    "title": "MySQL Overview",
-    "description": "Prebuilt Moneat dashboard for MySQL Overview telemetry.",
+    "title": "MySQL",
+    "description": "Query throughput, connections, and InnoDB activity for MySQL servers.",
     "category": "databases",
     "tags": [
         "Databases",
@@ -16,8 +16,8 @@
         "Panel 4: couldn't parse PromQL '(mysql_global_variables_innodb_buffer_pool_size{instance=\"$host\"} * 100) / on (instance) node_memory_MemTotal_bytes{instance=\"$host\"}', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "MySQL Overview",
-        "description": "Prebuilt Moneat dashboard for MySQL Overview telemetry.",
+        "title": "MySQL",
+        "description": "Query throughput, connections, and InnoDB activity for MySQL servers.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "089-16367-kubernetes-compute-resources-node-pods",
-    "title": "Kubernetes / Compute Resources / Node (Pods)",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / Compute Resources / Node (Pods) telemetry.",
+    "title": "Kubernetes Node Compute Resources",
+    "description": "CPU and memory usage broken down by pod for a selected Kubernetes node.",
     "category": "kubernetes",
     "tags": [
         "Infrastructure",
@@ -15,8 +15,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes / Compute Resources / Node (Pods)",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / Compute Resources / Node (Pods) telemetry.",
+        "title": "Kubernetes Node Compute Resources",
+        "description": "CPU and memory usage broken down by pod for a selected Kubernetes node.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

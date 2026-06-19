@@ -1,7 +1,7 @@
 {
     "id": "090-10619-docker-host-container-overview",
-    "title": "Docker Container & Host Metrics",
-    "description": "Prebuilt Moneat dashboard for Docker Container & Host Metrics telemetry.",
+    "title": "Docker Containers & Hosts",
+    "description": "Container and host CPU, memory, network, and disk usage for Docker environments.",
     "category": "infrastructure",
     "tags": [
         "Infrastructure",
@@ -17,8 +17,8 @@
         "Panel 5: couldn't parse PromQL '{__name__=~\"^node_load.*\"}', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Docker Container & Host Metrics",
-        "description": "Prebuilt Moneat dashboard for Docker Container & Host Metrics telemetry.",
+        "title": "Docker Containers & Hosts",
+        "description": "Container and host CPU, memory, network, and disk usage for Docker environments.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

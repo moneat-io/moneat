@@ -1,7 +1,7 @@
 {
     "id": "046-9578-alertmanager",
     "title": "Alertmanager",
-    "description": "Prebuilt Moneat dashboard for Alertmanager telemetry.",
+    "description": "Alert volume, notification delivery, and active silences for Prometheus Alertmanager.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Alertmanager",
-        "description": "Prebuilt Moneat dashboard for Alertmanager telemetry.",
+        "description": "Alert volume, notification delivery, and active silences for Prometheus Alertmanager.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

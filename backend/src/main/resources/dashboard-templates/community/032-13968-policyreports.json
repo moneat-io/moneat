@@ -1,7 +1,7 @@
 {
     "id": "032-13968-policyreports",
-    "title": "PolicyReports",
-    "description": "Prebuilt Moneat dashboard for PolicyReports telemetry.",
+    "title": "Policy Reports",
+    "description": "Summary of policy compliance and violations across namespaces from PolicyReports.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 7,
     "warnings": [],
     "dashboard": {
-        "title": "PolicyReports",
-        "description": "Prebuilt Moneat dashboard for PolicyReports telemetry.",
+        "title": "Policy Reports",
+        "description": "Summary of policy compliance and violations across namespaces from PolicyReports.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "082-12006-kubernetes-apiserver",
-    "title": "Kubernetes apiserver",
-    "description": "Prebuilt Moneat dashboard for Kubernetes apiserver telemetry.",
+    "title": "Kubernetes API Server",
+    "description": "Request rate, latency, and error codes for the Kubernetes API server.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -14,8 +14,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes apiserver",
-        "description": "Prebuilt Moneat dashboard for Kubernetes apiserver telemetry.",
+        "title": "Kubernetes API Server",
+        "description": "Request rate, latency, and error codes for the Kubernetes API server.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

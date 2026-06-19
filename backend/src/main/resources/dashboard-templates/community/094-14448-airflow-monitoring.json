@@ -1,7 +1,7 @@
 {
     "id": "094-14448-airflow-monitoring",
-    "title": "Airflow monitoring",
-    "description": "Prebuilt Moneat dashboard for Airflow monitoring telemetry.",
+    "title": "Apache Airflow",
+    "description": "DAG runs, task status, and scheduler health for Apache Airflow.",
     "category": "databases",
     "tags": [
         "PostgreSQL"
@@ -20,8 +20,8 @@
         "Panel 5: SQL query imported as rawQuery for manual review"
     ],
     "dashboard": {
-        "title": "Airflow monitoring",
-        "description": "Prebuilt Moneat dashboard for Airflow monitoring telemetry.",
+        "title": "Apache Airflow",
+        "description": "DAG runs, task status, and scheduler health for Apache Airflow.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

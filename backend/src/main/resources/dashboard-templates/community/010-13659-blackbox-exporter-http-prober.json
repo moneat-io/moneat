@@ -1,7 +1,7 @@
 {
     "id": "010-13659-blackbox-exporter-http-prober",
-    "title": "Blackbox Exporter (HTTP prober)",
-    "description": "Prebuilt Moneat dashboard for Blackbox Exporter (HTTP prober) telemetry.",
+    "title": "Blackbox Exporter (HTTP)",
+    "description": "HTTP endpoint availability, response time, and status codes from Prometheus Blackbox Exporter probes.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "Blackbox Exporter (HTTP prober)",
-        "description": "Prebuilt Moneat dashboard for Blackbox Exporter (HTTP prober) telemetry.",
+        "title": "Blackbox Exporter (HTTP)",
+        "description": "HTTP endpoint availability, response time, and status codes from Prometheus Blackbox Exporter probes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

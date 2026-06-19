@@ -1,7 +1,7 @@
 {
     "id": "060-12010-aws-kafka-topic",
-    "title": "AWS Kafka Topic",
-    "description": "Prebuilt Moneat dashboard for AWS Kafka Topic telemetry.",
+    "title": "Amazon MSK Topics",
+    "description": "Per-topic throughput, message rates, and consumer activity for Amazon MSK via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -15,8 +15,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "AWS Kafka Topic",
-        "description": "Prebuilt Moneat dashboard for AWS Kafka Topic telemetry.",
+        "title": "Amazon MSK Topics",
+        "description": "Per-topic throughput, message rates, and consumer activity for Amazon MSK via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

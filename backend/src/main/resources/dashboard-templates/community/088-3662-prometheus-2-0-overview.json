@@ -1,7 +1,7 @@
 {
     "id": "088-3662-prometheus-2-0-overview",
-    "title": "Prometheus 2.0 Overview",
-    "description": "Prebuilt Moneat dashboard for Prometheus 2.0 Overview telemetry.",
+    "title": "Prometheus",
+    "description": "Scrape performance, TSDB statistics, and resource usage for a Prometheus server.",
     "category": "infrastructure",
     "tags": [
         "Infrastructure"
@@ -11,8 +11,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "Prometheus 2.0 Overview",
-        "description": "Prebuilt Moneat dashboard for Prometheus 2.0 Overview telemetry.",
+        "title": "Prometheus",
+        "description": "Scrape performance, TSDB statistics, and resource usage for a Prometheus server.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

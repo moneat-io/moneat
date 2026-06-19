@@ -1,7 +1,7 @@
 {
     "id": "084-17347-traefik-official-kubernetes-dashboard",
-    "title": "Traefik Official Kubernetes Dashboard",
-    "description": "Prebuilt Moneat dashboard for Traefik Official Kubernetes Dashboard telemetry.",
+    "title": "Traefik on Kubernetes",
+    "description": "Entrypoint, router, and service traffic for Traefik ingress on Kubernetes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -15,8 +15,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "Traefik Official Kubernetes Dashboard",
-        "description": "Prebuilt Moneat dashboard for Traefik Official Kubernetes Dashboard telemetry.",
+        "title": "Traefik on Kubernetes",
+        "description": "Entrypoint, router, and service traffic for Traefik ingress on Kubernetes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

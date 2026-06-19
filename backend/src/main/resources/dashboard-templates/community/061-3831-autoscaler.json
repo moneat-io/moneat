@@ -1,7 +1,7 @@
 {
     "id": "061-3831-autoscaler",
-    "title": "Kubernetes Cluster Autoscaler (via Prometheus)",
-    "description": "Prebuilt Moneat dashboard for Kubernetes Cluster Autoscaler (via Prometheus) telemetry.",
+    "title": "Kubernetes Cluster Autoscaler",
+    "description": "Scale-up and scale-down activity, node group sizes, and unschedulable pods for the cluster autoscaler.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes"
@@ -11,8 +11,8 @@
     "variable_count": 0,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes Cluster Autoscaler (via Prometheus)",
-        "description": "Prebuilt Moneat dashboard for Kubernetes Cluster Autoscaler (via Prometheus) telemetry.",
+        "title": "Kubernetes Cluster Autoscaler",
+        "description": "Scale-up and scale-down activity, node group sizes, and unschedulable pods for the cluster autoscaler.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

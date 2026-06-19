@@ -1,7 +1,7 @@
 {
     "id": "038-6417-kubernetes-cluster-prometheus",
     "title": "Kubernetes Cluster (Prometheus)",
-    "description": "Prebuilt Moneat dashboard for Kubernetes Cluster (Prometheus) telemetry.",
+    "description": "Node, pod, and container resource usage across a Kubernetes cluster from Prometheus.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -17,7 +17,7 @@
     ],
     "dashboard": {
         "title": "Kubernetes Cluster (Prometheus)",
-        "description": "Prebuilt Moneat dashboard for Kubernetes Cluster (Prometheus) telemetry.",
+        "description": "Node, pod, and container resource usage across a Kubernetes cluster from Prometheus.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",
