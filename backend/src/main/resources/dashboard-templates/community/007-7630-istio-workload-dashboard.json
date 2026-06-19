@@ -1,7 +1,7 @@
 {
     "id": "007-7630-istio-workload-dashboard",
-    "title": "Istio Workload Dashboard",
-    "description": "Prebuilt Moneat dashboard for Istio Workload Dashboard telemetry.",
+    "title": "Istio Workloads",
+    "description": "Inbound and outbound traffic, latency, and TCP metrics per workload in the Istio mesh.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -14,8 +14,8 @@
     "variable_count": 7,
     "warnings": [],
     "dashboard": {
-        "title": "Istio Workload Dashboard",
-        "description": "Prebuilt Moneat dashboard for Istio Workload Dashboard telemetry.",
+        "title": "Istio Workloads",
+        "description": "Inbound and outbound traffic, latency, and TCP metrics per workload in the Istio mesh.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

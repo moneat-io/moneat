@@ -1,7 +1,7 @@
 {
     "id": "050-11022-envoy-global",
     "title": "Envoy Global",
-    "description": "Prebuilt Moneat dashboard for Envoy Global telemetry.",
+    "description": "Fleet-wide request volume, connections, latency, and traffic across Envoy proxies.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Envoy Global",
-        "description": "Prebuilt Moneat dashboard for Envoy Global telemetry.",
+        "description": "Fleet-wide request volume, connections, latency, and traffic across Envoy proxies.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

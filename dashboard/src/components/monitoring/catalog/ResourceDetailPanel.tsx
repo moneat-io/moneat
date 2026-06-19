@@ -43,6 +43,7 @@ import {
   Share2,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   TrendingDown,
   TrendingUp,
   Users,
@@ -50,12 +51,14 @@ import {
 } from 'lucide-react'
 
 import {cn} from '@/lib/utils'
+import type {OrganizationTeam} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {EmptyState} from '@/components/ui/empty-state'
-import {Input} from '@/components/ui/input'
+import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from '@/components/ui/select'
 import {StatusDot} from '@/components/ui/status-dot'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
+import {useOrganizationTeams} from '@/hooks/useOrganizationTeams'
 import {useTimezone} from '@/hooks/useTimezone'
 import {HealthBadge, KindIcon, TagChip, VulnBar} from './CatalogPrimitives'
 import {MetricChart, type MetricChartProps} from './CatalogCharts'
@@ -79,6 +82,7 @@ import {
   relTime,
   totalVulns,
   useClaimOwnership,
+  useDeleteOwnership,
   useResourceTelemetry,
   type Relationship,
   type Resource,
@@ -87,20 +91,9 @@ import {
 
 type DetailTab = 'overview' | 'relationships' | 'ownership' | 'security' | 'cost' | 'changes'
 
-type OwnershipSubmitEvent = {
-  readonly preventDefault: () => void
-}
-
 type OwnershipClaimError = {
   readonly className: string
   readonly message: string
-}
-
-type OwnershipForm = {
-  readonly team: string
-  readonly oncall: string
-  readonly slack: string
-  readonly repo: string
 }
 
 const DETAIL_TABS: readonly {readonly id: DetailTab; readonly label: string}[] = [
@@ -134,15 +127,6 @@ function getOwnershipClaimError(error: unknown, isError: boolean): OwnershipClai
     }
   }
   return null
-}
-
-function ownershipForm(owner: Resource['owner']): OwnershipForm {
-  return {
-    team: owner?.team ?? '',
-    oncall: owner?.oncall ?? '',
-    slack: owner?.slack ?? '',
-    repo: owner?.repo ?? '',
-  }
 }
 
 function FieldRow({label, value}: {readonly label: string; readonly value: ReactNode}) {
@@ -366,7 +350,7 @@ function OverviewTab({
             }
           />
           <FieldRow label="Provider" value={CLOUD_LABEL[resource.cloud]} />
-          <FieldRow label="Owner" value={resource.owner ? resource.owner.team : <span className="text-warning-fg">Unowned</span>} />
+          <FieldRow label="Owner" value={resource.owner ? resource.owner.teamName : <span className="text-warning-fg">Unowned</span>} />
           <FieldRow label="First seen" value={relTime(resource.firstSeen)} />
           <FieldRow label="Last change" value={relTime(resource.lastChange)} />
         </PanelSection>
@@ -435,124 +419,193 @@ function RelationshipsTab({resource, onSelect}: {readonly resource: Resource; re
   )
 }
 
-function OwnerField({
-  label,
-  value,
-  onChange,
-  placeholder,
-  required,
-}: {
-  readonly label: string
-  readonly value: string
-  readonly onChange: (value: string) => void
-  readonly placeholder?: string
-  readonly required?: boolean
-}) {
+// ── Ownership ────────────────────────────────────────────────────────────────
+// The owner is an organization team. The Slack channel, repo, and current on-call
+// person are carried on that team (the on-call person is resolved server-side from
+// the team's primary schedule) — there is no per-resource on-call field. Teams are
+// created and managed under On-call → Teams. Tags stay independent of ownership.
+
+function OwnerSummary({owner}: {readonly owner: NonNullable<Resource['owner']>}) {
   return (
-    <label className="block space-y-1">
-      <span className="text-[11px] text-muted-foreground">
-        {label}
-        {required && <span className="text-danger-fg"> *</span>}
-      </span>
-      <Input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className="h-8 text-xs"
-      />
-    </label>
+    <>
+      <FieldRow label="Team" value={owner.teamName} />
+      {owner.currentOnCall && (
+        <FieldRow
+          label="On-call now"
+          value={
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot tone="success" size="sm" />
+              {owner.currentOnCall.userName}
+            </span>
+          }
+        />
+      )}
+      {owner.slack && (
+        <FieldRow
+          label="Slack"
+          value={
+            <span className="inline-flex items-center gap-1">
+              <Hash className="h-3 w-3 text-muted-foreground" />
+              {owner.slack.replace(/^#/, '')}
+            </span>
+          }
+        />
+      )}
+      {owner.repo && (
+        <FieldRow
+          label="Repository"
+          value={
+            <span className="inline-flex items-center gap-1">
+              <GitBranch className="h-3 w-3 text-muted-foreground" />
+              {owner.repo}
+            </span>
+          }
+        />
+      )}
+    </>
   )
+}
+
+/** Read-only preview of what assigning the selected team implies. */
+function TeamPreview({team}: {readonly team: OrganizationTeam}) {
+  return (
+    <div className="space-y-0.5 rounded-md border border-border/70 bg-muted/20 px-2 py-1.5">
+      <FieldRow
+        label="On-call now"
+        value={
+          team.currentOnCall ? (
+            <span className="inline-flex items-center gap-1.5">
+              <StatusDot tone="success" size="sm" />
+              {team.currentOnCall.userName}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">No active schedule</span>
+          )
+        }
+      />
+      {team.slack && <FieldRow label="Slack" value={team.slack.replace(/^#/, '')} />}
+      {team.repo && <FieldRow label="Repository" value={team.repo} />}
+    </div>
+  )
+}
+
+function OwnershipEditor({
+  resource,
+  owner,
+  onDone,
+  onCancel,
+}: {
+  readonly resource: Resource
+  readonly owner: Resource['owner']
+  readonly onDone: () => void
+  readonly onCancel: () => void
+}) {
+  const claim = useClaimOwnership()
+  const teamsQuery = useOrganizationTeams()
+  const teams = teamsQuery.data ?? []
+  const [teamId, setTeamId] = useState<string>(owner?.teamId ?? '')
+  const selectedTeam = teams.find((team) => team.id === teamId) ?? null
+
+  const submit = () => {
+    if (!teamId) return
+    claim.mutate({resourceId: resource.id, teamId}, {onSuccess: onDone})
+  }
+
+  const claimError = getOwnershipClaimError(claim.error, claim.isError)
+  const teamsForbidden = teamsQuery.isError && isOwnershipForbidden(teamsQuery.error)
+
+  let body: ReactNode
+  if (teamsQuery.isLoading) {
+    body = <p className="text-xs text-muted-foreground">Loading teams…</p>
+  } else if (teamsForbidden) {
+    body = <p className="text-[11px] text-warning-fg">Team-based ownership is available on the Team plan and above.</p>
+  } else if (teams.length === 0) {
+    body = (
+      <div className="space-y-2 text-xs text-muted-foreground">
+        <p>No teams yet. Create a team to assign ownership.</p>
+        <Button asChild type="button" size="sm" variant="outline" className="gap-1">
+          <Link to="/on-call/teams">
+            <Plus className="h-3.5 w-3.5" /> Create a team
+          </Link>
+        </Button>
+      </div>
+    )
+  } else {
+    body = (
+      <div className="space-y-2">
+        <label className="block space-y-1">
+          <span className="text-[11px] text-muted-foreground">
+            Team<span className="text-danger-fg"> *</span>
+          </span>
+          <Select value={teamId} onValueChange={setTeamId}>
+            <SelectTrigger className="h-8 text-xs" aria-label="Owning team">
+              <SelectValue placeholder="Select a team" />
+            </SelectTrigger>
+            <SelectContent>
+              {teams.map((team) => (
+                <SelectItem key={team.id} value={team.id}>
+                  {team.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
+        {selectedTeam && <TeamPreview team={selectedTeam} />}
+        {claimError && <p className={claimError.className}>{claimError.message}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="button" size="sm" disabled={teamId === '' || claim.isPending} onClick={submit}>
+            {claim.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  return <PanelSection title={owner ? 'Edit ownership' : 'Assign owner'}>{body}</PanelSection>
 }
 
 function OwnershipTab({resource}: {readonly resource: Resource}) {
   const owner = resource.owner
-  const claim = useClaimOwnership()
   const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState(() => ownershipForm(owner))
-  const {reset: resetClaim} = claim
+  const removeOwnership = useDeleteOwnership()
 
-  const startEdit = () => {
-    setForm(ownershipForm(owner))
-    resetClaim()
-    setEditing(true)
-  }
-
-  const submit = (event: OwnershipSubmitEvent) => {
-    event.preventDefault()
-    const team = form.team.trim()
-    if (!team) return
-    claim.mutate(
-      {resourceId: resource.id, team, oncall: form.oncall.trim(), slack: form.slack.trim(), repo: form.repo.trim()},
-      {onSuccess: () => setEditing(false)},
-    )
-  }
-
-  const claimError = getOwnershipClaimError(claim.error, claim.isError)
   let ownershipContent: ReactNode
   if (editing) {
     ownershipContent = (
-      <PanelSection title={owner ? 'Edit ownership' : 'Claim ownership'}>
-        <form className="space-y-2" onSubmit={submit}>
-          <OwnerField label="Team" required value={form.team} placeholder="Payments" onChange={(v) => setForm((f) => ({...f, team: v}))} />
-          <OwnerField label="On-call" value={form.oncall} placeholder="Dana Whitfield" onChange={(v) => setForm((f) => ({...f, oncall: v}))} />
-          <OwnerField label="Slack" value={form.slack} placeholder="#payments-oncall" onChange={(v) => setForm((f) => ({...f, slack: v}))} />
-          <OwnerField label="Repository" value={form.repo} placeholder="moneat-io/payments" onChange={(v) => setForm((f) => ({...f, repo: v}))} />
-          {claimError && <p className={claimError.className}>{claimError.message}</p>}
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm" disabled={form.team.trim() === '' || claim.isPending}>
-              {claim.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-        </form>
-      </PanelSection>
+      <OwnershipEditor
+        resource={resource}
+        owner={owner}
+        onDone={() => setEditing(false)}
+        onCancel={() => setEditing(false)}
+      />
     )
   } else if (owner) {
     ownershipContent = (
       <PanelSection
         title="Ownership"
         action={
-          <Button type="button" size="sm" variant="ghost" onClick={startEdit}>
-            Edit
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 text-muted-foreground hover:text-danger-fg"
+              aria-label="Remove owner"
+              disabled={removeOwnership.isPending}
+              onClick={() => removeOwnership.mutate(resource.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         }
       >
-        <FieldRow label="Team" value={owner.team} />
-        {owner.oncall && (
-          <FieldRow
-            label="On-call"
-            value={
-              <span className="inline-flex items-center gap-1">
-                <Users className="h-3 w-3 text-muted-foreground" />
-                {owner.oncall}
-              </span>
-            }
-          />
-        )}
-        {owner.slack && (
-          <FieldRow
-            label="Slack"
-            value={
-              <span className="inline-flex items-center gap-1">
-                <Hash className="h-3 w-3 text-muted-foreground" />
-                {owner.slack.replace(/^#/, '')}
-              </span>
-            }
-          />
-        )}
-        {owner.repo && (
-          <FieldRow
-            label="Repository"
-            value={
-              <span className="inline-flex items-center gap-1">
-                <GitBranch className="h-3 w-3 text-muted-foreground" />
-                {owner.repo}
-              </span>
-            }
-          />
-        )}
+        <OwnerSummary owner={owner} />
       </PanelSection>
     )
   } else {
@@ -560,10 +613,10 @@ function OwnershipTab({resource}: {readonly resource: Resource}) {
       <EmptyState
         icon={Users}
         title="No owner assigned"
-        description="This resource has no team, on-call, or escalation path. Unowned resources are a common source of orphaned cost and slow incident response."
+        description="This resource has no owning team, on-call rotation, or escalation path. Unowned resources are a common source of orphaned cost and slow incident response."
         action={
-          <Button type="button" size="sm" className="gap-1" onClick={startEdit}>
-            <Plus className="h-3.5 w-3.5" /> Claim ownership
+          <Button type="button" size="sm" className="gap-1" onClick={() => setEditing(true)}>
+            <Plus className="h-3.5 w-3.5" /> Assign owner
           </Button>
         }
       />

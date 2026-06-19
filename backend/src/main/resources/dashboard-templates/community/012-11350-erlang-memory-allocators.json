@@ -1,7 +1,7 @@
 {
     "id": "012-11350-erlang-memory-allocators",
-    "title": "Erlang-Memory-Allocators",
-    "description": "Prebuilt Moneat dashboard for Erlang-Memory-Allocators telemetry.",
+    "title": "Erlang Memory Allocators",
+    "description": "Memory allocator usage and carrier utilization for the Erlang VM.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 6,
     "warnings": [],
     "dashboard": {
-        "title": "Erlang-Memory-Allocators",
-        "description": "Prebuilt Moneat dashboard for Erlang-Memory-Allocators telemetry.",
+        "title": "Erlang Memory Allocators",
+        "description": "Memory allocator usage and carrier utilization for the Erlang VM.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

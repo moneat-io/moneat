@@ -17,6 +17,7 @@
 package com.moneat.org
 
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.monitor.services.ResourceCatalogTeamResolver
 import com.moneat.org.repositories.OrgInvitationRepository
 import com.moneat.org.repositories.OrgInvitationRepositoryImpl
 import com.moneat.org.repositories.OrgMembershipRepository
@@ -26,6 +27,7 @@ import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.org.services.AdminService
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrganizationTeamService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 import org.koin.core.module.Module
@@ -47,6 +49,8 @@ class OrgModule : EnterpriseModule {
 
                 single { OrgMembershipService(get()) }
                 single { OrgInvitationService(get(), get(), get()) }
+                single { OrganizationTeamService(get(), get()) }
+                single<ResourceCatalogTeamResolver> { get<OrganizationTeamService>() }
                 single { AdminService(get()) }
             }
         )

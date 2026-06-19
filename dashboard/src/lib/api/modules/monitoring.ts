@@ -46,6 +46,8 @@ import type {
   InfrastructureSizeBy,
   SaveInfrastructureMapViewRequest,
   SavedInfrastructureMapView,
+  ResourceOwner,
+  ResourceOwnershipClaim,
 } from '../types'
 
 interface RawInfrastructureMapSavedView {
@@ -257,18 +259,20 @@ export function monitoringMethods(core: ApiClientCore) {
         {method: 'DELETE'}
       ),
 
-    // Resource catalog ownership claim (paid-plan gated server-side).
-    claimResourceOwnership: (claim: {
-      resourceId: string
-      team: string
-      oncall?: string
-      slack?: string
-      repo?: string
-    }): Promise<{team: string; oncall: string; slack: string; repo: string}> =>
-      core.request(`${base}/monitoring/resources/ownership`, {
+    // Resource catalog ownership. The owner is an organization team; Slack, repo,
+    // and the current on-call person are resolved from that team server-side.
+    // Both endpoints are paid-plan gated server-side (403 when Teams is off).
+    claimResourceOwnership: (claim: ResourceOwnershipClaim): Promise<ResourceOwner> =>
+      core.request<ResourceOwner>(`${base}/monitoring/resources/ownership`, {
         method: 'PUT',
         body: JSON.stringify(claim),
       }),
+
+    deleteResourceOwnership: (resourceId: string) =>
+      core.request<void>(
+        `${base}/monitoring/resources/ownership/${encodeURIComponent(resourceId)}`,
+        {method: 'DELETE'}
+      ),
 
     // Connections
     getConnections: (

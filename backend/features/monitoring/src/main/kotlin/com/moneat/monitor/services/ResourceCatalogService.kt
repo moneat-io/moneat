@@ -35,6 +35,8 @@ import com.moneat.monitor.models.ResourceTelemetryPoint
 import com.moneat.monitor.models.ResourceTelemetryResponse
 import com.moneat.monitor.repositories.NoopResourceOwnershipRepository
 import com.moneat.monitor.repositories.ResourceOwnershipRepository
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
@@ -105,6 +107,7 @@ class ResourceCatalogService(
     private val monitorService: MonitorService,
     private val queryClient: ResourceCatalogQueryClient = ClickHouseResourceCatalogQueryClient(),
     private val ownershipRepository: ResourceOwnershipRepository = NoopResourceOwnershipRepository,
+    private val teamResolver: ResourceCatalogTeamResolver = NoopResourceCatalogTeamResolver,
     private val securityReader: ResourceSecurityReader = DefaultResourceSecurityReader(),
 ) {
     suspend fun listResources(
@@ -202,43 +205,50 @@ class ResourceCatalogService(
     private fun ResourceVulnAggregate.toCounts(): CatalogVulnerabilityCounts =
         CatalogVulnerabilityCounts(critical = critical, high = high, medium = medium, low = low)
 
-    /**
-     * Real ownership for each resource: a persisted claim wins, otherwise the owning
-     * team is derived from a `team:` tag when present. Resources with neither stay
-     * unowned (null) rather than carrying a fabricated owner.
-     */
+    /** Real ownership for each resource: persisted team claims only. Tags remain tags. */
     private fun attachOwnership(
         organizationIds: List<Int>,
         resources: List<CatalogResource>,
     ): List<CatalogResource> {
-        val claims = HashMap<String, CatalogOwner>()
+        val ownersByResourceId = HashMap<String, CatalogOwner>()
         for (organizationId in organizationIds) {
-            claims.putAll(ownershipRepository.listByOrganization(organizationId))
+            val claims = ownershipRepository.listByOrganization(organizationId)
+            val ownersByTeamId = teamResolver.catalogOwnersByInternalIds(organizationId, claims.values.toSet())
+            for ((resourceId, teamId) in claims) {
+                ownersByTeamId[teamId]?.let { owner -> ownersByResourceId[resourceId] = owner }
+            }
         }
         return resources.map { resource ->
-            val owner = claims[resource.id] ?: teamTagOwner(resource)
+            val owner = ownersByResourceId[resource.id]
             if (owner == null) resource else resource.copy(owner = owner)
         }
     }
 
-    private fun teamTagOwner(resource: CatalogResource): CatalogOwner? {
-        val team = resource.tags.firstTagValue("team") ?: return null
-        return CatalogOwner(team = team, oncall = "", slack = "", repo = "")
-    }
-
     /** Persist (create or replace) an ownership claim for one catalog resource. */
     suspend fun claimOwnership(organizationId: Int, claim: ResourceOwnershipClaim, actor: String): CatalogOwner? {
+        if (claim.resourceId.isBlank() || claim.teamId.isBlank()) {
+            throw BadRequestException("resourceId and teamId are required")
+        }
         val requestedResource = listResources(listOf(organizationId), limit = MAX_CATALOG_LIMIT)
             .firstOrNull { resource -> resource.id == claim.resourceId }
             ?: return null
-        val owner = CatalogOwner(
-            team = claim.team,
-            oncall = claim.oncall,
-            slack = claim.slack,
-            repo = claim.repo,
-        )
-        ownershipRepository.upsert(organizationId, requestedResource.id, owner, actor)
+        val teamId = teamResolver.resolveTeamId(organizationId, claim.teamId)
+            ?: throw NotFoundException("Team not found")
+        val owner = teamResolver.catalogOwnersByInternalIds(organizationId, setOf(teamId))[teamId]
+            ?: throw NotFoundException("Team not found")
+        ownershipRepository.upsert(organizationId, requestedResource.id, teamId, actor)
         return owner
+    }
+
+    /** Delete a persisted ownership claim for one catalog resource. */
+    suspend fun deleteOwnership(organizationId: Int, resourceId: String): Boolean {
+        if (resourceId.isBlank()) {
+            throw BadRequestException("resourceId is required")
+        }
+        val requestedResource = listResources(listOf(organizationId), limit = MAX_CATALOG_LIMIT)
+            .firstOrNull { resource -> resource.id == resourceId }
+            ?: return false
+        return ownershipRepository.delete(organizationId, requestedResource.id)
     }
 
     /**

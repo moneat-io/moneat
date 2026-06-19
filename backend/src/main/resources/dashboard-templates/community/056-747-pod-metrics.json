@@ -1,7 +1,7 @@
 {
     "id": "056-747-pod-metrics",
-    "title": "Kubernetes Pod Metrics",
-    "description": "Prebuilt Moneat dashboard for Kubernetes Pod Metrics telemetry.",
+    "title": "Kubernetes Pods",
+    "description": "CPU, memory, network, and restart counts per Kubernetes pod.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes"
@@ -11,8 +11,8 @@
     "variable_count": 5,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes Pod Metrics",
-        "description": "Prebuilt Moneat dashboard for Kubernetes Pod Metrics telemetry.",
+        "title": "Kubernetes Pods",
+        "description": "CPU, memory, network, and restart counts per Kubernetes pod.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

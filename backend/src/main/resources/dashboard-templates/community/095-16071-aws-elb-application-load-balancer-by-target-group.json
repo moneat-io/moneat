@@ -1,7 +1,7 @@
 {
     "id": "095-16071-aws-elb-application-load-balancer-by-target-group",
-    "title": "AWS ELB Application Load Balancer by Target Group",
-    "description": "Prebuilt Moneat dashboard for AWS ELB Application Load Balancer by Target Group telemetry.",
+    "title": "AWS ALB Target Groups",
+    "description": "Request counts, latency, and healthy host counts per AWS Application Load Balancer target group.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -14,8 +14,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "AWS ELB Application Load Balancer by Target Group",
-        "description": "Prebuilt Moneat dashboard for AWS ELB Application Load Balancer by Target Group telemetry.",
+        "title": "AWS ALB Target Groups",
+        "description": "Request counts, latency, and healthy host counts per AWS Application Load Balancer target group.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

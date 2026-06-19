@@ -282,7 +282,7 @@ class DashboardCrudToolTest {
             templates.any {
                 val template = it.jsonObject
                 template["id"]?.jsonPrimitive?.content == "001-1860-node-exporter-full" &&
-                    template["title"]?.jsonPrimitive?.content == "Node Exporter Full"
+                    template["title"]?.jsonPrimitive?.content == "Node Exporter"
             }
         )
     }

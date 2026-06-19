@@ -1,7 +1,7 @@
 {
     "id": "065-7187-kubernetes-resource-requests",
     "title": "Kubernetes Resource Requests",
-    "description": "Prebuilt Moneat dashboard for Kubernetes Resource Requests telemetry.",
+    "description": "CPU and memory requests versus allocatable capacity across the Kubernetes cluster.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Kubernetes Resource Requests",
-        "description": "Prebuilt Moneat dashboard for Kubernetes Resource Requests telemetry.",
+        "description": "CPU and memory requests versus allocatable capacity across the Kubernetes cluster.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "077-15759-kubernetes-views-nodes",
-    "title": "Kubernetes / Views / Nodes",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Nodes telemetry.",
+    "title": "Kubernetes Node View",
+    "description": "Capacity, allocation, and resource pressure for a selected Kubernetes node.",
     "category": "kubernetes",
     "tags": [
         "Infrastructure",
@@ -18,8 +18,8 @@
         "Panel 34: couldn't parse PromQL '100 - (node_filesystem_files_free{instance=\"$instance\", cluster=\"$cluster\"} / node_filesystem_files{instance=\"$instance\", cluster=\"$cluster\"} * 100)', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Kubernetes / Views / Nodes",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / Views / Nodes telemetry.",
+        "title": "Kubernetes Node View",
+        "description": "Capacity, allocation, and resource pressure for a selected Kubernetes node.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

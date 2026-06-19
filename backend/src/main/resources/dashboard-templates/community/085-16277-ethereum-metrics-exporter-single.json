@@ -1,7 +1,7 @@
 {
     "id": "085-16277-ethereum-metrics-exporter-single",
-    "title": "Ethereum Metrics Exporter (Single)",
-    "description": "Prebuilt Moneat dashboard for Ethereum Metrics Exporter (Single) telemetry.",
+    "title": "Ethereum Node",
+    "description": "Sync status, peer count, and chain head for a single Ethereum node.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "Ethereum Metrics Exporter (Single)",
-        "description": "Prebuilt Moneat dashboard for Ethereum Metrics Exporter (Single) telemetry.",
+        "title": "Ethereum Node",
+        "description": "Sync status, peer count, and chain head for a single Ethereum node.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

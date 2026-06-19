@@ -1,7 +1,7 @@
 {
     "id": "013-11829-istio-performance-dashboard",
-    "title": "Istio Performance Dashboard",
-    "description": "Prebuilt Moneat dashboard for Istio Performance Dashboard telemetry.",
+    "title": "Istio Performance",
+    "description": "CPU, memory, and throughput overhead introduced by the Istio mesh sidecars and control plane.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -14,8 +14,8 @@
     "variable_count": 1,
     "warnings": [],
     "dashboard": {
-        "title": "Istio Performance Dashboard",
-        "description": "Prebuilt Moneat dashboard for Istio Performance Dashboard telemetry.",
+        "title": "Istio Performance",
+        "description": "CPU, memory, and throughput overhead introduced by the Istio mesh sidecars and control plane.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

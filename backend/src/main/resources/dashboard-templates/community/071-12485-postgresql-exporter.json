@@ -1,7 +1,7 @@
 {
     "id": "071-12485-postgresql-exporter",
     "title": "PostgreSQL Exporter",
-    "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter telemetry.",
+    "description": "Database activity, locks, and background writer stats from the PostgreSQL Prometheus exporter.",
     "category": "databases",
     "tags": [
         "Databases",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "PostgreSQL Exporter",
-        "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter telemetry.",
+        "description": "Database activity, locks, and background writer stats from the PostgreSQL Prometheus exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

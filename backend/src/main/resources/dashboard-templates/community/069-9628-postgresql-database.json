@@ -1,7 +1,7 @@
 {
     "id": "069-9628-postgresql-database",
-    "title": "PostgreSQL Database",
-    "description": "Prebuilt Moneat dashboard for PostgreSQL Database telemetry.",
+    "title": "PostgreSQL",
+    "description": "Connections, transaction rates, and cache hit ratio for PostgreSQL databases.",
     "category": "databases",
     "tags": [
         "Databases",
@@ -14,8 +14,8 @@
     "variable_count": 7,
     "warnings": [],
     "dashboard": {
-        "title": "PostgreSQL Database",
-        "description": "Prebuilt Moneat dashboard for PostgreSQL Database telemetry.",
+        "title": "PostgreSQL",
+        "description": "Connections, transaction rates, and cache hit ratio for PostgreSQL databases.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

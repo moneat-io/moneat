@@ -1,7 +1,7 @@
 {
     "id": "040-4475-traefik",
     "title": "Traefik",
-    "description": "Prebuilt Moneat dashboard for Traefik telemetry.",
+    "description": "Request rate, latency, and response codes for the Traefik reverse proxy.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Traefik",
-        "description": "Prebuilt Moneat dashboard for Traefik telemetry.",
+        "description": "Request rate, latency, and response codes for the Traefik reverse proxy.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

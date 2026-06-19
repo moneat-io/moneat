@@ -1,7 +1,7 @@
 {
     "id": "080-13646-kubernetes-persistent-volumes",
-    "title": "kubernetes-persistent-volumes",
-    "description": "Prebuilt Moneat dashboard for kubernetes-persistent-volumes telemetry.",
+    "title": "Kubernetes Persistent Volume Usage",
+    "description": "Per-claim capacity, usage, and growth for Kubernetes persistent volumes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -16,8 +16,8 @@
         "Panel 11: couldn't parse PromQL '(max by (persistentvolumeclaim,namespace) (kubelet_volume_stats_used_bytes{namespace=~\"${k8s_namespace}\"}))', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "kubernetes-persistent-volumes",
-        "description": "Prebuilt Moneat dashboard for kubernetes-persistent-volumes telemetry.",
+        "title": "Kubernetes Persistent Volume Usage",
+        "description": "Per-claim capacity, usage, and growth for Kubernetes persistent volumes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "009-10991-rabbitmq-overview",
-    "title": "RabbitMQ-Overview",
-    "description": "Prebuilt Moneat dashboard for RabbitMQ-Overview telemetry.",
+    "title": "RabbitMQ",
+    "description": "Queue depth, message throughput, and node health for RabbitMQ.",
     "category": "infrastructure",
     "tags": [
         "Messaging",
@@ -14,8 +14,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "RabbitMQ-Overview",
-        "description": "Prebuilt Moneat dashboard for RabbitMQ-Overview telemetry.",
+        "title": "RabbitMQ",
+        "description": "Queue depth, message throughput, and node health for RabbitMQ.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

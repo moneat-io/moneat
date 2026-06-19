@@ -160,3 +160,92 @@ data class AnalyticsFilter(
     val operator: String,
     val value: String,
 )
+
+@Serializable
+data class ProductKpiMetric(
+    val value: Double,
+    val previous: Double? = null,
+    val spark: List<Double> = emptyList(),
+)
+
+@Serializable
+data class ProductAnalyticsSummary(
+    val weeklyActiveUsers: ProductKpiMetric,
+    val dailyActiveUsers: Long? = null,
+    val newUsers: ProductKpiMetric,
+    val activationRate: ProductKpiMetric,
+    val stickiness: ProductKpiMetric,
+    val week1Retention: ProductKpiMetric,
+    val powerUsers: ProductKpiMetric,
+)
+
+@Serializable
+data class ProductActivityPoint(
+    val timestamp: String,
+    val value: Long,
+    val previous: Long? = null,
+)
+
+@Serializable
+data class ProductActivitySeries(
+    val metric: String,
+    val points: List<ProductActivityPoint>,
+)
+
+@Serializable
+data class ProductActivityAnnotation(
+    val date: String,
+    val label: String,
+    val kind: String? = null,
+)
+
+@Serializable
+data class ProductActivityResponse(
+    val series: List<ProductActivitySeries>,
+    val annotations: List<ProductActivityAnnotation> = emptyList(),
+)
+
+@Serializable
+data class ProductMover(
+    val name: String,
+    val category: String,
+    val detail: String? = null,
+    val change: String,
+    val tone: String,
+)
+
+@Serializable
+data class ProductFeatureAdoptionItem(
+    val name: String,
+    val adoptionRate: Double,
+)
+
+@Serializable
+data class ProductSegmentRow(
+    val name: String,
+    val users: Long,
+    val activationRate: Double,
+    val week1Retention: Double,
+    val stickiness: Double,
+)
+
+@Serializable
+data class ProductSegmentation(
+    val plan: List<ProductSegmentRow>,
+    val platform: List<ProductSegmentRow>,
+    val country: List<ProductSegmentRow>,
+)
+
+@Serializable
+data class ProductRetentionCohortRow(
+    val cohort: String,
+    val users: Long,
+    val values: List<Double?>,
+)
+
+@Serializable
+data class ProductRetentionGrid(
+    val mode: String,
+    val periods: List<Int>,
+    val cohorts: List<ProductRetentionCohortRow>,
+)

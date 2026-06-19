@@ -24,6 +24,7 @@ import com.moneat.org.routes.orgManagementRoutes
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
 import com.moneat.org.services.OrgRole
+import com.moneat.org.services.OrganizationTeamService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrgInvitations
 import com.moneat.shared.models.Organizations
@@ -47,7 +48,9 @@ import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import io.mockk.every
@@ -70,6 +73,7 @@ class OrgManagementRoutesMockTest {
         private const val NEW_MEMBER_EMAIL = "new@acme.test"
         private const val INVITATION_RESOURCE_ID = "00000000-0000-0000-0000-000000000001"
         private const val NEW_INVITATION_RESOURCE_ID = "00000000-0000-0000-0000-000000000099"
+        private const val TEAM_RESOURCE_ID = "11111111-1111-4111-8111-111111111111"
         private var dbInitialized = false
 
         private fun resourceId(id: Int): String =
@@ -78,6 +82,7 @@ class OrgManagementRoutesMockTest {
 
     private val mockMembershipService = mockk<OrgMembershipService>(relaxed = true)
     private val mockInvitationService = mockk<OrgInvitationService>(relaxed = true)
+    private val mockTeamService = mockk<OrganizationTeamService>(relaxed = true)
 
     @BeforeTest
     fun setupDatabase() {
@@ -261,6 +266,78 @@ class OrgManagementRoutesMockTest {
             assertEquals(HttpStatusCode.Created, response.status)
             verify { mockMembershipService.requireRole(orgId, userId, OrgRole.ADMIN) }
             verify { mockInvitationService.inviteMember(orgId, NEW_MEMBER_EMAIL, "member", userId) }
+        }
+    }
+
+    @Test
+    fun `POST teams returns forbidden when service rejects permissions`() {
+        val orgId = seedOrg("Acme")
+        val userId = seedUser(OWNER_EMAIL)
+        seedMembership(orgId, userId, "member")
+        every { mockTeamService.createTeam(orgId, userId, any()) } throws
+            IllegalStateException("Insufficient permissions")
+
+        testApplication {
+            application {
+                installAuth()
+                routing { orgManagementRoutes(mockMembershipService, mockInvitationService, mockTeamService) }
+            }
+            val response = client.post("/v1/org/teams") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"name":"Platform"}""")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Insufficient permissions"))
+        }
+    }
+
+    @Test
+    fun `PUT teams returns not found when service rejects unknown team`() {
+        val orgId = seedOrg("Acme")
+        val userId = seedUser(OWNER_EMAIL)
+        seedMembership(orgId, userId, "owner")
+        every { mockTeamService.updateTeam(orgId, userId, TEAM_RESOURCE_ID, any()) } throws
+            NotFoundException("Team not found")
+
+        testApplication {
+            application {
+                installAuth()
+                routing { orgManagementRoutes(mockMembershipService, mockInvitationService, mockTeamService) }
+            }
+            val response = client.put("/v1/org/teams/$TEAM_RESOURCE_ID") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"name":"Platform Core"}""")
+            }
+
+            assertEquals(HttpStatusCode.NotFound, response.status)
+            assertTrue(response.bodyAsText().contains("Team not found"))
+        }
+    }
+
+    @Test
+    fun `POST teams returns bad request when service rejects invalid payload`() {
+        val orgId = seedOrg("Acme")
+        val userId = seedUser(OWNER_EMAIL)
+        seedMembership(orgId, userId, "owner")
+        every { mockTeamService.createTeam(orgId, userId, any()) } throws
+            BadRequestException("Invalid team member ID")
+
+        testApplication {
+            application {
+                installAuth()
+                routing { orgManagementRoutes(mockMembershipService, mockInvitationService, mockTeamService) }
+            }
+            val response = client.post("/v1/org/teams") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"name":"Platform","memberIds":["not-a-uuid"]}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid team member ID"))
         }
     }
 }

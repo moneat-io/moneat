@@ -20,6 +20,7 @@ import { projectsMethods } from './modules/projects'
 import { issuesMethods } from './modules/issues'
 import { userMethods } from './modules/user'
 import { orgMembersMethods } from './modules/org-members'
+import { teamsMethods } from './modules/teams'
 import { logsMethods } from './modules/logs'
 import { debuggerMethods } from './modules/debugger'
 import { apmMethods } from './modules/apm'
@@ -63,6 +64,7 @@ export const api = {
   ...issuesMethods(core),
   ...userMethods(core),
   ...orgMembersMethods(core),
+  ...teamsMethods(core),
   ...logsMethods(core),
   ...debuggerMethods(core),
   ...apmMethods(core),

@@ -1187,4 +1187,45 @@ describe('Monitoring API module', () => {
       await api.deleteSilencePeriod(silencePeriodId)
     })
   })
+
+  describe('claimResourceOwnership', () => {
+    it('assigns an owning team and returns the resolved owner', async () => {
+      const teamId = '11111111-1111-4111-8111-111111111111'
+      const owner = {
+        teamId,
+        teamName: 'Payments',
+        slack: '#payments',
+        repo: 'moneat-io/payments',
+        onCallScheduleId: '22222222-2222-4222-8222-222222222222',
+        escalationPolicyId: '33333333-3333-4333-8333-333333333333',
+        currentOnCall: { userId: '44444444-4444-4444-8444-444444444444', userName: 'Dana' },
+      }
+      server.use(
+        http.put(`${API_BASE}/v1/monitoring/resources/ownership`, async ({ request }) => {
+          const body = (await request.json()) as Record<string, unknown>
+          expect(body.resourceId).toBe('svc:checkout')
+          expect(body.teamId).toBe(teamId)
+          return HttpResponse.json(owner)
+        })
+      )
+
+      const result = await api.claimResourceOwnership({ resourceId: 'svc:checkout', teamId })
+      expect(result).toEqual(owner)
+    })
+  })
+
+  describe('deleteResourceOwnership', () => {
+    it('clears ownership for a resource', async () => {
+      let called = false
+      server.use(
+        http.delete(`${API_BASE}/v1/monitoring/resources/ownership/svc%3Acheckout`, () => {
+          called = true
+          return new HttpResponse(null, { status: 204 })
+        })
+      )
+
+      await api.deleteResourceOwnership('svc:checkout')
+      expect(called).toBe(true)
+    })
+  })
 })

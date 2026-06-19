@@ -34,6 +34,7 @@ import com.moneat.monitor.services.ManagedIdentityCloudSourceVerifier
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
 import com.moneat.monitor.services.ResourceCatalogService
+import com.moneat.monitor.services.ResourceCatalogTeamResolver
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
 import com.moneat.billing.services.PricingTierService
@@ -93,6 +94,7 @@ class MonitoringFeatureRegistryTest {
                     single { mockk<RetentionPolicyService>(relaxed = true) }
                     single { mockk<IncidentService>(relaxed = true) }
                     single { mockk<WorkflowService>(relaxed = true) }
+                    single { mockk<ResourceCatalogTeamResolver>(relaxed = true) }
                 },
                 *MonitoringModule().koinModules().toTypedArray(),
             )

@@ -1,7 +1,7 @@
 {
     "id": "026-14361-aws-alb-cloudwatch-metrics",
-    "title": "AWS ALB Cloudwatch Metrics",
-    "description": "Prebuilt Moneat dashboard for AWS ALB Cloudwatch Metrics telemetry.",
+    "title": "AWS Application Load Balancer",
+    "description": "Request counts, target latency, and HTTP error codes for AWS Application Load Balancers via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -14,8 +14,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "AWS ALB Cloudwatch Metrics",
-        "description": "Prebuilt Moneat dashboard for AWS ALB Cloudwatch Metrics telemetry.",
+        "title": "AWS Application Load Balancer",
+        "description": "Request counts, target latency, and HTTP error codes for AWS Application Load Balancers via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

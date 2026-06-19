@@ -1,7 +1,7 @@
 {
     "id": "054-11021-envoy-clusters",
     "title": "Envoy Clusters",
-    "description": "Prebuilt Moneat dashboard for Envoy Clusters telemetry.",
+    "description": "Upstream cluster health, membership, and connection-pool metrics for Envoy.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Envoy Clusters",
-        "description": "Prebuilt Moneat dashboard for Envoy Clusters telemetry.",
+        "description": "Upstream cluster health, membership, and connection-pool metrics for Envoy.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

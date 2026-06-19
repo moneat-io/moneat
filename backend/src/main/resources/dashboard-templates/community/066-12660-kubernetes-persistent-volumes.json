@@ -1,7 +1,7 @@
 {
     "id": "066-12660-kubernetes-persistent-volumes",
-    "title": "Kubernetes / Persistent Volumes",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / Persistent Volumes telemetry.",
+    "title": "Kubernetes Persistent Volumes",
+    "description": "Capacity, used space, and availability for Kubernetes persistent volumes.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes"
@@ -11,8 +11,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes / Persistent Volumes",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / Persistent Volumes telemetry.",
+        "title": "Kubernetes Persistent Volumes",
+        "description": "Capacity, used space, and availability for Kubernetes persistent volumes.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

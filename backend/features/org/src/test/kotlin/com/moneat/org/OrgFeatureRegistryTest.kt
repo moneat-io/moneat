@@ -16,16 +16,19 @@
 
 package com.moneat.org
 
+import com.moneat.billing.services.EntitlementService
 import com.moneat.billing.services.PricingTierService
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.monitor.services.ResourceCatalogTeamResolver
 import com.moneat.notifications.services.EmailService
 import com.moneat.org.repositories.OrgInvitationRepository
 import com.moneat.org.repositories.OrgMembershipRepository
 import com.moneat.org.services.AdminService
 import com.moneat.org.services.OrgInvitationService
 import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrganizationTeamService
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
 import io.ktor.client.call.body
@@ -37,6 +40,7 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.mockk
 import org.koin.core.KoinApplication
 import org.koin.dsl.module
 import java.util.ServiceLoader
@@ -72,6 +76,7 @@ class OrgFeatureRegistryTest {
                 module {
                     single { EmailService() }
                     single { PricingTierService() }
+                    single { mockk<EntitlementService>(relaxed = true) }
                 },
                 *OrgModule().koinModules().toTypedArray(),
             )
@@ -81,6 +86,8 @@ class OrgFeatureRegistryTest {
             assertIs<OrgInvitationRepository>(koinApplication.koin.get<OrgInvitationRepository>())
             assertIs<OrgMembershipService>(koinApplication.koin.get<OrgMembershipService>())
             assertIs<OrgInvitationService>(koinApplication.koin.get<OrgInvitationService>())
+            assertIs<OrganizationTeamService>(koinApplication.koin.get<OrganizationTeamService>())
+            assertIs<OrganizationTeamService>(koinApplication.koin.get<ResourceCatalogTeamResolver>())
             assertIs<AdminService>(koinApplication.koin.get<AdminService>())
         } finally {
             koinApplication.close()

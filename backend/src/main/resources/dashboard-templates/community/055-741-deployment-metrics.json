@@ -1,7 +1,7 @@
 {
     "id": "055-741-deployment-metrics",
-    "title": "Kubernetes Deployment metrics",
-    "description": "Prebuilt Moneat dashboard for Kubernetes Deployment metrics telemetry.",
+    "title": "Kubernetes Deployments",
+    "description": "Replica counts, availability, and rollout status for Kubernetes deployments.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes"
@@ -11,8 +11,8 @@
     "variable_count": 2,
     "warnings": [],
     "dashboard": {
-        "title": "Kubernetes Deployment metrics",
-        "description": "Prebuilt Moneat dashboard for Kubernetes Deployment metrics telemetry.",
+        "title": "Kubernetes Deployments",
+        "description": "Replica counts, availability, and rollout status for Kubernetes deployments.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

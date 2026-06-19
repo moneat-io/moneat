@@ -37,7 +37,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type {StatusTone} from '@/components/ui/status-dot'
-import {api} from '@/lib/api'
+import {api, type ResourceOwner, type ResourceOwnershipClaim} from '@/lib/api'
 import type {FacetFilter, FacetSchema} from '@/lib/filters/types'
 
 // ── Domain types ─────────────────────────────────────────────────────────────
@@ -49,12 +49,10 @@ export type CloudProvider = 'aws' | 'gcp' | 'azure' | 'on-prem'
 export type VulnSeverity = 'critical' | 'high' | 'medium' | 'low'
 export type ChangeKind = 'deploy' | 'config' | 'scale' | 'incident'
 
-export interface Owner {
-  readonly team: string
-  readonly oncall: string
-  readonly slack: string
-  readonly repo: string
-}
+// A resource's owner is an organization team. The Slack channel, repo, and the
+// current on-call person are carried on the team and resolved server-side — never
+// typed in per resource.
+export type Owner = ResourceOwner
 
 export type VulnCounts = Readonly<Record<VulnSeverity, number>>
 
@@ -252,7 +250,7 @@ export function formatPct(n: number): string {
 }
 
 export function teamOf(r: Resource): string {
-  return r.owner?.team ?? 'Unowned'
+  return r.owner?.teamName ?? 'Unowned'
 }
 
 // ── Findings (real top vulnerability findings, supplied by the backend) ───────
@@ -400,7 +398,7 @@ export function matchesFilters(r: Resource, query: string, facetFilters: readonl
     ENV_LABEL[r.environment],
     r.region,
     teamOf(r),
-    r.owner?.oncall ?? '',
+    r.owner?.currentOnCall?.userName ?? '',
     ...r.tags,
     ...r.metadata.map((m) => `${m.label} ${m.value}`),
   ]
@@ -453,26 +451,30 @@ export function useResourceCatalog(): UseQueryResult<readonly Resource[]> {
   return useQuery({queryKey: CATALOG_KEY, queryFn: fetchResources, staleTime: 30_000})
 }
 
-// ── Ownership claim ───────────────────────────────────────────────────────────
-// Persisting an owner is a paid-plan feature; the backend returns 403 otherwise.
+// ── Ownership ─────────────────────────────────────────────────────────────────
+// Assigning an owner team is a paid-plan feature; the backend returns 403 otherwise.
+// The owner is an organization team picked from the Teams view, so the claim only
+// carries the resource id and the chosen team id.
 
-export interface OwnershipClaimInput {
-  readonly resourceId: string
-  readonly team: string
-  readonly oncall?: string
-  readonly slack?: string
-  readonly repo?: string
-}
-
-/** True when an error from the claim endpoint is the paid-plan entitlement gate. */
+/** True when an error from an ownership endpoint is the paid-plan entitlement gate. */
 export function isOwnershipForbidden(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as {status?: number}).status === 403
 }
 
-export function useClaimOwnership(): UseMutationResult<Owner, Error, OwnershipClaimInput> {
+export function useClaimOwnership(): UseMutationResult<Owner, Error, ResourceOwnershipClaim> {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: OwnershipClaimInput) => api.claimResourceOwnership(input) as Promise<Owner>,
+    mutationFn: (input: ResourceOwnershipClaim) => api.claimResourceOwnership(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({queryKey: CATALOG_KEY})
+    },
+  })
+}
+
+export function useDeleteOwnership(): UseMutationResult<void, Error, string> {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (resourceId: string) => api.deleteResourceOwnership(resourceId),
     onSuccess: () => {
       void queryClient.invalidateQueries({queryKey: CATALOG_KEY})
     },

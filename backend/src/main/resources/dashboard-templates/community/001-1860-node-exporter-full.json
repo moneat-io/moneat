@@ -1,7 +1,7 @@
 {
     "id": "001-1860-node-exporter-full",
-    "title": "Node Exporter Full",
-    "description": "Prebuilt Moneat dashboard for Node Exporter Full telemetry.",
+    "title": "Node Exporter",
+    "description": "Host CPU, memory, disk, and network metrics collected by Prometheus Node Exporter.",
     "category": "infrastructure",
     "tags": [
         "Infrastructure",
@@ -27,8 +27,8 @@
         "Panel 139: couldn't parse PromQL '1 - node_textfile_scrape_error{instance=\"$node\",job=\"$job\"}', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Node Exporter Full",
-        "description": "Prebuilt Moneat dashboard for Node Exporter Full telemetry.",
+        "title": "Node Exporter",
+        "description": "Host CPU, memory, disk, and network metrics collected by Prometheus Node Exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -22,19 +22,25 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class CatalogOwner(
-    val team: String,
-    val oncall: String,
-    val slack: String,
-    val repo: String
+    val teamId: String,
+    val teamName: String,
+    val slack: String? = null,
+    val repo: String? = null,
+    val onCallScheduleId: String? = null,
+    val escalationPolicyId: String? = null,
+    val currentOnCall: CatalogCurrentOnCall? = null
 )
 
 @Serializable
 data class ResourceOwnershipClaim(
     val resourceId: String,
-    val team: String,
-    val oncall: String = "",
-    val slack: String = "",
-    val repo: String = ""
+    val teamId: String
+)
+
+@Serializable
+data class CatalogCurrentOnCall(
+    val userId: String,
+    val userName: String
 )
 
 @Serializable

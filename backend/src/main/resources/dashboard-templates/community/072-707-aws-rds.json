@@ -1,7 +1,7 @@
 {
     "id": "072-707-aws-rds",
-    "title": "AWS RDS",
-    "description": "Prebuilt Moneat dashboard for AWS RDS telemetry.",
+    "title": "Amazon RDS Overview",
+    "description": "Latency, throughput, and replica lag for Amazon RDS instances via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -14,8 +14,8 @@
     "variable_count": 3,
     "warnings": [],
     "dashboard": {
-        "title": "AWS RDS",
-        "description": "Prebuilt Moneat dashboard for AWS RDS telemetry.",
+        "title": "Amazon RDS Overview",
+        "description": "Latency, throughput, and replica lag for Amazon RDS instances via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -1,7 +1,7 @@
 {
     "id": "074-19993-argocd-operational-overview",
-    "title": "ArgoCD / Operational / Overview",
-    "description": "Prebuilt Moneat dashboard for ArgoCD / Operational / Overview telemetry.",
+    "title": "Argo CD Operations",
+    "description": "Controller performance, reconciliation, and sync activity across Argo CD.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 6,
     "warnings": [],
     "dashboard": {
-        "title": "ArgoCD / Operational / Overview",
-        "description": "Prebuilt Moneat dashboard for ArgoCD / Operational / Overview telemetry.",
+        "title": "Argo CD Operations",
+        "description": "Controller performance, reconciliation, and sync activity across Argo CD.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

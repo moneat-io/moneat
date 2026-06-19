@@ -1,7 +1,7 @@
 {
     "id": "083-15761-kubernetes-system-api-server",
-    "title": "Kubernetes / System / API Server",
-    "description": "Prebuilt Moneat dashboard for Kubernetes / System / API Server telemetry.",
+    "title": "Kubernetes API Server View",
+    "description": "Availability, request latency, and work queue health for the Kubernetes API server.",
     "category": "kubernetes",
     "tags": [
         "Kubernetes",
@@ -16,8 +16,8 @@
         "Panel 0: couldn't parse PromQL 'up{cluster=~\"$cluster\", job=~\"$job\"}', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Kubernetes / System / API Server",
-        "description": "Prebuilt Moneat dashboard for Kubernetes / System / API Server telemetry.",
+        "title": "Kubernetes API Server View",
+        "description": "Availability, request latency, and work queue health for the Kubernetes API server.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

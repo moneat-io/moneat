@@ -1,7 +1,7 @@
 {
     "id": "053-11023-contour",
     "title": "Contour",
-    "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+    "description": "IngressRoute counts and LDS, CDS, and RDS update health for Contour.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Contour",
-        "description": "Prebuilt Moneat dashboard for Contour telemetry.",
+        "description": "IngressRoute counts and LDS, CDS, and RDS update health for Contour.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -8,7 +8,7 @@ import {AnalyticsFilterBar} from '@/components/analytics/AnalyticsFilterBar'
 import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analytics/AnalyticsKpiCards'
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
 import {AnalyticsBreakdownTable} from '@/components/analytics/AnalyticsBreakdownTable'
-import {AnalyticsRetentionTable} from '@/components/analytics/AnalyticsRetentionTable'
+import {ProductAnalyticsView} from '@/components/analytics/product/ProductAnalyticsView'
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {SegmentedTabs, type SegmentedOption} from '@/components/filters/SegmentedTabs'
@@ -16,16 +16,14 @@ import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {Card, CardContent} from '@/components/ui/card'
 import {CopyBlock} from '@/components/ui/copy-block'
 import {Button} from '@/components/ui/button'
-import {Input} from '@/components/ui/input'
 import {EmptyState} from '@/components/ui/empty-state'
 import {
   ArrowRight, BarChart3, BookOpen, FileText, Globe, Laptop, LogIn, LogOut, MapPin, Megaphone,
-  MousePointerClick, Plus, Share2, Target, Trash2,
+  MousePointerClick, Share2, Target,
 } from 'lucide-react'
 import type {
   AnalyticsBreakdownItem,
   AnalyticsFilter,
-  AnalyticsFunnelResponse,
   AnalyticsParams,
   AnalyticsScopeId,
   Project,
@@ -43,10 +41,6 @@ const ANALYTICS_VIEW_TABS = [
 ] as const satisfies ReadonlyArray<SegmentedOption<AnalyticsView>>
 
 const PRODUCT_PRESENCE_PARAMS: AnalyticsParams = {period: '12mo'}
-const DEFAULT_PRODUCT_FUNNEL_STEPS = ['signup.completed', 'recording.started', 'export.completed']
-const PRODUCT_RETENTION_PERIODS = [1, 7, 14, 30]
-const PRODUCT_RETENTION_START_EVENT = 'signup.completed'
-const PRODUCT_RETENTION_RETURN_EVENT = 'recording.started'
 const ORGANIZATION_ANALYTICS_SCOPE: AnalyticsScopeId = null
 
 function facetValues(filters: readonly FacetFilter[], key: string, exclude: boolean): string[] {
@@ -642,11 +636,7 @@ function ProductAnalyticsContent({
   }
 
   if (hasProductEvents) {
-    return (
-      <div className="space-y-2">
-        <ProductAnalyticsTab scopeId={ORGANIZATION_ANALYTICS_SCOPE} params={productParams} />
-      </div>
-    )
+    return <ProductAnalyticsView scopeId={ORGANIZATION_ANALYTICS_SCOPE} params={productParams} />
   }
 
   return (
@@ -720,161 +710,6 @@ function getServicePublicKey(service?: Project): string {
   } catch {
     return 'your-service-public-key'
   }
-}
-
-function ProductAnalyticsTab({scopeId, params}: Readonly<{scopeId: AnalyticsScopeId; params: AnalyticsParams}>) {
-  const {data: productEvents, isLoading: productEventsLoading} = useQuery({
-    queryKey: ['analytics-product-events', 'organization', scopeId, params],
-    queryFn: () => api.getAnalyticsEvents(scopeId, params, {
-      source: 'server',
-      groupBy: 'user_id',
-    }),
-  })
-
-  const {data: retention, isLoading: retentionLoading} = useQuery({
-    queryKey: ['analytics-product-retention', 'organization', scopeId, params],
-    queryFn: () => api.getAnalyticsRetention(scopeId, {
-      ...params,
-      startEvent: PRODUCT_RETENTION_START_EVENT,
-      returnEvent: PRODUCT_RETENTION_RETURN_EVENT,
-      periods: PRODUCT_RETENTION_PERIODS,
-    }),
-  })
-
-  return (
-    <div className="space-y-2">
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <AnalyticsBreakdownTable
-          title="Product Events"
-          icon={MousePointerClick}
-          iconColor="text-chart-7"
-          data={productEvents}
-          isLoading={productEventsLoading}
-        />
-        <ProductFunnelPanel scopeId={scopeId} params={params} />
-      </div>
-      <AnalyticsRetentionTable data={retention} isLoading={retentionLoading} />
-    </div>
-  )
-}
-
-function ProductFunnelPanel({scopeId, params}: Readonly<{scopeId: AnalyticsScopeId; params: AnalyticsParams}>) {
-  const [steps, setSteps] = useState(DEFAULT_PRODUCT_FUNNEL_STEPS)
-  const validSteps = steps.map(step => step.trim()).filter(Boolean)
-  const {data: funnel, isLoading} = useQuery({
-    queryKey: ['analytics-product-funnel', 'organization', scopeId, params, validSteps],
-    queryFn: () => api.getAnalyticsFunnel(scopeId, validSteps, params, {
-      source: 'server',
-      groupBy: 'user_id',
-    }),
-    enabled: validSteps.length >= 2,
-  })
-
-  const updateStep = (index: number, value: string) => {
-    setSteps(current => current.map((step, stepIndex) => (stepIndex === index ? value : step)))
-  }
-
-  const removeStep = (index: number) => {
-    setSteps(current => current.filter((_, stepIndex) => stepIndex !== index))
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-3 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-medium">
-            <Target className="h-3.5 w-3.5 text-success-fg" />
-            Activation Funnel
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSteps(current => [...current, ''])}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Step
-          </Button>
-        </div>
-
-        <div className="space-y-1.5">
-          {steps.map((step, index) => (
-            <div key={index} className="flex items-center gap-1.5">
-              <Input
-                value={step}
-                onChange={(event) => updateStep(index, event.target.value)}
-                className="h-7 text-xs"
-                placeholder="event.name"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                aria-label="Remove funnel step"
-                disabled={steps.length <= 2}
-                onClick={() => removeStep(index)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-
-        <ProductFunnelResults data={funnel} isLoading={isLoading} hasEnoughSteps={validSteps.length >= 2} />
-      </CardContent>
-    </Card>
-  )
-}
-
-function ProductFunnelResults({
-  data,
-  isLoading,
-  hasEnoughSteps,
-}: {
-  data?: AnalyticsFunnelResponse
-  isLoading: boolean
-  hasEnoughSteps: boolean
-}) {
-  if (!hasEnoughSteps) {
-    return <p className="text-xs text-muted-foreground text-center py-4">Add at least two steps</p>
-  }
-
-  if (isLoading) {
-    return <div className="h-[140px] w-full animate-pulse rounded bg-muted" />
-  }
-
-  if (!data || data.steps.length === 0) {
-    return <p className="text-xs text-muted-foreground text-center py-4">No funnel data</p>
-  }
-
-  const maxVisitors = Math.max(data.steps[0]?.visitors ?? 0, 1)
-
-  return (
-    <div className="space-y-2">
-      <div className="text-xs text-muted-foreground">
-        Overall conversion <span className="font-medium text-foreground">{data.overallConversion.toFixed(1)}%</span>
-      </div>
-      <div className="space-y-1.5">
-        {data.steps.map(step => (
-          <div key={step.name} className="space-y-1">
-            <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="truncate font-medium">{step.name}</span>
-              <span className="text-muted-foreground">
-                {step.visitors.toLocaleString()} / {step.conversionRate.toFixed(1)}%
-              </span>
-            </div>
-            <div className="h-2 rounded bg-muted">
-              <div
-                className="h-2 rounded bg-primary"
-                style={{width: `${Math.max((step.visitors / maxVisitors) * 100, step.visitors > 0 ? 2 : 0)}%`}}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
 }
 
 function ProductAnalyticsEmptyState({service, serviceId}: Readonly<{service?: Project; serviceId: string}>) {

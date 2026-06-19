@@ -23,12 +23,23 @@ import com.moneat.analytics.models.BreakdownResponse
 import com.moneat.analytics.models.BreakdownRow
 import com.moneat.analytics.models.FunnelResponse
 import com.moneat.analytics.models.FunnelStep
+import com.moneat.analytics.models.ProductActivityResponse
+import com.moneat.analytics.models.ProductActivitySeries
+import com.moneat.analytics.models.ProductAnalyticsSummary
+import com.moneat.analytics.models.ProductFeatureAdoptionItem
+import com.moneat.analytics.models.ProductKpiMetric
+import com.moneat.analytics.models.ProductMover
+import com.moneat.analytics.models.ProductRetentionCohortRow
+import com.moneat.analytics.models.ProductRetentionGrid
+import com.moneat.analytics.models.ProductSegmentRow
+import com.moneat.analytics.models.ProductSegmentation
 import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.RetentionResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.analytics.routes.analyticsRoutes
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
+import com.moneat.analytics.services.ProductRetentionRequest
 import com.moneat.events.services.DashboardService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
@@ -196,6 +207,60 @@ class AnalyticsRoutesTest {
         startEvent = "signup.completed",
         returnEvent = "recording.started",
         cohorts = emptyList(),
+    )
+
+    private val productSummaryResponse = ProductAnalyticsSummary(
+        weeklyActiveUsers = ProductKpiMetric(value = 120.0, previous = 100.0),
+        dailyActiveUsers = 30,
+        newUsers = ProductKpiMetric(value = 25.0, previous = 20.0),
+        activationRate = ProductKpiMetric(value = 48.0, previous = 42.0),
+        stickiness = ProductKpiMetric(value = 35.0, previous = 32.0),
+        week1Retention = ProductKpiMetric(value = 44.0, previous = 41.0),
+        powerUsers = ProductKpiMetric(value = 12.0, previous = 10.0),
+    )
+
+    private val productActivityResponse = ProductActivityResponse(
+        series = listOf(ProductActivitySeries(metric = "active", points = emptyList())),
+    )
+
+    private val productMoverResponse = listOf(
+        ProductMover(
+            name = "activated",
+            category = "event",
+            detail = "40 this period",
+            change = "+25%",
+            tone = "good",
+        )
+    )
+
+    private val productFeatureAdoptionResponse = listOf(
+        ProductFeatureAdoptionItem(name = "Search", adoptionRate = 38.0)
+    )
+
+    private val productSegmentationResponse = ProductSegmentation(
+        plan = listOf(
+            ProductSegmentRow(
+                name = "pro",
+                users = 20,
+                activationRate = 55.0,
+                week1Retention = 40.0,
+                stickiness = 30.0,
+            )
+        ),
+        platform = emptyList(),
+        country = emptyList(),
+    )
+
+    private val productRetentionResponse = ProductRetentionGrid(
+        mode = "key_action",
+        periods = listOf(0, 1),
+        cohorts = listOf(
+            ProductRetentionCohortRow(
+                cohort = "2026-01-05 00:00:00",
+                users = 10,
+                values = listOf(100.0, 50.0),
+            )
+        ),
     )
 
     // ──── Auth ────
@@ -843,6 +908,133 @@ class AnalyticsRoutesTest {
         stubAccess(userId)
         application { installRoutes(this) }
         val r = client.get(authedGet("/retention?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.BadRequest, r.status)
+    }
+
+    @Test
+    fun `GET org product summary forwards organization service scope`() = testApplication {
+        val (userId, orgId) = seedOrganizationMembership()
+        every { mockDashboardService.getServiceIdsForOrganization(orgId) } returns
+            listOf(PROJECT_ID, SECOND_PROJECT_ID)
+        coEvery {
+            mockAnalyticsService.getProductAnalyticsSummary(
+                match<AnalyticsQueryScope> { it.serviceIds == listOf(PROJECT_ID, SECOND_PROJECT_ID) },
+                any(),
+                any(),
+                any(),
+            )
+        } returns productSummaryResponse
+
+        application { installRoutes(this) }
+        val r = client.get("/v1/analytics/product/summary?period=30d") {
+            withAuth(token(userId, orgId))
+        }
+
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"weeklyActiveUsers\""))
+    }
+
+    @Test
+    fun `GET product summary returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getProductAnalyticsSummary(PROJECT_ID, any(), any(), any())
+        } returns productSummaryResponse
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/summary?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"activationRate\""))
+    }
+
+    @Test
+    fun `GET product activity returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getProductActivity(PROJECT_ID, any(), any(), any())
+        } returns productActivityResponse
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/activity?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"series\""))
+    }
+
+    @Test
+    fun `GET product movers returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getProductMovers(PROJECT_ID, any(), any(), any())
+        } returns productMoverResponse
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/movers?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"change\""))
+    }
+
+    @Test
+    fun `GET product feature adoption returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getProductFeatureAdoption(PROJECT_ID, any(), any(), any())
+        } returns productFeatureAdoptionResponse
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/feature-adoption?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"adoptionRate\""))
+    }
+
+    @Test
+    fun `GET product segmentation returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getProductSegmentation(PROJECT_ID, any(), any(), any())
+        } returns productSegmentationResponse
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/segmentation?period=30d")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"plan\""))
+    }
+
+    @Test
+    fun `GET product retention returns 200`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        coEvery {
+            mockAnalyticsService.getProductRetention(
+                PROJECT_ID,
+                match<ProductRetentionRequest> { it.mode == "key_action" && it.periodCount == 2 },
+            )
+        } returns productRetentionResponse
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/retention?period=30d&mode=key_action&periods=2")) {
+            withAuth(token(userId))
+        }
+        assertEquals(HttpStatusCode.OK, r.status)
+        assertTrue(r.bodyAsText().contains("\"cohorts\""))
+    }
+
+    @Test
+    fun `GET product retention requires custom event for custom mode`() = testApplication {
+        val userId = seedUser()
+        stubAccess(userId)
+        application { installRoutes(this) }
+        val r = client.get(authedGet("/product/retention?period=30d&mode=custom")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.BadRequest, r.status)

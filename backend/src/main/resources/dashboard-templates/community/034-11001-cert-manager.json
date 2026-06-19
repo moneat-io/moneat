@@ -1,7 +1,7 @@
 {
     "id": "034-11001-cert-manager",
     "title": "cert-manager",
-    "description": "Prebuilt Moneat dashboard for cert-manager telemetry.",
+    "description": "Certificate expiry, renewal status, and request activity for cert-manager.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "cert-manager",
-        "description": "Prebuilt Moneat dashboard for cert-manager telemetry.",
+        "description": "Certificate expiry, renewal status, and request activity for cert-manager.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

@@ -22,6 +22,7 @@ val rootBackendTestOutput = rootBackendSourceSets.named("test").get().output
 dependencies {
     compileOnly(project(":"))
     compileOnly(project(":features:dashboards"))
+    compileOnly(project(":features:monitoring"))
     compileOnly(project(":features:security"))
     implementation(project(":feature-spi"))
     implementation(project(":features:featureflags"))
@@ -51,6 +52,7 @@ dependencies {
 
     testImplementation(project(":"))
     testImplementation(project(":features:dashboards"))
+    testImplementation(project(":features:monitoring"))
     testImplementation(project(":features:security"))
     testImplementation(rootBackendTestOutput)
     testImplementation(libs.ktor.server.test.host)

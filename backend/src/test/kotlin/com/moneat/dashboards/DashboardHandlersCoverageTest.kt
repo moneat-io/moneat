@@ -172,33 +172,41 @@ class DashboardHandlersCoverageTest {
     // ──── PrometheusHandler — resolvePrometheusStep ────
 
     @Test
-    fun `resolvePrometheusStep returns 15s for short range`() {
+    fun `resolvePrometheusStep rounds short range by auto resolution`() {
         val handler = PrometheusHandler()
-        assertEquals("15s", handler.resolvePrometheusStep(1800L))
+        assertEquals("2s", handler.resolvePrometheusStep(1800L))
     }
 
     @Test
-    fun `resolvePrometheusStep returns 1m for medium range`() {
+    fun `resolvePrometheusStep rounds medium range by auto resolution`() {
         val handler = PrometheusHandler()
-        assertEquals("1m", handler.resolvePrometheusStep(10_800L))
+        assertEquals("10s", handler.resolvePrometheusStep(10_800L))
     }
 
     @Test
-    fun `resolvePrometheusStep returns 5m for day range`() {
+    fun `resolvePrometheusStep rounds day range by auto resolution`() {
         val handler = PrometheusHandler()
-        assertEquals("5m", handler.resolvePrometheusStep(86_400L))
+        assertEquals("1m", handler.resolvePrometheusStep(86_400L))
     }
 
     @Test
-    fun `resolvePrometheusStep returns 1h for week range`() {
+    fun `resolvePrometheusStep rounds week range by auto resolution`() {
         val handler = PrometheusHandler()
-        assertEquals("1h", handler.resolvePrometheusStep(604_800L))
+        assertEquals("10m", handler.resolvePrometheusStep(604_800L))
     }
 
     @Test
-    fun `resolvePrometheusStep returns 1d for long range`() {
+    fun `resolvePrometheusStep rounds long range by auto resolution`() {
         val handler = PrometheusHandler()
-        assertEquals("1d", handler.resolvePrometheusStep(2_592_000L))
+        assertEquals("30m", handler.resolvePrometheusStep(2_592_000L))
+    }
+
+    @Test
+    fun `resolvePrometheusStep applies max data point resolution`() {
+        val handler = PrometheusHandler()
+        assertEquals("5m", handler.resolvePrometheusStep(604_800L, 2_000))
+        assertEquals("2h", handler.resolvePrometheusStep(604_800L, 100))
+        assertEquals("30d", handler.resolvePrometheusStep(40L * 86_400L, 1))
     }
 
     // ──── PrometheusHandler — parsePrometheusResponse ────

@@ -1,7 +1,7 @@
 {
     "id": "070-14114-postgres-overview",
-    "title": "PostgreSQL Exporter Quickstart and Dashboard",
-    "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter Quickstart and Dashboard telemetry.",
+    "title": "PostgreSQL Overview",
+    "description": "Throughput, replication, and resource usage for PostgreSQL via the Prometheus exporter.",
     "category": "databases",
     "tags": [
         "Databases",
@@ -14,8 +14,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "PostgreSQL Exporter Quickstart and Dashboard",
-        "description": "Prebuilt Moneat dashboard for PostgreSQL Exporter Quickstart and Dashboard telemetry.",
+        "title": "PostgreSQL Overview",
+        "description": "Throughput, replication, and resource usage for PostgreSQL via the Prometheus exporter.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

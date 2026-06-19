@@ -1,7 +1,7 @@
 {
     "id": "063-17175-spring-boot-observability",
-    "title": "Spring Boot Observability",
-    "description": "Prebuilt Moneat dashboard for Spring Boot Observability telemetry.",
+    "title": "Spring Boot",
+    "description": "HTTP throughput, JVM health, and log activity for Spring Boot applications.",
     "category": "applications",
     "tags": [
         "Applications",
@@ -18,8 +18,8 @@
         "Panel 10: couldn't parse PromQL '{compose_service=~\"app-.*\"} | pattern `<date> <time> <_>=<trace_id> <_>=<span_id> <_>=<trace_flags> <type> <_> --- <msg>` | line_format \"{{.compose_service}}\\t{{.type}}\\ttrace_id={{.trace_id}}\\t{{.msg}}\" |= \"$log_keyword\"', stored as rawQuery"
     ],
     "dashboard": {
-        "title": "Spring Boot Observability",
-        "description": "Prebuilt Moneat dashboard for Spring Boot Observability telemetry.",
+        "title": "Spring Boot",
+        "description": "HTTP throughput, JVM health, and log activity for Spring Boot applications.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

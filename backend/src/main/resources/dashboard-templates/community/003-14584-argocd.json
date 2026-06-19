@@ -1,7 +1,7 @@
 {
     "id": "003-14584-argocd",
-    "title": "ArgoCD",
-    "description": "Prebuilt Moneat dashboard for ArgoCD telemetry.",
+    "title": "Argo CD",
+    "description": "Sync status, application health, and controller performance for Argo CD GitOps deployments.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -13,8 +13,8 @@
     "variable_count": 7,
     "warnings": [],
     "dashboard": {
-        "title": "ArgoCD",
-        "description": "Prebuilt Moneat dashboard for ArgoCD telemetry.",
+        "title": "Argo CD",
+        "description": "Sync status, application health, and controller performance for Argo CD GitOps deployments.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

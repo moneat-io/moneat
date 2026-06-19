@@ -19,6 +19,7 @@ package com.moneat.incident
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.incident.services.IncidentService
+import com.moneat.monitor.repositories.ResourceOwnershipRepository
 import com.moneat.plugins.FeaturesResponse
 import com.moneat.plugins.configureSerialization
 import com.moneat.workflows.services.WorkflowService
@@ -66,6 +67,7 @@ class IncidentFeatureRegistryTest {
             .modules(
                 module {
                     single { mockk<WorkflowService>(relaxed = true) }
+                    single { mockk<ResourceOwnershipRepository>(relaxed = true) }
                 },
                 *IncidentModule().koinModules().toTypedArray(),
             )

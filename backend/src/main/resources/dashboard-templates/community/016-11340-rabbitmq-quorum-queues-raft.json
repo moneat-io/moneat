@@ -1,7 +1,7 @@
 {
     "id": "016-11340-rabbitmq-quorum-queues-raft",
-    "title": "RabbitMQ-Quorum-Queues-Raft",
-    "description": "Prebuilt Moneat dashboard for RabbitMQ-Quorum-Queues-Raft telemetry.",
+    "title": "RabbitMQ Quorum Queues",
+    "description": "Raft consensus, replication, and commit metrics for RabbitMQ quorum queues.",
     "category": "infrastructure",
     "tags": [
         "Messaging",
@@ -14,8 +14,8 @@
     "variable_count": 4,
     "warnings": [],
     "dashboard": {
-        "title": "RabbitMQ-Quorum-Queues-Raft",
-        "description": "Prebuilt Moneat dashboard for RabbitMQ-Quorum-Queues-Raft telemetry.",
+        "title": "RabbitMQ Quorum Queues",
+        "description": "Raft consensus, replication, and commit metrics for RabbitMQ quorum queues.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

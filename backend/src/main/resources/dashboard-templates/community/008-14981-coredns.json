@@ -1,7 +1,7 @@
 {
     "id": "008-14981-coredns",
     "title": "CoreDNS",
-    "description": "Prebuilt Moneat dashboard for CoreDNS telemetry.",
+    "description": "Query rates, cache hit ratio, and response latency for CoreDNS.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "CoreDNS",
-        "description": "Prebuilt Moneat dashboard for CoreDNS telemetry.",
+        "description": "Query rates, cache hit ratio, and response latency for CoreDNS.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

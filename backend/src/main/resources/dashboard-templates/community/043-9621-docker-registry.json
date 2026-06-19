@@ -1,7 +1,7 @@
 {
     "id": "043-9621-docker-registry",
     "title": "Docker Registry",
-    "description": "Prebuilt Moneat dashboard for Docker Registry telemetry.",
+    "description": "Image pull and push activity, request latency, and storage for a Docker registry.",
     "category": "infrastructure",
     "tags": [
         "Prometheus"
@@ -14,7 +14,7 @@
     "warnings": [],
     "dashboard": {
         "title": "Docker Registry",
-        "description": "Prebuilt Moneat dashboard for Docker Registry telemetry.",
+        "description": "Image pull and push activity, request latency, and storage for a Docker registry.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

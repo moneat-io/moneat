@@ -1,7 +1,7 @@
 {
     "id": "039-593-aws-lambda",
     "title": "AWS Lambda",
-    "description": "Prebuilt Moneat dashboard for AWS Lambda telemetry.",
+    "description": "Invocations, errors, duration, and throttles for AWS Lambda functions via CloudWatch.",
     "category": "cloud",
     "tags": [
         "Cloud",
@@ -15,7 +15,7 @@
     "warnings": [],
     "dashboard": {
         "title": "AWS Lambda",
-        "description": "Prebuilt Moneat dashboard for AWS Lambda telemetry.",
+        "description": "Invocations, errors, duration, and throttles for AWS Lambda functions via CloudWatch.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

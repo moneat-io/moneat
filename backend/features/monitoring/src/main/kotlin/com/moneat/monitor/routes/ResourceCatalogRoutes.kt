@@ -21,7 +21,10 @@ import com.moneat.monitor.models.ResourceOwnershipClaim
 import com.moneat.monitor.services.ResourceCatalogService
 import com.moneat.monitor.services.ResourceTelemetryRequest
 import com.moneat.monitor.services.ResourceTelemetrySelector
+import com.moneat.org.services.OrgMembershipService
+import com.moneat.org.services.OrgRole
 import com.moneat.plugins.getDemoEpochMs
+import com.moneat.utils.ErrorResponse
 import com.moneat.utils.OrganizationContextMissingException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -29,9 +32,11 @@ import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.NotFoundException
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.put
 import io.ktor.server.routing.route
@@ -43,70 +48,134 @@ private const val DEFAULT_TELEMETRY_RANGE_SECONDS = 86_400L
 fun Route.resourceCatalogRoutes(
     resourceCatalogService: ResourceCatalogService = GlobalContext.get().get(),
     entitlementService: EntitlementService = GlobalContext.get().get(),
+    membershipService: OrgMembershipService = GlobalContext.get().get(),
 ) {
     route("/v1/monitoring") {
         authenticate("auth-jwt") {
             get("/resources") {
-                val organizationId = call.resolveResourceCatalogOrganizationId()
-                val limit = call.resolveResourceCatalogLimit()
-                val demoEpochMs = call.getDemoEpochMs()
-                val resources = if (limit == null) {
-                    resourceCatalogService.listResources(listOf(organizationId), demoEpochMs = demoEpochMs)
-                } else {
-                    resourceCatalogService.listResources(
-                        listOf(organizationId),
-                        limit,
-                        demoEpochMs
-                    )
-                }
-
-                call.respond(HttpStatusCode.OK, resources)
+                call.respondResourceCatalog(resourceCatalogService)
             }
 
             get("/resources/telemetry") {
-                val organizationId = call.resolveResourceCatalogOrganizationId()
-                val kind = call.request.queryParameters["kind"]?.takeIf { it.isNotBlank() }
-                    ?: throw BadRequestException("kind is required")
-                val rangeSeconds = call.resolveTelemetryRangeSeconds()
-                val telemetry = resourceCatalogService.getResourceTelemetry(
-                    ResourceTelemetryRequest(
-                        organizationIds = listOf(organizationId),
-                        kind = kind,
-                        selector = ResourceTelemetrySelector(
-                            hostId = call.resolveTelemetryHostId(),
-                            service = call.request.queryParameters["service"],
-                            containerHost = call.request.queryParameters["host"],
-                            containerName = call.request.queryParameters["container"],
-                        ),
-                        rangeSeconds = rangeSeconds,
-                        demoEpochMs = call.getDemoEpochMs(),
-                    ),
-                )
-                call.respond(HttpStatusCode.OK, telemetry)
+                call.respondResourceTelemetry(resourceCatalogService)
             }
 
             put("/resources/ownership") {
-                val organizationId = call.resolveResourceCatalogOrganizationId()
-                // Claiming ownership is a paid-plan collaboration feature; viewing the owner is free.
-                if (!entitlementService.isFeatureEnabled(organizationId) { it.monthlyPriceCents > 0 }) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        mapOf("error" to "Resource ownership is available on paid plans"),
-                    )
-                    return@put
-                }
-                val claim = call.receive<ResourceOwnershipClaim>()
-                if (claim.resourceId.isBlank() || claim.team.isBlank()) {
-                    throw BadRequestException("resourceId and team are required")
-                }
-                val owner = resourceCatalogService.claimOwnership(organizationId, claim, call.ownershipActor())
-                    ?: return@put call.respond(
-                        HttpStatusCode.NotFound,
-                        mapOf("error" to "Resource not found"),
-                    )
-                call.respond(HttpStatusCode.OK, owner)
+                call.putResourceOwnership(resourceCatalogService, entitlementService, membershipService)
+            }
+
+            delete("/resources/ownership/{resourceId}") {
+                call.deleteResourceOwnership(resourceCatalogService, entitlementService, membershipService)
             }
         }
+    }
+}
+
+private suspend fun ApplicationCall.respondResourceCatalog(resourceCatalogService: ResourceCatalogService) {
+    val organizationId = resolveResourceCatalogOrganizationId()
+    val limit = resolveResourceCatalogLimit()
+    val demoEpochMs = getDemoEpochMs()
+    val resources =
+        if (limit == null) {
+            resourceCatalogService.listResources(listOf(organizationId), demoEpochMs = demoEpochMs)
+        } else {
+            resourceCatalogService.listResources(
+                listOf(organizationId),
+                limit,
+                demoEpochMs,
+            )
+        }
+    respond(HttpStatusCode.OK, resources)
+}
+
+private suspend fun ApplicationCall.respondResourceTelemetry(resourceCatalogService: ResourceCatalogService) {
+    val organizationId = resolveResourceCatalogOrganizationId()
+    val kind = request.queryParameters["kind"]?.takeIf { it.isNotBlank() }
+        ?: throw BadRequestException("kind is required")
+    val rangeSeconds = resolveTelemetryRangeSeconds()
+    val telemetry = resourceCatalogService.getResourceTelemetry(
+        ResourceTelemetryRequest(
+            organizationIds = listOf(organizationId),
+            kind = kind,
+            selector = ResourceTelemetrySelector(
+                hostId = resolveTelemetryHostId(),
+                service = request.queryParameters["service"],
+                containerHost = request.queryParameters["host"],
+                containerName = request.queryParameters["container"],
+            ),
+            rangeSeconds = rangeSeconds,
+            demoEpochMs = getDemoEpochMs(),
+        ),
+    )
+    respond(HttpStatusCode.OK, telemetry)
+}
+
+private suspend fun ApplicationCall.putResourceOwnership(
+    resourceCatalogService: ResourceCatalogService,
+    entitlementService: EntitlementService,
+    membershipService: OrgMembershipService,
+) {
+    val organizationId = resolveResourceCatalogOrganizationId()
+    if (!ensureTeamsEnabled(organizationId, entitlementService)) return
+    if (!requireOwnershipMutationRole(organizationId, membershipService)) return
+    val claim = receive<ResourceOwnershipClaim>()
+    if (claim.resourceId.isBlank() || claim.teamId.isBlank()) {
+        throw BadRequestException("resourceId and teamId are required")
+    }
+    val owner =
+        try {
+            resourceCatalogService.claimOwnership(organizationId, claim, ownershipActor())
+        } catch (e: NotFoundException) {
+            return respond(
+                HttpStatusCode.NotFound,
+                ErrorResponse(e.message ?: "Team not found"),
+            )
+        } ?: return respond(HttpStatusCode.NotFound, mapOf("error" to "Resource not found"))
+    respond(HttpStatusCode.OK, owner)
+}
+
+private suspend fun ApplicationCall.deleteResourceOwnership(
+    resourceCatalogService: ResourceCatalogService,
+    entitlementService: EntitlementService,
+    membershipService: OrgMembershipService,
+) {
+    val organizationId = resolveResourceCatalogOrganizationId()
+    if (!ensureTeamsEnabled(organizationId, entitlementService)) return
+    if (!requireOwnershipMutationRole(organizationId, membershipService)) return
+    val resourceId = parameters["resourceId"]?.takeIf { it.isNotBlank() }
+        ?: throw BadRequestException("resourceId is required")
+    val deleted = resourceCatalogService.deleteOwnership(organizationId, resourceId)
+    if (!deleted) {
+        respond(HttpStatusCode.NotFound, mapOf("error" to "Resource ownership not found"))
+        return
+    }
+    respond(HttpStatusCode.NoContent)
+}
+
+private suspend fun ApplicationCall.ensureTeamsEnabled(
+    organizationId: Int,
+    entitlementService: EntitlementService,
+): Boolean {
+    if (entitlementService.isTeamsEnabled(organizationId)) return true
+    respond(
+        HttpStatusCode.Forbidden,
+        mapOf("error" to entitlementService.unavailableTeamsMessage(organizationId)),
+    )
+    return false
+}
+
+private suspend fun ApplicationCall.requireOwnershipMutationRole(
+    organizationId: Int,
+    membershipService: OrgMembershipService,
+): Boolean {
+    val userId = principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
+        ?: throw OrganizationContextMissingException()
+    return try {
+        membershipService.requireRole(organizationId, userId, OrgRole.ADMIN)
+        true
+    } catch (e: IllegalStateException) {
+        respond(HttpStatusCode.Forbidden, ErrorResponse(e.message ?: "Insufficient permissions"))
+        false
     }
 }
 

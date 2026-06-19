@@ -28,18 +28,23 @@ import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.incident.services.IncidentService
+import com.moneat.monitor.repositories.ResourceOwnershipRepository
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.EscalationPolicyAlertSources
+import com.moneat.shared.models.Hosts
 import com.moneat.shared.models.Organizations
 import com.moneat.testsupport.IncidentTestHelper
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -82,7 +87,8 @@ class IncidentServiceExtendedTest {
             IncidentRoutingRules,
             IncidentEventLog,
             EscalationPolicies,
-            EscalationPolicyAlertSources
+            EscalationPolicyAlertSources,
+            Hosts,
         )
 
         transaction {
@@ -125,7 +131,8 @@ class IncidentServiceExtendedTest {
         source: AlertSource = AlertSource.UPTIME_MONITOR,
         priority: AlertPriority = AlertPriority.P1,
         status: AlertStatus = AlertStatus.FIRING,
-        dedupKey: String = "dedup-1"
+        dedupKey: String = "dedup-1",
+        metadata: Map<String, JsonElement> = emptyMap(),
     ): AlertLifecycleEvent = AlertLifecycleEvent(
         title = "Test Alert",
         description = "Something went wrong",
@@ -134,8 +141,26 @@ class IncidentServiceExtendedTest {
         source = source,
         deduplicationKey = dedupKey,
         organizationId = orgId,
+        metadata = metadata,
         moneatUrl = "https://moneat.test/issues/1"
     )
+
+    private fun insertHost(hostname: String = "web-01"): Pair<Int, String> =
+        transaction {
+            val now = Clock.System.now()
+            val hostId = Hosts.insert {
+                it[organization_id] = orgId
+                it[Hosts.hostname] = hostname
+                it[first_seen_at] = now
+                it[last_seen_at] = now
+            }[Hosts.id]
+            val resourceId = Hosts
+                .selectAll()
+                .where { Hosts.id eq hostId }
+                .single()[Hosts.resource_id]
+                .toString()
+            hostId to resourceId
+        }
 
     // ──── fireAlert ────
 
@@ -445,7 +470,7 @@ class IncidentServiceExtendedTest {
         val bridge = mockk<OnCallBridge>()
         mockkObject(FeatureRegistry)
         every { FeatureRegistry.getOnCallBridge() } returns bridge
-        every { bridge.resolvePriority(orgId, "HIGH") } returns PriorityInfo("P1", "High")
+        every { bridge.resolvePriority(orgId, "P1") } returns PriorityInfo("P1", "High")
         every { bridge.shouldEscalate(orgId, "P1") } returns true
         coEvery {
             bridge.triggerEscalation(
@@ -489,6 +514,218 @@ class IncidentServiceExtendedTest {
         assertTrue(logs[0][IncidentEventLog.success])
 
         unmockkObject(FeatureRegistry)
+    }
+
+    @Test
+    fun `fireAlert prefers owning team escalation policy for catalog resource alerts`() = runBlocking {
+        every { EnvConfig.get("ONCALL_ENABLED", "false") } returns "true"
+
+        var sourcePolicyId = 0
+        var teamPolicyId = 0
+        transaction {
+            sourcePolicyId = EscalationPolicies.insert {
+                it[organizationId] = orgId
+                it[name] = "Source Policy"
+                it[repeatCount] = 1
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }[EscalationPolicies.id].value
+            teamPolicyId = EscalationPolicies.insert {
+                it[organizationId] = orgId
+                it[name] = "Team Policy"
+                it[repeatCount] = 1
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }[EscalationPolicies.id].value
+            EscalationPolicyAlertSources.insert {
+                it[organizationId] = orgId
+                it[alertSource] = AlertSource.UPTIME_MONITOR.name
+                it[escalationPolicyId] = sourcePolicyId
+            }
+        }
+
+        val bridge = mockk<OnCallBridge>()
+        mockkObject(FeatureRegistry)
+        every { FeatureRegistry.getOnCallBridge() } returns bridge
+        every { bridge.resolvePriority(orgId, "P1") } returns PriorityInfo("P1", "High")
+        every { bridge.shouldEscalate(orgId, "P1") } returns true
+        coEvery {
+            bridge.triggerEscalation(
+                organizationId = orgId,
+                escalationPolicyId = any(),
+                title = any(),
+                description = any(),
+                priority = "P1",
+                alertSource = AlertSource.UPTIME_MONITOR.name,
+                deduplicationKey = any(),
+                metadata = any()
+            )
+        } returns "77777777-7777-4777-8777-777777777777"
+
+        IncidentTestHelper.registerMockProvider(
+            testProviderType,
+            sendAlertResult = Result.success("inc-team")
+        )
+
+        val ownershipRepository = FixedEscalationOwnershipRepository(
+            resourceId = "service:7:checkout-api",
+            escalationPolicyId = teamPolicyId,
+        )
+        val teamAwareService = IncidentService(workflowService, ownershipRepository)
+
+        try {
+            teamAwareService.fireAlert(
+                makeEvent(
+                    metadata = mapOf("catalog_resource_id" to JsonPrimitive("service:7:checkout-api")),
+                )
+            )
+
+            coVerify {
+                bridge.triggerEscalation(
+                    organizationId = orgId,
+                    escalationPolicyId = teamPolicyId,
+                    title = any(),
+                    description = any(),
+                    priority = "P1",
+                    alertSource = AlertSource.UPTIME_MONITOR.name,
+                    deduplicationKey = any(),
+                    metadata = any()
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
+    }
+
+    @Test
+    fun `fireAlert resolves host metadata to owning team escalation policy`() = runBlocking {
+        every { EnvConfig.get("ONCALL_ENABLED", "false") } returns "true"
+        val host = insertHost()
+        var teamPolicyId = 0
+        transaction {
+            teamPolicyId = EscalationPolicies.insert {
+                it[organizationId] = orgId
+                it[name] = "Host Team Policy"
+                it[repeatCount] = 1
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }[EscalationPolicies.id].value
+        }
+
+        val bridge = mockk<OnCallBridge>()
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+            every { bridge.resolvePriority(orgId, "P1") } returns PriorityInfo("P1", "High")
+            every { bridge.shouldEscalate(orgId, "P1") } returns true
+            coEvery {
+                bridge.triggerEscalation(
+                    organizationId = orgId,
+                    escalationPolicyId = any(),
+                    title = any(),
+                    description = any(),
+                    priority = "P1",
+                    alertSource = AlertSource.HOST_ALERT.name,
+                    deduplicationKey = any(),
+                    metadata = any(),
+                )
+            } returns "88888888-8888-4888-8888-888888888888"
+
+            val ownershipRepository = FixedEscalationOwnershipRepository(
+                resourceId = "host:$orgId:${host.first}",
+                escalationPolicyId = teamPolicyId,
+            )
+            val teamAwareService = IncidentService(workflowService, ownershipRepository)
+
+            teamAwareService.fireAlert(
+                makeEvent(
+                    source = AlertSource.HOST_ALERT,
+                    metadata = mapOf("host_id" to JsonPrimitive(host.second)),
+                ),
+            )
+
+            coVerify {
+                bridge.triggerEscalation(
+                    organizationId = orgId,
+                    escalationPolicyId = teamPolicyId,
+                    title = any(),
+                    description = any(),
+                    priority = "P1",
+                    alertSource = AlertSource.HOST_ALERT.name,
+                    deduplicationKey = any(),
+                    metadata = any(),
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
+    }
+
+    @Test
+    fun `fireAlert falls back to source escalation policy when owning team has no policy`() = runBlocking {
+        every { EnvConfig.get("ONCALL_ENABLED", "false") } returns "true"
+        var sourcePolicyId = 0
+        transaction {
+            sourcePolicyId = EscalationPolicies.insert {
+                it[organizationId] = orgId
+                it[name] = "Source Policy"
+                it[repeatCount] = 1
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }[EscalationPolicies.id].value
+            EscalationPolicyAlertSources.insert {
+                it[organizationId] = orgId
+                it[alertSource] = AlertSource.UPTIME_MONITOR.name
+                it[escalationPolicyId] = sourcePolicyId
+            }
+        }
+
+        val bridge = mockk<OnCallBridge>()
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+            every { bridge.resolvePriority(orgId, "P1") } returns PriorityInfo("P1", "High")
+            every { bridge.shouldEscalate(orgId, "P1") } returns true
+            coEvery {
+                bridge.triggerEscalation(
+                    organizationId = orgId,
+                    escalationPolicyId = any(),
+                    title = any(),
+                    description = any(),
+                    priority = "P1",
+                    alertSource = AlertSource.UPTIME_MONITOR.name,
+                    deduplicationKey = any(),
+                    metadata = any(),
+                )
+            } returns "99999999-9999-4999-8999-999999999999"
+
+            val ownershipRepository = FixedEscalationOwnershipRepository(
+                resourceId = "service:7:checkout-api",
+                escalationPolicyId = null,
+            )
+            val teamAwareService = IncidentService(workflowService, ownershipRepository)
+
+            teamAwareService.fireAlert(
+                makeEvent(
+                    metadata = mapOf("catalog_resource_id" to JsonPrimitive("service:7:checkout-api")),
+                ),
+            )
+
+            coVerify {
+                bridge.triggerEscalation(
+                    organizationId = orgId,
+                    escalationPolicyId = sourcePolicyId,
+                    title = any(),
+                    description = any(),
+                    priority = "P1",
+                    alertSource = AlertSource.UPTIME_MONITOR.name,
+                    deduplicationKey = any(),
+                    metadata = any(),
+                )
+            }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
     }
 
     @Test
@@ -541,7 +778,7 @@ class IncidentServiceExtendedTest {
         val bridge = mockk<OnCallBridge>()
         mockkObject(FeatureRegistry)
         every { FeatureRegistry.getOnCallBridge() } returns bridge
-        every { bridge.resolvePriority(orgId, "HIGH") } returns PriorityInfo("P2", "High")
+        every { bridge.resolvePriority(orgId, "P1") } returns PriorityInfo("P2", "High")
         every { bridge.shouldEscalate(orgId, "P2") } returns false
 
         transaction {
@@ -639,4 +876,28 @@ class IncidentServiceExtendedTest {
         assertEquals("P0", logs[0][IncidentEventLog.alertPriority])
         assertEquals("meta-dedup", logs[0][IncidentEventLog.deduplicationKey])
     }
+}
+
+private class FixedEscalationOwnershipRepository(
+    private val resourceId: String,
+    private val escalationPolicyId: Int?,
+) : ResourceOwnershipRepository {
+    override fun listByOrganization(organizationId: Int): Map<String, Int> = emptyMap()
+
+    override fun upsert(
+        organizationId: Int,
+        resourceId: String,
+        teamId: Int,
+        updatedBy: String,
+    ) = Unit
+
+    override fun delete(
+        organizationId: Int,
+        resourceId: String,
+    ): Boolean = false
+
+    override fun escalationPolicyIdForResource(
+        organizationId: Int,
+        resourceId: String,
+    ): Int? = escalationPolicyId?.takeIf { resourceId == this.resourceId }
 }

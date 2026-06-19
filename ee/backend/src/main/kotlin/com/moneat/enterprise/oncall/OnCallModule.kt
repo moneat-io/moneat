@@ -8,6 +8,7 @@ import com.moneat.config.RedisClient
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.IncidentInfo
 import com.moneat.enterprise.OnCallBridge
+import com.moneat.enterprise.OnCallUserInfo
 import com.moneat.enterprise.PriorityInfo
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
@@ -59,6 +60,7 @@ class OnCallModule :
     private val priorityService = PriorityService()
     private val businessHoursService = BusinessHoursService()
     private val escalationPolicyService = EscalationPolicyService()
+    private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
 
     override val name: String = "On-Call"
@@ -87,7 +89,6 @@ class OnCallModule :
 
     override fun startBackgroundJobs(application: Application) {
         val escalationPolicyService = EscalationPolicyService()
-        val onCallScheduleService = OnCallScheduleService()
         pushNotificationService = PushNotificationService()
         val slackService = SlackService()
         val redisClient = RedisClient()
@@ -165,6 +166,16 @@ class OnCallModule :
         organizationId: Int,
         alertResourceId: String,
     ): Int? = alertIdForResource(organizationId, alertResourceId)
+
+    override fun getCurrentOnCall(
+        organizationId: Int,
+        scheduleId: Int,
+    ): OnCallUserInfo? {
+        val schedule = onCallScheduleService.getSchedule(scheduleId) ?: return null
+        if (schedule.organizationId != organizationId) return null
+        val participant = onCallScheduleService.getCurrentOnCall(scheduleId) ?: return null
+        return OnCallUserInfo(userId = participant.userResourceId, userName = participant.userName)
+    }
 
     override suspend fun triggerEscalation(
         organizationId: Int,

@@ -1,7 +1,7 @@
 {
     "id": "005-7636-istio-service-dashboard",
-    "title": "Istio Service Dashboard",
-    "description": "Prebuilt Moneat dashboard for Istio Service Dashboard telemetry.",
+    "title": "Istio Services",
+    "description": "Request rate, latency, and success rate for individual services in the Istio mesh.",
     "category": "infrastructure",
     "tags": [
         "Network",
@@ -14,8 +14,8 @@
     "variable_count": 9,
     "warnings": [],
     "dashboard": {
-        "title": "Istio Service Dashboard",
-        "description": "Prebuilt Moneat dashboard for Istio Service Dashboard telemetry.",
+        "title": "Istio Services",
+        "description": "Request rate, latency, and success rate for individual services in the Istio mesh.",
         "project_id": null,
         "folder_id": null,
         "layout_type": "grid",

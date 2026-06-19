@@ -23,6 +23,7 @@ dependencies {
     compileOnly(project(":"))
     implementation(project(":feature-spi"))
     implementation(project(":ingest-common"))
+    implementation(project(":features:otlp"))
 
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.auth)
@@ -40,6 +41,7 @@ dependencies {
     detektPlugins(libs.detekt.formatting)
 
     testImplementation(project(":"))
+    testImplementation(project(":features:otlp"))
     testImplementation(rootBackendTestOutput)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.content.negotiation)
