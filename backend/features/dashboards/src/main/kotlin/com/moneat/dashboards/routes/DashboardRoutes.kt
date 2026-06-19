@@ -43,10 +43,12 @@ import com.moneat.dashboards.models.UpdateFolderRequest
 import com.moneat.dashboards.services.CustomDashboardService
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.CustomDataSourceService
-import com.moneat.dashboards.services.handlers.withConnectionOptions
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.services.DashboardTemplateCatalogService
+import com.moneat.dashboards.services.DashboardVariableResolver
+import com.moneat.dashboards.services.DataSourceQueryErrors
+import com.moneat.dashboards.services.handlers.withConnectionOptions
 import com.moneat.dashboards.translation.DashboardTranslator
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
@@ -80,6 +82,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.koin.core.context.GlobalContext
+import java.sql.SQLException
 
 private val logger = KotlinLogging.logger {}
 private val json = Json { ignoreUnknownKeys = true }
@@ -430,6 +433,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDashboardQuery(
         call.respond(executeDashboardQuery(effectiveQuery, queryContext, dependencies))
     } catch (e: DashboardQueryRouteException) {
         call.respond(e.status, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
+    } catch (e: SQLException) {
+        logger.warn(e) { "Dashboard custom data source query failed" }
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(DataSourceQueryErrors.message(e)))
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
@@ -637,8 +643,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleBatchDashboardQu
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve(
     dashboardService: CustomDashboardService,
-    dataSourceService: CustomDataSourceService,
-    dataSourceExecutor: CustomDataSourceExecutor,
+    variableResolver: DashboardVariableResolver,
 ) {
     val principal = call.principal<JWTPrincipal>()
     val userId = principal!!.payload.getClaim("userId").asInt()
@@ -654,41 +659,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleVariablesResolve
     val variables = dashboard.variables
     val currentValues = call.receive<Map<String, String>>()
 
-    val sources = dataSourceService.listDataSources(orgId)
-
-    val resolved = mutableMapOf<String, List<String>>()
-    for (v in variables) {
-        val query = v.query ?: continue
-        if (!query.startsWith("label_values(")) continue
-        val requiredSourceType = DashboardQueryEngine.templateDataSourceType(v.datasource)
-        val source = sources.firstOrNull {
-            it.enabled && it.sourceType.equals(requiredSourceType, ignoreCase = true)
-        } ?: continue
-
-        // Substitute variable references in the query
-        var substituted = query
-        for ((name, value) in currentValues) {
-            substituted = substituted
-                .replace("\${$name}", value)
-                .replace("\$$name", value)
-        }
-
-        val creds = dataSourceService.getDecryptedCredentials(source.numericId, orgId) ?: continue
-        val sourceType = CustomDataSourceType.fromString(source.sourceType)
-            ?: continue
-        val options = dataSourceExecutor.executeLabelValuesQuery(
-            sourceType,
-            source.host,
-            source.port,
-            creds.withConnectionOptions(source.extraConfig),
-            substituted,
-        )
-        if (options.isNotEmpty()) {
-            resolved[v.name] = options
-        }
+    try {
+        call.respond(variableResolver.resolve(variables, currentValues, orgId))
+    } catch (e: SQLException) {
+        logger.warn(e) { "Dashboard variable query failed" }
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(DataSourceQueryErrors.message(e)))
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
-
-    call.respond(resolved)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleImportDashboard(
@@ -1069,6 +1047,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleCustomDataSource
             request.query, request.limit, request.timeRange,
         )
         call.respond(results)
+    } catch (e: SQLException) {
+        logger.warn(e) { "Custom data source query failed" }
+        call.respond(HttpStatusCode.BadRequest, ErrorResponse(DataSourceQueryErrors.message(e)))
     } catch (e: IllegalArgumentException) {
         call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message ?: ERR_INVALID_QUERY))
     }
@@ -1089,6 +1070,7 @@ data class DashboardCoreRouteDependencies(
 data class DashboardDataSourceRouteDependencies(
     val dataSourceService: CustomDataSourceService = GlobalContext.get().get(),
     val dataSourceExecutor: CustomDataSourceExecutor = GlobalContext.get().get(),
+    val variableResolver: DashboardVariableResolver = GlobalContext.get().get(),
 )
 
 data class DashboardRouteDependencies(
@@ -1109,6 +1091,7 @@ fun Route.customDashboardRoutes(
     val translators = dependencies.translators
     val dataSourceService = dependencies.dataSources.dataSourceService
     val dataSourceExecutor = dependencies.dataSources.dataSourceExecutor
+    val variableResolver = dependencies.dataSources.variableResolver
     val dashboardAlertService = dependencies.dashboardAlertService
     val templateCatalogService = dependencies.templateCatalogService
     val queryDependencies = DashboardQueryRouteDependencies(
@@ -1145,7 +1128,7 @@ fun Route.customDashboardRoutes(
             post("/{id}/query") { handleDashboardQuery(queryDependencies) }
             post("/{id}/query/batch") { handleBatchDashboardQuery(queryDependencies) }
             post("/{id}/variables/resolve") {
-                handleVariablesResolve(dashboardService, dataSourceService, dataSourceExecutor)
+                handleVariablesResolve(dashboardService, variableResolver)
             }
             post("/import") { handleImportDashboard(dashboardService, translators.dataDog, translators.grafana) }
             get("/{id}/export/{format}") {

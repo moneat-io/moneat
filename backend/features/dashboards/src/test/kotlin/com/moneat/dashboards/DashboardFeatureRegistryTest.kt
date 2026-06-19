@@ -28,6 +28,7 @@ import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.services.DashboardTemplateCatalogService
+import com.moneat.dashboards.services.DashboardVariableResolver
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.incident.services.IncidentService
@@ -102,6 +103,7 @@ class DashboardFeatureRegistryTest {
             assertIs<CustomDashboardService>(koinApplication.koin.get<CustomDashboardService>())
             assertIs<CustomDataSourceService>(koinApplication.koin.get<CustomDataSourceService>())
             assertIs<CustomDataSourceExecutor>(koinApplication.koin.get<CustomDataSourceExecutor>())
+            assertIs<DashboardVariableResolver>(koinApplication.koin.get<DashboardVariableResolver>())
         } finally {
             koinApplication.close()
         }

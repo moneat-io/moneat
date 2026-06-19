@@ -110,6 +110,23 @@ class CustomDataSourceExecutorTest {
     }
 
     @Test
+    fun `validateSqlQuery allows read only CTE queries`() {
+        postgresHandler.validateSqlQuery(
+            "WITH recent_users AS (SELECT id FROM users) SELECT count(*) FROM recent_users"
+        )
+    }
+
+    @Test
+    fun `validateSqlQuery rejects mutating CTE queries`() {
+        val ex = assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery(
+                "WITH deleted AS (DELETE FROM users RETURNING id) SELECT count(*) FROM deleted"
+            )
+        }
+        assertTrue(ex.message?.contains("DELETE") == true)
+    }
+
+    @Test
     fun `validateSqlQuery is case insensitive`() {
         val ex = assertFailsWith<IllegalArgumentException> {
             postgresHandler.validateSqlQuery("delete from users")

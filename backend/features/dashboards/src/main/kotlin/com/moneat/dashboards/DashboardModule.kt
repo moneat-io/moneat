@@ -29,6 +29,7 @@ import com.moneat.dashboards.services.CustomDataSourceService
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.services.DashboardTemplateCatalogService
+import com.moneat.dashboards.services.DashboardVariableResolver
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.events.repositories.ProjectRepositoryImpl
 import io.ktor.server.application.Application
@@ -82,6 +83,7 @@ class DashboardModule : EnterpriseModule {
                 }
                 single { CustomDataSourceService() }
                 single { CustomDataSourceExecutor() }
+                single { DashboardVariableResolver(get(), get()) }
             }
         )
 
