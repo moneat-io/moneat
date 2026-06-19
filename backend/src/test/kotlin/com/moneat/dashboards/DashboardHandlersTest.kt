@@ -403,6 +403,37 @@ class DashboardHandlersTest {
         }
 
     @Test
+    fun `Prometheus executeQuery uses auto step for week range`() =
+        withSelfHosted {
+            runBlocking {
+                val resp =
+                    PROMETHEUS_SUCCESS_PREFIX + """"data":{""" +
+                        """"resultType":"matrix","result":[""" +
+                        """{"metric":{"__name__":"up"},""" +
+                        """"values":[[1700000000,"1"]]}]}}"""
+                val queries = mutableListOf<String?>()
+                MockHttpServer { ex ->
+                    queries.add(ex.requestURI.query)
+                    ex.respond(200, resp)
+                }.use { server ->
+                    val port = extractPort(server.baseUrl)
+                    val rows = PrometheusHandler().executeQuery(
+                        DEFAULT_ROW_ID,
+                        DEFAULT_HOST,
+                        port,
+                        null,
+                        DataSourceCredentials(),
+                        "up",
+                        DEFAULT_LIMIT,
+                        TimeRangeDef("now-7d", "now")
+                    )
+                    assertEquals(1, rows.size)
+                    assertContains(queries.single().orEmpty(), "step=10m")
+                }
+            }
+        }
+
+    @Test
     fun `Prometheus executeQuery returns empty on server error`() =
         withSelfHosted {
             runBlocking {
