@@ -70,7 +70,8 @@ def decode_git_path(path: str) -> Path:
 
 
 def changed_lines(base_ref: str, head_ref: str) -> dict[Path, set[int]]:
-    diff = run_git(["diff", "--unified=0", "--no-ext-diff", base_ref, head_ref, "--"])
+    merge_base = run_git(["merge-base", base_ref, head_ref]).strip()
+    diff = run_git(["diff", "--unified=0", "--no-ext-diff", merge_base, head_ref, "--"])
     lines_by_path: dict[Path, set[int]] = {}
     current_path: Path | None = None
 
