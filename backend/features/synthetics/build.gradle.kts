@@ -29,12 +29,14 @@ dependencies {
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.kotlin.datetime)
     implementation(libs.kotlin.logging)
     implementation(libs.koin.ktor)
+    implementation(libs.playwright)
 
     detektPlugins(libs.detekt.formatting)
 
