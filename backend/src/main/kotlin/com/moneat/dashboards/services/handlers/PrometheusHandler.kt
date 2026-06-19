@@ -23,6 +23,7 @@ import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND
+import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 import com.moneat.utils.TimeConstants.SECONDS_PER_DAY
 import com.moneat.utils.TimeConstants.SECONDS_PER_HOUR
 import com.moneat.utils.TimeConstants.SECONDS_PER_MINUTE
@@ -51,8 +52,50 @@ class PrometheusHandler : HttpApiHandler() {
 
     companion object {
         private const val PROMETHEUS_LABEL_LIMIT = 20
-        private const val SECONDS_SIX_HOURS = 21_600L
         private const val PROMETHEUS_SOURCE = "prometheus"
+        private const val DEFAULT_PROMETHEUS_MAX_DATA_POINTS = 1_000
+        private const val PROMETHEUS_RESULT_SERIES_HEADROOM = 10
+        private const val DEFAULT_PROMETHEUS_RESULT_LIMIT =
+            DEFAULT_PROMETHEUS_MAX_DATA_POINTS * PROMETHEUS_RESULT_SERIES_HEADROOM
+        private const val MIN_PROMETHEUS_MAX_DATA_POINTS = 1
+        private const val MILLIS_PER_MINUTE_LONG = 60_000L
+        private const val MILLIS_PER_HOUR_LONG = 3_600_000L
+        private const val MILLIS_PER_DAY_LONG = 86_400_000L
+        private const val MILLIS_PER_WEEK_LONG = 604_800_000L
+        private const val MILLIS_PER_MONTH_30_LONG = 2_592_000_000L
+        private const val MILLIS_PER_YEAR_365_LONG = 31_536_000_000L
+
+        private val AUTO_STEP_ROUND_INTERVALS_MS = listOf(
+            10L to 1L,
+            15L to 10L,
+            35L to 20L,
+            75L to 50L,
+            150L to 100L,
+            350L to 200L,
+            750L to 500L,
+            1_500L to 1_000L,
+            3_500L to 2_000L,
+            7_500L to 5_000L,
+            12_500L to 10_000L,
+            17_500L to 15_000L,
+            25_000L to 20_000L,
+            45_000L to 30_000L,
+            90_000L to MILLIS_PER_MINUTE_LONG,
+            210_000L to 2 * MILLIS_PER_MINUTE_LONG,
+            450_000L to 5 * MILLIS_PER_MINUTE_LONG,
+            750_000L to 10 * MILLIS_PER_MINUTE_LONG,
+            1_050_000L to 15 * MILLIS_PER_MINUTE_LONG,
+            1_500_000L to 20 * MILLIS_PER_MINUTE_LONG,
+            2_700_000L to 30 * MILLIS_PER_MINUTE_LONG,
+            5_400_000L to MILLIS_PER_HOUR_LONG,
+            9_000_000L to 2 * MILLIS_PER_HOUR_LONG,
+            16_200_000L to 3 * MILLIS_PER_HOUR_LONG,
+            32_400_000L to 6 * MILLIS_PER_HOUR_LONG,
+            MILLIS_PER_DAY_LONG to 12 * MILLIS_PER_HOUR_LONG,
+            MILLIS_PER_WEEK_LONG to MILLIS_PER_DAY_LONG,
+            3 * MILLIS_PER_WEEK_LONG to MILLIS_PER_WEEK_LONG,
+            6 * MILLIS_PER_WEEK_LONG to MILLIS_PER_MONTH_30_LONG,
+        )
 
         private fun httpStatusLabel(status: Int): String = "http_$status"
     }
@@ -147,7 +190,7 @@ class PrometheusHandler : HttpApiHandler() {
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
         val baseUrl = buildUrl(host, port)
-        val promLimit = limit
+        val promLimit = limit.coerceAtLeast(DEFAULT_PROMETHEUS_RESULT_LIMIT)
 
         return suspendRunCatching {
             val response = if (timeRange != null) {
@@ -306,11 +349,32 @@ class PrometheusHandler : HttpApiHandler() {
         return nowSec - offsetSec
     }
 
-    internal fun resolvePrometheusStep(rangeSec: Long): String = when {
-        rangeSec <= SECONDS_PER_HOUR -> "15s"
-        rangeSec <= SECONDS_SIX_HOURS -> "1m"
-        rangeSec <= SECONDS_PER_DAY -> "5m"
-        rangeSec <= SECONDS_PER_WEEK -> "1h"
-        else -> "1d"
+    internal fun resolvePrometheusStep(
+        rangeSec: Long,
+        maxDataPoints: Int = DEFAULT_PROMETHEUS_MAX_DATA_POINTS,
+    ): String {
+        val resolution = maxDataPoints.coerceAtLeast(MIN_PROMETHEUS_MAX_DATA_POINTS)
+        val rangeMs = rangeSec.coerceAtLeast(0) * MILLIS_PER_SECOND_LONG
+        val intervalMs = roundAutoStepIntervalMs(rangeMs.toDouble() / resolution)
+        return formatPrometheusDuration(intervalMs)
+    }
+
+    private fun roundAutoStepIntervalMs(intervalMs: Double): Long {
+        for ((thresholdMs, roundedMs) in AUTO_STEP_ROUND_INTERVALS_MS) {
+            if (intervalMs < thresholdMs) return roundedMs
+        }
+        return MILLIS_PER_YEAR_365_LONG
+    }
+
+    private fun formatPrometheusDuration(intervalMs: Long): String {
+        return when {
+            intervalMs % MILLIS_PER_YEAR_365_LONG == 0L -> "${intervalMs / MILLIS_PER_YEAR_365_LONG}y"
+            intervalMs % MILLIS_PER_WEEK_LONG == 0L -> "${intervalMs / MILLIS_PER_WEEK_LONG}w"
+            intervalMs % MILLIS_PER_DAY_LONG == 0L -> "${intervalMs / MILLIS_PER_DAY_LONG}d"
+            intervalMs % MILLIS_PER_HOUR_LONG == 0L -> "${intervalMs / MILLIS_PER_HOUR_LONG}h"
+            intervalMs % MILLIS_PER_MINUTE_LONG == 0L -> "${intervalMs / MILLIS_PER_MINUTE_LONG}m"
+            intervalMs % MILLIS_PER_SECOND_LONG == 0L -> "${intervalMs / MILLIS_PER_SECOND_LONG}s"
+            else -> "${intervalMs}ms"
+        }
     }
 }

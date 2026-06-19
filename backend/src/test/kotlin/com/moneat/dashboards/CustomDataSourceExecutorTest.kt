@@ -279,27 +279,34 @@ class CustomDataSourceExecutorTest {
 
     @Test
     fun `resolvePrometheusStep for 1 hour range`() {
-        assertEquals("15s", prometheusHandler.resolvePrometheusStep(3600L))
+        assertEquals("5s", prometheusHandler.resolvePrometheusStep(3600L))
     }
 
     @Test
     fun `resolvePrometheusStep for 6 hour range`() {
-        assertEquals("1m", prometheusHandler.resolvePrometheusStep(21600L))
+        assertEquals("20s", prometheusHandler.resolvePrometheusStep(21600L))
     }
 
     @Test
     fun `resolvePrometheusStep for 24 hour range`() {
-        assertEquals("5m", prometheusHandler.resolvePrometheusStep(86400L))
+        assertEquals("1m", prometheusHandler.resolvePrometheusStep(86400L))
     }
 
     @Test
     fun `resolvePrometheusStep for 7 day range`() {
-        assertEquals("1h", prometheusHandler.resolvePrometheusStep(604800L))
+        assertEquals("10m", prometheusHandler.resolvePrometheusStep(604800L))
     }
 
     @Test
     fun `resolvePrometheusStep for 30 day range`() {
-        assertEquals("1d", prometheusHandler.resolvePrometheusStep(2592000L))
+        assertEquals("30m", prometheusHandler.resolvePrometheusStep(2592000L))
+    }
+
+    @Test
+    fun `resolvePrometheusStep honors max data points`() {
+        assertEquals("5m", prometheusHandler.resolvePrometheusStep(604800L, 2000))
+        assertEquals("2h", prometheusHandler.resolvePrometheusStep(604800L, 100))
+        assertEquals("30d", prometheusHandler.resolvePrometheusStep(40L * 86_400L, 1))
     }
 
     // ──── Relative time resolution ────
