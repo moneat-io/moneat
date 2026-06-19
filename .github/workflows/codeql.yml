@@ -30,6 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up JDK
@@ -79,4 +80,17 @@ jobs:
             -Pkotlin.incremental=false
 
       - name: Perform CodeQL analysis
+        id: analyze
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+
+      - name: Fail on CodeQL alerts in changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
+        run: |
+          python3 scripts/check-codeql-pr-alerts.py \
+            --sarif-dir "$SARIF_DIR" \
+            --base-ref "$BASE_SHA" \
+            --head-ref "$HEAD_SHA"
