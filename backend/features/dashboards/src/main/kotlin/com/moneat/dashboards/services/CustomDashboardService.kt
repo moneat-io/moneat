@@ -202,9 +202,10 @@ class CustomDashboardService(
         val folderId = resolveOptionalFolderId(request.folderId, orgId)
         val updated = dashboardRepository.update(id, orgId, request, folderId)
         if (!updated) return null
-        if (request.widgets != null) {
+        val widgets = request.widgets
+        if (widgets != null) {
             val now = Clock.System.now()
-            val keptIds = dashboardWidgetRepository.bulkUpsert(id, request.widgets, now)
+            val keptIds = dashboardWidgetRepository.bulkUpsert(id, widgets, now)
             dashboardWidgetRepository.deleteNotIn(id, keptIds)
         }
         return getDashboard(id, orgId, null)
