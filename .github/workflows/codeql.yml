@@ -104,8 +104,9 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
+          CODEQL_PR_GUARD_REPO_ROOT: ${{ github.workspace }}
         run: |
           python3 "$CODEQL_PR_GUARD" \
             --sarif-dir "$SARIF_DIR" \

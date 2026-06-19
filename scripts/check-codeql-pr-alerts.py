@@ -20,7 +20,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(os.environ.get("CODEQL_PR_GUARD_REPO_ROOT", Path(__file__).resolve().parents[1])).resolve()
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(?P<start>\d+)(?:,(?P<count>\d+))? @@")
 MAX_SUMMARY_ROWS = 50
 
