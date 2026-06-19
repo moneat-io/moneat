@@ -39,6 +39,7 @@ dependencies {
     detektPlugins(libs.detekt.formatting)
 
     testImplementation(project(":"))
+    testImplementation(project(":features:org"))
     testImplementation(rootBackendTestOutput)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.content.negotiation)
