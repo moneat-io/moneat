@@ -30,6 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up JDK
@@ -79,4 +80,35 @@ jobs:
             -Pkotlin.incremental=false
 
       - name: Perform CodeQL analysis
+        id: analyze
         uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e
+
+      - name: Prepare CodeQL PR guard
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          guard_path="${RUNNER_TEMP}/check-codeql-pr-alerts.py"
+
+          if git cat-file -e "${BASE_SHA}:scripts/check-codeql-pr-alerts.py" 2>/dev/null; then
+            git show "${BASE_SHA}:scripts/check-codeql-pr-alerts.py" > "$guard_path"
+          else
+            cp scripts/check-codeql-pr-alerts.py "$guard_path"
+          fi
+
+          chmod +x "$guard_path"
+          echo "CODEQL_PR_GUARD=$guard_path" >> "$GITHUB_ENV"
+
+      - name: Fail on CodeQL alerts in changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SARIF_DIR: ${{ steps.analyze.outputs.sarif-output }}
+          CODEQL_PR_GUARD_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          python3 "$CODEQL_PR_GUARD" \
+            --sarif-dir "$SARIF_DIR" \
+            --base-ref "$BASE_SHA" \
+            --head-ref "$HEAD_SHA"
