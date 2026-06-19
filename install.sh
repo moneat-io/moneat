@@ -479,11 +479,11 @@ build_and_start() {
   run_cmd "Pulling Docker images..." "Images pulled" \
     docker compose pull --quiet
 
-  info "Starting databases..."
-  run_cmd "Starting PostgreSQL, ClickHouse, Redis, and Temporal..." "Databases started" \
+  info "Starting infrastructure services..."
+  run_cmd "Starting PostgreSQL, ClickHouse, Redis, and Temporal..." "Infrastructure services started" \
     docker compose up -d postgres clickhouse redis temporal-bootstrap temporal temporal-ui
 
-  info "Waiting for databases to be healthy..."
+  info "Waiting for infrastructure services to be healthy..."
   local retries=30
   while [[ $retries -gt 0 ]]; do
     local healthy=0
@@ -498,9 +498,9 @@ build_and_start() {
   done
 
   if [[ $retries -eq 0 ]]; then
-    warn "Database health check timed out — continuing anyway"
+    warn "Infrastructure health check timed out — continuing anyway"
   else
-    success "Databases healthy"
+    success "Infrastructure services healthy"
   fi
 
   info "Starting application..."
