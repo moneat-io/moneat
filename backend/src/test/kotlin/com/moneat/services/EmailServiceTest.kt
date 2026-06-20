@@ -309,8 +309,9 @@ class EmailServiceTest {
         assertTrue(htmlSlot.captured.contains("80%"))
         assertTrue(htmlSlot.captured.contains("aria-label=\"80% used\""))
         assertTrue(htmlSlot.captured.contains("width=\"80%\""))
-        assertTrue(htmlSlot.captured.contains("white-space:nowrap;word-break:normal;"))
+        assertTrue(htmlSlot.captured.contains("https://moneat.io/email/logo-mark.png"))
         assertTrue(!htmlSlot.captured.contains("<svg"))
+        assertNoUnresolvedTemplateMarkers(htmlSlot.captured)
     }
 
     @Test
@@ -336,16 +337,17 @@ class EmailServiceTest {
         service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData(rows = rows))
 
         val html = htmlSlot.captured
-        assertTrue(html.contains("background-color:#dc2626;"))
-        assertTrue(html.contains("background-color:#f59e0b;"))
-        assertTrue(html.contains("background-color:#2563eb;"))
-        assertTrue(html.contains("background-color:#38bdf8;"))
+        assertTrue(html.contains("background:#cf2126"))
+        assertTrue(html.contains("background:#e0a100"))
+        assertTrue(html.contains("background:#0369a1"))
+        assertTrue(html.contains("background:#0ea5e9"))
         assertTrue(html.contains("width=\"100%\""))
         assertTrue(html.contains("width=\"45%\""))
         assertTrue(html.contains("width=\"2%\""))
         assertTrue(html.contains("width=\"0%\""))
         assertTrue(html.contains("aria-label=\"Unlimited used\""))
         assertTrue(html.contains("aria-label=\"not available used\""))
+        assertNoUnresolvedTemplateMarkers(html)
     }
 
     @Test
@@ -361,6 +363,52 @@ class EmailServiceTest {
         service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData(rows = emptyList()))
 
         assertTrue(htmlSlot.captured.contains("No billable usage yet."))
+        assertNoUnresolvedTemplateMarkers(htmlSlot.captured)
+    }
+
+    @Test
+    fun `redesigned transactional templates render without unresolved tokens or inert links`() {
+        val service = spyk(EmailService())
+        val htmlBodies = mutableListOf<String>()
+        every {
+            service.sendEmail(
+                any(), any(), capture(htmlBodies), any(), any()
+            )
+        } just Runs
+
+        service.sendVerificationEmail("user@example.com", "tok-verify", "Ada")
+        service.sendPasswordResetEmail("user@example.com", "tok-reset", "Ada")
+        service.sendInvitationEmail("invitee@example.com", "Bob", "Acme", "admin", "tok-invite")
+        service.sendErrorAlertEmail("ops@example.com", errorAlertData())
+        service.sendWeeklySummaryEmail("lead@example.com", weeklySummaryData())
+        service.sendBillingThresholdAlertEmail(
+            to = "owner@example.com",
+            subject = "[Billing Org] Usage is over the included limit",
+            data = billingInsightEmailData()
+        )
+        service.sendBillingInsightsEmail("owner@example.com", billingInsightEmailData())
+        service.sendHostAlertEmail("sre@example.com", hostAlertData())
+        service.sendMonitorAlertEmail("sre@example.com", monitorAlertData())
+        service.sendResolvedAlertEmail("sre@example.com", "host_up", resolvedAlertData())
+        service.sendHostDownEmail("sre@example.com", "db-1", "5 minutes ago", "https://app.example/hosts/db-1")
+        service.sendHostUpEmail("sre@example.com", "db-1", "https://app.example/hosts/db-1")
+        service.sendUptimeAlertEmail(
+            to = "sre@example.com",
+            monitorName = "API",
+            status = "down",
+            message = "timeout",
+            monitorUrl = "https://app.example/monitors/1"
+        )
+        service.sendUptimeAlertEmail(
+            to = "sre@example.com",
+            monitorName = "API",
+            status = "up",
+            message = "",
+            monitorUrl = "https://app.example/monitors/1"
+        )
+
+        assertEquals(14, htmlBodies.size)
+        htmlBodies.forEach(::assertNoUnresolvedTemplateMarkers)
     }
 
     // ──── Enterprise sales inquiry ────
@@ -422,6 +470,133 @@ class EmailServiceTest {
         assertTrue(!htmlSlot.captured.contains("<script>alert(1)</script>"))
     }
 
+    private fun errorAlertData() =
+        EmailService.ErrorAlertData(
+            issueTitle = "TypeError: missing total",
+            issueLevel = "error",
+            issueCulprit = "CartController.computeTotals src/controllers/cart.ts:148:24",
+            issueMessage = "Cannot read properties of undefined",
+            issueCount = "12",
+            issueUrl = "https://app.example/issues/issue-1",
+            projectName = "checkout-api",
+            environment = "production",
+            timestamp = "2026-01-01T00:00:00Z",
+            stackTrace = "TypeError\nat CartController.computeTotals",
+            settingsUrl = "https://app.example/settings",
+            unsubscribeUrl = "https://app.example/unsub",
+            errorRate = "4.7%",
+            errorRateDelta = "up 3.9pt",
+            p95Latency = "842 ms",
+            p95LatencyDelta = "up 210 ms",
+            throughput = "1.2k/m",
+            throughputDelta = "down 8%",
+            usersAffected = "312",
+            firstSeen = "14m ago",
+            lastSeen = "8s ago",
+            eventSeries = listOf(4, 5, 7, 9, 12, 18, 24),
+            spikeIndex = 4,
+            issueFunction = "CartController.computeTotals",
+            issueLocation = "src/controllers/cart.ts:148:24",
+            release = "v2.4.1",
+            deploySummary = "Deployed before first event",
+            contextTags =
+            listOf(
+                EmailService.ContextTag("runtime", "node@20"),
+                EmailService.ContextTag("http.route", "POST /api/checkout")
+            ),
+            codeOwner = "@checkout-team",
+            stackFrames =
+            listOf(
+                EmailService.StackFrame("TypeError: missing total", heading = true),
+                EmailService.StackFrame("at CartController.computeTotals", inApp = true)
+            )
+        )
+
+    private fun weeklySummaryData() =
+        EmailService.WeeklySummaryData(
+            startDate = "2026-01-01",
+            endDate = "2026-01-07",
+            totalEvents = "1,234",
+            eventsTrend = 5,
+            newIssues = "42",
+            issuesTrend = -3,
+            affectedUsers = "100",
+            usersTrend = 0,
+            topIssues =
+            listOf(
+                EmailService.TopIssue(
+                    title = "Slow query",
+                    culprit = "db",
+                    project = "api",
+                    count = "9"
+                )
+            ),
+            projects =
+            listOf(
+                EmailService.ProjectSummary(
+                    name = "api",
+                    events = "500",
+                    issues = "10",
+                    crashFree = "99.1%"
+                )
+            ),
+            dashboardUrl = "https://app.example/dashboard",
+            settingsUrl = "https://app.example/settings",
+            unsubscribeUrl = "https://app.example/unsub",
+            organizationName = "Acme"
+        )
+
+    private fun hostAlertData() =
+        EmailService.HostAlertData(
+            hostName = "db-1",
+            lastSeenText = "3 minutes ago",
+            hostUrl = "https://app.example/hosts/db-1",
+            settingsUrl = "https://app.example/settings",
+            unsubscribeUrl = "https://app.example/unsub",
+            currentValue = "92%",
+            baselineSummary = "up from 41% baseline",
+            sustainedDuration = "5m",
+            processes =
+            listOf(
+                EmailService.HostProcessRow("postgres", "61%", "2.1 GiB"),
+                EmailService.HostProcessRow("otel-collector", "6%", "412 MiB")
+            ),
+            historySeries = listOf(38, 40, 61, 80, 92)
+        )
+
+    private fun monitorAlertData() =
+        EmailService.MonitorAlertData(
+            monitorName = "API",
+            status = "down",
+            message = "timeout",
+            monitorUrl = "https://app.example/monitors/1",
+            settingsUrl = "https://app.example/settings",
+            unsubscribeUrl = "https://app.example/unsub",
+            metricName = "5xx error rate",
+            currentValue = "15.2%",
+            threshold = "10%",
+            condition = "avg over 5m > 10%",
+            dashboardName = "Production Overview",
+            widgetName = "HTTP 5xx error rate",
+            historySeries = listOf(2, 3, 5, 10, 15),
+            breachIndex = 3
+        )
+
+    private fun resolvedAlertData() =
+        EmailService.ResolvedAlertData(
+            targetName = "db-1",
+            metricName = "CPU",
+            alertUrl = "https://app.example/hosts/db-1",
+            settingsUrl = "https://app.example/settings",
+            unsubscribeUrl = "https://app.example/unsub",
+            duration = "12m",
+            peakValue = "92%",
+            currentValue = "38%",
+            monitorName = "CPU > 90%",
+            triggeredAt = "16:30 UTC",
+            recoveredAt = "16:42 UTC"
+        )
+
     private fun billingInsightEmailData(
         rows: List<EmailService.BillingInsightRow> =
             listOf(
@@ -446,4 +621,12 @@ class EmailServiceTest {
             rows = rows,
             totalOverage = "\$0.00"
         )
+
+    private fun assertNoUnresolvedTemplateMarkers(html: String) {
+        val unresolvedToken = Regex("""\{\{\s*[\w.]+\s*}}""").find(html)?.value
+        val sentinel = Regex("""[A-Z][A-Z0-9_]+_PLACEHOLDER""").find(html)?.value
+        assertTrue(unresolvedToken == null, "HTML contains unresolved token: $unresolvedToken")
+        assertTrue(sentinel == null, "HTML contains sentinel: $sentinel")
+        assertTrue(!html.contains("href=\"#\""), "HTML contains inert href")
+    }
 }

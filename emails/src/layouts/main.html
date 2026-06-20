@@ -1,95 +1,33 @@
 <!doctype html>
 <html lang="en">
-
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="x-apple-disable-message-reformatting">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no, url=no">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <!--[if mso]>
-  <noscript>
-    <xml>
-      <o:OfficeDocumentSettings xmlns:o="urn:schemas-microsoft-com:office:office">
-        <o:PixelsPerInch>96</o:PixelsPerInch>
-      </o:OfficeDocumentSettings>
-    </xml>
-  </noscript>
   <style>
-    td,th,div,p,a,h1,h2,h3,h4,h5,h6 {font-family: "Segoe UI", sans-serif; mso-line-height-rule: exactly;}
-  </style>
-  <![endif]-->
-  <style>
-    @tailwind components;
-    @tailwind utilities;
-
-    @media screen and (max-width: 600px) {
-      .email-shell {
-        width: calc(100vw - 24px) !important;
-        max-width: calc(100vw - 24px) !important;
-        min-width: 0 !important;
-      }
-
-      .email-pad {
-        padding-left: 16px !important;
-        padding-right: 16px !important;
-      }
-    }
-
-    u + .body .gmail-blend-screen {
-      background: #000000;
-      mix-blend-mode: screen;
-    }
-
-    u + .body .gmail-blend-difference {
-      background: #000000;
-      mix-blend-mode: difference;
-    }
-
-    /* Reset for email clients */
-    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-    img { -ms-interpolation-mode: bicubic; }
-
-    /* Prevent rounding on iOS */
-    a[x-apple-data-detectors] {
-      color: inherit !important;
-      text-decoration: none !important;
-      font-size: inherit !important;
-      font-family: inherit !important;
-      font-weight: inherit !important;
-      line-height: inherit !important;
+    body { margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+    a { text-decoration: none; }
+    img { border: 0; outline: none; -ms-interpolation-mode: bicubic; }
+    table { border-collapse: collapse; mso-table-lspace: 0; mso-table-rspace: 0; }
+    @media only screen and (max-width: 600px) {
+      .shell { width: 100% !important; border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important; }
+      .px { padding-left: 18px !important; padding-right: 18px !important; }
     }
   </style>
 </head>
-
-<body
-  class="body m-0 p-0 w-full [-webkit-font-smoothing:antialiased]"
-  style="
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    background-color: #f5f5f5;
-    word-break: normal;
-    overflow-wrap: break-word;
-  "
->
-  <div role="article" aria-roledescription="email" aria-label="Notification from Moneat" lang="en">
-    <table
-      class="w-full"
-      width="100%"
-      style="
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      "
-    >
-      <tr>
-        <td align="center" class="py-8" style="padding: 32px 12px; background-color: #f5f5f5;">
+<body style="margin:0;padding:0;background:#f7f8fa;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f8fa;">
+    <tr>
+      <td align="center" style="padding:28px 12px;">
+        <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+        <table role="presentation" class="shell" align="center" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #d8dce3;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(16,18,26,0.09);">
           <yield />
-        </td>
-      </tr>
-    </table>
-  </div>
+        </table>
+        <!--[if mso]></td></tr></table><![endif]-->
+      </td>
+    </tr>
+  </table>
 </body>
-
 </html>

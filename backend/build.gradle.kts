@@ -61,6 +61,15 @@ tasks.register<JavaExec>("convertDashboardTemplates") {
     )
 }
 
+val emailTemplateSourceDir = layout.projectDirectory.dir("../emails")
+
+tasks.register<Exec>("buildEmails") {
+    group = "email"
+    description = "Builds Maizzle transactional email templates for backend resources."
+    workingDir = emailTemplateSourceDir.asFile
+    commandLine("npm", "run", "build:production")
+}
+
 repositories {
     mavenCentral()
 }
@@ -79,7 +88,6 @@ sourceSets {
     }
 }
 
-// Fix duplicate resources issue
 tasks.named<ProcessResources>("processIntegrationTestResources") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
@@ -263,6 +271,7 @@ val copyEmailTemplates =
     tasks.register<Copy>("copyEmailTemplates") {
         group = "build"
         description = "Copies built email templates into backend resources"
+        dependsOn(tasks.named("buildEmails"))
 
         from("${project.rootDir}/../emails/build/templates/email")
         into(layout.buildDirectory.dir("resources/main/email-templates"))
@@ -276,6 +285,7 @@ val copyEmailTemplatesForTest =
     tasks.register<Copy>("copyEmailTemplatesForTest") {
         group = "build"
         description = "Copies built email templates into backend test resources"
+        dependsOn(tasks.named("buildEmails"))
 
         from("${project.rootDir}/../emails/build/templates/email")
         into(layout.buildDirectory.dir("resources/test/email-templates"))
