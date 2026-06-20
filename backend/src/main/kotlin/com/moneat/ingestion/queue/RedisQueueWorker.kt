@@ -38,11 +38,15 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogger
 import java.time.Duration
 
 private const val ERROR_RETRY_DELAY_MS = 1_000L
+private const val STOP_JOIN_TIMEOUT_MS = 5_000L
 private const val REDIS_GROUP_EXISTS = "BUSYGROUP"
 private const val REDIS_GROUP_MISSING = "NOGROUP"
 private const val REDIS_STREAM_START_ID = "0-0"
@@ -166,12 +170,22 @@ class RedisQueueWorker(
     fun stop() {
         jobs.forEach { it.cancel() }
         scope.cancel()
+        val stopped = runBlocking {
+            withTimeoutOrNull(STOP_JOIN_TIMEOUT_MS) {
+                jobs.joinAll()
+            }
+        } != null
+        if (!stopped) {
+            logger.warn { "${spec.pipeline.workerName} queue worker did not stop within timeout" }
+        }
         logger.info { "${spec.pipeline.workerName} queue worker stopped" }
     }
 
     private suspend fun runWorker(workerId: Int) {
-        val conn = RedisConfig.newBlockingConnection()
+        if (!scope.isActive) return
+        var conn: StatefulRedisConnection<String, String>? = null
         try {
+            conn = RedisConfig.newBlockingConnection()
             ensureConsumerGroup(conn)
             while (scope.isActive) {
                 try {
@@ -186,8 +200,18 @@ class RedisQueueWorker(
                     onQueueLoopFailure(workerId, e)
                 }
             }
+        } catch (e: CancellationException) {
+            // Worker is shutting down before or during connection setup.
+        } catch (e: RedisException) {
+            onQueueLoopFailure(workerId, e)
+        } catch (e: java.io.IOException) {
+            onQueueLoopFailure(workerId, e)
+        } catch (e: IllegalStateException) {
+            if (scope.isActive) {
+                onQueueLoopFailure(workerId, e)
+            }
         } finally {
-            RedisConfig.closeBlockingConnection(conn)
+            conn?.let { RedisConfig.closeBlockingConnection(it) }
         }
     }
 
