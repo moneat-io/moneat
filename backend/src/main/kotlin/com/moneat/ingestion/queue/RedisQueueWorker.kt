@@ -352,7 +352,12 @@ class RedisQueueWorker(
     }
 
     private fun registerQueues() {
-        OperationalMetrics.registerWorkerQueues(spec.pipeline.workerName, spec.streamKey, spec.dlqStreamKey)
+        OperationalMetrics.registerWorkerQueues(
+            spec.pipeline.workerName,
+            spec.streamKey,
+            spec.dlqStreamKey,
+            spec.consumerGroup,
+        )
         OperationalMetrics.registerWorkerStream(
             workerName = spec.pipeline.workerName,
             streamKey = spec.streamKey,
