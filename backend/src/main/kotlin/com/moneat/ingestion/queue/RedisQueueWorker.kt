@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import mu.KLogger
+import java.io.IOException
 import java.time.Duration
 
 private const val ERROR_RETRY_DELAY_MS = 1_000L
@@ -187,31 +188,42 @@ class RedisQueueWorker(
         try {
             conn = RedisConfig.newBlockingConnection()
             ensureConsumerGroup(conn)
-            while (scope.isActive) {
-                try {
-                    consumeStreams(workerId, conn)
-                } catch (e: CancellationException) {
-                    break
-                } catch (e: RedisException) {
-                    onQueueLoopFailure(workerId, e)
-                } catch (e: java.io.IOException) {
-                    onQueueLoopFailure(workerId, e)
-                } catch (e: IllegalStateException) {
-                    onQueueLoopFailure(workerId, e)
-                }
-            }
+            runWorkerLoop(workerId, conn)
         } catch (e: CancellationException) {
             // Worker is shutting down before or during connection setup.
         } catch (e: RedisException) {
             onQueueLoopFailure(workerId, e)
-        } catch (e: java.io.IOException) {
+        } catch (e: IOException) {
             onQueueLoopFailure(workerId, e)
         } catch (e: IllegalStateException) {
-            if (scope.isActive) {
-                onQueueLoopFailure(workerId, e)
-            }
+            onActiveStartupFailure(workerId, e)
         } finally {
             conn?.let { RedisConfig.closeBlockingConnection(it) }
+        }
+    }
+
+    private suspend fun runWorkerLoop(
+        workerId: Int,
+        conn: StatefulRedisConnection<String, String>,
+    ) {
+        while (scope.isActive) {
+            try {
+                consumeStreams(workerId, conn)
+            } catch (e: CancellationException) {
+                break
+            } catch (e: RedisException) {
+                onQueueLoopFailure(workerId, e)
+            } catch (e: IOException) {
+                onQueueLoopFailure(workerId, e)
+            } catch (e: IllegalStateException) {
+                onQueueLoopFailure(workerId, e)
+            }
+        }
+    }
+
+    private suspend fun onActiveStartupFailure(workerId: Int, error: IllegalStateException) {
+        if (scope.isActive) {
+            onQueueLoopFailure(workerId, error)
         }
     }
 
