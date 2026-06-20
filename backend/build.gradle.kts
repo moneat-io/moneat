@@ -63,9 +63,20 @@ tasks.register<JavaExec>("convertDashboardTemplates") {
 
 val emailTemplateSourceDir = layout.projectDirectory.dir("../emails")
 
+tasks.register<Exec>("installEmailDependencies") {
+    group = "email"
+    description = "Installs Maizzle transactional email build dependencies."
+    workingDir = emailTemplateSourceDir.asFile
+    commandLine("npm", "ci")
+    inputs.file(emailTemplateSourceDir.file("package.json"))
+    inputs.file(emailTemplateSourceDir.file("package-lock.json"))
+    outputs.file(emailTemplateSourceDir.file("node_modules/.bin/maizzle"))
+}
+
 tasks.register<Exec>("buildEmails") {
     group = "email"
     description = "Builds Maizzle transactional email templates for backend resources."
+    dependsOn(tasks.named("installEmailDependencies"))
     workingDir = emailTemplateSourceDir.asFile
     commandLine("npm", "run", "build:production")
 }
