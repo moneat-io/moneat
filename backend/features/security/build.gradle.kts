@@ -36,6 +36,7 @@ dependencies {
     implementation(libs.exposed.kotlin.datetime)
     implementation(libs.kotlin.logging)
     implementation(libs.koin.ktor)
+    implementation(libs.snakeyaml)
 
     detektPlugins(libs.detekt.formatting)
 
