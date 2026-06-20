@@ -21,6 +21,7 @@ val rootBackendTestOutput = rootBackendSourceSets.named("test").get().output
 
 dependencies {
     compileOnly(project(":"))
+    compileOnly(project(":features:dashboards"))
     implementation(project(":feature-spi"))
 
     implementation(libs.ktor.server.core)
@@ -40,6 +41,7 @@ dependencies {
     detektPlugins(libs.detekt.formatting)
 
     testImplementation(project(":"))
+    testImplementation(project(":features:dashboards"))
     testImplementation(rootBackendTestOutput)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.ktor.client.content.negotiation)

@@ -34,6 +34,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
     implementation(libs.hikaricp)
     implementation(libs.kotlin.logging)
     implementation(libs.koin.ktor)
