@@ -157,6 +157,12 @@ class RedisQueueWorker(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var jobs: List<Job> = emptyList()
 
+    init {
+        require(spec.readTimeoutMs <= STOP_JOIN_TIMEOUT_MS) {
+            "${spec.pipeline.workerName} queue read timeout must be <= ${STOP_JOIN_TIMEOUT_MS}ms"
+        }
+    }
+
     fun start() {
         registerQueues()
         logger.info {
@@ -176,10 +182,11 @@ class RedisQueueWorker(
                 jobs.joinAll()
             }
         } != null
-        if (!stopped) {
-            logger.warn { "${spec.pipeline.workerName} queue worker did not stop within timeout" }
+        if (stopped) {
+            logger.info { "${spec.pipeline.workerName} queue worker stopped" }
+        } else {
+            logger.warn { "${spec.pipeline.workerName} queue worker did not stop within ${STOP_JOIN_TIMEOUT_MS}ms" }
         }
-        logger.info { "${spec.pipeline.workerName} queue worker stopped" }
     }
 
     private suspend fun runWorker(workerId: Int) {
