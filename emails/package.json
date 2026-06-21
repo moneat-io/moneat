@@ -7,7 +7,7 @@
     "dev": "maizzle serve --port 3001",
     "build:development": "maizzle build",
     "build:staging": "maizzle build production",
-    "build:production": "maizzle build production"
+    "build:production": "node scripts/generate-redesign-templates.mjs && maizzle build production"
   },
   "dependencies": {
     "@maizzle/framework": "^5.0.0"

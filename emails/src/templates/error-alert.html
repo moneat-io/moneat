@@ -1,252 +1,110 @@
----
-issueTitle: 'TypeError: Cannot read property "user" of undefined'
-issueLevel: error
-issueCulprit: app/controllers/users.js in handleRequest
-issueMessage: 'Cannot read property "user" of undefined at line 42'
-issueCount: "12"
-issueUrl: https://moneat.example.com/issues/abc123
-projectName: My App (Production)
-environment: production
-timestamp: "2026-02-05 16:30:00 UTC"
-stackTrace: |-
-  TypeError: Cannot read property "user" of undefined
-      at handleRequest (app/controllers/users.js:42:15)
-      at processRequest (app/middleware/auth.js:28:10)
-      at Layer.handle [as handle_request] (express/lib/router/layer.js:95:5)
----
-<x-main>
-  <table class="w-full max-w-[600px]" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px -1px rgba(0,0,0,0.1);">
-
-    <!-- Header -->
-    <tr>
-      <td>
-        <component src="src/components/header.html"></component>
-      </td>
-    </tr>
-
-    <!-- Severity accent stripe -->
-    <tr>
-      <td>
-        <if condition="page.issueLevel === 'error'">
-          <div style="height: 4px; background: linear-gradient(90deg, #ef4444 0%, #f87171 100%);"></div>
-        </if>
-        <if condition="page.issueLevel === 'warning'">
-          <div style="height: 4px; background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 100%);"></div>
-        </if>
-        <if condition="page.issueLevel === 'info'">
-          <div style="height: 4px; background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);"></div>
-        </if>
-      </td>
-    </tr>
-
-    <!-- Alert Banner -->
-    <tr>
-      <td class="px-8 pt-6 pb-4 bg-white">
-        <table cellpadding="0" cellspacing="0" role="presentation" class="w-full">
-          <tr>
-            <td style="vertical-align: middle;">
-              <table cellpadding="0" cellspacing="0" role="presentation">
-                <tr>
-                  <td class="pr-3" style="vertical-align: middle;">
-                    <if condition="page.issueLevel === 'error'">
-                      <div style="width: 40px; height: 40px; border-radius: 12px; background-color: #fef2f2; text-align: center; line-height: 40px; font-size: 18px;">&#9888;</div>
-                    </if>
-                    <if condition="page.issueLevel === 'warning'">
-                      <div style="width: 40px; height: 40px; border-radius: 12px; background-color: #fffbeb; text-align: center; line-height: 40px; font-size: 18px;">&#9888;</div>
-                    </if>
-                    <if condition="page.issueLevel === 'info'">
-                      <div style="width: 40px; height: 40px; border-radius: 12px; background-color: #eff6ff; text-align: center; line-height: 40px; font-size: 18px;">&#8505;</div>
-                    </if>
-                  </td>
-                  <td style="vertical-align: middle;">
-                    <p class="m-0 text-xs font-semibold uppercase tracking-wide" style="color: #737373;">New Issue Detected</p>
-                    <if condition="page.issueLevel === 'error'">
-                      <p class="m-0 mt-1" style="display: inline-block; background-color: #fef2f2; color: #991b1b; border: 1px solid #fecaca; border-radius: 6px; padding: 2px 10px; font-size: 11px; font-weight: 600;">Error</p>
-                    </if>
-                    <if condition="page.issueLevel === 'warning'">
-                      <p class="m-0 mt-1" style="display: inline-block; background-color: #fffbeb; color: #92400e; border: 1px solid #fde68a; border-radius: 6px; padding: 2px 10px; font-size: 11px; font-weight: 600;">Warning</p>
-                    </if>
-                    <if condition="page.issueLevel === 'info'">
-                      <p class="m-0 mt-1" style="display: inline-block; background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; border-radius: 6px; padding: 2px 10px; font-size: 11px; font-weight: 600;">Info</p>
-                    </if>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Issue Title -->
-    <tr>
-      <td class="px-8 pb-6 bg-white">
-        <h2 class="m-0 text-xl font-semibold leading-tight tracking-tight" style="color: #0a0a0a;">
-          [[ page.issueTitle ]]
-        </h2>
-      </td>
-    </tr>
-
-    <!-- Metadata Cards -->
-    <tr>
-      <td class="px-8 pb-6 bg-white">
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
-          <tr>
-            <!-- Service Card -->
-            <td class="w-1/2 pr-2">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden;">
-                <tr>
-                  <td style="height: 4px; background-color: #3b82f6; line-height: 1px; font-size: 1px;">&nbsp;</td>
-                </tr>
-                <tr>
-                  <td class="p-3">
-                    <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Service</p>
-                    <p class="m-0 text-sm font-semibold" style="color: #0a0a0a;">[[ page.projectName ]]</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-            <!-- Environment Card -->
-            <td class="w-1/2 pl-2">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden;">
-                <tr>
-                  <td style="height: 4px; background-color: #8b5cf6; line-height: 1px; font-size: 1px;">&nbsp;</td>
-                </tr>
-                <tr>
-                  <td class="p-3">
-                    <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Environment</p>
-                    <p class="m-0 text-sm font-semibold" style="color: #0a0a0a;">[[ page.environment ]]</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Stats Row -->
-    <tr>
-      <td class="px-8 pb-6 bg-white">
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation">
-          <tr>
-            <!-- First Seen Card -->
-            <td class="w-1/2 pr-2">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden;">
-                <tr>
-                  <td style="height: 4px; background-color: #f59e0b; line-height: 1px; font-size: 1px;">&nbsp;</td>
-                </tr>
-                <tr>
-                  <td class="p-3">
-                    <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">First Seen</p>
-                    <p class="m-0 text-sm font-semibold" style="color: #0a0a0a;">[[ page.timestamp ]]</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-            <!-- Occurrences Card -->
-            <td class="w-1/2 pl-2">
-              <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5; overflow: hidden;">
-                <tr>
-                  <td style="height: 4px; background-color: #10b981; line-height: 1px; font-size: 1px;">&nbsp;</td>
-                </tr>
-                <tr>
-                  <td class="p-3">
-                    <p class="m-0 text-xs font-medium mb-1" style="color: #737373;">Occurrences</p>
-                    <p class="m-0 text-2xl font-bold" style="color: #0a0a0a;">[[ page.issueCount ]]</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Culprit -->
-    <tr>
-      <td class="px-8 pb-6 bg-white">
-        <p class="m-0 text-xs font-medium mb-2" style="color: #737373;">Culprit</p>
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 6px; border: 1px solid #e5e5e5;">
-          <tr>
-            <td class="px-3 py-2" style="background-color: #fafafa;">
-              <p class="m-0 text-sm" style="color: #0a0a0a; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;">[[ page.issueCulprit ]]</p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Error Message -->
-    <tr>
-      <td class="px-8 pb-6 bg-white">
-        <p class="m-0 text-xs font-medium mb-2" style="color: #737373;">Error Message</p>
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; border: 1px solid #e5e5e5;">
-          <tr>
-            <td class="p-4" style="background-color: #fafafa;">
-              <p class="m-0 text-sm leading-relaxed" style="color: #0a0a0a; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;">
-                [[ page.issueMessage ]]
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Stack Trace -->
-    <tr>
-      <td class="px-8 pb-6 bg-white">
-        <p class="m-0 text-xs font-medium mb-2" style="color: #737373;">Stack Trace</p>
-        <table class="w-full" cellpadding="0" cellspacing="0" role="presentation" style="border-radius: 8px; overflow: hidden; border: 1px solid #262626;">
-          <!-- Terminal title bar -->
-          <tr>
-            <td class="px-4 py-2" style="background-color: #262626;">
-              <table cellpadding="0" cellspacing="0" role="presentation">
-                <tr>
-                  <td>
-                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: #ef4444; margin-right: 6px;"></span>
-                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: #f59e0b; margin-right: 6px;"></span>
-                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: #22c55e;"></span>
-                  </td>
-                  <td class="pl-4">
-                    <p class="m-0 text-xs font-medium" style="color: #737373;">stack trace</p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <!-- Stack content -->
-          <tr>
-            <td class="p-4" style="background-color: #171717;">
-              <pre class="m-0 text-xs leading-relaxed overflow-x-auto" style="color: #4ade80; font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace; background-color: #171717; margin: 0; white-space: pre-wrap;">[[ page.stackTrace ]]</pre>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- CTA Button -->
-    <tr>
-      <td align="center" class="px-8 pt-2 pb-8 bg-white">
-        <table cellpadding="0" cellspacing="0" role="presentation">
-          <tr>
-            <td align="center" style="border-radius: 6px; background-color: #171717; box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);">
-              <a href="[[ page.issueUrl ]]"
-                style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #fafafa; text-decoration: none; padding: 12px 24px; border-radius: 6px; display: inline-block; font-size: 14px; font-weight: 500;">
-                View Full Issue Details &rarr;
-              </a>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Footer -->
-    <tr>
-      <td>
-        <component src="src/components/footer.html"></component>
-      </td>
-    </tr>
-
-  </table>
-</x-main>
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
+<title>[{{ projectName }}] New issue &middot; {{ issueTitle }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+  a{text-decoration:none;}
+  img{border:0;outline:none;-ms-interpolation-mode:bicubic;}
+  table{border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;}
+  @media only screen and (max-width:600px){
+    .shell{width:100% !important;border-radius:0 !important;border-left:0 !important;border-right:0 !important;}
+    .px{padding-left:18px !important;padding-right:18px !important;}
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background:#f7f8fa;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:#f7f8fa;">{{ issueLevel }} &middot; {{ issueCount }} events &middot; {{ usersAffected }} users affected &middot; first seen {{ firstSeen }}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f8fa;">
+<tr><td align="center" style="padding:28px 12px;">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<table role="presentation" class="shell" align="center" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid #d8dce3;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(16,18,26,0.09);">
+<tr><td style="height:3px;line-height:3px;font-size:0;background:#cf2126;">&nbsp;</td></tr>
+<tr><td class="px" style="padding:15px 28px;background:#082f49;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+<td style="vertical-align:middle;">
+  <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+  <td style="vertical-align:middle;"><img src="https://moneat.io/email/logo-mark.png" width="24" height="24" alt="Moneat" style="display:block;border:0;outline:none;width:24px;height:24px;"></td>
+  <td style="vertical-align:middle;padding-left:9px;"><span style="font:700 17px/24px 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff;letter-spacing:-0.01em;">moneat</span></td>
+  </tr></table>
+</td>
+<td align="right" style="vertical-align:middle;"><span style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.04em;color:#8fcde8;text-transform:uppercase;">{{ environment }}</span></td>
+</tr></table>
+</td></tr><tr><td class="px" style="padding:20px 28px 18px;background:#ffffff;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td><div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">New issue</div></td><td align="right"><span style="font:500 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#9aa1ae;">{{ timestamp }}</span></td></tr></table>
+      <h1 style="margin:11px 0 0;font:600 19px/1.32 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0e1016;letter-spacing:-0.01em;">{{ issueTitle }}</h1>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:13px;"><tr><td style="vertical-align:middle;"><span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:#cf2126;vertical-align:middle;"></span> <span style="display:inline-block;padding:3px 8px;border-radius:6px;background:#fdecec;color:#ad1a1f;border:1px solid #f3b3b5;font:600 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:0.06em;text-transform:uppercase;vertical-align:middle;">{{ issueLevel }}</span></td><td style="padding-left:9px;vertical-align:middle;"><span style="display:inline-block;padding:3px 8px;border-radius:6px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;font:600 11px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;vertical-align:middle;">{{ projectName }}</span></td><td style="padding-left:9px;vertical-align:middle;"><span style="display:inline-block;padding:3px 8px;border-radius:6px;background:#eef0f4;color:#353a45;border:1px solid #d8dce3;font:600 11px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;vertical-align:middle;">{{ environment }}</span></td></tr></table></td></tr><tr><td class="px" style="padding:20px 28px 20px;background:#f7f8fa;border-top:1px solid #e4e7ec;"><div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">Service health &middot; {{ projectName }}</div>
+      <div style="height:13px;"></div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f8fa;"><tr>
+    <td width="33.3333%" style="padding:0 14px;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ errorRate }} <span style="font:600 11px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#cf2126;white-space:nowrap;">{{ errorRateDelta }}</span></div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">Error rate</div>
+    </td>
+    <td width="33.3333%" style="padding:0 14px;border-left:1px solid #e4e7ec;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ p95Latency }} <span style="font:600 11px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#cf2126;white-space:nowrap;">{{ p95LatencyDelta }}</span></div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">p95 latency</div>
+    </td>
+    <td width="33.3333%" style="padding:0 14px;border-left:1px solid #e4e7ec;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ throughput }} <span style="font:600 11px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;white-space:nowrap;">{{ throughputDelta }}</span></div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">Throughput</div>
+    </td></tr></table></td></tr><tr><td class="px" style="padding:20px 28px 20px;background:#ffffff;border-top:1px solid #e4e7ec;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;"><tr>
+    <td width="25.0000%" style="padding:0 14px;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ issueCount }}</div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">Occurrences</div>
+    </td>
+    <td width="25.0000%" style="padding:0 14px;border-left:1px solid #e4e7ec;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ usersAffected }}</div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">Users affected</div>
+    </td>
+    <td width="25.0000%" style="padding:0 14px;border-left:1px solid #e4e7ec;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ firstSeen }}</div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">First seen</div>
+    </td>
+    <td width="25.0000%" style="padding:0 14px;border-left:1px solid #e4e7ec;vertical-align:top;">
+      <div style="font:600 21px/1.1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;letter-spacing:-0.01em;">{{ lastSeen }}</div>
+      <div style="margin-top:5px;font:500 10px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;letter-spacing:0.05em;text-transform:uppercase;">Last seen</div>
+    </td></tr></table>
+      <div style="height:20px;"></div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td><div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">Events &middot; last 24h</div></td>
+        <td align="right"><span style="font:600 12px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#161922;">{{ issueCount }} events</span></td>
+      </tr></table>
+      <div style="height:10px;"></div>
+      ISSUE_SPARKLINE_PLACEHOLDER</td></tr><tr><td class="px" style="padding:20px 28px 20px;background:#f7f8fa;border-top:1px solid #e4e7ec;"><div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">Where</div>
+      <div style="margin-top:9px;font:600 13px/1.5 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#0e1016;">{{ issueFunction }}</div>
+      <div style="margin-top:2px;font:500 12px/1.5 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;color:#6b7280;">{{ issueLocation }}</div>
+      <div style="height:20px;"></div>
+      <div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">Likely cause &middot; deploy</div>
+      <div style="margin-top:10px;">
+        <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;"><span style="display:inline-block;padding:3px 8px;border-radius:6px;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;font:600 11px/1.3 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;vertical-align:middle;">release {{ release }}</span></td>
+          <td style="vertical-align:middle;padding-left:10px;font:400 13px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#161922;">{{ deploySummary }}</td>
+        </tr></table>
+      </div></td></tr><tr><td class="px" style="padding:20px 28px 20px;background:#ffffff;border-top:1px solid #e4e7ec;"><div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">Stack trace</div>
+      <div style="height:10px;"></div>
+      STACK_FRAMES_PLACEHOLDER</td></tr><tr><td class="px" style="padding:20px 28px 20px;background:#ffffff;border-top:1px solid #e4e7ec;"><div style="font:600 11px/1 'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;letter-spacing:0.08em;text-transform:uppercase;color:#6b7280;">Context</div>
+      <div style="height:11px;"></div>
+      ISSUE_CONTEXT_TAGS_PLACEHOLDER
+      <div style="margin-top:8px;font:400 12px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;">Code owner <span style="color:#161922;font-weight:600;">{{ codeOwner }}</span> &middot; suggested from CODEOWNERS</div></td></tr><tr><td class="px" style="padding:20px 28px 20px;background:#f7f8fa;border-top:1px solid #e4e7ec;"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#161922" style="border-radius:8px;"><a href="{{ issueUrl }}" style="display:inline-block;padding:13px 22px;font:600 14px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#ffffff;border-radius:8px;">Investigate issue &rarr;</a></td></tr></table>
+      <div style="height:16px;"></div>
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr><td><a href="{{ issueUrl }}" style="font:500 13px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0369a1;">View trace</a></td><td style="padding:0 11px;color:#c2c8d2;font-size:12px;line-height:1;">&middot;</td><td><a href="{{ issueUrl }}" style="font:500 13px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0369a1;">Search logs</a></td><td style="padding:0 11px;color:#c2c8d2;font-size:12px;line-height:1;">&middot;</td><td><a href="{{ issueUrl }}" style="font:500 13px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0369a1;">Assign</a></td><td style="padding:0 11px;color:#c2c8d2;font-size:12px;line-height:1;">&middot;</td><td><a href="{{ issueUrl }}" style="font:500 13px/1 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#0369a1;">Mute issue</a></td></tr></table></td></tr>
+<tr><td class="px" style="padding:22px 28px 26px;background:#f7f8fa;border-top:1px solid #e4e7ec;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+  <div style="margin-bottom:9px;">
+    <img src="https://moneat.io/email/logo-mark.png" width="16" height="16" alt="" style="display:inline-block;border:0;outline:none;width:16px;height:16px;vertical-align:middle;"><span style="vertical-align:middle;font:700 13px/16px 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#161922;padding-left:7px;">moneat</span>
+  </div>
+  <p style="margin:0 0 9px;font:400 12px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;">You're receiving this because issue alerts are enabled for your account.</p>
+  <p style="margin:0 0 12px;font:400 12px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"><a href="{{ settingsUrl }}" style="color:#0369a1;">Manage preferences</a><span style="color:#c2c8d2;padding:0 7px;">&middot;</span><a href="{{ unsubscribeUrl }}" style="color:#6b7280;">Unsubscribe</a></p>
+  <p style="margin:0;font:400 11px/1.4 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#9aa1ae;">&copy; {{ year }} Moneat &middot; 1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, USA</p>
+</td></tr></table>
+</td></tr>
+</table>
+<table role="presentation" class="shell" align="center" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;"><tr><td align="center" style="padding:16px 28px 4px;">
+<p style="margin:0;font:400 11px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#9aa1ae;">Sent by Moneat &middot; You can adjust which events email you from notification preferences.</p>
+</td></tr></table>
+<!--[if mso]></td></tr></table><![endif]-->
+</td></tr></table>
+</body></html>

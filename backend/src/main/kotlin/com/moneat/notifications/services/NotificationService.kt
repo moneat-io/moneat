@@ -59,6 +59,7 @@ import java.util.concurrent.TimeUnit
 private val logger = KotlinLogging.logger {}
 
 private const val STACK_FRAMES_COUNT = 5
+private const val EMAIL_CONTEXT_TAGS_COUNT = 4
 private const val EPOCH_SECONDS_TO_MILLIS = 1000
 private const val WEEKLY_SUMMARY_DAYS = 7L
 private const val ERROR_BODY_PREVIEW_CHARS = 500
@@ -130,6 +131,42 @@ class NotificationService(
                     ?.joinToString("\n") { frame ->
                         "  at ${frame.function ?: "unknown"} (${frame.filename}:${frame.lineno})"
                     } ?: "No stack trace available"
+            val frames =
+                event.exception
+                    ?.values
+                    ?.firstOrNull()
+                    ?.stacktrace
+                    ?.frames
+                    .orEmpty()
+            val inAppFrame = frames.lastOrNull { it.inApp == true } ?: frames.lastOrNull()
+            val issueFunction = inAppFrame?.function ?: culprit.substringBefore(":")
+            val issueLocation =
+                listOfNotNull(
+                    inAppFrame?.filename,
+                    inAppFrame?.lineno?.toString(),
+                    inAppFrame?.colno?.toString()
+                ).joinToString(":").ifBlank { culprit }
+            val emailStackFrames =
+                frames
+                    .takeLast(STACK_FRAMES_COUNT)
+                    .map { frame ->
+                        val text =
+                            "at ${frame.function ?: "unknown"} " +
+                                "(${frame.filename ?: "unknown"}:${frame.lineno ?: 0})"
+                        EmailService.StackFrame(text = text, inApp = frame.inApp == true)
+                    }
+            val contextTags =
+                buildList {
+                    event.platform?.let { add(EmailService.ContextTag("runtime", it)) }
+                    event.serverName?.let { add(EmailService.ContextTag("host", it)) }
+                    event.release?.let { add(EmailService.ContextTag("release", it)) }
+                    event.environment?.let { add(EmailService.ContextTag("env", it)) }
+                    event.tags
+                        .orEmpty()
+                        .entries
+                        .take(EMAIL_CONTEXT_TAGS_COUNT)
+                        .forEach { add(EmailService.ContextTag(it.key, it.value)) }
+                }
 
             val emailData =
                 EmailService.ErrorAlertData(
@@ -159,7 +196,16 @@ class NotificationService(
                         .toString(),
                     stackTrace = stackTrace,
                     settingsUrl = settingsUrl,
-                    unsubscribeUrl = "$settingsUrl?project=$projectId"
+                    unsubscribeUrl = "$settingsUrl?project=$projectId",
+                    usersAffected = "1",
+                    firstSeen = "now",
+                    lastSeen = "now",
+                    issueFunction = issueFunction,
+                    issueLocation = issueLocation,
+                    release = event.release ?: "—",
+                    deploySummary = "Deploy context unavailable",
+                    contextTags = contextTags,
+                    stackFrames = emailStackFrames
                 )
 
             workflowService.publishAlertTriggered(
