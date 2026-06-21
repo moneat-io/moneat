@@ -72,10 +72,13 @@ class EmailServiceTest {
         val service = EmailService()
         service.sendInvitationEmail(
             toEmail = "invitee@example.com",
-            inviterName = "Bob",
-            orgName = "Acme",
-            role = "member",
-            token = "tok-invite"
+            data = EmailService.InvitationEmailData(
+                inviterName = "Bob",
+                inviterEmail = "bob@example.com",
+                orgName = "Acme",
+                role = "member",
+                token = "tok-invite"
+            )
         )
     }
 
@@ -310,6 +313,7 @@ class EmailServiceTest {
         assertTrue(htmlSlot.captured.contains("aria-label=\"80% used\""))
         assertTrue(htmlSlot.captured.contains("width=\"80%\""))
         assertTrue(htmlSlot.captured.contains("https://moneat.io/email/logo-mark.png"))
+        assertTrue(htmlSlot.captured.contains("href=\"https://app.example/unsub-billing\""))
         assertTrue(!htmlSlot.captured.contains("<svg"))
         assertNoUnresolvedTemplateMarkers(htmlSlot.captured)
     }
@@ -378,7 +382,16 @@ class EmailServiceTest {
 
         service.sendVerificationEmail("user@example.com", "tok-verify", "Ada")
         service.sendPasswordResetEmail("user@example.com", "tok-reset", "Ada")
-        service.sendInvitationEmail("invitee@example.com", "Bob", "Acme", "admin", "tok-invite")
+        service.sendInvitationEmail(
+            toEmail = "invitee@example.com",
+            data = EmailService.InvitationEmailData(
+                inviterName = "Bob",
+                inviterEmail = "bob@example.com",
+                orgName = "Acme",
+                role = "admin",
+                token = "tok-invite"
+            )
+        )
         service.sendErrorAlertEmail("ops@example.com", errorAlertData())
         service.sendWeeklySummaryEmail("lead@example.com", weeklySummaryData())
         service.sendBillingThresholdAlertEmail(
@@ -409,6 +422,7 @@ class EmailServiceTest {
 
         assertEquals(14, htmlBodies.size)
         htmlBodies.forEach(::assertNoUnresolvedTemplateMarkers)
+        assertTrue(htmlBodies.any { it.contains("Bob &middot; bob@example.com") })
     }
 
     // ──── Enterprise sales inquiry ────
@@ -619,7 +633,8 @@ class EmailServiceTest {
             dashboardUrl = "https://app.example/usage-insights",
             settingsUrl = "https://app.example/settings?tab=billing",
             rows = rows,
-            totalOverage = "\$0.00"
+            totalOverage = "\$0.00",
+            unsubscribeUrl = "https://app.example/unsub-billing"
         )
 
     private fun assertNoUnresolvedTemplateMarkers(html: String) {

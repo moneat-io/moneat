@@ -197,7 +197,7 @@ class NotificationService(
                     stackTrace = stackTrace,
                     settingsUrl = settingsUrl,
                     unsubscribeUrl = "$settingsUrl?project=$projectId",
-                    usersAffected = event.user?.id ?: event.user?.email ?: "—",
+                    usersAffected = "1",
                     firstSeen = "now",
                     lastSeen = "now",
                     issueFunction = issueFunction,

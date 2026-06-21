@@ -179,20 +179,24 @@ class EmailService {
 
     fun sendInvitationEmail(
         toEmail: String,
-        inviterName: String,
-        orgName: String,
-        role: String,
-        token: String
+        data: InvitationEmailData
     ) {
-        val inviteUrl = "$frontendUrl/accept-invite?token=$token"
+        val inviteUrl = "$frontendUrl/accept-invite?token=${data.token}"
 
-        val subject = "You've been invited to join $orgName on Moneat"
-        val htmlBody = loadInvitationTemplate(inviterName, orgName, role, inviteUrl)
+        val subject = "You've been invited to join ${data.orgName} on Moneat"
+        val htmlBody =
+            loadInvitationTemplate(
+                data.inviterName,
+                data.orgName,
+                data.role,
+                inviteUrl,
+                data.inviterEmail
+            )
         val textBody =
             """
-            You've been invited to join $orgName on Moneat
+            You've been invited to join ${data.orgName} on Moneat
             
-            $inviterName has invited you to join their team as a ${role.lowercase()}.
+            ${data.inviterName} has invited you to join their team as a ${data.role.lowercase()}.
             
             Click the link below to accept the invitation:
             
@@ -393,6 +397,18 @@ class EmailService {
             html.replace(token, value)
         }
 
+    private fun invitationInviterDetails(
+        inviterName: String,
+        inviterEmail: String?
+    ): String {
+        val safeName = inviterName.escapeHtml()
+        val safeEmail =
+            inviterEmail
+                ?.takeIf { it.isNotBlank() && it != inviterName }
+                ?.escapeHtml()
+        return if (safeEmail == null) safeName else "$safeName &middot; $safeEmail"
+    }
+
     private fun loadVerificationTemplate(
         userName: String,
         verificationUrl: String
@@ -479,7 +495,8 @@ class EmailService {
         inviterName: String,
         orgName: String,
         role: String,
-        inviteUrl: String
+        inviteUrl: String,
+        inviterEmail: String?
     ): String {
         val template = loadTemplate("org-invitation.html")
 
@@ -487,7 +504,7 @@ class EmailService {
             template.replaceTokens(
                 commonEmailTokens() + mapOf(
                     "inviterName" to inviterName.escapeHtml(),
-                    "inviterEmail" to inviterName.escapeHtml(),
+                    "inviterDetails" to invitationInviterDetails(inviterName, inviterEmail),
                     "orgName" to orgName.escapeHtml(),
                     "role" to role.replaceFirstChar { it.uppercase() }.escapeHtml(),
                     "inviteUrl" to inviteUrl.escapeHtml()
@@ -562,6 +579,14 @@ class EmailService {
         val text: String,
         val inApp: Boolean = false,
         val heading: Boolean = false
+    )
+
+    data class InvitationEmailData(
+        val inviterName: String,
+        val inviterEmail: String?,
+        val orgName: String,
+        val role: String,
+        val token: String
     )
 
     data class HostProcessRow(
@@ -697,7 +722,8 @@ class EmailService {
         val rows: List<BillingInsightRow>,
         val totalOverage: String,
         val topDriver: String = "—",
-        val topDriverUsage: String = "—"
+        val topDriverUsage: String = "—",
+        val unsubscribeUrl: String = settingsUrl
     )
 
     fun sendErrorAlertEmail(
@@ -1217,7 +1243,7 @@ class EmailService {
                     .replace("{{ summary }}", data.summary.escapeHtml())
                     .replace("{{ dashboardUrl }}", data.dashboardUrl.escapeHtml())
                     .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl.escapeHtml())
-                    .replace("{{ unsubscribeUrl }}", data.settingsUrl.escapeHtml())
+                    .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl.escapeHtml())
                     .replace("{{ totalOverage }}", data.totalOverage.escapeHtml())
                     .replace("{{ topDriver }}", data.topDriver.escapeHtml())
                     .replace("{{ topDriverUsage }}", data.topDriverUsage.escapeHtml())
