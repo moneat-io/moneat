@@ -61,15 +61,29 @@ tasks.register<JavaExec>("convertDashboardTemplates") {
     )
 }
 
-val emailTemplateSourceDir = layout.projectDirectory.dir("../emails")
+val emailTemplateSourceDir =
+    layout.projectDirectory.dir(
+        providers.gradleProperty("emailTemplateSource")
+            .orElse(providers.environmentVariable("EMAIL_TEMPLATE_SOURCE_DIR"))
+            .orElse("../emails")
+            .get()
+    )
+val emailPackageJson = emailTemplateSourceDir.file("package.json")
+val emailPackageLock = emailTemplateSourceDir.file("package-lock.json")
+val emailBuildOutputDir = emailTemplateSourceDir.dir("build/templates/email")
+val hasEmailSourceTree = {
+    emailPackageJson.asFile.exists() && emailPackageLock.asFile.exists()
+}
 
 tasks.register<Exec>("installEmailDependencies") {
     group = "email"
     description = "Installs Maizzle transactional email build dependencies."
     workingDir = emailTemplateSourceDir.asFile
     commandLine("npm", "ci")
-    inputs.file(emailTemplateSourceDir.file("package.json"))
-    inputs.file(emailTemplateSourceDir.file("package-lock.json"))
+    onlyIf("email source tree is available") { hasEmailSourceTree() }
+    inputs.files(emailPackageJson, emailPackageLock)
+        .withPropertyName("emailDependencyManifests")
+        .optional()
     outputs.file(emailTemplateSourceDir.file("node_modules/.bin/maizzle"))
 }
 
@@ -79,6 +93,11 @@ tasks.register<Exec>("buildEmails") {
     dependsOn(tasks.named("installEmailDependencies"))
     workingDir = emailTemplateSourceDir.asFile
     commandLine("npm", "run", "build:production")
+    onlyIf("email source tree is available") { hasEmailSourceTree() }
+    inputs.dir(emailTemplateSourceDir.dir("src"))
+        .withPropertyName("emailSources")
+        .optional()
+    outputs.dir(emailBuildOutputDir)
 }
 
 repositories {
@@ -284,11 +303,11 @@ val copyEmailTemplates =
         description = "Copies built email templates into backend resources"
         dependsOn(tasks.named("buildEmails"))
 
-        from("${project.rootDir}/../emails/build/templates/email")
+        from(emailBuildOutputDir)
         into(layout.buildDirectory.dir("resources/main/email-templates"))
 
         // Only copy if source exists
-        onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
+        onlyIf { emailBuildOutputDir.asFile.exists() }
     }
 
 // Task to copy email templates into test resources
@@ -298,11 +317,11 @@ val copyEmailTemplatesForTest =
         description = "Copies built email templates into backend test resources"
         dependsOn(tasks.named("buildEmails"))
 
-        from("${project.rootDir}/../emails/build/templates/email")
+        from(emailBuildOutputDir)
         into(layout.buildDirectory.dir("resources/test/email-templates"))
 
         // Only copy if source exists
-        onlyIf { file("${project.rootDir}/../emails/build/templates/email").exists() }
+        onlyIf { emailBuildOutputDir.asFile.exists() }
     }
 
 // Ensure email templates are copied before processing resources
