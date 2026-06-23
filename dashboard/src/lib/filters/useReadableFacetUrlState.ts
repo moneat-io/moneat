@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useNavigate} from '@tanstack/react-router'
 import {useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction} from 'react'
 
 import type {FacetFilter} from '@/lib/filters/types'
@@ -77,38 +76,12 @@ function readUrlState({
   }
 }
 
-function readableFacetSearch(
-  search: Record<string, unknown>,
+function applyReadableFacetSearchToUrl(
+  url: URL,
   query: string,
   facetFilters: readonly FacetFilter[],
   {facetKeys, syncQuery = true}: ReadableFacetUrlStateOptions
-): Record<string, unknown> {
-  const next = {...search}
-  for (const key of facetKeys) {
-    next[key] = undefined
-    next[`${EXCLUDE_FACET_PARAM_PREFIX}${key}`] = undefined
-  }
-  next[LEGACY_FACETS_PARAM] = undefined
-
-  if (syncQuery) {
-    const trimmedQuery = query.trim()
-    next.q = trimmedQuery || undefined
-  }
-
-  return {
-    ...next,
-    ...serializeReadableFacetFilters(facetFilters, facetKeys),
-  }
-}
-
-function readableFacetUrlMatchesCurrentSearch(
-  query: string,
-  facetFilters: readonly FacetFilter[],
-  {facetKeys, syncQuery = true}: ReadableFacetUrlStateOptions
-): boolean {
-  if (typeof globalThis.window === 'undefined') return true
-
-  const url = new URL(globalThis.window.location.href)
+): URL {
   for (const key of facetKeys) {
     url.searchParams.delete(key)
     url.searchParams.delete(`${EXCLUDE_FACET_PARAM_PREFIX}${key}`)
@@ -135,6 +108,18 @@ function readableFacetUrlMatchesCurrentSearch(
     }
   }
 
+  return url
+}
+
+function readableFacetUrlMatchesCurrentSearch(
+  query: string,
+  facetFilters: readonly FacetFilter[],
+  options: ReadableFacetUrlStateOptions
+): boolean {
+  if (typeof globalThis.window === 'undefined') return true
+
+  const url = applyReadableFacetSearchToUrl(new URL(globalThis.window.location.href), query, facetFilters, options)
+
   const nextUrl = `${url.pathname}${url.search}${url.hash}`
   const currentUrl = [
     globalThis.window.location.pathname,
@@ -148,13 +133,23 @@ function readableFacetUrlMatchesCurrentSearch(
   return true
 }
 
+function replaceReadableFacetUrl(
+  query: string,
+  facetFilters: readonly FacetFilter[],
+  options: ReadableFacetUrlStateOptions
+): void {
+  if (typeof globalThis.window === 'undefined') return
+
+  const url = applyReadableFacetSearchToUrl(new URL(globalThis.window.location.href), query, facetFilters, options)
+  globalThis.window.history.replaceState(globalThis.window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
+}
+
 export function useReadableFacetUrlState({
   facetKeys,
   defaultQuery = '',
   defaultFacetFilters = EMPTY_FACET_FILTERS,
   syncQuery = true,
 }: ReadableFacetUrlStateOptions): ReadableFacetUrlState {
-  const navigate = useNavigate()
   const options = useMemo(
     () => ({facetKeys, defaultQuery, defaultFacetFilters, syncQuery}),
     [defaultFacetFilters, defaultQuery, facetKeys, syncQuery]
@@ -183,12 +178,8 @@ export function useReadableFacetUrlState({
       return
     }
     if (readableFacetUrlMatchesCurrentSearch(query, facetFilters, options)) return
-    navigate({
-      replace: true,
-      search: ((prev: Record<string, unknown>) =>
-        readableFacetSearch(prev, query, facetFilters, options)) as never,
-    })
-  }, [facetFilters, navigate, options, query])
+    replaceReadableFacetUrl(query, facetFilters, options)
+  }, [facetFilters, options, query])
 
   return {query, setQuery, facetFilters, setFacetFilters}
 }
