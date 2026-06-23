@@ -32,6 +32,11 @@ import {SegmentedTabs, type SegmentedOption} from '@/components/filters/Segmente
 import {TimeRangePicker} from '@/components/filters/TimeRangePicker'
 import type {TimeRangePreset} from '@/lib/filters/time'
 import type {FacetFilter, FacetSchema, FacetRailSection} from '@/lib/filters/types'
+import {
+  parseExplorerSearch,
+  parseFacetFiltersOptionalParam,
+  type ReadableFacetSearchValue,
+} from '@/lib/filters/urlState'
 import {levelBadgeVariant, levelBorderClass} from '@/lib/severity'
 import {Checkbox} from '@/components/ui/checkbox'
 import {DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from '@/components/ui/dropdown-menu'
@@ -49,7 +54,7 @@ import {
   Server,
   Timer,
 } from 'lucide-react'
-import {useEffect, useMemo, useState} from 'react'
+import {useEffect, useMemo, useRef, useState} from 'react'
 import type {ReactNode} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {getNow} from '@/lib/demo'
@@ -409,11 +414,389 @@ function EventSparkline({ eventCount, eventSeries }: { eventCount: number; event
   )
 }
 
+/** Issues default to the unresolved status facet (also mirrored into the URL). */
+export const DEFAULT_ISSUE_FACET_FILTERS: readonly FacetFilter[] = [
+  {key: 'status', value: 'unresolved'},
+]
+
+const ISSUE_STATUS_ALL_URL_VALUE = 'all'
+const ISSUE_FACET_KEYS = ['service', 'status', 'level'] as const
+const APM_FACET_KEYS = ['service'] as const
+const APM_FACET_PARAM_PREFIX = 'apm_'
+type IssueFacetKey = (typeof ISSUE_FACET_KEYS)[number]
+type IssueExcludeFacetKey = `exclude_${IssueFacetKey}`
+const ISSUE_EXCLUDE_FACET_KEYS = ISSUE_FACET_KEYS.map((key) => `exclude_${key}` as const)
+type ApmFacetKey = (typeof APM_FACET_KEYS)[number]
+type ApmFacetParamKey = `${typeof APM_FACET_PARAM_PREFIX}${ApmFacetKey}`
+type ApmExcludeFacetParamKey = `exclude_${ApmFacetParamKey}`
+
+type IssueFacetSearch = Partial<Record<IssueFacetKey | IssueExcludeFacetKey, ReadableFacetSearchValue>>
+type ApmFacetSearch = Partial<Record<ApmFacetParamKey | ApmExcludeFacetParamKey, ReadableFacetSearchValue>>
+
+function apmFacetParamKey(key: ApmFacetKey): ApmFacetParamKey {
+  return `${APM_FACET_PARAM_PREFIX}${key}` as ApmFacetParamKey
+}
+
+function apmExcludeFacetParamKey(key: ApmFacetKey): ApmExcludeFacetParamKey {
+  return `exclude_${apmFacetParamKey(key)}` as ApmExcludeFacetParamKey
+}
+
+function searchParamValues(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap(searchParamValues)
+  }
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return []
+  return String(value)
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function toSearchParamValue(values: readonly string[]): ReadableFacetSearchValue | undefined {
+  if (values.length === 0) return undefined
+  return values.length === 1 ? values[0] : [...values]
+}
+
+function issueFacetFiltersFromSearch(search: Partial<IssuesSearch> | Record<string, unknown>): FacetFilter[] | undefined {
+  const filters: FacetFilter[] = []
+  let hasCleanFacetParam = false
+
+  for (const key of ISSUE_FACET_KEYS) {
+    const includeValues = searchParamValues(search[key])
+    if (includeValues.length > 0) {
+      hasCleanFacetParam = true
+      for (const value of includeValues) {
+        if (key === 'status' && value === ISSUE_STATUS_ALL_URL_VALUE) continue
+        filters.push({key, value})
+      }
+    }
+
+    const excludeKey = `exclude_${key}` as const
+    const excludeValues = searchParamValues(search[excludeKey])
+    if (excludeValues.length > 0) {
+      hasCleanFacetParam = true
+      filters.push(...excludeValues.map((value) => ({key, value, exclude: true})))
+    }
+  }
+
+  if (hasCleanFacetParam) {
+    return filters
+  }
+
+  return parseFacetFiltersOptionalParam('facets' in search ? search.facets : undefined)
+}
+
+function serializeIssueFacetSearch(filters: readonly FacetFilter[], forceStatusParam: boolean): IssueFacetSearch {
+  const search: IssueFacetSearch = {}
+
+  for (const key of ISSUE_FACET_KEYS) {
+    const includeValues = filters.filter((filter) => filter.key === key && !filter.exclude).map((filter) => filter.value)
+    const excludeValues = filters.filter((filter) => filter.key === key && filter.exclude).map((filter) => filter.value)
+
+    const includeParam = toSearchParamValue(includeValues)
+    if (includeParam) {
+      search[key] = includeParam
+    }
+
+    const excludeParam = toSearchParamValue(excludeValues)
+    if (excludeParam) {
+      search[`exclude_${key}` as const] = excludeParam
+    }
+  }
+
+  if (forceStatusParam && !search.status && !search.exclude_status) {
+    search.status = ISSUE_STATUS_ALL_URL_VALUE
+  }
+
+  return search
+}
+
+function issueFacetSearchKey(search: Partial<IssuesSearch>): string | undefined {
+  const filters = issueFacetFiltersFromSearch(search)
+  if (filters === undefined) return undefined
+  return JSON.stringify(serializeIssueFacetSearch(filters, true))
+}
+
+function apmFacetFiltersFromSearch(search: Record<string, unknown>): FacetFilter[] | undefined {
+  const filters: FacetFilter[] = []
+  let hasCleanFacetParam = false
+
+  for (const key of APM_FACET_KEYS) {
+    const includeParamKey = apmFacetParamKey(key)
+    const includeValues = searchParamValues(search[includeParamKey])
+    if (includeValues.length > 0) {
+      hasCleanFacetParam = true
+      filters.push(...includeValues.map((value) => ({key, value})))
+    }
+
+    const excludeParamKey = apmExcludeFacetParamKey(key)
+    const excludeValues = searchParamValues(search[excludeParamKey])
+    if (excludeValues.length > 0) {
+      hasCleanFacetParam = true
+      filters.push(...excludeValues.map((value) => ({key, value, exclude: true})))
+    }
+  }
+
+  if (hasCleanFacetParam) {
+    return filters
+  }
+
+  return parseFacetFiltersOptionalParam('afacets' in search ? search.afacets : undefined)
+}
+
+function serializeApmFacetSearch(filters: readonly FacetFilter[]): ApmFacetSearch {
+  const search: ApmFacetSearch = {}
+
+  for (const key of APM_FACET_KEYS) {
+    const includeValues = filters.filter((filter) => filter.key === key && !filter.exclude).map((filter) => filter.value)
+    const excludeValues = filters.filter((filter) => filter.key === key && filter.exclude).map((filter) => filter.value)
+
+    const includeParam = toSearchParamValue(includeValues)
+    if (includeParam) {
+      search[apmFacetParamKey(key)] = includeParam
+    }
+
+    const excludeParam = toSearchParamValue(excludeValues)
+    if (excludeParam) {
+      search[apmExcludeFacetParamKey(key)] = excludeParam
+    }
+  }
+
+  return search
+}
+
+function apmFacetSearchKey(search: Record<string, unknown>): string | undefined {
+  const filters = apmFacetFiltersFromSearch(search)
+  if (filters === undefined) return undefined
+  return JSON.stringify(serializeApmFacetSearch(filters))
+}
+
+function clearIssueFacetSearch(prev: Record<string, unknown>): Record<string, unknown> {
+  const next = {...prev}
+  for (const key of ISSUE_FACET_KEYS) {
+    if (key in next) next[key] = undefined
+  }
+  for (const key of ISSUE_EXCLUDE_FACET_KEYS) {
+    if (key in next) next[key] = undefined
+  }
+  if ('facets' in next) next.facets = undefined
+  return next
+}
+
+function clearApmFacetSearch(prev: Record<string, unknown>): Record<string, unknown> {
+  const next = {...prev}
+  for (const key of APM_FACET_KEYS) {
+    const includeKey = apmFacetParamKey(key)
+    if (includeKey in next) next[includeKey] = undefined
+    const excludeKey = apmExcludeFacetParamKey(key)
+    if (excludeKey in next) next[excludeKey] = undefined
+  }
+  if ('afacets' in next) next.afacets = undefined
+  return next
+}
+
+function hasLegacyIssueFacetParam(): boolean {
+  if (typeof globalThis.window === 'undefined') return false
+  return new URLSearchParams(globalThis.window.location.search).has('facets')
+}
+
+function hasLegacyApmFacetParam(): boolean {
+  if (typeof globalThis.window === 'undefined') return false
+  return new URLSearchParams(globalThis.window.location.search).has('afacets')
+}
+
+function releaseHydrationGuard(ref: {current: boolean}): () => void {
+  const release = globalThis.setTimeout(() => {
+    ref.current = false
+  }, 0)
+  return () => {
+    globalThis.clearTimeout(release)
+    ref.current = false
+  }
+}
+
+/**
+ * Resolve issue-explorer facet state from clean URL params. An absent facet
+ * state falls back to the unresolved default; `status=all` means the user
+ * explicitly cleared every status facet.
+ */
+export function resolveIssueFacetFilters(search: Partial<IssuesSearch> | undefined): FacetFilter[] {
+  const filters = search ? issueFacetFiltersFromSearch(search) : undefined
+  if (filters === undefined) {
+    return DEFAULT_ISSUE_FACET_FILTERS.map((filter) => ({...filter}))
+  }
+  return filters
+}
+
+/** Issue explorer sub-views (tabs), persisted in the URL as `?view=`. */
+export type IssuesView = 'issues' | 'apm-errors'
+const ISSUES_VIEWS: readonly IssuesView[] = ['issues', 'apm-errors']
+
+function parseIssuesView(value: unknown): IssuesView | undefined {
+  return typeof value === 'string' && (ISSUES_VIEWS as readonly string[]).includes(value)
+    ? (value as IssuesView)
+    : undefined
+}
+
+/**
+ * Issue explorer route search: the Issues tab's readable filters, the active
+ * tab (`view`), and the APM Errors tab's own readable `apm_*` filters so each
+ * tab's view persists independently without one tab's facets leaking into the
+ * other. Legacy `facets`/`afacets` JSON is accepted by validateSearch only.
+ */
+export interface IssuesSearch {
+  q?: string
+  view?: IssuesView
+  service?: ReadableFacetSearchValue
+  status?: ReadableFacetSearchValue
+  level?: ReadableFacetSearchValue
+  exclude_service?: ReadableFacetSearchValue
+  exclude_status?: ReadableFacetSearchValue
+  exclude_level?: ReadableFacetSearchValue
+  aq?: string
+  apm_service?: ReadableFacetSearchValue
+  exclude_apm_service?: ReadableFacetSearchValue
+  afacets?: FacetFilter[]
+}
+
 export const Route = createFileRoute('/issues/')({
+  validateSearch: (search: Record<string, unknown>): IssuesSearch => {
+    const issueFacets = issueFacetFiltersFromSearch(search)
+    const issueSearch = issueFacets ? serializeIssueFacetSearch(issueFacets, true) : {}
+    const parsedExplorer = parseExplorerSearch(search)
+    const apmFacets = apmFacetFiltersFromSearch(search)
+    const apmSearch = apmFacets ? serializeApmFacetSearch(apmFacets) : {}
+    const apmQuery = parseExplorerSearch({q: search.aq})
+    const result: IssuesSearch = {
+      ...issueSearch,
+      ...apmSearch,
+    }
+    if (parsedExplorer.q) result.q = parsedExplorer.q
+    const view = parseIssuesView(search.view)
+    if (view) result.view = view
+    if (apmQuery.q) result.aq = apmQuery.q
+    return result
+  },
   component: IndexPage,
 })
 
-type IssuesView = 'issues' | 'apm-errors'
+function useIssueFacetUrlState() {
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const urlQuery = search.q
+  const urlFacetsKey = issueFacetSearchKey(search)
+  const shouldNormalizeFacetsUrl = hasLegacyIssueFacetParam()
+  const resolvedFacetFilters = useMemo(() => resolveIssueFacetFilters(search), [search])
+
+  const [searchQuery, setSearchQuery] = useState(() => urlQuery ?? '')
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => resolvedFacetFilters)
+  const didMountRef = useRef(false)
+  const isHydratingRef = useRef(false)
+
+  // URL -> state: adopt external changes only (shared-link nav, back/forward).
+  // The first run is skipped because state is already seeded from the URL above.
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return undefined
+    }
+    if (isHydratingRef.current) return undefined
+    isHydratingRef.current = true
+    setSearchQuery(urlQuery ?? '')
+    setFacetFilters(resolvedFacetFilters)
+    return releaseHydrationGuard(isHydratingRef)
+  }, [urlQuery, urlFacetsKey, resolvedFacetFilters])
+
+  // state -> URL: reflect active filters in human-readable params such as
+  // `status=unresolved&service=api`. Unrelated params persist.
+  useEffect(() => {
+    if (isHydratingRef.current) return undefined
+    const nextQuery = searchQuery.trim() || undefined
+    const nextFacetSearch = serializeIssueFacetSearch(facetFilters, true)
+    const nextFacetsKey = JSON.stringify(nextFacetSearch)
+    if (nextQuery === urlQuery && nextFacetsKey === urlFacetsKey && !shouldNormalizeFacetsUrl) return undefined
+    isHydratingRef.current = true
+    navigate({
+      replace: true,
+      search: (prev) => ({
+        ...clearIssueFacetSearch(prev),
+        q: nextQuery,
+        ...nextFacetSearch,
+      }),
+    })
+    return releaseHydrationGuard(isHydratingRef)
+  }, [searchQuery, facetFilters, navigate, urlQuery, urlFacetsKey, shouldNormalizeFacetsUrl])
+
+  return {searchQuery, setSearchQuery, facetFilters, setFacetFilters}
+}
+
+function isDoubleStringifiedFacetSearchParam(name: string): boolean {
+  if (typeof globalThis.window === 'undefined') return false
+  return new URLSearchParams(globalThis.window.location.search).get(name)?.startsWith('"') ?? false
+}
+
+/**
+ * Two-way bind an explorer's free-text query + facet filters to the route URL.
+ * State stays the source of truth for the UI; the URL mirrors it in APM's
+ * namespaced `aq`/`apm_*` params and seeds it on load / back-forward.
+ * `isHydratingRef` keeps the two effects from echoing each other (same approach
+ * as LogExplorer).
+ */
+function useApmFacetUrlState() {
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const urlQuery = search.aq
+  const urlFacetsKey = apmFacetSearchKey(search)
+  const shouldNormalizeFacetsUrl =
+    hasLegacyApmFacetParam() || isDoubleStringifiedFacetSearchParam('afacets')
+
+  const [searchQuery, setSearchQuery] = useState(() => urlQuery ?? '')
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => apmFacetFiltersFromSearch(search) ?? [])
+  const didMountRef = useRef(false)
+  const isHydratingRef = useRef(false)
+
+  // URL -> state: adopt external changes only (shared-link nav, back/forward).
+  // The first run is skipped because state is already seeded from the URL above.
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return undefined
+    }
+    if (isHydratingRef.current) return undefined
+    isHydratingRef.current = true
+    setSearchQuery(urlQuery ?? '')
+    setFacetFilters(apmFacetFiltersFromSearch(search) ?? [])
+    return releaseHydrationGuard(isHydratingRef)
+  }, [urlQuery, urlFacetsKey, search])
+
+  // state -> URL: reflect active APM filters. Unrelated params persist.
+  useEffect(() => {
+    if (isHydratingRef.current) return undefined
+    const nextQuery = searchQuery.trim() || undefined
+    const nextFacetSearch = serializeApmFacetSearch(facetFilters)
+    const nextFacetsKey = Object.keys(nextFacetSearch).length > 0 ? JSON.stringify(nextFacetSearch) : undefined
+    if (nextQuery === urlQuery && nextFacetsKey === urlFacetsKey && !shouldNormalizeFacetsUrl) return undefined
+    isHydratingRef.current = true
+    navigate({
+      replace: true,
+      search: (prev) => ({
+        ...clearApmFacetSearch(prev),
+        aq: nextQuery,
+        ...nextFacetSearch,
+      }),
+    })
+    return releaseHydrationGuard(isHydratingRef)
+  }, [
+    searchQuery,
+    facetFilters,
+    navigate,
+    urlQuery,
+    urlFacetsKey,
+    shouldNormalizeFacetsUrl,
+  ])
+
+  return {searchQuery, setSearchQuery, facetFilters, setFacetFilters}
+}
 
 const ISSUES_VIEW_TABS = [
   {value: 'issues', label: 'Issues', icon: AlertCircle},
@@ -421,13 +804,32 @@ const ISSUES_VIEW_TABS = [
 ] as const satisfies ReadonlyArray<SegmentedOption<IssuesView>>
 
 function IndexPage() {
-  const [activeTab, setActiveTab] = useState<IssuesView>('issues')
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  // State stays the source of truth for the tab; the URL mirrors it (shareable
+  // links) and seeds it on load. The default tab stays out of the URL to keep
+  // links clean. Adopt external URL changes (back/forward) by adjusting state
+  // during render — React's sanctioned alternative to a state-syncing effect.
+  const [activeTab, setActiveTab] = useState<IssuesView>(() => search.view ?? 'issues')
+  const [syncedView, setSyncedView] = useState(search.view)
+  if (syncedView !== search.view) {
+    setSyncedView(search.view)
+    setActiveTab(search.view ?? 'issues')
+  }
+
+  const handleTabChange = (view: IssuesView) => {
+    setActiveTab(view)
+    navigate({
+      replace: true,
+      search: (prev) => ({...prev, view: view === 'issues' ? undefined : view}),
+    })
+  }
 
   const viewTabs = (
     <SegmentedTabs
       ariaLabel="Issues view"
       value={activeTab}
-      onChange={setActiveTab}
+      onChange={handleTabChange}
       options={ISSUES_VIEW_TABS}
     />
   )
@@ -448,8 +850,9 @@ type DashboardPageProps = Readonly<{
 }>
 
 function DashboardPage({tabs}: DashboardPageProps) {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  // Issues filters round-trip through readable URL params such as
+  // `status=unresolved`, defaulting a fresh visit to unresolved.
+  const {searchQuery, setSearchQuery, facetFilters, setFacetFilters} = useIssueFacetUrlState()
   const [selectedIssueKeys, setSelectedIssueKeys] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const pageSize = 25
@@ -1072,21 +1475,6 @@ const APM_TIME_PRESETS: TimeRangePreset[] = [
   {label: '90d', value: '90d', minutes: 129600},
 ]
 
-function loadApmErrorFacetFilters(): FacetFilter[] {
-  try {
-    const raw = globalThis.localStorage?.getItem('apmErrors.facetFilters')
-    const parsed = raw ? JSON.parse(raw) : null
-    return Array.isArray(parsed)
-      ? parsed.filter(
-          (filter): filter is FacetFilter =>
-            !!filter && typeof filter.key === 'string' && typeof filter.value === 'string'
-        )
-      : []
-  } catch {
-    return []
-  }
-}
-
 function visibleApmErrors(errors: readonly ApmErrorGroup[], normalizedQuery: string): readonly ApmErrorGroup[] {
   if (!normalizedQuery) return errors
   return errors.filter((error) =>
@@ -1100,20 +1488,13 @@ type ApmErrorsTabProps = Readonly<{
 }>
 
 function ApmErrorsTab({ isActive, tabs }: ApmErrorsTabProps) {
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(loadApmErrorFacetFilters)
-  const [query, setQuery] = useState('')
+  // APM filters live in the URL under their own namespace (aq/apm_*) so the
+  // Issues and APM tab views stay shareable and persist independently across tab
+  // switches (replaces the old localStorage facet slice). No default facet.
+  const {searchQuery: query, setSearchQuery: setQuery, facetFilters, setFacetFilters} =
+    useApmFacetUrlState()
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
   const [offset, setOffset] = useState(0)
-
-  // Persist the selected facets so the slice survives reloads (service-first
-  // navigation — replaces the old global "active project" mode).
-  useEffect(() => {
-    try {
-      globalThis.localStorage?.setItem('apmErrors.facetFilters', JSON.stringify(facetFilters))
-    } catch {
-      /* ignore persistence errors */
-    }
-  }, [facetFilters])
 
   // The trace API filters by an explicit service list (no excludes), so only
   // include-mode service facets reach the query.

@@ -15,6 +15,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {type FacetFilter} from '@/lib/filters/types'
+import {
+  parseFacetFiltersParam,
+  parseReadableFacetFilters,
+  type ReadableFacetSearchValue,
+  serializeReadableFacetFilters,
+} from '@/lib/filters/urlState'
 import {type LogVizMode} from '@/components/logs/LogVizTabs'
 
 /**
@@ -25,7 +31,29 @@ export interface LogViewSearch {
   // Search & filters
   q?: string // query
   levels?: string // comma-separated levels
-  facets?: string // JSON-encoded facet filters
+  facets?: FacetFilter[] // component-internal structured filters; omitted from canonical route search
+  service?: ReadableFacetSearchValue
+  environment?: ReadableFacetSearchValue
+  host?: ReadableFacetSearchValue
+  level?: ReadableFacetSearchValue
+  container_name?: ReadableFacetSearchValue
+  'k8s.pod.name'?: ReadableFacetSearchValue
+  team?: ReadableFacetSearchValue
+  owner?: ReadableFacetSearchValue
+  trace_id?: ReadableFacetSearchValue
+  message_pattern?: ReadableFacetSearchValue
+  source?: ReadableFacetSearchValue
+  exclude_service?: ReadableFacetSearchValue
+  exclude_environment?: ReadableFacetSearchValue
+  exclude_host?: ReadableFacetSearchValue
+  exclude_level?: ReadableFacetSearchValue
+  exclude_container_name?: ReadableFacetSearchValue
+  'exclude_k8s.pod.name'?: ReadableFacetSearchValue
+  exclude_team?: ReadableFacetSearchValue
+  exclude_owner?: ReadableFacetSearchValue
+  exclude_trace_id?: ReadableFacetSearchValue
+  exclude_message_pattern?: ReadableFacetSearchValue
+  exclude_source?: ReadableFacetSearchValue
   
   // Time range
   timePreset?: string // e.g., "15m", "1h", "custom"
@@ -50,6 +78,25 @@ export const NO_LOG_GROUP_BY_URL_VALUE = 'none'
 const VALID_VIZ_MODES: LogVizMode[] = ['timeseries', 'table', 'toplist', 'pie']
 const VALID_TIME_PRESETS = ['5m', '15m', '30m', '1h', '4h', '12h', '24h', '3d', '7d', '14d', '30d', 'custom']
 const VALID_GROUP_BY_VALUES = [DEFAULT_LOG_GROUP_BY, 'service', 'environment', NO_LOG_GROUP_BY_URL_VALUE]
+export const LOG_FACET_URL_KEYS = [
+  'service',
+  'environment',
+  'host',
+  'level',
+  'container_name',
+  'k8s.pod.name',
+  'team',
+  'owner',
+  'trace_id',
+  'message_pattern',
+  'source',
+] as const
+
+export function parseLogViewFacetFilters(
+  search: Partial<LogViewSearch> | Record<string, unknown>
+): FacetFilter[] | undefined {
+  return parseReadableFacetFilters(search as Record<string, unknown>, LOG_FACET_URL_KEYS)
+}
 
 /**
  * Parse URL search params into normalized log view state.
@@ -71,16 +118,11 @@ export function parseLogViewSearch(search: Record<string, unknown>): LogViewSear
     }
   }
   
-  // Facet filters
-  if (typeof search.facets === 'string' && search.facets) {
-    try {
-      const parsed = JSON.parse(search.facets)
-      if (Array.isArray(parsed) && parsed.every(isFacetFilter)) {
-        result.facets = JSON.stringify(parsed)
-      }
-    } catch {
-      // Invalid JSON, ignore
-    }
+  // Facet filters. Prefer readable params (`service=api`); keep legacy
+  // `facets=` JSON as input-only compatibility.
+  const facetFilters = parseLogViewFacetFilters(search)
+  if (facetFilters) {
+    Object.assign(result, serializeReadableFacetFilters(facetFilters, LOG_FACET_URL_KEYS))
   }
   
   // Time preset
@@ -151,7 +193,24 @@ export function serializeLogViewState(state: {
   cursor?: string | null
   selectedLogId?: string | null
 }): Partial<LogViewSearch> {
-  const result: Partial<LogViewSearch> = {}
+  const result: Partial<LogViewSearch> = {
+    q: undefined,
+    levels: undefined,
+    facets: undefined,
+    timePreset: undefined,
+    from: undefined,
+    to: undefined,
+    viz: undefined,
+    groupBy: undefined,
+    topField: undefined,
+    cursor: undefined,
+    logId: undefined,
+  }
+  const clearableSearch = result as Record<string, unknown>
+  for (const key of LOG_FACET_URL_KEYS) {
+    clearableSearch[key] = undefined
+    clearableSearch[`exclude_${key}`] = undefined
+  }
   
   // Query
   if (state.query && state.query.trim()) {
@@ -165,7 +224,7 @@ export function serializeLogViewState(state: {
   
   // Facet filters
   if (state.facetFilters && state.facetFilters.length > 0) {
-    result.facets = JSON.stringify(state.facetFilters)
+    Object.assign(result, serializeReadableFacetFilters(state.facetFilters, LOG_FACET_URL_KEYS))
   }
   
   // Time range
@@ -222,33 +281,11 @@ export function resolveLogGroupBy(groupBy: string | undefined): string {
 }
 
 /**
- * Type guard for FacetFilter
+ * Parse facet filters from a JSON string. Delegates to the shared explorer
+ * helper ({@link parseFacetFiltersParam}) so logs and other ExplorerShell
+ * surfaces share one facet URL encoding.
  */
-function isFacetFilter(value: unknown): value is FacetFilter {
-  if (typeof value !== 'object' || value === null) return false
-  const obj = value as Record<string, unknown>
-  return (
-    typeof obj.key === 'string' &&
-    typeof obj.value === 'string' &&
-    (obj.exclude === undefined || typeof obj.exclude === 'boolean')
-  )
-}
-
-/**
- * Parse facet filters from JSON string
- */
-export function parseFacetFiltersFromUrl(facetsJson: string | undefined): FacetFilter[] {
-  if (!facetsJson) return []
-  try {
-    const parsed = JSON.parse(facetsJson)
-    if (Array.isArray(parsed) && parsed.every(isFacetFilter)) {
-      return parsed
-    }
-  } catch {
-    // Invalid JSON
-  }
-  return []
-}
+export const parseFacetFiltersFromUrl = parseFacetFiltersParam
 
 /**
  * Parse levels from comma-separated string

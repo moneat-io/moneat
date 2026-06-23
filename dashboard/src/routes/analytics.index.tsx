@@ -3,7 +3,7 @@ import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {useAnalyticsParams} from '@/contexts/UseAnalyticsParams'
-import {serviceNamesForQuery} from '@/lib/service-facet-scope'
+import {SERVICE_FACET_URL_KEYS, serviceNamesForQuery} from '@/lib/service-facet-scope'
 import {AnalyticsFilterBar} from '@/components/analytics/AnalyticsFilterBar'
 import {AnalyticsKpiCards, AnalyticsKpiCardsSkeleton} from '@/components/analytics/AnalyticsKpiCards'
 import {AnalyticsChart} from '@/components/analytics/AnalyticsChart'
@@ -29,6 +29,7 @@ import type {
   Project,
 } from '@/lib/api'
 import type {FacetFilter, FacetRailSection} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 
 export const Route = createFileRoute('/analytics/')({
   component: AnalyticsOverview,
@@ -204,7 +205,10 @@ function useAnalyticsQueries({
 function AnalyticsOverview() {
   const {period, customFrom, customTo} = useAnalyticsParams()
   const [filters, setFilters] = useState<AnalyticsFilter[]>([])
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {facetFilters, setFacetFilters} = useReadableFacetUrlState({
+    facetKeys: SERVICE_FACET_URL_KEYS,
+    syncQuery: false,
+  })
   const [breakdownTab, setBreakdownTab] = useState('pages')
   const [analyticsTab, setAnalyticsTab] = useState<AnalyticsView>('web')
 

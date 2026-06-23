@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { renderRoute, clearAuthStorage } from '@/test/utils'
 
-const { mockNavigate, mockToast, mockApi } = vi.hoisted(() => ({
+const { mockNavigate, mockToast, mockApi, mockSearch } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockToast: vi.fn(),
+  // Mutable container so each test can drive what the route's `useSearch` returns.
+  mockSearch: { value: {} as Record<string, unknown> },
   mockApi: {
     isAuthenticated: vi.fn(),
     checkAuth: vi.fn(),
@@ -37,6 +39,8 @@ vi.mock('@tanstack/react-router', () => ({
     ...options,
     options,
     useParams: () => ({}),
+    useSearch: () => mockSearch.value,
+    useNavigate: () => mockNavigate,
   }),
   Link: ({
     children,
@@ -55,7 +59,21 @@ vi.mock('@tanstack/react-router', () => ({
   Outlet: () => null,
 }))
 
-import { Route as IssuesIndexRoute } from '../issues.index'
+import { Route as IssuesIndexRoute, resolveIssueFacetFilters } from '../issues.index'
+
+const UNRESOLVED_FACETS = [{ key: 'status', value: 'unresolved' }]
+const STATUS_ALL_SEARCH = { status: 'all' }
+
+/** Pull the last search payload navigate() was called with, resolved to an object. */
+function lastNavigatedSearch(): Record<string, unknown> | undefined {
+  const call = mockNavigate.mock.calls.at(-1)
+  if (!call) return undefined
+  const arg = call[0] as { search?: unknown } | undefined
+  const search = arg?.search
+  return typeof search === 'function'
+    ? (search as (prev: Record<string, unknown>) => Record<string, unknown>)({})
+    : (search as Record<string, unknown> | undefined)
+}
 
 const mockProject = {
   id: 'proj-1',
@@ -136,6 +154,8 @@ describe('Issues Index - data coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     clearAuthStorage()
+    // Default to a fresh visit (no facets param) so the unresolved default applies.
+    mockSearch.value = {}
     mockApi.isAuthenticated.mockReturnValue(true)
     mockApi.checkAuth.mockResolvedValue(true)
     mockApi.getProjects.mockResolvedValue([mockProject])
@@ -147,6 +167,8 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('renders issues list with projects and issues data', async () => {
+    // Explicitly-empty facets = the user cleared the default, so all statuses show.
+    mockSearch.value = STATUS_ALL_SEARCH
     renderRoute(IssuesIndexRoute)
 
     // Should show the search bar
@@ -201,6 +223,7 @@ describe('Issues Index - data coverage', () => {
   })
 
   it('filters by status from the rail and clears it again (removable, multi-select capable)', async () => {
+    mockSearch.value = STATUS_ALL_SEARCH
     renderRoute(IssuesIndexRoute)
 
     await screen.findByText(/app.main: TypeError: null ref/)
@@ -272,7 +295,8 @@ describe('Issues Index - data coverage', () => {
     expect(screen.getByText('No issues match your filters')).toBeInTheDocument()
   })
 
-  it('shows empty state when issues list is empty for default filter', async () => {
+  it('shows the no-issues-yet empty state when there are no issues and no active filters', async () => {
+    mockSearch.value = STATUS_ALL_SEARCH
     mockApi.getOrganizationIssues.mockResolvedValue([])
 
     renderRoute(IssuesIndexRoute)
@@ -288,6 +312,7 @@ describe('Issues Index - data coverage', () => {
       slug: 'worker-service',
     }
     mockApi.getProjects.mockResolvedValue([mockProject, workerProject])
+    mockSearch.value = STATUS_ALL_SEARCH
 
     renderRoute(IssuesIndexRoute)
 
@@ -350,18 +375,20 @@ describe('Issues Index - data coverage', () => {
       ],
     })
 
-    localStorage.clear()
-    localStorage.setItem('apmErrors.facetFilters', JSON.stringify([{ key: 'service', value: 'api-gateway' }]))
+    // Seed the active tab + APM service facet straight from the URL (APM now
+    // persists in readable aq/apm_* params, not localStorage).
+    mockSearch.value = {
+      view: 'apm-errors',
+      apm_service: 'api-gateway',
+    }
     renderRoute(IssuesIndexRoute)
 
-    await screen.findByRole('textbox')
-    fireEvent.click(screen.getByText('APM Errors'))
-
-    // Seed the selected service via its persisted slice (the rail/bar selection),
-    // which loads its errors.
     expect(await screen.findByText('Connection refused')).toBeInTheDocument()
     expect(screen.getByText('NetworkError')).toBeInTheDocument()
     expect(screen.getByText('View trace')).toBeInTheDocument()
+    expect(mockApi.getApmErrors).toHaveBeenCalledWith(
+      expect.objectContaining({ services: ['api-gateway'] })
+    )
   })
 
   it('does not show create or settings affordances in the header', async () => {
@@ -372,5 +399,157 @@ describe('Issues Index - data coverage', () => {
     expect(screen.queryByText('New Service')).not.toBeInTheDocument()
     expect(screen.queryByText('New Project')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Service settings')).not.toBeInTheDocument()
+  })
+
+  describe('facet URL state', () => {
+    it('resolveIssueFacetFilters defaults a fresh visit to unresolved but honours an explicit clear', () => {
+      expect(resolveIssueFacetFilters(undefined)).toEqual([{ key: 'status', value: 'unresolved' }])
+      expect(resolveIssueFacetFilters(STATUS_ALL_SEARCH)).toEqual([])
+      expect(resolveIssueFacetFilters({service: 'api'})).toEqual([
+        { key: 'service', value: 'api' },
+      ])
+    })
+
+    it('normalises legacy facets search params into readable issue params', () => {
+      const validateSearch = IssuesIndexRoute.options.validateSearch as (search: Record<string, unknown>) => unknown
+      expect(validateSearch({facets: '[{"key":"status","value":"resolved"}]'})).toEqual({status: 'resolved'})
+      expect(validateSearch({facets: '[]'})).toEqual({status: 'all'})
+      expect(validateSearch({facets: JSON.stringify(JSON.stringify(UNRESOLVED_FACETS))})).toEqual({
+        status: 'unresolved',
+      })
+    })
+
+    it('applies the unresolved default and normalises a fresh URL to carry it', async () => {
+      // mockSearch.value defaults to {} (no facets param) in beforeEach.
+      renderRoute(IssuesIndexRoute)
+
+      // Only the two unresolved issues survive the default client-side filter.
+      expect(await screen.findByText(/app.main: TypeError: null ref/)).toBeInTheDocument()
+      expect(screen.queryByText(/api.handler: ValueError: invalid input/)).not.toBeInTheDocument()
+      expect(screen.getByText('2 results')).toBeInTheDocument()
+
+      // The unresolved status drives the org issue request...
+      expect(mockApi.getOrganizationIssues).toHaveBeenCalledWith({
+        page: 1,
+        limit: 500,
+        status: 'unresolved',
+        services: undefined,
+      })
+
+      // ...and the URL is normalised so the default is shareable.
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalled()
+      })
+      expect(lastNavigatedSearch()).toEqual({ q: undefined, status: 'unresolved' })
+    })
+
+    it('restores facet state from the URL without re-normalising', async () => {
+      mockSearch.value = { status: 'resolved' }
+      renderRoute(IssuesIndexRoute)
+
+      expect(await screen.findByText(/api.handler: ValueError: invalid input/)).toBeInTheDocument()
+      expect(screen.queryByText(/app.main: TypeError: null ref/)).not.toBeInTheDocument()
+      expect(screen.getByText('1 result')).toBeInTheDocument()
+      expect(mockApi.getOrganizationIssues).toHaveBeenCalledWith({
+        page: 1,
+        limit: 500,
+        status: 'resolved',
+        services: undefined,
+      })
+
+      // Already in sync with the URL → no redundant navigation.
+      expect(mockNavigate).not.toHaveBeenCalled()
+    })
+
+    it('writes facet selections back to the URL', async () => {
+      mockSearch.value = STATUS_ALL_SEARCH
+      renderRoute(IssuesIndexRoute)
+
+      await screen.findByText(/app.main: TypeError: null ref/)
+      fireEvent.click(screen.getByRole('button', { name: 'Resolved' }))
+
+      await waitFor(() => {
+        expect(lastNavigatedSearch()).toEqual({
+          q: undefined,
+          status: 'resolved',
+        })
+      })
+    })
+
+    it('records an explicit empty facets param when the default is cleared', async () => {
+      // Fresh visit → unresolved default; toggling it off must not silently
+      // resurrect on reload, so the URL gets an explicit "[]".
+      renderRoute(IssuesIndexRoute)
+
+      await screen.findByText(/app.main: TypeError: null ref/)
+      fireEvent.click(screen.getByRole('button', { name: 'Unresolved' }))
+
+      await waitFor(() => {
+        expect(mockApi.getOrganizationIssues).toHaveBeenLastCalledWith({
+          page: 1,
+          limit: 500,
+          status: undefined,
+          services: undefined,
+        })
+      })
+      expect(await screen.findByText('5 results')).toBeInTheDocument()
+      expect(lastNavigatedSearch()).toEqual({ q: undefined, status: 'all' })
+    })
+  })
+
+  describe('tab URL state', () => {
+    it('persists the active tab in the URL', async () => {
+      renderRoute(IssuesIndexRoute)
+
+      await screen.findByRole('textbox')
+      fireEvent.click(screen.getByText('APM Errors'))
+
+      expect(await screen.findByText('No APM errors found')).toBeInTheDocument()
+      expect(lastNavigatedSearch()).toEqual({ view: 'apm-errors' })
+    })
+
+    it('restores the active tab from the URL', async () => {
+      mockSearch.value = { view: 'apm-errors' }
+      renderRoute(IssuesIndexRoute)
+
+      // Lands on APM Errors without a click, and never queries the issues list.
+      expect(await screen.findByText('No APM errors found')).toBeInTheDocument()
+      expect(mockApi.getOrganizationIssues).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('APM facet URL state', () => {
+    it('writes APM facet selections to its own namespaced URL params', async () => {
+      mockApi.getApmErrors.mockResolvedValue({
+        errors: [],
+        totalCount: 0,
+        serviceFacets: [{ service: 'api-gateway', count: 35 }],
+      })
+      mockSearch.value = { view: 'apm-errors' }
+      renderRoute(IssuesIndexRoute)
+
+      // The rail offers services from the facet counts; selecting one writes apm_service.
+      fireEvent.click(await screen.findByLabelText('api-gateway'))
+
+      await waitFor(() => {
+        expect(lastNavigatedSearch()).toEqual({
+          aq: undefined,
+          apm_service: 'api-gateway',
+        })
+      })
+    })
+
+    it('keeps Issues and APM facets separate — no cross-tab leakage', async () => {
+      mockApi.getApmErrors.mockResolvedValue({ errors: [], totalCount: 0, serviceFacets: [] })
+      // Issues default (unresolved) lives in q/facets; APM must ignore it.
+      mockSearch.value = { view: 'apm-errors', status: 'unresolved' }
+      renderRoute(IssuesIndexRoute)
+
+      await screen.findByText('No APM errors found')
+      expect(screen.queryByText('status:unresolved')).not.toBeInTheDocument()
+      expect(mockApi.getApmErrors).toHaveBeenCalledWith(
+        expect.objectContaining({ services: undefined })
+      )
+    })
   })
 })

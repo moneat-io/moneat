@@ -64,6 +64,7 @@ import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import type {FacetFilter, FacetRailSection, FacetSchema} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/performance/traces/')({
@@ -76,6 +77,7 @@ const DURATION_BAR_MAX_NS = 1_000_000_000
 const SEARCH_DEBOUNCE_MS = 300
 const KPI_CARD_COUNT = 6
 const SKELETON_TABLE_ROWS = 4
+const TRACE_FACET_URL_KEYS = ['service', 'operation', 'env', 'status', 'source'] as const
 
 const TIME_RANGE_OPTIONS: Array<{value: ApmTimeRange; label: string}> = [
   {value: '1h', label: 'Last hour'},
@@ -217,8 +219,12 @@ function PerformanceTracesPage() {
   const queryClient = useQueryClient()
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('24h')
   const [refresh, setRefresh] = useState<RefreshValue>('15s')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
-  const [search, setSearch] = useState('')
+  const {
+    query: search,
+    setQuery: setSearch,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: TRACE_FACET_URL_KEYS})
   const [page, setPage] = useState(0)
   const [showErroringResources, setShowErroringResources] = useState(false)
   const [erroringResourcesScrollKey, setErroringResourcesScrollKey] = useState(0)

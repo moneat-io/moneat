@@ -1096,7 +1096,11 @@ export function LogExplorer({
   
   // Sync state to URL with debounce
   useEffect(() => {
-    if (!enableUrlSync || isHydratingRef.current) return
+    const shouldNormalizeLegacyFacetUrl =
+      enableUrlSync &&
+      typeof globalThis.window !== 'undefined' &&
+      new URLSearchParams(globalThis.window.location.search).has('facets')
+    if (!enableUrlSync || (isHydratingRef.current && !shouldNormalizeLegacyFacetUrl)) return
     
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current)
@@ -1120,7 +1124,12 @@ export function LogExplorer({
       // Prevent our own navigate() from triggering the hydration effect and resetting state
       isHydratingRef.current = true
       navigate({
-        search: newSearch as never,
+        search: ((prev: Record<string, unknown>) => {
+          const clearedSearch = Object.fromEntries(
+            Object.keys(prev).map((key) => [key, undefined])
+          )
+          return {...clearedSearch, ...newSearch}
+        }) as never,
         replace: true,
       })
       setTimeout(() => {

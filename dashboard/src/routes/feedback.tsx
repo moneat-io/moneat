@@ -46,6 +46,7 @@ import {
 import {useMemo, useState, type ReactNode} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
@@ -53,6 +54,7 @@ import {
 } from '@/lib/service-facet-scope'
 import {feedbackSourceLabel} from '@/lib/telemetry-sources'
 import type {FacetFilter} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import type {Feedback} from '@/lib/api/types/replays'
 
 export const Route = createFileRoute('/feedback')({
@@ -584,10 +586,14 @@ function FeedbackMainContent(props: FeedbackMainContentProps) {
 }
 
 function FeedbackPage() {
-  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedFeedback, setSelectedFeedback] = useState<Set<string>>(new Set())
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: SERVICE_FACET_URL_KEYS})
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
