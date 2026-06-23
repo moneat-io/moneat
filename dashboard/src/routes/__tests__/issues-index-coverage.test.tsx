@@ -71,7 +71,7 @@ function lastNavigatedSearch(): Record<string, unknown> | undefined {
   const arg = call[0] as { search?: unknown } | undefined
   const search = arg?.search
   return typeof search === 'function'
-    ? (search as (prev: Record<string, unknown>) => Record<string, unknown>)({})
+    ? (search as (prev: Record<string, unknown>) => Record<string, unknown>)(mockSearch.value)
     : (search as Record<string, unknown> | undefined)
 }
 
@@ -408,6 +408,9 @@ describe('Issues Index - data coverage', () => {
       expect(resolveIssueFacetFilters({service: 'api'})).toEqual([
         { key: 'service', value: 'api' },
       ])
+      expect(resolveIssueFacetFilters({service: 'api, v2'})).toEqual([
+        {key: 'service', value: 'api, v2'},
+      ])
     })
 
     it('normalises legacy facets search params into readable issue params', () => {
@@ -533,6 +536,7 @@ describe('Issues Index - data coverage', () => {
 
       await waitFor(() => {
         expect(lastNavigatedSearch()).toEqual({
+          view: 'apm-errors',
           aq: undefined,
           apm_service: 'api-gateway',
         })

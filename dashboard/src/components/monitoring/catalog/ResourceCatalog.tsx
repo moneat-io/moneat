@@ -488,7 +488,7 @@ type ResourceCatalogProps = Readonly<{
 }>
 
 function catalogUrlStateKey(state: ResourceCatalogUrlState | undefined): string {
-  return JSON.stringify(state ?? {query: '', facetFilters: []})
+  return state ? JSON.stringify(state) : ''
 }
 
 function releaseHydrationGuard(ref: {current: boolean}): () => void {
@@ -511,19 +511,23 @@ export function ResourceCatalog({urlState, onUrlStateChange}: ResourceCatalogPro
   const didMountRef = useRef(false)
   const isHydratingRef = useRef(false)
   const urlStateKey = catalogUrlStateKey(urlState)
+  const stableUrlState = useMemo<ResourceCatalogUrlState | undefined>(
+    () => urlStateKey ? JSON.parse(urlStateKey) as ResourceCatalogUrlState : undefined,
+    [urlStateKey]
+  )
 
   useEffect(() => {
-    if (!urlState) return undefined
+    if (!stableUrlState) return undefined
     if (!didMountRef.current) {
       didMountRef.current = true
       return undefined
     }
     if (isHydratingRef.current) return undefined
     isHydratingRef.current = true
-    setQuery(urlState.query)
-    setFacetFilters(urlState.facetFilters)
+    setQuery(stableUrlState.query)
+    setFacetFilters(stableUrlState.facetFilters)
     return releaseHydrationGuard(isHydratingRef)
-  }, [urlState, urlStateKey])
+  }, [stableUrlState])
 
   useEffect(() => {
     if (!onUrlStateChange || isHydratingRef.current) return

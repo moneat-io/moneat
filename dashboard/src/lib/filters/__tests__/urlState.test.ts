@@ -94,6 +94,12 @@ describe('filters/urlState', () => {
       ])
     })
 
+    it('keeps scalar comma values atomic', () => {
+      expect(parseReadableFacetFilters({service: 'api, v2'}, keys)).toEqual([
+        {key: 'service', value: 'api, v2'},
+      ])
+    })
+
     it('serializes filters into first-class params', () => {
       expect(
         serializeReadableFacetFilters(

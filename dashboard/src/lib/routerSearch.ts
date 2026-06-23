@@ -25,14 +25,7 @@ function stringifySearchValue(value: unknown): string {
     return JSON.stringify(value)
   }
 
-  if (typeof value === 'string') {
-    try {
-      JSON.parse(value)
-      return JSON.stringify(value)
-    } catch {
-      return value
-    }
-  }
+  if (typeof value === 'string') return value
 
   return String(value)
 }

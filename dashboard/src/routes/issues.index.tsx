@@ -54,8 +54,7 @@ import {
   Server,
   Timer,
 } from 'lucide-react'
-import {useEffect, useMemo, useRef, useState} from 'react'
-import type {ReactNode} from 'react'
+import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {getNow} from '@/lib/demo'
 import {parseDate} from '@/lib/date-format'
@@ -446,10 +445,8 @@ function searchParamValues(value: unknown): string[] {
     return value.flatMap(searchParamValues)
   }
   if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return []
-  return String(value)
-    .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
+  const normalized = String(value).trim()
+  return normalized ? [normalized] : []
 }
 
 function toSearchParamValue(values: readonly string[]): ReadableFacetSearchValue | undefined {

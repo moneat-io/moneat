@@ -16,8 +16,11 @@
 
 import {type FacetFilter} from '@/lib/filters/types'
 import {
+  EXCLUDE_FACET_PARAM_PREFIX,
+  parseFacetFiltersOptionalParam,
   parseReadableFacetFilters,
   type ReadableFacetSearchValue,
+  serializeFacetFiltersParam,
   serializeReadableFacetFilters,
 } from '@/lib/filters/urlState'
 import {type LogVizMode} from '@/components/logs/LogVizTabs'
@@ -27,6 +30,7 @@ import {type LogVizMode} from '@/components/logs/LogVizTabs'
  * This enables deep linking and context-based navigation.
  */
 export interface LogViewSearch {
+  [key: string]: ReadableFacetSearchValue | FacetFilter[] | string | undefined
   // Search & filters
   q?: string // query
   levels?: string // comma-separated levels
@@ -90,11 +94,92 @@ export const LOG_FACET_URL_KEYS = [
   'message_pattern',
   'source',
 ] as const
+const LOG_NON_FACET_SEARCH_KEYS = new Set([
+  'q',
+  'levels',
+  'facets',
+  'timePreset',
+  'from',
+  'to',
+  'viz',
+  'groupBy',
+  'topField',
+  'cursor',
+  'logId',
+])
+
+function isReadableLogFacetKey(key: string): boolean {
+  return key !== '' && !LOG_NON_FACET_SEARCH_KEYS.has(key) && !key.startsWith(EXCLUDE_FACET_PARAM_PREFIX)
+}
+
+function hasSearchParamValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasSearchParamValue)
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') return false
+  return String(value).trim() !== ''
+}
+
+function logFacetUrlKeysFromSearch(search: Record<string, unknown>): string[] {
+  const keys = new Set<string>(LOG_FACET_URL_KEYS)
+  for (const rawKey of Object.keys(search)) {
+    if (rawKey.startsWith(EXCLUDE_FACET_PARAM_PREFIX)) {
+      const key = rawKey.slice(EXCLUDE_FACET_PARAM_PREFIX.length)
+      if (isReadableLogFacetKey(key)) keys.add(key)
+      continue
+    }
+    if (isReadableLogFacetKey(rawKey)) keys.add(rawKey)
+  }
+  return [...keys]
+}
+
+function hasReadableLogFacetParam(search: Record<string, unknown>, facetKeys: readonly string[]): boolean {
+  return facetKeys.some((key) => (
+    hasSearchParamValue(search[key]) ||
+    hasSearchParamValue(search[`${EXCLUDE_FACET_PARAM_PREFIX}${key}`])
+  ))
+}
+
+function logFacetFilterIdentity(filter: FacetFilter): string {
+  return `${filter.exclude ? 'exclude' : 'include'}\u0000${filter.key}\u0000${filter.value}`
+}
+
+function mergeFacetFilters(primary: readonly FacetFilter[], fallback: readonly FacetFilter[]): FacetFilter[] {
+  const seen = new Set(primary.map(logFacetFilterIdentity))
+  const merged = [...primary]
+  for (const filter of fallback) {
+    const identity = logFacetFilterIdentity(filter)
+    if (seen.has(identity)) continue
+    seen.add(identity)
+    merged.push(filter)
+  }
+  return merged
+}
+
+function serializeLogFacetFilters(filters: readonly FacetFilter[]): Partial<LogViewSearch> {
+  const readableFilters = filters.filter((filter) => isReadableLogFacetKey(filter.key))
+  const fallbackFilters = filters.filter((filter) => !isReadableLogFacetKey(filter.key))
+  const readableKeys = new Set<string>(LOG_FACET_URL_KEYS)
+  for (const filter of readableFilters) {
+    readableKeys.add(filter.key)
+  }
+
+  const search: Partial<LogViewSearch> = serializeReadableFacetFilters(readableFilters, [...readableKeys])
+  if (fallbackFilters.length > 0) {
+    search.facets = serializeFacetFiltersParam(fallbackFilters)
+  }
+  return search
+}
 
 export function parseLogViewFacetFilters(
   search: Partial<LogViewSearch> | Record<string, unknown>
 ): FacetFilter[] | undefined {
-  return parseReadableFacetFilters(search as Record<string, unknown>, LOG_FACET_URL_KEYS)
+  const searchRecord = search as Record<string, unknown>
+  const facetKeys = logFacetUrlKeysFromSearch(searchRecord)
+  const filters = parseReadableFacetFilters(searchRecord, facetKeys)
+  if (!hasReadableLogFacetParam(searchRecord, facetKeys)) return filters
+
+  const fallbackFilters = (parseFacetFiltersOptionalParam(searchRecord.facets) ?? [])
+    .filter((filter) => !isReadableLogFacetKey(filter.key))
+  return mergeFacetFilters(filters ?? [], fallbackFilters)
 }
 
 /**
@@ -207,7 +292,7 @@ export function parseLogViewSearch(search: Record<string, unknown>): LogViewSear
 
   const facetFilters = parseLogViewFacetFilters(search)
   if (facetFilters) {
-    Object.assign(result, serializeReadableFacetFilters(facetFilters, LOG_FACET_URL_KEYS))
+    Object.assign(result, serializeLogFacetFilters(facetFilters))
   }
 
   if (typeof search.timePreset === 'string' && VALID_TIME_PRESETS.includes(search.timePreset)) {
@@ -261,7 +346,7 @@ export function serializeLogViewState(state: {
   if (levels) result.levels = levels
 
   if (state.facetFilters?.length) {
-    Object.assign(result, serializeReadableFacetFilters(state.facetFilters, LOG_FACET_URL_KEYS))
+    Object.assign(result, serializeLogFacetFilters(state.facetFilters))
   }
 
   Object.assign(result, serializeTimeRangeSearch(state))

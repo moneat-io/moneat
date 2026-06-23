@@ -15,6 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
+import {useMemo} from 'react'
 import {api} from '@/lib/api'
 import {MonitoringTabBar} from '@/components/monitoring/MonitoringTabBar'
 import {ResourceCatalog, type ResourceCatalogUrlState} from '@/components/monitoring/catalog/ResourceCatalog'
@@ -34,6 +35,13 @@ type ResourcesSearch = {
   q?: string
 } & Partial<Record<ResourceFacetUrlKey | ResourceExcludeFacetUrlKey, ReadableFacetSearchValue>>
 
+function resourceCatalogUrlStateFromSearch(search: ResourcesSearch): ResourceCatalogUrlState {
+  return {
+    query: search.q ?? '',
+    facetFilters: parseReadableFacetFilters(search, RESOURCE_FACET_URL_KEYS) ?? [],
+  }
+}
+
 function parseResourcesSearch(search: Record<string, unknown>): ResourcesSearch {
   const result: ResourcesSearch = {}
   if (typeof search.q === 'string' && search.q.trim()) {
@@ -52,10 +60,11 @@ function parseResourcesSearch(search: Record<string, unknown>): ResourcesSearch 
 function ResourcesPage() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
-  const urlState: ResourceCatalogUrlState = {
-    query: search.q ?? '',
-    facetFilters: parseReadableFacetFilters(search, RESOURCE_FACET_URL_KEYS) ?? [],
-  }
+  const urlStateKey = JSON.stringify(resourceCatalogUrlStateFromSearch(search))
+  const urlState = useMemo(
+    () => JSON.parse(urlStateKey) as ResourceCatalogUrlState,
+    [urlStateKey]
+  )
   const handleUrlStateChange = (next: ResourceCatalogUrlState) => {
     navigate({
       replace: true,

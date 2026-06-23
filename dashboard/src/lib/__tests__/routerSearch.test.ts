@@ -27,6 +27,16 @@ describe('routerSearch', () => {
     ).toBe('?kind=host&kind=pod&kind=network-device&kind=service&env=prod')
   })
 
+  it('keeps JSON-like strings as plain query values', () => {
+    expect(
+      stringifySearchWithRepeatedPrimitiveArrays({
+        enabled: ['true', 'false'],
+        count: ['123'],
+        service: ['api'],
+      })
+    ).toBe('?enabled=true&enabled=false&count=123&service=api')
+  })
+
   it('keeps object arrays JSON encoded for legacy structured search values', () => {
     expect(
       stringifySearchWithRepeatedPrimitiveArrays({

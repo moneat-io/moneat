@@ -66,6 +66,16 @@ describe('logViewUrlState', () => {
       ])
     })
 
+    it('should parse dynamic readable tag facet params', () => {
+      const result = parseLogViewSearch({region: 'us-east-1', exclude_http_status: '500'})
+      expect(result.region).toBe('us-east-1')
+      expect(result.exclude_http_status).toBe('500')
+      expect(parseLogViewFacetFilters(result)).toEqual([
+        {key: 'region', value: 'us-east-1'},
+        {key: 'http_status', value: '500', exclude: true},
+      ])
+    })
+
     it('should ignore malformed facet JSON', () => {
       const result = parseLogViewSearch({facets: 'not-json'})
       expect(result.facets).toBeUndefined()
@@ -201,6 +211,26 @@ describe('logViewUrlState', () => {
       const result = serializeLogViewState({facetFilters: filters})
       expect(result.exclude_environment).toBe('dev')
       expect(result.facets).toBeUndefined()
+    })
+
+    it('should include dynamic tag facet filters as readable params', () => {
+      const filters: FacetFilter[] = [
+        {key: 'region', value: 'us-east-1'},
+        {key: 'http_status', value: '500', exclude: true},
+      ]
+      const result = serializeLogViewState({facetFilters: filters})
+      expect(result.region).toBe('us-east-1')
+      expect(result.exclude_http_status).toBe('500')
+      expect(result.facets).toBeUndefined()
+      expect(parseLogViewFacetFilters(result)).toEqual(filters)
+    })
+
+    it('should preserve facet keys that collide with log URL params', () => {
+      const filters: FacetFilter[] = [{key: 'timePreset', value: 'custom-tag'}]
+      const result = serializeLogViewState({facetFilters: filters})
+      expect(result.timePreset).toBeUndefined()
+      expect(result.facets).toEqual(filters)
+      expect(parseLogViewFacetFilters(result)).toEqual(filters)
     })
 
     it('should omit default time preset (15m)', () => {
