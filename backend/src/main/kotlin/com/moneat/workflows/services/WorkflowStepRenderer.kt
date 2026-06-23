@@ -19,7 +19,6 @@ package com.moneat.workflows.services
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.alerts.models.AlertStatus
-import com.moneat.config.EnvConfig
 import com.moneat.workflows.models.ALERT_EPISODE_ID_REFERENCE
 import com.moneat.workflows.models.ALERT_EPISODE_KEY_REFERENCE
 import com.moneat.workflows.models.ALERT_EPISODE_SEQ_REFERENCE
@@ -76,6 +75,23 @@ private const val ALERT_COLOR_RED = "#E01E5A"
 private const val ALERT_COLOR_GREEN = "#2EB67D"
 private const val ALERT_COLOR_YELLOW = "#ECB22E"
 private const val ALERT_COLOR_PURPLE = "#6366F1"
+private const val EMAIL_BACKGROUND = "#f7f8fa"
+private const val EMAIL_HEADER_BACKGROUND = "#082f49"
+private const val EMAIL_ACCENT_RED = "#cf2126"
+private const val EMAIL_ACCENT_GREEN = "#18a07a"
+private const val EMAIL_ACCENT_YELLOW = "#e0a100"
+private const val EMAIL_LINK = "#0369a1"
+private const val EMAIL_BORDER = "#d8dce3"
+private const val EMAIL_BORDER_MUTED = "#e4e7ec"
+private const val EMAIL_TEXT = "#161922"
+private const val EMAIL_TEXT_STRONG = "#0e1016"
+private const val EMAIL_TEXT_MUTED = "#6b7280"
+private const val EMAIL_TEXT_SUBTLE = "#9aa1ae"
+private const val EMAIL_LOGO_URL = "https://moneat.io/email/logo-mark.png"
+private const val EMAIL_SANS =
+    "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+private const val EMAIL_MONO =
+    "'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace"
 private const val SAMPLE_ORGANIZATION_ID = "123e4567-e89b-12d3-a456-426614170001"
 private const val SAMPLE_USER_ID = "123e4567-e89b-12d3-a456-426614170002"
 private const val SAMPLE_ALERT_EPISODE_ID = "123e4567-e89b-12d3-a456-426614170003"
@@ -414,18 +430,6 @@ class WorkflowStepRenderer {
             }
         }.trim()
 
-    private fun alertEmailHeaderText(preview: WorkflowStepPreview): String {
-        return listOf(alertEmailEmoji(preview), preview.title)
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
-    }
-
-    private fun alertEmailEmoji(preview: WorkflowStepPreview): String {
-        val status = previewFieldValue(preview, "Status")
-        if (status == "Resolved") return "✅"
-        return if (preview.color == ALERT_COLOR_RED) "🔴" else "⚠️"
-    }
-
     private fun previewFieldValue(
         preview: WorkflowStepPreview,
         label: String
@@ -436,90 +440,241 @@ class WorkflowStepRenderer {
             .orEmpty()
 
     private fun buildAlertLifecycleHtml(preview: WorkflowStepPreview): String {
-        val fieldRows = preview.fields.chunked(2).joinToString("") { row ->
-            val cells =
-                row.joinToString("") { field ->
-                    """
-                    <td style="width:50%;padding:0 20px 16px 0;vertical-align:top;">
-                        <div style="font-size:14px;line-height:20px;font-weight:700;color:#334155;">
-                            ${field.label.escapeHtml()}:
-                        </div>
-                        <div style="font-size:14px;line-height:20px;color:#475569;word-break:break-word;">
-                            ${field.value.escapeHtml()}
-                        </div>
-                    </td>
-                    """.trimIndent()
-                }
-            val filler =
-                if (row.size == 1) {
-                    """<td style="width:50%;padding:0 20px 16px 0;vertical-align:top;"></td>"""
-                } else {
-                    ""
-                }
-            "<tr>$cells$filler</tr>"
-        }
-        val ctaHtml =
-            if (!preview.ctaUrl.isNullOrBlank() && !preview.ctaLabel.isNullOrBlank()) {
-                """
-                <div style="margin-top:20px;">
-                    <a href="${preview.ctaUrl.escapeHtml()}" style="display:inline-block;background:#111827;
-                        color:#f8fafc;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700;
-                        font-size:14px;line-height:20px;">
-                        ${preview.ctaLabel.escapeHtml()}
-                    </a>
-                </div>
-                """.trimIndent()
-            } else {
-                ""
-            }
-        val appHeader = alertEmailHeaderText(preview).escapeHtml()
-        val accentColor = preview.color.escapeHtml()
-        val logoUrl = moneatFaviconUrl().escapeHtml()
+        val theme = alertLifecycleEmailTheme(preview)
+        val title = preview.title.escapeHtml()
+        val source = preview.footer?.ifBlank { null } ?: "Moneat alert"
+        val status = previewFieldValue(preview, "Status")
+        val priority = previewFieldValue(preview, "Priority")
+        val chips = alertLifecycleChips(status, priority, source, theme)
+        val detailRows = alertLifecycleDetailRows(preview.fields)
+        val detailsSection = alertLifecycleDetailsSection(detailRows)
+        val ctaSection = alertLifecycleCtaSection(preview)
+        val preheader = "${preview.title}: ${preview.body}".escapeHtml()
+        val sourceLabel = source.escapeHtml()
+        val topAccent = theme.accentColor.escapeHtml()
+        val statusLabel = status.ifBlank { "Alert" }.escapeHtml()
+        val year = java.time.Year.now().value
         return """
-            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;
-                padding:24px;">
-                <div style="max-width:640px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;
-                    background:#ffffff;color:#0f172a;padding:24px;">
-                    <table role="presentation" style="width:100%;border-collapse:collapse;margin:0;">
-                        <tr>
-                            <td style="width:48px;padding:0 12px 0 0;vertical-align:top;">
-                                <div style="width:40px;height:40px;border-radius:10px;background:#ffffff;
-                                    border:1px solid #e2e8f0;text-align:center;">
-                                    <img src="$logoUrl" width="40" height="40" alt="Moneat" style="display:block;
-                                        width:40px;height:40px;border-radius:10px;">
-                                </div>
-                            </td>
-                            <td style="padding:0;vertical-align:top;">
-                                <div style="font-size:14px;line-height:20px;font-weight:700;color:#0f172a;">Moneat</div>
-                                <div style="margin-top:10px;font-size:18px;line-height:26px;font-weight:700;
-                                    color:#0f172a;">
-                                    $appHeader
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
-                    <div style="margin-top:20px;border-top:4px solid $accentColor;padding-top:18px;">
-                        <div style="margin:0 0 18px;color:#334155;font-size:14px;line-height:21px;">
-                            ${preview.body.toHtmlLines()}
-                        </div>
-                        <table role="presentation" style="width:100%;border-collapse:collapse;margin:0;">
-                            $fieldRows
-                        </table>
-                        $ctaHtml
-                        <div style="margin-top:18px;color:#64748b;font-size:12px;line-height:18px;">
-                            Added by Moneat
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <!doctype html>
+            <html lang="en"><head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta name="x-apple-disable-message-reformatting">
+            <meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light">
+            <title>$title</title>
+            <style>
+              body{margin:0;padding:0;-webkit-font-smoothing:antialiased;}
+              a{text-decoration:none;}
+              img{border:0;outline:none;-ms-interpolation-mode:bicubic;}
+              table{border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;}
+              @media only screen and (max-width:600px){
+                .shell{width:100% !important;border-radius:0 !important;border-left:0 !important;
+                  border-right:0 !important;}
+                .px{padding-left:18px !important;padding-right:18px !important;}
+              }
+            </style>
+            </head>
+            <body style="margin:0;padding:0;background:$EMAIL_BACKGROUND;">
+            <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;
+              line-height:1px;color:$EMAIL_BACKGROUND;">$preheader</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+              style="background:$EMAIL_BACKGROUND;">
+            <tr><td align="center" style="padding:28px 12px;">
+            <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0"
+              border="0"><tr><td><![endif]-->
+            <table role="presentation" class="shell" align="center" width="100%" cellpadding="0" cellspacing="0"
+              border="0" style="width:100%;max-width:600px;background:#ffffff;border:1px solid $EMAIL_BORDER;
+              border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(16,18,26,0.09);">
+            <tr><td style="height:3px;line-height:3px;font-size:0;background:$topAccent;">&nbsp;</td></tr>
+            <tr><td class="px" style="padding:15px 28px;background:$EMAIL_HEADER_BACKGROUND;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+            <td style="vertical-align:middle;">
+              <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+              <td style="vertical-align:middle;"><img src="$EMAIL_LOGO_URL" width="24" height="24" alt="Moneat"
+                style="display:block;border:0;outline:none;width:24px;height:24px;"></td>
+              <td style="vertical-align:middle;padding-left:9px;"><span
+                style="font:700 17px/24px $EMAIL_SANS;color:#ffffff;letter-spacing:0;">moneat</span></td>
+              </tr></table>
+            </td>
+            <td align="right" style="vertical-align:middle;"><span
+              style="font:600 11px/1 $EMAIL_MONO;letter-spacing:0.04em;color:#8fcde8;text-transform:uppercase;">
+              $sourceLabel</span></td>
+            </tr></table>
+            </td></tr>
+            <tr><td class="px" style="padding:20px 28px 18px;background:#ffffff;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td><div style="font:600 11px/1 $EMAIL_MONO;letter-spacing:0.08em;text-transform:uppercase;
+                  color:$EMAIL_TEXT_MUTED;">Alert workflow</div></td>
+                <td align="right"><span style="font:500 11px/1 $EMAIL_MONO;color:$EMAIL_TEXT_SUBTLE;">
+                  $statusLabel</span></td>
+              </tr></table>
+              <h1 style="margin:11px 0 0;font:600 19px/1.32 $EMAIL_SANS;color:$EMAIL_TEXT_STRONG;
+                letter-spacing:0;">$title</h1>
+              $chips
+            </td></tr>
+            <tr><td class="px" style="padding:20px 28px 20px;background:$EMAIL_BACKGROUND;
+              border-top:1px solid $EMAIL_BORDER_MUTED;">
+              <div style="font:600 11px/1 $EMAIL_MONO;letter-spacing:0.08em;text-transform:uppercase;
+                color:$EMAIL_TEXT_MUTED;">Summary</div>
+              <div style="margin-top:9px;font:400 13px/1.6 $EMAIL_SANS;color:$EMAIL_TEXT;">
+                ${preview.body.toHtmlLines()}
+              </div>
+            </td></tr>
+            $detailsSection
+            $ctaSection
+            <tr><td class="px" style="padding:22px 28px 26px;background:$EMAIL_BACKGROUND;
+              border-top:1px solid $EMAIL_BORDER_MUTED;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+              <div style="margin-bottom:9px;">
+                <img src="$EMAIL_LOGO_URL" width="16" height="16" alt=""
+                  style="display:inline-block;border:0;outline:none;width:16px;height:16px;vertical-align:middle;">
+                <span style="vertical-align:middle;font:700 13px/16px $EMAIL_SANS;color:$EMAIL_TEXT;
+                  padding-left:7px;">moneat</span>
+              </div>
+              <p style="margin:0 0 9px;font:400 12px/1.5 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;">
+                You're receiving this because an alert workflow emailed your organization.</p>
+              <p style="margin:0;font:400 11px/1.4 $EMAIL_SANS;color:$EMAIL_TEXT_SUBTLE;">
+                &copy; $year Moneat &middot; 1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, USA</p>
+            </td></tr></table>
+            </td></tr>
+            </table>
+            <table role="presentation" class="shell" align="center" width="100%" cellpadding="0" cellspacing="0"
+              style="width:100%;max-width:600px;"><tr><td align="center" style="padding:16px 28px 4px;">
+            <p style="margin:0;font:400 11px/1.5 $EMAIL_SANS;color:$EMAIL_TEXT_SUBTLE;">Sent by Moneat &middot;
+              You can adjust alert workflows from workflow settings.</p>
+            </td></tr></table>
+            <!--[if mso]></td></tr></table><![endif]-->
+            </td></tr></table>
+            </body></html>
         """.trimIndent()
     }
 
-    private fun moneatFaviconUrl(): String {
-        val frontendUrl = EnvConfig.get("FRONTEND_URL", "https://moneat.io").trimEnd('/')
-        return "$frontendUrl/favicon.svg"
+    private fun alertLifecycleChips(
+        status: String,
+        priority: String,
+        source: String,
+        theme: AlertEmailTheme
+    ): String {
+        val cells =
+            listOf(
+                status.takeIf { it.isNotBlank() }?.let { alertLifecycleChipCell(it, theme, primary = true) },
+                priority.takeIf { it.isNotBlank() }?.let { alertLifecycleChipCell(it, theme, primary = false) },
+                source.takeIf { it.isNotBlank() }?.let { alertLifecycleChipCell(it, theme, primary = false) }
+            ).filterNotNull().joinToString("")
+        return if (cells.isBlank()) {
+            ""
+        } else {
+            """
+            <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:13px;">
+              <tr>$cells</tr>
+            </table>
+            """.trimIndent()
+        }
+    }
+
+    private fun alertLifecycleChipCell(
+        label: String,
+        theme: AlertEmailTheme,
+        primary: Boolean
+    ): String {
+        val dot =
+            if (primary) {
+                """<span style="display:inline-block;width:8px;height:8px;border-radius:999px;""" +
+                    """background:${theme.accentColor};vertical-align:middle;"></span> """
+            } else {
+                ""
+            }
+        val background = if (primary) theme.badgeBackground else "#eef0f4"
+        val color = if (primary) theme.badgeText else "#353a45"
+        val border = if (primary) theme.badgeBorder else EMAIL_BORDER
+        return """
+            <td style="vertical-align:middle;padding-right:9px;">
+              $dot<span style="display:inline-block;padding:3px 8px;border-radius:6px;background:$background;
+                color:$color;border:1px solid $border;font:600 11px/1.3 $EMAIL_SANS;vertical-align:middle;">
+                ${label.escapeHtml()}</span>
+            </td>
+        """.trimIndent()
+    }
+
+    private fun alertLifecycleDetailRows(fields: List<WorkflowPreviewField>): String =
+        fields.joinToString("") { field ->
+            """
+            <tr>
+              <td style="padding:9px 0;border-top:1px solid $EMAIL_BORDER_MUTED;font:500 12px/1.4 $EMAIL_SANS;
+                color:$EMAIL_TEXT_MUTED;vertical-align:top;width:40%;">${field.label.escapeHtml()}</td>
+              <td style="padding:9px 0;border-top:1px solid $EMAIL_BORDER_MUTED;text-align:right;
+                font:500 13px/1.5 $EMAIL_SANS;color:$EMAIL_TEXT;vertical-align:top;word-break:break-word;">
+                ${field.value.escapeHtml()}</td>
+            </tr>
+            """.trimIndent()
+        }
+
+    private fun alertLifecycleDetailsSection(detailRows: String): String =
+        if (detailRows.isBlank()) {
+            ""
+        } else {
+            """
+            <tr><td class="px" style="padding:20px 28px 20px;background:#ffffff;
+              border-top:1px solid $EMAIL_BORDER_MUTED;">
+              <div style="font:600 11px/1 $EMAIL_MONO;letter-spacing:0.08em;text-transform:uppercase;
+                color:$EMAIL_TEXT_MUTED;">Details</div>
+              <div style="height:8px;"></div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                $detailRows
+              </table>
+            </td></tr>
+            """.trimIndent()
+        }
+
+    private fun alertLifecycleCtaSection(preview: WorkflowStepPreview): String {
+        val ctaUrl = preview.ctaUrl?.takeIf { it.isNotBlank() } ?: return ""
+        val ctaLabel = preview.ctaLabel?.takeIf { it.isNotBlank() } ?: VIEW_CTA_LABEL
+        return """
+            <tr><td class="px" style="padding:20px 28px 20px;background:#ffffff;
+              border-top:1px solid $EMAIL_BORDER_MUTED;">
+              <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="$EMAIL_TEXT"
+                style="border-radius:8px;"><a href="${ctaUrl.escapeHtml()}"
+                style="display:inline-block;padding:13px 22px;font:600 14px/1 $EMAIL_SANS;color:#ffffff;
+                border-radius:8px;">${ctaLabel.escapeHtml()} alert &rarr;</a></td></tr></table>
+              <div style="height:16px;"></div>
+              <table role="presentation" cellpadding="0" cellspacing="0"><tr><td>
+                <a href="${ctaUrl.escapeHtml()}" style="font:500 13px/1 $EMAIL_SANS;color:$EMAIL_LINK;">
+                  Open in Moneat</a></td></tr></table>
+            </td></tr>
+        """.trimIndent()
+    }
+
+    private fun alertLifecycleEmailTheme(preview: WorkflowStepPreview): AlertEmailTheme {
+        val status = previewFieldValue(preview, "Status")
+        return when {
+            status == "Resolved" -> AlertEmailTheme(
+                accentColor = EMAIL_ACCENT_GREEN,
+                badgeBackground = "#ecfdf7",
+                badgeBorder = "#9ee7d0",
+                badgeText = "#0d755b"
+            )
+            preview.color == ALERT_COLOR_RED -> AlertEmailTheme(
+                accentColor = EMAIL_ACCENT_RED,
+                badgeBackground = "#fdecec",
+                badgeBorder = "#f3b3b5",
+                badgeText = "#ad1a1f"
+            )
+            else -> AlertEmailTheme(
+                accentColor = EMAIL_ACCENT_YELLOW,
+                badgeBackground = "#fff8db",
+                badgeBorder = "#f3d36a",
+                badgeText = "#7c5d00"
+            )
+        }
     }
 }
+
+private data class AlertEmailTheme(
+    val accentColor: String,
+    val badgeBackground: String,
+    val badgeBorder: String,
+    val badgeText: String
+)
 
 internal fun interpolate(
     template: String,
