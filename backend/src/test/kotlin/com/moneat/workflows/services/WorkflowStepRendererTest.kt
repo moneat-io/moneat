@@ -233,9 +233,31 @@ class WorkflowStepRendererTest {
         assertTrue(htmlBody.contains("Error issue"))
         assertTrue(htmlBody.contains("View alert &rarr;"))
         assertTrue(htmlBody.contains("Open in Moneat"))
+        assertTrue(htmlBody.contains("#cf2126"))
         assertFalse(htmlBody.contains("Added by Moneat"))
         assertFalse(htmlBody.contains("favicon.svg"))
         assertFalse(htmlBody.contains("#E01E5A"))
+    }
+
+    @Test
+    fun `lifecycle email omits unsafe cta urls`() {
+        val preview =
+            renderer.renderStepPreview(
+                lifecycleStep(EMAIL_ORG_STEP),
+                mapOf(
+                    ALERT_TITLE_REFERENCE to "New Issue: Client request failed",
+                    ALERT_DESCRIPTION_REFERENCE to "Bandapella reported ERROR: Client request failed",
+                    ALERT_STATUS_REFERENCE to "FIRING",
+                    ALERT_PRIORITY_REFERENCE to "P1",
+                    ALERT_SOURCE_REFERENCE to "ERROR_ALERT",
+                    ALERT_URL_REFERENCE to "javascript:alert(1)"
+                )
+            )
+        val htmlBody = preview.htmlBody
+        assertNotNull(htmlBody)
+        assertFalse(htmlBody.contains("javascript:alert"))
+        assertFalse(htmlBody.contains("View alert &rarr;"))
+        assertFalse(htmlBody.contains("Open in Moneat"))
     }
 
     @Test

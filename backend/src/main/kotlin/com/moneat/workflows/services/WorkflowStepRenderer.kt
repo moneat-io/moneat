@@ -627,7 +627,7 @@ class WorkflowStepRenderer {
         }
 
     private fun alertLifecycleCtaSection(preview: WorkflowStepPreview): String {
-        val ctaUrl = preview.ctaUrl?.takeIf { it.isNotBlank() } ?: return ""
+        val ctaUrl = safeEmailCtaUrl(preview.ctaUrl) ?: return ""
         val ctaLabel = preview.ctaLabel?.takeIf { it.isNotBlank() } ?: VIEW_CTA_LABEL
         return """
             <tr><td class="px" style="padding:20px 28px 20px;background:#ffffff;
@@ -643,6 +643,20 @@ class WorkflowStepRenderer {
             </td></tr>
         """.trimIndent()
     }
+
+    private fun safeEmailCtaUrl(url: String?): String? {
+        val uri =
+            url
+                ?.takeIf { it.isNotBlank() }
+                ?.let { raw -> runCatching { java.net.URI(raw) }.getOrNull() }
+                ?: return null
+        return uri
+            .takeIf { it.isAbsolute && isSafeEmailCtaScheme(it.scheme) }
+            ?.toASCIIString()
+    }
+
+    private fun isSafeEmailCtaScheme(scheme: String?): Boolean =
+        scheme.equals("https", ignoreCase = true) || scheme.equals("http", ignoreCase = true)
 
     private fun alertLifecycleEmailTheme(preview: WorkflowStepPreview): AlertEmailTheme {
         val status = previewFieldValue(preview, "Status")
