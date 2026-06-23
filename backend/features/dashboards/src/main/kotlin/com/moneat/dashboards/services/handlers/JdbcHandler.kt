@@ -259,7 +259,9 @@ abstract class JdbcHandler(
             java.text.Normalizer.normalize(query, java.text.Normalizer.Form.NFKC)
         )
         val trimmed = normalized.trim().uppercase()
-        require(trimmed.startsWith("SELECT")) { "Only SELECT queries are allowed" }
+        require(trimmed.startsWith("SELECT") || trimmed.startsWith("WITH")) {
+            "Only SELECT or WITH queries are allowed"
+        }
         require(!hasSemicolonOutsideQuotes(normalized)) { "Multiple statements are not allowed" }
         for ((pattern, name) in forbiddenKeywords()) {
             require(!pattern.containsMatchIn(normalized)) { "$name statements are not allowed" }
