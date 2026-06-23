@@ -88,6 +88,7 @@ private const val EMAIL_TEXT_STRONG = "#0e1016"
 private const val EMAIL_TEXT_MUTED = "#6b7280"
 private const val EMAIL_TEXT_SUBTLE = "#9aa1ae"
 private const val EMAIL_LOGO_URL = "https://moneat.io/email/logo-mark.png"
+private const val DEFAULT_ALERT_SOURCE_LABEL = "Moneat alert"
 private const val EMAIL_SANS =
     "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 private const val EMAIL_MONO =
@@ -349,7 +350,7 @@ class WorkflowStepRenderer {
             }
         return prefixes.fold(title.orEmpty()) { current, prefix ->
             current.removePrefix(prefix)
-        }.ifBlank { "Moneat alert" }
+        }.ifBlank { DEFAULT_ALERT_SOURCE_LABEL }
     }
 
     private fun alertLifecycleFields(scope: Map<String, String>): List<WorkflowPreviewField> {
@@ -406,7 +407,7 @@ class WorkflowStepRenderer {
             "UPTIME_MONITOR" -> "Uptime monitor"
             "SYNTHETIC_TEST" -> "Synthetic test"
             "ERROR_ALERT" -> "Error issue"
-            else -> humanizeEnum(source).ifBlank { "Moneat alert" }
+            else -> humanizeEnum(source).ifBlank { DEFAULT_ALERT_SOURCE_LABEL }
         }
 
     private fun buildAlertText(
@@ -442,7 +443,7 @@ class WorkflowStepRenderer {
     private fun buildAlertLifecycleHtml(preview: WorkflowStepPreview): String {
         val theme = alertLifecycleEmailTheme(preview)
         val title = preview.title.escapeHtml()
-        val source = preview.footer?.ifBlank { null } ?: "Moneat alert"
+        val source = preview.footer?.ifBlank { null } ?: DEFAULT_ALERT_SOURCE_LABEL
         val status = previewFieldValue(preview, "Status")
         val priority = previewFieldValue(preview, "Priority")
         val chips = alertLifecycleChips(status, priority, source, theme)
@@ -656,7 +657,10 @@ class WorkflowStepRenderer {
     }
 
     private fun isSafeEmailCtaScheme(scheme: String?): Boolean =
-        scheme.equals("https", ignoreCase = true) || scheme.equals("http", ignoreCase = true)
+        when (scheme?.lowercase()) {
+            "https", "http" -> true
+            else -> false
+        }
 
     private fun alertLifecycleEmailTheme(preview: WorkflowStepPreview): AlertEmailTheme {
         val status = previewFieldValue(preview, "Status")
