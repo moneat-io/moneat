@@ -1,62 +1,21 @@
-<table class="w-full" width="100%" cellpadding="0" cellspacing="0" role="presentation">
-  <tr>
-    <td class="email-pad px-8 py-6 bg-neutral-50 border-t border-neutral-200">
-      <table class="w-full" width="100%" cellpadding="0" cellspacing="0" role="presentation">
-        <!-- Divider line -->
-        <tr>
-          <td class="pb-5">
-            <table class="w-full" width="100%" cellpadding="0" cellspacing="0" role="presentation">
-              <tr>
-                <td class="h-px bg-neutral-200" style="line-height: 1px; font-size: 1px;">&nbsp;</td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td class="text-center">
-            <table cellpadding="0" cellspacing="0" role="presentation" class="mx-auto" style="margin: 0 auto;">
-              <tr>
-                <td style="vertical-align: middle; padding-right: 6px;">
-                  <img
-                    src="https://moneat.io/favicon.svg"
-                    width="18"
-                    height="18"
-                    alt=""
-                    style="
-                      display: block;
-                      width: 18px;
-                      height: 18px;
-                      border: 0;
-                      outline: none;
-                      text-decoration: none;
-                    "
-                  >
-                </td>
-                <td style="vertical-align: middle;">
-                  <p class="m-0" style="font-size: 11px; line-height: 18px; font-weight: 700; color: #262626;">moneat</p>
-                </td>
-              </tr>
-            </table>
-
-            <!-- Notification info -->
-            <p class="m-0 mt-3 text-xs text-neutral-500 leading-relaxed">
-              You're receiving this because you have notifications enabled.
-            </p>
-
-            <!-- Action links -->
-            <p class="m-0 mt-2 text-xs">
-              <a href="{{ settingsUrl }}" class="text-neutral-600 underline" style="color: #525252; text-decoration: underline;">Manage preferences</a>
-              <span class="text-neutral-300 mx-2">&middot;</span>
-              <a href="{{ unsubscribeUrl }}" class="text-neutral-500 underline" style="color: #737373; text-decoration: underline;">Unsubscribe</a>
-            </p>
-
-            <!-- Copyright -->
-            <p class="m-0 mt-4 text-xs text-neutral-400">
-              &copy; {{ year }} Moneat. All rights reserved.
-            </p>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>
+<tr>
+  <td class="px" style="padding:22px 28px 26px;background:#f7f8fa;border-top:1px solid #e4e7ec;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center">
+          <div style="margin-bottom:9px;">
+            <img src="https://moneat.io/email/logo-mark.png" width="16" height="16" alt="" style="display:inline-block;border:0;outline:none;width:16px;height:16px;vertical-align:middle;">
+            <span style="vertical-align:middle;font:700 13px/16px 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#161922;padding-left:7px;">moneat</span>
+          </div>
+          <p style="margin:0 0 9px;font:400 12px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#6b7280;">You're receiving this because notifications are enabled for your account.</p>
+          <p style="margin:0 0 12px;font:400 12px/1.5 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+            <a href="{{ settingsUrl }}" style="color:#0369a1;">Manage preferences</a>
+            <span style="color:#c2c8d2;padding:0 7px;">&middot;</span>
+            <a href="{{ unsubscribeUrl }}" style="color:#6b7280;">Unsubscribe</a>
+          </p>
+          <p style="margin:0;font:400 11px/1.4 'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#9aa1ae;">&copy; {{ year }} Moneat &middot; 1235 East Blvd, Ste E PMB 2045, Charlotte, NC 28203, USA</p>
+        </td>
+      </tr>
+    </table>
+  </td>
+</tr>

@@ -102,10 +102,13 @@ class OrgInvitationService(
         if (inviterAndOrg != null) {
             emailService.sendInvitationEmail(
                 toEmail = normalizedEmail,
-                inviterName = inviterAndOrg.inviterName ?: inviterAndOrg.inviterEmail,
-                orgName = inviterAndOrg.orgName,
-                role = role,
-                token = token
+                data = EmailService.InvitationEmailData(
+                    inviterName = inviterAndOrg.inviterName ?: inviterAndOrg.inviterEmail,
+                    inviterEmail = inviterAndOrg.inviterEmail,
+                    orgName = inviterAndOrg.orgName,
+                    role = role,
+                    token = token
+                )
             )
         }
 
@@ -244,10 +247,13 @@ class OrgInvitationService(
         if (inviterAndOrg != null) {
             emailService.sendInvitationEmail(
                 toEmail = invite.email,
-                inviterName = inviterAndOrg.inviterName ?: inviterAndOrg.inviterEmail,
-                orgName = inviterAndOrg.orgName,
-                role = invite.role,
-                token = newToken
+                data = EmailService.InvitationEmailData(
+                    inviterName = inviterAndOrg.inviterName ?: inviterAndOrg.inviterEmail,
+                    inviterEmail = inviterAndOrg.inviterEmail,
+                    orgName = inviterAndOrg.orgName,
+                    role = invite.role,
+                    token = newToken
+                )
             )
         }
 

@@ -31,25 +31,6 @@ private val json = Json { ignoreUnknownKeys = true }
 private const val OTLP_SPAN_STATUS_ERROR = 2
 
 /**
- * Extracted exception data from an OTLP span event with name="exception".
- */
-data class OtlpExceptionEvent(
-    val traceIdHex: String,
-    val spanIdHex: String,
-    val organizationId: Long,
-    val projectId: Long?,
-    val serviceNamespace: String,
-    val service: String,
-    val environment: String,
-    val host: String,
-    val serviceVersion: String,
-    val exceptionType: String,
-    val exceptionMessage: String,
-    val stackTrace: String,
-    val timestampMs: Long,
-)
-
-/**
  * Extracts exception events from OTLP span data.
  *
  * OTLP encodes errors as span events with name="exception" carrying:

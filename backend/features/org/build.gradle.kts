@@ -21,6 +21,7 @@ val rootBackendTestOutput = rootBackendSourceSets.named("test").get().output
 
 dependencies {
     compileOnly(project(":"))
+    compileOnly(project(":features:ai"))
     compileOnly(project(":features:billing"))
     compileOnly(project(":features:monitoring"))
     implementation(project(":feature-spi"))
@@ -41,6 +42,7 @@ dependencies {
     detektPlugins(libs.detekt.formatting)
 
     testImplementation(project(":"))
+    testImplementation(project(":features:ai"))
     testImplementation(project(":features:billing"))
     testImplementation(project(":features:monitoring"))
     testImplementation(rootBackendTestOutput)
