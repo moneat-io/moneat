@@ -367,8 +367,11 @@ class WorkflowServiceTest {
         val emailPreview = response.previews.first { it.channel == "email" }
         assertEquals("[Moneat] P3 Resolved: Worker failures detected", emailPreview.subject)
         assertEquals("#2EB67D", emailPreview.color)
-        assertTrue(emailPreview.htmlBody.orEmpty().contains("View"))
-        assertTrue(emailPreview.htmlBody.orEmpty().contains("/favicon.svg"))
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("Alert workflow"))
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("View alert &rarr;"))
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("https://moneat.io/email/logo-mark.png"))
+        assertTrue(emailPreview.htmlBody.orEmpty().contains("Sent by Moneat"))
+        assertFalse(emailPreview.htmlBody.orEmpty().contains("/favicon.svg"))
         assertFalse(emailPreview.htmlBody.orEmpty().contains(">APP</span>"))
         assertTrue(emailPreview.fields.any { it.label == "Dashboard" })
         assertTrue(emailPreview.fields.any { it.label == "Priority" && it.value == "P3" })
@@ -446,7 +449,13 @@ class WorkflowServiceTest {
                 emailService.sendEmail(
                     "verified@moneat.io",
                     "[Moneat] P1 Worker failures detected",
-                    match { it.contains("Added by Moneat") && it.contains("/favicon.svg") },
+                    match {
+                        it.contains("Alert workflow") &&
+                            it.contains("View alert &rarr;") &&
+                            it.contains("https://moneat.io/email/logo-mark.png") &&
+                            it.contains("Sent by Moneat") &&
+                            !it.contains("/favicon.svg")
+                    },
                     match { it.contains("View: https://moneat.io/dashboards/13") },
                     "workflow"
                 )

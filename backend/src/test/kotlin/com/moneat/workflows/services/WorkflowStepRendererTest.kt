@@ -172,7 +172,10 @@ class WorkflowStepRendererTest {
         assertEquals("[Moneat] P3 Resolved: Worker failures", preview.subject)
         val htmlBody = preview.htmlBody
         assertNotNull(htmlBody)
-        assertTrue(htmlBody.contains("Added by Moneat"))
+        assertTrue(htmlBody.contains("https://moneat.io/email/logo-mark.png"))
+        assertTrue(htmlBody.contains("Sent by Moneat"))
+        assertTrue(htmlBody.contains("You're receiving this because an alert workflow emailed your organization."))
+        assertFalse(htmlBody.contains("Added by Moneat"))
     }
 
     @Test
@@ -206,6 +209,55 @@ class WorkflowStepRendererTest {
         assertEquals("Moneat detected an alert lifecycle event.", preview.body)
         // Unknown source is humanized with each word capitalized.
         assertEquals("Custom Source", preview.footer)
+    }
+
+    @Test
+    fun `lifecycle error issue email uses redesigned alert shell`() {
+        val preview =
+            renderer.renderStepPreview(
+                lifecycleStep(EMAIL_ORG_STEP),
+                mapOf(
+                    ALERT_TITLE_REFERENCE to "New Issue: Client request failed",
+                    ALERT_DESCRIPTION_REFERENCE to "Bandapella reported ERROR: Client request failed",
+                    ALERT_STATUS_REFERENCE to "FIRING",
+                    ALERT_PRIORITY_REFERENCE to "P1",
+                    ALERT_SOURCE_REFERENCE to "ERROR_ALERT",
+                    ALERT_URL_REFERENCE to "https://moneat.io/issues/issue-1"
+                )
+            )
+        assertEquals("P1 New Issue: Client request failed", preview.title)
+        val htmlBody = preview.htmlBody
+        assertNotNull(htmlBody)
+        assertTrue(htmlBody.contains("background:#082f49"))
+        assertTrue(htmlBody.contains("Alert workflow"))
+        assertTrue(htmlBody.contains("Error issue"))
+        assertTrue(htmlBody.contains("View alert &rarr;"))
+        assertTrue(htmlBody.contains("Open in Moneat"))
+        assertTrue(htmlBody.contains("#cf2126"))
+        assertFalse(htmlBody.contains("Added by Moneat"))
+        assertFalse(htmlBody.contains("favicon.svg"))
+        assertFalse(htmlBody.contains("#E01E5A"))
+    }
+
+    @Test
+    fun `lifecycle email omits unsafe cta urls`() {
+        val preview =
+            renderer.renderStepPreview(
+                lifecycleStep(EMAIL_ORG_STEP),
+                mapOf(
+                    ALERT_TITLE_REFERENCE to "New Issue: Client request failed",
+                    ALERT_DESCRIPTION_REFERENCE to "Bandapella reported ERROR: Client request failed",
+                    ALERT_STATUS_REFERENCE to "FIRING",
+                    ALERT_PRIORITY_REFERENCE to "P1",
+                    ALERT_SOURCE_REFERENCE to "ERROR_ALERT",
+                    ALERT_URL_REFERENCE to "javascript:alert(1)"
+                )
+            )
+        val htmlBody = preview.htmlBody
+        assertNotNull(htmlBody)
+        assertFalse(htmlBody.contains("javascript:alert"))
+        assertFalse(htmlBody.contains("View alert &rarr;"))
+        assertFalse(htmlBody.contains("Open in Moneat"))
     }
 
     @Test
