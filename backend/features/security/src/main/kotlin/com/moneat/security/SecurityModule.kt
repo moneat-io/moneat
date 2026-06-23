@@ -16,9 +16,13 @@
 
 package com.moneat.security
 
+import com.moneat.enterprise.DemoDataFeatureSeeder
+import com.moneat.enterprise.DetectionSignalEvidenceBridge
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.security.detection.DetectionScheduler
+import com.moneat.security.detection.RuleQueryCompiler
 import com.moneat.security.detection.detectionRuleRoutes
+import com.moneat.security.detection.seedDemoDetectionRules
 import com.moneat.security.signals.signalRoutes
 import com.moneat.security.vulnerabilities.VulnerabilityAdvisorySyncJob
 import com.moneat.security.vulnerabilities.vulnerabilityRoutes
@@ -31,7 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
-class SecurityModule : EnterpriseModule {
+class SecurityModule : EnterpriseModule, DemoDataFeatureSeeder, DetectionSignalEvidenceBridge {
     override val name: String = "Security"
 
     private var detectionScheduler: DetectionScheduler? = null
@@ -45,6 +49,13 @@ class SecurityModule : EnterpriseModule {
             vulnerabilityRoutes()
         }
     }
+
+    override suspend fun seedDemoData() {
+        seedDemoDetectionRules()
+    }
+
+    override fun entityPredicate(column: String, value: String, escape: (String) -> String): String? =
+        RuleQueryCompiler.entityPredicate(column, value, escape)
 
     override fun startBackgroundJobs(application: Application) {
         startBackgroundJobs(application, startSchedulers = true, startIngestionWorkers = true)

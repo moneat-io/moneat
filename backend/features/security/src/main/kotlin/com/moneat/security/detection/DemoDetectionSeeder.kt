@@ -14,11 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-package com.moneat.config
+package com.moneat.security.detection
 
-import com.moneat.security.detection.DetectionRuleService
-import com.moneat.security.detection.DetectionRules
-import com.moneat.security.detection.DetectionStarterPack
 import com.moneat.utils.suspendRunCatching
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
