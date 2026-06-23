@@ -984,6 +984,14 @@ function InfiniteScrollFooter({
   )
 }
 
+function clearExistingRouteSearch(prev: Record<string, unknown>): Record<string, undefined> {
+  const clearedSearch: Record<string, undefined> = {}
+  for (const key of Object.keys(prev)) {
+    clearedSearch[key] = undefined
+  }
+  return clearedSearch
+}
+
 export function LogExplorer({
   systemId,
   initialQuery = '',
@@ -1098,7 +1106,7 @@ export function LogExplorer({
   useEffect(() => {
     const shouldNormalizeLegacyFacetUrl =
       enableUrlSync &&
-      typeof globalThis.window !== 'undefined' &&
+      globalThis.window !== undefined &&
       new URLSearchParams(globalThis.window.location.search).has('facets')
     if (!enableUrlSync || (isHydratingRef.current && !shouldNormalizeLegacyFacetUrl)) return
     
@@ -1125,9 +1133,7 @@ export function LogExplorer({
       isHydratingRef.current = true
       navigate({
         search: ((prev: Record<string, unknown>) => {
-          const clearedSearch = Object.fromEntries(
-            Object.keys(prev).map((key) => [key, undefined])
-          )
+          const clearedSearch = clearExistingRouteSearch(prev)
           return {...clearedSearch, ...newSearch}
         }) as never,
         replace: true,

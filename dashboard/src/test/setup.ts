@@ -29,7 +29,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
 afterEach(() => {
   server.resetHandlers()
   cleanup()
-  window.history.replaceState(window.history.state, '', '/')
+  globalThis.window.history.replaceState(globalThis.window.history.state, '', '/')
 })
 
 // Cleanup MSW server after all tests

@@ -596,12 +596,12 @@ function clearApmFacetSearch(prev: Record<string, unknown>): Record<string, unkn
 }
 
 function hasLegacyIssueFacetParam(): boolean {
-  if (typeof globalThis.window === 'undefined') return false
+  if (globalThis.window === undefined) return false
   return new URLSearchParams(globalThis.window.location.search).has('facets')
 }
 
 function hasLegacyApmFacetParam(): boolean {
-  if (typeof globalThis.window === 'undefined') return false
+  if (globalThis.window === undefined) return false
   return new URLSearchParams(globalThis.window.location.search).has('afacets')
 }
 
@@ -731,7 +731,7 @@ function useIssueFacetUrlState() {
 }
 
 function isDoubleStringifiedFacetSearchParam(name: string): boolean {
-  if (typeof globalThis.window === 'undefined') return false
+  if (globalThis.window === undefined) return false
   return new URLSearchParams(globalThis.window.location.search).get(name)?.startsWith('"') ?? false
 }
 

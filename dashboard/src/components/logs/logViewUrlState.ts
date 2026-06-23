@@ -16,7 +16,6 @@
 
 import {type FacetFilter} from '@/lib/filters/types'
 import {
-  parseFacetFiltersParam,
   parseReadableFacetFilters,
   type ReadableFacetSearchValue,
   serializeReadableFacetFilters,
@@ -99,80 +98,139 @@ export function parseLogViewFacetFilters(
 }
 
 /**
+ * Parse facet filters from a JSON string. Delegates to the shared explorer
+ * helper so logs and other ExplorerShell surfaces share one facet URL encoding.
+ */
+export {parseFacetFiltersParam as parseFacetFiltersFromUrl} from '@/lib/filters/urlState'
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined
+}
+
+function trimmedString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function parseLevelsSearchValue(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value) return undefined
+  const parsed = value.split(',').filter(Boolean)
+  return parsed.length > 0 ? parsed.join(',') : undefined
+}
+
+function parseDateSearchValue(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : value
+}
+
+function parseVizSearchValue(value: unknown): LogVizMode | undefined {
+  if (typeof value !== 'string') return undefined
+  const vizMode = value === 'list' ? 'timeseries' : value
+  return VALID_VIZ_MODES.includes(vizMode as LogVizMode) ? (vizMode as LogVizMode) : undefined
+}
+
+function parseGroupBySearchValue(value: unknown): string | undefined {
+  const groupBy = trimmedString(value)
+  return groupBy && VALID_GROUP_BY_VALUES.includes(groupBy) ? groupBy : undefined
+}
+
+function createEmptyLogViewSearch(): Partial<LogViewSearch> {
+  const result: Partial<LogViewSearch> = {
+    q: undefined,
+    levels: undefined,
+    facets: undefined,
+    timePreset: undefined,
+    from: undefined,
+    to: undefined,
+    viz: undefined,
+    groupBy: undefined,
+    topField: undefined,
+    cursor: undefined,
+    logId: undefined,
+  }
+  const clearableSearch = result as Record<string, unknown>
+  for (const key of LOG_FACET_URL_KEYS) {
+    clearableSearch[key] = undefined
+    clearableSearch[`exclude_${key}`] = undefined
+  }
+  return result
+}
+
+function serializeLevelsValue(levels: string[] | undefined): string | undefined {
+  return levels && levels.length > 0 && levels.length < 6 ? levels.join(',') : undefined
+}
+
+function serializeDateValue(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+}
+
+function serializeTimeRangeSearch(state: {
+  timePreset?: string
+  customFrom?: string
+  customTo?: string
+}): Partial<LogViewSearch> {
+  const result: Partial<LogViewSearch> = {}
+  if (state.timePreset && state.timePreset !== '15m') {
+    result.timePreset = state.timePreset
+  }
+  if (state.timePreset !== 'custom') return result
+
+  const from = serializeDateValue(state.customFrom)
+  const to = serializeDateValue(state.customTo)
+  if (from) result.from = from
+  if (to) result.to = to
+  return result
+}
+
+function serializeGroupByValue(groupBy: string | undefined): string | undefined {
+  if (groupBy === '') return NO_LOG_GROUP_BY_URL_VALUE
+  const trimmedGroupBy = groupBy?.trim()
+  return trimmedGroupBy && trimmedGroupBy !== DEFAULT_LOG_GROUP_BY ? trimmedGroupBy : undefined
+}
+
+/**
  * Parse URL search params into normalized log view state.
  * Defensively handles malformed or invalid values.
  */
 export function parseLogViewSearch(search: Record<string, unknown>): LogViewSearch {
   const result: LogViewSearch = {}
-  
-  // Query
-  if (typeof search.q === 'string' && search.q.trim()) {
-    result.q = search.q.trim()
-  }
-  
-  // Levels
-  if (typeof search.levels === 'string' && search.levels) {
-    const parsed = search.levels.split(',').filter(Boolean)
-    if (parsed.length > 0) {
-      result.levels = parsed.join(',')
-    }
-  }
-  
-  // Facet filters. Prefer readable params (`service=api`); keep legacy
-  // `facets=` JSON as input-only compatibility.
+
+  const query = trimmedString(search.q)
+  if (query) result.q = query
+
+  const levels = parseLevelsSearchValue(search.levels)
+  if (levels) result.levels = levels
+
   const facetFilters = parseLogViewFacetFilters(search)
   if (facetFilters) {
     Object.assign(result, serializeReadableFacetFilters(facetFilters, LOG_FACET_URL_KEYS))
   }
-  
-  // Time preset
+
   if (typeof search.timePreset === 'string' && VALID_TIME_PRESETS.includes(search.timePreset)) {
     result.timePreset = search.timePreset
   }
-  
-  // Custom time range
-  if (typeof search.from === 'string') {
-    const date = new Date(search.from)
-    if (!Number.isNaN(date.getTime())) {
-      result.from = search.from
-    }
-  }
-  if (typeof search.to === 'string') {
-    const date = new Date(search.to)
-    if (!Number.isNaN(date.getTime())) {
-      result.to = search.to
-    }
-  }
-  
-  // Viz mode - migrate 'list' to 'timeseries' for backwards compatibility
-  if (typeof search.viz === 'string') {
-    const vizMode = search.viz === 'list' ? 'timeseries' : search.viz
-    if (VALID_VIZ_MODES.includes(vizMode as LogVizMode)) {
-      result.viz = vizMode as LogVizMode
-    }
-  }
-  
-  // Group by / top field
-  if (typeof search.groupBy === 'string') {
-    const groupBy = search.groupBy.trim()
-    if (VALID_GROUP_BY_VALUES.includes(groupBy)) {
-      result.groupBy = groupBy
-    }
-  }
-  if (typeof search.topField === 'string' && search.topField.trim()) {
-    result.topField = search.topField.trim()
-  }
-  
-  // Cursor
-  if (typeof search.cursor === 'string' && search.cursor) {
-    result.cursor = search.cursor
-  }
-  
-  // Selected log ID
-  if (typeof search.logId === 'string' && search.logId) {
-    result.logId = search.logId
-  }
-  
+
+  const from = parseDateSearchValue(search.from)
+  const to = parseDateSearchValue(search.to)
+  if (from) result.from = from
+  if (to) result.to = to
+
+  const viz = parseVizSearchValue(search.viz)
+  const groupBy = parseGroupBySearchValue(search.groupBy)
+  const topField = trimmedString(search.topField)
+  if (viz) result.viz = viz
+  if (groupBy) result.groupBy = groupBy
+  if (topField) result.topField = topField
+
+  const cursor = nonEmptyString(search.cursor)
+  const logId = nonEmptyString(search.logId)
+  if (cursor) result.cursor = cursor
+  if (logId) result.logId = logId
+
   return result
 }
 
@@ -193,80 +251,30 @@ export function serializeLogViewState(state: {
   cursor?: string | null
   selectedLogId?: string | null
 }): Partial<LogViewSearch> {
-  const result: Partial<LogViewSearch> = {
-    q: undefined,
-    levels: undefined,
-    facets: undefined,
-    timePreset: undefined,
-    from: undefined,
-    to: undefined,
-    viz: undefined,
-    groupBy: undefined,
-    topField: undefined,
-    cursor: undefined,
-    logId: undefined,
-  }
-  const clearableSearch = result as Record<string, unknown>
-  for (const key of LOG_FACET_URL_KEYS) {
-    clearableSearch[key] = undefined
-    clearableSearch[`exclude_${key}`] = undefined
-  }
-  
-  // Query
-  if (state.query && state.query.trim()) {
-    result.q = state.query.trim()
-  }
-  
-  // Levels (only if custom selection)
-  if (state.levels && state.levels.length > 0 && state.levels.length < 6) {
-    result.levels = state.levels.join(',')
-  }
-  
-  // Facet filters
-  if (state.facetFilters && state.facetFilters.length > 0) {
+  const result = createEmptyLogViewSearch()
+
+  const query = trimmedString(state.query)
+  const levels = serializeLevelsValue(state.levels)
+  const groupBy = serializeGroupByValue(state.groupBy)
+  const topField = trimmedString(state.topField)
+  if (query) result.q = query
+  if (levels) result.levels = levels
+
+  if (state.facetFilters?.length) {
     Object.assign(result, serializeReadableFacetFilters(state.facetFilters, LOG_FACET_URL_KEYS))
   }
-  
-  // Time range
-  if (state.timePreset && state.timePreset !== '15m') {
-    result.timePreset = state.timePreset
-  }
-  if (state.timePreset === 'custom') {
-    if (state.customFrom) {
-      const date = new Date(state.customFrom)
-      if (!Number.isNaN(date.getTime())) {
-        result.from = date.toISOString()
-      }
-    }
-    if (state.customTo) {
-      const date = new Date(state.customTo)
-      if (!Number.isNaN(date.getTime())) {
-        result.to = date.toISOString()
-      }
-    }
-  }
-  
-  // Viz mode (omit default "timeseries")
+
+  Object.assign(result, serializeTimeRangeSearch(state))
+
   if (state.vizMode && state.vizMode !== 'timeseries') {
     result.viz = state.vizMode
   }
-  
-  // Group by / top field
-  if (state.groupBy === '') {
-    result.groupBy = NO_LOG_GROUP_BY_URL_VALUE
-  } else if (state.groupBy && state.groupBy.trim() && state.groupBy !== DEFAULT_LOG_GROUP_BY) {
-    result.groupBy = state.groupBy.trim()
-  }
-  if (state.topField && state.topField.trim() && state.topField !== 'service') {
-    result.topField = state.topField.trim()
-  }
-  
-  // Cursor
+  if (groupBy) result.groupBy = groupBy
+  if (topField && topField !== 'service') result.topField = topField
+
   if (state.cursor) {
     result.cursor = state.cursor
   }
-  
-  // Selected log ID
   if (state.selectedLogId) {
     result.logId = state.selectedLogId
   }
@@ -279,13 +287,6 @@ export function resolveLogGroupBy(groupBy: string | undefined): string {
   if (groupBy && VALID_GROUP_BY_VALUES.includes(groupBy)) return groupBy
   return DEFAULT_LOG_GROUP_BY
 }
-
-/**
- * Parse facet filters from a JSON string. Delegates to the shared explorer
- * helper ({@link parseFacetFiltersParam}) so logs and other ExplorerShell
- * surfaces share one facet URL encoding.
- */
-export const parseFacetFiltersFromUrl = parseFacetFiltersParam
 
 /**
  * Parse levels from comma-separated string

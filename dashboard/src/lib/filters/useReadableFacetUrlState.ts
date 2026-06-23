@@ -44,12 +44,12 @@ function searchParamsToRecord(params: URLSearchParams): Record<string, unknown> 
   const record: Record<string, string | string[]> = {}
   for (const [key, value] of params.entries()) {
     const current = record[key]
-    if (Array.isArray(current)) {
-      current.push(value)
-    } else if (current !== undefined) {
-      record[key] = [current, value]
-    } else {
+    if (current === undefined) {
       record[key] = value
+    } else if (Array.isArray(current)) {
+      current.push(value)
+    } else {
+      record[key] = [current, value]
     }
   }
   return record
@@ -61,7 +61,7 @@ function readUrlState({
   defaultFacetFilters = EMPTY_FACET_FILTERS,
   syncQuery = true,
 }: ReadableFacetUrlStateOptions): Pick<ReadableFacetUrlState, 'query' | 'facetFilters'> {
-  if (typeof globalThis.window === 'undefined') {
+  if (globalThis.window === undefined) {
     return {query: defaultQuery, facetFilters: [...defaultFacetFilters]}
   }
 
@@ -116,7 +116,7 @@ function readableFacetUrlMatchesCurrentSearch(
   facetFilters: readonly FacetFilter[],
   options: ReadableFacetUrlStateOptions
 ): boolean {
-  if (typeof globalThis.window === 'undefined') return true
+  if (globalThis.window === undefined) return true
 
   const url = applyReadableFacetSearchToUrl(new URL(globalThis.window.location.href), query, facetFilters, options)
 
@@ -138,7 +138,7 @@ function replaceReadableFacetUrl(
   facetFilters: readonly FacetFilter[],
   options: ReadableFacetUrlStateOptions
 ): void {
-  if (typeof globalThis.window === 'undefined') return
+  if (globalThis.window === undefined) return
 
   const url = applyReadableFacetSearchToUrl(new URL(globalThis.window.location.href), query, facetFilters, options)
   globalThis.window.history.replaceState(globalThis.window.history.state, '', `${url.pathname}${url.search}${url.hash}`)
@@ -159,7 +159,7 @@ export function useReadableFacetUrlState({
   const applyingUrlStateRef = useRef(false)
 
   useEffect(() => {
-    if (typeof globalThis.window === 'undefined') return undefined
+    if (globalThis.window === undefined) return undefined
 
     const handlePopState = () => {
       const nextState = readUrlState(options)
