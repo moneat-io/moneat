@@ -19,7 +19,7 @@ package com.moneat.security.signals
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.isClickHouseError
-import com.moneat.security.detection.RuleQueryCompiler
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.security.threatintel.ThreatIntelService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
@@ -354,29 +354,28 @@ class SignalService(
     /**
      * Evidence for a detection-rule signal: recent log rows for the entity this signal fired on, scoped
      * by org and by **every** group-by dimension the rule keyed on — top-level columns and `tags[…]` /
-     * `resource_attributes[…]` map access alike — via [RuleQueryCompiler.entityPredicate], which reuses
+     * `resource_attributes[…]` map access alike — via the detection feature evidence bridge, which reuses
      * the detection whitelist + escaping. The query is org-injected via [ClickHouseQueryUtils.orgIdClause]
      * (org clause first) and every entity value/key is escaped, so a crafted entity can neither widen the
      * scope past the calling org nor alter query structure.
      *
      * Detection evidence is **entity-scoped by design**, not rule-filter-scoped: the signal persists
-     * only its group-by entity values and a schema-free evidence descriptor (see
-     * [com.moneat.security.detection.RuleQueryCompiler]'s `evidenceDescriptor`), never the compiled
+     * only its group-by entity values and a schema-free evidence descriptor, never the compiled
      * filter/WHERE, so it is not reachable here. As a result this sample may include rows that match the
      * entity but not the rule's original filter — it answers "what is this entity doing now," which is
-     * the intended triage view, rather than replaying the exact matched set. Re-running the rule's
-     * compiled filter is the [com.moneat.security.detection.DetectionRuleService.preview] path.
+     * the intended triage view, rather than replaying the exact matched set.
      */
     private suspend fun fetchDetectionSamples(orgId: Int, signal: SignalResponse): List<JsonElement> {
         val db = ClickHouseClient.getDatabase()
         val conditions = mutableListOf(ClickHouseQueryUtils.orgIdClause(orgId.toLong()))
+        val evidenceBridge = FeatureRegistry.getDetectionSignalEvidenceBridge()
         // Re-scope on every dimension the rule grouped on — service/host/environment/container_name AND
         // tags[…]/resource_attributes[…] (and any other whitelisted column) — so a map-grouped signal
         // does not fall back to org-wide samples of unrelated logs. Each predicate reuses the detection
         // whitelist + escaping; non-whitelisted/blank entity keys are skipped.
         signal.entities.forEach { (column, value) ->
             if (value.isBlank()) return@forEach
-            RuleQueryCompiler.entityPredicate(column, value, ::escapeSql)?.let { conditions.add(it) }
+            evidenceBridge?.entityPredicate(column, value, ::escapeSql)?.let { conditions.add(it) }
         }
         val where = conditions.joinToString(" AND ")
         return executeSamples(
