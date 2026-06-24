@@ -54,6 +54,7 @@ import {
     Sparkles,
     Timer,
     Workflow,
+    X,
 } from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {Tooltip, TooltipContent, TooltipTrigger} from '@/components/ui/tooltip'
@@ -86,6 +87,12 @@ interface SidebarProps {
   readonly isExpanded: boolean
   readonly onExpandedChange: (expanded: boolean) => void
   readonly headerHeight: number
+  /** Render as an off-canvas drawer (viewport below the `md` breakpoint). */
+  readonly isMobile?: boolean
+  /** Whether the mobile drawer is currently open. */
+  readonly isMobileOpen?: boolean
+  /** Toggle the mobile drawer open/closed. */
+  readonly onMobileOpenChange?: (open: boolean) => void
 }
 
 function getInitials(name?: string) {
@@ -93,10 +100,21 @@ function getInitials(name?: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
-export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarProps) {
+export function Sidebar({
+  isExpanded,
+  onExpandedChange,
+  headerHeight,
+  isMobile = false,
+  isMobileOpen = false,
+  onMobileOpenChange,
+}: SidebarProps) {
   const router = useRouterState()
   const currentPath = router.location.pathname
   const navigate = useNavigate()
+  // In the mobile drawer the rail is always full-width with labels; the
+  // collapsed icon-only rail is a desktop-only affordance.
+  const expanded = isMobile ? true : isExpanded
+  const closeMobileDrawer = () => onMobileOpenChange?.(false)
   const queryClient = useQueryClient()
   const { toast } = useToast()
   const { data: features } = useEnterpriseFeatures()
@@ -293,18 +311,29 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
   const renderSidebarContent = () => (
     <>
       {/* Logo at top */}
-      <div className={cn('shrink-0 border-b flex items-center justify-center h-[var(--app-header-h)]', isExpanded ? 'px-2.5' : 'px-1.5')}>
+      <div className={cn('shrink-0 border-b flex items-center h-[var(--app-header-h)]', expanded ? 'px-2.5' : 'px-1.5', expanded && isMobile ? 'justify-between' : 'justify-center')}>
         <Link
           to="/"
           search={APP_OVERVIEW_SEARCH}
+          onClick={closeMobileDrawer}
           className="flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-ring rounded"
         >
-          {isExpanded ? <Logo className="h-6" /> : <Logo markOnly className="h-6 w-8" />}
+          {expanded ? <Logo className="h-6" /> : <Logo markOnly className="h-6 w-8" />}
         </Link>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={closeMobileDrawer}
+            aria-label="Close navigation"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
       {/* Search bar */}
       <div className="shrink-0 border-b flex items-center h-[var(--app-subheader-h)] px-1.5">
-        {isExpanded ? (
+        {expanded ? (
           <button
             type="button"
             onClick={() => openPalette?.()}
@@ -339,17 +368,17 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       {/* Navigation Items */}
       <nav
         className={cn(
-          'flex-1 overflow-y-auto overscroll-contain',
-          isExpanded
+          'min-h-0 flex-1 overflow-y-auto overscroll-contain',
+          expanded
             ? 'p-1.5'
             : 'py-1.5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]'
         )}
       >
-        <div className={cn(!isExpanded && 'px-1.5')}>
+        <div className={cn(!expanded && 'px-1.5')}>
           {navGroups.map((group, groupIndex) => (
             <div key={group.id}>
               {groupIndex > 0 && <FadingDivider />}
-              {isExpanded && (
+              {expanded && (
                 <div className="px-2.5 pt-0.5 pb-0.5">
                   <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
                     {group.label}
@@ -374,19 +403,21 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                     <Link
                       key={item.href}
                       to={item.href}
+                      onClick={closeMobileDrawer}
                       className={cn(
-                        'flex items-center gap-2 py-1.5 rounded-md transition-colors',
-                        isExpanded ? 'px-2.5' : 'px-1.5',
+                        'flex items-center gap-2 rounded-md transition-colors',
+                        isMobile ? 'py-2.5' : 'py-1.5',
+                        expanded ? 'px-2.5' : 'px-1.5',
                         isActive
                           ? 'bg-[hsl(var(--sidebar-active))] text-[hsl(var(--sidebar-active-foreground))]'
                           : 'hover:bg-accent text-muted-foreground hover:text-foreground',
-                        !isExpanded && 'justify-center'
+                        !expanded && 'justify-center'
                       )}
                     >
-                      <Icon className="h-4 w-4 flex-shrink-0" />
-                      {isExpanded && (
+                      <Icon className={cn('flex-shrink-0', isMobile ? 'h-[18px] w-[18px]' : 'h-4 w-4')} />
+                      {expanded && (
                         <div className="flex items-center gap-1.5 flex-1">
-                          <span className="text-xs font-medium">{item.label}</span>
+                          <span className={cn('font-medium', isMobile ? 'text-sm' : 'text-xs')}>{item.label}</span>
                           {item.badge && (
                             <Badge variant="secondary" className="h-3 px-1 text-[9px] font-medium">
                               {item.badge}
@@ -397,7 +428,7 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                     </Link>
                   )
 
-                  if (!isExpanded) {
+                  if (!expanded) {
                     return (
                       <Tooltip key={item.href}>
                         <TooltipTrigger asChild>
@@ -419,8 +450,8 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
       </nav>
 
       {/* Bottom Section - compact single row when expanded */}
-      <div className={cn('border-t p-1.5', isExpanded ? 'py-1' : 'space-y-0.5')}>
-        {isExpanded ? (
+      <div className={cn('shrink-0 border-t p-1.5', expanded ? 'py-1' : 'space-y-0.5')}>
+        {expanded ? (
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -448,21 +479,23 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
                 <p>Docs</p>
               </TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => onExpandedChange(false)}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>Collapse</p>
-              </TooltipContent>
-            </Tooltip>
+            {!isMobile && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onExpandedChange(false)}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Collapse</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
             <div className="ml-auto shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -560,13 +593,30 @@ export function Sidebar({ isExpanded, onExpandedChange, headerHeight }: SidebarP
 
   return (
     <>
-      {/* Fixed Sidebar */}
+      {/* Mobile drawer backdrop */}
+      {isMobile && (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden={!isMobileOpen}
+          onClick={closeMobileDrawer}
+          className={cn(
+            'fixed inset-x-0 bottom-0 z-40 bg-black/50 transition-opacity duration-300',
+            isMobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+          )}
+          style={{top: headerHeight}}
+        />
+      )}
+      {/* Fixed sidebar (desktop rail) / off-canvas drawer (mobile) */}
       <div
         className={cn(
-          'sidebar fixed left-0 bg-card border-r flex flex-col transition-all duration-300 z-40',
-          isExpanded ? 'w-44' : 'w-14'
+          'sidebar fixed left-0 bg-card border-r flex flex-col transition-transform duration-300',
+          isMobile
+            ? cn('z-50 w-[min(82vw,288px)] shadow-2xl', !isMobileOpen && '-translate-x-full')
+            : cn('z-40 transition-all', isExpanded ? 'w-44' : 'w-14')
         )}
-        style={{top: headerHeight, height: `calc(100vh - ${headerHeight}px)`}}
+        style={{top: headerHeight, height: `calc(100dvh - ${headerHeight}px)`}}
+        inert={isMobile && !isMobileOpen ? true : undefined}
       >
         {renderSidebarContent()}
       </div>

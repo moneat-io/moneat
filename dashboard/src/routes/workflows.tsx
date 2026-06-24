@@ -226,7 +226,7 @@ function WorkflowsPage() {
   return (
     <div className="workflows-page">
       <WorkflowsHeader onCreate={openCreate} />
-      <div className="grid gap-4 px-6 py-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 px-3 py-4 sm:px-6 lg:grid-cols-[320px_minmax(0,1fr)]">
         <WorkflowList
           workflows={workflows}
           catalog={catalog}
@@ -459,7 +459,7 @@ function WorkflowDetail({
             )}
           </div>
         </div>
-        <div className="grid gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
           <WorkflowCanvas
             graph={workflow.graph}
             catalog={catalog}
@@ -585,7 +585,7 @@ function WorkflowEditorDialog({
             Configure a workflow automation graph with triggers, conditions, controls, and actions.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)_360px]">
           <div className="space-y-3">
             <WorkflowDraftFields draft={draft} catalog={catalog} onDraftChange={onDraftChange} onTriggerChange={changeTrigger} />
             <NodePalette catalog={catalog} onAddNode={addNode} />

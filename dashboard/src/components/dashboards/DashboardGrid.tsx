@@ -31,6 +31,19 @@ const GRID_COLS = {lg: 12, md: 12, sm: 12, xs: 6}
 const GRID_MARGIN: [number, number] = [12, 12]
 const LEGACY_SMALL_WIDGET_TYPES = new Set(['stat', 'gauge', 'bargauge'])
 
+// Below this container width the drag-grid is replaced by a simple stacked layout:
+// small KPI/stat tiles sit two-up, everything else spans the full width.
+const MOBILE_STACK_MAX_WIDTH = 640
+const SMALL_MOBILE_WIDGET_TYPES = new Set(['stat', 'gauge', 'bargauge', 'kpi'])
+
+function mobileWidgetHeightPx(widget: DashboardWidget): number | undefined {
+  if (widget.widget_type === 'section') return 36
+  // Banner / text size to their own content so wrapped lines aren't clipped.
+  if (widget.widget_type === 'system_status' || widget.widget_type === 'text') return undefined
+  const rows = widget.grid_h
+  return Math.max(rows * 40 + (rows - 1) * 12, 100)
+}
+
 interface DashboardGridProps {
   widgets: DashboardWidget[]
   isEditing: boolean
@@ -258,6 +271,51 @@ export function DashboardGrid({
     return (
       <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
         This dashboard has no widgets yet. Click Edit to add some.
+      </div>
+    )
+  }
+
+  // Mobile: drop the drag-grid and stack widgets. Small KPI/stat tiles share a
+  // two-column row; charts, tables and sections take the full width.
+  if (width > 0 && width < MOBILE_STACK_MAX_WIDTH) {
+    return (
+      <div ref={containerRef} className="relative z-0 w-full">
+        <div className="grid grid-cols-2 items-start gap-3">
+          {visibleWidgets.map((widget) => {
+            const isSmall = SMALL_MOBILE_WIDGET_TYPES.has(widget.widget_type)
+            const widgetHeight = mobileWidgetHeightPx(widget)
+            return (
+              <div
+                key={String(widget.id)}
+                className={isSmall ? 'min-w-0' : 'col-span-2 min-w-0'}
+                style={widgetHeight === undefined ? undefined : {height: widgetHeight}}
+              >
+                {widget.widget_type === 'section' ? (
+                  <SectionHeader
+                    widget={widget}
+                    isEditing={false}
+                    isCollapsed={collapsedSections.has(widget.id)}
+                    onToggle={() => toggleSection(widget.id)}
+                    onDelete={() => onWidgetDelete(widget.id)}
+                  />
+                ) : (
+                  <WidgetCard
+                    widget={widget}
+                    isEditing={false}
+                    dashboardId={dashboardId}
+                    projectId={projectId}
+                    timeRange={timeRange}
+                    autoRefresh={autoRefresh}
+                    variableValues={variableValues}
+                    alerts={alerts}
+                    onWidgetClick={onWidgetClick}
+                    onWidgetDelete={onWidgetDelete}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
   }

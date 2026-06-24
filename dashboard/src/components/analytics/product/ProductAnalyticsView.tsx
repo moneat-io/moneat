@@ -77,12 +77,12 @@ export function ProductAnalyticsView({
     <div className="space-y-3">
       <ProductKpiBand data={summary.data} isLoading={summary.isLoading} />
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.85fr)_minmax(0,1fr)]">
         <ProductActivityChart data={activity.data} isLoading={activity.isLoading} />
         <ProductMovers data={movers.data} isLoading={movers.isLoading} />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <ProductActivationFunnel scopeId={scopeId} params={params} />
         <ProductEventTrends data={eventTrends.data} isLoading={eventTrends.isLoading} />
       </div>

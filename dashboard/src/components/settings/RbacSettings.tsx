@@ -431,7 +431,7 @@ function PermissionChecklist({
           </Badge>
         </div>
 
-        <div className="grid min-h-[320px] md:grid-cols-[260px_1fr]">
+        <div className="grid grid-cols-1 min-h-[320px] md:grid-cols-[260px_1fr]">
           <div className="border-b bg-muted/30 p-2 md:border-b-0 md:border-r">
             <div className="flex max-h-52 flex-col gap-1 overflow-y-auto md:max-h-[360px]">
               {visibleGroups.map((group) => {
@@ -975,7 +975,7 @@ export function RbacSettings() {
       ) : roles.length === 0 ? (
         <EmptyRolesState onCreate={() => setCreateOpen(true)} />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(260px,360px),1fr]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(260px,360px),1fr]">
           <RoleList roles={roles} selectedRoleId={effectiveSelectedRoleId} onSelectRole={setSelectedRoleId} />
           {selectedRole && (
             <RoleDetails

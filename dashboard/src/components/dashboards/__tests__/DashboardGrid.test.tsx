@@ -253,4 +253,40 @@ describe('DashboardGrid', () => {
       expect.objectContaining({id: WIDGET_ID, grid_x: 1, grid_y: 2, grid_w: 5, grid_h: 4}),
     ])
   })
+
+  it('stacks widgets instead of the drag-grid at mobile container widths', () => {
+    // Force a narrow container so the grid drops the drag layout and stacks.
+    const proto = HTMLElement.prototype
+    const original = Object.getOwnPropertyDescriptor(proto, 'offsetWidth')
+    Object.defineProperty(proto, 'offsetWidth', {configurable: true, get: () => 400})
+
+    try {
+      const {container} = render(
+        <DashboardGrid
+          widgets={[
+            {...widget, id: 'w-stat', widget_type: 'stat', title: 'Error rate'},
+            widget,
+          ]}
+          isEditing={false}
+          dashboardId={DASHBOARD_ID}
+          timeRange={{from: 'now-24h', to: 'now'}}
+          autoRefresh={false}
+          onLayoutChange={vi.fn()}
+          onWidgetClick={vi.fn()}
+          onWidgetDelete={vi.fn()}
+        />
+      )
+
+      expect(screen.queryByTestId('responsive-grid-layout')).not.toBeInTheDocument()
+      expect(container.querySelector('.grid-cols-2')).toBeInTheDocument()
+      expect(screen.getByText('Dependency p95 check latency')).toBeInTheDocument()
+      expect(screen.getByText('Error rate')).toBeInTheDocument()
+    } finally {
+      if (original) {
+        Object.defineProperty(proto, 'offsetWidth', original)
+      } else {
+        delete (proto as {offsetWidth?: number}).offsetWidth
+      }
+    }
+  })
 })

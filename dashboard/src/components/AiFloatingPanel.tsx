@@ -27,8 +27,15 @@ const RESIZE_HANDLE = 8
 
 export function AiFloatingPanel() {
   const palette = useCommandPalette()
-  const [pos, setPos] = useState({x: window.innerWidth - DEFAULT_WIDTH - 24, y: 80})
-  const [size, setSize] = useState({w: DEFAULT_WIDTH, h: DEFAULT_HEIGHT})
+  // Clamp the initial window to the viewport so it stays usable on small/mobile screens.
+  const [size, setSize] = useState(() => ({
+    w: Math.min(DEFAULT_WIDTH, window.innerWidth - 16),
+    h: Math.min(DEFAULT_HEIGHT, window.innerHeight - 96),
+  }))
+  const [pos, setPos] = useState(() => {
+    const w = Math.min(DEFAULT_WIDTH, window.innerWidth - 16)
+    return {x: Math.max(8, window.innerWidth - w - 24), y: 80}
+  })
   const dragOffset = useRef<{x: number; y: number} | null>(null)
   const resizeStart = useRef<{mx: number; my: number; w: number; h: number} | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
