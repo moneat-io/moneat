@@ -16,9 +16,14 @@
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
+import {useMemo} from 'react'
 import {api} from '@/lib/api'
 import {LogExplorer} from '@/components/logs/LogExplorer'
-import {parseLogViewSearch, type LogViewSearch} from '@/components/logs/logViewUrlState'
+import {
+  parseLogViewFacetFilters,
+  parseLogViewSearch,
+  type LogViewSearch,
+} from '@/components/logs/logViewUrlState'
 
 export const Route = createFileRoute('/logs')({
   validateSearch: (search: Record<string, unknown>): LogViewSearch => {
@@ -34,6 +39,10 @@ export const Route = createFileRoute('/logs')({
 
 function LogsPage() {
   const search = Route.useSearch()
+  const urlSearch = useMemo<LogViewSearch>(
+    () => ({...search, facets: parseLogViewFacetFilters(search)}),
+    [search]
+  )
   const {data: sdkVersionsResponse} = useQuery({
     queryKey: ['sdk-versions'],
     queryFn: () => api.getSdkVersions(),
@@ -54,7 +63,7 @@ function LogsPage() {
         sdkVersions={sdkVersionsResponse?.versions}
         className="h-full"
         enableUrlSync={true}
-        urlSearch={search}
+        urlSearch={urlSearch}
       />
     </div>
   )

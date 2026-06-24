@@ -24,6 +24,7 @@ import {HelmetProvider} from 'react-helmet-async'
 import * as Sentry from '@sentry/react'
 import {initAnalytics} from './lib/analytics'
 import {shouldRetryQuery} from './lib/query-retry'
+import {stringifySearchWithRepeatedPrimitiveArrays} from './lib/routerSearch'
 import './index.css'
 
 function configuredEnv(value: string | undefined): string | undefined {
@@ -108,6 +109,7 @@ const router = createRouter({
   routeTree,
   context: { queryClient },
   scrollRestoration: true,
+  stringifySearch: stringifySearchWithRepeatedPrimitiveArrays,
 })
 
 declare module '@tanstack/react-router' {

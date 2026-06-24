@@ -29,12 +29,13 @@ import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot} from '@/components/ui/status-dot'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
   serviceScopeKey,
 } from '@/lib/service-facet-scope'
-import type {FacetFilter} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {parseDate} from '@/lib/date-format'
 
 export const Route = createFileRoute('/releases')({
@@ -73,9 +74,13 @@ function crashFreeTextClass(tone: CrashFreeTone): string {
 }
 
 function ReleasesPage() {
-  const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('latest')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: SERVICE_FACET_URL_KEYS})
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery({
     queryKey: ['projects'],

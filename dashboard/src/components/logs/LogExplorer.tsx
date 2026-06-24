@@ -984,6 +984,14 @@ function InfiniteScrollFooter({
   )
 }
 
+function clearExistingRouteSearch(prev: Record<string, unknown>): Record<string, undefined> {
+  const clearedSearch: Record<string, undefined> = {}
+  for (const key of Object.keys(prev)) {
+    clearedSearch[key] = undefined
+  }
+  return clearedSearch
+}
+
 export function LogExplorer({
   systemId,
   initialQuery = '',
@@ -1096,7 +1104,11 @@ export function LogExplorer({
   
   // Sync state to URL with debounce
   useEffect(() => {
-    if (!enableUrlSync || isHydratingRef.current) return
+    const shouldNormalizeLegacyFacetUrl =
+      enableUrlSync &&
+      globalThis.window !== undefined &&
+      new URLSearchParams(globalThis.window.location.search).has('facets')
+    if (!enableUrlSync || (isHydratingRef.current && !shouldNormalizeLegacyFacetUrl)) return
     
     if (syncTimeoutRef.current) {
       clearTimeout(syncTimeoutRef.current)
@@ -1120,7 +1132,10 @@ export function LogExplorer({
       // Prevent our own navigate() from triggering the hydration effect and resetting state
       isHydratingRef.current = true
       navigate({
-        search: newSearch as never,
+        search: ((prev: Record<string, unknown>) => {
+          const clearedSearch = clearExistingRouteSearch(prev)
+          return {...clearedSearch, ...newSearch}
+        }) as never,
         replace: true,
       })
       setTimeout(() => {

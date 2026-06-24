@@ -25,6 +25,7 @@ import {type KeyboardEvent, useCallback, useMemo, useState} from 'react'
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {Badge} from '@/components/ui/badge'
 import {EmptyState} from '@/components/ui/empty-state'
 import {Avatar, AvatarFallback} from '@/components/ui/avatar'
@@ -51,6 +52,7 @@ import {
   Video,
 } from 'lucide-react'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
@@ -100,6 +102,7 @@ function formatDate(isoString: string, timezone: string) {
 
 type ReplayPeriod = '24h' | '7d' | '30d' | '90d'
 type ReplayView = 'all' | 'errors' | 'mobile'
+const REPLAY_FACET_URL_KEYS = [...SERVICE_FACET_URL_KEYS, 'environment'] as const
 
 export const replaysHelperTestHooks = {
   ReplaysLayout,
@@ -374,8 +377,12 @@ function ReplaysPage() {
   const { timezone } = useTimezone()
   const [period, setPeriod] = useState<ReplayPeriod>('7d')
   const [page, setPage] = useState(1)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: REPLAY_FACET_URL_KEYS})
   const [view, setView] = useState<ReplayView>('all')
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery({

@@ -32,12 +32,13 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Brain, Coins, Clock, AlertTriangle, Hash, Zap, BookOpen, ArrowRight, TrendingUp } from 'lucide-react'
 import { ProviderLogo } from '@/components/icons/AiProviders'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
   serviceScopeKey,
 } from '@/lib/service-facet-scope'
-import type {FacetFilter} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 
 export const Route = createFileRoute('/ai/')({
   component: AiOverviewPage,
@@ -76,7 +77,10 @@ function llmBreakdowns(overview: LlmOverview | undefined) {
 
 function AiOverviewPage() {
   const [range, setRange] = useState('24h')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {facetFilters, setFacetFilters} = useReadableFacetUrlState({
+    facetKeys: SERVICE_FACET_URL_KEYS,
+    syncQuery: false,
+  })
 
   const {data: projects, isLoading: projectsLoading, error: projectsError} = useQuery({
     queryKey: ['projects'],

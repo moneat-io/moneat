@@ -8,7 +8,7 @@
 
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {useCallback, useMemo, useState} from 'react'
+import {useCallback, useEffect, useMemo, useState} from 'react'
 import {Flame} from 'lucide-react'
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
@@ -17,6 +17,7 @@ import {TimeRangePicker} from '@/components/filters/TimeRangePicker'
 import {ServiceExplorer} from '@/components/profiling/ServiceExplorer'
 import {api, type ProfileServiceSummary} from '@/lib/api'
 import type {FacetFilter, FacetRailSection, FacetSchema} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 
 export const Route = createFileRoute('/profiles/service/$service')({
   component: ServiceExplorerPage,
@@ -25,6 +26,7 @@ export const Route = createFileRoute('/profiles/service/$service')({
 type ProfileRangeKey = '1h' | '6h' | '24h' | '7d'
 
 const DEFAULT_PROFILE_RANGE: ProfileRangeKey = '24h'
+const PROFILE_SERVICE_FACET_URL_KEYS = ['service', 'env', 'type'] as const
 const PROFILE_TIME_PRESETS: Array<{
   label: string
   value: ProfileRangeKey
@@ -43,17 +45,25 @@ function ServiceExplorerPage() {
 }
 
 function SeededServiceExplorerPage({routeService}: Readonly<{routeService: string}>) {
-  const [query, setQuery] = useState('')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => [
-    serviceFacet(routeService),
-  ])
+  const defaultFacetFilters = useMemo(() => [serviceFacet(routeService)], [routeService])
+  const {query, setQuery, facetFilters, setFacetFilters} = useReadableFacetUrlState({
+    facetKeys: PROFILE_SERVICE_FACET_URL_KEYS,
+    defaultFacetFilters,
+  })
   const [timeRange, setTimeRange] = useState<ProfileRangeKey>(DEFAULT_PROFILE_RANGE)
   const handleFacetFiltersChange = useCallback(
     (filters: FacetFilter[]) => {
       setFacetFilters(lockServiceFacet(filters, routeService))
     },
-    [routeService],
+    [routeService, setFacetFilters],
   )
+
+  useEffect(() => {
+    const lockedFilters = lockServiceFacet(facetFilters, routeService)
+    if (JSON.stringify(lockedFilters) !== JSON.stringify(facetFilters)) {
+      setFacetFilters(lockedFilters)
+    }
+  }, [facetFilters, routeService, setFacetFilters])
 
   const {data: servicesData} = useQuery({
     queryKey: ['profileServices'],

@@ -41,6 +41,7 @@ import {ExplorerShell} from '@/components/filters/ExplorerShell'
 import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import type {FacetFilter, FacetRailSection, FacetSchema} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {Checkbox} from '@/components/ui/checkbox'
@@ -54,6 +55,7 @@ export const Route = createFileRoute('/synthetics/')({
 })
 
 type DerivedStatus = 'passing' | 'failing' | 'degraded' | 'paused'
+const SYNTHETICS_FACET_URL_KEYS = ['service', 'type', 'location', 'tag'] as const
 
 const TYPE_ICON: Record<string, React.ComponentType<{className?: string}>> = {
   api: FlaskConical,
@@ -285,8 +287,12 @@ function SyntheticsOverview() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const {toast} = useToast()
-  const [searchQuery, setSearchQuery] = useState('')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: SYNTHETICS_FACET_URL_KEYS})
   const [statusTab, setStatusTab] = useState<DerivedStatus | 'all'>('all')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 

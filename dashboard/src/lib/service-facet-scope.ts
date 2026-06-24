@@ -1,6 +1,8 @@
 import type {Issue, IssueListParams, Project} from '@/lib/api'
 import type {FacetFilter, FacetRailSection} from '@/lib/filters/types'
 
+export const SERVICE_FACET_URL_KEYS = ['service'] as const
+
 type ServiceList = readonly Project[] | null | undefined
 
 export const HOME_OVERVIEW_ISSUES_QUERY = {

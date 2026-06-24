@@ -17,6 +17,7 @@ import {FacetRail} from '@/components/filters/FacetRail'
 import {SearchFilterBar} from '@/components/filters/SearchFilterBar'
 import {api, type ProfileServiceSummary} from '@/lib/api'
 import type {FacetFilter, FacetRailSection, FacetSchema} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/profiles/')({
@@ -24,6 +25,7 @@ export const Route = createFileRoute('/profiles/')({
 })
 
 type ProfilesView = 'services' | 'all'
+const PROFILE_FACET_URL_KEYS = ['service', 'type'] as const
 
 const PROFILE_FACET_SCHEMA = [
   {
@@ -45,8 +47,9 @@ const PROFILE_FACET_SCHEMA = [
 
 function ProfilesIndexPage() {
   const [view, setView] = useState<ProfilesView>('services')
-  const [query, setQuery] = useState('')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {query, setQuery, facetFilters, setFacetFilters} = useReadableFacetUrlState({
+    facetKeys: PROFILE_FACET_URL_KEYS,
+  })
 
   const {data: servicesData} = useQuery({
     queryKey: ['profileServices'],

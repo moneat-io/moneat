@@ -69,6 +69,7 @@ vi.mock('@tanstack/react-router', () => ({
     options,
     useParams: () => ({ issueId: 'issue-123' }),
     useSearch: () => ({}),
+    useNavigate: () => mockNavigate,
   }),
   Link: ({ children, ...props }: { children: React.ReactNode }) => React.createElement('a', props, children),
   redirect: (opts: Record<string, unknown>) => ({ ...opts, __redirect: true }),

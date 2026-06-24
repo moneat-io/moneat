@@ -33,12 +33,14 @@ import {ProviderLogo} from '@/components/icons/AiProviders'
 import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
   serviceScopeKey,
 } from '@/lib/service-facet-scope'
 import type {FacetFilter} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 
 export const Route = createFileRoute('/ai/generations')({
   component: GenerationsPage,
@@ -63,7 +65,10 @@ function GenerationsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [typeFilter, setTypeFilter] = useState<string>('')
   const [selectedGenId, setSelectedGenId] = useState<string | null>(null)
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {facetFilters, setFacetFilters} = useReadableFacetUrlState({
+    facetKeys: SERVICE_FACET_URL_KEYS,
+    syncQuery: false,
+  })
 
   const {data: projects, isLoading: projectsLoading, error: projectsError} = useQuery({
     queryKey: ['projects'],
@@ -116,7 +121,7 @@ function GenerationsPage() {
     setFacetFilters(nextFilters)
     setPage(1)
     setSelectedGenId(null)
-  }, [])
+  }, [setFacetFilters])
 
   if (projectsLoading) {
     return <div className="p-8 text-sm text-muted-foreground">Loading generations...</div>

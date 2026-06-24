@@ -17,6 +17,7 @@
 import {describe, it, expect} from 'vitest'
 import {
   NO_LOG_GROUP_BY_URL_VALUE,
+  parseLogViewFacetFilters,
   parseLogViewSearch,
   parseFacetFiltersFromUrl,
   parseLevelsFromUrl,
@@ -47,10 +48,32 @@ describe('logViewUrlState', () => {
       expect(result.levels).toBe('error,warn,fatal')
     })
 
-    it('should parse valid facet filters JSON', () => {
-      const filters = [{key: 'service', value: 'api'}, {key: 'env', value: 'prod', exclude: true}]
+    it('should parse legacy facet filters JSON', () => {
+      const filters = [{key: 'service', value: 'api'}, {key: 'environment', value: 'prod', exclude: true}]
       const result = parseLogViewSearch({facets: JSON.stringify(filters)})
-      expect(result.facets).toBe(JSON.stringify(filters))
+      expect(result.service).toBe('api')
+      expect(result.exclude_environment).toBe('prod')
+      expect(parseLogViewFacetFilters(result)).toEqual(filters)
+    })
+
+    it('should parse readable facet params', () => {
+      const result = parseLogViewSearch({service: 'api', exclude_environment: 'dev'})
+      expect(result.service).toBe('api')
+      expect(result.exclude_environment).toBe('dev')
+      expect(parseLogViewFacetFilters(result)).toEqual([
+        {key: 'service', value: 'api'},
+        {key: 'environment', value: 'dev', exclude: true},
+      ])
+    })
+
+    it('should parse dynamic readable tag facet params', () => {
+      const result = parseLogViewSearch({region: 'us-east-1', exclude_http_status: '500'})
+      expect(result.region).toBe('us-east-1')
+      expect(result.exclude_http_status).toBe('500')
+      expect(parseLogViewFacetFilters(result)).toEqual([
+        {key: 'region', value: 'us-east-1'},
+        {key: 'http_status', value: '500', exclude: true},
+      ])
     })
 
     it('should ignore malformed facet JSON', () => {
@@ -129,7 +152,7 @@ describe('logViewUrlState', () => {
       const search = {
         q: 'error',
         levels: 'error,warn',
-        facets: JSON.stringify(facets),
+        service: 'api',
         timePreset: '1h',
         from: '2024-01-15T10:00:00Z',
         to: '2024-01-15T11:00:00Z',
@@ -142,7 +165,8 @@ describe('logViewUrlState', () => {
       const result = parseLogViewSearch(search)
       expect(result.q).toBe('error')
       expect(result.levels).toBe('error,warn')
-      expect(result.facets).toBe(JSON.stringify(facets))
+      expect(result.service).toBe('api')
+      expect(parseLogViewFacetFilters(result)).toEqual(facets)
       expect(result.timePreset).toBe('1h')
       expect(result.viz).toBe('table')
       expect(result.cursor).toBe('abc')
@@ -178,7 +202,35 @@ describe('logViewUrlState', () => {
     it('should include non-empty facet filters', () => {
       const filters: FacetFilter[] = [{key: 'service', value: 'api'}]
       const result = serializeLogViewState({facetFilters: filters})
-      expect(result.facets).toBe(JSON.stringify(filters))
+      expect(result.service).toBe('api')
+      expect(result.facets).toBeUndefined()
+    })
+
+    it('should include excluded readable facet filters', () => {
+      const filters: FacetFilter[] = [{key: 'environment', value: 'dev', exclude: true}]
+      const result = serializeLogViewState({facetFilters: filters})
+      expect(result.exclude_environment).toBe('dev')
+      expect(result.facets).toBeUndefined()
+    })
+
+    it('should include dynamic tag facet filters as readable params', () => {
+      const filters: FacetFilter[] = [
+        {key: 'region', value: 'us-east-1'},
+        {key: 'http_status', value: '500', exclude: true},
+      ]
+      const result = serializeLogViewState({facetFilters: filters})
+      expect(result.region).toBe('us-east-1')
+      expect(result.exclude_http_status).toBe('500')
+      expect(result.facets).toBeUndefined()
+      expect(parseLogViewFacetFilters(result)).toEqual(filters)
+    })
+
+    it('should preserve facet keys that collide with log URL params', () => {
+      const filters: FacetFilter[] = [{key: 'timePreset', value: 'custom-tag'}]
+      const result = serializeLogViewState({facetFilters: filters})
+      expect(result.timePreset).toBeUndefined()
+      expect(result.facets).toEqual(filters)
+      expect(parseLogViewFacetFilters(result)).toEqual(filters)
     })
 
     it('should omit default time preset (15m)', () => {
@@ -348,7 +400,8 @@ describe('logViewUrlState', () => {
 
       expect(parsed.q).toBe(state.query)
       expect(parsed.levels).toBe(state.levels.join(','))
-      expect(parsed.facets).toBe(JSON.stringify(state.facetFilters))
+      expect(parsed.service).toBe('api')
+      expect(parseLogViewFacetFilters(parsed)).toEqual(state.facetFilters)
       expect(parsed.timePreset).toBe(state.timePreset)
       expect(parsed.viz).toBe(state.vizMode)
       expect(parsed.groupBy).toBe(state.groupBy)
