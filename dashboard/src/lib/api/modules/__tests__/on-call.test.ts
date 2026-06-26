@@ -289,19 +289,19 @@ describe('onCallMethods', () => {
     })
   })
 
-  // ──── Incidents ────
+  // ──── Alerts ────
 
-  describe('getIncidents', () => {
-    it('fetches incidents without filters', async () => {
+  describe('getAlerts', () => {
+    it('fetches alerts without filters', async () => {
       const mock = [{ id: ALERT_ID_PRIMARY, title: 'Server Down', status: 'TRIGGERED' }]
       server.use(
         http.get(`${API_BASE}/on-call/alerts`, () => HttpResponse.json(mock))
       )
-      const result = await api.getIncidents()
+      const result = await api.getAlerts()
       expect(result).toEqual(mock)
     })
 
-    it('fetches incidents with filters', async () => {
+    it('fetches alerts with filters', async () => {
       const mock = [{ id: ALERT_ID_SECONDARY, title: 'High CPU', status: 'ACKNOWLEDGED' }]
       server.use(
         http.get(`${API_BASE}/on-call/alerts`, ({ request }) => {
@@ -313,7 +313,7 @@ describe('onCallMethods', () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getIncidents({
+      const result = await api.getAlerts({
         status: 'ACKNOWLEDGED',
         priority: 'P1',
         fromDate: '2025-01-01',
@@ -322,7 +322,7 @@ describe('onCallMethods', () => {
       expect(result).toEqual(mock)
     })
 
-    it('fetches incidents with multiple statuses', async () => {
+    it('fetches alerts with multiple statuses', async () => {
       const mock = [
         { id: ALERT_ID_PRIMARY, title: 'Server Down', status: 'TRIGGERED' },
         { id: ALERT_ID_SECONDARY, title: 'High CPU', status: 'ACKNOWLEDGED' },
@@ -335,7 +335,7 @@ describe('onCallMethods', () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.getIncidents({
+      const result = await api.getAlerts({
         status: ['TRIGGERED', 'ACKNOWLEDGED'],
         priority: 'P0',
       })
@@ -343,55 +343,60 @@ describe('onCallMethods', () => {
     })
   })
 
-  describe('getIncident', () => {
-    it('fetches single incident', async () => {
+  describe('getAlert', () => {
+    it('fetches single alert', async () => {
       const mock = { id: ALERT_ID_PRIMARY, title: 'Server Down', status: 'TRIGGERED', timeline: [] }
       server.use(
         http.get(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}`, () => HttpResponse.json(mock))
       )
-      const result = await api.getIncident(ALERT_ID_PRIMARY)
+      const result = await api.getAlert(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
-  describe('getIncidentTimeline', () => {
-    it('fetches incident timeline', async () => {
-      const mock = [{ type: 'TRIGGERED', timestamp: '2025-01-01T00:00:00Z' }]
+  describe('getAlertTimeline', () => {
+    it('fetches alert timeline', async () => {
+      const mock = [{
+        id: 'timeline-event-1',
+        targetId: ALERT_ID_PRIMARY,
+        eventType: 'TRIGGERED',
+        createdAt: '2025-01-01T00:00:00Z',
+      }]
       server.use(
         http.get(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/timeline`, () => HttpResponse.json(mock))
       )
-      const result = await api.getIncidentTimeline(ALERT_ID_PRIMARY)
+      const result = await api.getAlertTimeline(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
-  describe('acknowledgeIncident', () => {
+  describe('acknowledgeAlert', () => {
     it('sends POST to acknowledge', async () => {
-      const mock = { id: ALERT_ID_PRIMARY, status: 'ACKNOWLEDGED' }
+      const mock = { message: 'Alert acknowledged' }
       server.use(
         http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/acknowledge`, () =>
           HttpResponse.json(mock)
         )
       )
-      const result = await api.acknowledgeIncident(ALERT_ID_PRIMARY)
+      const result = await api.acknowledgeAlert(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
-  describe('resolveIncident', () => {
+  describe('resolveAlert', () => {
     it('sends POST to resolve', async () => {
-      const mock = { id: ALERT_ID_PRIMARY, status: 'RESOLVED' }
+      const mock = { message: 'Alert resolved' }
       server.use(
         http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/resolve`, () =>
           HttpResponse.json(mock)
         )
       )
-      const result = await api.resolveIncident(ALERT_ID_PRIMARY)
+      const result = await api.resolveAlert(ALERT_ID_PRIMARY)
       expect(result).toEqual(mock)
     })
   })
 
-  describe('reassignIncident', () => {
+  describe('reassignAlert', () => {
     it('sends POST with toUserId', async () => {
       const mock = { id: ALERT_ID_PRIMARY, assignedTo: USER_ID_REASSIGN }
       server.use(
@@ -401,12 +406,12 @@ describe('onCallMethods', () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.reassignIncident(ALERT_ID_PRIMARY, USER_ID_REASSIGN)
+      const result = await api.reassignAlert(ALERT_ID_PRIMARY, USER_ID_REASSIGN)
       expect(result).toEqual(mock)
     })
   })
 
-  describe('addIncidentNote', () => {
+  describe('addAlertNote', () => {
     it('sends POST with note body', async () => {
       const mock = { type: 'NOTE', content: 'Investigating' }
       server.use(
@@ -416,30 +421,36 @@ describe('onCallMethods', () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.addIncidentNote(ALERT_ID_PRIMARY, 'Investigating')
+      const result = await api.addAlertNote(ALERT_ID_PRIMARY, 'Investigating')
       expect(result).toEqual(mock)
     })
   })
 
-  describe('viewIncident', () => {
-    it('sends POST to mark incident as viewed', async () => {
+  describe('viewAlert', () => {
+    it('sends POST to mark alert as viewed', async () => {
+      let requested = false
       server.use(
-        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/view`, () =>
-          new HttpResponse(null, { status: 204 })
-        )
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/view`, () => {
+          requested = true
+          return new HttpResponse(null, { status: 204 })
+        })
       )
-      await api.viewIncident(ALERT_ID_PRIMARY)
+      await api.viewAlert(ALERT_ID_PRIMARY)
+      expect(requested).toBe(true)
     })
   })
 
-  describe('markUnavailable', () => {
+  describe('markAlertUnavailable', () => {
     it('sends POST to mark unavailable', async () => {
+      let requested = false
       server.use(
-        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/unavailable`, () =>
-          new HttpResponse(null, { status: 204 })
-        )
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/unavailable`, () => {
+          requested = true
+          return new HttpResponse(null, { status: 204 })
+        })
       )
-      await api.markUnavailable(ALERT_ID_PRIMARY)
+      await api.markAlertUnavailable(ALERT_ID_PRIMARY)
+      expect(requested).toBe(true)
     })
   })
 
@@ -475,7 +486,7 @@ describe('onCallMethods', () => {
 
   // ──── Declare Incident ────
 
-  describe('declareIncident', () => {
+  describe('declareIncidentFromAlert', () => {
     it('sends POST to declare incident from alert', async () => {
       const data = { title: 'Outage', description: 'Full outage', severity: 'SEV-1' }
       const mock = { id: DECLARED_INCIDENT_ID }
@@ -487,7 +498,7 @@ describe('onCallMethods', () => {
           return HttpResponse.json(mock)
         })
       )
-      const result = await api.declareIncident(ALERT_ID_PRIMARY, data)
+      const result = await api.declareIncidentFromAlert(ALERT_ID_PRIMARY, data)
       expect(result).toEqual(mock)
     })
   })

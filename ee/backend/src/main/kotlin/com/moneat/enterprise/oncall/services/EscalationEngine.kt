@@ -67,6 +67,10 @@ class EscalationEngine(
         private const val TIMEOUT_KEY_PREFIX = "escalation:timeout:"
         private const val ACTIVE_INCIDENTS_KEY = "escalation:active"
         private const val SMS_FALLBACK_KEY = "escalation:sms_fallback"
+        private const val TRIGGERED_STATUS = "TRIGGERED"
+        private const val ACKNOWLEDGED_STATUS = "ACKNOWLEDGED"
+        private const val RESOLVED_STATUS = "RESOLVED"
+        private val OPEN_ALERT_STATUSES = listOf(TRIGGERED_STATUS, ACKNOWLEDGED_STATUS)
     }
 
     private data class AlertEscalationState(
@@ -150,7 +154,7 @@ class EscalationEngine(
                             .where {
                                 (OnCallAlerts.organizationId eq organizationId) and
                                     (OnCallAlerts.deduplicationKey eq deduplicationKey) and
-                                    (OnCallAlerts.status inList listOf("TRIGGERED", "ACKNOWLEDGED"))
+                                    (OnCallAlerts.status inList OPEN_ALERT_STATUSES)
                             }.singleOrNull()
 
                     if (existing != null) {
@@ -167,7 +171,7 @@ class EscalationEngine(
                             it[OnCallAlerts.title] = title
                             it[OnCallAlerts.description] = description
                             it[OnCallAlerts.priority] = priority
-                            it[OnCallAlerts.status] = "TRIGGERED"
+                            it[OnCallAlerts.status] = TRIGGERED_STATUS
                             it[OnCallAlerts.alertSource] = alertSource
                             it[OnCallAlerts.deduplicationKey] = deduplicationKey
                             it[currentStep] = 0
@@ -178,7 +182,7 @@ class EscalationEngine(
                             it[updatedAt] = now
                         }.value
 
-                insertTimelineEvent(alertId, "TRIGGERED", null, mapOf("priority" to JsonPrimitive(priority)))
+                insertTimelineEvent(alertId, TRIGGERED_STATUS, null, mapOf("priority" to JsonPrimitive(priority)))
 
                 alertId
             } ?: return null
@@ -186,6 +190,61 @@ class EscalationEngine(
         processEscalationStep(alertId, 0, 0)
         return getAlert(alertId)
     }
+
+    fun resolveAlertByDeduplicationKey(
+        organizationId: Int,
+        alertSource: String,
+        deduplicationKey: String,
+    ): Boolean =
+        transaction {
+            val now = Clock.System.now()
+            val alertIds =
+                OnCallAlerts
+                    .selectAll()
+                    .where {
+                        (OnCallAlerts.organizationId eq organizationId) and
+                            (OnCallAlerts.alertSource eq alertSource) and
+                            (OnCallAlerts.deduplicationKey eq deduplicationKey) and
+                            (OnCallAlerts.status inList OPEN_ALERT_STATUSES)
+                    }.map { row -> row[OnCallAlerts.id].value }
+
+            if (alertIds.isEmpty()) {
+                return@transaction false
+            }
+
+            val updated =
+                OnCallAlerts.update({ OnCallAlerts.id inList alertIds }) {
+                    it[status] = RESOLVED_STATUS
+                    it[resolvedAt] = now
+                    it[resolvedBy] = null
+                    it[updatedAt] = now
+                }
+
+            if (updated <= 0) {
+                return@transaction false
+            }
+
+            alertIds.forEach { alertId ->
+                removeTimeout(alertId)
+                removeSmsFallback(alertId)
+                insertTimelineEvent(
+                    alertId,
+                    RESOLVED_STATUS,
+                    null,
+                    mapOf(
+                        "source" to JsonPrimitive(alertSource),
+                        "deduplicationKey" to JsonPrimitive(deduplicationKey),
+                        "resolvedBy" to JsonPrimitive("system"),
+                    ),
+                )
+            }
+
+            logger.info(
+                "Resolved $updated on-call alert(s) for org $organizationId, source $alertSource, " +
+                    "deduplication key $deduplicationKey",
+            )
+            true
+        }
 
     private fun processEscalationStep(
         incidentId: Int,

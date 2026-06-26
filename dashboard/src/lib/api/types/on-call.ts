@@ -107,16 +107,16 @@ export interface EscalationPolicy {
   steps: EscalationStep[]
 }
 
-export type IncidentStatus = 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
+export type OnCallAlertStatus = 'TRIGGERED' | 'ACKNOWLEDGED' | 'RESOLVED'
 
-export interface Incident {
+export interface OnCallAlert {
   id: string
   organizationId: string
   escalationPolicyId: string
   title: string
   description?: string
   priority: string
-  status: IncidentStatus
+  status: OnCallAlertStatus
   alertSource: string
   deduplicationKey?: string
   triggeredAt: string
@@ -131,27 +131,22 @@ export interface Incident {
   viewedByCurrentUser?: boolean
 }
 
-export interface IncidentTimeline {
+export interface OnCallTimelineEvent {
   id: string
-  incidentId: string
-  eventType:
-    | 'TRIGGERED'
-    | 'ESCALATED'
-    | 'ACKNOWLEDGED'
-    | 'RESOLVED'
-    | 'REASSIGNED'
-    | 'NOTE_ADDED'
-    | 'STEP_TIMEOUT'
-    | 'NOTIFICATION_SENT'
-    | 'VIEWED'
+  targetId: string
+  eventType: string
   actorUserId?: string
+  actorName?: string
   actorUserName?: string
   details?: Record<string, unknown>
   createdAt: string
+  source?: string
+  alertId?: string
+  alertTitle?: string
 }
 
-export interface IncidentDetail extends Incident {
-  timeline?: IncidentTimeline[]
+export interface OnCallAlertDetail extends OnCallAlert {
+  timeline?: OnCallTimelineEvent[]
 }
 
 export interface OnCallIncident {
@@ -174,7 +169,7 @@ export interface OnCallIncident {
 }
 
 export interface OnCallIncidentDetail extends OnCallIncident {
-  timeline?: IncidentTimeline[]
+  timeline?: OnCallTimelineEvent[]
 }
 
 export interface DeviceToken {
@@ -264,8 +259,8 @@ export interface RegisterDeviceRequest {
   deviceName?: string
 }
 
-export interface IncidentListFilters {
-  status?: IncidentStatus | IncidentStatus[]
+export interface OnCallAlertListFilters {
+  status?: OnCallAlertStatus | OnCallAlertStatus[]
   priority?: string
   fromDate?: string
   toDate?: string

@@ -16,7 +16,7 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type IncidentTimeline} from '@/lib/api'
+import {api, type OnCallTimelineEvent} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {SectionCard} from '@/components/ui/section-card'
@@ -68,7 +68,7 @@ interface DeclaredIncidentDetail {
   [key: string]: unknown
 }
 
-interface DeclaredIncidentTimelineEvent extends Omit<IncidentTimeline, 'eventType'> {
+interface DeclaredIncidentTimelineEvent extends Omit<OnCallTimelineEvent, 'eventType'> {
   eventType: string
   source?: string
   alertTitle?: string
@@ -149,7 +149,7 @@ function getTimelineDescription(event: DeclaredIncidentTimelineEvent): string | 
 
 function notificationDescription(event: DeclaredIncidentTimelineEvent): string | null {
   if (!event.details) return null
-  const toName = detailString(event.details.toUserName) ?? event.actorUserName
+  const toName = detailString(event.details.toUserName) ?? event.actorName ?? event.actorUserName
   const channel = detailString(event.details.channel)
   if (toName && channel) return `to ${toName} via ${channel}`
   if (toName) return `to ${toName}`

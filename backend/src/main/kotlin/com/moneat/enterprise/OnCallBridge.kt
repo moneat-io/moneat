@@ -64,6 +64,13 @@ interface OnCallBridge {
         metadata: String?
     ): String?
 
+    /** Resolve open on-call alerts for the source/deduplication key. */
+    suspend fun resolveEscalation(
+        organizationId: Int,
+        alertSource: String,
+        deduplicationKey: String
+    ): Boolean
+
     /** Declare an operational incident and return the declared incident resource ID. */
     suspend fun declareIncident(
         organizationId: Int,

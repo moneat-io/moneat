@@ -22,9 +22,9 @@ import type {
   OnCallSchedule,
   OnCallOverride,
   EscalationPolicy,
-  Incident,
-  IncidentDetail,
-  IncidentTimeline,
+  OnCallAlert,
+  OnCallAlertDetail,
+  OnCallTimelineEvent,
   OnCallIncident,
   OnCallIncidentDetail,
   DeviceToken,
@@ -37,17 +37,21 @@ import type {
   UpdatePrioritiesRequest,
   UpdateBusinessHoursRequest,
   RegisterDeviceRequest,
-  IncidentListFilters,
+  OnCallAlertListFilters,
 } from '../types'
 
-function appendIncidentStatusFilters(
+function appendAlertStatusFilters(
   params: URLSearchParams,
-  status?: IncidentListFilters['status']
+  status?: OnCallAlertListFilters['status']
 ) {
   if (!status) return
 
   const statuses = Array.isArray(status) ? status : [status]
   statuses.forEach((value) => params.append('status', value))
+}
+
+type MessageResponse = {
+  message: string
 }
 
 export function onCallMethods(core: ApiClientCore) {
@@ -148,54 +152,54 @@ export function onCallMethods(core: ApiClientCore) {
         method: 'DELETE',
       }),
 
-    getIncidents: (filters?: IncidentListFilters) => {
+    getAlerts: (filters?: OnCallAlertListFilters) => {
       const params = new URLSearchParams()
-      appendIncidentStatusFilters(params, filters?.status)
+      appendAlertStatusFilters(params, filters?.status)
       if (filters?.priority) params.append('priority', filters.priority)
       if (filters?.fromDate) params.append('fromDate', filters.fromDate)
       if (filters?.toDate) params.append('toDate', filters.toDate)
       const query = params.toString()
-      return core.request<Incident[]>(
+      return core.request<OnCallAlert[]>(
         urlWithQuery(`${base}/on-call/alerts`, query)
       )
     },
 
-    getIncident: (id: string) =>
-      core.request<IncidentDetail>(`${base}/on-call/alerts/${encodeURIComponent(id)}`),
+    getAlert: (id: string) =>
+      core.request<OnCallAlertDetail>(`${base}/on-call/alerts/${encodeURIComponent(id)}`),
 
-    getIncidentTimeline: (id: string) =>
-      core.request<IncidentTimeline[]>(
+    getAlertTimeline: (id: string) =>
+      core.request<OnCallTimelineEvent[]>(
         `${base}/on-call/alerts/${encodeURIComponent(id)}/timeline`
       ),
 
-    acknowledgeIncident: (id: string) =>
-      core.request<Incident>(`${base}/on-call/alerts/${encodeURIComponent(id)}/acknowledge`, {
+    acknowledgeAlert: (id: string) =>
+      core.request<MessageResponse>(`${base}/on-call/alerts/${encodeURIComponent(id)}/acknowledge`, {
         method: 'POST',
       }),
 
-    resolveIncident: (id: string) =>
-      core.request<Incident>(`${base}/on-call/alerts/${encodeURIComponent(id)}/resolve`, {
+    resolveAlert: (id: string) =>
+      core.request<MessageResponse>(`${base}/on-call/alerts/${encodeURIComponent(id)}/resolve`, {
         method: 'POST',
       }),
 
-    reassignIncident: (id: string, toUserId: string) =>
-      core.request<Incident>(`${base}/on-call/alerts/${encodeURIComponent(id)}/reassign`, {
+    reassignAlert: (id: string, toUserId: string) =>
+      core.request<OnCallAlert>(`${base}/on-call/alerts/${encodeURIComponent(id)}/reassign`, {
         method: 'POST',
         body: JSON.stringify({ toUserId }),
       }),
 
-    addIncidentNote: (id: string, note: string) =>
-      core.request<IncidentTimeline>(`${base}/on-call/alerts/${encodeURIComponent(id)}/notes`, {
+    addAlertNote: (id: string, note: string) =>
+      core.request<OnCallTimelineEvent>(`${base}/on-call/alerts/${encodeURIComponent(id)}/notes`, {
         method: 'POST',
         body: JSON.stringify({ note }),
       }),
 
-    viewIncident: (id: string) =>
+    viewAlert: (id: string) =>
       core.request<void>(`${base}/on-call/alerts/${encodeURIComponent(id)}/view`, {
         method: 'POST',
       }),
 
-    markUnavailable: (id: string) =>
+    markAlertUnavailable: (id: string) =>
       core.request<void>(`${base}/on-call/alerts/${encodeURIComponent(id)}/unavailable`, {
         method: 'POST',
       }),
@@ -211,7 +215,7 @@ export function onCallMethods(core: ApiClientCore) {
         method: 'DELETE',
       }),
 
-    declareIncident: (
+    declareIncidentFromAlert: (
       alertId: string,
       data: { title: string; description: string; severity: string }
     ) =>
@@ -244,7 +248,7 @@ export function onCallMethods(core: ApiClientCore) {
       }),
 
     getOnCallIncidentTimeline: (id: string) =>
-      core.request<IncidentTimeline[]>(
+      core.request<OnCallTimelineEvent[]>(
         `${base}/on-call/incidents/${encodeURIComponent(id)}/timeline`
       ),
 

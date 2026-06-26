@@ -209,6 +209,17 @@ class OnCallModule :
         return alert?.id
     }
 
+    override suspend fun resolveEscalation(
+        organizationId: Int,
+        alertSource: String,
+        deduplicationKey: String,
+    ): Boolean =
+        escalationEngine.resolveAlertByDeduplicationKey(
+            organizationId = organizationId,
+            alertSource = alertSource,
+            deduplicationKey = deduplicationKey,
+        )
+
     override suspend fun declareIncident(
         organizationId: Int,
         userId: Int,
