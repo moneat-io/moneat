@@ -160,6 +160,15 @@ class IncidentService(
         moneatUrl: String = "",
         publishWorkflow: Boolean = true
     ) {
+        val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
+        if (onCallEnabled) {
+            suspendRunCatching {
+                resolveNativeEscalation(organizationId, source, deduplicationKey)
+            }.getOrElse { e ->
+                logger.error("Error resolving native escalation", e)
+            }
+        }
+
         if (publishWorkflow) {
             suspendRunCatching {
                 workflowService.publishAlertResolved(
@@ -421,6 +430,16 @@ class IncidentService(
             }
 
             // Trigger escalation
+            val serializedMetadata =
+                if (event.metadata.isNotEmpty()) {
+                    kotlinx.serialization.json.Json.encodeToString(
+                        kotlinx.serialization.serializer(),
+                        event.metadata,
+                    )
+                } else {
+                    null
+                }
+
             val incidentId =
                 bridge.triggerEscalation(
                     organizationId = event.organizationId,
@@ -430,15 +449,7 @@ class IncidentService(
                     priority = priority.priority,
                     alertSource = event.source.name,
                     deduplicationKey = event.deduplicationKey,
-                    metadata =
-                    if (event.metadata.isNotEmpty()) {
-                        kotlinx.serialization.json.Json.encodeToString(
-                            kotlinx.serialization.serializer(),
-                            event.metadata
-                        )
-                    } else {
-                        null
-                    }
+                    metadata = serializedMetadata,
                 )
 
             if (incidentId != null) {
@@ -446,6 +457,40 @@ class IncidentService(
             }
         }.getOrElse { e ->
             logger.error("Error triggering native escalation", e)
+        }
+    }
+
+    /**
+     * Resolve native on-call alerts that were created from the same source and deduplication key.
+     */
+    private suspend fun resolveNativeEscalation(
+        organizationId: Int,
+        source: AlertSource,
+        deduplicationKey: String,
+    ) {
+        val bridge = FeatureRegistry.getOnCallBridge()
+        if (bridge == null) {
+            logger.debug("On-call enterprise module not loaded — skipping native escalation resolve")
+            return
+        }
+
+        val resolved =
+            bridge.resolveEscalation(
+                organizationId = organizationId,
+                alertSource = source.name,
+                deduplicationKey = deduplicationKey,
+            )
+
+        if (resolved) {
+            logger.info(
+                "Native escalation resolved for org $organizationId, source ${source.name}, " +
+                    "deduplication key $deduplicationKey",
+            )
+        } else {
+            logger.debug(
+                "No open native escalation found for org $organizationId, source ${source.name}, " +
+                    "deduplication key $deduplicationKey",
+            )
         }
     }
 

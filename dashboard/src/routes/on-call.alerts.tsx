@@ -16,7 +16,7 @@
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
-import {api, type IncidentListFilters, type IncidentStatus} from '@/lib/api'
+import {api, type OnCallAlertListFilters, type OnCallAlertStatus} from '@/lib/api'
 import {Card, CardContent} from '@/components/ui/card'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {EmptyState} from '@/components/ui/empty-state'
@@ -37,10 +37,10 @@ export const Route = createFileRoute('/on-call/alerts')({
   component: Alerts,
 })
 
-type AlertStatusFilter = IncidentStatus | 'active' | 'all'
+type AlertStatusFilter = OnCallAlertStatus | 'active' | 'all'
 
 const DEFAULT_ALERT_STATUS_FILTER: AlertStatusFilter = 'active'
-const ACTIVE_ALERT_STATUSES: IncidentStatus[] = ['TRIGGERED', 'ACKNOWLEDGED']
+const ACTIVE_ALERT_STATUSES: OnCallAlertStatus[] = ['TRIGGERED', 'ACKNOWLEDGED']
 
 // Priority / status mapped onto the shared status language.
 function priorityTone(priority: string): StatusTone {
@@ -86,7 +86,7 @@ function isEscalatingSoon(nextEscalationAt?: string): boolean {
   return diff > 0 && diff <= 2 * 60 * 1000
 }
 
-function toIncidentStatusFilter(statusFilter: AlertStatusFilter): IncidentListFilters['status'] | undefined {
+function toAlertStatusFilterValue(statusFilter: AlertStatusFilter): OnCallAlertListFilters['status'] | undefined {
   if (statusFilter === 'active') return ACTIVE_ALERT_STATUSES
   if (statusFilter === 'all') return undefined
   return statusFilter
@@ -105,11 +105,11 @@ function toAlertStatusFilter(value: string): AlertStatusFilter {
   return DEFAULT_ALERT_STATUS_FILTER
 }
 
-function nextAlertStatusFilter(current: AlertStatusFilter, status: IncidentStatus): AlertStatusFilter {
+function nextAlertStatusFilter(current: AlertStatusFilter, status: OnCallAlertStatus): AlertStatusFilter {
   return current === status ? DEFAULT_ALERT_STATUS_FILTER : status
 }
 
-function isAlertStatusActive(current: AlertStatusFilter, status: IncidentStatus): boolean {
+function isAlertStatusActive(current: AlertStatusFilter, status: OnCallAlertStatus): boolean {
   return current === status || (current === 'active' && ACTIVE_ALERT_STATUSES.includes(status))
 }
 
@@ -129,11 +129,11 @@ function Alerts() {
   const {data: alerts, isLoading} = useQuery({
     queryKey: ['alerts', statusFilter, priorityFilter],
     queryFn: () => {
-      const filters: IncidentListFilters = {}
-      const status = toIncidentStatusFilter(statusFilter)
+      const filters: OnCallAlertListFilters = {}
+      const status = toAlertStatusFilterValue(statusFilter)
       if (status) filters.status = status
       if (priorityFilter !== 'all') filters.priority = priorityFilter
-      return api.getIncidents(filters)
+      return api.getAlerts(filters)
     },
     refetchInterval: 30000,
   })

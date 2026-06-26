@@ -17,7 +17,7 @@
 import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {type ComponentType, type ReactNode} from 'react'
-import {api, type BusinessHours, type Incident, type OnCallSchedule} from '@/lib/api'
+import {api, type BusinessHours, type OnCallAlert, type OnCallSchedule} from '@/lib/api'
 import {SectionCard} from '@/components/ui/section-card'
 import {StatCard} from '@/components/ui/stat-card'
 import {EmptyState} from '@/components/ui/empty-state'
@@ -192,7 +192,7 @@ function PriorityAlertList({
   emptyMessage,
   compact = false,
 }: Readonly<{
-  alerts: Incident[]
+  alerts: OnCallAlert[]
   limit: number
   emptyMessage: string
   compact?: boolean
@@ -267,8 +267,8 @@ function YourAlertSummaryCard({
   businessHours?: BusinessHours
   isWithinBusinessHours: boolean | null
   currentUserOnCallSchedules: OnCallSchedule[]
-  pageableAlerts: Incident[]
-  lowPriorityAlerts: Incident[]
+  pageableAlerts: OnCallAlert[]
+  lowPriorityAlerts: OnCallAlert[]
 }>) {
   return (
     <SectionCard
@@ -412,7 +412,7 @@ function CurrentOnCallAssignee({schedule}: Readonly<{ schedule: OnCallSchedule }
   )
 }
 
-function ActiveAlertsCard({activeAlerts}: Readonly<{ activeAlerts: Incident[] }>) {
+function ActiveAlertsCard({activeAlerts}: Readonly<{ activeAlerts: OnCallAlert[] }>) {
   if (activeAlerts.length === 0) return null
 
   return (
@@ -439,7 +439,7 @@ function ActiveAlertsCard({activeAlerts}: Readonly<{ activeAlerts: Incident[] }>
   )
 }
 
-function ActiveAlertRow({alert}: Readonly<{ alert: Incident }>) {
+function ActiveAlertRow({alert}: Readonly<{ alert: OnCallAlert }>) {
   const statusCfg = getStatusConfig(alert.status)
   const StatusIcon = statusCfg.icon
 
@@ -524,7 +524,7 @@ function OnCallOverview() {
 
   const {data: alerts, isLoading: alertsLoading} = useQuery({
     queryKey: ['alerts', {active: true}],
-    queryFn: () => api.getIncidents(),
+    queryFn: () => api.getAlerts(),
   })
 
   const {data: policies, isLoading: policiesLoading} = useQuery({
