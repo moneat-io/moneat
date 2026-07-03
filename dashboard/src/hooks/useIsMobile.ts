@@ -22,9 +22,17 @@ const MOBILE_BREAKPOINT = 768
 
 const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`
 
+type MobileBrowserWindow = Omit<Window, 'matchMedia'> & {
+  readonly matchMedia?: Window['matchMedia']
+}
+
+function getBrowserWindow(): MobileBrowserWindow | undefined {
+  return globalThis.window as MobileBrowserWindow | undefined
+}
+
 function getMatches(): boolean {
-  const browserWindow = globalThis.window
-  if (typeof browserWindow === 'undefined' || typeof browserWindow.matchMedia !== 'function') return false
+  const browserWindow = getBrowserWindow()
+  if (browserWindow === undefined || browserWindow.matchMedia === undefined) return false
   return browserWindow.matchMedia(MOBILE_QUERY).matches
 }
 
@@ -33,8 +41,8 @@ export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(getMatches)
 
   useEffect(() => {
-    const browserWindow = globalThis.window
-    if (typeof browserWindow === 'undefined' || typeof browserWindow.matchMedia !== 'function') {
+    const browserWindow = getBrowserWindow()
+    if (browserWindow === undefined || browserWindow.matchMedia === undefined) {
       return
     }
 

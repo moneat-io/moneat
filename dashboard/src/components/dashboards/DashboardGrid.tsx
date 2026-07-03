@@ -79,6 +79,15 @@ type WidgetCardProps = Readonly<{
   onWidgetDelete: (widgetId: string) => void
 }>
 
+type SectionHeaderProps = Readonly<{
+  widget: DashboardWidget
+  isEditing: boolean
+  showDragHandle: boolean
+  isCollapsed: boolean
+  onToggle: () => void
+  onDelete: () => void
+}>
+
 function widgetMinHeight(widgetType: DashboardWidget['widget_type']): number {
   if (widgetType === 'section') return 1
   if (isOverviewWidgetType(widgetType)) return overviewWidgetDef(widgetType)?.minH ?? 4
@@ -386,14 +395,7 @@ function SectionHeader({
   isCollapsed,
   onToggle,
   onDelete,
-}: {
-  widget: DashboardWidget
-  isEditing: boolean
-  showDragHandle: boolean
-  isCollapsed: boolean
-  onToggle: () => void
-  onDelete: () => void
-}) {
+}: SectionHeaderProps) {
   return (
     <div className="h-full flex items-center gap-2 px-1">
       {showDragHandle && (
