@@ -31,9 +31,7 @@ function getBrowserWindow(): MobileBrowserWindow | undefined {
 }
 
 function getMatches(): boolean {
-  const browserWindow = getBrowserWindow()
-  if (browserWindow === undefined || browserWindow.matchMedia === undefined) return false
-  return browserWindow.matchMedia(MOBILE_QUERY).matches
+  return getBrowserWindow()?.matchMedia?.(MOBILE_QUERY).matches ?? false
 }
 
 /** True when the viewport is narrower than the `md` breakpoint. Updates on resize. */
@@ -41,12 +39,11 @@ export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(getMatches)
 
   useEffect(() => {
-    const browserWindow = getBrowserWindow()
-    if (browserWindow === undefined || browserWindow.matchMedia === undefined) {
+    const mql = getBrowserWindow()?.matchMedia?.(MOBILE_QUERY)
+    if (mql === undefined) {
       return
     }
 
-    const mql = browserWindow.matchMedia(MOBILE_QUERY)
     const onChange = () => setIsMobile(mql.matches)
     onChange()
     mql.addEventListener('change', onChange)
