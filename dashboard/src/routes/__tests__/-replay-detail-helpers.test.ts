@@ -149,6 +149,7 @@ describe('replay detail helper coverage', () => {
       {type: 5, timestamp: 1000, segment_id: 1, data: {tag: 'video', payload: {duration: '1200'}}},
       {type: 5, timestamp: 1100, segment_id: 1, data: {tag: 'breadcrumb', payload: {category: 'ui.click'}}},
       {type: 'mobile_replay_video', segment_id: 1},
+      {type: 'mobile_replay_video', segment_id: 1},
       {type: 'mobile_replay_video', segment_id: 2},
     ]
     expect(helpers.getRecordingDurationMs(mobileEvents, true)).toBe(6200)
@@ -166,6 +167,7 @@ describe('replay detail helper coverage', () => {
       {type: 5, timestamp: 2200, segment_id: 2, data: {tag: 'breadcrumb', payload: {category: 'navigation'}}},
       {type: 5, timestamp: 2300, data: {tag: 'breadcrumb', payload: {category: 'ui.click'}}},
       {type: 'mobile_replay_video', segment_id: 1},
+      {type: 'mobile_replay_video', segment_id: 2},
       {type: 'mobile_replay_video', segment_id: 2},
     ]
 

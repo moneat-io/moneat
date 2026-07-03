@@ -219,7 +219,7 @@ class McpToolValidationTest {
                     exchange.respond(200, """{"project_id":1}""", CONTENT_TYPE_TEXT_PLAIN)
                 query.contains("GROUP BY e.replay_id") ->
                     exchange.respond(200, replayDetailRow(), CONTENT_TYPE_TEXT_PLAIN)
-                query.contains("SELECT recording_data") ->
+                isRecordingSegmentsQuery(query) ->
                     exchange.respond(200, recordingDataRow(recordingPayload), CONTENT_TYPE_TEXT_PLAIN)
                 else ->
                     exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
@@ -795,6 +795,9 @@ class McpToolValidationTest {
 
     private fun recordingDataRow(recordingData: String): String =
         """{"recording_data":${jsonString(recordingData)},"segment_id":2,"timestamp_ms":"1767225600000"}"""
+
+    private fun isRecordingSegmentsQuery(query: String): Boolean =
+        query.contains("recording_data") && query.contains("replay_segments")
 
     private fun jsonString(value: String): String =
         buildString {
