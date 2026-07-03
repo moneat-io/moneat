@@ -96,7 +96,11 @@ describe('login route', () => {
     await submitEmailLogin()
 
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith({to: '/replays/replay-1?tab=errors#event'})
+      expect(mockNavigate).toHaveBeenCalledWith({
+        to: '/replays/replay-1',
+        search: {tab: 'errors'},
+        hash: 'event',
+      })
     })
   })
 
@@ -105,7 +109,7 @@ describe('login route', () => {
 
     await submitEmailLogin()
 
-    expect(mockNavigate).toHaveBeenCalledWith({to: '/issues?status=unresolved'})
+    expect(mockNavigate).toHaveBeenCalledWith({to: '/issues', search: {status: 'unresolved'}})
   })
 
   it('routes invite tokens through the accept-invite page after email login', async () => {
@@ -113,7 +117,7 @@ describe('login route', () => {
 
     await submitEmailLogin()
 
-    expect(mockNavigate).toHaveBeenCalledWith({to: '/accept-invite?token=invite+1'})
+    expect(mockNavigate).toHaveBeenCalledWith({to: '/accept-invite', search: {token: 'invite 1'}})
   })
 
   it('falls back to the app overview for missing or external redirects', async () => {
@@ -121,7 +125,7 @@ describe('login route', () => {
 
     await submitEmailLogin()
 
-    expect(mockNavigate).toHaveBeenCalledWith({to: '/?view=overview'})
+    expect(mockNavigate).toHaveBeenCalledWith({to: '/', search: {view: 'overview'}})
   })
 
   it('shows an invalid credentials error when email login fails', async () => {

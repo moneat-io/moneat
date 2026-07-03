@@ -62,8 +62,9 @@ export function normalizeInternalRedirectPath(value: unknown): string | undefine
   const trimmed = value.trim()
   if (!trimmed) return undefined
 
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed
-  return undefined
+  if (!trimmed.startsWith('/')) return undefined
+  if (trimmed[1] === '/' || trimmed[1] === '\\') return undefined
+  return trimmed
 }
 
 export function storePendingAuthRedirect(location: BrowserLocationLike): void {

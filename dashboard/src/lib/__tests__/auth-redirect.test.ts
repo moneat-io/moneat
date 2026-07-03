@@ -48,6 +48,7 @@ describe('auth redirect helpers', () => {
     expect(normalizeInternalRedirectPath('https://www.moneat.io/logs?query=error')).toBeUndefined()
     expect(normalizeInternalRedirectPath('https://example.com/issues/issue-1')).toBeUndefined()
     expect(normalizeInternalRedirectPath('//example.com/issues/issue-1')).toBeUndefined()
+    expect(normalizeInternalRedirectPath('/\\example.com/issues/issue-1')).toBeUndefined()
     expect(normalizeInternalRedirectPath('')).toBeUndefined()
     expect(normalizeInternalRedirectPath(null)).toBeUndefined()
   })

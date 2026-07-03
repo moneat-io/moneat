@@ -29,6 +29,14 @@ import {AuthAlert, AuthDivider, AuthField, AuthShell} from '@/components/auth/Au
 import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
+type SearchValue = string | string[]
+
+interface InternalRouteTarget {
+  readonly to: string
+  readonly search?: Record<string, SearchValue>
+  readonly hash?: string
+}
+
 function normalizePostLoginRedirect(value: unknown): string | undefined {
   return normalizeInternalRedirectPath(value)
 }
@@ -47,12 +55,10 @@ function defaultPostLoginPath(): string {
   return `/?${params.toString()}`
 }
 
-function resolvePostLoginPath(searchParams: URLSearchParams): string {
+function resolveQueryPostLoginPath(searchParams: URLSearchParams): string | undefined {
   return (
     normalizePostLoginRedirect(searchParams.get('redirect') || undefined) ??
-    consumePendingAuthRedirect() ??
-    buildInviteRedirectPath(searchParams.get('inviteToken') || undefined) ??
-    defaultPostLoginPath()
+    buildInviteRedirectPath(searchParams.get('inviteToken') || undefined)
   )
 }
 
@@ -65,6 +71,31 @@ function normalizeSsoRedirectUrl(value: unknown): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function internalRouteTarget(path: string): InternalRouteTarget {
+  const url = new URL(path, 'https://moneat.io')
+  const search: Record<string, SearchValue> = {}
+  url.searchParams.forEach((value, key) => {
+    const existing = search[key]
+    if (Array.isArray(existing)) {
+      existing.push(value)
+    } else if (existing !== undefined) {
+      search[key] = [existing, value]
+    } else {
+      search[key] = value
+    }
+  })
+
+  return {
+    to: url.pathname || '/',
+    ...(Object.keys(search).length > 0 ? {search} : {}),
+    ...(url.hash ? {hash: url.hash.slice(1)} : {}),
+  }
+}
+
+function resolveSubmitPostLoginPath(queryPostLoginPath: string | undefined): string {
+  return queryPostLoginPath ?? consumePendingAuthRedirect() ?? defaultPostLoginPath()
 }
 
 export const Route = createFileRoute('/login')({
@@ -82,7 +113,12 @@ export const Route = createFileRoute('/login')({
 
     // If authenticated with a post-login redirect (e.g. from email link), go there
     if (api.isAuthenticated() && postLoginRedirect) {
-      throw redirect({ to: postLoginRedirect as never }) // NOSONAR: normalized to an internal app path.
+      const target = internalRouteTarget(postLoginRedirect)
+      throw redirect({
+        to: target.to as never,
+        ...(target.search ? {search: target.search as never} : {}),
+        ...(target.hash ? {hash: target.hash} : {}),
+      })
     }
 
     // If authenticated with no special params, redirect to home
@@ -96,7 +132,7 @@ export const Route = createFileRoute('/login')({
 function LoginPage() {
   const navigate = useNavigate()
   const searchParams = new URLSearchParams(window.location.search)
-  const [postLoginPath] = useState(() => resolvePostLoginPath(searchParams))
+  const [queryPostLoginPath] = useState(() => resolveQueryPostLoginPath(searchParams))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -113,7 +149,12 @@ function LoginPage() {
     try {
       await api.login(email, password)
       trackEvent('Login', { method: 'email' })
-      navigate({ to: postLoginPath as never }) // NOSONAR: normalized to an internal app path.
+      const target = internalRouteTarget(resolveSubmitPostLoginPath(queryPostLoginPath))
+      navigate({
+        to: target.to as never,
+        ...(target.search ? {search: target.search as never} : {}),
+        ...(target.hash ? {hash: target.hash} : {}),
+      })
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       if (errorMessage === 'NETWORK_ERROR') {
