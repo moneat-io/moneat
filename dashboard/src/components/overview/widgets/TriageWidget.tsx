@@ -51,7 +51,6 @@ const NEEDS_ATTENTION_ID = 'overview-needs-attention'
 function attentionRouteFor(triage: AttentionRouteInput): string | null {
   if (triage.incidents.length > 0) return '/on-call/incidents'
   if (triage.issues.length > 0) return '/issues'
-  if (triage.alerts.length > 0) return null
   if (triage.security.length > 0) return '/security/signals'
   return null
 }

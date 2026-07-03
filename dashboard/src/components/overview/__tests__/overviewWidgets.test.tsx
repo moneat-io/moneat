@@ -135,6 +135,26 @@ describe('TriageWidget', () => {
     expect(screen.getByText('Alerts firing')).toBeInTheDocument()
     expect(screen.queryByRole('link', {name: 'View all'})).not.toBeInTheDocument()
   })
+
+  it('links to security signals when alerts and security signals both need attention', () => {
+    renderWithOverview(<TriageWidget />, {
+      triage: {
+        incidents: [],
+        alerts: overviewTestData.triage.alerts,
+        issues: [],
+        security: [{
+          level: 'warn',
+          title: 'Suspicious login volume',
+          detail: '12 flagged sessions',
+          ageLabel: '4m',
+        }],
+      },
+    })
+
+    expect(screen.getByText('Security signals')).toBeInTheDocument()
+    const action = screen.getByRole('link', {name: 'View all'})
+    expect(action).toHaveAttribute('href', '/security/signals')
+  })
 })
 
 describe('InfraSummaryWidget', () => {
