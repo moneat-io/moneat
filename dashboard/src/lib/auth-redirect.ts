@@ -40,7 +40,11 @@ export function currentRouteFromLocation(location: BrowserLocationLike): string 
 
 function normalizePath(pathname: string): string {
   if (!pathname || pathname === '/') return '/'
-  return pathname.replace(/\/+$/, '') || '/'
+  let end = pathname.length
+  while (end > 1 && pathname[end - 1] === '/') {
+    end -= 1
+  }
+  return pathname.slice(0, end) || '/'
 }
 
 export function isAuthPagePath(pathname: string): boolean {
