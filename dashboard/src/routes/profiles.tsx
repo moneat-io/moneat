@@ -6,15 +6,9 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute, Outlet} from '@tanstack/react-router'
 
 export const Route = createFileRoute('/profiles')({
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: ProfilesLayout,
 })
 

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
     api,
@@ -77,11 +77,6 @@ import {useTimezone} from '@/hooks/useTimezone'
 import {formatDateTime} from '@/lib/date-format'
 
 export const Route = createFileRoute('/status-pages/$pageId')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: StatusPageDetailPage,
 })
 

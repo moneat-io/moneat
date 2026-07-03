@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useMemo, useState, type ReactNode} from 'react'
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import type {
@@ -64,12 +64,6 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/feature-flags')({
-  beforeLoad: async ({location}) => {
-    if (!api.isAuthenticated()) {
-      const hasSession = await api.checkAuth()
-      if (!hasSession) throw redirect({to: '/login', search: {redirect: location.href}})
-    }
-  },
   component: FeatureFlagsPage,
 })
 

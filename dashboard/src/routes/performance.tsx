@@ -14,15 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute, Outlet} from '@tanstack/react-router'
 
 export const Route = createFileRoute('/performance')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: PerformanceLayout,
 })
 

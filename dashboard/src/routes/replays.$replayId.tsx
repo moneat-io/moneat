@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {type RefObject, useCallback, useMemo, useRef, useState} from 'react'
 import {api, type ReplayDetail, type ReplayTimelineItem} from '@/lib/api'
@@ -47,11 +47,6 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/replays/$replayId')({
-  beforeLoad: ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ReplayDetailPage,
 })
 

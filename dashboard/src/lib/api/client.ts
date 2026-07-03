@@ -15,16 +15,9 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import { isDemo, setDemoEpoch, syncDemoEpochFromUser } from '../demo'
+import { isAuthPagePath, isPublicLandingLocation } from '../auth-redirect'
 
 export const API_BASE = `${import.meta.env.VITE_BACKEND_URL || ''}/v1`
-const AUTH_PAGE_PATHS = new Set([
-  '/',
-  '/login',
-  '/signup',
-  '/verify-email',
-  '/forgot-password',
-  '/reset-password',
-])
 const AUTH_CHECK_TIMEOUT_MS = 4000
 const API_REQUEST_TIMEOUT_MS = 15000
 
@@ -163,7 +156,8 @@ export function createApiClientCore(): ApiClientCore {
     if (
       !authRedirectInProgress &&
       globalThis.window !== undefined &&
-      !AUTH_PAGE_PATHS.has(globalThis.window.location.pathname)
+      !isAuthPagePath(globalThis.window.location.pathname) &&
+      !isPublicLandingLocation(globalThis.window.location)
     ) {
       authRedirectInProgress = true
       globalThis.window.location.assign('/login')

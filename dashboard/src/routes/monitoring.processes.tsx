@@ -6,16 +6,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute} from '@tanstack/react-router'
 import {ProcessExplorer} from '@/components/monitoring/ProcessExplorer'
 
 export const Route = createFileRoute('/monitoring/processes')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringProcessesPage,
 })
 

@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useState} from 'react'
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {KeyRound, Loader2, Lock, Plus, RotateCw, Trash2} from 'lucide-react'
 import {api} from '@/lib/api'
@@ -38,12 +38,6 @@ import {hasEnterpriseModule, useEnterpriseFeatures} from '@/hooks/useEnterpriseF
 import {useToast} from '@/hooks/useToast'
 
 export const Route = createFileRoute('/workflows/connections')({
-  beforeLoad: async () => {
-    const authenticated = api.isAuthenticated() || (await api.checkAuth())
-    if (!authenticated) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: ConnectionsPage,
 })
 

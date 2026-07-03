@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {ArrowLeft} from 'lucide-react'
 import {api} from '@/lib/api'
 import {ServiceSettingsCard} from '@/components/projects/ServiceSettingsCard'
@@ -24,11 +24,6 @@ import {
 } from '@/lib/telemetry-sources'
 
 export const Route = createFileRoute('/projects/$projectId/settings')({
-  beforeLoad: async ({location}) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login', search: {redirect: location.href}})
-    }
-  },
   loader: async ({params}) => {
     const service = await api.getProject(params.projectId)
     return {service}

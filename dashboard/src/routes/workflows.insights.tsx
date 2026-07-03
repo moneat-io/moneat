@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {ArrowLeft, ClipboardList, Gauge, LayoutGrid, Loader2} from 'lucide-react'
 import {api} from '@/lib/api'
@@ -31,12 +31,6 @@ import {useToast} from '@/hooks/useToast'
 const AUDIT_LIMIT = 25
 
 export const Route = createFileRoute('/workflows/insights')({
-  beforeLoad: async () => {
-    const authenticated = api.isAuthenticated() || (await api.checkAuth())
-    if (!authenticated) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: InsightsPage,
 })
 

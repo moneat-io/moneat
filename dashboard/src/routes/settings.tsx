@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {type FormEvent, Fragment, useEffect, useMemo, useState} from 'react'
-import {createFileRoute, Link, redirect, useNavigate, useSearch} from '@tanstack/react-router'
+import {createFileRoute, Link, useNavigate, useSearch} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {loadStripe} from '@stripe/stripe-js'
 import {Elements, PaymentElement, useElements, useStripe} from '@stripe/react-stripe-js'
@@ -191,11 +191,6 @@ export const Route = createFileRoute('/settings')({
     return {
       tab: requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : 'general',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
-    }
-  },
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
     }
   },
   component: SettingsPage,
