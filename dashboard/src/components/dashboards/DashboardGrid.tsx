@@ -68,6 +68,7 @@ type WidgetCardAlert = {
 type WidgetCardProps = Readonly<{
   widget: DashboardWidget
   isEditing: boolean
+  showDragHandle: boolean
   dashboardId: string
   projectId?: string
   timeRange: TimeRangeDef
@@ -287,13 +288,14 @@ export function DashboardGrid({
             return (
               <div
                 key={String(widget.id)}
-                className={isSmall ? 'min-w-0' : 'col-span-2 min-w-0'}
+                className={`group ${isSmall ? 'min-w-0' : 'col-span-2 min-w-0'}`}
                 style={widgetHeight === undefined ? undefined : {height: widgetHeight}}
               >
                 {widget.widget_type === 'section' ? (
                   <SectionHeader
                     widget={widget}
-                    isEditing={false}
+                    isEditing={isEditing}
+                    showDragHandle={false}
                     isCollapsed={collapsedSections.has(widget.id)}
                     onToggle={() => toggleSection(widget.id)}
                     onDelete={() => onWidgetDelete(widget.id)}
@@ -301,7 +303,8 @@ export function DashboardGrid({
                 ) : (
                   <WidgetCard
                     widget={widget}
-                    isEditing={false}
+                    isEditing={isEditing}
+                    showDragHandle={false}
                     dashboardId={dashboardId}
                     projectId={projectId}
                     timeRange={timeRange}
@@ -349,6 +352,7 @@ export function DashboardGrid({
             <SectionHeader
               widget={widget}
               isEditing={isEditing}
+              showDragHandle={isEditing}
               isCollapsed={collapsedSections.has(widget.id)}
               onToggle={() => toggleSection(widget.id)}
               onDelete={() => onWidgetDelete(widget.id)}
@@ -357,6 +361,7 @@ export function DashboardGrid({
             <WidgetCard
               widget={widget}
               isEditing={isEditing}
+              showDragHandle={isEditing}
               dashboardId={dashboardId}
               projectId={projectId}
               timeRange={timeRange}
@@ -377,19 +382,21 @@ export function DashboardGrid({
 function SectionHeader({
   widget,
   isEditing,
+  showDragHandle,
   isCollapsed,
   onToggle,
   onDelete,
 }: {
   widget: DashboardWidget
   isEditing: boolean
+  showDragHandle: boolean
   isCollapsed: boolean
   onToggle: () => void
   onDelete: () => void
 }) {
   return (
     <div className="h-full flex items-center gap-2 px-1">
-      {isEditing && (
+      {showDragHandle && (
         <div className="drag-handle cursor-grab active:cursor-grabbing shrink-0">
           <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
@@ -411,7 +418,7 @@ function SectionHeader({
             e.stopPropagation()
             onDelete()
           }}
-          className="p-1 rounded text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          className="p-1 rounded text-destructive hover:bg-destructive/10 opacity-100 transition-opacity shrink-0 md:opacity-0 md:group-hover:opacity-100"
         >
           <Trash2 className="h-3 w-3" />
         </button>
@@ -423,6 +430,7 @@ function SectionHeader({
 function WidgetCard({
   widget,
   isEditing,
+  showDragHandle,
   dashboardId,
   projectId,
   timeRange,
@@ -438,10 +446,12 @@ function WidgetCard({
     return (
       <div className="relative h-full" style={{contain: 'style'}}>
         {isEditing && (
-          <div className="absolute right-1 top-1 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            <div className="drag-handle cursor-grab rounded border bg-background/90 p-1 shadow-sm active:cursor-grabbing">
-              <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
+          <div className="absolute right-1 top-1 z-10 flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+            {showDragHandle && (
+              <div className="drag-handle cursor-grab rounded border bg-background/90 p-1 shadow-sm active:cursor-grabbing">
+                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+            )}
             <button
               type="button"
               aria-label={`Delete ${widget.title ?? 'widget'}`}
@@ -476,7 +486,7 @@ function WidgetCard({
     >
       <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 min-h-[36px]">
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          {isEditing && (
+          {showDragHandle && (
             <div className="drag-handle cursor-grab active:cursor-grabbing">
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
@@ -512,7 +522,7 @@ function WidgetCard({
           })()}
         </div>
         {isEditing && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
             <button
               onClick={(e) => {
                 e.stopPropagation()

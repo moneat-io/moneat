@@ -25,31 +25,48 @@ const MIN_WIDTH = 300
 const MIN_HEIGHT = 360
 const RESIZE_HANDLE = 8
 
+function getViewportSize() {
+  const browserWindow = globalThis.window
+  return {
+    width: browserWindow?.innerWidth ?? DEFAULT_WIDTH + 16,
+    height: browserWindow?.innerHeight ?? DEFAULT_HEIGHT + 96,
+  }
+}
+
+function getInitialPanelSize() {
+  const {width, height} = getViewportSize()
+  return {
+    w: Math.min(DEFAULT_WIDTH, width - 16),
+    h: Math.min(DEFAULT_HEIGHT, height - 96),
+  }
+}
+
+function getInitialPanelPosition() {
+  const {width} = getViewportSize()
+  const w = Math.min(DEFAULT_WIDTH, width - 16)
+  return {x: Math.max(8, width - w - 24), y: 80}
+}
+
 export function AiFloatingPanel() {
   const palette = useCommandPalette()
   // Clamp the initial window to the viewport so it stays usable on small/mobile screens.
-  const [size, setSize] = useState(() => ({
-    w: Math.min(DEFAULT_WIDTH, window.innerWidth - 16),
-    h: Math.min(DEFAULT_HEIGHT, window.innerHeight - 96),
-  }))
-  const [pos, setPos] = useState(() => {
-    const w = Math.min(DEFAULT_WIDTH, window.innerWidth - 16)
-    return {x: Math.max(8, window.innerWidth - w - 24), y: 80}
-  })
+  const [size, setSize] = useState(getInitialPanelSize)
+  const [pos, setPos] = useState(getInitialPanelPosition)
   const dragOffset = useRef<{x: number; y: number} | null>(null)
   const resizeStart = useRef<{mx: number; my: number; w: number; h: number} | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
 
   // Keep panel within viewport on resize
   useEffect(() => {
+    const browserWindow = globalThis.window
     const onResize = () => {
       setPos((p) => ({
-        x: Math.min(p.x, window.innerWidth - size.w - 8),
-        y: Math.min(p.y, window.innerHeight - size.h - 8),
+        x: Math.min(p.x, browserWindow.innerWidth - size.w - 8),
+        y: Math.min(p.y, browserWindow.innerHeight - size.h - 8),
       }))
     }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    browserWindow.addEventListener('resize', onResize)
+    return () => browserWindow.removeEventListener('resize', onResize)
   }, [size])
 
   const startDrag = useCallback((e: React.MouseEvent) => {
@@ -59,17 +76,17 @@ export function AiFloatingPanel() {
     const onMove = (ev: MouseEvent) => {
       if (!dragOffset.current) return
       setPos({
-        x: Math.max(0, Math.min(ev.clientX - dragOffset.current.x, window.innerWidth - size.w)),
-        y: Math.max(0, Math.min(ev.clientY - dragOffset.current.y, window.innerHeight - size.h)),
+        x: Math.max(0, Math.min(ev.clientX - dragOffset.current.x, globalThis.window.innerWidth - size.w)),
+        y: Math.max(0, Math.min(ev.clientY - dragOffset.current.y, globalThis.window.innerHeight - size.h)),
       })
     }
     const onUp = () => {
       dragOffset.current = null
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      globalThis.window.removeEventListener('mousemove', onMove)
+      globalThis.window.removeEventListener('mouseup', onUp)
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    globalThis.window.addEventListener('mousemove', onMove)
+    globalThis.window.addEventListener('mouseup', onUp)
   }, [pos, size])
 
   const startResize = useCallback((e: React.MouseEvent) => {
@@ -87,11 +104,11 @@ export function AiFloatingPanel() {
     }
     const onUp = () => {
       resizeStart.current = null
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      globalThis.window.removeEventListener('mousemove', onMove)
+      globalThis.window.removeEventListener('mouseup', onUp)
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    globalThis.window.addEventListener('mousemove', onMove)
+    globalThis.window.addEventListener('mouseup', onUp)
   }, [size])
 
   if (!palette || palette.aiPanelMode !== 'float') return null

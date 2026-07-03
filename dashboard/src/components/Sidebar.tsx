@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useEffect, useState} from 'react'
+import {type ComponentType, useEffect, useState} from 'react'
 import {Link, useNavigate, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -95,9 +95,54 @@ interface SidebarProps {
   readonly onMobileOpenChange?: (open: boolean) => void
 }
 
+type NavGroupId = 'core' | 'infrastructure' | 'insights' | 'operations' | 'analytics' | 'management'
+
+interface NavItem {
+  key: string
+  icon: ComponentType<{className?: string}>
+  label: string
+  href: string
+  requiresProject: boolean
+  badge?: string
+  group: NavGroupId
+}
+
 function getInitials(name?: string) {
   if (!name) return 'U'
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+function isMoreSpecificActivePath(currentPath: string, item: NavItem, other: NavItem) {
+  if (other.href === item.href) return false
+  if (!other.href.startsWith(item.href + '/')) return false
+  return currentPath === other.href || currentPath.startsWith(other.href + '/')
+}
+
+function isNavItemActive(
+  currentPath: string,
+  currentSearch: unknown,
+  item: NavItem,
+  navItems: NavItem[],
+) {
+  if (item.href === APP_OVERVIEW_HREF) {
+    return currentPath === '/' && isAppOverviewSearch(currentSearch)
+  }
+
+  if (currentPath === item.href) return true
+  if (!currentPath.startsWith(item.href + '/')) return false
+  return !navItems.some((other) => isMoreSpecificActivePath(currentPath, item, other))
+}
+
+function FadingDivider() {
+  return (
+    <div
+      className="h-px my-1 bg-border shrink-0"
+      style={{
+        maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+        WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
+      }}
+    />
+  )
 }
 
 export function Sidebar({
@@ -187,18 +232,6 @@ export function Sidebar({
   const resetCreateForm = () => {
     setShowCreateDialog(false)
     createServiceMutation.reset()
-  }
-
-  type NavGroupId = 'core' | 'infrastructure' | 'insights' | 'operations' | 'analytics' | 'management'
-
-  interface NavItem {
-    key: string
-    icon: React.ComponentType<{className?: string}>
-    label: string
-    href: string
-    requiresProject: boolean
-    badge?: string
-    group: NavGroupId
   }
 
   const datadogCoreNavItems: NavItem[] = hasEnterpriseModule(features, 'datadog')
@@ -297,16 +330,10 @@ export function Sidebar({
     items: navItems.filter(item => item.group === groupId),
   })).filter(g => g.items.length > 0)
 
-
-  const FadingDivider = () => (
-    <div
-      className="h-px my-1 bg-border shrink-0"
-      style={{
-        maskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-        WebkitMaskImage: 'linear-gradient(to right, transparent, black 15%, black 85%, transparent)',
-      }}
-    />
-  )
+  const desktopSidebarWidthClassName = isExpanded ? 'w-44' : 'w-14'
+  const sidebarModeClassName = isMobile
+    ? cn('z-50 w-[min(82vw,288px)] shadow-2xl', !isMobileOpen && '-translate-x-full')
+    : cn('z-40 transition-all', desktopSidebarWidthClassName)
 
   const renderSidebarContent = () => (
     <>
@@ -387,16 +414,7 @@ export function Sidebar({
               )}
               <div className={cn('space-y-1')}>
                 {group.items.map((item) => {
-                  const isActive = item.href === APP_OVERVIEW_HREF
-                    ? currentPath === '/' && isAppOverviewSearch(router.location.search)
-                    : currentPath === item.href ||
-                      (currentPath.startsWith(item.href + '/') &&
-                        !navItems.some(
-                          (other) =>
-                            other.href !== item.href &&
-                            (currentPath === other.href || currentPath.startsWith(other.href + '/')) &&
-                            other.href.startsWith(item.href + '/')
-                        ))
+                  const isActive = isNavItemActive(currentPath, router.location.search, item, navItems)
                   const Icon = item.icon
 
                   const linkContent = (
@@ -579,7 +597,7 @@ export function Sidebar({
                   Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={async () => { await api.logout(); window.location.href = '/login' }}>
+                <DropdownMenuItem onClick={async () => { await api.logout(); globalThis.window.location.href = '/login' }}>
                   <LogOut className="h-4 w-4 mr-2" />
                   Logout
                 </DropdownMenuItem>
@@ -611,9 +629,7 @@ export function Sidebar({
       <div
         className={cn(
           'sidebar fixed left-0 bg-card border-r flex flex-col transition-transform duration-300',
-          isMobile
-            ? cn('z-50 w-[min(82vw,288px)] shadow-2xl', !isMobileOpen && '-translate-x-full')
-            : cn('z-40 transition-all', isExpanded ? 'w-44' : 'w-14')
+          sidebarModeClassName
         )}
         style={{top: headerHeight, height: `calc(100dvh - ${headerHeight}px)`}}
         inert={isMobile && !isMobileOpen ? true : undefined}

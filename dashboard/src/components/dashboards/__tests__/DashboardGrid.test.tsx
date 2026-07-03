@@ -115,6 +115,22 @@ beforeEach(() => {
   queryState.alerts = []
 })
 
+function withContainerWidth(width: number, run: () => void) {
+  const proto = HTMLElement.prototype
+  const original = Object.getOwnPropertyDescriptor(proto, 'offsetWidth')
+  Object.defineProperty(proto, 'offsetWidth', {configurable: true, get: () => width})
+
+  try {
+    run()
+  } finally {
+    if (original) {
+      Object.defineProperty(proto, 'offsetWidth', original)
+    } else {
+      delete (proto as {offsetWidth?: number}).offsetWidth
+    }
+  }
+}
+
 describe('DashboardGrid', () => {
   it('keeps widget stacking inside the grid container', () => {
     const onLayoutChange = vi.fn()
@@ -255,12 +271,7 @@ describe('DashboardGrid', () => {
   })
 
   it('stacks widgets instead of the drag-grid at mobile container widths', () => {
-    // Force a narrow container so the grid drops the drag layout and stacks.
-    const proto = HTMLElement.prototype
-    const original = Object.getOwnPropertyDescriptor(proto, 'offsetWidth')
-    Object.defineProperty(proto, 'offsetWidth', {configurable: true, get: () => 400})
-
-    try {
+    withContainerWidth(400, () => {
       const {container} = render(
         <DashboardGrid
           widgets={[
@@ -281,12 +292,37 @@ describe('DashboardGrid', () => {
       expect(container.querySelector('.grid-cols-2')).toBeInTheDocument()
       expect(screen.getByText('Dependency p95 check latency')).toBeInTheDocument()
       expect(screen.getByText('Error rate')).toBeInTheDocument()
-    } finally {
-      if (original) {
-        Object.defineProperty(proto, 'offsetWidth', original)
-      } else {
-        delete (proto as {offsetWidth?: number}).offsetWidth
-      }
-    }
+    })
+  })
+
+  it('keeps edit controls available in the mobile stack', () => {
+    const onWidgetClick = vi.fn()
+    const onWidgetDelete = vi.fn()
+
+    withContainerWidth(400, () => {
+      render(
+        <DashboardGrid
+          widgets={[widget]}
+          isEditing={true}
+          dashboardId={DASHBOARD_ID}
+          timeRange={{from: 'now-24h', to: 'now'}}
+          autoRefresh={false}
+          onLayoutChange={vi.fn()}
+          onWidgetClick={onWidgetClick}
+          onWidgetDelete={onWidgetDelete}
+        />
+      )
+
+      expect(screen.queryByTestId('responsive-grid-layout')).not.toBeInTheDocument()
+      const editButton = screen.getByText('Edit')
+      expect(editButton.parentElement).toHaveClass('opacity-100')
+
+      fireEvent.click(editButton)
+      expect(onWidgetClick).toHaveBeenCalledWith(expect.objectContaining({id: WIDGET_ID}))
+
+      const buttons = screen.getAllByRole('button')
+      fireEvent.click(buttons[buttons.length - 1])
+      expect(onWidgetDelete).toHaveBeenCalledWith(WIDGET_ID)
+    })
   })
 })

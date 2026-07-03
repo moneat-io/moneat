@@ -19,6 +19,15 @@ import {describe, expect, it} from 'vitest'
 
 import {AiFloatingPanel} from '@/components/AiFloatingPanel'
 
+function restoreWindowProperty(property: keyof Window, descriptor: PropertyDescriptor | undefined) {
+  if (descriptor) {
+    Object.defineProperty(globalThis.window, property, descriptor)
+    return
+  }
+
+  delete (globalThis.window as Partial<Window>)[property]
+}
+
 describe('AiFloatingPanel', () => {
   it('renders nothing when no floating panel is active', () => {
     // With no command-palette provider the panel bails out, but its size/position
@@ -28,16 +37,16 @@ describe('AiFloatingPanel', () => {
   })
 
   it('clamps its initial geometry to a narrow viewport without throwing', () => {
-    const originalWidth = window.innerWidth
-    const originalHeight = window.innerHeight
+    const originalWidth = Object.getOwnPropertyDescriptor(globalThis.window, 'innerWidth')
+    const originalHeight = Object.getOwnPropertyDescriptor(globalThis.window, 'innerHeight')
     try {
-      Object.defineProperty(window, 'innerWidth', {configurable: true, value: 360})
-      Object.defineProperty(window, 'innerHeight', {configurable: true, value: 640})
+      Object.defineProperty(globalThis.window, 'innerWidth', {configurable: true, value: 360})
+      Object.defineProperty(globalThis.window, 'innerHeight', {configurable: true, value: 640})
       const {container} = render(<AiFloatingPanel />)
       expect(container).toBeEmptyDOMElement()
     } finally {
-      Object.defineProperty(window, 'innerWidth', {configurable: true, value: originalWidth})
-      Object.defineProperty(window, 'innerHeight', {configurable: true, value: originalHeight})
+      restoreWindowProperty('innerWidth', originalWidth)
+      restoreWindowProperty('innerHeight', originalHeight)
     }
   })
 })

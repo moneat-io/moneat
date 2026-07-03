@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState} from 'react'
+import {type ReactNode, useMemo, useState} from 'react'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {AlertCircle, Loader2, Pencil, Plus, Search, Trash2, UserPlus, X} from 'lucide-react'
 import {api, type OrgMember, type RbacRole} from '@/lib/api'
@@ -946,6 +946,27 @@ export function RbacSettings() {
 
   const pageError = rolesQuery.error ?? membersQuery.error
   const isLoading = rolesQuery.isLoading || membersQuery.isLoading
+  let rolesContent: ReactNode
+
+  if (isLoading) {
+    rolesContent = <RoleLoadingState />
+  } else if (roles.length === 0) {
+    rolesContent = <EmptyRolesState onCreate={() => setCreateOpen(true)} />
+  } else {
+    rolesContent = (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(260px,360px)_1fr]">
+        <RoleList roles={roles} selectedRoleId={effectiveSelectedRoleId} onSelectRole={setSelectedRoleId} />
+        {selectedRole && (
+          <RoleDetails
+            role={selectedRole}
+            members={members}
+            onEdit={setRoleToEdit}
+            onDelete={setRoleToDelete}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -970,23 +991,7 @@ export function RbacSettings() {
         </Alert>
       )}
 
-      {isLoading ? (
-        <RoleLoadingState />
-      ) : roles.length === 0 ? (
-        <EmptyRolesState onCreate={() => setCreateOpen(true)} />
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(260px,360px),1fr]">
-          <RoleList roles={roles} selectedRoleId={effectiveSelectedRoleId} onSelectRole={setSelectedRoleId} />
-          {selectedRole && (
-            <RoleDetails
-              role={selectedRole}
-              members={members}
-              onEdit={setRoleToEdit}
-              onDelete={setRoleToDelete}
-            />
-          )}
-        </div>
-      )}
+      {rolesContent}
 
       <RbacRoleFormDialog
         open={createOpen}
