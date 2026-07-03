@@ -21,7 +21,10 @@ type ParsedReleaseVersion = {
   build: string[]
 }
 
-const VERSION_CANDIDATE_PATTERN = /v?\d+(?:\.\d+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/g
+type CandidateRange = {
+  start: number
+  end: number
+}
 
 export function compareReleaseVersionPrecedence(left: string, right: string): number {
   const leftVersion = parseReleaseVersion(left)
@@ -43,26 +46,38 @@ function parseReleaseVersion(value: string): ParsedReleaseVersion | null {
   const trimmed = value.trim()
   const atIndex = trimmed.lastIndexOf('@')
   if (atIndex >= 0) {
-    const atVersion = parseCandidateAt(trimmed, atIndex + 1)
+    const atVersion = parseCandidate(trimmed, atIndex + 1)
     if (atVersion) return atVersion
   }
 
-  const matches = Array.from(trimmed.matchAll(VERSION_CANDIDATE_PATTERN))
-  const match = matches.at(-1)
-  if (match?.index == null) return null
+  const range = findLastCandidateRange(trimmed)
+  if (range == null) return null
 
-  return parseCandidate(trimmed, match.index, match[0])
+  return parseCandidate(trimmed, range.start)
 }
 
-function parseCandidateAt(value: string, index: number): ParsedReleaseVersion | null {
-  const match = /^v?\d+(?:\.\d+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?/.exec(value.slice(index))
-  if (!match) return null
+function findLastCandidateRange(value: string): CandidateRange | null {
+  let lastRange: CandidateRange | null = null
+  let index = 0
+  while (index < value.length) {
+    const range = readCandidateRange(value, index)
+    if (range == null) {
+      index += 1
+    } else {
+      lastRange = range
+      index = range.end
+    }
+  }
 
-  return parseCandidate(value, index, match[0])
+  return lastRange
 }
 
-function parseCandidate(source: string, index: number, candidate: string): ParsedReleaseVersion | null {
-  const normalized = candidate.replace(/^v/i, '')
+function parseCandidate(source: string, index: number): ParsedReleaseVersion | null {
+  const range = readCandidateRange(source, index)
+  if (range == null) return null
+
+  const candidate = source.slice(range.start, range.end)
+  const normalized = isVersionPrefix(candidate.charAt(0)) ? candidate.slice(1) : candidate
   const buildIndex = normalized.indexOf('+')
   const withoutBuild = buildIndex >= 0 ? normalized.slice(0, buildIndex) : normalized
   const build = buildIndex >= 0 ? normalized.slice(buildIndex + 1).split('.') : []
@@ -79,6 +94,73 @@ function parseCandidate(source: string, index: number, candidate: string): Parse
     prerelease,
     build,
   }
+}
+
+function readCandidateRange(value: string, start: number): CandidateRange | null {
+  let index = isVersionPrefix(value.charAt(start)) ? start + 1 : start
+  const firstSegmentEnd = readDigits(value, index)
+  if (firstSegmentEnd === index) return null
+
+  index = firstSegmentEnd
+  let coreSegmentCount = 1
+  while (value.charAt(index) === '.') {
+    const nextSegmentStart = index + 1
+    const nextSegmentEnd = readDigits(value, nextSegmentStart)
+    if (nextSegmentEnd === nextSegmentStart) break
+
+    coreSegmentCount += 1
+    index = nextSegmentEnd
+  }
+
+  if (coreSegmentCount < 2) return null
+
+  if (value.charAt(index) === '-') {
+    const prereleaseStart = index + 1
+    const prereleaseEnd = readVersionSuffix(value, prereleaseStart)
+    if (prereleaseEnd > prereleaseStart) index = prereleaseEnd
+  }
+
+  if (value.charAt(index) === '+') {
+    const buildStart = index + 1
+    const buildEnd = readVersionSuffix(value, buildStart)
+    if (buildEnd > buildStart) index = buildEnd
+  }
+
+  return {start, end: index}
+}
+
+function readDigits(value: string, start: number): number {
+  let index = start
+  while (isDigit(value.charAt(index))) index += 1
+
+  return index
+}
+
+function readVersionSuffix(value: string, start: number): number {
+  let index = start
+  while (isVersionSuffixChar(value.charAt(index))) index += 1
+
+  return index
+}
+
+function isVersionPrefix(value: string): boolean {
+  return value === 'v' || value === 'V'
+}
+
+function isVersionSuffixChar(value: string): boolean {
+  return isDigit(value) || isUppercaseLetter(value) || isLowercaseLetter(value) || value === '.' || value === '-'
+}
+
+function isDigit(value: string): boolean {
+  return value >= '0' && value <= '9'
+}
+
+function isUppercaseLetter(value: string): boolean {
+  return value >= 'A' && value <= 'Z'
+}
+
+function isLowercaseLetter(value: string): boolean {
+  return value >= 'a' && value <= 'z'
 }
 
 function compareNumberList(left: number[], right: number[]): number {
@@ -135,8 +217,18 @@ function compareIdentifier(left: string, right: string): number {
 }
 
 function parseNumericIdentifier(value: string): number | null {
-  if (!/^\d+$/.test(value)) return null
+  if (!hasOnlyDigits(value)) return null
 
   const parsed = Number.parseInt(value, 10)
   return Number.isSafeInteger(parsed) ? parsed : null
+}
+
+function hasOnlyDigits(value: string): boolean {
+  if (value.length === 0) return false
+
+  for (const character of value) {
+    if (!isDigit(character)) return false
+  }
+
+  return true
 }

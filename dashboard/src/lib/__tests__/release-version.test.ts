@@ -34,6 +34,33 @@ describe('compareReleaseVersionPrecedence', () => {
     expect(compareReleaseVersionPrecedence('frontend@1.2.0', 'frontend@1.2.0-beta.1')).toBeGreaterThan(0)
   })
 
+  it('orders prerelease identifiers using semantic version precedence', () => {
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0-beta.2', 'frontend@1.2.0-beta.1')).toBeGreaterThan(0)
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0-1', 'frontend@1.2.0-alpha')).toBeLessThan(0)
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0-alpha', 'frontend@1.2.0-1')).toBeGreaterThan(0)
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0-alpha', 'frontend@1.2.0-beta')).toBeLessThan(0)
+  })
+
+  it('keeps longer prerelease and build metadata ahead when the shared prefix matches', () => {
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0-beta.1', 'frontend@1.2.0-beta')).toBeGreaterThan(0)
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0+build.2', 'frontend@1.2.0+build')).toBeGreaterThan(0)
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0+build', 'frontend@1.2.0+build.2')).toBeLessThan(0)
+  })
+
+  it('falls back to the last version-like token when no package separator is present', () => {
+    expect(compareReleaseVersionPrecedence('web build v2.4.0', 'web build v2.3.9')).toBeGreaterThan(0)
+  })
+
+  it('ignores unparsable release labels', () => {
+    expect(compareReleaseVersionPrecedence('frontend@release', 'frontend@1.0.0')).toBe(0)
+    expect(compareReleaseVersionPrecedence('frontend@1', 'frontend@1.0.0')).toBe(0)
+  })
+
+  it('treats equivalent version precedence as equal', () => {
+    expect(compareReleaseVersionPrecedence('frontend@1.2.0-beta', 'frontend@1.2.0-beta')).toBe(0)
+    expect(compareReleaseVersionPrecedence('frontend@1.2', 'frontend@1.2.0')).toBe(0)
+  })
+
   it('does not compare versions from different release families', () => {
     expect(compareReleaseVersionPrecedence('api@9.0.0', 'worker@1.0.0')).toBe(0)
   })
