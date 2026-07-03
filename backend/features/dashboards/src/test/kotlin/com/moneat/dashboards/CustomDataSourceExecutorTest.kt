@@ -18,6 +18,7 @@ package com.moneat.dashboards
 
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
+import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.handlers.PostgresHandler
 import com.moneat.dashboards.services.handlers.PrometheusHandler
@@ -223,6 +224,36 @@ class CustomDataSourceExecutorTest {
     @Test
     fun `validateSqlQuery allows legitimate inline comment`() {
         postgresHandler.validateSqlQuery("SELECT /* fetch all */ * FROM users LIMIT 10")
+    }
+
+    @Test
+    fun `prepareSqlQuery expands Grafana time macros for PostgreSQL`() {
+        val query = """
+            SELECT ${'$'}__timeGroupAlias(created_at, '5m'), count(*) AS count
+            FROM app_events
+            WHERE ${'$'}__timeFilter(created_at)
+            GROUP BY 1
+            ORDER BY 1
+        """.trimIndent()
+
+        val prepared = postgresHandler.prepareSqlQuery(
+            query,
+            TimeRangeDef(
+                from = "2026-07-01T00:00:00Z",
+                to = "2026-07-01T01:00:00Z",
+            )
+        )
+
+        assertContains(
+            prepared,
+            "to_timestamp(floor(extract(epoch from created_at) / 300) * 300) AS time"
+        )
+        assertContains(
+            prepared,
+            "created_at BETWEEN TIMESTAMPTZ '2026-07-01 00:00:00+00' " +
+                "AND TIMESTAMPTZ '2026-07-01 01:00:00+00'"
+        )
+        postgresHandler.validateSqlQuery(prepared)
     }
 
     // ──── Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ────

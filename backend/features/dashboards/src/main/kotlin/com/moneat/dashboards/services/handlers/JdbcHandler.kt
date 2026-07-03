@@ -31,6 +31,12 @@ import kotlinx.serialization.json.JsonPrimitive
 import mu.KotlinLogging
 import java.sql.Connection
 import java.sql.ResultSet
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
 private val logger = KotlinLogging.logger {}
@@ -50,6 +56,31 @@ abstract class JdbcHandler(
         private const val POOL_MAX_LIFETIME_MS = 300_000L
         private const val POOL_CONNECTION_TIMEOUT_MS = 10_000L
         private const val TEMP_POOL_MAX_SIZE = 1
+        private const val DEFAULT_MACRO_INTERVAL_SECONDS = 60L
+        private const val SECONDS_PER_MINUTE = 60L
+        private const val SECONDS_PER_HOUR = 3_600L
+        private const val SECONDS_PER_DAY = 86_400L
+        private const val SECONDS_PER_WEEK = 604_800L
+        private const val DAYS_PER_WEEK = 7L
+        private const val DAYS_PER_MONTH = 30L
+        private const val DAYS_PER_YEAR = 365L
+        private const val EPOCH_MILLIS_DIVISOR = 1_000L
+
+        private val TIMESTAMP_FORMATTER: DateTimeFormatter =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
+        private val RELATIVE_TIME_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
+        private val INTERVAL_REGEX = Regex("""^(\d+)\s*([smhdwMy])$""")
+        private val TIME_GROUP_ALIAS_REGEX =
+            Regex("""\${'$'}__timeGroupAlias\(([^,]+),\s*['"]?([^'",)]+)['"]?(?:,\s*[^)]*)?\)""")
+        private val TIME_GROUP_REGEX =
+            Regex("""\${'$'}__timeGroup\(([^,]+),\s*['"]?([^'",)]+)['"]?(?:,\s*[^)]*)?\)""")
+        private val TIME_FILTER_REGEX = Regex("""\${'$'}__timeFilter\(([^)]+)\)""")
+        private val TIME_MACRO_REGEX = Regex("""\${'$'}__time\(([^)]+)\)""")
+        private val UNIX_EPOCH_FILTER_REGEX = Regex("""\${'$'}__unixEpochFilter\(([^)]+)\)""")
+        private val UNIX_EPOCH_FROM_REGEX = Regex("""\${'$'}__unixEpochFrom\(\)""")
+        private val UNIX_EPOCH_TO_REGEX = Regex("""\${'$'}__unixEpochTo\(\)""")
+        private val TIME_FROM_REGEX = Regex("""\${'$'}__timeFrom\(\)""")
+        private val TIME_TO_REGEX = Regex("""\${'$'}__timeTo\(\)""")
     }
 
     internal abstract fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String
@@ -95,7 +126,8 @@ abstract class JdbcHandler(
         limit: Int,
         timeRange: TimeRangeDef?,
     ): List<Map<String, JsonElement>> {
-        validateSqlQuery(query)
+        val preparedQuery = prepareSqlQuery(query, timeRange)
+        validateSqlQuery(preparedQuery)
         val p = port ?: defaultPort()
         val db = databaseName ?: defaultDatabase()
         val ds = getOrCreatePool(sourceId, host, p, db, credentials)
@@ -103,7 +135,7 @@ abstract class JdbcHandler(
             conn.createStatement().use { stmt ->
                 stmt.maxRows = limit.coerceIn(1, QUERY_MAX_ROWS)
                 stmt.queryTimeout = credentials.options.timeoutSeconds ?: QUERY_TIMEOUT_SECONDS
-                stmt.executeQuery(query).use { rs -> resultSetToMaps(rs) }
+                stmt.executeQuery(preparedQuery).use { rs -> resultSetToMaps(rs) }
             }
         }
     }
@@ -144,6 +176,47 @@ abstract class JdbcHandler(
     }
 
     protected open fun defaultDatabase(): String = ""
+
+    internal fun prepareSqlQuery(query: String, timeRange: TimeRangeDef?): String {
+        val range = resolvedTimeRange(timeRange)
+        val fromLiteral = timestampLiteral(range.from)
+        val toLiteral = timestampLiteral(range.to)
+        val fromEpochSeconds = range.from.toEpochMilli() / EPOCH_MILLIS_DIVISOR
+        val toEpochSeconds = range.to.toEpochMilli() / EPOCH_MILLIS_DIVISOR
+
+        var expanded = query
+        expanded = TIME_GROUP_ALIAS_REGEX.replace(expanded) { match ->
+            val column = match.groupValues[1].trim()
+            val intervalSeconds = intervalSeconds(match.groupValues[2])
+            "${timeBucketExpression(column, intervalSeconds)} AS time"
+        }
+        expanded = TIME_GROUP_REGEX.replace(expanded) { match ->
+            val column = match.groupValues[1].trim()
+            val intervalSeconds = intervalSeconds(match.groupValues[2])
+            timeBucketExpression(column, intervalSeconds)
+        }
+        expanded = TIME_FILTER_REGEX.replace(expanded) { match ->
+            val column = match.groupValues[1].trim()
+            "$column BETWEEN $fromLiteral AND $toLiteral"
+        }
+        expanded = UNIX_EPOCH_FILTER_REGEX.replace(expanded) { match ->
+            val column = match.groupValues[1].trim()
+            "$column BETWEEN $fromEpochSeconds AND $toEpochSeconds"
+        }
+        expanded = TIME_MACRO_REGEX.replace(expanded) { match ->
+            "${match.groupValues[1].trim()} AS time"
+        }
+        expanded = TIME_FROM_REGEX.replace(expanded, fromLiteral)
+        expanded = TIME_TO_REGEX.replace(expanded, toLiteral)
+        expanded = UNIX_EPOCH_FROM_REGEX.replace(expanded, fromEpochSeconds.toString())
+        expanded = UNIX_EPOCH_TO_REGEX.replace(expanded, toEpochSeconds.toString())
+        return expanded
+    }
+
+    protected open fun timestampLiteral(instant: Instant): String =
+        "'${TIMESTAMP_FORMATTER.format(instant)}'"
+
+    protected open fun timeBucketExpression(column: String, intervalSeconds: Long): String = column
 
     private fun getOrCreatePool(
         sourceId: Long,
@@ -273,5 +346,65 @@ abstract class JdbcHandler(
 
     fun closePool(sourceId: Long) {
         pools.remove(sourceId)?.close()
+    }
+
+    private data class ResolvedTimeRange(
+        val from: Instant,
+        val to: Instant,
+    )
+
+    private fun resolvedTimeRange(timeRange: TimeRangeDef?): ResolvedTimeRange {
+        val now = Instant.now()
+        val range = timeRange ?: TimeRangeDef()
+        return ResolvedTimeRange(
+            from = resolveTimeExpression(range.from, now),
+            to = resolveTimeExpression(range.to, now),
+        )
+    }
+
+    private fun resolveTimeExpression(expr: String, now: Instant): Instant {
+        if (expr == "now") return now
+        val match = RELATIVE_TIME_REGEX.matchEntire(expr)
+        if (match != null) {
+            val amount = match.groupValues[1].toLong()
+            val duration = when (match.groupValues[2]) {
+                "s" -> Duration.ofSeconds(amount)
+                "m" -> Duration.ofMinutes(amount)
+                "h" -> Duration.ofHours(amount)
+                "d" -> Duration.ofDays(amount)
+                "w" -> Duration.ofDays(amount * DAYS_PER_WEEK)
+                "M" -> Duration.ofDays(amount * DAYS_PER_MONTH)
+                "y" -> Duration.ofDays(amount * DAYS_PER_YEAR)
+                else -> Duration.ZERO
+            }
+            return now.minus(duration)
+        }
+        return parseAbsoluteInstant(expr)
+    }
+
+    private fun parseAbsoluteInstant(expr: String): Instant {
+        val normalized = expr.trim().replace(' ', 'T')
+        return runCatching { Instant.parse(normalized) }
+            .getOrElse {
+                runCatching { OffsetDateTime.parse(normalized).toInstant() }
+                    .getOrElse { LocalDateTime.parse(normalized).toInstant(ZoneOffset.UTC) }
+            }
+    }
+
+    private fun intervalSeconds(raw: String): Long {
+        val normalized = raw.trim().removeSurrounding("'").removeSurrounding("\"")
+        if (normalized == "\${'$'}__interval") return DEFAULT_MACRO_INTERVAL_SECONDS
+        val match = INTERVAL_REGEX.matchEntire(normalized) ?: return DEFAULT_MACRO_INTERVAL_SECONDS
+        val amount = match.groupValues[1].toLong()
+        return when (match.groupValues[2]) {
+            "s" -> amount
+            "m" -> amount * SECONDS_PER_MINUTE
+            "h" -> amount * SECONDS_PER_HOUR
+            "d" -> amount * SECONDS_PER_DAY
+            "w" -> amount * SECONDS_PER_WEEK
+            "M" -> amount * DAYS_PER_MONTH * SECONDS_PER_DAY
+            "y" -> amount * DAYS_PER_YEAR * SECONDS_PER_DAY
+            else -> DEFAULT_MACRO_INTERVAL_SECONDS
+        }
     }
 }
