@@ -209,14 +209,16 @@ class ReplayServiceTest {
 
     @Test
     fun `getReplays returns paginated replay list`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         val replayRow = """
 {"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000","finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],"error_count":2,"user_id":"u-1","user_email":"test@test.com","user_username":"tester","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}
         """.trimIndent()
         val contextRow = """
-{"project_id":1,"ts_ms":"1767225660000","user_id":"u-1","contexts":"{}","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:01:00.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
+{"context_project_id":1,"ts_ms":"1767225660000","user_id":"u-1","contexts":"{}","breadcrumbs":"[{\"timestamp\":\"2026-01-01T00:01:00.000Z\",\"category\":\"ui.click\",\"message\":\"rage click x3\"}]"}
         """.trimIndent()
         withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
+            queries += query
             if (query.contains("toUnixTimestamp64Milli(timestamp) as ts_ms")) {
                 exchange.respond(200, contextRow, TEXT_PLAIN)
             } else {
@@ -235,6 +237,9 @@ class ReplayServiceTest {
             assertEquals("https://app.example.com", result[0].entryUrl)
             assertTrue("error" in result[0].signals)
             assertTrue("rage_click" in result[0].signals)
+            val contextQueries = queries.filter { it.contains("toUnixTimestamp64Milli(timestamp) as ts_ms") }
+            assertTrue(contextQueries.any { it.contains("toInt64(project_id) as context_project_id") })
+            assertTrue(contextQueries.none { it.contains("toInt64(project_id) as project_id") })
         }
     }
 

@@ -526,7 +526,7 @@ class ReplayService(
         val query =
             """
             SELECT
-                toInt64(project_id) as project_id,
+                toInt64(project_id) as $REPLAY_CONTEXT_PROJECT_ID_FIELD,
                 toUnixTimestamp64Milli(timestamp) as ts_ms,
                 user_id,
                 contexts,
@@ -544,7 +544,7 @@ class ReplayService(
             val enrichments = validWindows.associateWith { ReplayContextEnrichment() }.toMutableMap()
 
             rows.forEach { row ->
-                val projectId = row["project_id"]?.jsonPrimitive?.long ?: return@forEach
+                val projectId = row[REPLAY_CONTEXT_PROJECT_ID_FIELD]?.jsonPrimitive?.long ?: return@forEach
                 val timestampMs = row["ts_ms"]?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: return@forEach
                 val rowUserId = row["user_id"]?.jsonPrimitive?.contentOrNull
                 val contexts = parseStoredJsonObject(stringValue(row, "contexts"))
@@ -1787,6 +1787,7 @@ class ReplayService(
         private const val PERIOD_7D_MS = 7 * MILLIS_PER_DAY
         private const val PERIOD_30D_MS = 30 * MILLIS_PER_DAY
         private const val PERIOD_90D_MS = 90 * MILLIS_PER_DAY
+        private const val REPLAY_CONTEXT_PROJECT_ID_FIELD = "context_project_id"
         private const val REPLAY_CONTEXT_EVENT_LIMIT = 100
         private const val REPLAY_BREADCRUMB_EVENT_LIMIT = 100
         private val HTTP_STATUS_REGEX = Regex("""\b([1-5]\d{2})\b""")
