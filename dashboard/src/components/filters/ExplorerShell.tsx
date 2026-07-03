@@ -19,6 +19,7 @@ import type {ReactNode} from 'react'
 import {PanelLeftClose, PanelLeftOpen} from 'lucide-react'
 
 import {cn} from '@/lib/utils'
+import {useIsMobile} from '@/hooks/useIsMobile'
 
 export interface ExplorerShellProps {
   /** The search/filter bar (typically a <SearchFilterBar/>), stretched to fill. */
@@ -63,10 +64,16 @@ export function ExplorerShell({
   children,
   className,
 }: Readonly<ExplorerShellProps>) {
+  const isMobile = useIsMobile()
   const [railOpen, setRailOpen] = useState(defaultRailOpen)
+  // On mobile the rail is an overlay drawer that defaults closed, so it never
+  // squeezes the result list; on desktop it stays inline and pushes content.
+  const [mobileRailOpen, setMobileRailOpen] = useState(false)
+  const open = isMobile ? mobileRailOpen : railOpen
+  const toggleRail = () => (isMobile ? setMobileRailOpen((v) => !v) : setRailOpen((v) => !v))
 
   return (
-    <div className={cn('flex h-[calc(100dvh-var(--header-height,0px))] flex-col', className)}>
+    <div className={cn('flex h-[calc(100dvh-var(--header-height,0px))] flex-col overflow-x-clip', className)}>
       {/* Header bar */}
       <div className="@container/header flex min-h-[var(--app-header-h)] items-center gap-2 border-b px-2 py-1 sm:px-3">
         {(icon || title) && (
@@ -75,14 +82,14 @@ export function ExplorerShell({
             {title && <h2 className="hidden text-xs font-semibold leading-tight sm:block">{title}</h2>}
           </div>
         )}
-        {tabs && <div className="flex shrink-0 items-center">{tabs}</div>}
+        {tabs && <div className="flex min-w-0 shrink items-center">{tabs}</div>}
         <div className="min-w-0 flex-1">{searchBar}</div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
 
       {/* Body: rail + content */}
-      <div className="flex min-h-0 flex-1">
-        {rail && (
+      <div className="relative flex min-h-0 flex-1">
+        {rail && !isMobile && (
           <div
             className={cn(
               'shrink-0 self-stretch overflow-y-auto border-r transition-all duration-200',
@@ -93,18 +100,43 @@ export function ExplorerShell({
           </div>
         )}
 
+        {/* Mobile facet overlay */}
+        {rail && isMobile && (
+          <>
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden={!open}
+              onClick={() => setMobileRailOpen(false)}
+              className={cn(
+                'absolute inset-0 z-20 bg-black/50 transition-opacity duration-200',
+                open ? 'opacity-100' : 'pointer-events-none opacity-0'
+              )}
+            />
+            <div
+              className={cn(
+                'absolute inset-y-0 left-0 z-30 w-[min(80%,280px)] overflow-y-auto border-r bg-card shadow-xl transition-transform duration-200',
+                open ? 'translate-x-0' : '-translate-x-full'
+              )}
+              inert={open ? undefined : true}
+            >
+              {rail}
+            </div>
+          </>
+        )}
+
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {(rail || toolbar) && (
             <div className="flex h-[var(--app-subheader-h)] shrink-0 items-center gap-1.5 border-b bg-card/30 px-2">
               {rail && (
                 <button
                   type="button"
-                  onClick={() => setRailOpen((v) => !v)}
+                  onClick={toggleRail}
                   className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title={railOpen ? 'Hide facets' : 'Show facets'}
-                  aria-label={railOpen ? 'Hide facets' : 'Show facets'}
+                  title={open ? 'Hide facets' : 'Show facets'}
+                  aria-label={open ? 'Hide facets' : 'Show facets'}
                 >
-                  {railOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                  {open ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
                 </button>
               )}
               {toolbar}

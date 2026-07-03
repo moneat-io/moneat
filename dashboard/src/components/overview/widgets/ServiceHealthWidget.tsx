@@ -156,7 +156,8 @@ export function ServiceHealthWidget() {
       }
       flush
     >
-      <table className="w-full border-collapse text-sm">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[680px] border-collapse text-sm">
         <thead>
           <tr className="border-b bg-muted/40">
             <th className={TH}>Service</th>
@@ -175,6 +176,7 @@ export function ServiceHealthWidget() {
           ))}
         </tbody>
       </table>
+      </div>
     </OverviewPanel>
   )
 }

@@ -138,7 +138,7 @@ function ServiceDetailContent({service}: Readonly<{service: string}>) {
 
       <ApmKpiRow kpis={detail.kpis} />
 
-      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
         <SectionCard
           title="Latency percentiles"
           actions={<Badge variant="neutral" shape="pill" size="sm">{rangeLabel}</Badge>}
@@ -166,7 +166,7 @@ function ServiceDetailContent({service}: Readonly<{service: string}>) {
         </SectionCard>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[3fr_2fr]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[3fr_2fr]">
         <SectionCard
           title="Errors over time"
           actions={

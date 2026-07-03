@@ -1195,7 +1195,7 @@ function MonitoringHostsPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
                 {([
                   {key: 'all' as const, tone: 'neutral' as const, count: hosts.length},
                   {key: 'online' as const, tone: 'success' as const, count: onlineCount},
@@ -1217,7 +1217,7 @@ function MonitoringHostsPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={cn(

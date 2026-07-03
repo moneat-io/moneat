@@ -136,7 +136,7 @@ export function OverviewDashboard() {
   return (
     <OverviewDataProvider>
       <div className="min-h-screen">
-        <div className="px-6 py-3">
+        <div className="px-3 py-3 sm:px-6">
           <OverviewHeader
             isEditing={isEditing}
             onToggleEdit={handleToggleEdit}

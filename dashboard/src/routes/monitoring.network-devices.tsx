@@ -69,7 +69,7 @@ function NetworkDevicesLayout() {
   return (
     <div className="container mx-auto px-4 py-4 space-y-4">
       <div className="border-b">
-        <nav className="flex gap-1">
+        <nav className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => {
             const isActive = tab.href === '/monitoring/network-devices'
               ? isIndexPage

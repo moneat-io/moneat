@@ -96,7 +96,7 @@ function InsightsSection() {
 
   return (
     <SectionCard title="Overview" icon={Gauge} iconTone="accent">
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <OverviewBlock query={overviewQuery} />
         <UsageBlock query={usageQuery} />
       </div>

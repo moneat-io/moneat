@@ -267,7 +267,7 @@ export function ContainerList() {
             className="pl-9"
           />
         </div>
-        <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+        <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
           {(['all', 'running', 'stopped'] as const).map((f) => (
             <button
               key={f}

@@ -237,7 +237,7 @@ export function CloudAccountSetup() {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
       <SectionCard title="Cloud account" icon={CloudCog} bodyClassName="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Provider</p>

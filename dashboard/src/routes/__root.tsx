@@ -17,7 +17,10 @@
 import {createRootRoute, Outlet, Link, useRouterState, useNavigate} from '@tanstack/react-router'
 import {useCallback, useEffect, useState} from 'react'
 import {useQuery} from '@tanstack/react-query'
+import {Menu} from 'lucide-react'
 import {Sidebar, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH} from '../components/Sidebar'
+import {Logo} from '../components/Logo'
+import {useIsMobile} from '../hooks/useIsMobile'
 import {CommandPalette} from '../components/CommandPalette'
 import {CommandPaletteProvider} from '../contexts/CommandPaletteProvider'
 import {Toaster} from '../components/ui/toaster'
@@ -286,6 +289,8 @@ function RootComponent() {
     setIsSidebarExpanded(expanded)
     localStorage.setItem('moneat:sidebar-expanded', String(expanded))
   }, [])
+  const isMobile = useIsMobile()
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [onboardingChecked, setOnboardingChecked] = useState(false)
   const [authCheckComplete, setAuthCheckComplete] = useState(false)
   const [headerHeight, setHeaderHeight] = useState(0)
@@ -365,7 +370,9 @@ function RootComponent() {
     pathname: currentPath,
     search: router.location.search,
   })
-  const sidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
+  // On mobile the sidebar is an overlay drawer, so content spans the full width.
+  const desktopSidebarWidth = isSidebarExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH
+  const sidebarWidth = isMobile ? 0 : desktopSidebarWidth
 
   // Show loading state while checking auth and onboarding
   if (!authCheckComplete && !isPublicRoute) {
@@ -380,14 +387,38 @@ function RootComponent() {
     <div className="min-h-screen bg-background">
       {showSidebar && (
         <CommandPaletteProvider>
-          {/* Fixed header: optional demo banner */}
+          {/* Fixed header: optional demo banner + mobile top bar with nav toggle */}
           <div ref={headerRef} className="fixed top-0 left-0 right-0 z-50 w-full">
             <DemoBanner isDemoMode={showDemoBanner} />
+            {isMobile && (
+              <div className="flex items-center gap-2 h-[var(--app-header-h)] border-b bg-card px-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMobileNavOpen(true)}
+                  aria-label="Open navigation"
+                  aria-expanded={isMobileNavOpen}
+                  className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                <Link
+                  to="/"
+                  search={APP_OVERVIEW_SEARCH}
+                  onClick={() => setIsMobileNavOpen(false)}
+                  className="flex items-center focus:outline-none focus:ring-2 focus:ring-ring rounded"
+                >
+                  <Logo className="h-6" />
+                </Link>
+              </div>
+            )}
           </div>
           <Sidebar
             isExpanded={isSidebarExpanded}
             onExpandedChange={handleSidebarExpandedChange}
             headerHeight={headerHeight}
+            isMobile={isMobile}
+            isMobileOpen={isMobileNavOpen}
+            onMobileOpenChange={setIsMobileNavOpen}
           />
           <AuthenticatedContent sidebarWidth={sidebarWidth} headerHeight={headerHeight} />
           <CommandPalette />

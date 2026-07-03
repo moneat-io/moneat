@@ -542,7 +542,7 @@ function HostDetailPage() {
             </TabsList>
 
             {activeTab === 'containers' && containers.length > 0 && (
-              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
                 <Button
                   variant={containerViewMode === 'cards' ? 'secondary' : 'ghost'}
                   size="sm"

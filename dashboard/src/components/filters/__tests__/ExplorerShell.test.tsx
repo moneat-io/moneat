@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {render, screen, fireEvent} from '@testing-library/react'
-import {describe, it, expect} from 'vitest'
+import {afterEach, beforeEach, describe, it, expect} from 'vitest'
 
 import {ExplorerShell} from '@/components/filters/ExplorerShell'
 
@@ -99,5 +99,42 @@ describe('ExplorerShell', () => {
     )
 
     expect(screen.getByRole('button', {name: 'APM Errors'})).toBeTruthy()
+  })
+})
+
+describe('ExplorerShell (mobile)', () => {
+  const realMatchMedia = window.matchMedia
+
+  beforeEach(() => {
+    // Force the `md`-breakpoint media query to match so useIsMobile() is true and
+    // the facet rail renders as an off-canvas overlay instead of an inline column.
+    const noop = () => undefined
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      onchange: null,
+      addListener: noop,
+      removeListener: noop,
+      addEventListener: noop,
+      removeEventListener: noop,
+      dispatchEvent: () => false,
+    })) as typeof window.matchMedia
+  })
+
+  afterEach(() => {
+    window.matchMedia = realMatchMedia
+  })
+
+  it('renders the rail as a closed overlay drawer that toggles open', () => {
+    render(
+      <ExplorerShell searchBar={<input aria-label="Search" />} rail={<div>Facet rail</div>}>
+        <div>Rows</div>
+      </ExplorerShell>
+    )
+
+    // On mobile the rail stays mounted inside the drawer but defaults closed.
+    expect(screen.getByText('Facet rail')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', {name: 'Show facets'}))
+    expect(screen.getByRole('button', {name: 'Hide facets'})).toBeTruthy()
   })
 })

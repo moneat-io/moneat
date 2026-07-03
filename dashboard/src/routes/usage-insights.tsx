@@ -162,7 +162,7 @@ function UsageInsightsPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         <SectionCard title="Forecast Timeline" icon={LineChart} flushBody>
             <div className="w-full overflow-x-auto">
               <Table className="min-w-[640px]">
