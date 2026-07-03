@@ -85,6 +85,9 @@ import com.moneat.mcp.tools.GetProjectStatsTool
 import com.moneat.mcp.tools.GetProjectTool
 import com.moneat.mcp.tools.GetRelatedErrorsTool
 import com.moneat.mcp.tools.GetReleaseStatsTool
+import com.moneat.mcp.tools.GetReplayRecordingSummaryTool
+import com.moneat.mcp.tools.GetReplayTimelineTool
+import com.moneat.mcp.tools.GetReplayTool
 import com.moneat.mcp.tools.GetSecurityEventTool
 import com.moneat.mcp.tools.GetSecuritySignalTool
 import com.moneat.mcp.tools.GetSpanDetailsTool
@@ -122,6 +125,7 @@ import com.moneat.mcp.tools.ListProjectsTool
 import com.moneat.mcp.tools.ListProcessesTool
 import com.moneat.mcp.tools.ListProfilesTool
 import com.moneat.mcp.tools.ListReleasesTool
+import com.moneat.mcp.tools.ListReplaysTool
 import com.moneat.mcp.tools.ListSecurityEventsTool
 import com.moneat.mcp.tools.ListSecuritySignalsTool
 import com.moneat.mcp.tools.ListSilencePeriodsTool
@@ -174,6 +178,12 @@ object McpToolRegistrar {
         toolRegistry.register(GetIssueTool())
         toolRegistry.register(GetIssueEventsTool())
         toolRegistry.register(UpdateIssueStatusTool())
+
+        // Replay tools
+        toolRegistry.register(ListReplaysTool())
+        toolRegistry.register(GetReplayTool())
+        toolRegistry.register(GetReplayTimelineTool())
+        toolRegistry.register(GetReplayRecordingSummaryTool())
 
         // Log tools
         toolRegistry.register(QueryLogsTool())

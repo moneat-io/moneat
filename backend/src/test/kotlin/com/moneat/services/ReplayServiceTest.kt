@@ -137,12 +137,24 @@ class ReplayServiceTest {
             append('"')
         }
 
-    private fun recordingDataRow(recordingData: String, segmentId: Int? = null): String =
-        if (segmentId == null) {
-            """{"recording_data":${jsonString(recordingData)}}"""
-        } else {
-            """{"segment_id":$segmentId,"recording_data":${jsonString(recordingData)}}"""
+    private fun recordingDataRow(
+        recordingData: String,
+        segmentId: Int? = null,
+        timestampMs: Long? = null
+    ): String =
+        buildString {
+            append("""{"recording_data":${jsonString(recordingData)}""")
+            if (segmentId != null) {
+                append(",\"segment_id\":$segmentId")
+            }
+            if (timestampMs != null) {
+                append(",\"timestamp_ms\":\"$timestampMs\",\"timestamp\":\"2026-01-01T00:00:00.000Z\"")
+            }
+            append("}")
         }
+
+    private fun isRecordingSegmentsQuery(query: String): Boolean =
+        query.contains("recording_data") && query.contains("replay_segments")
 
     private fun defaultProjectResourceId(): String =
         ProjectIdResolver().resourceIdFor(1) ?: ""
@@ -682,6 +694,93 @@ class ReplayServiceTest {
             assertEquals(1, result.events.size)
             val placeholder = result.events.first().jsonObject
             assertEquals("mobile_replay_not_supported", placeholder["type"]?.jsonPrimitive?.contentOrNull)
+        }
+    }
+
+    @Test
+    fun `getReplayRecordingDiagnostics summarizes rrweb events`() = runBlocking {
+        val recordingRows = recordingDataRow(
+            """[{"type":2,"timestamp":1000,"segment_id":4},{"type":3,"timestamp":2000,"segment_id":4}]""",
+            segmentId = 4,
+            timestampMs = 1767225600000
+        )
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                isRecordingSegmentsQuery(query) ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecordingDiagnostics(REPLAY_UUID)
+
+            assertNotNull(result)
+            assertEquals(1, result.recordingSegmentCount)
+            assertEquals(2, result.decodedEventCount)
+            assertEquals(listOf("4"), result.decodedSegmentIds)
+            assertEquals(1, result.eventTypes["2"])
+            assertEquals(1, result.eventTypes["3"])
+            assertTrue(result.hasFullSnapshot)
+            assertTrue(result.hasIncrementalSnapshot)
+            assertTrue(result.anomalies.isEmpty())
+        }
+    }
+
+    @Test
+    fun `getReplayRecordingDiagnostics summarizes mobile video without raw data`() = runBlocking {
+        val recordingRows = recordingDataRow(encodedMobileReplaySegment(), segmentId = 7)
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                isRecordingSegmentsQuery(query) ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecordingDiagnostics(REPLAY_UUID)
+
+            assertNotNull(result)
+            assertEquals(1, result.recordingSegmentCount)
+            assertEquals(2, result.decodedEventCount)
+            assertEquals(1, result.eventTypes["mobile_replay_video"])
+            assertTrue(result.hasMobileVideo)
+            assertTrue(result.isMobileReplay)
+            assertTrue(result.segments.single().recordingDataBytes > 0)
+        }
+    }
+
+    @Test
+    fun `getReplayRecordingDiagnostics flags unsupported mobile recordings`() = runBlocking {
+        val recordingRows = recordingDataRow(encodedMobileMetadataOnlySegment(), segmentId = 8)
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                isRecordingSegmentsQuery(query) ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecordingDiagnostics(REPLAY_UUID)
+
+            assertNotNull(result)
+            assertEquals(1, result.recordingSegmentCount)
+            assertEquals(0, result.decodedEventCount)
+            assertTrue(result.isMobileReplay)
+            assertTrue(result.placeholderOnly)
+            assertTrue("recording_segments_without_decoded_events" in result.anomalies)
+            assertTrue("mobile_replay_not_supported_placeholder" in result.anomalies)
         }
     }
 

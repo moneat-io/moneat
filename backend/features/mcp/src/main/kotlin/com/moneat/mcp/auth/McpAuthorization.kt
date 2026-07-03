@@ -21,6 +21,7 @@ import com.moneat.dashboards.models.Dashboards
 import com.moneat.events.repositories.IssueRepositoryImpl
 import com.moneat.events.services.DashboardQueryHelper
 import com.moneat.events.services.IssueService
+import com.moneat.events.services.ReplayService
 import com.moneat.events.services.TransactionService
 import com.moneat.mcp.models.McpContext
 import com.moneat.security.detection.DetectionRules
@@ -48,6 +49,7 @@ class McpAuthorizationException(message: String) : RuntimeException(message)
 object McpAuthorization {
     private val queryHelper = DashboardQueryHelper()
     private val issueService = IssueService(IssueRepositoryImpl(queryHelper), queryHelper)
+    private val replayService = ReplayService(queryHelper)
     private val transactionService = TransactionService(queryHelper)
     private val projectIdResolver = ProjectIdResolver()
 
@@ -63,6 +65,7 @@ object McpAuthorization {
         args.stringValue("project_id")?.let { requireProjectResourceAccess(it, context) }
         args.stringValue("issue_id")?.let { requireIssueAccess(it, context) }
         args.stringValue("event_id")?.let { requireTransactionAccess(it, context) }
+        args.stringValue("replay_id")?.let { requireReplayAccess(it, context) }
         args.uuidValue("host_id")?.let { requireHostAccess(it, context) }
         args.stringValue("dashboard_id")?.let { requireDashboardAccess(it, context) }
         args.uuidValue("monitor_id")?.let { requireUptimeMonitorAccess(it, context) }
@@ -105,6 +108,12 @@ object McpAuthorization {
     private suspend fun requireTransactionAccess(eventId: String, context: McpContext) {
         val projectId = transactionService.getProjectIdForTransaction(eventId)
             ?: throw McpAuthorizationException("$AUTHORIZATION_ERROR: event not found")
+        requireProjectAccess(projectId, context)
+    }
+
+    private suspend fun requireReplayAccess(replayId: String, context: McpContext) {
+        val projectId = replayService.getProjectIdForReplay(replayId)
+            ?: throw McpAuthorizationException("$AUTHORIZATION_ERROR: replay not found")
         requireProjectAccess(projectId, context)
     }
 

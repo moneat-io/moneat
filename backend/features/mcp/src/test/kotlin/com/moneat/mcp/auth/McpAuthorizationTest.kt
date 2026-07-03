@@ -146,6 +146,21 @@ class McpAuthorizationTest {
     }
 
     @Test
+    fun `replay id from another org returns authorization error`() = runBlocking {
+        val projectId = seedProject(organizationId = 2)
+        stubClickHouseProjectId(projectId)
+
+        val result = registryWithNoopTool().callTool(
+            name = "read_project",
+            args = JsonObject(mapOf("replay_id" to JsonPrimitive("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"))),
+            context = context,
+        )
+
+        assertTrue(result.isError)
+        assertTrue(result.content[0].text!!.contains("project not found"))
+    }
+
+    @Test
     fun `host metrics tool cannot leak cross-org data`() = runBlocking {
         val hostId = seedHost(organizationId = 2)
         val result = McpToolRegistry()
