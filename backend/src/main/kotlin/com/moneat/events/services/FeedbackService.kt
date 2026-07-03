@@ -255,7 +255,7 @@ class FeedbackService(private val queryHelper: DashboardQueryHelper) {
             val query =
                 """
                 ALTER TABLE `$clickhouseDb`.user_feedback
-                UPDATE status = '$escapedStatus', updated_at = now64(3)
+                UPDATE status = '$escapedStatus'
                 WHERE toString(feedback_id) = '$normalizedFeedbackId'
                 """.trimIndent()
             queryHelper.executeMutation(query, "Feedback update")
