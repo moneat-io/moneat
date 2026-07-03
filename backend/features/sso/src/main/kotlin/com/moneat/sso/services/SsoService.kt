@@ -650,15 +650,17 @@ open class SsoService {
 
             val (userId, orgRole) =
                 if (existingLink != null) {
+                    val userId = existingLink[UserSsoLinks.userId]
                     val membership =
                         Memberships
                             .selectAll()
-                            .where { Memberships.user_id eq existingLink[UserSsoLinks.userId] }
+                            .where {
+                                (Memberships.user_id eq userId) and
+                                    (Memberships.organization_id eq organizationId)
+                            }
                             .firstOrNull()
-                    Pair(
-                        existingLink[UserSsoLinks.userId],
-                        membership?.get(Memberships.role) ?: "member",
-                    )
+                            ?: throw SsoForbiddenException("SSO user is not a member of this organization")
+                    Pair(userId, membership[Memberships.role])
                 } else {
                     linkOrCreateUser(
                         normalizedEmail,
@@ -906,8 +908,16 @@ open class SsoService {
 
         return if (existingUser != null) {
             val uid = existingUser[Users.id]
+            val membership =
+                Memberships
+                    .selectAll()
+                    .where {
+                        (Memberships.user_id eq uid) and
+                            (Memberships.organization_id eq organizationId)
+                    }
+                    .firstOrNull()
             val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
-            require(isOrganizationMember(uid, organizationId) || invitationRole != null) {
+            require(membership != null || invitationRole != null) {
                 "SSO account linking requires an existing membership or invitation"
             }
             UserSsoLinks.insert {
@@ -917,7 +927,7 @@ open class SsoService {
             }
             addToOrgIfNeeded(uid, organizationId, invitationRole)
             acceptPendingInvitation(normalizedEmail, organizationId)
-            Pair(uid, invitationRole ?: "member")
+            Pair(uid, membership?.get(Memberships.role) ?: invitationRole ?: "member")
         } else {
             val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
             val uid =
