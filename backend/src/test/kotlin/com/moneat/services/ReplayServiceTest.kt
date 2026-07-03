@@ -137,8 +137,12 @@ class ReplayServiceTest {
             append('"')
         }
 
-    private fun recordingDataRow(recordingData: String): String =
-        """{"recording_data":${jsonString(recordingData)}}"""
+    private fun recordingDataRow(recordingData: String, segmentId: Int? = null): String =
+        if (segmentId == null) {
+            """{"recording_data":${jsonString(recordingData)}}"""
+        } else {
+            """{"segment_id":$segmentId,"recording_data":${jsonString(recordingData)}}"""
+        }
 
     private fun defaultProjectResourceId(): String =
         ProjectIdResolver().resourceIdFor(1) ?: ""
@@ -319,7 +323,9 @@ class ReplayServiceTest {
             assertTrue("error" in replay.signals)
             assertTrue("dead_click" !in replay.signals)
             assertTrue(queries.any { it.contains("replay_segments") })
-            assertTrue(queries.any { it.contains("max(greatest(e.timestamp") })
+            assertTrue(queries.any { it.contains("max(e.timestamp)") })
+            assertTrue(queries.none { it.contains("last_segment_timestamp") })
+            assertTrue(queries.none { it.contains("max(greatest") })
         }
     }
 
@@ -544,6 +550,34 @@ class ReplayServiceTest {
     }
 
     @Test
+    fun `getReplayTimeline skips range correlation for blank user replay`() = runBlocking {
+        val replayId = REPLAY_UUID
+        val detailRow = """
+{"replay_id":"$replayId","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-04T00:00:00.000Z","started_ms":"1767225600000","finished_ms":"1767484800000","duration_ms":"259200000","urls":[],"error_ids":[],"trace_ids":[],"segment_count":1,"environment":"","release":"","platform":"android","user_id":"","user_email":"","user_username":"","browser_name":"","browser_version":"","os_name":"","os_version":"","activity":0,"tags":"{}"}
+        """.trimIndent()
+        val queries = mutableListOf<String>()
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            queries += query
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("GROUP BY e.replay_id") ->
+                    exchange.respond(200, detailRow, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayTimeline(replayId)
+            assertTrue(result.items.isEmpty())
+            assertTrue(queries.none { it.contains("event_type = 'error'") })
+            assertTrue(queries.none { it.contains("event_type = 'transaction'") })
+            assertTrue(queries.none { it.contains("breadcrumbs != '[]'") })
+        }
+    }
+
+    @Test
     fun `getReplayRecording decodes json payload variants`() = runBlocking {
         val rawJsonEvents = """[{"type":2,"timestamp":1000}]"""
         val encodedJsonEvents =
@@ -558,7 +592,7 @@ class ReplayServiceTest {
             when {
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("SELECT recording_data") ->
+                query.contains("replay_segments") ->
                     exchange.respond(200, recordingRows, TEXT_PLAIN)
                 else ->
                     exchange.respond(200, "", TEXT_PLAIN)
@@ -581,7 +615,7 @@ class ReplayServiceTest {
             when {
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("SELECT recording_data") ->
+                query.contains("replay_segments") ->
                     exchange.respond(200, recordingRows, TEXT_PLAIN)
                 else ->
                     exchange.respond(200, "", TEXT_PLAIN)
@@ -601,6 +635,34 @@ class ReplayServiceTest {
     }
 
     @Test
+    fun `getReplayRecording ignores duplicate segment rows`() = runBlocking {
+        val encodedSegment = encodedMobileReplaySegment()
+        val recordingRows = listOf(
+            recordingDataRow(encodedSegment, segmentId = 7),
+            recordingDataRow(encodedSegment, segmentId = 7)
+        ).joinToString("\n")
+
+        withClickHouseMockServer({ exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
+                query.contains("replay_segments") ->
+                    exchange.respond(200, recordingRows, TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", TEXT_PLAIN)
+            }
+        }) {
+            val result = service.getReplayRecording(REPLAY_UUID)
+            assertNotNull(result)
+            val videoEvents = result.events.filter {
+                it.jsonObject["type"]?.jsonPrimitive?.contentOrNull == "mobile_replay_video"
+            }
+            assertEquals(1, videoEvents.size)
+        }
+    }
+
+    @Test
     fun `getReplayRecording returns placeholder for unsupported mobile payloads`() = runBlocking {
         val recordingRows = recordingDataRow(encodedMobileMetadataOnlySegment())
 
@@ -609,7 +671,7 @@ class ReplayServiceTest {
             when {
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
-                query.contains("SELECT recording_data") ->
+                query.contains("replay_segments") ->
                     exchange.respond(200, recordingRows, TEXT_PLAIN)
                 else ->
                     exchange.respond(200, "", TEXT_PLAIN)

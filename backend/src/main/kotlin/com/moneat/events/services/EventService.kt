@@ -136,6 +136,19 @@ class EventService(
     // Maps replay_id -> next segment counter. Cleaned up when map exceeds threshold.
     private val replaySegmentCounters = ConcurrentHashMap<String, AtomicInteger>()
 
+    private data class LastReplayEventContext(
+        val replayId: String?,
+        val segmentId: Int,
+        val timestampMs: Long?
+    )
+
+    private data class ResolvedReplayVideoContext(
+        val replayId: String,
+        val segmentId: Int,
+        val embeddedReplayEvent: SentryReplayEvent?,
+        val timestampMs: Long
+    )
+
     suspend fun storeOtlpException(exception: OtlpExceptionEvent): Boolean {
         val projectId = exception.projectId ?: return false
         val eventId = UUID.randomUUID().toString()
@@ -241,6 +254,7 @@ class EventService(
     ) {
         var lastReplayId: String? = null
         var lastSegmentId: Int = 0
+        var lastReplayTimestampMs: Long? = null
         for (item in envelope.items) {
             logger.debug { "Processing envelope item type: ${item.type}" }
             when (item.type) {
@@ -262,6 +276,7 @@ class EventService(
                     val replayEvent = parseReplayEventPayload(item.payload)
                     lastReplayId = replayEvent.replayId
                     lastSegmentId = replayEvent.segmentId ?: 0
+                    lastReplayTimestampMs = replayEventTimestampMs(replayEvent)
                     if (storeReplayEvent(projectId, replayEvent)) {
                         recordUsage(projectId, "replay", item)
                     }
@@ -269,10 +284,17 @@ class EventService(
 
                 "replay_recording" -> {
                     val rid = lastReplayId ?: envelope.eventId
-                    storeReplayRecording(projectId, rid, lastSegmentId, item.payload)
+                    storeReplayRecording(
+                        projectId,
+                        rid,
+                        lastSegmentId,
+                        item.payload,
+                        lastReplayTimestampMs ?: System.currentTimeMillis()
+                    )
                     recordUsage(projectId, "replay", item)
                     lastReplayId = null
                     lastSegmentId = 0
+                    lastReplayTimestampMs = null
                 }
 
                 "replay_video" -> {
@@ -280,11 +302,15 @@ class EventService(
                         projectId,
                         item,
                         envelope,
-                        lastReplayId,
-                        lastSegmentId,
+                        LastReplayEventContext(
+                            replayId = lastReplayId,
+                            segmentId = lastSegmentId,
+                            timestampMs = lastReplayTimestampMs
+                        ),
                     )
                     lastReplayId = newReplayId
                     lastSegmentId = newSegmentId
+                    lastReplayTimestampMs = null
                 }
 
                 "profile" -> handleProfileItem(projectId, item)
@@ -332,35 +358,103 @@ class EventService(
         projectId: Long,
         item: EnvelopeItem,
         envelope: SentryEnvelope,
-        lastReplayId: String?,
-        lastSegmentId: Int,
+        lastReplayEvent: LastReplayEventContext,
     ): Pair<String?, Int> {
         // Mobile replay uses replay_video instead of replay_recording.
         // The SDK may send a preceding replay_event item (with replay_id & segment_id)
         // or just a standalone replay_video. Handle both cases.
-        val rid = lastReplayId ?: envelope.eventId
+        val mobilePayloads = decodeMobileReplayPayloads(item)
+        val resolved = resolveReplayVideoContext(envelope, lastReplayEvent, mobilePayloads)
+        storeReplayVideoMetadata(projectId, lastReplayEvent, resolved)
 
-        val segmentId =
-            if (lastReplayId != null) {
-                // A replay_event was parsed in this envelope - use its segment_id
-                lastSegmentId
-            } else {
-                // No replay_event - derive segment_id from an in-memory counter.
-                // Evict stale entries if the map grows too large.
-                if (replaySegmentCounters.size > MAX_REPLAY_SEGMENT_COUNTERS) {
-                    replaySegmentCounters.clear()
-                }
-                replaySegmentCounters.computeIfAbsent(rid) { AtomicInteger(0) }.getAndIncrement()
-            }
-
-        // Only create a synthetic replay event for the first segment of a session
-        if (lastReplayId == null && segmentId == 0) {
-            storeSyntheticReplayEvent(projectId, rid, segmentId, envelope)
-        }
-
-        storeReplayRecording(projectId, rid, segmentId, item.payload)
+        storeReplayRecording(projectId, resolved.replayId, resolved.segmentId, item.payload, resolved.timestampMs)
         recordUsage(projectId, "replay", item)
         return null to 0
+    }
+
+    private fun resolveReplayVideoContext(
+        envelope: SentryEnvelope,
+        lastReplayEvent: LastReplayEventContext,
+        mobilePayloads: MobileReplaySegmentPayloads?
+    ): ResolvedReplayVideoContext {
+        val parsedEmbeddedReplayEvent =
+            if (lastReplayEvent.replayId == null) parseEmbeddedReplayEvent(mobilePayloads) else null
+        val replayId = lastReplayEvent.replayId ?: parsedEmbeddedReplayEvent?.replayId ?: envelope.eventId
+        val segmentId = replayVideoSegmentId(lastReplayEvent, parsedEmbeddedReplayEvent, mobilePayloads, replayId)
+        val embeddedReplayEvent =
+            parsedEmbeddedReplayEvent?.copy(
+                replayId = parsedEmbeddedReplayEvent.replayId ?: replayId,
+                segmentId = parsedEmbeddedReplayEvent.segmentId ?: segmentId
+            )
+        val timestampMs =
+            lastReplayEvent.timestampMs
+                ?: embeddedReplayEvent?.let(::replayEventTimestampMs)
+                ?: System.currentTimeMillis()
+
+        return ResolvedReplayVideoContext(
+            replayId = replayId,
+            segmentId = segmentId,
+            embeddedReplayEvent = embeddedReplayEvent,
+            timestampMs = timestampMs
+        )
+    }
+
+    private fun replayVideoSegmentId(
+        lastReplayEvent: LastReplayEventContext,
+        embeddedReplayEvent: SentryReplayEvent?,
+        mobilePayloads: MobileReplaySegmentPayloads?,
+        replayId: String
+    ): Int =
+        lastReplayEvent.replayId?.let { lastReplayEvent.segmentId }
+            ?: embeddedReplayEvent?.segmentId
+            ?: segmentIdFromMobileRecording(mobilePayloads)
+            ?: nextFallbackReplaySegmentId(replayId)
+
+    private suspend fun storeReplayVideoMetadata(
+        projectId: Long,
+        lastReplayEvent: LastReplayEventContext,
+        resolved: ResolvedReplayVideoContext
+    ) {
+        if (lastReplayEvent.replayId != null) return
+        resolved.embeddedReplayEvent?.let {
+            storeReplayEvent(projectId, it)
+            return
+        }
+        if (resolved.segmentId == 0) {
+            storeSyntheticReplayEvent(projectId, resolved.replayId, resolved.segmentId, resolved.timestampMs)
+        }
+    }
+
+    private fun decodeMobileReplayPayloads(item: EnvelopeItem): MobileReplaySegmentPayloads? {
+        val rawBytes = MobileReplaySegmentPayloadParser.rawBytes(item.payload, item.payloadBytes)
+        return MobileReplaySegmentPayloadParser.decode(rawBytes)
+    }
+
+    private fun parseEmbeddedReplayEvent(payloads: MobileReplaySegmentPayloads?): SentryReplayEvent? {
+        val payload = payloads?.replayEvent ?: return null
+        return runCatching {
+            parseReplayEventPayload(String(payload, Charsets.UTF_8))
+        }.onFailure { e ->
+            logger.warn(e) { "Failed to parse embedded mobile replay_event payload" }
+        }.getOrNull()
+    }
+
+    private fun segmentIdFromMobileRecording(payloads: MobileReplaySegmentPayloads?): Int? {
+        val payload = payloads?.replayRecording ?: return null
+        val recording = String(payload, Charsets.UTF_8)
+        val arrayStart = recording.indexOf('[')
+        val header = recording.substring(0, if (arrayStart == -1) recording.length else arrayStart).trim()
+        if (header.isBlank()) return null
+        return runCatching {
+            json.parseToJsonElement(header).jsonObject["segment_id"]?.jsonPrimitive?.intOrNull
+        }.getOrNull()
+    }
+
+    private fun nextFallbackReplaySegmentId(replayId: String): Int {
+        if (replaySegmentCounters.size > MAX_REPLAY_SEGMENT_COUNTERS) {
+            replaySegmentCounters.clear()
+        }
+        return replaySegmentCounters.computeIfAbsent(replayId) { AtomicInteger(0) }.getAndIncrement()
     }
 
     private suspend fun handleProfileItem(projectId: Long, item: EnvelopeItem) {
@@ -930,11 +1024,18 @@ class EventService(
         }
     }
 
+    private fun replayEventTimestampMs(replayEvent: SentryReplayEvent): Long =
+        replayEvent.timestamp
+            ?.let { unixSecondsToMillis(it) }
+            ?: replayEvent.replayStartTimestamp?.let { unixSecondsToMillis(it) }
+            ?: System.currentTimeMillis()
+
     private suspend fun storeReplayRecording(
         projectId: Long,
         replayId: String,
         segmentId: Int,
-        payload: String
+        payload: String,
+        timestampMs: Long = System.currentTimeMillis()
     ) {
         val organizationId = requireOrganizationIdForProject(projectId, "replay recording") ?: return
         suspendRunCatching {
@@ -944,7 +1045,7 @@ class EventService(
                     projectId = projectId,
                     organizationId = organizationId,
                     segmentId = segmentId,
-                    timestampMs = System.currentTimeMillis(),
+                    timestampMs = timestampMs,
                     recordingData = payload
                 )
             )
@@ -958,7 +1059,7 @@ class EventService(
         projectId: Long,
         replayId: String,
         segmentId: Int,
-        @Suppress("UNUSED_PARAMETER") envelope: SentryEnvelope
+        timestamp: Long = System.currentTimeMillis()
     ) {
         // Validate project ID — allow negative demo project IDs (-1, -2, -3)
         if (projectId == 0L) {
@@ -967,13 +1068,7 @@ class EventService(
         }
 
         val normalizedReplayId = normalizeUuid(replayId)
-        val timestamp = System.currentTimeMillis()
         val organizationId = requireOrganizationIdForProject(projectId, "synthetic replay event") ?: return
-
-        // Extract SDK info from envelope header if available
-        val sdkName = "sentry.java.android"
-        val sdkVersion = ""
-        val platform = "android"
 
         suspendRunCatching {
             eventRepository.insertReplayEvent(
@@ -987,15 +1082,15 @@ class EventService(
                     urls = emptyList(),
                     errorIds = emptyList(),
                     traceIds = emptyList(),
-                    environment = "e2e-testing",
+                    environment = "",
                     release = "",
-                    platform = platform,
+                    platform = "",
                     userId = "",
                     userEmail = "",
                     userUsername = "",
                     userIpAddress = "",
-                    sdkName = sdkName,
-                    sdkVersion = sdkVersion,
+                    sdkName = "",
+                    sdkVersion = "",
                     browserName = "",
                     browserVersion = "",
                     osName = "",

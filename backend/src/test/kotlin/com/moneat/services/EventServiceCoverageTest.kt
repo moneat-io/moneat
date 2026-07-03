@@ -38,6 +38,7 @@ import com.moneat.events.repositories.models.FeedbackInsertData
 import com.moneat.events.repositories.models.LlmGenerationInsertData
 import com.moneat.events.repositories.models.ProjectKeyVerification
 import com.moneat.events.repositories.models.ReplayEventInsertData
+import com.moneat.events.repositories.models.ReplayRecordingInsertData
 import com.moneat.events.repositories.models.SessionInsertData
 import com.moneat.events.repositories.models.TransactionEventInsertData
 import com.moneat.events.services.EventService
@@ -66,6 +67,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.msgpack.core.MessagePack
+import java.util.Base64
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -144,6 +147,29 @@ class EventServiceCoverageTest {
             eventRepository = eventRepository,
             releaseService = releaseService,
         )
+    }
+
+    private fun mobileReplayMsgpackPayload(
+        replayEventPayload: String,
+        recordingPayload: String,
+        videoPayload: ByteArray = byteArrayOf(0, 0, 0, 24) + "ftyp".toByteArray() + byteArrayOf(0, 0, 0, 0)
+    ): ByteArray {
+        val packer = MessagePack.newDefaultBufferPacker()
+        packer.packMapHeader(3)
+        packer.packString("replay_event")
+        val replayEventBytes = replayEventPayload.toByteArray()
+        packer.packBinaryHeader(replayEventBytes.size)
+        packer.writePayload(replayEventBytes)
+        packer.packString("replay_recording")
+        val recordingBytes = recordingPayload.toByteArray()
+        packer.packBinaryHeader(recordingBytes.size)
+        packer.writePayload(recordingBytes)
+        packer.packString("replay_video")
+        packer.packBinaryHeader(videoPayload.size)
+        packer.writePayload(videoPayload)
+        val bytes = packer.toByteArray()
+        packer.close()
+        return bytes
     }
 
     // ──── OTLP exception storage ────
@@ -575,6 +601,67 @@ class EventServiceCoverageTest {
         // Should create synthetic replay event + recording
         coVerify(atLeast = 1) { eventRepository.insertReplayEvent(any()) }
         coVerify(atLeast = 1) { eventRepository.insertReplayRecording(any()) }
+    }
+
+    @Test
+    fun `processEnvelope stores embedded mobile replay metadata from replay_video`() = runBlocking {
+        val replayEventSlot = slot<ReplayEventInsertData>()
+        val recordingSlot = slot<ReplayRecordingInsertData>()
+        coEvery { eventRepository.insertReplayEvent(capture(replayEventSlot)) } returns true
+        coEvery { eventRepository.insertReplayRecording(capture(recordingSlot)) } returns Unit
+
+        val replayId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        val replayEventPayload =
+            """
+            {
+              "replay_id": "$replayId",
+              "segment_id": 7,
+              "timestamp": 1767225603.0,
+              "replay_start_timestamp": 1767225600.0,
+              "urls": ["MainActivity"],
+              "platform": "java",
+              "environment": "production",
+              "release": "com.bandapella@4.4.1+126",
+              "user": {"id": "user-1", "email": "user@example.com"},
+              "sdk": {"name": "sentry.java.android.kmp", "version": "8.27.1"},
+              "contexts": {"replay": {"activity": 4}}
+            }
+            """.trimIndent()
+        val recordingPayload =
+            """{"segment_id":7}[{"type":5,"timestamp":1767225603000,"data":{"tag":"breadcrumb"}}]"""
+        val rawPayload = mobileReplayMsgpackPayload(replayEventPayload, recordingPayload)
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "fallback-envelope-id",
+                items = listOf(
+                    EnvelopeItem(
+                        type = "replay_video",
+                        payload = Base64.getEncoder().encodeToString(rawPayload),
+                        payloadBytes = rawPayload
+                    )
+                )
+            )
+        )
+
+        assertEquals(replayId, replayEventSlot.captured.replayId)
+        assertEquals(7, replayEventSlot.captured.segmentId)
+        assertEquals(1767225603000L, replayEventSlot.captured.timestampMs)
+        assertEquals(1767225600000L, replayEventSlot.captured.replayStartTimestampMs)
+        assertEquals("production", replayEventSlot.captured.environment)
+        assertEquals("com.bandapella@4.4.1+126", replayEventSlot.captured.release)
+        assertEquals("java", replayEventSlot.captured.platform)
+        assertEquals("user-1", replayEventSlot.captured.userId)
+        assertEquals("user@example.com", replayEventSlot.captured.userEmail)
+        assertEquals("sentry.java.android.kmp", replayEventSlot.captured.sdkName)
+        assertEquals("8.27.1", replayEventSlot.captured.sdkVersion)
+        assertEquals(listOf("MainActivity"), replayEventSlot.captured.urls)
+        assertEquals(4, replayEventSlot.captured.activity)
+
+        assertEquals(replayId, recordingSlot.captured.replayId)
+        assertEquals(7, recordingSlot.captured.segmentId)
+        assertEquals(1767225603000L, recordingSlot.captured.timestampMs)
     }
 
     @Test
