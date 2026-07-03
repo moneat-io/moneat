@@ -648,9 +648,17 @@ open class SsoService {
                             (UserSsoLinks.externalId eq externalId)
                     }.firstOrNull()
 
-            val userId =
+            val (userId, orgRole) =
                 if (existingLink != null) {
-                    existingLink[UserSsoLinks.userId]
+                    val membership =
+                        Memberships
+                            .selectAll()
+                            .where { Memberships.user_id eq existingLink[UserSsoLinks.userId] }
+                            .firstOrNull()
+                    Pair(
+                        existingLink[UserSsoLinks.userId],
+                        membership?.get(Memberships.role) ?: "member",
+                    )
                 } else {
                     linkOrCreateUser(
                         normalizedEmail,
@@ -667,7 +675,7 @@ open class SsoService {
                     .where { Users.id eq userId }
                     .first()
 
-            val token = generateToken(userId, user[Users.email])
+            val token = generateToken(userId, user[Users.email], organizationId, orgRole)
             Triple(token, user[Users.email], user[Users.name] ?: email)
         }
     }
@@ -868,12 +876,16 @@ open class SsoService {
     private fun generateToken(
         userId: Int,
         email: String,
+        orgId: Int,
+        orgRole: String,
     ): String =
         JWT
             .create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
             .withClaim("userId", userId)
+            .withClaim("orgId", orgId)
+            .withClaim("orgRole", orgRole)
             .withClaim("email", email)
             .withExpiresAt(Date(System.currentTimeMillis() + TOKEN_TTL_MS))
             .sign(Algorithm.HMAC256(jwtSecret))
@@ -884,7 +896,7 @@ open class SsoService {
         externalId: String,
         ssoConfigId: Int,
         organizationId: Int,
-    ): Int {
+    ): Pair<Int, String> {
         ensureSsoEmailDomainAllowsNewLink(normalizedEmail, ssoConfigId)
         val existingUser =
             Users
@@ -905,7 +917,7 @@ open class SsoService {
             }
             addToOrgIfNeeded(uid, organizationId, invitationRole)
             acceptPendingInvitation(normalizedEmail, organizationId)
-            uid
+            Pair(uid, invitationRole ?: "member")
         } else {
             val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
             val uid =
@@ -927,7 +939,7 @@ open class SsoService {
                 it[role] = invitationRole ?: "member"
             }
             acceptPendingInvitation(normalizedEmail, organizationId)
-            uid
+            Pair(uid, invitationRole ?: "member")
         }
     }
 
