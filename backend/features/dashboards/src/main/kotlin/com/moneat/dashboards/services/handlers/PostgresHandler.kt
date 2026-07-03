@@ -16,12 +16,18 @@
 
 package com.moneat.dashboards.services.handlers
 
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 
 class PostgresHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDataSource>) : JdbcHandler(
     driverClass = "org.postgresql.Driver",
     pools = pools,
 ) {
+    private val timestampFormatter: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneOffset.UTC)
+
     override fun buildJdbcUrl(host: String, port: Int, database: String, options: ConnectionOptions): String =
         "jdbc:postgresql://$host:$port/$database" + JdbcHandlerCommon.postgresQuerySuffix(options)
 
@@ -46,6 +52,12 @@ class PostgresHandler(pools: ConcurrentHashMap<Long, com.zaxxer.hikari.HikariDat
     override fun forbiddenKeywords(): List<Pair<Regex, String>> = POSTGRESQL_FORBIDDEN
 
     override fun forbiddenFunctionPatterns(): List<Pair<Regex, String>> = POSTGRESQL_FORBIDDEN_FUNCTIONS
+
+    override fun timestampLiteral(instant: Instant): String =
+        "TIMESTAMPTZ '${timestampFormatter.format(instant)}+00'"
+
+    override fun timeBucketExpression(column: String, intervalSeconds: Long): String =
+        "to_timestamp(floor(extract(epoch from $column) / $intervalSeconds) * $intervalSeconds)"
 
     companion object {
         private fun wb(kw: String) = Regex("""\b${Regex.escape(kw)}\b""", RegexOption.IGNORE_CASE)
