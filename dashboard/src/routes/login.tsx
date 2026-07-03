@@ -29,11 +29,9 @@ import {AuthAlert, AuthDivider, AuthField, AuthShell} from '@/components/auth/Au
 import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
-type SearchValue = string | string[]
-
 interface InternalRouteTarget {
   readonly to: string
-  readonly search?: Record<string, SearchValue>
+  readonly search?: Record<string, string>
   readonly hash?: string
 }
 
@@ -75,17 +73,7 @@ function normalizeSsoRedirectUrl(value: unknown): string | undefined {
 
 function internalRouteTarget(path: string): InternalRouteTarget {
   const url = new URL(path, 'https://moneat.io')
-  const search: Record<string, SearchValue> = {}
-  url.searchParams.forEach((value, key) => {
-    const existing = search[key]
-    if (Array.isArray(existing)) {
-      existing.push(value)
-    } else if (existing !== undefined) {
-      search[key] = [existing, value]
-    } else {
-      search[key] = value
-    }
-  })
+  const search = Object.fromEntries(url.searchParams.entries())
 
   return {
     to: url.pathname || '/',
