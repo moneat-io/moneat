@@ -251,6 +251,30 @@ describe('release, replay, and feedback service facets', () => {
     expect(mockApi.getOrganizationReleases).toHaveBeenCalledWith({})
   })
 
+  it('marks the highest release version as latest when older releases report later signals', async () => {
+    mockApi.getOrganizationReleases.mockResolvedValue([
+      {
+        ...release,
+        version: 'com.bandapella@4.4.2+15',
+        firstSeen: '2026-06-26T21:08:00.000Z',
+        lastSeen: '2026-07-02T20:02:00.000Z',
+      },
+      {
+        ...healthyRelease,
+        version: 'com.bandapella@4.5.1+16',
+        firstSeen: '2026-07-01T15:54:00.000Z',
+        lastSeen: '2026-07-01T15:54:00.000Z',
+      },
+    ])
+
+    renderRoute(ReleasesRoute)
+
+    const latestBadge = await screen.findByText('Latest')
+    const latestRow = latestBadge.closest('a')
+    expect(latestRow).toHaveTextContent('com.bandapella@4.5.1+16')
+    expect(latestRow).not.toHaveTextContent('com.bandapella@4.4.2+15')
+  })
+
   it('adds selected services to release calls', async () => {
     renderRoute(ReleasesRoute)
 
