@@ -49,8 +49,8 @@ describe('SystemStatusWidget', () => {
     renderWithOverview(<SystemStatusWidget />)
     expect(screen.getByTestId('widget-system_status')).toBeInTheDocument()
     expect(screen.getByText('Action needed')).toBeInTheDocument()
-    const action = screen.getByRole('link', {name: 'View alerts'})
-    expect(action).toHaveAttribute('href', '/on-call/alerts')
+    const action = screen.getByRole('link', {name: 'Review firing alerts in needs attention'})
+    expect(action).toHaveAttribute('href', '#overview-needs-attention')
   })
 })
 
@@ -119,7 +119,21 @@ describe('TriageWidget', () => {
     expect(screen.getByText('Alerts firing')).toBeInTheDocument()
     expect(screen.getByText('Elevated 5xx on checkout-api')).toBeInTheDocument()
     const action = screen.getByRole('link', {name: 'View all'})
-    expect(action).toHaveAttribute('href', '/on-call/alerts')
+    expect(action).toHaveAttribute('href', '/issues')
+  })
+
+  it('does not link broad alert episodes to native on-call alerts', () => {
+    renderWithOverview(<TriageWidget />, {
+      triage: {
+        incidents: [],
+        alerts: overviewTestData.triage.alerts,
+        issues: [],
+        security: [],
+      },
+    })
+
+    expect(screen.getByText('Alerts firing')).toBeInTheDocument()
+    expect(screen.queryByRole('link', {name: 'View all'})).not.toBeInTheDocument()
   })
 })
 

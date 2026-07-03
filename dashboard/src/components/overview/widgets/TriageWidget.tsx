@@ -43,13 +43,17 @@ type AttentionRouteInput = Readonly<{
   incidents: readonly unknown[]
   alerts: readonly unknown[]
   issues: readonly unknown[]
+  security: readonly unknown[]
 }>
 
-function attentionRouteFor(triage: AttentionRouteInput): string {
+const NEEDS_ATTENTION_ID = 'overview-needs-attention'
+
+function attentionRouteFor(triage: AttentionRouteInput): string | null {
   if (triage.incidents.length > 0) return '/on-call/incidents'
-  if (triage.alerts.length > 0) return '/on-call/alerts'
   if (triage.issues.length > 0) return '/issues'
-  return '/security/signals'
+  if (triage.alerts.length > 0) return null
+  if (triage.security.length > 0) return '/security/signals'
+  return null
 }
 
 function borderForLevel(level: TriageLevel): string {
@@ -112,10 +116,11 @@ export function TriageWidget() {
   return (
     <OverviewPanel
       testId="widget-triage"
+      id={NEEDS_ATTENTION_ID}
       title="Needs attention"
       icon={ListChecks}
       count={total}
-      actions={total > 0 ? <PanelLink to={attentionRoute}>View all</PanelLink> : undefined}
+      actions={attentionRoute ? <PanelLink to={attentionRoute}>View all</PanelLink> : undefined}
       flush
     >
       {t.incidents.length > 0 && (
