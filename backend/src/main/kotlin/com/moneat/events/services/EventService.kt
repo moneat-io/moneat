@@ -388,8 +388,11 @@ class EventService(
             )
         val timestampMs =
             lastReplayEvent.timestampMs
-                ?: embeddedReplayEvent?.let(::replayEventTimestampMs)
-                ?: System.currentTimeMillis()
+                ?: if (embeddedReplayEvent != null) {
+                    replayEventTimestampMs(embeddedReplayEvent)
+                } else {
+                    System.currentTimeMillis()
+                }
 
         return ResolvedReplayVideoContext(
             replayId = replayId,

@@ -981,10 +981,10 @@ class ReplayService(
                 max(ifNull(s.recording_segment_count, 0)) as recording_segment_count,
                 argMax(e.activity, e.timestamp) as activity
             FROM (
-                ${dedupedReplayEventsSubquery("raw", replayEventsWhereClause).prependIndent("                ")}
+                ${dedupedReplayEventsSubquery("raw", replayEventsWhereClause).prependIndent(SQL_SUBQUERY_INDENT)}
             ) e
             LEFT JOIN (
-                ${replaySegmentCountSubquery(replaySegmentsWhereClause).prependIndent("                ")}
+                ${replaySegmentCountSubquery(replaySegmentsWhereClause).prependIndent(SQL_SUBQUERY_INDENT)}
             ) s ON s.replay_id = e.replay_id AND s.project_id = e.project_id
             GROUP BY e.replay_id, e.project_id
             ORDER BY max(e.timestamp) DESC
@@ -1162,10 +1162,10 @@ class ReplayService(
                 argMax(e.activity, e.timestamp) as activity,
                 argMax(e.tags, e.timestamp) as tags
             FROM (
-                ${dedupedReplayEventsSubquery("raw", replayEventsWhereClause).prependIndent("                ")}
+                ${dedupedReplayEventsSubquery("raw", replayEventsWhereClause).prependIndent(SQL_SUBQUERY_INDENT)}
             ) e
             LEFT JOIN (
-                ${replaySegmentCountSubquery(replaySegmentsWhereClause).prependIndent("                ")}
+                ${replaySegmentCountSubquery(replaySegmentsWhereClause).prependIndent(SQL_SUBQUERY_INDENT)}
             ) s ON s.replay_id = e.replay_id AND s.project_id = e.project_id
             GROUP BY e.replay_id, e.project_id
             LIMIT 1
@@ -1762,7 +1762,7 @@ class ReplayService(
                 max(ifNull(s.recording_segment_count, 0)) as recording_segment_count,
                 argMax(r.activity, r.timestamp) as activity
             FROM (
-                ${dedupedReplayEventsSubquery("raw", replayEventsWhereClause).prependIndent("                ")}
+                ${dedupedReplayEventsSubquery("raw", replayEventsWhereClause).prependIndent(SQL_SUBQUERY_INDENT)}
             ) r
             ARRAY JOIN arrayDistinct(r.error_ids) AS error_id
             INNER JOIN `$clickhouseDb`.events e
@@ -1772,7 +1772,7 @@ class ReplayService(
                 AND e.event_type = 'error'
                 AND $retentionClause
             LEFT JOIN (
-                ${replaySegmentCountSubquery(replaySegmentsWhereClause).prependIndent("                ")}
+                ${replaySegmentCountSubquery(replaySegmentsWhereClause).prependIndent(SQL_SUBQUERY_INDENT)}
             ) s ON s.replay_id = r.replay_id AND s.project_id = r.project_id
             GROUP BY r.replay_id, r.project_id
             ORDER BY max(r.timestamp) DESC
@@ -1808,6 +1808,7 @@ class ReplayService(
         private const val MILLISECONDS_PER_SECOND = 1000.0
         private const val MILLIS_PER_DAY = 24L * 60 * 60 * 1000
         private const val MAX_REPLAY_TIMELINE_CORRELATION_MS = 60L * 60 * 1000
+        private const val SQL_SUBQUERY_INDENT = "                "
         private const val EVENT_TIMESTAMP_COLUMN = "e.timestamp"
         private const val PERIOD_24H_MS = MILLIS_PER_DAY
         private const val PERIOD_7D_MS = 7 * MILLIS_PER_DAY
