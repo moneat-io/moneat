@@ -37,6 +37,7 @@ class McpToolCatalogServiceTest {
         val toolRegistry = McpToolRegistry()
         listOf(
             "get_issue",
+            "get_replay",
             "aggregate_logs",
             "search_logs",
             "get_trace",
@@ -63,6 +64,7 @@ class McpToolCatalogServiceTest {
         assertEquals(
             listOf(
                 "issues",
+                "replays",
                 "logs",
                 "apm",
                 "infrastructure",
@@ -79,6 +81,10 @@ class McpToolCatalogServiceTest {
                 "summaries",
             ),
             catalog.sections.map { it.id },
+        )
+        assertEquals(
+            listOf("get_replay"),
+            catalog.sections.single { it.id == "replays" }.tools.map { it.name },
         )
         assertEquals(
             listOf("aggregate_logs", "search_logs"),

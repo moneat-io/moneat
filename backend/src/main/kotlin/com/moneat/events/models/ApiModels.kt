@@ -550,6 +550,39 @@ data class ReplayRecordingResponse(
 )
 
 @Serializable
+data class ReplayRecordingDiagnosticsResponse(
+    val recordingSegmentCount: Int,
+    val decodedEventCount: Int,
+    val decodedSegmentIds: List<String>,
+    val eventTypes: Map<String, Int>,
+    val hasRrwebEvents: Boolean,
+    val hasFullSnapshot: Boolean,
+    val hasIncrementalSnapshot: Boolean,
+    val hasMobileVideo: Boolean,
+    val isMobileReplay: Boolean,
+    val placeholderOnly: Boolean,
+    val firstEventTimestampMs: Long?,
+    val lastEventTimestampMs: Long?,
+    val segments: List<ReplayRecordingSegmentDiagnostics>,
+    val anomalies: List<String> = emptyList()
+)
+
+@Serializable
+data class ReplayRecordingSegmentDiagnostics(
+    val segmentId: String?,
+    val timestamp: String?,
+    val timestampMs: Long?,
+    val recordingDataBytes: Int,
+    val decodedEventCount: Int,
+    val decodedSegmentIds: List<String>,
+    val eventTypes: Map<String, Int>,
+    val hasFullSnapshot: Boolean,
+    val hasIncrementalSnapshot: Boolean,
+    val hasMobileVideo: Boolean,
+    val isMobileReplay: Boolean
+)
+
+@Serializable
 data class ReplayTimelineItem(
     val id: String,
     val type: String,
