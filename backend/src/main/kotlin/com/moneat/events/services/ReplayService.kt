@@ -19,7 +19,9 @@ package com.moneat.events.services
 import com.moneat.config.ClickHouseClient
 import com.moneat.events.models.ReplayDetailResponse
 import com.moneat.events.models.ReplayListItem
+import com.moneat.events.models.ReplayRecordingDiagnosticsResponse
 import com.moneat.events.models.ReplayRecordingResponse
+import com.moneat.events.models.ReplayRecordingSegmentDiagnostics
 import com.moneat.events.models.ReplayTimelineItem
 import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.shared.models.Projects
@@ -105,6 +107,15 @@ class ReplayService(
     private data class SegmentDecodeResult(
         val events: List<JsonElement>,
         val isMobileReplay: Boolean = false
+    )
+
+    private data class DecodedReplayRecordingSegment(
+        val segmentId: Int?,
+        val timestamp: String?,
+        val timestampMs: Long?,
+        val recordingDataBytes: Int,
+        val events: List<JsonElement>,
+        val isMobileReplay: Boolean
     )
 
     suspend fun getProjectIdForReplay(replayId: String): Long? {
@@ -1620,15 +1631,59 @@ class ReplayService(
         return ReplayTimelineResponse(items = sorted, replayStartMs = replayStartMs)
     }
 
+    suspend fun getReplayRecordingDiagnostics(replayId: String): ReplayRecordingDiagnosticsResponse? {
+        val normalizedReplayId = queryHelper.normalizeUuid(replayId) ?: return null
+        val projectId = getProjectIdForReplay(normalizedReplayId) ?: return null
+        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
+        val segments = loadReplayRecordingSegments(normalizedReplayId, projectId, retentionDays) ?: return null
+        return buildRecordingDiagnostics(segments)
+    }
+
     suspend fun getReplayRecording(replayId: String): ReplayRecordingResponse? {
         val normalizedReplayId = queryHelper.normalizeUuid(replayId) ?: return null
         val projectId = getProjectIdForReplay(normalizedReplayId) ?: return null
         val retentionDays = queryHelper.getProjectRetentionDays(projectId)
+        val segments = loadReplayRecordingSegments(normalizedReplayId, projectId, retentionDays) ?: return null
+
+        val allEvents = segments.flatMap { it.events }
+        val isMobileReplay = segments.any { it.isMobileReplay }
+        logger.info { "Msgpack decoding complete, extracted ${allEvents.size} total events from all segments" }
+
+        // If mobile replay but no events decoded, return placeholder
+        return if (isMobileReplay && allEvents.isEmpty()) {
+            logger.warn { "Mobile replay detected but no events extracted!" }
+            ReplayRecordingResponse(
+                events =
+                listOf(
+                    JsonObject(
+                        mapOf(
+                            "type" to JsonPrimitive(MOBILE_REPLAY_NOT_SUPPORTED_TYPE),
+                            "message" to JsonPrimitive(
+                                "Mobile session replays are not yet supported in the web viewer"
+                            )
+                        )
+                    )
+                )
+            )
+        } else {
+            logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
+            ReplayRecordingResponse(events = allEvents)
+        }
+    }
+
+    private suspend fun loadReplayRecordingSegments(
+        normalizedReplayId: String,
+        projectId: Long,
+        retentionDays: Int
+    ): List<DecodedReplayRecordingSegment>? {
         val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
 
         val query =
             """
-            SELECT recording_data
+            SELECT recording_data,
+                segment_id,
+                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                toUnixTimestamp64Milli(timestamp) as timestamp_ms
             FROM `$clickhouseDb`.replay_segments
             WHERE toString(replay_id) = '$normalizedReplayId'
                 AND $projectIdClause
@@ -1640,53 +1695,151 @@ class ReplayService(
         return suspendRunCatching {
             val response = ClickHouseClient.execute(query)
             val body = queryHelper.extractClickHouseBody(response) ?: return null
+            val lines = body.lines().filter { it.isNotBlank() }
+            logger.debug { "Processing replay recording response, body lines: ${lines.size}" }
 
-            val allEvents = mutableListOf<JsonElement>()
-            var isMobileReplay = false
-
-            val bodyLineCount = body.lines().count { it.isNotBlank() }
-            logger.debug { "Processing replay recording response, body lines: $bodyLineCount" }
-
-            body
-                .lines()
-                .filter { it.isNotBlank() }
-                .forEachIndexed { segmentIdx, line ->
-                    val obj = json.parseToJsonElement(line).jsonObject
-                    val recordingData = obj["recording_data"]?.jsonPrimitive?.content ?: return@forEachIndexed
-                    val segment = decodeReplaySegment(recordingData, segmentIdx)
-                    if (segment.isMobileReplay) {
-                        isMobileReplay = true
-                    }
-                    allEvents.addAll(segment.events)
-                }
-
-            logger.info { "Msgpack decoding complete, extracted ${allEvents.size} total events from all segments" }
-
-            // If mobile replay but no events decoded, return placeholder
-            if (isMobileReplay && allEvents.isEmpty()) {
-                logger.warn { "Mobile replay detected but no events extracted!" }
-                ReplayRecordingResponse(
-                    events =
-                    listOf(
-                        JsonObject(
-                            mapOf(
-                                "type" to JsonPrimitive("mobile_replay_not_supported"),
-                                "message" to JsonPrimitive(
-                                    "Mobile session replays are not yet supported in the web viewer"
-                                )
-                            )
-                        )
-                    )
+            lines.mapIndexedNotNull { segmentIdx, line ->
+                val obj = json.parseToJsonElement(line).jsonObject
+                val recordingData = obj["recording_data"]?.jsonPrimitive?.content ?: return@mapIndexedNotNull null
+                val segment = decodeReplaySegment(recordingData, segmentIdx)
+                DecodedReplayRecordingSegment(
+                    segmentId = intValue(obj, "segment_id"),
+                    timestamp = obj["timestamp"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() },
+                    timestampMs = longValue(obj, "timestamp_ms"),
+                    recordingDataBytes = recordingData.toByteArray(Charsets.UTF_8).size,
+                    events = segment.events,
+                    isMobileReplay = segment.isMobileReplay
                 )
-            } else {
-                logger.info { "Returning response with ${allEvents.size} events, isMobileReplay=$isMobileReplay" }
-                ReplayRecordingResponse(events = allEvents)
             }
         }.getOrElse { e ->
-            logger.error(e) { "Failed to fetch replay recording $replayId" }
+            logger.error(e) { "Failed to fetch replay recording $normalizedReplayId" }
             null
         }
     }
+
+    private fun buildRecordingDiagnostics(
+        segments: List<DecodedReplayRecordingSegment>
+    ): ReplayRecordingDiagnosticsResponse {
+        val allEvents = segments.flatMap { it.events }
+        val eventTypes = eventTypeCounts(allEvents)
+        val timestamps = allEvents.mapNotNull(::eventTimestampMs)
+        val hasMobileVideo = eventTypes.containsKey(MOBILE_REPLAY_VIDEO_TYPE)
+        val hasFullSnapshot = eventTypes.containsKey(RRWEB_FULL_SNAPSHOT_TYPE)
+        val hasIncrementalSnapshot = eventTypes.containsKey(RRWEB_INCREMENTAL_SNAPSHOT_TYPE)
+        val isMobileReplay = segments.any { it.isMobileReplay } || hasMobileVideo
+        val placeholderOnly =
+            (isMobileReplay && allEvents.isEmpty()) || isPlaceholderOnly(eventTypes, allEvents.size)
+        return ReplayRecordingDiagnosticsResponse(
+            recordingSegmentCount = segments.size,
+            decodedEventCount = allEvents.size,
+            decodedSegmentIds = decodedSegmentIdsFromSegments(segments).map(::formatSegmentId),
+            eventTypes = eventTypes,
+            hasRrwebEvents = eventTypes.keys.any { it.toIntOrNull() != null },
+            hasFullSnapshot = hasFullSnapshot,
+            hasIncrementalSnapshot = hasIncrementalSnapshot,
+            hasMobileVideo = hasMobileVideo,
+            isMobileReplay = isMobileReplay,
+            placeholderOnly = placeholderOnly,
+            firstEventTimestampMs = timestamps.minOrNull(),
+            lastEventTimestampMs = timestamps.maxOrNull(),
+            segments = segments.map(::segmentDiagnostics),
+            anomalies = recordingAnomalies(
+                recordingSegmentCount = segments.size,
+                decodedEventCount = allEvents.size,
+                hasMobileVideo = hasMobileVideo,
+                hasFullSnapshot = hasFullSnapshot,
+                placeholderOnly = placeholderOnly
+            )
+        )
+    }
+
+    private fun segmentDiagnostics(segment: DecodedReplayRecordingSegment): ReplayRecordingSegmentDiagnostics {
+        val eventTypes = eventTypeCounts(segment.events)
+        return ReplayRecordingSegmentDiagnostics(
+            segmentId = segment.segmentId?.let(::formatSegmentId),
+            timestamp = segment.timestamp,
+            timestampMs = segment.timestampMs,
+            recordingDataBytes = segment.recordingDataBytes,
+            decodedEventCount = segment.events.size,
+            decodedSegmentIds = decodedSegmentIdsFromSegments(listOf(segment)).map(::formatSegmentId),
+            eventTypes = eventTypes,
+            hasFullSnapshot = eventTypes.containsKey(RRWEB_FULL_SNAPSHOT_TYPE),
+            hasIncrementalSnapshot = eventTypes.containsKey(RRWEB_INCREMENTAL_SNAPSHOT_TYPE),
+            hasMobileVideo = eventTypes.containsKey(MOBILE_REPLAY_VIDEO_TYPE),
+            isMobileReplay = segment.isMobileReplay || eventTypes.containsKey(MOBILE_REPLAY_VIDEO_TYPE)
+        )
+    }
+
+    private fun formatSegmentId(segmentId: Int): String = segmentId.toString()
+
+    private fun eventTypeCounts(events: List<JsonElement>): Map<String, Int> =
+        events
+            .map(::eventTypeValue)
+            .groupingBy { it }
+            .eachCount()
+            .toSortedMap()
+
+    private fun eventTypeValue(event: JsonElement): String {
+        val obj = event as? JsonObject ?: return UNKNOWN_REPLAY_EVENT_TYPE
+        val primitive = obj["type"] as? JsonPrimitive ?: return UNKNOWN_REPLAY_EVENT_TYPE
+        return primitive.contentOrNull?.takeIf { it.isNotBlank() } ?: UNKNOWN_REPLAY_EVENT_TYPE
+    }
+
+    private fun decodedSegmentIds(events: List<JsonElement>): List<Int> =
+        events
+            .mapNotNull { event ->
+                val obj = event as? JsonObject ?: return@mapNotNull null
+                intValue(obj, "segment_id")
+            }
+            .distinct()
+            .sorted()
+
+    private fun decodedSegmentIdsFromSegments(segments: List<DecodedReplayRecordingSegment>): List<Int> =
+        segments
+            .filter { it.events.isNotEmpty() }
+            .flatMap { segment ->
+                val eventSegmentIds = decodedSegmentIds(segment.events)
+                if (eventSegmentIds.isEmpty()) listOfNotNull(segment.segmentId) else eventSegmentIds
+            }
+            .distinct()
+            .sorted()
+
+    private fun eventTimestampMs(event: JsonElement): Long? {
+        val obj = event as? JsonObject ?: return null
+        return longValue(obj, "timestamp") ?: longValue(obj, "timestamp_ms")
+    }
+
+    private fun longValue(obj: JsonObject, key: String): Long? {
+        val primitive = obj[key] as? JsonPrimitive ?: return null
+        val content = primitive.contentOrNull ?: return null
+        return content.toLongOrNull() ?: content.toDoubleOrNull()?.toLong()
+    }
+
+    private fun isPlaceholderOnly(
+        eventTypes: Map<String, Int>,
+        decodedEventCount: Int
+    ): Boolean =
+        decodedEventCount == 1 &&
+            eventTypes.size == 1 &&
+            eventTypes[MOBILE_REPLAY_NOT_SUPPORTED_TYPE] == 1
+
+    private fun recordingAnomalies(
+        recordingSegmentCount: Int,
+        decodedEventCount: Int,
+        hasMobileVideo: Boolean,
+        hasFullSnapshot: Boolean,
+        placeholderOnly: Boolean
+    ): List<String> =
+        buildList {
+            if (recordingSegmentCount == 0) add("recording_segments_missing")
+            if (recordingSegmentCount > 0 && decodedEventCount == 0) {
+                add("recording_segments_without_decoded_events")
+            }
+            if (placeholderOnly) add("mobile_replay_not_supported_placeholder")
+            if (decodedEventCount > 0 && !hasMobileVideo && !hasFullSnapshot) {
+                add("missing_full_snapshot")
+            }
+        }
 
     suspend fun getReplaysForIssue(
         issueId: String,
@@ -1790,6 +1943,11 @@ class ReplayService(
         private const val REPLAY_CONTEXT_PROJECT_ID_FIELD = "context_project_id"
         private const val REPLAY_CONTEXT_EVENT_LIMIT = 100
         private const val REPLAY_BREADCRUMB_EVENT_LIMIT = 100
+        private const val RRWEB_FULL_SNAPSHOT_TYPE = "2"
+        private const val RRWEB_INCREMENTAL_SNAPSHOT_TYPE = "3"
+        private const val MOBILE_REPLAY_VIDEO_TYPE = "mobile_replay_video"
+        private const val MOBILE_REPLAY_NOT_SUPPORTED_TYPE = "mobile_replay_not_supported"
+        private const val UNKNOWN_REPLAY_EVENT_TYPE = "unknown"
         private val HTTP_STATUS_REGEX = Regex("""\b([1-5]\d{2})\b""")
         private val BREADCRUMB_CATEGORY_SPLIT_REGEX = Regex("[._-]+")
         private val REPLAY_SKIPPED_BREADCRUMB_ACTIONS =

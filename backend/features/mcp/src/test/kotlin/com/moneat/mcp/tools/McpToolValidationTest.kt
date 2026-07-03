@@ -54,6 +54,7 @@ class McpToolValidationTest {
     companion object {
         private const val CONTENT_TYPE_TEXT_PLAIN = "text/plain"
         private const val EVENT_ID = "01234567-89ab-cdef-0123-456789abcdef"
+        private const val REPLAY_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
         private const val TRACE_ID = "trace-1"
         private const val VALID_RESOURCE_ID = "11111111-1111-1111-1111-111111111111"
         private const val PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
@@ -183,6 +184,65 @@ class McpToolValidationTest {
 
             assertFalse(result.isError)
             assertTrue(result.content.first().text.orEmpty().contains(TRACE_ID))
+        }
+    }
+
+    @Test
+    fun `listReplays tool returns replay list rows`() = runBlocking {
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("GROUP BY e.replay_id") ->
+                    exchange.respond(200, replayListRow(), CONTENT_TYPE_TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = ListReplaysTool().execute(obj("project_id" to PROJECT_RESOURCE_ID), context)
+
+            assertFalse(result.isError)
+            assertTrue(result.content.first().text.orEmpty().contains(REPLAY_ID))
+        }
+    }
+
+    @Test
+    fun `replay inspect tools return detail timeline and redacted recording summary`() = runBlocking {
+        val recordingPayload = """[{"type":2,"timestamp":1000,"data":{"text":"SECRET_DOM"}},""" +
+            """{"type":"mobile_replay_video","segment_id":2,"data":"BASE64SECRET"}]"""
+        MockHttpServer { exchange ->
+            val query = exchange.requestBodyText()
+            when {
+                query.contains("SELECT toInt64(project_id)") ->
+                    exchange.respond(200, """{"project_id":1}""", CONTENT_TYPE_TEXT_PLAIN)
+                query.contains("GROUP BY e.replay_id") ->
+                    exchange.respond(200, replayDetailRow(), CONTENT_TYPE_TEXT_PLAIN)
+                query.contains("SELECT recording_data") ->
+                    exchange.respond(200, recordingDataRow(recordingPayload), CONTENT_TYPE_TEXT_PLAIN)
+                else ->
+                    exchange.respond(200, "", CONTENT_TYPE_TEXT_PLAIN)
+            }
+        }.use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val detailResult = GetReplayTool().execute(obj("replay_id" to REPLAY_ID), context)
+            val timelineResult = GetReplayTimelineTool().execute(obj("replay_id" to REPLAY_ID), context)
+            val summaryResult = GetReplayRecordingSummaryTool().execute(obj("replay_id" to REPLAY_ID), context)
+            val summaryText = summaryResult.content.first().text.orEmpty()
+
+            assertFalse(detailResult.isError)
+            assertTrue(detailResult.content.first().text.orEmpty().contains(REPLAY_ID))
+            assertFalse(timelineResult.isError)
+            assertTrue(timelineResult.content.first().text.orEmpty().contains("items"))
+            assertFalse(summaryResult.isError)
+            assertTrue(summaryText.contains("recordingSegmentCount"))
+            assertTrue(summaryText.contains("decodedEventCount"))
+            assertTrue(summaryText.contains("mobile_replay_video"))
+            assertFalse(summaryText.contains("SECRET_DOM"))
+            assertFalse(summaryText.contains("BASE64SECRET"))
         }
     }
 
@@ -545,6 +605,15 @@ class McpToolValidationTest {
             ),
             case("transaction_stats_project_id", GetTransactionStatsTool(), obj(), "project_id is required"),
             case("list_issues_project_id", ListIssuesTool(), obj(), "project_id is required"),
+            case("list_replays_project_id", ListReplaysTool(), obj(), "project_id is required"),
+            case("get_replay_id", GetReplayTool(), obj(), "replay_id is required"),
+            case("get_replay_timeline_id", GetReplayTimelineTool(), obj(), "replay_id is required"),
+            case(
+                "get_replay_recording_summary_id",
+                GetReplayRecordingSummaryTool(),
+                obj(),
+                "replay_id is required",
+            ),
             case("list_releases_project_id", ListReleasesTool(), obj(), "project_id is required"),
             case("release_stats_project_id", GetReleaseStatsTool(), obj(), "project_id is required"),
             case("get_project_project_id", GetProjectTool(), obj(), "project_id is required"),
@@ -707,6 +776,41 @@ class McpToolValidationTest {
         is Number -> JsonPrimitive(value)
         else -> JsonPrimitive(value.toString())
     }
+
+    private fun replayListRow(): String =
+        """{"replay_id":"$REPLAY_ID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z",""" +
+            """"finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000",""" +
+            """"finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],""" +
+            """"error_count":1,"user_id":"u-1","user_email":"test@example.com","user_username":"tester",""" +
+            """"browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":8}"""
+
+    private fun replayDetailRow(): String =
+        """{"replay_id":"$REPLAY_ID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z",""" +
+            """"finished_at":"2026-01-01T00:05:00.000Z","started_ms":"1767225600000",""" +
+            """"finished_ms":"1767225900000","duration_ms":"300000","urls":["https://app.example.com"],""" +
+            """"error_ids":[],"trace_ids":[],"segment_count":2,"environment":"prod","release":"1.0.0",""" +
+            """"platform":"javascript","user_id":"u-1","user_email":"test@example.com",""" +
+            """"user_username":"tester","user_ip_address":"","browser_name":"Chrome","browser_version":"120",""" +
+            """"os_name":"macOS","os_version":"14","activity":8,"tags":"{}"}"""
+
+    private fun recordingDataRow(recordingData: String): String =
+        """{"recording_data":${jsonString(recordingData)},"segment_id":2,"timestamp_ms":"1767225600000"}"""
+
+    private fun jsonString(value: String): String =
+        buildString {
+            append('"')
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
+            append('"')
+        }
 
     private fun spanRow(): String =
         """{"span_id":"s1","parent_span_id":"","trace_id":"$TRACE_ID",""" +

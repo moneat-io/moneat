@@ -23,8 +23,12 @@ import com.moneat.mcp.tools.CreateDetectionRuleTool
 import com.moneat.mcp.tools.CreateWorkflowTool
 import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
 import com.moneat.mcp.tools.GetFeatureFlagTool
+import com.moneat.mcp.tools.GetReplayRecordingSummaryTool
+import com.moneat.mcp.tools.GetReplayTimelineTool
+import com.moneat.mcp.tools.GetReplayTool
 import com.moneat.mcp.tools.GetWorkflowTool
 import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
+import com.moneat.mcp.tools.ListReplaysTool
 import com.moneat.mcp.tools.ListSecuritySignalsTool
 import com.moneat.mcp.tools.RunWorkflowTool
 import kotlinx.coroutines.CancellationException
@@ -39,7 +43,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 147
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 151
 
 class McpToolRegistryTest {
 
@@ -186,6 +190,16 @@ class McpToolRegistryTest {
 
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagTool()))
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetFeatureFlagAnalyticsTool()))
+    }
+
+    @Test
+    fun `replay tools use event read scope`() {
+        val expectedScope = setOf(McpScopes.EVENT_READ)
+
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(ListReplaysTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetReplayTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetReplayTimelineTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetReplayRecordingSummaryTool()))
     }
 
     @Test
