@@ -22,6 +22,7 @@ import type {Tone} from './overviewData'
 import {toneBgSolid} from './overviewTone'
 
 type OverviewPanelProps = Readonly<{
+  id?: string
   title: string
   icon?: LucideIcon | ComponentType<{className?: string}>
   count?: ReactNode
@@ -54,6 +55,7 @@ type MiniBarProps = Readonly<{
 
 /** Shared panel chrome for overview widgets — mirrors SectionCard at compact density. */
 export function OverviewPanel({
+  id,
   title,
   icon: Icon,
   count,
@@ -65,6 +67,7 @@ export function OverviewPanel({
 }: OverviewPanelProps) {
   return (
     <div
+      id={id}
       data-testid={testId}
       className="flex h-full flex-col overflow-hidden rounded-lg border border-border/60 bg-card"
     >
