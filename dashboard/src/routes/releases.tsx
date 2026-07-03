@@ -37,6 +37,8 @@ import {
 } from '@/lib/service-facet-scope'
 import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {parseDate} from '@/lib/date-format'
+import {compareReleaseVersionPrecedence} from '@/lib/release-version'
+import type {Release} from '@/lib/api/types'
 
 export const Route = createFileRoute('/releases')({
   beforeLoad: async ({ location }) => {
@@ -71,6 +73,17 @@ function crashFreeTextClass(tone: CrashFreeTone): string {
   if (tone === 'success') return 'text-success-fg'
   if (tone === 'warning') return 'text-warning-fg'
   return 'text-danger-fg'
+}
+
+function compareReleasesByLastSeen(left: Release, right: Release): number {
+  return parseDate(right.lastSeen).getTime() - parseDate(left.lastSeen).getTime()
+}
+
+function compareReleasesByLatest(left: Release, right: Release): number {
+  const versionOrder = compareReleaseVersionPrecedence(right.version, left.version)
+  if (versionOrder !== 0) return versionOrder
+
+  return compareReleasesByLastSeen(left, right)
 }
 
 function ReleasesPage() {
@@ -145,9 +158,7 @@ function ReleasesPage() {
         : null
 
     const mostActive = [...releaseList].sort((a, b) => b.eventCount - a.eventCount)[0]
-    const latest = [...releaseList].sort(
-      (a, b) => parseDate(b.lastSeen).getTime() - parseDate(a.lastSeen).getTime()
-    )[0]
+    const latest = [...releaseList].sort(compareReleasesByLatest)[0]
 
     return {
       healthyCount,
@@ -172,7 +183,7 @@ function ReleasesPage() {
         return bRate - aRate
       }
 
-      return parseDate(b.lastSeen).getTime() - parseDate(a.lastSeen).getTime()
+      return compareReleasesByLatest(a, b)
     })
   }, [releaseList, searchQuery, sortBy])
 
@@ -282,7 +293,7 @@ function ReleasesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="latest">Sort: Latest seen</SelectItem>
+                    <SelectItem value="latest">Sort: Latest release</SelectItem>
                     <SelectItem value="events">Sort: Most signals</SelectItem>
                     <SelectItem value="issues">Sort: Most new issues</SelectItem>
                     <SelectItem value="stability">Sort: Most stable</SelectItem>
