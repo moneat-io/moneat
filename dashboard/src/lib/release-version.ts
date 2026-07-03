@@ -27,7 +27,8 @@ export function compareReleaseVersionPrecedence(left: string, right: string): nu
   const leftVersion = parseReleaseVersion(left)
   const rightVersion = parseReleaseVersion(right)
 
-  if (!leftVersion || !rightVersion || leftVersion.family !== rightVersion.family) return 0
+  if (leftVersion == null || rightVersion == null) return 0
+  if (leftVersion.family !== rightVersion.family) return 0
 
   const coreOrder = compareNumberList(leftVersion.core, rightVersion.core)
   if (coreOrder !== 0) return coreOrder
@@ -48,7 +49,7 @@ function parseReleaseVersion(value: string): ParsedReleaseVersion | null {
 
   const matches = Array.from(trimmed.matchAll(VERSION_CANDIDATE_PATTERN))
   const match = matches.at(-1)
-  if (!match || match.index == null) return null
+  if (match?.index == null) return null
 
   return parseCandidate(trimmed, match.index, match[0])
 }
