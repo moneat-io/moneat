@@ -268,8 +268,10 @@ jobs:
           fi
           gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" -f body="$BODY"
 
-      # Informational check while we validate the fork pipeline. Once confirmed on a
-      # live fork PR, rename to "SonarQube Analysis" to make it the enforced gate.
+      # Report the required "SonarQube Analysis" check for fork PRs with the real
+      # gate result. Because this completes after the inline job's skip (which posts
+      # the same context as "skipped"), branch protection uses this later result as
+      # the authoritative gate. Fails closed: any scan/gate problem posts failure.
       - name: Report Sonar check
         if: always()
         env:
@@ -280,9 +282,9 @@ jobs:
           if [[ "${{ steps.ctx.outcome }}" != "success" ]]; then CONCLUSION="failure"; fi
           if [[ "${{ steps.qg.outcome }}" == "failure" ]]; then CONCLUSION="failure"; fi
           gh api -X POST "repos/${{ github.repository }}/check-runs" \
-            -f name="Sonar (fork PR)" \
+            -f name="SonarQube Analysis" \
             -f head_sha="${{ github.event.workflow_run.head_sha }}" \
             -f status="completed" \
             -f conclusion="$CONCLUSION" \
-            -f "output[title]=SonarQube Fork Analysis" \
+            -f "output[title]=SonarQube Analysis (fork PR)" \
             -f "output[summary]=Quality gate: ${CONCLUSION}. Fork PR analyzed via workflow_run." >/dev/null || true
