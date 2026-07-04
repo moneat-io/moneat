@@ -86,6 +86,18 @@ describe('TelemetryWidget', () => {
     expect(screen.getByText('log volume')).toBeInTheDocument()
   })
 
+  it('does not render a deploy marker when no deploy is in the telemetry window', () => {
+    renderWithOverview(<TelemetryWidget />, {
+      telemetry: {
+        ...overviewTestData.telemetry,
+        deployAtPct: 0,
+        deployLabel: 'No deploys',
+      },
+    })
+
+    expect(screen.queryByText('No deploys')).not.toBeInTheDocument()
+  })
+
   it('keeps deploy labels inside chart edges', () => {
     const {rerender} = render(
       <svg>
