@@ -23,12 +23,9 @@ jobs:
         uses: contributor-assistant/github-action@v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         with:
           path-to-signatures: 'signatures/cla.json'
           path-to-document: 'https://github.com/${{ github.repository }}/blob/main/CLA.md'
-          remote-organization-name: ${{ github.repository_owner }}
-          remote-repository-name: ${{ github.event.repository.name }}
           branch: 'develop'
           allowlist: 'dependabot[bot],github-actions[bot],Copilot,renovate[bot]'
           custom-notsigned-prcomment: |
