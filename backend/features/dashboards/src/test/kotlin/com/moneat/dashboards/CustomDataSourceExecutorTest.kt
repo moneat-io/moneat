@@ -141,6 +141,11 @@ class CustomDataSourceExecutorTest {
     }
 
     @Test
+    fun `validateSqlQuery allows trailing semicolon`() {
+        postgresHandler.validateSqlQuery("WITH users AS (SELECT 1 AS id) SELECT id FROM users;")
+    }
+
+    @Test
     fun `validateSqlQuery allows comment as column name`() {
         postgresHandler.validateSqlQuery("SELECT comment FROM posts")
     }

@@ -148,7 +148,7 @@ export function QueryBuilderForm({value, onChange}: QueryBuilderFormProps) {
           <p className="text-xs text-muted-foreground mt-1">
             {selectedSource?.label?.includes('prometheus')
               ? 'Enter a PromQL query expression'
-              : 'Only SELECT queries are allowed. Read-only access is enforced.'}
+              : 'Only SELECT or WITH queries are allowed. Read-only access is enforced.'}
           </p>
           {/* Limit */}
           <div className="mt-3">

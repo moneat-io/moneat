@@ -291,7 +291,7 @@ abstract class JdbcHandler(
         return rows
     }
 
-    private fun hasSemicolonOutsideQuotes(query: String): Boolean {
+    private fun hasNonTrailingSemicolonOutsideQuotes(query: String): Boolean {
         var i = 0
         var inSingle = false
         var inDouble = false
@@ -310,7 +310,7 @@ abstract class JdbcHandler(
                 }
                 c == '\'' -> inSingle = true
                 c == '"' -> inDouble = true
-                c == ';' -> return true
+                c == ';' -> return query.drop(i + 1).any { !it.isWhitespace() }
             }
             i++
         }
@@ -335,7 +335,7 @@ abstract class JdbcHandler(
         require(trimmed.startsWith("SELECT") || trimmed.startsWith("WITH")) {
             "Only SELECT or WITH queries are allowed"
         }
-        require(!hasSemicolonOutsideQuotes(normalized)) { "Multiple statements are not allowed" }
+        require(!hasNonTrailingSemicolonOutsideQuotes(normalized)) { "Multiple statements are not allowed" }
         for ((pattern, name) in forbiddenKeywords()) {
             require(!pattern.containsMatchIn(normalized)) { "$name statements are not allowed" }
         }
