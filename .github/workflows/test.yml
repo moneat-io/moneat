@@ -1236,6 +1236,60 @@ jobs:
           gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
             -f body="$BODY"
 
+  # Fork PRs: compile Kotlin bytecode in the secret-free PR context and upload it,
+  # so the trusted sonar-fork workflow_run can scan without executing fork build code.
+  sonar-fork-classes:
+    name: Sonar fork classes
+    needs: changes
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Cache Gradle packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Compile Kotlin (bytecode for Sonar)
+        working-directory: backend
+        run: ./gradlew testClasses integrationTestClasses --no-daemon
+
+      - name: Bundle compiled classes
+        run: |
+          set -euo pipefail
+          find backend ee/backend -type d \
+            \( -path '*/build/classes/kotlin/main' -o -path '*/build/classes/kotlin/test' \) \
+            -print0 2>/dev/null | tar --null -czf sonar-fork-classes.tgz --files-from=- \
+            || tar -czf sonar-fork-classes.tgz --files-from=/dev/null
+          ls -la sonar-fork-classes.tgz
+
+      - name: Upload compiled classes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: sonar-fork-classes
+          path: sonar-fork-classes.tgz
+          retention-days: 1
+
   # PR-Required: Frontend unit tests
   frontend-unit:
     needs: changes
