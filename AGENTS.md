@@ -135,6 +135,10 @@ The required PR workflow is `.github/workflows/test.yml`.
   coverage/detekt data, and enforces the Sonar quality gate.
 - Coverage gates are hard by default: backend 65%, frontend 80%, global 60%.
   Add focused tests with behavior changes, especially on new code.
+- For new MCP analytics or query tools, avoid long service parameter lists by
+  using request DTOs, bound user-controlled arrays before query construction,
+  and add focused tests for parser limits, saved-resource CRUD, and generated
+  query behavior so Sonar new-code coverage has real signal.
 - Change classification may skip backend or frontend jobs. Workflow, env,
   scripts, Docker/compose, and Sonar changes can force both sides.
 
