@@ -172,7 +172,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   if (error || (!isExtendedWidget && (!data || data.length === 0))) {
     return (
       <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
-        {error ? 'Query error' : 'No data'}
+        {error ? <QueryErrorState error={error} /> : 'No data'}
       </div>
     )
   }
@@ -236,6 +236,25 @@ export const WidgetRenderer = memo(function WidgetRenderer({
 
 function isTimeKey(key: string): boolean {
   return TIME_KEYS.has(key)
+}
+
+function QueryErrorState({error}: Readonly<{error: unknown}>) {
+  const detail = queryErrorDetail(error)
+  return (
+    <div className="max-w-full px-4 text-center">
+      <div>Query error</div>
+      {detail ? <div className="mt-1 break-words">{detail}</div> : null}
+    </div>
+  )
+}
+
+function queryErrorDetail(error: unknown): string | null {
+  if (error instanceof Error) {
+    const message = error.message.trim()
+    if (!message) return null
+    return message === 'NETWORK_ERROR' ? 'Network error' : message
+  }
+  return null
 }
 
 function isQueryDrivenWidget(widgetType: string): boolean {

@@ -89,7 +89,7 @@ describe('QueryBuilderForm – extended branch coverage', () => {
       await waitFor(() => {
         expect(screen.getByText('SQL Query')).toBeInTheDocument()
       })
-      expect(screen.getByText(/Only SELECT queries are allowed/)).toBeInTheDocument()
+      expect(screen.getByText(/Only SELECT or WITH queries are allowed/)).toBeInTheDocument()
     })
 
     it('renders PromQL editor for prometheus custom source', async () => {
