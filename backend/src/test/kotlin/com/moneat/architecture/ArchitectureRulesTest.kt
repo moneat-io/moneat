@@ -164,6 +164,7 @@ class ArchitectureRulesTest {
                 "analytics -> monitoring",
                 "datadog -> monitoring",
                 "llm -> monitoring",
+                "mcp -> analytics",
                 "mcp -> featureflags",
                 "mcp -> statuspage",
                 "overview -> statuspage",

@@ -454,7 +454,7 @@ class AnalyticsServiceTest {
                 source = "server"
             )
 
-            assertTrue(queries.any { it.contains("GROUP BY project_id, user_id") })
+            assertTrue(queries.any { it.contains("GROUP BY e.project_id, e.user_id") })
             assertTrue(queries.any { it.contains("source = 'server'") })
             assertTrue(queries.any { it.contains("user_id != ''") })
         }
@@ -978,7 +978,7 @@ class AnalyticsServiceTest {
             )
 
             assertTrue(queries.any { it.contains("project_id IN (toUInt64(42), toUInt64(43))") })
-            assertTrue(queries.any { it.contains("GROUP BY project_id, session_id") })
+            assertTrue(queries.any { it.contains("GROUP BY e.project_id, e.session_id") })
         }
     }
 
