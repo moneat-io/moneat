@@ -84,6 +84,7 @@ object InfraTelemetryRollups {
 
         val db = ClickHouseClient.getDatabase()
         val latestRows = resolvedRows.joinToString(",\n") { (row, hostId) ->
+            val metricIdentity = metricIdentity(row.metricName, row.tags)
             """(
                 ${row.organizationId},
                 $hostId,
@@ -93,10 +94,12 @@ object InfraTelemetryRollups {
                 '${escapeSql(row.host)}',
                 '${escapeSql(row.unit)}',
                 '${escapeSql(row.source)}',
+                '${escapeSql(metricIdentity)}',
                 ${mapToSqlMap(row.tags)}
             )"""
         }
         val rollupRows = resolvedRows.joinToString(",\n") { (row, hostId) ->
+            val metricIdentity = metricIdentity(row.metricName, row.tags)
             """(
                 ${row.organizationId},
                 $hostId,
@@ -105,6 +108,8 @@ object InfraTelemetryRollups {
                 '${escapeSql(row.host)}',
                 '${escapeSql(row.unit)}',
                 '${escapeSql(row.source)}',
+                '${escapeSql(metricIdentity)}',
+                ${mapToSqlMap(row.tags)},
                 ${row.value},
                 1
             )"""
@@ -114,7 +119,7 @@ object InfraTelemetryRollups {
             """
             INSERT INTO `$db`.metrics_latest_by_host (
                 organization_id, host_id, metric_name, timestamp, value,
-                host, unit, source, tags
+                host, unit, source, metric_identity, tags
             ) VALUES
             $latestRows
             """.trimIndent(),
@@ -124,7 +129,7 @@ object InfraTelemetryRollups {
             """
             INSERT INTO `$db`.metrics_rollup_1m (
                 organization_id, host_id, bucket_start, metric_name, host,
-                unit, source, value_sum, value_count
+                unit, source, metric_identity, tags, value_sum, value_count
             ) VALUES
             $rollupRows
             """.trimIndent(),
@@ -216,6 +221,16 @@ object InfraTelemetryRollups {
             ?.toLongOrNull()
             ?.takeIf { it > 0L }
 
+    private fun metricIdentity(metricName: String, tags: Map<String, String>): String =
+        if (metricName in diskMetricNames) diskIdentity(tags) else ""
+
+    private fun diskIdentity(tags: Map<String, String>): String {
+        val parts = diskIdentityTagKeys.mapNotNull { key ->
+            tags[key]?.takeIf { it.isNotBlank() }?.let { value -> "$key=$value" }
+        }
+        return parts.ifEmpty { listOf(DEFAULT_DISK_IDENTITY) }.joinToString("|")
+    }
+
     private fun mapToSqlMap(map: Map<String, String>): String {
         if (map.isEmpty()) return "map()"
         val entries = map.entries.joinToString(", ") { (key, value) ->
@@ -235,4 +250,21 @@ object InfraTelemetryRollups {
     )
 
     private const val ERROR_BODY_PREVIEW_CHARS = 600
+    private const val DEFAULT_DISK_IDENTITY = "default"
+    private val diskMetricNames = setOf(
+        "system.disk.percent",
+        "system.disk.total",
+        "system.disk.used",
+    )
+    private val diskIdentityTagKeys = listOf(
+        "device_name",
+        "device",
+        "system.filesystem.device",
+        "mount_point",
+        "mountpoint",
+        "system.filesystem.mountpoint",
+        "filesystem",
+        "system.filesystem.type",
+        "type",
+    )
 }

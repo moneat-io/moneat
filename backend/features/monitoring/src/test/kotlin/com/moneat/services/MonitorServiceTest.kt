@@ -233,30 +233,41 @@ class MonitorServiceTest {
     fun `getLatestMetricsForHosts derives normalized host metric percentages`() = runBlocking {
         val hostRepository = mockk<HostRepository>()
         val hostAlertRepository = mockk<HostAlertRepository>(relaxed = true)
-        val querySlot = slot<String>()
-        coEvery { hostRepository.executeClickHouseQuery(capture(querySlot)) } returns
-            """
-            {
-              "data": [
-                [7, 23.5, 16000000, 12000000, 0, 100, 40, 123, 456, 1.2, null, null, null, 40.0]
-              ]
+        val queries = mutableListOf<String>()
+        coEvery { hostRepository.executeClickHouseQuery(any()) } coAnswers {
+            val query = firstArg<String>()
+            queries.add(query)
+            if (query.contains("GROUP BY host_id, metric_identity")) {
+                """{"data": [[7, 100.0, 45.0, 45.0]]}"""
+            } else {
+                """
+                {
+                  "data": [
+                    [7, 23.5, 16000000, 12000000, 0, 100, 40, 123, 456, 1.2, null, null, null, 40.0]
+                  ]
+                }
+                """.trimIndent()
             }
-            """.trimIndent()
+        }
 
         val result = MonitorService(hostRepository, hostAlertRepository)
             .getLatestMetricsForHosts(listOf(7), 42)
             .getValue(7)
 
         assertNotNull(result)
-        assertTrue(querySlot.captured.contains("system.cpu.user"))
-        assertFalse(querySlot.captured.contains("system.mem.pct_usable"))
-        assertTrue(querySlot.captured.contains("system.mem.used"))
-        assertTrue(querySlot.captured.contains("system.mem.total"))
-        assertFalse(querySlot.captured.contains("system.disk.in_use"))
-        assertTrue(querySlot.captured.contains("system.disk.percent"))
+        val latestQuery = queries.first()
+        val diskQuery = queries.last()
+        assertTrue(latestQuery.contains("system.cpu.user"))
+        assertFalse(latestQuery.contains("system.mem.pct_usable"))
+        assertTrue(latestQuery.contains("system.mem.used"))
+        assertTrue(latestQuery.contains("system.mem.total"))
+        assertFalse(latestQuery.contains("system.disk.in_use"))
+        assertTrue(latestQuery.contains("system.disk.percent"))
+        assertTrue(diskQuery.contains("GROUP BY host_id, metric_identity"))
+        assertTrue(diskQuery.contains("max(pct) as disk_percent"))
         assertEquals(23.5f, result.cpuPercent)
         assertEquals(75.0f, result.memPercent)
-        assertEquals(40.0f, result.diskPercent)
+        assertEquals(45.0f, result.diskPercent)
         assertEquals(123L, result.netRecvBytes)
         assertEquals(456L, result.netSentBytes)
     }
