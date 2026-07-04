@@ -192,13 +192,15 @@ class ProductAnalyticsFunnelService(
         val projectId = transaction { resolveInternalProjectId(organizationId, funnel.projectId) } ?: return null
         val result = analyticsService.getFunnel(
             projectId = projectId,
-            dateFrom = dateFrom,
-            dateTo = dateTo,
-            steps = funnel.steps,
-            groupBy = funnel.groupBy,
-            source = funnel.source,
-            filters = funnel.filters,
-            propFilters = funnel.propFilters,
+            query = AnalyticsFunnelQuery(
+                dateFrom = dateFrom,
+                dateTo = dateTo,
+                steps = funnel.steps,
+                groupBy = funnel.groupBy,
+                source = funnel.source,
+                filters = funnel.filters,
+                propFilters = funnel.propFilters,
+            ),
         )
         return SavedProductFunnelRunResult(funnel, dateFrom.toString(), dateTo.toString(), result)
     }

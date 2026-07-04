@@ -31,6 +31,7 @@ private val productFunnelService = ProductAnalyticsFunnelService()
 private val savedFunnelGroupByValues = listOf("session_id", "user_id")
 private const val FUNNEL_ID_FIELD = "funnel_id"
 private const val FLAG_KEY_FIELD = "flag_key"
+private const val SAVED_FUNNEL_RESOURCE_ID_DESCRIPTION = "Saved product funnel resource ID"
 
 class ListSavedProductFunnelsTool(
     private val service: ProductAnalyticsFunnelService = productFunnelService,
@@ -106,7 +107,7 @@ class UpdateSavedProductFunnelTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             savedFunnelDefinitionProperties() + mapOf(
-                FUNNEL_ID_FIELD to schemaResourceId("Saved product funnel resource ID"),
+                FUNNEL_ID_FIELD to schemaResourceId(SAVED_FUNNEL_RESOURCE_ID_DESCRIPTION),
                 "name" to schemaString("Updated saved funnel name"),
                 "description" to schemaString("Updated saved funnel description"),
             ),
@@ -158,7 +159,7 @@ class RunSavedProductFunnelTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
-                FUNNEL_ID_FIELD to schemaResourceId("Saved product funnel resource ID"),
+                FUNNEL_ID_FIELD to schemaResourceId(SAVED_FUNNEL_RESOURCE_ID_DESCRIPTION),
                 "period" to schemaString("Relative period such as 7d, 30d, month, 6mo, or 12mo"),
                 "date_from" to schemaString("Start date in YYYY-MM-DD format"),
                 "date_to" to schemaString("End date in YYYY-MM-DD format"),
@@ -215,26 +216,17 @@ class CompareProductFunnelByFeatureFlagTool(
 
 private fun savedFunnelDefinitionProperties(): Map<String, JsonObject> =
     mapOf(
-        "steps" to savedFunnelStringArraySchema("Ordered product analytics event names"),
+        "steps" to productAnalyticsStringArraySchema("Ordered product analytics event names"),
         "filters" to schemaAnalyticsFilters(),
         "prop_filters" to schemaEventPropertyFilters(),
         "group_by" to schemaEnum("Conversion identity", savedFunnelGroupByValues),
         "source" to schemaString("Optional analytics source filter"),
     )
 
-private fun savedFunnelStringArraySchema(description: String): JsonObject =
-    JsonObject(
-        mapOf(
-            "type" to JsonPrimitive("array"),
-            "description" to JsonPrimitive(description),
-            "items" to JsonObject(mapOf("type" to JsonPrimitive("string"))),
-        ),
-    )
-
 private fun savedFunnelIdInputSchema(): InputSchema =
     InputSchema(
         properties = JsonObject(
-            mapOf(FUNNEL_ID_FIELD to schemaResourceId("Saved product funnel resource ID")),
+            mapOf(FUNNEL_ID_FIELD to schemaResourceId(SAVED_FUNNEL_RESOURCE_ID_DESCRIPTION)),
         ),
         required = listOf(FUNNEL_ID_FIELD),
     )
@@ -274,17 +266,14 @@ private fun parseUpdateSavedProductFunnelRequest(args: JsonObject): Result<Saved
             groupBy = groupBy,
             source = args.stringContent("source"),
         )
-        if (
-            request.name == null &&
-            request.description == null &&
-            request.steps == null &&
-            request.filters == null &&
-            request.propFilters == null &&
-            request.groupBy == null &&
-            request.source == null
-        ) {
-            throw IllegalArgumentException("At least one saved funnel field is required")
-        }
+        val hasUpdates = request.name != null ||
+            request.description != null ||
+            request.steps != null ||
+            request.filters != null ||
+            request.propFilters != null ||
+            request.groupBy != null ||
+            request.source != null
+        require(hasUpdates) { "At least one saved funnel field is required" }
         request
     }
 
@@ -323,7 +312,7 @@ private fun funnelComparisonDefinition(
 private fun JsonObject.funnelResourceIdResult(required: Boolean = true): Result<kotlin.uuid.Uuid?> = runCatching {
     val raw = stringContent(FUNNEL_ID_FIELD)
         ?: run {
-            if (required) throw IllegalArgumentException("$FUNNEL_ID_FIELD is required")
+            require(!required) { "$FUNNEL_ID_FIELD is required" }
             return@runCatching null
         }
     parseResourceId(raw)

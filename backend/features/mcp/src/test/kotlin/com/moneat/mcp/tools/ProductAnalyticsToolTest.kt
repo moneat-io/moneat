@@ -357,13 +357,60 @@ class ProductAnalyticsToolTest {
             ),
             context,
         )
+        val tooManyFilters = registry().callTool(
+            "get_product_events",
+            JsonObject(
+                mapOf(
+                    "project_id" to JsonPrimitive(PRODUCT_ANALYTICS_PROJECT_RESOURCE_ID),
+                    "date_from" to JsonPrimitive("2026-06-01"),
+                    "date_to" to JsonPrimitive("2026-06-30"),
+                    "filters" to JsonArray(
+                        (1..21).map { index ->
+                            JsonObject(
+                                mapOf(
+                                    "property" to JsonPrimitive("device_type"),
+                                    "operator" to JsonPrimitive("is"),
+                                    "value" to JsonPrimitive("device-$index"),
+                                ),
+                            )
+                        },
+                    ),
+                ),
+            ),
+            context,
+        )
+        val tooManyPropFilters = registry().callTool(
+            "get_product_funnel",
+            JsonObject(
+                mapOf(
+                    "project_id" to JsonPrimitive(PRODUCT_ANALYTICS_PROJECT_RESOURCE_ID),
+                    "date_from" to JsonPrimitive("2026-06-01"),
+                    "date_to" to JsonPrimitive("2026-06-30"),
+                    "steps" to JsonArray(listOf(JsonPrimitive("signup_completed"), JsonPrimitive("activated"))),
+                    "prop_filters" to JsonArray(
+                        (1..21).map { index ->
+                            JsonObject(
+                                mapOf(
+                                    "key" to JsonPrimitive("prop_$index"),
+                                    "operator" to JsonPrimitive("is"),
+                                    "value" to JsonPrimitive("value"),
+                                ),
+                            )
+                        },
+                    ),
+                ),
+            ),
+            context,
+        )
 
-        listOf(badGroupBy, badFilter, missingCustomEvent).forEach { result ->
+        listOf(badGroupBy, badFilter, missingCustomEvent, tooManyFilters, tooManyPropFilters).forEach { result ->
             assertTrue(result.isError, result.content.single().text)
         }
         assertTrue(badGroupBy.content.single().text!!.contains("group_by must be one of"))
         assertTrue(badFilter.content.single().text!!.contains("filters[0].property must be one of"))
         assertTrue(missingCustomEvent.content.single().text!!.contains("custom_event is required"))
+        assertTrue(tooManyFilters.content.single().text!!.contains("filters cannot include more than"))
+        assertTrue(tooManyPropFilters.content.single().text!!.contains("prop_filters cannot include more than"))
     }
 
     @Test
@@ -413,6 +460,36 @@ class ProductAnalyticsToolTest {
         val createdJson = toolJson.parseToJsonElement(created.content.single().text.orEmpty()).jsonObject
         val funnelId = createdJson["id"]!!.jsonPrimitive.content
         assertEquals("Record to export", createdJson["name"]!!.jsonPrimitive.content)
+
+        val fetched = registry().callTool(
+            "get_saved_product_funnel",
+            JsonObject(mapOf("funnel_id" to JsonPrimitive(funnelId))),
+            context,
+        )
+        assertFalse(fetched.isError, fetched.content.single().text.orEmpty())
+        assertEquals(
+            "Record to export",
+            toolJson.parseToJsonElement(fetched.content.single().text.orEmpty())
+                .jsonObject["name"]!!
+                .jsonPrimitive
+                .content,
+        )
+
+        val updated = registry().callTool(
+            "update_saved_product_funnel",
+            JsonObject(
+                mapOf(
+                    "funnel_id" to JsonPrimitive(funnelId),
+                    "name" to JsonPrimitive("Record to private export"),
+                    "group_by" to JsonPrimitive("session_id"),
+                ),
+            ),
+            context,
+        )
+        assertFalse(updated.isError, updated.content.single().text.orEmpty())
+        val updatedJson = toolJson.parseToJsonElement(updated.content.single().text.orEmpty()).jsonObject
+        assertEquals("Record to private export", updatedJson["name"]!!.jsonPrimitive.content)
+        assertEquals("session_id", updatedJson["groupBy"]!!.jsonPrimitive.content)
 
         val listed = registry().callTool(
             "list_saved_product_funnels",

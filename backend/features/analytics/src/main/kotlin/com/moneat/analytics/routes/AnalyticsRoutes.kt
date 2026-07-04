@@ -17,6 +17,8 @@
 package com.moneat.analytics.routes
 
 import com.moneat.analytics.models.AnalyticsFilter
+import com.moneat.analytics.services.AnalyticsEventsQuery
+import com.moneat.analytics.services.AnalyticsFunnelQuery
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.ProductRetentionRequest
@@ -227,7 +229,12 @@ private suspend fun ApplicationCall.respondEvents(
     val filters = parseFilters(this)
     val groupBy = request.queryParameters["group_by"] ?: "session_id"
     val source = request.queryParameters["source"]
-    respond(analyticsService.getEvents(context, dateFrom, dateTo, filters, limitQuery(), groupBy, source))
+    respond(
+        analyticsService.getEvents(
+            context,
+            AnalyticsEventsQuery(dateFrom, dateTo, filters, limitQuery(), groupBy, source),
+        ),
+    )
 }
 
 private suspend fun ApplicationCall.respondRealtime(
@@ -248,7 +255,12 @@ private suspend fun ApplicationCall.respondFunnel(
     val filters = parseFilters(this)
     val groupBy = request.queryParameters["group_by"] ?: "session_id"
     val source = request.queryParameters["source"]
-    respond(analyticsService.getFunnel(context, dateFrom, dateTo, steps, groupBy, source, filters))
+    respond(
+        analyticsService.getFunnel(
+            context,
+            AnalyticsFunnelQuery(dateFrom, dateTo, steps, groupBy, source, filters),
+        ),
+    )
 }
 
 private suspend fun ApplicationCall.respondRetention(
@@ -403,18 +415,12 @@ private fun AnalyticsService.getRealtime(context: AnalyticsRouteContext) =
         getRealtime(projectId)
     } ?: getRealtime(context.scope)
 
-@Suppress("LongParameterList")
 private suspend fun AnalyticsService.getFunnel(
     context: AnalyticsRouteContext,
-    dateFrom: LocalDate,
-    dateTo: LocalDate,
-    steps: List<String>,
-    groupBy: String,
-    source: String?,
-    filters: List<AnalyticsFilter>,
+    query: AnalyticsFunnelQuery,
 ) = context.projectId?.let { projectId ->
-    getFunnel(projectId, dateFrom, dateTo, steps, groupBy, source, filters)
-} ?: getFunnel(context.scope, dateFrom, dateTo, steps, groupBy, source, filters)
+    getFunnel(projectId, query)
+} ?: getFunnel(context.scope, query)
 
 private suspend fun AnalyticsService.getRetention(
     context: AnalyticsRouteContext,
@@ -429,15 +435,10 @@ private suspend fun AnalyticsService.getRetention(
 
 private suspend fun AnalyticsService.getEvents(
     context: AnalyticsRouteContext,
-    dateFrom: LocalDate,
-    dateTo: LocalDate,
-    filters: List<AnalyticsFilter>,
-    limit: Int,
-    groupBy: String,
-    source: String?,
+    query: AnalyticsEventsQuery,
 ) = context.projectId?.let { projectId ->
-    getEvents(projectId, dateFrom, dateTo, filters, limit, groupBy, source)
-} ?: getEvents(context.scope, dateFrom, dateTo, filters, limit, groupBy, source)
+    getEvents(projectId, query)
+} ?: getEvents(context.scope, query)
 
 private suspend fun AnalyticsService.getProductAnalyticsSummary(
     context: AnalyticsRouteContext,

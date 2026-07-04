@@ -21,6 +21,8 @@ import com.moneat.analytics.models.BreakdownRow
 import com.moneat.analytics.models.EventPropertyFilter
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.ProductRetentionCohortRow
+import com.moneat.analytics.services.AnalyticsEventsQuery
+import com.moneat.analytics.services.AnalyticsFunnelQuery
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.ProductRetentionRequest
 import com.moneat.mcp.models.McpContext
@@ -52,6 +54,7 @@ private const val PERIOD_6MO_MONTHS = 6L
 private const val PERIOD_12MO_MONTHS = 12L
 private const val MAX_ANALYTICS_RANGE_DAYS = 366L
 private const val MAX_EVENT_PROPERTY_KEY_LENGTH = 128
+private const val MAX_FILTER_COUNT = 20
 private const val FILTER_PARTS_COUNT = 3
 private const val PRODUCT_RETENTION_MODE_KEY_ACTION = "key_action"
 private const val PRODUCT_RETENTION_MODE_ANY_SESSION = "any_session"
@@ -98,7 +101,7 @@ class GetProductFunnelTool(
             productAnalyticsBaseProperties() + mapOf(
                 "filters" to schemaAnalyticsFilters(),
                 "prop_filters" to schemaEventPropertyFilters(),
-                "steps" to schemaStringArray("Ordered analytics event names in the funnel"),
+                "steps" to productAnalyticsStringArraySchema("Ordered analytics event names in the funnel"),
                 "group_by" to schemaEnum("Conversion identity", analyticsGroupByValues.toList()),
                 "source" to schemaString("Optional telemetry source filter, such as server or web"),
             ),
@@ -132,13 +135,15 @@ class GetProductFunnelTool(
         val source = args.stringContent("source")
         val result = analyticsService.getFunnel(
             projectId = projectId,
-            dateFrom = range.dateFrom,
-            dateTo = range.dateTo,
-            steps = steps,
-            groupBy = groupBy,
-            source = source,
-            filters = filters,
-            propFilters = propFilters,
+            query = AnalyticsFunnelQuery(
+                dateFrom = range.dateFrom,
+                dateTo = range.dateTo,
+                steps = steps,
+                groupBy = groupBy,
+                source = source,
+                filters = filters,
+                propFilters = propFilters,
+            ),
         )
 
         jsonResult(
@@ -196,13 +201,15 @@ class GetProductEventsTool(
             .getOrElse { return@withRequiredProjectId errorResult(it.message!!) }
         val result = analyticsService.getEvents(
             projectId = projectId,
-            dateFrom = range.dateFrom,
-            dateTo = range.dateTo,
-            filters = filters,
-            limit = limit,
-            groupBy = groupBy,
-            source = source,
-            propFilters = propFilters,
+            query = AnalyticsEventsQuery(
+                dateFrom = range.dateFrom,
+                dateTo = range.dateTo,
+                filters = filters,
+                limit = limit,
+                groupBy = groupBy,
+                source = source,
+                propFilters = propFilters,
+            ),
         )
 
         jsonResult(
@@ -339,8 +346,8 @@ internal fun parseProductAnalyticsDateRange(args: JsonObject): Result<ProductAna
     val explicitFrom = args.stringContent("date_from") ?: args.stringContent("from")
     val explicitTo = args.stringContent("date_to") ?: args.stringContent("to")
     val range = if (explicitFrom != null || explicitTo != null) {
-        if (explicitFrom == null || explicitTo == null) {
-            throw IllegalArgumentException("date_from and date_to are both required for custom date ranges")
+        require(!(explicitFrom == null || explicitTo == null)) {
+            "date_from and date_to are both required for custom date ranges"
         }
         parseDate(explicitFrom, "date_from") to parseDate(explicitTo, "date_to")
     } else {
@@ -351,8 +358,8 @@ internal fun parseProductAnalyticsDateRange(args: JsonObject): Result<ProductAna
 }
 
 private fun dateRangeForPeriod(period: String): Pair<LocalDate, LocalDate> {
-    if (period !in analyticsPeriodValues) {
-        throw IllegalArgumentException("period must be one of: ${analyticsPeriodValues.joinToString(", ")}")
+    require(period in analyticsPeriodValues) {
+        "period must be one of: ${analyticsPeriodValues.joinToString(", ")}"
     }
     val now = LocalDate.now()
     return when (period) {
@@ -375,19 +382,15 @@ private fun parseDate(value: String, fieldName: String): LocalDate =
     }
 
 private fun validateDateRange(dateFrom: LocalDate, dateTo: LocalDate) {
-    if (dateFrom.isAfter(dateTo)) {
-        throw IllegalArgumentException("date_from must be on or before date_to")
-    }
+    require(!dateFrom.isAfter(dateTo)) { "date_from must be on or before date_to" }
     val days = dateTo.toEpochDay() - dateFrom.toEpochDay() + 1
-    if (days > MAX_ANALYTICS_RANGE_DAYS) {
-        throw IllegalArgumentException("date range cannot exceed $MAX_ANALYTICS_RANGE_DAYS days")
-    }
+    require(days <= MAX_ANALYTICS_RANGE_DAYS) { "date range cannot exceed $MAX_ANALYTICS_RANGE_DAYS days" }
 }
 
 internal fun parseGroupBy(args: JsonObject): Result<String> = runCatching {
     val groupBy = args.stringContent("group_by") ?: "session_id"
-    if (groupBy !in analyticsGroupByValues) {
-        throw IllegalArgumentException("group_by must be one of: ${analyticsGroupByValues.joinToString(", ")}")
+    require(groupBy in analyticsGroupByValues) {
+        "group_by must be one of: ${analyticsGroupByValues.joinToString(", ")}"
     }
     groupBy
 }
@@ -402,9 +405,7 @@ internal fun parseStringArray(args: JsonObject, fieldName: String): Result<List<
         else -> throw IllegalArgumentException("$fieldName must be an array of strings")
     }.map(String::trim)
 
-    if (values.any(String::isBlank)) {
-        throw IllegalArgumentException("$fieldName must not contain blank values")
-    }
+    require(!values.any(String::isBlank)) { "$fieldName must not contain blank values" }
     values
 }
 
@@ -422,22 +423,26 @@ private fun JsonElement.stringValue(fieldName: String): String =
 
 internal fun parseAnalyticsFilters(args: JsonObject): Result<List<AnalyticsFilter>> = runCatching {
     val value = args["filters"] ?: return@runCatching emptyList()
-    when (value) {
+    val filters = when (value) {
         is JsonArray -> value.mapIndexed { index, element -> parseAnalyticsFilter(element, "filters[$index]") }
         is JsonPrimitive -> listOf(parseFilterString(value.contentOrNull.orEmpty(), "filters"))
         else -> throw IllegalArgumentException("filters must be an array")
     }
+    require(filters.size <= MAX_FILTER_COUNT) { "filters cannot include more than $MAX_FILTER_COUNT entries" }
+    filters
 }
 
 internal fun parseEventPropertyFilters(args: JsonObject): Result<List<EventPropertyFilter>> = runCatching {
     val value = args["prop_filters"] ?: args["property_filters"] ?: return@runCatching emptyList()
-    when (value) {
+    val filters = when (value) {
         is JsonArray -> value.mapIndexed { index, element ->
             parseEventPropertyFilter(element, "prop_filters[$index]")
         }
         is JsonPrimitive -> listOf(parseEventPropertyFilterString(value.contentOrNull.orEmpty(), "prop_filters"))
         else -> throw IllegalArgumentException("prop_filters must be an array")
     }
+    require(filters.size <= MAX_FILTER_COUNT) { "prop_filters cannot include more than $MAX_FILTER_COUNT entries" }
+    filters
 }
 
 private fun parseAnalyticsFilter(element: JsonElement, label: String): AnalyticsFilter =
@@ -470,17 +475,13 @@ private fun parseEventPropertyFilterObject(element: JsonObject, label: String): 
 
 private fun parseFilterString(value: String, label: String): AnalyticsFilter {
     val parts = value.split(":", limit = FILTER_PARTS_COUNT)
-    if (parts.size != FILTER_PARTS_COUNT) {
-        throw IllegalArgumentException("$label must use property:operator:value format")
-    }
+    require(parts.size == FILTER_PARTS_COUNT) { "$label must use property:operator:value format" }
     return validatedFilter(parts[0].trim(), parts[1].trim(), parts[2].trim(), label)
 }
 
 private fun parseEventPropertyFilterString(value: String, label: String): EventPropertyFilter {
     val parts = value.split(":", limit = FILTER_PARTS_COUNT)
-    if (parts.size != FILTER_PARTS_COUNT) {
-        throw IllegalArgumentException("$label must use key:operator:value format")
-    }
+    require(parts.size == FILTER_PARTS_COUNT) { "$label must use key:operator:value format" }
     return validatedEventPropertyFilter(parts[0].trim(), parts[1].trim(), parts[2].trim(), label)
 }
 
@@ -490,21 +491,15 @@ private fun validatedFilter(
     value: String,
     label: String,
 ): AnalyticsFilter {
-    if (property !in analyticsFilterProperties) {
-        throw IllegalArgumentException(
-            "$label.property must be one of: " +
-                analyticsFilterProperties.joinToString(", "),
-        )
+    require(property in analyticsFilterProperties) {
+        "$label.property must be one of: " +
+            analyticsFilterProperties.joinToString(", ")
     }
-    if (operator !in analyticsFilterOperators) {
-        throw IllegalArgumentException(
-            "$label.operator must be one of: " +
-                analyticsFilterOperators.joinToString(", "),
-        )
+    require(operator in analyticsFilterOperators) {
+        "$label.operator must be one of: " +
+            analyticsFilterOperators.joinToString(", ")
     }
-    if (value.isBlank()) {
-        throw IllegalArgumentException("$label.value is required")
-    }
+    require(value.isNotBlank()) { "$label.value is required" }
     return AnalyticsFilter(property, operator, value)
 }
 
@@ -514,21 +509,15 @@ private fun validatedEventPropertyFilter(
     value: String,
     label: String,
 ): EventPropertyFilter {
-    if (key.isBlank()) {
-        throw IllegalArgumentException("$label.key is required")
+    require(key.isNotBlank()) { "$label.key is required" }
+    require(key.length <= MAX_EVENT_PROPERTY_KEY_LENGTH) {
+        "$label.key cannot exceed $MAX_EVENT_PROPERTY_KEY_LENGTH characters"
     }
-    if (key.length > MAX_EVENT_PROPERTY_KEY_LENGTH) {
-        throw IllegalArgumentException("$label.key cannot exceed $MAX_EVENT_PROPERTY_KEY_LENGTH characters")
+    require(operator in analyticsFilterOperators) {
+        "$label.operator must be one of: " +
+            analyticsFilterOperators.joinToString(", ")
     }
-    if (operator !in analyticsFilterOperators) {
-        throw IllegalArgumentException(
-            "$label.operator must be one of: " +
-                analyticsFilterOperators.joinToString(", "),
-        )
-    }
-    if (value.isBlank()) {
-        throw IllegalArgumentException("$label.value is required")
-    }
+    require(value.isNotBlank()) { "$label.value is required" }
     return EventPropertyFilter(key, operator, value)
 }
 
@@ -546,7 +535,7 @@ internal fun parseBoundedInt(
     value.coerceIn(min, max)
 }
 
-private fun schemaStringArray(description: String): JsonObject =
+internal fun productAnalyticsStringArraySchema(description: String): JsonObject =
     JsonObject(
         mapOf(
             "type" to JsonPrimitive("array"),

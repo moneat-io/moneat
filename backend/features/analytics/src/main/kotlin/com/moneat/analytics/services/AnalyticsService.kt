@@ -85,6 +85,26 @@ data class ProductRetentionRequest(
     val periodCount: Int,
 )
 
+data class AnalyticsFunnelQuery(
+    val dateFrom: LocalDate,
+    val dateTo: LocalDate,
+    val steps: List<String>,
+    val groupBy: String = "session_id",
+    val source: String? = null,
+    val filters: List<AnalyticsFilter> = emptyList(),
+    val propFilters: List<EventPropertyFilter> = emptyList(),
+)
+
+data class AnalyticsEventsQuery(
+    val dateFrom: LocalDate,
+    val dateTo: LocalDate,
+    val filters: List<AnalyticsFilter>,
+    val limit: Int = DEFAULT_LIMIT,
+    val groupBy: String = "session_id",
+    val source: String? = null,
+    val propFilters: List<EventPropertyFilter> = emptyList(),
+)
+
 /**
  * Query builder for analytics dashboard endpoints.
  * Builds ClickHouse SQL queries with filters, date ranges, and comparison periods.
@@ -336,39 +356,23 @@ class AnalyticsService {
 
     // --- Funnel ---
 
-    @Suppress("LongParameterList")
     suspend fun getFunnel(
         projectId: Long,
-        dateFrom: LocalDate,
-        dateTo: LocalDate,
-        steps: List<String>,
-        groupBy: String = "session_id",
-        source: String? = null,
-        filters: List<AnalyticsFilter> = emptyList(),
-        propFilters: List<EventPropertyFilter> = emptyList(),
+        query: AnalyticsFunnelQuery,
     ): FunnelResponse =
-        getFunnel(
-            AnalyticsQueryScope.service(projectId),
-            dateFrom,
-            dateTo,
-            steps,
-            groupBy,
-            source,
-            filters,
-            propFilters,
-        )
+        getFunnel(AnalyticsQueryScope.service(projectId), query)
 
-    @Suppress("LongParameterList")
     suspend fun getFunnel(
         scope: AnalyticsQueryScope,
-        dateFrom: LocalDate,
-        dateTo: LocalDate,
-        steps: List<String>,
-        groupBy: String = "session_id",
-        source: String? = null,
-        filters: List<AnalyticsFilter> = emptyList(),
-        propFilters: List<EventPropertyFilter> = emptyList(),
+        query: AnalyticsFunnelQuery,
     ): FunnelResponse {
+        val dateFrom = query.dateFrom
+        val dateTo = query.dateTo
+        val steps = query.steps
+        val groupBy = query.groupBy
+        val source = query.source
+        val filters = query.filters
+        val propFilters = query.propFilters
         if (steps.size < 2) return FunnelResponse(emptyList(), 0.0)
         val where = buildWhere(scope, dateFrom, dateTo, filters, "e", "timestamp", propFilters)
         val groupByColumn = resolveGroupByColumn(groupBy)
@@ -530,39 +534,23 @@ $retentionColumns
 
     // --- Events breakdown (custom events) ---
 
-    @Suppress("LongParameterList")
     suspend fun getEvents(
         projectId: Long,
-        dateFrom: LocalDate,
-        dateTo: LocalDate,
-        filters: List<AnalyticsFilter>,
-        limit: Int = DEFAULT_LIMIT,
-        groupBy: String = "session_id",
-        source: String? = null,
-        propFilters: List<EventPropertyFilter> = emptyList(),
+        query: AnalyticsEventsQuery,
     ): BreakdownResponse =
-        getEvents(
-            AnalyticsQueryScope.service(projectId),
-            dateFrom,
-            dateTo,
-            filters,
-            limit,
-            groupBy,
-            source,
-            propFilters,
-        )
+        getEvents(AnalyticsQueryScope.service(projectId), query)
 
-    @Suppress("LongParameterList")
     suspend fun getEvents(
         scope: AnalyticsQueryScope,
-        dateFrom: LocalDate,
-        dateTo: LocalDate,
-        filters: List<AnalyticsFilter>,
-        limit: Int = DEFAULT_LIMIT,
-        groupBy: String = "session_id",
-        source: String? = null,
-        propFilters: List<EventPropertyFilter> = emptyList(),
+        query: AnalyticsEventsQuery,
     ): BreakdownResponse {
+        val dateFrom = query.dateFrom
+        val dateTo = query.dateTo
+        val filters = query.filters
+        val limit = query.limit
+        val groupBy = query.groupBy
+        val source = query.source
+        val propFilters = query.propFilters
         val where = buildWhere(scope, dateFrom, dateTo, filters, "e", "timestamp", propFilters)
         val groupByColumn = resolveGroupByColumn(groupBy)
         val sourceClause = sourceWhere(source, "e")
