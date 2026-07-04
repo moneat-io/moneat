@@ -238,7 +238,7 @@ function isTimeKey(key: string): boolean {
   return TIME_KEYS.has(key)
 }
 
-function QueryErrorState({error}: {error: unknown}) {
+function QueryErrorState({error}: Readonly<{error: unknown}>) {
   const detail = queryErrorDetail(error)
   return (
     <div className="max-w-full px-4 text-center">
