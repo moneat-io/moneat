@@ -42,6 +42,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.parallel.ResourceLock
+import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -414,6 +415,106 @@ class ProductAnalyticsToolTest {
     }
 
     @Test
+    fun `product analytics parser helpers cover relative periods strings and invalid primitives`() {
+        val today = LocalDate.now()
+
+        assertEquals(
+            today.minusDays(6),
+            parseProductAnalyticsDateRange(JsonObject(mapOf("period" to JsonPrimitive("7d"))))
+                .getOrThrow()
+                .dateFrom,
+        )
+        assertEquals(
+            today.minusMonths(6),
+            parseProductAnalyticsDateRange(JsonObject(mapOf("period" to JsonPrimitive("6mo"))))
+                .getOrThrow()
+                .dateFrom,
+        )
+        assertTrue(
+            parseProductAnalyticsDateRange(JsonObject(mapOf("period" to JsonPrimitive("custom"))))
+                .exceptionOrNull()!!
+                .message!!
+                .contains("date_from and date_to are required"),
+        )
+        assertTrue(
+            parseProductAnalyticsDateRange(JsonObject(mapOf("date_from" to JsonPrimitive("2026-06-01"))))
+                .exceptionOrNull()!!
+                .message!!
+                .contains("both required"),
+        )
+        assertTrue(
+            parseProductAnalyticsDateRange(
+                JsonObject(
+                    mapOf(
+                        "date_from" to JsonPrimitive("2026-13-01"),
+                        "date_to" to JsonPrimitive("2026-06-30"),
+                    ),
+                ),
+            ).exceptionOrNull()!!
+                .message!!
+                .contains("valid YYYY-MM-DD"),
+        )
+        assertTrue(
+            parseProductAnalyticsDateRange(
+                JsonObject(
+                    mapOf(
+                        "date_from" to JsonPrimitive("2026-06-30"),
+                        "date_to" to JsonPrimitive("2026-06-01"),
+                    ),
+                ),
+            ).exceptionOrNull()!!
+                .message!!
+                .contains("on or before"),
+        )
+        assertTrue(
+            parseProductAnalyticsDateRange(
+                JsonObject(
+                    mapOf(
+                        "date_from" to JsonPrimitive("2025-01-01"),
+                        "date_to" to JsonPrimitive("2026-06-01"),
+                    ),
+                ),
+            ).exceptionOrNull()!!
+                .message!!
+                .contains("cannot exceed"),
+        )
+
+        assertEquals(
+            listOf("recording.started", "export.completed"),
+            parseStringArray(
+                JsonObject(mapOf("steps" to JsonPrimitive("recording.started, export.completed"))),
+                "steps",
+            ).getOrThrow(),
+        )
+        assertTrue(
+            parseStringArray(JsonObject(mapOf("steps" to JsonArray(listOf(JsonPrimitive(" "))))), "steps")
+                .exceptionOrNull()!!
+                .message!!
+                .contains("must not contain blank values"),
+        )
+        assertEquals(
+            "ios",
+            parseAnalyticsFilters(JsonObject(mapOf("filters" to JsonPrimitive("device_type:is:ios"))))
+                .getOrThrow()
+                .single()
+                .value,
+        )
+        assertEquals(
+            "private",
+            parseEventPropertyFilters(JsonObject(mapOf("property_filters" to JsonPrimitive("destination:is:private"))))
+                .getOrThrow()
+                .single()
+                .value,
+        )
+        assertTrue(
+            parseBoundedInt(JsonObject(mapOf("limit" to JsonPrimitive("many"))), "limit", 50, 1, 200)
+                .exceptionOrNull()!!
+                .message!!
+                .contains("must be an integer"),
+        )
+    }
+
+    @Test
     fun `saved product funnel tools create list run and delete persisted funnels`() = runBlocking {
         val created = registry().callTool(
             "create_saved_product_funnel",
@@ -642,6 +743,49 @@ class ProductAnalyticsToolTest {
             assertTrue(queries.single().contains("e.device_type = 'ios'"))
             assertTrue(queries.single().contains("mapContains(e.props, 'destination')"))
             assertTrue(queries.single().contains("e.props['destination'] = 'private'"))
+        }
+    }
+
+    @Test
+    fun `feature flag funnel comparison accepts inline funnel definition`() = runBlocking {
+        val queries = mutableListOf<String>()
+        MockHttpServer(
+            queryBasedClickHouseHandler(
+                "flag_assignments" to """{"variant_key":"control","level":1,"cnt":4,"evaluations":5,"unique_targets":4}
+                    |{"variant_key":"control","level":2,"cnt":3,"evaluations":5,"unique_targets":4}
+                """.trimMargin(),
+                captureQueries = queries,
+            ),
+        ).use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = registry().callTool(
+                "compare_product_funnel_by_feature_flag",
+                JsonObject(
+                    mapOf(
+                        "project_id" to JsonPrimitive(PRODUCT_ANALYTICS_PROJECT_RESOURCE_ID),
+                        "date_from" to JsonPrimitive("2026-06-01"),
+                        "date_to" to JsonPrimitive("2026-06-30"),
+                        "flag_key" to JsonPrimitive("paywall.export_gate"),
+                        "steps" to JsonPrimitive("recording.started, export.completed"),
+                        "group_by" to JsonPrimitive("session_id"),
+                        "source" to JsonPrimitive("server"),
+                        "filters" to JsonPrimitive("device_type:is:ios"),
+                        "property_filters" to JsonPrimitive("destination:is:local_device"),
+                    ),
+                ),
+                context,
+            )
+
+            assertFalse(result.isError, result.content.single().text.orEmpty())
+            val response = toolJson.parseToJsonElement(result.content.single().text.orEmpty()).jsonObject
+            val variant = response["variants"]!!.jsonArray.single().jsonObject
+            assertEquals("control", variant["variantKey"]!!.jsonPrimitive.content)
+            assertEquals(42.9, variant["overallConversion"]!!.jsonPrimitive.content.toDouble())
+            assertTrue(queries.single().contains("INNER JOIN flag_assignments AS f ON f.targeting_key = e.session_id"))
+            assertTrue(queries.single().contains("e.device_type = 'ios'"))
+            assertTrue(queries.single().contains("e.props['destination'] = 'local_device'"))
         }
     }
 
