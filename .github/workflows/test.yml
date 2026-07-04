@@ -1084,6 +1084,7 @@ jobs:
           args: >
             -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
             -Dsonar.scanner.skipJreProvisioning=true
+            -Dsonar.ws.timeout=300
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonar.moneat.io
