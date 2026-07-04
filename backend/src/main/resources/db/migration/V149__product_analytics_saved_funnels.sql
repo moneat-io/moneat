@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS product_analytics_funnels (
     id SERIAL PRIMARY KEY,
     resource_id UUID NOT NULL DEFAULT gen_random_uuid(),
     organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    project_id BIGINT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    project_id BIGINT NOT NULL REFERENCES services(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     steps_json JSONB NOT NULL DEFAULT '[]'::jsonb,
