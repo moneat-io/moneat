@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {useMemo} from 'react'
 import {api} from '@/lib/api'
@@ -28,11 +28,6 @@ import {
 export const Route = createFileRoute('/logs')({
   validateSearch: (search: Record<string, unknown>): LogViewSearch => {
     return parseLogViewSearch(search)
-  },
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
   },
   component: LogsPage,
 })

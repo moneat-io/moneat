@@ -23,26 +23,67 @@ import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {cn} from '@/lib/utils'
+import {consumePendingAuthRedirect, normalizeInternalRedirectPath} from '@/lib/auth-redirect'
 import {GRADIENT_TEXT} from '@/components/landing/Landing'
 import {AuthAlert, AuthDivider, AuthField, AuthShell} from '@/components/auth/AuthShell'
 import {authInputClass, authPrimaryButtonClass, authSecondaryButtonClass} from '@/components/auth/authStyles'
 import {Helmet} from 'react-helmet-async'
 
+interface InternalRouteTarget {
+  readonly to: string
+  readonly search?: Record<string, string>
+  readonly hash?: string
+}
+
 function normalizePostLoginRedirect(value: unknown): string | undefined {
+  return normalizeInternalRedirectPath(value)
+}
+
+function buildInviteRedirectPath(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   if (!trimmed) return undefined
 
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
-    return trimmed
-  }
+  const params = new URLSearchParams({token: trimmed})
+  return `/accept-invite?${params.toString()}`
+}
+
+function defaultPostLoginPath(): string {
+  const params = new URLSearchParams(APP_OVERVIEW_SEARCH)
+  return `/?${params.toString()}`
+}
+
+function resolveQueryPostLoginPath(searchParams: URLSearchParams): string | undefined {
+  return (
+    normalizePostLoginRedirect(searchParams.get('redirect') || undefined) ??
+    buildInviteRedirectPath(searchParams.get('inviteToken') || undefined)
+  )
+}
+
+function normalizeSsoRedirectUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
 
   try {
-    const url = new URL(trimmed, 'https://moneat.io')
-    return `${url.pathname}${url.search}${url.hash}` || undefined
+    const url = new URL(value)
+    return url.protocol === 'https:' ? url.toString() : undefined
   } catch {
     return undefined
   }
+}
+
+function internalRouteTarget(path: string): InternalRouteTarget {
+  const url = new URL(path, 'https://moneat.io')
+  const search = Object.fromEntries(url.searchParams.entries())
+
+  return {
+    to: url.pathname || '/',
+    ...(Object.keys(search).length > 0 ? {search} : {}),
+    ...(url.hash ? {hash: url.hash.slice(1)} : {}),
+  }
+}
+
+function resolveSubmitPostLoginPath(queryPostLoginPath: string | undefined): string {
+  return queryPostLoginPath ?? consumePendingAuthRedirect() ?? defaultPostLoginPath()
 }
 
 export const Route = createFileRoute('/login')({
@@ -60,7 +101,12 @@ export const Route = createFileRoute('/login')({
 
     // If authenticated with a post-login redirect (e.g. from email link), go there
     if (api.isAuthenticated() && postLoginRedirect) {
-      throw redirect({ to: postLoginRedirect as never })
+      const target = internalRouteTarget(postLoginRedirect)
+      throw redirect({
+        to: target.to as never,
+        ...(target.search ? {search: target.search as never} : {}),
+        ...(target.hash ? {hash: target.hash} : {}),
+      })
     }
 
     // If authenticated with no special params, redirect to home
@@ -74,10 +120,7 @@ export const Route = createFileRoute('/login')({
 function LoginPage() {
   const navigate = useNavigate()
   const searchParams = new URLSearchParams(window.location.search)
-  const inviteToken = searchParams.get('inviteToken') || undefined
-  const redirectUri = searchParams.get('redirect_uri') || undefined
-  const postLoginRedirect =
-    normalizePostLoginRedirect(searchParams.get('redirect') || undefined)
+  const [queryPostLoginPath] = useState(() => resolveQueryPostLoginPath(searchParams))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -86,58 +129,20 @@ function LoginPage() {
   const [showSsoInput, setShowSsoInput] = useState(false)
   const [ssoEmail, setSsoEmail] = useState('')
 
-  // Validate redirect URI against allowlist
-  const isValidRedirectUri = (uri: string): boolean => {
-    try {
-      const url = new URL(uri)
-      const allowedHosts = ['moneat.io', 'www.moneat.io']
-
-      // Allow moneat:// deep links (production mobile app scheme)
-      if (url.protocol === 'moneat:') {
-        return true
-      }
-
-      // Allow https on moneat.io domains
-      if (url.protocol === 'https:' && allowedHosts.includes(url.hostname)) {
-        return true
-      }
-
-      // Allow Expo deep links only in local development
-      if ((url.protocol === 'exp:' || url.protocol === 'exps:') &&
-          process.env.NODE_ENV === 'development') {
-        return true
-      }
-
-      return false
-    } catch {
-      return false
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
     try {
-      const { token } = await api.login(email, password)
+      await api.login(email, password)
       trackEvent('Login', { method: 'email' })
-      if (inviteToken) {
-        navigate({ to: '/accept-invite', search: { token: inviteToken } })
-      } else if (redirectUri) {
-        // Validate redirect URI before redirecting (mobile deep link)
-        if (!isValidRedirectUri(redirectUri)) {
-          setError('Invalid redirect URI')
-          setLoading(false)
-          return
-        }
-        window.location.href = `${redirectUri}#token=${token}`
-      } else if (postLoginRedirect) {
-        // Redirect back to the page the user was trying to access (e.g. from email link)
-        window.location.href = postLoginRedirect
-      } else {
-        navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
-      }
+      const target = internalRouteTarget(resolveSubmitPostLoginPath(queryPostLoginPath))
+      navigate({
+        to: target.to as never,
+        ...(target.search ? {search: target.search as never} : {}),
+        ...(target.hash ? {hash: target.hash} : {}),
+      })
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       if (errorMessage === 'NETWORK_ERROR') {
@@ -157,8 +162,15 @@ function LoginPage() {
 
     try {
       const response = await api.initSso(ssoEmail)
+      const redirectUrl = normalizeSsoRedirectUrl(response.redirectUrl)
+      if (!redirectUrl) {
+        setError('Invalid SSO redirect URL')
+        setSsoLoading(false)
+        return
+      }
+
       // Redirect to SSO provider
-      window.location.href = response.redirectUrl
+      window.location.href = redirectUrl // NOSONAR: generated by the backend SSO initiation endpoint and validated as HTTPS.
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
       if (errorMessage === 'NETWORK_ERROR') {
@@ -249,7 +261,7 @@ function LoginPage() {
             className={authSecondaryButtonClass}
             onClick={() => {
               const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
-              window.location.href = `${backendUrl}/auth/github`
+              window.location.href = `${backendUrl}/auth/github` // NOSONAR: fixed backend OAuth initiation path.
             }}
           >
             <Github />

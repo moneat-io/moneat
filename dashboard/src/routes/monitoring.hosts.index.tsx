@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, Link, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type DdHostResponse} from '@/lib/api'
 import {
@@ -80,11 +80,6 @@ function MonitoringPage() {
 }
 
 export const Route = createFileRoute('/monitoring/hosts/')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringPage,
 })
 

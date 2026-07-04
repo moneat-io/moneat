@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useMemo} from 'react'
-import {api} from '@/lib/api'
 import {MonitoringTabBar} from '@/components/monitoring/MonitoringTabBar'
 import {ResourceCatalog, type ResourceCatalogUrlState} from '@/components/monitoring/catalog/ResourceCatalog'
 import {
@@ -86,11 +85,5 @@ function ResourcesPage() {
 
 export const Route = createFileRoute('/resources')({
   validateSearch: parseResourcesSearch,
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      const hasSession = await api.checkAuth()
-      if (!hasSession) throw redirect({to: '/login'})
-    }
-  },
   component: ResourcesPage,
 })

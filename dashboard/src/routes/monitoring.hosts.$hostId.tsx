@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api, type BillingUsage, type DdContainerResponse} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
@@ -210,11 +210,6 @@ function getHostMonitoringLimitState(usage: BillingUsage | undefined): HostMonit
 }
 
 export const Route = createFileRoute('/monitoring/hosts/$hostId')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: HostDetailPage,
 })
 

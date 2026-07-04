@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime} from '@/lib/utils'
@@ -37,11 +37,6 @@ import {useTimezone} from '@/hooks/useTimezone'
 import {formatTimeHM} from '@/lib/date-format'
 
 export const Route = createFileRoute('/uptime/$monitorId')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: UptimeDetailPage,
 })
 

@@ -64,7 +64,12 @@ describe('client – branch coverage', () => {
     it('redirects to login when refresh fails', async () => {
       const assignSpy = vi.fn()
       Object.defineProperty(globalThis.window, 'location', {
-        value: { pathname: '/dashboard', assign: assignSpy },
+        value: {
+          pathname: '/issues/issue-123',
+          search: '?projectId=service-1&status=unresolved',
+          hash: '#events',
+          assign: assignSpy,
+        },
         writable: true,
         configurable: true,
       })

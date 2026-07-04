@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {type ReactNode} from 'react'
 import {api} from '@/lib/api'
@@ -28,11 +28,6 @@ import {Button} from '@/components/ui/button'
 import {Activity, AlertCircle, AlertTriangle, ArrowLeft, ListOrdered, Package, Users} from 'lucide-react'
 
 export const Route = createFileRoute('/releases/$version')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ReleaseDetailPage,
 })
 

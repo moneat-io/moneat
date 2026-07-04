@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, Outlet, useMatches, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime, cn} from '@/lib/utils'
@@ -58,11 +58,6 @@ import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import type {Feedback} from '@/lib/api/types/replays'
 
 export const Route = createFileRoute('/feedback')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: FeedbackLayout,
 })
 

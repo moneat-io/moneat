@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Navigate, Outlet, redirect, useMatches} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute, Navigate, Outlet, useMatches} from '@tanstack/react-router'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {Code2, Globe, Terminal} from 'lucide-react'
 
@@ -466,11 +465,6 @@ export const platforms: PlatformType[] = [
 ]
 
 export const Route = createFileRoute('/projects')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ProjectsLayout,
 })
 

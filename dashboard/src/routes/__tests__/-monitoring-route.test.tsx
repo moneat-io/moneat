@@ -2,21 +2,13 @@ import React from 'react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {render, screen, waitFor} from '@testing-library/react'
 
-const {mockApi, mockRouteState, mockFeatures} = vi.hoisted(() => ({
-  mockApi: {
-    isAuthenticated: vi.fn(),
-    checkAuth: vi.fn(),
-  },
+const {mockRouteState, mockFeatures} = vi.hoisted(() => ({
   mockRouteState: {
     pathname: '/monitoring',
   },
   mockFeatures: {
     modules: [] as string[],
   },
-}))
-
-vi.mock('@/lib/api', () => ({
-  api: mockApi,
 }))
 
 vi.mock('@/hooks/useEnterpriseFeatures', () => ({
@@ -30,7 +22,6 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({children, to, ...props}: {children: React.ReactNode; to?: string}) =>
     React.createElement('a', {href: to, ...props}, children),
   Outlet: () => <div data-testid="monitoring-outlet" />,
-  redirect: (options: Record<string, unknown>) => ({...options, __redirect: true}),
   useRouterState: () => ({location: {pathname: mockRouteState.pathname}}),
 }))
 
@@ -79,8 +70,6 @@ function renderMonitoringRoute() {
 describe('monitoring route shell', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApi.isAuthenticated.mockReturnValue(true)
-    mockApi.checkAuth.mockResolvedValue(true)
     mockRouteState.pathname = '/monitoring'
     mockFeatures.modules = []
     monitoringNavWidth = 900
@@ -102,19 +91,6 @@ describe('monitoring route shell', () => {
       unobserve(): void {}
       disconnect(): void {}
     })
-  })
-
-  it('redirects unauthenticated sessions before loading monitoring', async () => {
-    mockApi.isAuthenticated.mockReturnValue(false)
-    mockApi.checkAuth.mockResolvedValue(false)
-
-    const beforeLoad = (MonitoringRoute as unknown as {beforeLoad: () => Promise<void>}).beforeLoad
-
-    await expect(beforeLoad()).rejects.toMatchObject({
-      __redirect: true,
-      to: '/login',
-    })
-    expect(mockApi.checkAuth).toHaveBeenCalled()
   })
 
   it('renders core monitoring tabs and hides Datadog tabs without the module', () => {

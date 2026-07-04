@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useCallback, useEffect, useMemo, useState} from 'react'
-import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
   Bug,
@@ -83,11 +83,6 @@ import {useToast} from '@/hooks/useToast'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/workflows')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: WorkflowsLayout,
 })
 

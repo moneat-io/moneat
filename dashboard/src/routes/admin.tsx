@@ -51,7 +51,7 @@ export const Route = createFileRoute('/admin')({
       // Network errors shouldn't kick users to login — surface them instead
       if (err.message === 'NETWORK_ERROR') throw e
       console.error('[Admin] access check failed:', err.message, err.status)
-      throw redirect({to: '/login'})
+      throw e
     }
   },
   component: AdminLayout,

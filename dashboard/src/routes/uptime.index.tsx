@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
@@ -28,11 +28,6 @@ import MonitorListItem from '@/components/uptime/MonitorListItem'
 import MonitorCompactTable from '@/components/uptime/MonitorCompactTable'
 
 export const Route = createFileRoute('/uptime/')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: UptimeListPage,
 })
 

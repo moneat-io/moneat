@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useState, useEffect} from 'react'
 import {useMutation, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
@@ -37,11 +37,6 @@ import {
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 
 export const Route = createFileRoute('/onboarding')({
-  beforeLoad: ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: OnboardingPage,
 })
 

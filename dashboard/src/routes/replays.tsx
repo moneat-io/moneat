@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, Outlet, useMatches, useNavigate} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import type {Replay} from '@/lib/api'
@@ -74,11 +74,6 @@ import {
 } from '@/lib/replays-view'
 
 export const Route = createFileRoute('/replays')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ReplaysLayout,
 })
 

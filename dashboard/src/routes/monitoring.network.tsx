@@ -6,16 +6,10 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute} from '@tanstack/react-router'
 import {NetworkConnections} from '@/components/monitoring/NetworkConnections'
 
 export const Route = createFileRoute('/monitoring/network')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringNetworkPage,
 })
 

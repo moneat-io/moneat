@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api, formatErrorForLogging} from '@/lib/api'
 import {type ReactNode, useMemo, useState} from 'react'
@@ -41,11 +41,6 @@ import {compareReleaseVersionPrecedence} from '@/lib/release-version'
 import type {Release} from '@/lib/api/types'
 
 export const Route = createFileRoute('/releases')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ReleasesLayout,
 })
 

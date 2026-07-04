@@ -14,9 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect, useNavigate, useSearch} from '@tanstack/react-router'
+import {createFileRoute, useNavigate, useSearch} from '@tanstack/react-router'
 import {Boxes, CloudCog, ServerCog, SlidersHorizontal, type LucideIcon} from 'lucide-react'
-import {api} from '@/lib/api'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
 import {ServicesAndSdksSetup} from '@/components/setup/ServicesAndSdksSetup'
@@ -39,11 +38,6 @@ export const Route = createFileRoute('/setup')({
     tab: parseSetupTab(search.tab),
     service: typeof search.service === 'string' ? search.service : undefined,
   }),
-  beforeLoad: async ({location}) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login', search: {redirect: location.href}})
-    }
-  },
   component: SetupPage,
 })
 
