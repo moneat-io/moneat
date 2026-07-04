@@ -84,12 +84,17 @@ private const val DISK_PERCENT_METRIC = "system.disk.percent"
 private const val DISK_USED_METRIC = "system.disk.used"
 private const val DISK_TOTAL_METRIC = "system.disk.total"
 private const val DISK_ID_EXPRESSION = """
-    multiIf(
-        tags['device_name'] != '', tags['device_name'],
-        tags['device'] != '', tags['device'],
-        tags['mount_point'] != '', tags['mount_point'],
-        tags['filesystem'] != '', tags['filesystem'],
-        'default'
+    if(
+        metric_identity != '',
+        metric_identity,
+        multiIf(
+            tags['device_name'] != '', tags['device_name'],
+            tags['device'] != '', tags['device'],
+            tags['mount_point'] != '', tags['mount_point'],
+            tags['mountpoint'] != '', tags['mountpoint'],
+            tags['filesystem'] != '', tags['filesystem'],
+            'default'
+        )
     )
 """
 
@@ -770,14 +775,30 @@ class MonitorAlertService(
                 percentExpression = rollupMemoryPercentExpr(),
                 metricFilter = memoryPercentMetricFilter(),
             )
-            "disk_percent" -> derivedSustainedConditionQuery(
-                alert = alert,
-                baseFilter = baseFilter,
-                percentExpression = rollupDiskPercentExpr(),
-                metricFilter = diskPercentMetricFilter(),
-            )
+            "disk_percent" -> diskSustainedConditionQuery(alert, baseFilter)
             else -> scalarSustainedConditionQuery(alert, baseFilter)
         }
+
+    private fun diskSustainedConditionQuery(alert: AlertData, baseFilter: String): String? {
+        val havingClause = conditionSql("pct", alert.condition, alert.threshold) ?: return null
+        return """
+            SELECT count(*) as cnt FROM (
+                SELECT bucket_start, max(pct) as pct
+                FROM (
+                    SELECT bucket_start,
+                        metric_identity,
+                        ${rollupDiskPercentExpr()} as pct
+                    FROM `$clickhouseDb`.metrics_rollup_1m
+                    WHERE $baseFilter AND ${diskPercentMetricFilter()}
+                    GROUP BY bucket_start, metric_identity
+                    HAVING pct IS NOT NULL
+                )
+                GROUP BY bucket_start
+                HAVING $havingClause
+            )
+            FORMAT JSONCompact
+        """.trimIndent()
+    }
 
     private fun derivedSustainedConditionQuery(
         alert: AlertData,

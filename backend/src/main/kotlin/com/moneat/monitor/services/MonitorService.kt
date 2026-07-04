@@ -107,6 +107,14 @@ class MonitorService(
                 "'system.disk.percent','system.disk.total','system.disk.used'," +
                 "'system.net.recv_bytes','system.net.sent_bytes'," +
                 "'system.load.1','system.temp.max','system.gpu.percent','system.battery.percent'"
+        private const val DISK_PERCENT_METRIC = "system.disk.percent"
+        private const val DISK_USED_METRIC = "system.disk.used"
+        private const val DISK_TOTAL_METRIC = "system.disk.total"
+        private const val DISK_METRIC_NAMES_SQL = "'system.disk.percent','system.disk.used','system.disk.total'"
+        private const val DISK_QUERY_COL_HOST_ID = 0
+        private const val DISK_QUERY_COL_TOTAL = 1
+        private const val DISK_QUERY_COL_USED = 2
+        private const val DISK_QUERY_COL_PERCENT = 3
 
         // Time-range thresholds for historical downsampling (in seconds)
         private const val ONE_HOUR_SECONDS = 3600L
@@ -202,6 +210,12 @@ class MonitorService(
         private const val PERCENT_MULTIPLIER = 100
         private const val DATETIME64_MILLIS_PRECISION = 3
     }
+
+    private data class DiskMetrics(
+        val total: Long,
+        val used: Long,
+        val percent: Float,
+    )
 
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val defaultAlertTemplates =
@@ -350,6 +364,7 @@ class MonitorService(
             val json = Json { ignoreUnknownKeys = true }
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
+            val diskMetrics = getLatestDiskMetricsForHosts(listOf(hostId), host.organizationId)[hostId]
 
             val cpuPercent = data.getOrNull(0)?.toString()?.toFloatOrNull() ?: 0f
             val memTotal =
@@ -402,14 +417,16 @@ class MonitorService(
 
             val effectiveMemUsed = if (memAvailable > 0) memTotal - memAvailable else memUsed
             val memPercent = percent(effectiveMemUsed, memTotal)
-            val diskPercent = diskPercent(diskPercentMetric, diskUsed, diskTotal)
+            val resolvedDiskTotal = diskMetrics?.total ?: diskTotal
+            val resolvedDiskUsed = diskMetrics?.used ?: diskUsed
+            val diskPercent = diskMetrics?.percent ?: diskPercent(diskPercentMetric, diskUsed, diskTotal)
             return LatestMetrics(
                 cpuPercent = cpuPercent,
                 memTotal = memTotal,
                 memUsed = effectiveMemUsed,
                 memPercent = memPercent,
-                diskTotal = diskTotal,
-                diskUsed = diskUsed,
+                diskTotal = resolvedDiskTotal,
+                diskUsed = resolvedDiskUsed,
                 diskPercent = diskPercent,
                 netRecvBytes = netRecvBytes,
                 netSentBytes = netSentBytes,
@@ -491,10 +508,67 @@ class MonitorService(
                     result[hostId] = metrics
                 }
             }
-            hostIds.associateWith { result[it] }
+            val diskMetricsByHost = getLatestDiskMetricsForHosts(hostIds, organizationId, demoEpochMs)
+            hostIds.associateWith { hostId -> result[hostId]?.withDiskMetrics(diskMetricsByHost[hostId]) }
         }.getOrElse { e ->
             logger.warn(e) { "Failed to parse batch latest metrics response" }
             hostIds.associateWith { null }
+        }
+    }
+
+    private suspend fun getLatestDiskMetricsForHosts(
+        hostIds: List<Int>,
+        organizationId: Int,
+        demoEpochMs: Long? = null,
+    ): Map<Int, DiskMetrics> {
+        if (hostIds.isEmpty()) return emptyMap()
+        val hostIdList = hostIds.joinToString(",")
+        val freshnessNow = latestMetricsNowClause(demoEpochMs)
+        val query =
+            """
+            SELECT
+                toInt32(host_id) as host_id,
+                argMax(total, pct) as disk_total,
+                argMax(used, pct) as disk_used,
+                max(pct) as disk_percent
+            FROM (
+                SELECT
+                    host_id,
+                    metric_identity,
+                    argMaxIf(value, timestamp, metric_name = '$DISK_TOTAL_METRIC') as total,
+                    argMaxIf(value, timestamp, metric_name = '$DISK_USED_METRIC') as used,
+                    ${latestDiskPercentExpr()} as pct
+                FROM `$clickhouseDb`.metrics_latest_by_host
+                WHERE ${clickHouseOrgClause(organizationId)}
+                  AND host_id IN ($hostIdList)
+                  AND metric_name IN ($DISK_METRIC_NAMES_SQL)
+                  AND timestamp >= $freshnessNow - INTERVAL $LATEST_METRICS_LOOKBACK_HOURS HOUR
+                GROUP BY host_id, metric_identity
+                HAVING pct IS NOT NULL
+            )
+            GROUP BY host_id
+            FORMAT JSONCompact
+            """.trimIndent()
+
+        val body = hostRepository.executeClickHouseQuery(query)
+        if (body.isBlank()) return emptyMap()
+
+        return suspendRunCatching {
+            val json = Json { ignoreUnknownKeys = true }
+            val rows = json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: return emptyMap()
+            rows.mapNotNull { row ->
+                val arr = row.jsonArray
+                val rowHostId = arr.stringAt(DISK_QUERY_COL_HOST_ID).toIntOrNull() ?: return@mapNotNull null
+                val diskPercent = arr.floatAt(DISK_QUERY_COL_PERCENT) ?: return@mapNotNull null
+                rowHostId to DiskMetrics(
+                    total = arr.longAt(DISK_QUERY_COL_TOTAL),
+                    used = arr.longAt(DISK_QUERY_COL_USED),
+                    percent = diskPercent,
+                )
+            }.toMap()
+        }.getOrElse { e ->
+            logger.warn(e) { "Failed to parse latest disk metrics response" }
+            emptyMap()
         }
     }
 
@@ -530,7 +604,7 @@ class MonitorService(
         getOrNull(index)?.toString()?.replace("\"", "") ?: ""
 
     private fun JsonArray.longAt(index: Int): Long =
-        stringAt(index).toLongOrNull() ?: 0L
+        stringAt(index).let { value -> value.toLongOrNull() ?: value.toDoubleOrNull()?.toLong() } ?: 0L
 
     private fun JsonArray.floatAt(index: Int): Float? =
         stringAt(index).toFloatOrNull()
@@ -540,6 +614,60 @@ class MonitorService(
 
     private fun diskPercent(diskPercent: Float?, used: Long, total: Long): Float =
         diskPercent ?: percent(used, total)
+
+    private fun LatestMetrics.withDiskMetrics(diskMetrics: DiskMetrics?): LatestMetrics =
+        if (diskMetrics == null) {
+            this
+        } else {
+            copy(
+                diskTotal = diskMetrics.total,
+                diskUsed = diskMetrics.used,
+                diskPercent = diskMetrics.percent,
+            )
+        }
+
+    private fun latestDiskPercentExpr(): String =
+        """
+        coalesce(
+            if(
+                countIf(metric_name = '$DISK_PERCENT_METRIC') > 0,
+                argMaxIf(value, timestamp, metric_name = '$DISK_PERCENT_METRIC'),
+                NULL
+            ),
+            if(
+                countIf(metric_name = '$DISK_USED_METRIC') > 0 AND
+                    countIf(metric_name = '$DISK_TOTAL_METRIC') > 0,
+                argMaxIf(value, timestamp, metric_name = '$DISK_USED_METRIC') /
+                    nullIf(argMaxIf(value, timestamp, metric_name = '$DISK_TOTAL_METRIC'), 0) * 100,
+                NULL
+            )
+        )
+        """.trimIndent()
+
+    private fun rollupDiskPercentExpr(): String =
+        """
+        coalesce(
+            if(
+                sumIf(value_count, metric_name = '$DISK_PERCENT_METRIC') > 0,
+                sumIf(value_sum, metric_name = '$DISK_PERCENT_METRIC') /
+                    nullIf(sumIf(value_count, metric_name = '$DISK_PERCENT_METRIC'), 0),
+                NULL
+            ),
+            if(
+                sumIf(value_count, metric_name = '$DISK_USED_METRIC') > 0 AND
+                    sumIf(value_count, metric_name = '$DISK_TOTAL_METRIC') > 0,
+                (
+                    sumIf(value_sum, metric_name = '$DISK_USED_METRIC') /
+                    nullIf(sumIf(value_count, metric_name = '$DISK_USED_METRIC'), 0)
+                ) / nullIf(
+                    sumIf(value_sum, metric_name = '$DISK_TOTAL_METRIC') /
+                    nullIf(sumIf(value_count, metric_name = '$DISK_TOTAL_METRIC'), 0),
+                    0
+                ) * 100,
+                NULL
+            )
+        )
+        """.trimIndent()
 
     private fun latestMetricsNowClause(demoEpochMs: Long?): String =
         if (demoEpochMs != null) {
@@ -603,80 +731,82 @@ class MonitorService(
             val query =
                 """
             SELECT
-                toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
-                coalesce(
-                    sumIf(value_sum, metric_name='system.cpu.percent') /
-                        nullIf(sumIf(value_count, metric_name='system.cpu.percent'), 0),
-                    if(
-                        sumIf(value_count, metric_name IN ('system.cpu.user', 'system.cpu.system')) > 0,
-                        least(
-                            coalesce(
-                                sumIf(value_sum, metric_name='system.cpu.user') /
-                                    nullIf(sumIf(value_count, metric_name='system.cpu.user'), 0),
-                                0
-                            ) +
+                ts,
+                max(cpu) as cpu,
+                max(mem) as mem,
+                max(disk) as disk,
+                sum(net_recv) as net_recv,
+                sum(net_sent) as net_sent,
+                max(load1) as load1,
+                max(load5) as load5,
+                max(load15) as load15,
+                max(temp) as temp,
+                max(gpu) as gpu,
+                max(battery) as battery
+            FROM (
+                SELECT
+                    toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
+                    metric_identity,
+                    coalesce(
+                        sumIf(value_sum, metric_name='system.cpu.percent') /
+                            nullIf(sumIf(value_count, metric_name='system.cpu.percent'), 0),
+                        if(
+                            sumIf(value_count, metric_name IN ('system.cpu.user', 'system.cpu.system')) > 0,
+                            least(
                                 coalesce(
-                                    sumIf(value_sum, metric_name='system.cpu.system') /
-                                        nullIf(sumIf(value_count, metric_name='system.cpu.system'), 0),
+                                    sumIf(value_sum, metric_name='system.cpu.user') /
+                                        nullIf(sumIf(value_count, metric_name='system.cpu.user'), 0),
                                     0
-                                ),
-                            100
-                        ),
-                        NULL
-                    )
-                ) as cpu,
-                coalesce(
-                    (1 - (
-                        sumIf(value_sum, metric_name='system.mem.available') /
-                        nullIf(sumIf(value_count, metric_name='system.mem.available'), 0)
-                    ) / nullIf(
-                        sumIf(value_sum, metric_name='system.mem.total') /
-                        nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
-                        0
-                    )) * 100,
-                    (
-                        sumIf(value_sum, metric_name='system.mem.used') /
-                        nullIf(sumIf(value_count, metric_name='system.mem.used'), 0)
-                    ) / nullIf(
-                        sumIf(value_sum, metric_name='system.mem.total') /
-                        nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
-                        0
-                    ) * 100
-                ) as mem,
-                coalesce(
-                    if(
-                        sumIf(value_count, metric_name='system.disk.percent') > 0,
-                        sumIf(value_sum, metric_name='system.disk.percent') /
-                            nullIf(sumIf(value_count, metric_name='system.disk.percent'), 0),
-                        NULL
-                    ),
-                    (
-                        sumIf(value_sum, metric_name='system.disk.used') /
-                        nullIf(sumIf(value_count, metric_name='system.disk.used'), 0)
-                    ) / nullIf(
-                        sumIf(value_sum, metric_name='system.disk.total') /
-                        nullIf(sumIf(value_count, metric_name='system.disk.total'), 0),
-                        0
-                    ) * 100
-                ) as disk,
-                sumIf(value_sum, metric_name='system.net.recv_bytes') as net_recv,
-                sumIf(value_sum, metric_name='system.net.sent_bytes') as net_sent,
-                sumIf(value_sum, metric_name='system.load.1') /
-                    nullIf(sumIf(value_count, metric_name='system.load.1'), 0) as load1,
-                sumIf(value_sum, metric_name='system.load.5') /
-                    nullIf(sumIf(value_count, metric_name='system.load.5'), 0) as load5,
-                sumIf(value_sum, metric_name='system.load.15') /
-                    nullIf(sumIf(value_count, metric_name='system.load.15'), 0) as load15,
-                maxIf(value_sum / value_count, metric_name='system.temp.max') as temp,
-                sumIf(value_sum, metric_name='system.gpu.percent') /
-                    nullIf(sumIf(value_count, metric_name='system.gpu.percent'), 0) as gpu,
-                sumIf(value_sum, metric_name='system.battery.percent') /
-                    nullIf(sumIf(value_count, metric_name='system.battery.percent'), 0) as battery
-            FROM `$clickhouseDb`.metrics_rollup_1m
-            WHERE ${clickHouseOrgClause(host.organizationId)}
-              AND host_id = $hostId
-              AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
-              AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+                                ) +
+                                    coalesce(
+                                        sumIf(value_sum, metric_name='system.cpu.system') /
+                                            nullIf(sumIf(value_count, metric_name='system.cpu.system'), 0),
+                                        0
+                                    ),
+                                100
+                            ),
+                            NULL
+                        )
+                    ) as cpu,
+                    coalesce(
+                        (1 - (
+                            sumIf(value_sum, metric_name='system.mem.available') /
+                            nullIf(sumIf(value_count, metric_name='system.mem.available'), 0)
+                        ) / nullIf(
+                            sumIf(value_sum, metric_name='system.mem.total') /
+                            nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
+                            0
+                        )) * 100,
+                        (
+                            sumIf(value_sum, metric_name='system.mem.used') /
+                            nullIf(sumIf(value_count, metric_name='system.mem.used'), 0)
+                        ) / nullIf(
+                            sumIf(value_sum, metric_name='system.mem.total') /
+                            nullIf(sumIf(value_count, metric_name='system.mem.total'), 0),
+                            0
+                        ) * 100
+                    ) as mem,
+                    ${rollupDiskPercentExpr()} as disk,
+                    sumIf(value_sum, metric_name='system.net.recv_bytes') as net_recv,
+                    sumIf(value_sum, metric_name='system.net.sent_bytes') as net_sent,
+                    sumIf(value_sum, metric_name='system.load.1') /
+                        nullIf(sumIf(value_count, metric_name='system.load.1'), 0) as load1,
+                    sumIf(value_sum, metric_name='system.load.5') /
+                        nullIf(sumIf(value_count, metric_name='system.load.5'), 0) as load5,
+                    sumIf(value_sum, metric_name='system.load.15') /
+                        nullIf(sumIf(value_count, metric_name='system.load.15'), 0) as load15,
+                    maxIf(value_sum / value_count, metric_name='system.temp.max') as temp,
+                    sumIf(value_sum, metric_name='system.gpu.percent') /
+                        nullIf(sumIf(value_count, metric_name='system.gpu.percent'), 0) as gpu,
+                    sumIf(value_sum, metric_name='system.battery.percent') /
+                        nullIf(sumIf(value_count, metric_name='system.battery.percent'), 0) as battery
+                FROM `$clickhouseDb`.metrics_rollup_1m
+                WHERE ${clickHouseOrgClause(host.organizationId)}
+                  AND host_id = $hostId
+                  AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+                  AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+                GROUP BY ts, metric_identity
+            )
             GROUP BY ts
             ORDER BY ts
             FORMAT JSONCompact
