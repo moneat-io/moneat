@@ -19,6 +19,9 @@ package com.moneat.mcp.protocol
 import com.moneat.mcp.McpToolRegistrar
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
+import com.moneat.mcp.tools.CompareProductFunnelByFeatureFlagTool
+import com.moneat.mcp.tools.CreateSavedProductFunnelTool
+import com.moneat.mcp.tools.DeleteSavedProductFunnelTool
 import com.moneat.mcp.tools.CreateDetectionRuleTool
 import com.moneat.mcp.tools.CreateWorkflowTool
 import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
@@ -29,11 +32,15 @@ import com.moneat.mcp.tools.GetProductRetentionTool
 import com.moneat.mcp.tools.GetReplayRecordingSummaryTool
 import com.moneat.mcp.tools.GetReplayTimelineTool
 import com.moneat.mcp.tools.GetReplayTool
+import com.moneat.mcp.tools.GetSavedProductFunnelTool
 import com.moneat.mcp.tools.GetWorkflowTool
 import com.moneat.mcp.tools.GetWorkflowWebhookSigningTool
 import com.moneat.mcp.tools.ListReplaysTool
+import com.moneat.mcp.tools.ListSavedProductFunnelsTool
 import com.moneat.mcp.tools.ListSecuritySignalsTool
+import com.moneat.mcp.tools.RunSavedProductFunnelTool
 import com.moneat.mcp.tools.RunWorkflowTool
+import com.moneat.mcp.tools.UpdateSavedProductFunnelTool
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -46,7 +53,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 154
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 161
 
 class McpToolRegistryTest {
 
@@ -212,6 +219,19 @@ class McpToolRegistryTest {
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetProductFunnelTool()))
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetProductEventsTool()))
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetProductRetentionTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(ListSavedProductFunnelsTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetSavedProductFunnelTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(RunSavedProductFunnelTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(CompareProductFunnelByFeatureFlagTool()))
+    }
+
+    @Test
+    fun `saved product funnel write tools use project write scope`() {
+        val expectedScope = setOf(McpScopes.PROJECT_WRITE)
+
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(CreateSavedProductFunnelTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(UpdateSavedProductFunnelTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(DeleteSavedProductFunnelTool()))
     }
 
     @Test
@@ -433,11 +453,14 @@ class McpToolRegistryTest {
             "create_feature_flag_environment",
             "create_feature_flag_sdk_key",
             "create_feature_flag",
+            "create_saved_product_funnel",
             "delete_feature_flag",
             "delete_feature_flag_segment",
+            "delete_saved_product_funnel",
             "revoke_feature_flag_sdk_key",
             "update_feature_flag",
             "update_feature_flag_config",
+            "update_saved_product_funnel",
             "upsert_feature_flag_segment",
             "create_project",
             "cancel_workflow_run",

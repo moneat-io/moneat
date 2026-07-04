@@ -27,6 +27,7 @@ import com.moneat.mcp.tools.CreateDataSourceTool
 import com.moneat.mcp.tools.CreateFeatureFlagEnvironmentTool
 import com.moneat.mcp.tools.CreateFeatureFlagSdkKeyTool
 import com.moneat.mcp.tools.CreateFeatureFlagTool
+import com.moneat.mcp.tools.CreateSavedProductFunnelTool
 import com.moneat.mcp.tools.CreateAgentKeyTool
 import com.moneat.mcp.tools.CreateDetectionRuleTool
 import com.moneat.mcp.tools.CreateProjectTool
@@ -46,11 +47,13 @@ import com.moneat.mcp.tools.DeleteDetectionRuleTool
 import com.moneat.mcp.tools.DeleteFeatureFlagSegmentTool
 import com.moneat.mcp.tools.DeleteFeatureFlagTool
 import com.moneat.mcp.tools.DeleteHostTool
+import com.moneat.mcp.tools.DeleteSavedProductFunnelTool
 import com.moneat.mcp.tools.DeleteSilencePeriodTool
 import com.moneat.mcp.tools.DeleteSyntheticTestTool
 import com.moneat.mcp.tools.DeleteUptimeMonitorTool
 import com.moneat.mcp.tools.DeleteWorkflowTool
 import com.moneat.mcp.tools.ExportVulnerabilitySbomTool
+import com.moneat.mcp.tools.CompareProductFunnelByFeatureFlagTool
 import com.moneat.mcp.tools.GetAlertConfigTool
 import com.moneat.mcp.tools.ExecuteDataSourceQueryTool
 import com.moneat.mcp.tools.ExecuteDashboardQueryTool
@@ -86,6 +89,7 @@ import com.moneat.mcp.tools.GetProductFunnelTool
 import com.moneat.mcp.tools.GetProductRetentionTool
 import com.moneat.mcp.tools.GetProjectStatsTool
 import com.moneat.mcp.tools.GetProjectTool
+import com.moneat.mcp.tools.GetSavedProductFunnelTool
 import com.moneat.mcp.tools.GetRelatedErrorsTool
 import com.moneat.mcp.tools.GetReleaseStatsTool
 import com.moneat.mcp.tools.GetReplayRecordingSummaryTool
@@ -129,6 +133,7 @@ import com.moneat.mcp.tools.ListProcessesTool
 import com.moneat.mcp.tools.ListProfilesTool
 import com.moneat.mcp.tools.ListReleasesTool
 import com.moneat.mcp.tools.ListReplaysTool
+import com.moneat.mcp.tools.ListSavedProductFunnelsTool
 import com.moneat.mcp.tools.ListSecurityEventsTool
 import com.moneat.mcp.tools.ListSecuritySignalsTool
 import com.moneat.mcp.tools.ListSilencePeriodsTool
@@ -152,6 +157,7 @@ import com.moneat.mcp.tools.ReplaceDashboardWidgetsTool
 import com.moneat.mcp.tools.ResumeUptimeMonitorTool
 import com.moneat.mcp.tools.RevokeFeatureFlagSdkKeyTool
 import com.moneat.mcp.tools.RunSyntheticTestTool
+import com.moneat.mcp.tools.RunSavedProductFunnelTool
 import com.moneat.mcp.tools.RunWorkflowTool
 import com.moneat.mcp.tools.TriageSecuritySignalTool
 import com.moneat.mcp.tools.UnpublishWorkflowTool
@@ -165,6 +171,7 @@ import com.moneat.mcp.tools.UpdateFeatureFlagConfigTool
 import com.moneat.mcp.tools.UpdateFeatureFlagTool
 import com.moneat.mcp.tools.UpdateIssueStatusTool
 import com.moneat.mcp.tools.UpdateNotificationPreferencesTool
+import com.moneat.mcp.tools.UpdateSavedProductFunnelTool
 import com.moneat.mcp.tools.UpdateStatusPageIncidentTool
 import com.moneat.mcp.tools.UpdateStatusPageTool
 import com.moneat.mcp.tools.UpdateSyntheticTestTool
@@ -277,6 +284,13 @@ object McpToolRegistrar {
         toolRegistry.register(GetProductFunnelTool())
         toolRegistry.register(GetProductEventsTool())
         toolRegistry.register(GetProductRetentionTool())
+        toolRegistry.register(ListSavedProductFunnelsTool())
+        toolRegistry.register(GetSavedProductFunnelTool())
+        toolRegistry.register(CreateSavedProductFunnelTool())
+        toolRegistry.register(UpdateSavedProductFunnelTool())
+        toolRegistry.register(DeleteSavedProductFunnelTool())
+        toolRegistry.register(RunSavedProductFunnelTool())
+        toolRegistry.register(CompareProductFunnelByFeatureFlagTool())
 
         // Search tools
         toolRegistry.register(GlobalSearchTool())

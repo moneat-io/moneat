@@ -33,6 +33,7 @@ object McpScopes {
 
     private val telemetryReadTools = listOf(
         "aggregate_logs",
+        "compare_product_funnel_by_feature_flag",
         "get_feature_flag",
         "get_feature_flag_analytics",
         "get_issue",
@@ -47,15 +48,18 @@ object McpScopes {
         "get_replay",
         "get_replay_recording_summary",
         "get_replay_timeline",
+        "get_saved_product_funnel",
         "get_span_details",
         "get_trace",
         "get_transaction_stats",
         "list_feedback",
         "list_issues",
         "list_profiles",
+        "list_saved_product_funnels",
         "list_replays",
         "list_transactions",
         "query_logs",
+        "run_saved_product_funnel",
     ).associateWith { setOf(EVENT_READ) }
 
     private val projectReadTools = listOf(
@@ -155,6 +159,7 @@ object McpScopes {
         "create_feature_flag_sdk_key",
         "create_feature_flag",
         "create_project",
+        "create_saved_product_funnel",
         "create_silence_period",
         "create_status_page",
         "create_status_page_incident",
@@ -167,6 +172,7 @@ object McpScopes {
         "delete_feature_flag",
         "delete_feature_flag_segment",
         "delete_host",
+        "delete_saved_product_funnel",
         "delete_silence_period",
         "delete_synthetic_test",
         "delete_uptime_monitor",
@@ -187,6 +193,7 @@ object McpScopes {
         "update_feature_flag_config",
         "update_issue_status",
         "update_notification_preferences",
+        "update_saved_product_funnel",
         "update_status_page",
         "update_status_page_incident",
         "update_synthetic_test",

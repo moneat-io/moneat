@@ -17,6 +17,7 @@
 package com.moneat.analytics.services
 
 import com.moneat.analytics.models.AnalyticsFilter
+import com.moneat.analytics.models.EventPropertyFilter
 import com.moneat.analytics.models.AnalyticsOverviewResponse
 import com.moneat.analytics.models.BreakdownResponse
 import com.moneat.analytics.models.BreakdownRow
@@ -335,6 +336,7 @@ class AnalyticsService {
 
     // --- Funnel ---
 
+    @Suppress("LongParameterList")
     suspend fun getFunnel(
         projectId: Long,
         dateFrom: LocalDate,
@@ -342,9 +344,21 @@ class AnalyticsService {
         steps: List<String>,
         groupBy: String = "session_id",
         source: String? = null,
+        filters: List<AnalyticsFilter> = emptyList(),
+        propFilters: List<EventPropertyFilter> = emptyList(),
     ): FunnelResponse =
-        getFunnel(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, steps, groupBy, source)
+        getFunnel(
+            AnalyticsQueryScope.service(projectId),
+            dateFrom,
+            dateTo,
+            steps,
+            groupBy,
+            source,
+            filters,
+            propFilters,
+        )
 
+    @Suppress("LongParameterList")
     suspend fun getFunnel(
         scope: AnalyticsQueryScope,
         dateFrom: LocalDate,
@@ -352,31 +366,31 @@ class AnalyticsService {
         steps: List<String>,
         groupBy: String = "session_id",
         source: String? = null,
+        filters: List<AnalyticsFilter> = emptyList(),
+        propFilters: List<EventPropertyFilter> = emptyList(),
     ): FunnelResponse {
         if (steps.size < 2) return FunnelResponse(emptyList(), 0.0)
-        val scopeWhere = serviceScopeWhere(scope)
-        val dateWhere = dateRange(dateFrom, dateTo)
+        val where = buildWhere(scope, dateFrom, dateTo, filters, "e", "timestamp", propFilters)
         val groupByColumn = resolveGroupByColumn(groupBy)
-        val sourceClause = sourceWhere(source)
-        val nonEmptyGroupClause = if (groupByColumn == "user_id") "AND user_id != ''" else ""
+        val sourceClause = sourceWhere(source, "e")
+        val nonEmptyGroupClause = if (groupByColumn == "user_id") "AND e.user_id != ''" else ""
 
         // Build a windowFunnel query
-        val events = steps.joinToString(", ") { "event_name = '${AnalyticsIngestionWorker.escapeCH(it)}'" }
+        val events = steps.joinToString(", ") { "e.event_name = '${AnalyticsIngestionWorker.escapeCH(it)}'" }
         val sql = """
             SELECT
                 level,
                 count() AS cnt
             FROM (
                 SELECT
-                    project_id,
-                    $groupByColumn,
-                    windowFunnel($FUNNEL_WINDOW_SECONDS)(toDateTime(timestamp), $events) AS level
-                FROM analytics_events
-                WHERE $scopeWhere
-                  AND $dateWhere
+                    e.project_id,
+                    e.$groupByColumn,
+                    windowFunnel($FUNNEL_WINDOW_SECONDS)(toDateTime(e.timestamp), $events) AS level
+                FROM analytics_events AS e
+                WHERE $where
                   $sourceClause
                   $nonEmptyGroupClause
-                GROUP BY project_id, $groupByColumn
+                GROUP BY e.project_id, e.$groupByColumn
             )
             WHERE level > 0
             GROUP BY level
@@ -516,6 +530,7 @@ $retentionColumns
 
     // --- Events breakdown (custom events) ---
 
+    @Suppress("LongParameterList")
     suspend fun getEvents(
         projectId: Long,
         dateFrom: LocalDate,
@@ -524,9 +539,20 @@ $retentionColumns
         limit: Int = DEFAULT_LIMIT,
         groupBy: String = "session_id",
         source: String? = null,
+        propFilters: List<EventPropertyFilter> = emptyList(),
     ): BreakdownResponse =
-        getEvents(AnalyticsQueryScope.service(projectId), dateFrom, dateTo, filters, limit, groupBy, source)
+        getEvents(
+            AnalyticsQueryScope.service(projectId),
+            dateFrom,
+            dateTo,
+            filters,
+            limit,
+            groupBy,
+            source,
+            propFilters,
+        )
 
+    @Suppress("LongParameterList")
     suspend fun getEvents(
         scope: AnalyticsQueryScope,
         dateFrom: LocalDate,
@@ -535,8 +561,9 @@ $retentionColumns
         limit: Int = DEFAULT_LIMIT,
         groupBy: String = "session_id",
         source: String? = null,
+        propFilters: List<EventPropertyFilter> = emptyList(),
     ): BreakdownResponse {
-        val where = buildWhere(scope, dateFrom, dateTo, filters, "e", "timestamp")
+        val where = buildWhere(scope, dateFrom, dateTo, filters, "e", "timestamp", propFilters)
         val groupByColumn = resolveGroupByColumn(groupBy)
         val sourceClause = sourceWhere(source, "e")
         val nonEmptyGroupClause = if (groupByColumn == "user_id") "AND e.user_id != ''" else ""
@@ -1171,6 +1198,7 @@ $retentionColumns
         return "$prefix${abs(ratio).roundToInt()}%"
     }
 
+    @Suppress("LongParameterList")
     private fun buildWhere(
         scope: AnalyticsQueryScope,
         dateFrom: LocalDate,
@@ -1178,6 +1206,7 @@ $retentionColumns
         filters: List<AnalyticsFilter>,
         alias: String,
         timeColumn: String,
+        propFilters: List<EventPropertyFilter> = emptyList(),
     ): String {
         val parts = mutableListOf<String>()
         parts.add(serviceScopeWhere(scope, alias))
@@ -1194,7 +1223,26 @@ $retentionColumns
                 "not_contains" -> parts.add("$col NOT LIKE '%$value%'")
             }
         }
+        if (alias == "e") {
+            for (filter in propFilters) {
+                parts.add(eventPropertyFilterClause(filter, alias))
+            }
+        }
         return parts.joinToString(" AND ")
+    }
+
+    private fun eventPropertyFilterClause(filter: EventPropertyFilter, alias: String): String {
+        val key = AnalyticsIngestionWorker.escapeCH(filter.key)
+        val value = AnalyticsIngestionWorker.escapeCH(filter.value)
+        val contains = "mapContains($alias.props, '$key')"
+        val property = "$alias.props['$key']"
+        return when (filter.operator) {
+            "is" -> "$contains AND $property = '$value'"
+            "is_not" -> "$contains AND $property != '$value'"
+            "contains" -> "$contains AND $property LIKE '%$value%'"
+            "not_contains" -> "$contains AND $property NOT LIKE '%$value%'"
+            else -> "1 = 1"
+        }
     }
 
     private fun resolveFilterColumn(property: String, alias: String): String? {

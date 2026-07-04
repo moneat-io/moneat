@@ -245,9 +245,10 @@ private suspend fun ApplicationCall.respondFunnel(
     val context = contextProvider(this) ?: return
     val (dateFrom, dateTo) = parseRequiredDateRange() ?: return
     val steps = requiredFunnelSteps() ?: return
+    val filters = parseFilters(this)
     val groupBy = request.queryParameters["group_by"] ?: "session_id"
     val source = request.queryParameters["source"]
-    respond(analyticsService.getFunnel(context, dateFrom, dateTo, steps, groupBy, source))
+    respond(analyticsService.getFunnel(context, dateFrom, dateTo, steps, groupBy, source, filters))
 }
 
 private suspend fun ApplicationCall.respondRetention(
@@ -402,6 +403,7 @@ private fun AnalyticsService.getRealtime(context: AnalyticsRouteContext) =
         getRealtime(projectId)
     } ?: getRealtime(context.scope)
 
+@Suppress("LongParameterList")
 private suspend fun AnalyticsService.getFunnel(
     context: AnalyticsRouteContext,
     dateFrom: LocalDate,
@@ -409,9 +411,10 @@ private suspend fun AnalyticsService.getFunnel(
     steps: List<String>,
     groupBy: String,
     source: String?,
+    filters: List<AnalyticsFilter>,
 ) = context.projectId?.let { projectId ->
-    getFunnel(projectId, dateFrom, dateTo, steps, groupBy, source)
-} ?: getFunnel(context.scope, dateFrom, dateTo, steps, groupBy, source)
+    getFunnel(projectId, dateFrom, dateTo, steps, groupBy, source, filters)
+} ?: getFunnel(context.scope, dateFrom, dateTo, steps, groupBy, source, filters)
 
 private suspend fun AnalyticsService.getRetention(
     context: AnalyticsRouteContext,

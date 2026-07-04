@@ -18,6 +18,7 @@ package com.moneat.mcp.tools
 
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.models.BreakdownRow
+import com.moneat.analytics.models.EventPropertyFilter
 import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.ProductRetentionCohortRow
 import com.moneat.analytics.services.AnalyticsService
@@ -50,6 +51,7 @@ private const val PERIOD_30D_OFFSET_DAYS = 29L
 private const val PERIOD_6MO_MONTHS = 6L
 private const val PERIOD_12MO_MONTHS = 12L
 private const val MAX_ANALYTICS_RANGE_DAYS = 366L
+private const val MAX_EVENT_PROPERTY_KEY_LENGTH = 128
 private const val FILTER_PARTS_COUNT = 3
 private const val PRODUCT_RETENTION_MODE_KEY_ACTION = "key_action"
 private const val PRODUCT_RETENTION_MODE_ANY_SESSION = "any_session"
@@ -94,6 +96,8 @@ class GetProductFunnelTool(
     override val inputSchema = InputSchema(
         properties = JsonObject(
             productAnalyticsBaseProperties() + mapOf(
+                "filters" to schemaAnalyticsFilters(),
+                "prop_filters" to schemaEventPropertyFilters(),
                 "steps" to schemaStringArray("Ordered analytics event names in the funnel"),
                 "group_by" to schemaEnum("Conversion identity", analyticsGroupByValues.toList()),
                 "source" to schemaString("Optional telemetry source filter, such as server or web"),
@@ -119,8 +123,23 @@ class GetProductFunnelTool(
             return@withRequiredProjectId errorResult("steps cannot include more than $MAX_FUNNEL_STEPS event names")
         }
         val groupBy = parseGroupBy(args).getOrElse { return@withRequiredProjectId errorResult(it.message!!) }
+        val filters = parseAnalyticsFilters(args).getOrElse {
+            return@withRequiredProjectId errorResult(it.message!!)
+        }
+        val propFilters = parseEventPropertyFilters(args).getOrElse {
+            return@withRequiredProjectId errorResult(it.message!!)
+        }
         val source = args.stringContent("source")
-        val result = analyticsService.getFunnel(projectId, range.dateFrom, range.dateTo, steps, groupBy, source)
+        val result = analyticsService.getFunnel(
+            projectId = projectId,
+            dateFrom = range.dateFrom,
+            dateTo = range.dateTo,
+            steps = steps,
+            groupBy = groupBy,
+            source = source,
+            filters = filters,
+            propFilters = propFilters,
+        )
 
         jsonResult(
             ProductFunnelToolResponse(
@@ -128,6 +147,8 @@ class GetProductFunnelTool(
                 dateTo = range.dateTo.toString(),
                 groupBy = groupBy,
                 source = source,
+                filters = filters,
+                propFilters = propFilters,
                 steps = result.steps,
                 overallConversion = result.overallConversion,
             ),
@@ -145,6 +166,7 @@ class GetProductEventsTool(
         properties = JsonObject(
             productAnalyticsBaseProperties() + mapOf(
                 "filters" to schemaAnalyticsFilters(),
+                "prop_filters" to schemaEventPropertyFilters(),
                 "group_by" to schemaEnum("Identity used for unique counts", analyticsGroupByValues.toList()),
                 "source" to schemaString("Optional telemetry source filter, such as server or web"),
                 "limit" to schemaNumber("Maximum events to return (default 50, max 200)"),
@@ -163,6 +185,9 @@ class GetProductEventsTool(
         val filters = parseAnalyticsFilters(args).getOrElse {
             return@withRequiredProjectId errorResult(it.message!!)
         }
+        val propFilters = parseEventPropertyFilters(args).getOrElse {
+            return@withRequiredProjectId errorResult(it.message!!)
+        }
         val groupBy = parseGroupBy(args).getOrElse {
             return@withRequiredProjectId errorResult(it.message!!)
         }
@@ -177,6 +202,7 @@ class GetProductEventsTool(
             limit = limit,
             groupBy = groupBy,
             source = source,
+            propFilters = propFilters,
         )
 
         jsonResult(
@@ -186,6 +212,7 @@ class GetProductEventsTool(
                 groupBy = groupBy,
                 source = source,
                 filters = filters,
+                propFilters = propFilters,
                 events = result.results,
             ),
         )
@@ -262,7 +289,7 @@ class GetProductRetentionTool(
     }
 }
 
-private data class ProductAnalyticsDateRange(
+internal data class ProductAnalyticsDateRange(
     val dateFrom: LocalDate,
     val dateTo: LocalDate,
 )
@@ -273,6 +300,8 @@ private data class ProductFunnelToolResponse(
     val dateTo: String,
     val groupBy: String,
     val source: String? = null,
+    val filters: List<AnalyticsFilter>,
+    val propFilters: List<EventPropertyFilter>,
     val steps: List<FunnelStep>,
     val overallConversion: Double,
 )
@@ -284,6 +313,7 @@ private data class ProductEventsToolResponse(
     val groupBy: String,
     val source: String? = null,
     val filters: List<AnalyticsFilter>,
+    val propFilters: List<EventPropertyFilter>,
     val events: List<BreakdownRow>,
 )
 
@@ -305,7 +335,7 @@ private fun productAnalyticsBaseProperties(): Map<String, JsonObject> =
         "date_to" to schemaString("End date in YYYY-MM-DD format"),
     )
 
-private fun parseProductAnalyticsDateRange(args: JsonObject): Result<ProductAnalyticsDateRange> = runCatching {
+internal fun parseProductAnalyticsDateRange(args: JsonObject): Result<ProductAnalyticsDateRange> = runCatching {
     val explicitFrom = args.stringContent("date_from") ?: args.stringContent("from")
     val explicitTo = args.stringContent("date_to") ?: args.stringContent("to")
     val range = if (explicitFrom != null || explicitTo != null) {
@@ -354,7 +384,7 @@ private fun validateDateRange(dateFrom: LocalDate, dateTo: LocalDate) {
     }
 }
 
-private fun parseGroupBy(args: JsonObject): Result<String> = runCatching {
+internal fun parseGroupBy(args: JsonObject): Result<String> = runCatching {
     val groupBy = args.stringContent("group_by") ?: "session_id"
     if (groupBy !in analyticsGroupByValues) {
         throw IllegalArgumentException("group_by must be one of: ${analyticsGroupByValues.joinToString(", ")}")
@@ -362,7 +392,7 @@ private fun parseGroupBy(args: JsonObject): Result<String> = runCatching {
     groupBy
 }
 
-private fun parseStringArray(args: JsonObject, fieldName: String): Result<List<String>> = runCatching {
+internal fun parseStringArray(args: JsonObject, fieldName: String): Result<List<String>> = runCatching {
     val value = args[fieldName] ?: throw IllegalArgumentException("$fieldName is required")
     val values = when (value) {
         is JsonArray -> value.mapIndexed { index, element ->
@@ -390,12 +420,23 @@ private fun JsonElement.stringValue(fieldName: String): String =
         throw IllegalArgumentException("$fieldName must be a string")
     }
 
-private fun parseAnalyticsFilters(args: JsonObject): Result<List<AnalyticsFilter>> = runCatching {
+internal fun parseAnalyticsFilters(args: JsonObject): Result<List<AnalyticsFilter>> = runCatching {
     val value = args["filters"] ?: return@runCatching emptyList()
     when (value) {
         is JsonArray -> value.mapIndexed { index, element -> parseAnalyticsFilter(element, "filters[$index]") }
         is JsonPrimitive -> listOf(parseFilterString(value.contentOrNull.orEmpty(), "filters"))
         else -> throw IllegalArgumentException("filters must be an array")
+    }
+}
+
+internal fun parseEventPropertyFilters(args: JsonObject): Result<List<EventPropertyFilter>> = runCatching {
+    val value = args["prop_filters"] ?: args["property_filters"] ?: return@runCatching emptyList()
+    when (value) {
+        is JsonArray -> value.mapIndexed { index, element ->
+            parseEventPropertyFilter(element, "prop_filters[$index]")
+        }
+        is JsonPrimitive -> listOf(parseEventPropertyFilterString(value.contentOrNull.orEmpty(), "prop_filters"))
+        else -> throw IllegalArgumentException("prop_filters must be an array")
     }
 }
 
@@ -406,11 +447,25 @@ private fun parseAnalyticsFilter(element: JsonElement, label: String): Analytics
         else -> throw IllegalArgumentException("$label must be a filter object or property:operator:value string")
     }
 
+private fun parseEventPropertyFilter(element: JsonElement, label: String): EventPropertyFilter =
+    when (element) {
+        is JsonObject -> parseEventPropertyFilterObject(element, label)
+        is JsonPrimitive -> parseEventPropertyFilterString(element.contentOrNull.orEmpty(), label)
+        else -> throw IllegalArgumentException("$label must be a filter object or key:operator:value string")
+    }
+
 private fun parseFilterObject(element: JsonObject, label: String): AnalyticsFilter {
     val property = element.stringContent("property") ?: throw IllegalArgumentException("$label.property is required")
     val operator = element.stringContent("operator") ?: throw IllegalArgumentException("$label.operator is required")
     val value = element.stringContent("value") ?: throw IllegalArgumentException("$label.value is required")
     return validatedFilter(property, operator, value, label)
+}
+
+private fun parseEventPropertyFilterObject(element: JsonObject, label: String): EventPropertyFilter {
+    val key = element.stringContent("key") ?: throw IllegalArgumentException("$label.key is required")
+    val operator = element.stringContent("operator") ?: throw IllegalArgumentException("$label.operator is required")
+    val value = element.stringContent("value") ?: throw IllegalArgumentException("$label.value is required")
+    return validatedEventPropertyFilter(key, operator, value, label)
 }
 
 private fun parseFilterString(value: String, label: String): AnalyticsFilter {
@@ -419,6 +474,14 @@ private fun parseFilterString(value: String, label: String): AnalyticsFilter {
         throw IllegalArgumentException("$label must use property:operator:value format")
     }
     return validatedFilter(parts[0].trim(), parts[1].trim(), parts[2].trim(), label)
+}
+
+private fun parseEventPropertyFilterString(value: String, label: String): EventPropertyFilter {
+    val parts = value.split(":", limit = FILTER_PARTS_COUNT)
+    if (parts.size != FILTER_PARTS_COUNT) {
+        throw IllegalArgumentException("$label must use key:operator:value format")
+    }
+    return validatedEventPropertyFilter(parts[0].trim(), parts[1].trim(), parts[2].trim(), label)
 }
 
 private fun validatedFilter(
@@ -445,7 +508,31 @@ private fun validatedFilter(
     return AnalyticsFilter(property, operator, value)
 }
 
-private fun parseBoundedInt(
+private fun validatedEventPropertyFilter(
+    key: String,
+    operator: String,
+    value: String,
+    label: String,
+): EventPropertyFilter {
+    if (key.isBlank()) {
+        throw IllegalArgumentException("$label.key is required")
+    }
+    if (key.length > MAX_EVENT_PROPERTY_KEY_LENGTH) {
+        throw IllegalArgumentException("$label.key cannot exceed $MAX_EVENT_PROPERTY_KEY_LENGTH characters")
+    }
+    if (operator !in analyticsFilterOperators) {
+        throw IllegalArgumentException(
+            "$label.operator must be one of: " +
+                analyticsFilterOperators.joinToString(", "),
+        )
+    }
+    if (value.isBlank()) {
+        throw IllegalArgumentException("$label.value is required")
+    }
+    return EventPropertyFilter(key, operator, value)
+}
+
+internal fun parseBoundedInt(
     args: JsonObject,
     fieldName: String,
     defaultValue: Int,
@@ -468,7 +555,7 @@ private fun schemaStringArray(description: String): JsonObject =
         ),
     )
 
-private fun schemaAnalyticsFilters(): JsonObject =
+internal fun schemaAnalyticsFilters(): JsonObject =
     JsonObject(
         mapOf(
             "type" to JsonPrimitive("array"),
@@ -488,6 +575,32 @@ private fun schemaAnalyticsFilters(): JsonObject =
                     ),
                     "required" to JsonArray(
                         listOf("property", "operator", "value").map(::JsonPrimitive),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+internal fun schemaEventPropertyFilters(): JsonObject =
+    JsonObject(
+        mapOf(
+            "type" to JsonPrimitive("array"),
+            "description" to JsonPrimitive(
+                "Optional event property filters as objects with key, operator, value. " +
+                    "Operators: ${analyticsFilterOperators.joinToString(", ")}",
+            ),
+            "items" to JsonObject(
+                mapOf(
+                    "type" to JsonPrimitive("object"),
+                    "properties" to JsonObject(
+                        mapOf(
+                            "key" to schemaString("Event property key stored in analytics event props"),
+                            "operator" to schemaEnum("Filter operator", analyticsFilterOperators.toList()),
+                            "value" to schemaString("Filter value"),
+                        ),
+                    ),
+                    "required" to JsonArray(
+                        listOf("key", "operator", "value").map(::JsonPrimitive),
                     ),
                 ),
             ),
