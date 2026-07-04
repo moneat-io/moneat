@@ -81,6 +81,9 @@ import com.moneat.mcp.tools.GetMonitorHeartbeatsTool
 import com.moneat.mcp.tools.GetNetworkConnectionsTool
 import com.moneat.mcp.tools.GetNotificationPreferencesTool
 import com.moneat.mcp.tools.GetOvernightSummaryTool
+import com.moneat.mcp.tools.GetProductEventsTool
+import com.moneat.mcp.tools.GetProductFunnelTool
+import com.moneat.mcp.tools.GetProductRetentionTool
 import com.moneat.mcp.tools.GetProjectStatsTool
 import com.moneat.mcp.tools.GetProjectTool
 import com.moneat.mcp.tools.GetRelatedErrorsTool
@@ -269,6 +272,11 @@ object McpToolRegistrar {
         // Release tools
         toolRegistry.register(ListReleasesTool())
         toolRegistry.register(GetReleaseStatsTool())
+
+        // Product analytics tools
+        toolRegistry.register(GetProductFunnelTool())
+        toolRegistry.register(GetProductEventsTool())
+        toolRegistry.register(GetProductRetentionTool())
 
         // Search tools
         toolRegistry.register(GlobalSearchTool())

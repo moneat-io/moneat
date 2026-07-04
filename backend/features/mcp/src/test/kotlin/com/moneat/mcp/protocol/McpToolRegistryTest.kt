@@ -23,6 +23,9 @@ import com.moneat.mcp.tools.CreateDetectionRuleTool
 import com.moneat.mcp.tools.CreateWorkflowTool
 import com.moneat.mcp.tools.GetFeatureFlagAnalyticsTool
 import com.moneat.mcp.tools.GetFeatureFlagTool
+import com.moneat.mcp.tools.GetProductEventsTool
+import com.moneat.mcp.tools.GetProductFunnelTool
+import com.moneat.mcp.tools.GetProductRetentionTool
 import com.moneat.mcp.tools.GetReplayRecordingSummaryTool
 import com.moneat.mcp.tools.GetReplayTimelineTool
 import com.moneat.mcp.tools.GetReplayTool
@@ -43,7 +46,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 151
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 154
 
 class McpToolRegistryTest {
 
@@ -200,6 +203,15 @@ class McpToolRegistryTest {
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetReplayTool()))
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetReplayTimelineTool()))
         assertEquals(expectedScope, McpScopes.requiredScopesFor(GetReplayRecordingSummaryTool()))
+    }
+
+    @Test
+    fun `product analytics tools use event read scope`() {
+        val expectedScope = setOf(McpScopes.EVENT_READ)
+
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetProductFunnelTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetProductEventsTool()))
+        assertEquals(expectedScope, McpScopes.requiredScopesFor(GetProductRetentionTool()))
     }
 
     @Test
