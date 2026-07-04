@@ -44,6 +44,10 @@ const TABS: TabDef[] = [
 ]
 
 const X_LABELS = ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', 'now']
+const DEFAULT_DEPLOY_LABEL = 'No deploys'
+const MIN_DEPLOY_PCT = 0
+const MAX_DEPLOY_PCT = 100
+const DEPLOY_MARKER_ALIGN_RIGHT_PCT = 60
 
 interface DeployLabelProps {
   // Injected by recharts when used as a ReferenceLine label.
@@ -83,8 +87,18 @@ export function TelemetryWidget() {
 
   const series = telem[activeKey]
   const data = series.map((value, i) => ({i, value}))
-  const deployIndex = Math.round((telem.deployAtPct / 100) * (series.length - 1))
-  const deployLabelRight = telem.deployAtPct > 60
+  const deployAtPct = Math.min(MAX_DEPLOY_PCT, Math.max(MIN_DEPLOY_PCT, telem.deployAtPct))
+  const deployIndex = Math.round((deployAtPct / MAX_DEPLOY_PCT) * Math.max(series.length - 1, 0))
+  const deployLabelRight = deployAtPct > DEPLOY_MARKER_ALIGN_RIGHT_PCT
+  const hasDeployMarker = telem.deployLabel.trim() !== '' && telem.deployLabel !== DEFAULT_DEPLOY_LABEL
+  const deployMarker = hasDeployMarker ? (
+    <ReferenceLine
+      x={deployIndex}
+      stroke="hsl(var(--primary))"
+      strokeDasharray="4 3"
+      label={<DeployLabel text={telem.deployLabel} alignRight={deployLabelRight} />}
+    />
+  ) : null
 
   return (
     <OverviewPanel
@@ -125,12 +139,7 @@ export function TelemetryWidget() {
           {activeKey === 'logs' ? (
             <BarChart data={data} margin={{top: 6, right: 6, left: 0, bottom: 0}}>
               <CartesianGrid vertical={false} stroke="hsl(var(--border))" strokeOpacity={0.6} />
-              <ReferenceLine
-                x={deployIndex}
-                stroke="hsl(var(--primary))"
-                strokeDasharray="4 3"
-                label={<DeployLabel text={telem.deployLabel} alignRight={deployLabelRight} />}
-              />
+              {deployMarker}
               <Bar dataKey="value" fill={tab.color} radius={[1, 1, 0, 0]} />
             </BarChart>
           ) : (
@@ -151,12 +160,7 @@ export function TelemetryWidget() {
                   label={{value: 'alert: 5xx > 2%', position: 'insideTopRight', fontSize: 10, fill: 'hsl(var(--danger-fg))'}}
                 />
               )}
-              <ReferenceLine
-                x={deployIndex}
-                stroke="hsl(var(--primary))"
-                strokeDasharray="4 3"
-                label={<DeployLabel text={telem.deployLabel} alignRight={deployLabelRight} />}
-              />
+              {deployMarker}
               <Area
                 type="monotone"
                 dataKey="value"
