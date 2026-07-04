@@ -249,8 +249,10 @@ function QueryErrorState({error}: {error: unknown}) {
 }
 
 function queryErrorDetail(error: unknown): string | null {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message === 'NETWORK_ERROR' ? 'Network error' : error.message
+  if (error instanceof Error) {
+    const message = error.message.trim()
+    if (!message) return null
+    return message === 'NETWORK_ERROR' ? 'Network error' : message
   }
   return null
 }
