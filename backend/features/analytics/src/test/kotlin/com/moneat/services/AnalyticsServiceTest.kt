@@ -17,6 +17,7 @@
 package com.moneat.services
 
 import com.moneat.analytics.models.AnalyticsFilter
+import com.moneat.analytics.models.EventPropertyFilter
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.ProductRetentionRequest
@@ -34,6 +35,7 @@ import java.time.LocalDate
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AnalyticsServiceTest {
@@ -458,6 +460,21 @@ class AnalyticsServiceTest {
             assertTrue(queries.any { it.contains("source = 'server'") })
             assertTrue(queries.any { it.contains("user_id != ''") })
         }
+    }
+
+    @Test
+    fun `getFunnel rejects unsupported property filter operators`() = runBlocking {
+        val error = assertFailsWith<IllegalArgumentException> {
+            service.getFunnel(
+                projectId,
+                dateFrom,
+                dateTo,
+                listOf("signup.completed", "recording.started"),
+                propFilters = listOf(EventPropertyFilter("destination", "starts_with", "private")),
+            )
+        }
+
+        assertTrue(error.message!!.contains("Unsupported event property filter operator"))
     }
 
     @Test

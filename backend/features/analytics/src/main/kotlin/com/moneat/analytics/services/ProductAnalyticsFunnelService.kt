@@ -207,6 +207,10 @@ class ProductAnalyticsFunnelService(
         organizationId: Int,
         definition: FeatureFlagFunnelComparisonDefinition,
     ): FeatureFlagFunnelComparisonResponse {
+        transaction {
+            ensureProjectInOrganization(organizationId, definition.projectId)
+                ?: throw IllegalArgumentException("Project not found")
+        }
         validateFunnelDefinition(definition.steps, definition.groupBy)
         val sql = featureFlagComparisonSql(organizationId, definition)
         val rows = parseJsonRows(ClickHouseClient.executeWithFormat(sql, "JSONEachRow"))
@@ -366,7 +370,7 @@ class ProductAnalyticsFunnelService(
                 "is_not" -> "AND $contains AND $property != '$value'"
                 "contains" -> "AND $contains AND $property LIKE '%$value%'"
                 "not_contains" -> "AND $contains AND $property NOT LIKE '%$value%'"
-                else -> "AND 1 = 1"
+                else -> throw IllegalArgumentException("Unsupported event property filter operator: ${filter.operator}")
             }
         }
         return parts.joinToString("\n")

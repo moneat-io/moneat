@@ -1241,7 +1241,7 @@ $retentionColumns
             "is_not" -> "$contains AND $property != '$value'"
             "contains" -> "$contains AND $property LIKE '%$value%'"
             "not_contains" -> "$contains AND $property NOT LIKE '%$value%'"
-            else -> "1 = 1"
+            else -> throw IllegalArgumentException("Unsupported event property filter operator: ${filter.operator}")
         }
     }
 

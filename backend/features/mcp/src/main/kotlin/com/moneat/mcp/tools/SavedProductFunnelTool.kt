@@ -322,7 +322,10 @@ private fun funnelComparisonDefinition(
 
 private fun JsonObject.funnelResourceIdResult(required: Boolean = true): Result<kotlin.uuid.Uuid?> = runCatching {
     val raw = stringContent(FUNNEL_ID_FIELD)
-        ?: return@runCatching if (required) null else null
+        ?: run {
+            if (required) throw IllegalArgumentException("$FUNNEL_ID_FIELD is required")
+            return@runCatching null
+        }
     parseResourceId(raw)
         ?: throw IllegalArgumentException("Invalid $FUNNEL_ID_FIELD format")
 }

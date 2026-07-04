@@ -48,6 +48,7 @@ import kotlin.test.assertTrue
 import kotlin.uuid.Uuid
 
 private const val PRODUCT_ANALYTICS_PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9d"
+private const val OTHER_ORG_PROJECT_RESOURCE_ID = "018f4ce4-3f2a-7a67-a32b-0c1848f62b9e"
 
 @ResourceLock("exposed-default-database")
 class ProductAnalyticsToolTest {
@@ -86,6 +87,18 @@ class ProductAnalyticsToolTest {
                 it[resource_id] = Uuid.parse(PRODUCT_ANALYTICS_PROJECT_RESOURCE_ID)
                 it[name] = "Bandapella Backend"
                 it[slug] = "bandapella-backend"
+            }
+            Organizations.insert {
+                it[id] = 99
+                it[name] = "Other Org"
+                it[slug] = "other-org"
+            }
+            Projects.insert {
+                it[id] = 99
+                it[organization_id] = 99
+                it[resource_id] = Uuid.parse(OTHER_ORG_PROJECT_RESOURCE_ID)
+                it[name] = "Other Backend"
+                it[slug] = "other-backend"
             }
         }
     }
@@ -552,6 +565,44 @@ class ProductAnalyticsToolTest {
             assertTrue(queries.single().contains("e.device_type = 'ios'"))
             assertTrue(queries.single().contains("mapContains(e.props, 'destination')"))
             assertTrue(queries.single().contains("e.props['destination'] = 'private'"))
+        }
+    }
+
+    @Test
+    fun `feature flag funnel comparison rejects cross organization project ids`() = runBlocking {
+        val queries = mutableListOf<String>()
+        MockHttpServer(
+            queryBasedClickHouseHandler(
+                "flag_assignments" to """{"variant_key":"control","level":1,"cnt":1}""",
+                captureQueries = queries,
+            ),
+        ).use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = registry().callTool(
+                "compare_product_funnel_by_feature_flag",
+                JsonObject(
+                    mapOf(
+                        "project_id" to JsonPrimitive(OTHER_ORG_PROJECT_RESOURCE_ID),
+                        "date_from" to JsonPrimitive("2026-06-01"),
+                        "date_to" to JsonPrimitive("2026-06-30"),
+                        "steps" to JsonArray(
+                            listOf(
+                                JsonPrimitive("recording.started"),
+                                JsonPrimitive("export.completed"),
+                            ),
+                        ),
+                        "group_by" to JsonPrimitive("user_id"),
+                        "flag_key" to JsonPrimitive("paywall.export_gate"),
+                    ),
+                ),
+                context,
+            )
+
+            assertTrue(result.isError, result.content.single().text)
+            assertTrue(result.content.single().text!!.isNotBlank())
+            assertTrue(queries.isEmpty())
         }
     }
 
