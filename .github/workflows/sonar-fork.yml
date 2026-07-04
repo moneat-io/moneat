@@ -41,21 +41,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
-          PR_NUMBER=$(gh api "repos/${{ github.repository }}/commits/${HEAD_SHA}/pulls" \
-            -H "Accept: application/vnd.github+json" --jq '.[0].number // empty')
+          # workflow_run omits PRs for forks, and commits/{sha}/pulls can't resolve a
+          # fork's head commit from the base repo — look the PR up by head owner:branch.
+          PRS_JSON=$(gh api "repos/${{ github.repository }}/pulls?head=${HEAD_OWNER}:${HEAD_BRANCH}&state=all&per_page=100")
+          PR_NUMBER=$(echo "$PRS_JSON" | jq -r --arg sha "$HEAD_SHA" \
+            '([.[] | select(.head.sha == $sha)] | .[0].number) // (.[0].number) // empty')
           if [[ -z "$PR_NUMBER" ]]; then
-            echo "::error::Could not resolve a PR for commit ${HEAD_SHA}"; exit 1
+            echo "::error::Could not resolve a PR for ${HEAD_OWNER}:${HEAD_BRANCH} (${HEAD_SHA})"; exit 1
           fi
-          BASE_REF=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.base.ref')
+          BASE_REF=$(echo "$PRS_JSON" | jq -r --arg sha "$HEAD_SHA" \
+            '([.[] | select(.head.sha == $sha)] | .[0].base.ref) // (.[0].base.ref) // "develop"')
           {
             echo "pr=$PR_NUMBER"
             echo "head_sha=$HEAD_SHA"
-            echo "head_ref=${{ github.event.workflow_run.head_branch }}"
-            echo "base_ref=$BASE_REF"
+            echo "head_ref=${HEAD_BRANCH}"
+            echo "base_ref=${BASE_REF}"
           } >> "$GITHUB_OUTPUT"
-          echo "Resolved PR #$PR_NUMBER (head $HEAD_SHA, base $BASE_REF)"
+          echo "Resolved PR #$PR_NUMBER (head $HEAD_SHA, base ${BASE_REF})"
 
       - name: Checkout PR merge ref
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -269,13 +275,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           CONCLUSION="success"
-          [[ "${{ steps.qg.outcome }}" == "failure" ]] && CONCLUSION="failure"
+          if [[ "${{ steps.ctx.outcome }}" != "success" ]]; then CONCLUSION="failure"; fi
+          if [[ "${{ steps.qg.outcome }}" == "failure" ]]; then CONCLUSION="failure"; fi
           gh api -X POST "repos/${{ github.repository }}/check-runs" \
             -f name="Sonar (fork PR)" \
-            -f head_sha="${{ steps.ctx.outputs.head_sha }}" \
+            -f head_sha="${{ github.event.workflow_run.head_sha }}" \
             -f status="completed" \
             -f conclusion="$CONCLUSION" \
             -f "output[title]=SonarQube Fork Analysis" \
-            -f "output[summary]=Quality gate: ${CONCLUSION}. Fork PR analyzed via workflow_run." >/dev/null
+            -f "output[summary]=Quality gate: ${CONCLUSION}. Fork PR analyzed via workflow_run." >/dev/null || true
