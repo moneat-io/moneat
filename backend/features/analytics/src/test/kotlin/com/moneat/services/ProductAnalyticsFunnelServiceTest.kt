@@ -350,6 +350,32 @@ class ProductAnalyticsFunnelServiceTest {
         }
     }
 
+    @Test
+    fun `compare funnel by feature flag validates project definition and property operators`() = runBlocking {
+        assertFailsWith<IllegalArgumentException> {
+            service.compareFunnelByFeatureFlag(
+                organizationId = 99,
+                definition = comparisonDefinition(),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.compareFunnelByFeatureFlag(
+                organizationId = 1,
+                definition = comparisonDefinition(
+                    propFilters = listOf(EventPropertyFilter("plan", "starts_with", "pro")),
+                ),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.compareFunnelByFeatureFlag(
+                organizationId = 1,
+                definition = comparisonDefinition(
+                    steps = List(13) { index -> "step_$index" },
+                ),
+            )
+        }
+    }
+
     private fun createRequest(
         name: String = "Activation",
         steps: List<String> = listOf(" signup_completed ", "recording_created"),
@@ -363,6 +389,22 @@ class ProductAnalyticsFunnelServiceTest {
         propFilters = listOf(EventPropertyFilter("destination", "is", "private")),
         groupBy = groupBy,
         source = " app ",
+    )
+
+    private fun comparisonDefinition(
+        steps: List<String> = listOf("page_viewed", "signup_completed"),
+        propFilters: List<EventPropertyFilter> = emptyList(),
+    ) = FeatureFlagFunnelComparisonDefinition(
+        projectId = 1,
+        dateFrom = LocalDate.of(2026, 6, 1),
+        dateTo = LocalDate.of(2026, 6, 30),
+        steps = steps,
+        groupBy = "session_id",
+        source = null,
+        filters = emptyList(),
+        propFilters = propFilters,
+        flagKey = "onboarding_variant",
+        environment = null,
     )
 
     private fun createSchema() {
