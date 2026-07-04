@@ -18,10 +18,14 @@ package com.moneat.services
 
 import com.moneat.analytics.models.AnalyticsFilter
 import com.moneat.analytics.models.EventPropertyFilter
+import com.moneat.analytics.models.FunnelResponse
+import com.moneat.analytics.models.FunnelStep
 import com.moneat.analytics.models.ProductAnalyticsFunnels
 import com.moneat.analytics.models.SavedProductFunnelCreateRequest
 import com.moneat.analytics.models.SavedProductFunnelUpdateRequest
 import com.moneat.analytics.services.FeatureFlagFunnelComparisonDefinition
+import com.moneat.analytics.services.AnalyticsFunnelQuery
+import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.ProductAnalyticsFunnelService
 import com.moneat.config.ClickHouseClient
 import com.moneat.shared.models.Organizations
@@ -31,6 +35,9 @@ import com.moneat.testsupport.MockHttpServer
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.testsupport.queryBasedClickHouseHandler
 import kotlinx.coroutines.runBlocking
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -170,6 +177,63 @@ class ProductAnalyticsFunnelServiceTest {
     }
 
     @Test
+    fun `run saved funnel delegates stored definition to analytics service`() = runBlocking {
+        val analyticsService = mockk<AnalyticsService>()
+        val service = ProductAnalyticsFunnelService(analyticsService)
+        val created = service.createFunnel(
+            organizationId = 1,
+            actorUserId = 2,
+            request = createRequest(),
+        )
+        val response = FunnelResponse(
+            steps = listOf(
+                FunnelStep("signup_completed", visitors = 12, dropoff = 0.0, conversionRate = 100.0),
+                FunnelStep("recording_created", visitors = 5, dropoff = 58.3, conversionRate = 41.7),
+            ),
+            overallConversion = 41.7,
+        )
+        coEvery {
+            analyticsService.getFunnel(
+                projectId = 1,
+                query = any<AnalyticsFunnelQuery>(),
+            )
+        } returns response
+
+        val result = service.runFunnel(
+            organizationId = 1,
+            funnelResourceId = Uuid.parse(created.id),
+            dateFrom = LocalDate.of(2026, 6, 1),
+            dateTo = LocalDate.of(2026, 6, 30),
+        )
+
+        assertNotNull(result)
+        assertEquals(created.id, result.funnel.id)
+        assertEquals("2026-06-01", result.dateFrom)
+        assertEquals("2026-06-30", result.dateTo)
+        assertEquals(41.7, result.result.overallConversion)
+        coVerify {
+            analyticsService.getFunnel(
+                projectId = 1,
+                query = match {
+                    it.steps == created.steps &&
+                        it.groupBy == "user_id" &&
+                        it.source == "app" &&
+                        it.filters == created.filters &&
+                        it.propFilters == created.propFilters
+                },
+            )
+        }
+        assertNull(
+            service.runFunnel(
+                organizationId = 99,
+                funnelResourceId = Uuid.parse(created.id),
+                dateFrom = LocalDate.of(2026, 6, 1),
+                dateTo = LocalDate.of(2026, 6, 30),
+            ),
+        )
+    }
+
+    @Test
     fun `compare funnel by feature flag maps variants and applies filters`() = runBlocking {
         val queries = mutableListOf<String>()
         MockHttpServer(
@@ -220,6 +284,69 @@ class ProductAnalyticsFunnelServiceTest {
             assertTrue(query.contains("mapContains(e.props, 'plan')"))
             assertTrue(query.contains("e.props['plan'] LIKE '%pro%'"))
             assertTrue(query.contains("INNER JOIN flag_assignments AS f ON f.targeting_key = e.user_id"))
+        }
+    }
+
+    @Test
+    fun `compare funnel by feature flag applies alternate filters and empty variants`() = runBlocking {
+        val queries = mutableListOf<String>()
+        MockHttpServer(
+            queryBasedClickHouseHandler(
+                "feature_flag_evaluations" to "",
+                captureQueries = queries,
+            ),
+        ).use { server ->
+            ClickHouseClient.close()
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+
+            val result = service.compareFunnelByFeatureFlag(
+                organizationId = 1,
+                definition = FeatureFlagFunnelComparisonDefinition(
+                    projectId = 1,
+                    dateFrom = LocalDate.of(2026, 6, 1),
+                    dateTo = LocalDate.of(2026, 6, 1),
+                    steps = listOf("page_viewed", "signup_completed"),
+                    groupBy = "session_id",
+                    source = null,
+                    filters = listOf(
+                        AnalyticsFilter("page", "is_not", "/pricing"),
+                        AnalyticsFilter("country", "contains", "US"),
+                        AnalyticsFilter("browser", "not_contains", "Bot"),
+                        AnalyticsFilter("os", "is", "iOS"),
+                        AnalyticsFilter("utm_source", "is", "newsletter"),
+                        AnalyticsFilter("utm_medium", "is", "email"),
+                        AnalyticsFilter("utm_campaign", "is", "summer"),
+                        AnalyticsFilter("utm_term", "is", "acapella"),
+                        AnalyticsFilter("utm_content", "is", "hero"),
+                        AnalyticsFilter("event", "is", "signup_completed"),
+                        AnalyticsFilter("unknown", "is", "ignored"),
+                    ),
+                    propFilters = listOf(
+                        EventPropertyFilter("plan", "is_not", "free"),
+                        EventPropertyFilter("destination", "not_contains", "private"),
+                    ),
+                    flagKey = "onboarding_variant",
+                    environment = null,
+                ),
+            )
+
+            assertTrue(result.variants.isEmpty())
+            val query = queries.single()
+            assertTrue(query.contains("organization_id = 1"))
+            assertTrue(query.contains("f.targeting_key = e.session_id"))
+            assertTrue(query.contains("e.pathname != '/pricing'"))
+            assertTrue(query.contains("e.country_code LIKE '%US%'"))
+            assertTrue(query.contains("e.browser NOT LIKE '%Bot%'"))
+            assertTrue(query.contains("e.os = 'iOS'"))
+            assertTrue(query.contains("e.utm_source = 'newsletter'"))
+            assertTrue(query.contains("e.utm_medium = 'email'"))
+            assertTrue(query.contains("e.utm_campaign = 'summer'"))
+            assertTrue(query.contains("e.utm_term = 'acapella'"))
+            assertTrue(query.contains("e.utm_content = 'hero'"))
+            assertTrue(query.contains("e.event_name = 'signup_completed'"))
+            assertTrue(query.contains("e.props['plan'] != 'free'"))
+            assertTrue(query.contains("e.props['destination'] NOT LIKE '%private%'"))
+            assertFalse(query.contains("ignored"))
         }
     }
 
