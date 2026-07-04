@@ -677,6 +677,8 @@ jobs:
       ${{
         always() &&
         github.event_name != 'schedule' &&
+        (github.event_name != 'pull_request' ||
+         github.event.pull_request.head.repo.full_name == github.repository) &&
         (needs.backend-unit.result == 'success' || needs.backend-unit.result == 'skipped') &&
         (needs.backend-detekt.result == 'success' || needs.backend-detekt.result == 'skipped') &&
         (needs.frontend-unit.result == 'success' || needs.frontend-unit.result == 'skipped') &&
