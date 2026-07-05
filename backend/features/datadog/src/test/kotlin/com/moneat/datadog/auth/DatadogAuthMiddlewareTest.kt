@@ -160,5 +160,6 @@ class DatadogAuthMiddlewareTest {
 
         assertEquals("query-value", client.get("/probe?api_key=query-value").bodyAsText())
         assertEquals("dash-query-value", client.get("/probe?api-key=dash-query-value").bodyAsText())
+        assertEquals("dd-query-value", client.get("/probe?dd-api-key=dd-query-value").bodyAsText())
     }
 }
