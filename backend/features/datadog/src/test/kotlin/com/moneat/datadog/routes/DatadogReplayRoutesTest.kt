@@ -16,6 +16,8 @@
 
 package com.moneat.datadog.routes
 
+import com.moneat.billing.models.BillingUsageResponse
+import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogReplayIngestRequest
@@ -54,6 +56,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class DatadogReplayRoutesTest {
@@ -64,6 +67,33 @@ class DatadogReplayRoutesTest {
         private const val PROJECT_ID = 42
         private const val REPLAY_SEGMENT_JSON =
             """{"records":[{"type":4,"timestamp":1700000000000,"data":{"href":"https://example.com/cart"}}]}"""
+        private val quotaExceededUsage = BillingUsageResponse(
+            organizationId = "123",
+            periodStart = "2026-01-01T00:00:00Z",
+            periodEnd = "2026-02-01T00:00:00Z",
+            retentionDays = 30,
+            apmTraceRetentionDays = 30,
+            usedUnits = 0,
+            usedErrors = 0,
+            errorLimit = 1000,
+            usedTransactions = 0,
+            transactionLimit = 1000,
+            usedReplays = 0,
+            replayLimit = 1000,
+            usedFeedback = 0,
+            feedbackLimit = 1000,
+            usedBytes = 0,
+            bytesLimit = 1024,
+            baseLimitUnits = 1000,
+            paygLimitUnits = 1000,
+            totalLimitUnits = 2000,
+            paygBudgetCents = 0,
+            paygUsedUnits = 0,
+            paygUsedCentsEstimate = 0,
+            plan = "pro",
+            status = "active",
+            withinQuota = true,
+        )
 
         @JvmStatic
         @BeforeAll
@@ -156,12 +186,149 @@ class DatadogReplayRoutesTest {
     }
 
     @Test
+    fun `post replay rejects invalid replay event JSON`() = testApplication {
+        installRoutes()
+
+        val response = client.post("/dd/api/v2/replay?dd-api-key=$VALID_KEY") {
+            setBody(
+                replayEventOnlyBody("{not json".toByteArray()),
+            )
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid replay event JSON"))
+        coVerify(exactly = 0) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `post replay rejects malformed replay payload lacking segment`() = testApplication {
+        val eventBytes = replayEventJson().toByteArray()
+        coEvery { DatadogReplayIngestionService.ingestReplaySegment(any()) } returns
+            DatadogReplayIngestResult(
+                replayId = "11111111-2222-3333-4444-555555555555",
+                segmentId = 3,
+                recordCount = 2,
+                bytesStored = 128,
+            )
+        installRoutes()
+
+        val response = client.post("/dd/api/v2/replay?dd-api-key=$VALID_KEY") {
+            setBody(replayEventOnlyBody(eventBytes))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Replay event and segment parts are required"))
+        coVerify(exactly = 0) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `post replay rejects multipart payload missing event`() = testApplication {
+        installRoutes()
+
+        val response = client.post("/dd/api/v2/replay?dd-api-key=$VALID_KEY") {
+            setBody(replaySegmentOnlyBody(deflate(REPLAY_SEGMENT_JSON.toByteArray())))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Replay event and segment parts are required"))
+        coVerify(exactly = 0) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `post replay accepts event form item without filename`() = testApplication {
+        val requestSlot = slot<DatadogReplayIngestRequest>()
+        coEvery { DatadogReplayIngestionService.ingestReplaySegment(capture(requestSlot)) } returns
+            DatadogReplayIngestResult(
+                replayId = "11111111-2222-3333-4444-555555555555",
+                segmentId = 3,
+                recordCount = 2,
+                bytesStored = 128,
+            )
+        installRoutes()
+
+        val response = client.post(
+            "/dd/api/v2/replay?dd-api-key=$VALID_KEY&dd-evp-encoding=deflate"
+        ) {
+            setBody(replayFormFieldMultipartBody(deflate(REPLAY_SEGMENT_JSON.toByteArray())))
+        }
+
+        assertEquals(HttpStatusCode.Accepted, response.status)
+        assertEquals(3, requestSlot.captured.event.indexInView)
+        assertEquals("11111111-2222-3333-4444-555555555555", requestSlot.captured.event.session?.id)
+        coVerify(exactly = 1) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `post replay returns 429 when quota is exceeded`() = testApplication {
+        coEvery { quotaService.reserveUnits(any(), any(), any(), any()) } returns
+            QuotaReservationResult(
+                allowed = false,
+                reason = "replay quota exceeded",
+                usage = quotaExceededUsage,
+            )
+        every { quotaService.isEnforcementEnabled() } returns true
+        installRoutes()
+
+        val response = client.post("/dd/api/v2/replay?dd-api-key=$VALID_KEY") {
+            setBody(replayMultipartBody(deflate(REPLAY_SEGMENT_JSON.toByteArray())))
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        assertFalse(response.bodyAsText().contains("replay_id"))
+        coVerify(exactly = 0) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `post replay returns 400 when replay ingestion request is invalid`() = testApplication {
+        coEvery { DatadogReplayIngestionService.ingestReplaySegment(any()) } throws
+            IllegalArgumentException("Invalid replay payload")
+        installRoutes()
+
+        val response = client.post("/dd/api/v2/replay?dd-api-key=$VALID_KEY") {
+            setBody(replayMultipartBody(deflate(REPLAY_SEGMENT_JSON.toByteArray())))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid replay payload"))
+        coVerify(exactly = 1) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `post replay returns 500 when replay ingestion fails for non-validation reason`() = testApplication {
+        coEvery { DatadogReplayIngestionService.ingestReplaySegment(any()) } throws
+            IllegalStateException("backend failure")
+        installRoutes()
+
+        val response = client.post("/dd/api/v2/replay?dd-api-key=$VALID_KEY") {
+            setBody(replayMultipartBody(deflate(REPLAY_SEGMENT_JSON.toByteArray())))
+        }
+
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertTrue(response.bodyAsText().contains("Failed to ingest replay payload"))
+        coVerify(exactly = 1) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
     fun `parseDdTags parses browser SDK ddtags query`() {
         val tags = parseDdTags("env:prod,version:1.2.3,url:http://localhost:8080")
 
         assertEquals("prod", tags["env"])
         assertEquals("1.2.3", tags["version"])
         assertEquals("http://localhost:8080", tags["url"])
+    }
+
+    @Test
+    fun `parseDdTags ignores malformed entries`() {
+        val tags = parseDdTags("env:prod,malformed,service:backend,:,url:http://localhost:8080")
+
+        assertEquals(
+            mapOf(
+                "env" to "prod",
+                "service" to "backend",
+                "url" to "http://localhost:8080",
+            ),
+            tags,
+        )
     }
 
     private fun io.ktor.server.testing.ApplicationTestBuilder.installRoutes() {
@@ -182,6 +349,60 @@ class DatadogReplayRoutesTest {
                     bytes = replayEventJson().toByteArray(),
                     contentType = ContentType.Application.Json,
                 )
+                appendFile("segment", "segment.bin", segmentBytes)
+            }
+        )
+
+    private fun replayMultipartBody(
+        eventJson: String,
+        segmentBytes: ByteArray,
+    ): MultiPartFormDataContent =
+        MultiPartFormDataContent(
+            formData {
+                appendFile(
+                    name = "event",
+                    fileName = "event.json",
+                    bytes = eventJson.toByteArray(),
+                    contentType = ContentType.Application.Json,
+                )
+                appendFile("segment", "segment.bin", segmentBytes)
+            }
+        )
+
+    private fun replayFormFieldMultipartBody(segmentBytes: ByteArray): MultiPartFormDataContent =
+        MultiPartFormDataContent(
+            formData {
+                append(
+                    "event",
+                    replayEventJson(),
+                    Headers.build {
+                        append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                    }
+                )
+                appendFile("segment", "segment.bin", segmentBytes)
+            }
+        )
+
+    private fun replayEventOnlyBody(eventBytes: ByteArray): MultiPartFormDataContent =
+        MultiPartFormDataContent(
+            formData {
+                append(
+                    "event",
+                    eventBytes.toString(Charsets.UTF_8),
+                    Headers.build {
+                        append(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+                        append(
+                            HttpHeaders.ContentDisposition,
+                            "form-data; name=\"event\"; filename=\"event.json\"",
+                        )
+                    },
+                )
+            }
+        )
+
+    private fun replaySegmentOnlyBody(segmentBytes: ByteArray): MultiPartFormDataContent =
+        MultiPartFormDataContent(
+            formData {
                 appendFile("segment", "segment.bin", segmentBytes)
             }
         )

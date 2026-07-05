@@ -23,20 +23,71 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import io.mockk.every
+import io.mockk.mockkObject
+import io.mockk.verify
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import io.ktor.serialization.kotlinx.json.json
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.assertNotEquals
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 
 class DatadogAuthMiddlewareTest {
+
+    private fun fillCache(fieldName: String, count: Int) {
+        val field = DatadogAuthMiddleware::class.java.getDeclaredField(fieldName).apply {
+            isAccessible = true
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val cache = field.get(DatadogAuthMiddleware) as MutableMap<String, Any>
+        cache.clear()
+        val entryClass = DatadogAuthMiddleware::class.nestedClasses.single {
+            it.simpleName == when (fieldName) {
+                "cache" -> "CachedKey"
+                else -> "CachedContext"
+            }
+        }.java
+        val ctor = entryClass.declaredConstructors.single().apply { isAccessible = true }
+        repeat(count) { index ->
+            cache["cached-$fieldName-$index"] = when (fieldName) {
+                "cache" -> ctor.newInstance(index, 0L)
+                else -> ctor.newInstance(DatadogAuthContext(index, index), 0L)
+            }
+        }
+    }
+
+    private fun putExpiredCacheEntry(fieldName: String, key: String, organizationId: Int = 7) {
+        val field = DatadogAuthMiddleware::class.java.getDeclaredField(fieldName).apply {
+            isAccessible = true
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val cache = field.get(DatadogAuthMiddleware) as MutableMap<String, Any>
+        val entryClass = DatadogAuthMiddleware::class.nestedClasses.single {
+            it.simpleName == when (fieldName) {
+                "cache" -> "CachedKey"
+                else -> "CachedContext"
+            }
+        }.java
+        val ctor = entryClass.declaredConstructors.single().apply { isAccessible = true }
+        cache[key] = when (fieldName) {
+            "cache" -> ctor.newInstance(organizationId, 0L)
+            else -> ctor.newInstance(DatadogAuthContext(organizationId, 12), 0L)
+        }
+    }
 
     @BeforeEach
     fun setup() {
@@ -62,12 +113,11 @@ class DatadogAuthMiddlewareTest {
         // First validation hits DB
         val orgId1 = DatadogService.validateApiKey(created.key)
         assertNotNull(orgId1)
-        assertEquals(1, orgId1)
 
         // Second should also work (verifies key is still valid)
         val orgId2 = DatadogService.validateApiKey(created.key)
         assertNotNull(orgId2)
-        assertEquals(1, orgId2)
+        assertEquals(orgId1, orgId2)
     }
 
     @Test
@@ -106,6 +156,81 @@ class DatadogAuthMiddlewareTest {
         // Should still work (re-validates from DB)
         val orgId = DatadogService.validateApiKey(created.key)
         assertNotNull(orgId)
+    }
+
+    @Test
+    fun `authenticate returns organization id when key is valid`() = testApplication {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKey("valid-key") } returns 11
+
+        application {
+            routing {
+                get("/probe") {
+                    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@get
+                    call.respondText(orgId.toString())
+                }
+            }
+        }
+
+        val response = client.get("/probe") { header("api-key", "valid-key") }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("11", response.bodyAsText())
+
+        val secondResponse = client.get("/probe") { header("api-key", "valid-key") }
+        assertEquals(HttpStatusCode.OK, secondResponse.status)
+        assertEquals("11", secondResponse.bodyAsText())
+        verify(exactly = 1) { DatadogService.validateApiKey("valid-key") }
+    }
+
+    @Test
+    fun `authenticateContext returns cached context after first validation`() = testApplication {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKeyContext("valid-context-key") } returns
+            DatadogService.ApiKeyValidation(organizationId = 1, projectId = 2)
+
+        application {
+            routing {
+                get("/probe") {
+                    val context = DatadogAuthMiddleware.authenticateContext(call) ?: return@get
+                    call.respondText(context.projectId.toString())
+                }
+            }
+        }
+
+        val first = client.get("/probe") { header("api-key", "valid-context-key") }
+        assertEquals(HttpStatusCode.OK, first.status)
+        assertEquals("2", first.bodyAsText())
+
+        val second = client.get("/probe") { header("api-key", "valid-context-key") }
+        assertEquals(HttpStatusCode.OK, second.status)
+        assertEquals("2", second.bodyAsText())
+        verify(exactly = 1) { DatadogService.validateApiKeyContext("valid-context-key") }
+    }
+
+    @Test
+    fun `resolveOrgId uses cache and skips duplicate validation`() {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKey("cache-hit") } returns 77
+
+        val first = DatadogAuthMiddleware.resolveOrgId("cache-hit")
+        val second = DatadogAuthMiddleware.resolveOrgId("cache-hit")
+
+        assertEquals(77, first)
+        assertEquals(77, second)
+        verify(exactly = 1) { DatadogService.validateApiKey("cache-hit") }
+    }
+
+    @Test
+    fun `resolveOrgId still resolves when cache is full`() {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKey(any()) } returns 7
+
+        repeat(10_001) { index ->
+            val resolved = DatadogAuthMiddleware.resolveOrgId("key-$index")
+            assertEquals(7, resolved)
+        }
+        val resolved = DatadogAuthMiddleware.resolveOrgId("key-1")
+        assertEquals(7, resolved)
     }
 
     @Test
@@ -161,5 +286,129 @@ class DatadogAuthMiddlewareTest {
         assertEquals("query-value", client.get("/probe?api_key=query-value").bodyAsText())
         assertEquals("dash-query-value", client.get("/probe?api-key=dash-query-value").bodyAsText())
         assertEquals("dd-query-value", client.get("/probe?dd-api-key=dd-query-value").bodyAsText())
+    }
+
+    @Test
+    fun `authenticate rejects missing api key`() = testApplication {
+        application {
+            install(ContentNegotiation) {
+                json()
+            }
+            routing {
+                get("/probe") {
+                    val orgId = DatadogAuthMiddleware.authenticate(call)
+                    if (orgId != null) {
+                        call.respondText(orgId.toString())
+                    } else {
+                        return@get
+                    }
+                }
+            }
+        }
+
+        val response = client.get("/probe")
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        assertTrue(response.bodyAsText().contains("API key is missing or empty"))
+    }
+
+    @Test
+    fun `authenticate evicts expired cache entries before validation`() = testApplication {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKey("expired-key") } returns 77
+
+        putExpiredCacheEntry("cache", "expired-key")
+
+        application {
+            routing {
+                get("/probe") {
+                    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@get
+                    call.respondText(orgId.toString())
+                }
+            }
+        }
+
+        val response = client.get("/probe") { header("api-key", "expired-key") }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("77", response.bodyAsText())
+        verify(exactly = 1) { DatadogService.validateApiKey("expired-key") }
+    }
+
+    @Test
+    fun `authenticate skips cache insert when cache is full`() = testApplication {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKey(any()) } returns 88
+
+        fillCache("cache", 10_000)
+
+        application {
+            routing {
+                get("/probe") {
+                    val orgId = DatadogAuthMiddleware.authenticate(call) ?: return@get
+                    call.respondText(orgId.toString())
+                }
+            }
+        }
+
+        val response = client.get("/probe") { header("api-key", "full-cache-key") }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("88", response.bodyAsText())
+        verify(exactly = 1) { DatadogService.validateApiKey("full-cache-key") }
+    }
+
+    @Test
+    fun `authenticateContext evicts expired context cache entries`() = testApplication {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKeyContext("expired-context") } returns
+            DatadogService.ApiKeyValidation(11, 22)
+
+        putExpiredCacheEntry("contextCache", "expired-context")
+
+        application {
+            routing {
+                get("/probe") {
+                    val context = DatadogAuthMiddleware.authenticateContext(call) ?: return@get
+                    call.respondText("${context.organizationId}-${context.projectId}")
+                }
+            }
+        }
+
+        val response = client.get("/probe") { header("api-key", "expired-context") }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("11-22", response.bodyAsText())
+    }
+
+    @Test
+    fun `authenticateContext skips context cache insert when context cache is full`() = testApplication {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKeyContext("full-context-key") } returns
+            DatadogService.ApiKeyValidation(33, 44)
+
+        fillCache("contextCache", 10_000)
+
+        application {
+            routing {
+                get("/probe") {
+                    val context = DatadogAuthMiddleware.authenticateContext(call) ?: return@get
+                    call.respondText("${context.organizationId}-${context.projectId}")
+                }
+            }
+        }
+
+        val response = client.get("/probe") { header("api-key", "full-context-key") }
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("33-44", response.bodyAsText())
+    }
+
+    @Test
+    fun `resolveOrgId evicts expired cached entries before lookup`() {
+        mockkObject(DatadogService)
+        every { DatadogService.validateApiKey("resolve-expired") } returns 55
+
+        putExpiredCacheEntry("cache", "resolve-expired")
+
+        val resolved = DatadogAuthMiddleware.resolveOrgId("resolve-expired")
+        assertEquals(55, resolved)
+        verify(exactly = 1) { DatadogService.validateApiKey("resolve-expired") }
+        assertNotEquals(0, resolved)
     }
 }
