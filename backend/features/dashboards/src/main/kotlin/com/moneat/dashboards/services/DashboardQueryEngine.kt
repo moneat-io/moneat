@@ -302,13 +302,14 @@ class DashboardQueryEngine {
         for (gb in dsl.groupBy) {
             when (gb.type) {
                 GroupByType.TIME -> {
-                    val interval = if (gb.interval == "auto" || gb.interval == null) {
+                    val groupInterval = gb.interval
+                    val interval = if (groupInterval == "auto" || groupInterval == null) {
                         resolveTimeInterval(dsl.timeRange.from, dsl.timeRange.to)
                     } else {
-                        require(INTERVAL_REGEX.matches(gb.interval)) {
-                            "Invalid interval: ${gb.interval}. Must be e.g. '1 MINUTE', '5 HOUR'."
+                        require(INTERVAL_REGEX.matches(groupInterval)) {
+                            "Invalid interval: $groupInterval. Must be e.g. '1 MINUTE', '5 HOUR'."
                         }
-                        gb.interval
+                        groupInterval
                     }
                     clauses.add("toStartOfInterval($tsCol, INTERVAL $interval) AS time_bucket")
                 }
@@ -452,10 +453,11 @@ class DashboardQueryEngine {
     }
 
     internal fun buildOrderByClause(dsl: QueryDsl): String {
-        if (dsl.orderBy != null) {
-            ClickHouseSqlUtils.validateFieldName(dsl.orderBy.field)
-            val dir = if (dsl.orderBy.direction.lowercase() == "asc") "ASC" else "DESC"
-            return "${dsl.orderBy.field} $dir"
+        val orderBy = dsl.orderBy
+        if (orderBy != null) {
+            ClickHouseSqlUtils.validateFieldName(orderBy.field)
+            val dir = if (orderBy.direction.lowercase() == "asc") "ASC" else "DESC"
+            return "${orderBy.field} $dir"
         }
         // Default: order by time_bucket if time grouping exists
         val hasTimeGroup = dsl.groupBy.any { it.type == GroupByType.TIME }

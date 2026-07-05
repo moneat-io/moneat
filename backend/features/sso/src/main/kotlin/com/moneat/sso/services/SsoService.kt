@@ -648,9 +648,19 @@ open class SsoService {
                             (UserSsoLinks.externalId eq externalId)
                     }.firstOrNull()
 
-            val userId =
+            val (userId, orgRole) =
                 if (existingLink != null) {
-                    existingLink[UserSsoLinks.userId]
+                    val userId = existingLink[UserSsoLinks.userId]
+                    val membership =
+                        Memberships
+                            .selectAll()
+                            .where {
+                                (Memberships.user_id eq userId) and
+                                    (Memberships.organization_id eq organizationId)
+                            }
+                            .firstOrNull()
+                            ?: throw SsoForbiddenException("SSO user is not a member of this organization")
+                    Pair(userId, membership[Memberships.role])
                 } else {
                     linkOrCreateUser(
                         normalizedEmail,
@@ -667,7 +677,7 @@ open class SsoService {
                     .where { Users.id eq userId }
                     .first()
 
-            val token = generateToken(userId, user[Users.email])
+            val token = generateToken(userId, user[Users.email], organizationId, orgRole)
             Triple(token, user[Users.email], user[Users.name] ?: email)
         }
     }
@@ -868,12 +878,16 @@ open class SsoService {
     private fun generateToken(
         userId: Int,
         email: String,
+        orgId: Int,
+        orgRole: String,
     ): String =
         JWT
             .create()
             .withAudience(jwtAudience)
             .withIssuer(jwtIssuer)
             .withClaim("userId", userId)
+            .withClaim("orgId", orgId)
+            .withClaim("orgRole", orgRole)
             .withClaim("email", email)
             .withExpiresAt(Date(System.currentTimeMillis() + TOKEN_TTL_MS))
             .sign(Algorithm.HMAC256(jwtSecret))
@@ -884,7 +898,7 @@ open class SsoService {
         externalId: String,
         ssoConfigId: Int,
         organizationId: Int,
-    ): Int {
+    ): Pair<Int, String> {
         ensureSsoEmailDomainAllowsNewLink(normalizedEmail, ssoConfigId)
         val existingUser =
             Users
@@ -894,8 +908,16 @@ open class SsoService {
 
         return if (existingUser != null) {
             val uid = existingUser[Users.id]
+            val membership =
+                Memberships
+                    .selectAll()
+                    .where {
+                        (Memberships.user_id eq uid) and
+                            (Memberships.organization_id eq organizationId)
+                    }
+                    .firstOrNull()
             val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
-            require(isOrganizationMember(uid, organizationId) || invitationRole != null) {
+            require(membership != null || invitationRole != null) {
                 "SSO account linking requires an existing membership or invitation"
             }
             UserSsoLinks.insert {
@@ -905,7 +927,7 @@ open class SsoService {
             }
             addToOrgIfNeeded(uid, organizationId, invitationRole)
             acceptPendingInvitation(normalizedEmail, organizationId)
-            uid
+            Pair(uid, membership?.get(Memberships.role) ?: invitationRole ?: "member")
         } else {
             val invitationRole = pendingInvitationRole(normalizedEmail, organizationId)
             val uid =
@@ -927,7 +949,7 @@ open class SsoService {
                 it[role] = invitationRole ?: "member"
             }
             acceptPendingInvitation(normalizedEmail, organizationId)
-            uid
+            Pair(uid, invitationRole ?: "member")
         }
     }
 

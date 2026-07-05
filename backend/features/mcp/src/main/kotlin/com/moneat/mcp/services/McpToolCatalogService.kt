@@ -32,6 +32,7 @@ private data class ToolSection(
 
 private val SECTION_ORDER = listOf(
     ToolSection("issues", "Issues", "Investigate and update error groups and user feedback."),
+    ToolSection("replays", "Replays", "Inspect session replay metadata, timelines, and recording diagnostics."),
     ToolSection("logs", "Logs", "Search, aggregate, and facet logs."),
     ToolSection("apm", "APM and traces", "Inspect transactions, traces, spans, profiles, and releases."),
     ToolSection("infrastructure", "Infrastructure", "Inspect hosts, containers, Kubernetes, processes, and networks."),
@@ -101,6 +102,7 @@ object McpToolCatalogService {
         return when {
             name.contains("workflow") -> "workflows"
             name.contains("issue") || name.contains("feedback") || name.contains("error") -> "issues"
+            name.contains("replay") -> "replays"
             name.contains("log") -> "logs"
             name.contains("trace") ||
                 name.contains("span") ||

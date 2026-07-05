@@ -14,19 +14,12 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, redirect, useRouterState} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
 import {ArrowLeft} from 'lucide-react'
-import {api} from '@/lib/api'
 import {Button} from '@/components/ui/button'
 import {MonitoringTabBar} from '@/components/monitoring/MonitoringTabBar'
 
 export const Route = createFileRoute('/monitoring')({
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      const hasSession = await api.checkAuth()
-      if (!hasSession) throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringLayout,
 })
 

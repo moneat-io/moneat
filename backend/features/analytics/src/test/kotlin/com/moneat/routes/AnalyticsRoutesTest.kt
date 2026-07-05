@@ -37,6 +37,8 @@ import com.moneat.analytics.models.RealtimeResponse
 import com.moneat.analytics.models.RetentionResponse
 import com.moneat.analytics.models.TimeseriesPoint
 import com.moneat.analytics.routes.analyticsRoutes
+import com.moneat.analytics.services.AnalyticsEventsQuery
+import com.moneat.analytics.services.AnalyticsFunnelQuery
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.ProductRetentionRequest
@@ -797,17 +799,25 @@ class AnalyticsRoutesTest {
     fun `GET events forwards product grouping params`() = testApplication {
         val userId = seedUser()
         stubAccess(userId)
+        var eventsQuery: AnalyticsEventsQuery? = null
         coEvery {
-            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
-        } returns breakdownResponse
+            mockAnalyticsService.getEvents(PROJECT_ID, any<AnalyticsEventsQuery>())
+        } answers {
+            eventsQuery = invocation.args[1] as AnalyticsEventsQuery
+            breakdownResponse
+        }
         application { installRoutes(this) }
         val r = client.get(authedGet("/events?period=30d&limit=25&group_by=user_id&source=server")) {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, r.status)
         coVerify(exactly = 1) {
-            mockAnalyticsService.getEvents(PROJECT_ID, any(), any(), any(), 25, "user_id", "server")
+            mockAnalyticsService.getEvents(PROJECT_ID, any<AnalyticsEventsQuery>())
         }
+        val capturedQuery = checkNotNull(eventsQuery)
+        assertEquals(25, capturedQuery.limit)
+        assertEquals("user_id", capturedQuery.groupBy)
+        assertEquals("server", capturedQuery.source)
     }
 
     // ──── Realtime ────
@@ -832,7 +842,7 @@ class AnalyticsRoutesTest {
         val userId = seedUser()
         stubAccess(userId)
         coEvery {
-            mockAnalyticsService.getFunnel(PROJECT_ID, any(), any(), any(), any(), any())
+            mockAnalyticsService.getFunnel(PROJECT_ID, any<AnalyticsFunnelQuery>())
         } returns funnelResponse
         application { installRoutes(this) }
         val r = client.get(authedGet("/funnel?period=30d&steps=/home&steps=/signup")) {
@@ -847,16 +857,13 @@ class AnalyticsRoutesTest {
     fun `GET funnel forwards product grouping params`() = testApplication {
         val userId = seedUser()
         stubAccess(userId)
+        var funnelQuery: AnalyticsFunnelQuery? = null
         coEvery {
-            mockAnalyticsService.getFunnel(
-                PROJECT_ID,
-                any(),
-                any(),
-                any(),
-                "user_id",
-                "server"
-            )
-        } returns funnelResponse
+            mockAnalyticsService.getFunnel(PROJECT_ID, any<AnalyticsFunnelQuery>())
+        } answers {
+            funnelQuery = invocation.args[1] as AnalyticsFunnelQuery
+            funnelResponse
+        }
         application { installRoutes(this) }
         val path = "/funnel?period=30d&steps[]=signup.completed" +
             "&steps[]=recording.started&group_by=user_id&source=server"
@@ -867,13 +874,13 @@ class AnalyticsRoutesTest {
         coVerify(exactly = 1) {
             mockAnalyticsService.getFunnel(
                 PROJECT_ID,
-                any(),
-                any(),
-                listOf("signup.completed", "recording.started"),
-                "user_id",
-                "server"
+                any<AnalyticsFunnelQuery>(),
             )
         }
+        val capturedQuery = checkNotNull(funnelQuery)
+        assertEquals(listOf("signup.completed", "recording.started"), capturedQuery.steps)
+        assertEquals("user_id", capturedQuery.groupBy)
+        assertEquals("server", capturedQuery.source)
     }
 
     @Test

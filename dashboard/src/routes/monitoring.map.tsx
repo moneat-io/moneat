@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect, useNavigate} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {MonitoringMap, type MonitoringMapScope} from '@/components/monitoring/MonitoringMap'
 
 interface MonitoringMapSearch {
@@ -31,11 +30,6 @@ export const Route = createFileRoute('/monitoring/map')({
   validateSearch: (search: Record<string, unknown>): MonitoringMapSearch => ({
     scope: parseMapScope(search.scope),
   }),
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringMapPage,
 })
 

@@ -66,7 +66,9 @@ const SORT_LABELS: Record<SortKey, string> = {
   created: 'Recently created',
 }
 
-const LIST_GRID = 'grid-cols-[26px_56px_1fr_78px_104px_44px_30px]'
+// Mobile collapses to star · name · actions; the metadata columns return at `sm`.
+const LIST_GRID =
+  'grid-cols-[26px_minmax(0,1fr)_30px] sm:grid-cols-[26px_56px_1fr_78px_104px_44px_30px]'
 
 // Categorical palette for folder swatches / owner avatars (identity, not status).
 const SWATCHES = [
@@ -533,11 +535,11 @@ function ListView({dashboards, folders, now, ...actions}: BoardViewProps) {
         )}
       >
         <span />
-        <span />
+        <span className="hidden sm:block" />
         <span>Name</span>
-        <span className="text-right">Widgets</span>
-        <span className="text-right">Updated</span>
-        <span className="text-right">Owner</span>
+        <span className="hidden text-right sm:block">Widgets</span>
+        <span className="hidden text-right sm:block">Updated</span>
+        <span className="hidden text-right sm:block">Owner</span>
         <span />
       </div>
       <div className="overflow-hidden rounded-lg border bg-card">
@@ -582,7 +584,7 @@ const DashboardListRow = memo(function DashboardListRow({
       <Link
         to="/dashboards/$dashboardId"
         params={{dashboardId: String(dashboard.id)}}
-        className="col-span-5 grid grid-cols-[56px_1fr_78px_104px_44px] items-center gap-2 text-foreground no-underline"
+        className="col-span-1 grid grid-cols-[56px_minmax(0,1fr)] items-center gap-2 text-foreground no-underline sm:col-span-5 sm:grid-cols-[56px_1fr_78px_104px_44px]"
       >
         <span className="block h-9 w-14 overflow-hidden rounded-sm border border-border/60 bg-[hsl(var(--viz-surface))]">
           <SparkThumb kind={thumb} />
@@ -615,11 +617,11 @@ const DashboardListRow = memo(function DashboardListRow({
             ))}
           </span>
         </span>
-        <span className="text-right font-mono text-xs text-foreground">{dashboard.widgets.length}</span>
-        <span className="text-right text-xs tabular-nums text-muted-foreground">
+        <span className="hidden text-right font-mono text-xs text-foreground sm:block">{dashboard.widgets.length}</span>
+        <span className="hidden text-right text-xs tabular-nums text-muted-foreground sm:block">
           {formatRelative(now, dashboard.updated_at)}
         </span>
-        <span className="flex justify-end">
+        <span className="hidden justify-end sm:flex">
           <OwnerAvatar owner={owner} />
         </span>
       </Link>

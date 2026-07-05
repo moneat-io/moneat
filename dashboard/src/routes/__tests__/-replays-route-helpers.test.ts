@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from 'vitest'
-import {api, type Replay} from '@/lib/api'
+import type {Replay} from '@/lib/api'
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -10,12 +10,11 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => options,
   Link: ({children}: {children: unknown}) => children,
   Outlet: () => null,
-  redirect: (options: Record<string, unknown>) => options,
   useMatches: routerMocks.useMatches,
   useNavigate: () => routerMocks.navigate,
 }))
 
-import {Route as ReplaysRoute, replaysHelperTestHooks as helpers} from '../replays'
+import {replaysHelperTestHooks as helpers} from '../replays'
 
 function replay(overrides: Partial<Replay> = {}): Replay {
   return {
@@ -39,23 +38,6 @@ function elementProps(value: unknown): Record<string, unknown> {
 }
 
 describe('replays route helper coverage', () => {
-  it('redirects unauthenticated replay list loads', async () => {
-    const beforeLoad = (ReplaysRoute as unknown as {
-      beforeLoad: (args: {location: {href: string}}) => Promise<void>
-    }).beforeLoad
-    const isAuthenticated = vi.spyOn(api, 'isAuthenticated')
-
-    isAuthenticated.mockReturnValueOnce(false)
-    await expect(beforeLoad({location: {href: '/replays'}})).rejects.toEqual({
-      to: '/login',
-      search: {redirect: '/replays'},
-    })
-
-    isAuthenticated.mockReturnValueOnce(true)
-    await expect(beforeLoad({location: {href: '/replays'}})).resolves.toBeUndefined()
-    isAuthenticated.mockRestore()
-  })
-
   it('renders the outlet when a replay detail child route is active', () => {
     routerMocks.useMatches.mockReturnValueOnce([{id: '/replays/$replayId'}])
 

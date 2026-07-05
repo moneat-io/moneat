@@ -70,7 +70,7 @@ function eventCategory(item: TimelineItem): EventCategory {
 const CATEGORY_META: Record<EventCategory, { readonly label: string; readonly color: string; readonly Icon: typeof Activity }> = {
   navigation: { label: 'navigation', color: 'text-success-fg', Icon: Navigation },
   ui: { label: 'ui', color: 'text-info-fg', Icon: MousePointerClick },
-  http: { label: 'http', color: 'text-accent', Icon: Network },
+  http: { label: 'http', color: 'text-primary', Icon: Network },
   exception: { label: 'exception', color: 'text-danger-fg', Icon: AlertTriangle },
   console: { label: 'console', color: 'text-warning-fg', Icon: Terminal },
   other: { label: 'event', color: 'text-muted-foreground', Icon: Activity },

@@ -44,6 +44,7 @@ import {
   statusTone,
 } from '@/lib/apm-view'
 import type {FacetFilter, FacetRailSection, FacetValue} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {cn} from '@/lib/utils'
 
 export const Route = createFileRoute('/services/')({
@@ -66,11 +67,13 @@ const SORT_OPTIONS: ReadonlyArray<{value: SortKey; label: string}> = [
   {value: 'apdex', label: 'Apdex'},
   {value: 'name', label: 'Name'},
 ]
+const SERVICES_FACET_URL_KEYS = ['env', 'type', 'source'] as const
 
 function ServicesCatalogPage() {
   const navigate = useNavigate()
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
-  const [query, setQuery] = useState('')
+  const {query, setQuery, facetFilters, setFacetFilters} = useReadableFacetUrlState({
+    facetKeys: SERVICES_FACET_URL_KEYS,
+  })
   const [sort, setSort] = useState<SortState>({key: 'error', dir: 'desc'})
   const [view, setView] = useState<'list' | 'map'>('list')
   const [timeRange, setTimeRange] = useState<ApmTimeRange>('1h')

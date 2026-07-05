@@ -47,7 +47,7 @@ function SecurityLayout() {
         </div>
       </div>
       <div className="border-b">
-        <nav className="flex gap-1">
+        <nav className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => {
             const isActive = currentPath.startsWith(tab.href)
             const Icon = tab.icon

@@ -21,6 +21,22 @@ import { api, resetAuthRedirectForTesting } from '../api'
 
 const API_BASE = 'http://localhost:8080'
 
+function mockWindowLocation(location: Partial<Location> & Pick<Location, 'pathname'>): () => void {
+  const originalLocation = window.location
+  Object.defineProperty(window, 'location', {
+    value: {...originalLocation, ...location} as Location,
+    writable: true,
+    configurable: true,
+  })
+  return () => {
+    Object.defineProperty(window, 'location', {
+      value: originalLocation,
+      writable: true,
+      configurable: true,
+    })
+  }
+}
+
 describe('ApiClient', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -117,13 +133,14 @@ describe('ApiClient', () => {
   })
 
   describe('401 logout and redirect behavior', () => {
-    it('clears session and redirects to /login on 401', async () => {
+    it('clears session and redirects to login on 401', async () => {
       const mockAssign = vi.fn()
-      const originalLocation = window.location
-      // @ts-expect-error - Mocking window.location for tests
-      delete window.location
-      // @ts-expect-error - Mocking window.location for tests
-      window.location = { ...originalLocation, pathname: '/dashboard', assign: mockAssign }
+      const restoreLocation = mockWindowLocation({
+        pathname: '/issues/issue-123',
+        search: '?projectId=service-1&status=unresolved',
+        hash: '#events',
+        assign: mockAssign,
+      })
 
       sessionStorage.setItem('authenticated', 'true')
       server.use(
@@ -137,17 +154,17 @@ describe('ApiClient', () => {
       expect(sessionStorage.getItem('authenticated')).toBeNull()
       expect(mockAssign).toHaveBeenCalledWith('/login')
 
-      // @ts-expect-error - Restoring window.location
-      window.location = originalLocation
+      restoreLocation()
     })
 
     it('attempts token refresh at most once for persistent 401 responses', async () => {
       const mockAssign = vi.fn()
-      const originalLocation = window.location
-      // @ts-expect-error - Mocking window.location for tests
-      delete window.location
-      // @ts-expect-error - Mocking window.location for tests
-      window.location = { ...originalLocation, pathname: '/admin/infrastructure', assign: mockAssign }
+      const restoreLocation = mockWindowLocation({
+        pathname: '/admin/infrastructure',
+        search: '',
+        hash: '',
+        assign: mockAssign,
+      })
 
       sessionStorage.setItem('authenticated', 'true')
       localStorage.setItem('refresh_token', 'refresh-token-1')
@@ -175,17 +192,12 @@ describe('ApiClient', () => {
       expect(refreshCalls).toBe(1)
       expect(mockAssign).toHaveBeenCalledWith('/login')
 
-      // @ts-expect-error - Restoring window.location
-      window.location = originalLocation
+      restoreLocation()
     })
 
     it('does not redirect if already on auth page', async () => {
       const mockAssign = vi.fn()
-      const originalLocation = window.location
-      // @ts-expect-error - Mocking window.location for tests
-      delete window.location
-      // @ts-expect-error - Mocking window.location for tests
-      window.location = { ...originalLocation, pathname: '/login', assign: mockAssign }
+      const restoreLocation = mockWindowLocation({pathname: '/login', assign: mockAssign})
 
       sessionStorage.setItem('authenticated', 'true')
       server.use(
@@ -198,17 +210,34 @@ describe('ApiClient', () => {
 
       expect(mockAssign).not.toHaveBeenCalled()
 
-      // @ts-expect-error - Restoring window.location
-      window.location = originalLocation
+      restoreLocation()
     })
 
-    it('redirects on 401 even without session flag', async () => {
+    it('does not redirect from the public landing page on 401', async () => {
       const mockAssign = vi.fn()
-      const originalLocation = window.location
-      // @ts-expect-error - Mocking window.location for tests
-      delete window.location
-      // @ts-expect-error - Mocking window.location for tests
-      window.location = { ...originalLocation, pathname: '/dashboard', assign: mockAssign }
+      const restoreLocation = mockWindowLocation({pathname: '/', search: '', hash: '', assign: mockAssign})
+
+      server.use(
+        http.get(`${API_BASE}/v1/projects`, () => {
+          return new HttpResponse(null, { status: 401 })
+        })
+      )
+
+      await expect(api.getProjects()).rejects.toThrow('Unauthorized')
+
+      expect(mockAssign).not.toHaveBeenCalled()
+
+      restoreLocation()
+    })
+
+    it('redirects from the authenticated overview on 401', async () => {
+      const mockAssign = vi.fn()
+      const restoreLocation = mockWindowLocation({
+        pathname: '/',
+        search: '?view=overview',
+        hash: '',
+        assign: mockAssign,
+      })
 
       server.use(
         http.get(`${API_BASE}/v1/projects`, () => {
@@ -220,8 +249,29 @@ describe('ApiClient', () => {
 
       expect(mockAssign).toHaveBeenCalledWith('/login')
 
-      // @ts-expect-error - Restoring window.location
-      window.location = originalLocation
+      restoreLocation()
+    })
+
+    it('redirects on 401 even without session flag', async () => {
+      const mockAssign = vi.fn()
+      const restoreLocation = mockWindowLocation({
+        pathname: '/dashboard',
+        search: '',
+        hash: '',
+        assign: mockAssign,
+      })
+
+      server.use(
+        http.get(`${API_BASE}/v1/projects`, () => {
+          return new HttpResponse(null, { status: 401 })
+        })
+      )
+
+      await expect(api.getProjects()).rejects.toThrow('Unauthorized')
+
+      expect(mockAssign).toHaveBeenCalledWith('/login')
+
+      restoreLocation()
     })
 
     it('clears sessionStorage on logout', () => {

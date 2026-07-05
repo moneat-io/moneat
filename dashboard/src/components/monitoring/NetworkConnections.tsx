@@ -174,7 +174,7 @@ export function NetworkConnections() {
           />
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+        <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
           {(['all', 'tcp', 'udp'] as const).map((f) => (
             <button
               key={f}
@@ -197,7 +197,7 @@ export function NetworkConnections() {
           ))}
         </div>
 
-        <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+        <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
           {(['all', 'incoming', 'outgoing'] as const).map((f) => (
             <button
               key={f}

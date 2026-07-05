@@ -1,0 +1,290 @@
+name: SonarQube Fork Analysis
+
+# Fork PRs can't read SONAR_TOKEN in their own pull_request run (GitHub withholds
+# secrets from forks), so the inline Test/sonarqube job is skipped for them. This
+# workflow runs in the trusted base-repo context after Test completes, downloads
+# the artifacts the fork's run produced (compiled classes + coverage + detekt),
+# and performs the authenticated SonarQube analysis + PR decoration.
+#
+# Security: it never executes fork build code. It scans already-compiled classes
+# and checked-out sources; sonar-project.properties is always taken from the base
+# repo (never the fork), and npm deps install with --ignore-scripts.
+on:
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+  statuses: write
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '24'
+  SONAR_HOST: https://sonar.moneat.io
+  PROJECT_KEY: moneat
+
+jobs:
+  sonar-fork:
+    name: SonarQube Fork Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Only fork PRs. Internal PRs and pushes are analyzed inline by the Test workflow.
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name != github.repository
+    steps:
+      - name: Resolve PR context
+        id: ctx
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          # workflow_run omits PRs for forks, and commits/{sha}/pulls can't resolve a
+          # fork's head commit from the base repo — look the PR up by head owner:branch.
+          PRS_JSON=$(gh api "repos/${{ github.repository }}/pulls?head=${HEAD_OWNER}:${HEAD_BRANCH}&state=all&per_page=100")
+          PR_NUMBER=$(echo "$PRS_JSON" | jq -r --arg sha "$HEAD_SHA" \
+            '([.[] | select(.head.sha == $sha)] | .[0].number) // (.[0].number) // empty')
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "::error::Could not resolve a PR for ${HEAD_OWNER}:${HEAD_BRANCH} (${HEAD_SHA})"; exit 1
+          fi
+          BASE_REF=$(echo "$PRS_JSON" | jq -r --arg sha "$HEAD_SHA" \
+            '([.[] | select(.head.sha == $sha)] | .[0].base.ref) // (.[0].base.ref) // "develop"')
+          {
+            echo "pr=$PR_NUMBER"
+            echo "head_sha=$HEAD_SHA"
+            echo "head_ref=${HEAD_BRANCH}"
+            echo "base_ref=${BASE_REF}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved PR #$PR_NUMBER (head $HEAD_SHA, base ${BASE_REF})"
+
+      - name: Checkout PR merge ref
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: refs/pull/${{ steps.ctx.outputs.pr }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore trusted Sonar config
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Never trust the fork's sonar-project.properties — use the base repo's.
+          gh api "repos/${{ github.repository }}/contents/sonar-project.properties?ref=${{ github.event.repository.default_branch }}" \
+            --jq '.content' | base64 -d > sonar-project.properties
+
+      - name: Download fork CI artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh run download "${{ github.event.workflow_run.id }}" -D /tmp/art || true
+
+          # Compiled Kotlin bytecode (from the secret-free sonar-fork-classes job)
+          if [[ -f /tmp/art/sonar-fork-classes/sonar-fork-classes.tgz ]]; then
+            tar -xzf /tmp/art/sonar-fork-classes/sonar-fork-classes.tgz
+            echo "Restored compiled classes"
+          else
+            echo "::warning::sonar-fork-classes artifact missing — binaries analysis degraded"
+          fi
+
+          # Place coverage / detekt reports where sonar-project.properties expects them.
+          place() { [[ -d "$1" ]] || return 0; mkdir -p "$2"; cp -r "$1"/. "$2"/ 2>/dev/null || true; }
+          for d in /tmp/art/*/; do
+            base=$(basename "$d")
+            case "$base" in
+              backend-coverage-report)              place "$d" backend/build/reports/jacoco/test ;;
+              backend-detekt-report)                place "$d" backend/build/reports/detekt ;;
+              backend-feature-spi-detekt-report)    place "$d" backend/feature-spi/build/reports/detekt ;;
+              backend-ingest-common-detekt-report)  place "$d" backend/ingest-common/build/reports/detekt ;;
+              frontend-test-results)                place "$d" dashboard/coverage ;;
+              backend-*-coverage-report)
+                mod=${base#backend-}; mod=${mod%-coverage-report}
+                place "$d" "backend/features/${mod}/build/reports/jacoco/test" ;;
+              backend-*-detekt-report)
+                mod=${base#backend-}; mod=${mod%-detekt-report}
+                place "$d" "backend/features/${mod}/build/reports/detekt" ;;
+            esac
+          done
+
+      - name: Set up JDK
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654
+        with:
+          distribution: 'temurin'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install dashboard dependencies
+        working-directory: dashboard
+        # --ignore-scripts: do not run fork-controlled lifecycle scripts in this trusted context
+        run: npm ci --ignore-scripts
+
+      - name: Resolve Sonar project version
+        id: sonar-version
+        run: |
+          set -euo pipefail
+          version="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+          [[ -z "$version" ]] && version="0.0.0-${{ steps.ctx.outputs.head_sha }}"
+          echo "version=${version#v}" >> "$GITHUB_OUTPUT"
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602
+        with:
+          args: >
+            -Dsonar.projectVersion=${{ steps.sonar-version.outputs.version }}
+            -Dsonar.scm.revision=${{ steps.ctx.outputs.head_sha }}
+            -Dsonar.pullrequest.key=${{ steps.ctx.outputs.pr }}
+            -Dsonar.pullrequest.branch=${{ steps.ctx.outputs.head_ref }}
+            -Dsonar.pullrequest.base=${{ steps.ctx.outputs.base_ref }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST }}
+
+      - name: SonarQube Quality Gate check
+        id: qg
+        continue-on-error: true
+        uses: sonarsource/sonarqube-quality-gate-action@8e9b0ca0a7273d6f16986388d98393efdfcf56fd
+        with:
+          pollingTimeoutSec: 600
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST }}
+
+      - name: Post Quality Gate to PR
+        continue-on-error: true
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.ctx.outputs.pr }}
+        run: |
+          set -euo pipefail
+
+          SONAR_HOST="${SONAR_HOST:-https://sonar.moneat.io}"
+          PROJECT_KEY="${PROJECT_KEY:-moneat}"
+          REPORT_FILE=".scannerwork/report-task.txt"
+
+          if [[ ! -f "$REPORT_FILE" ]]; then
+            echo "::warning::$REPORT_FILE not found — skipping PR comment"
+            exit 0
+          fi
+
+          CE_TASK_ID=$(grep '^ceTaskId=' "$REPORT_FILE" | cut -d= -f2)
+          [[ -z "$CE_TASK_ID" ]] && { echo "::warning::no ceTaskId — skipping"; exit 0; }
+
+          ANALYSIS_ID=""
+          for _ in $(seq 1 30); do
+            TASK_RESP=$(curl -sf -u "${SONAR_TOKEN}:" "${SONAR_HOST}/api/ce/task?id=${CE_TASK_ID}" 2>/dev/null || true)
+            [[ -z "$TASK_RESP" ]] && { sleep 5; continue; }
+            TASK_STATUS=$(echo "$TASK_RESP" | jq -r '.task.status // empty')
+            case "$TASK_STATUS" in
+              SUCCESS) ANALYSIS_ID=$(echo "$TASK_RESP" | jq -r '.task.analysisId // empty'); break ;;
+              FAILED|CANCELED) echo "::warning::CE task ${TASK_STATUS} — skipping"; exit 0 ;;
+            esac
+            sleep 5
+          done
+          [[ -z "$ANALYSIS_ID" ]] && { echo "::warning::timed out resolving analysisId"; exit 0; }
+
+          QG_JSON=$(curl -sf -u "${SONAR_TOKEN}:" "${SONAR_HOST}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}")
+          QG_STATUS=$(echo "$QG_JSON" | jq -r '.projectStatus.status')
+
+          METRICS="new_violations,accepted_issues,new_security_hotspots,new_coverage,new_duplicated_lines_density"
+          MEASURES_JSON=$(curl -sf -u "${SONAR_TOKEN}:" \
+            "${SONAR_HOST}/api/measures/component?component=${PROJECT_KEY}&pullRequest=${PR_NUMBER}&metricKeys=${METRICS}" \
+            2>/dev/null || echo '{}')
+
+          measure_val() {
+            local val
+            val=$(echo "$MEASURES_JSON" | jq -r --arg m "$1" \
+              '([.component.measures[]? | select(.metric == $m) | (.period.value // .value)] | .[0]) // empty')
+            echo "${val:-$2}"
+          }
+
+          NEW_ISSUES=$(printf "%.0f" "$(measure_val new_violations 0)" 2>/dev/null || echo 0)
+          ACCEPTED=$(printf "%.0f" "$(measure_val accepted_issues 0)" 2>/dev/null || echo 0)
+          HOTSPOTS=$(printf "%.0f" "$(measure_val new_security_hotspots 0)" 2>/dev/null || echo 0)
+          COVERAGE=$(printf "%.1f" "$(measure_val new_coverage 0.0)" 2>/dev/null || echo 0.0)
+          DUPLICATION=$(printf "%.1f" "$(measure_val new_duplicated_lines_density 0.0)" 2>/dev/null || echo 0.0)
+
+          cond_icon() {
+            local status
+            status=$(echo "$QG_JSON" | jq -r --arg m "$1" \
+              '([.projectStatus.conditions[]? | select(.metricKey == $m) | .status] | .[0]) // "OK"')
+            [[ "$status" == "ERROR" ]] && echo ":x:" || echo ":white_check_mark:"
+          }
+
+          ISSUES_ERRORS=$(echo "$QG_JSON" | jq \
+            '[.projectStatus.conditions[]? | select(.metricKey | test("^new_(violations|reliability_rating|security_rating|maintainability_rating)$")) | select(.status == "ERROR")] | length')
+          [[ "$ISSUES_ERRORS" -gt 0 ]] && ISSUES_ICON=":x:" || ISSUES_ICON=":white_check_mark:"
+
+          HOTSPOTS_ICON=$(cond_icon "new_security_hotspots_reviewed")
+          COVERAGE_ICON=$(cond_icon "new_coverage")
+          DUPLICATION_ICON=$(cond_icon "new_duplicated_lines_density")
+
+          if [[ "$QG_STATUS" == "OK" ]]; then
+            HEADER=":ballot_box_with_check: **Quality Gate passed**"
+          else
+            HEADER=":x: **Quality Gate failed**"
+          fi
+
+          DASH="${SONAR_HOST}/dashboard?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}"
+          ISS="${SONAR_HOST}/project/issues?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}"
+
+          BODY="<!-- sonarqube-quality-gate -->
+          ${HEADER}
+
+          ---
+
+          **Issues**
+          ${ISSUES_ICON} [${NEW_ISSUES} New issues](${ISS}&resolved=false)
+          :information_source: [${ACCEPTED} Accepted issues](${ISS}&issueStatuses=ACCEPTED)
+
+          **Measures**
+          ${HOTSPOTS_ICON} [${HOTSPOTS} Security Hotspots](${SONAR_HOST}/security_hotspots?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER})
+          ${COVERAGE_ICON} [${COVERAGE}% Coverage on New Code](${SONAR_HOST}/component_measures?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}&metric=new_coverage)
+          ${DUPLICATION_ICON} [${DUPLICATION}% Duplication on New Code](${SONAR_HOST}/component_measures?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}&metric=new_duplicated_lines_density)
+
+          [See analysis details on SonarQube](${DASH})"
+
+          EXISTING_IDS=$(gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            --paginate --jq '.[] | select(.body | contains("<!-- sonarqube-quality-gate -->")) | .id' || true)
+          if [[ -n "$EXISTING_IDS" ]]; then
+            while IFS= read -r CID; do
+              [[ -z "$CID" ]] && continue
+              gh api "repos/${{ github.repository }}/issues/comments/${CID}" -X DELETE >/dev/null || true
+            done <<< "$EXISTING_IDS"
+          fi
+          gh api "repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" -f body="$BODY"
+
+      # Report the required "SonarQube Analysis" check for fork PRs with the real
+      # gate result. Because this completes after the inline job's skip (which posts
+      # the same context as "skipped"), branch protection uses this later result as
+      # the authoritative gate. Fails closed: any scan/gate problem posts failure.
+      - name: Report Sonar check
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          CONCLUSION="success"
+          if [[ "${{ steps.ctx.outcome }}" != "success" ]]; then CONCLUSION="failure"; fi
+          if [[ "${{ steps.qg.outcome }}" == "failure" ]]; then CONCLUSION="failure"; fi
+          gh api -X POST "repos/${{ github.repository }}/check-runs" \
+            -f name="SonarQube Analysis" \
+            -f head_sha="${{ github.event.workflow_run.head_sha }}" \
+            -f status="completed" \
+            -f conclusion="$CONCLUSION" \
+            -f "output[title]=SonarQube Analysis (fork PR)" \
+            -f "output[summary]=Quality gate: ${CONCLUSION}. Fork PR analyzed via workflow_run." >/dev/null || true

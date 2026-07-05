@@ -261,8 +261,10 @@ class MonitorAlertServiceCoverageTest {
 
         assertNotNull(query)
         assertTrue(query.contains("metric_name IN ('system.disk.percent','system.disk.used','system.disk.total')"))
+        assertTrue(query.contains("metric_identity != ''"))
         assertTrue(query.contains("GROUP BY disk_identity"))
         assertTrue(query.contains("tags['device_name']"))
+        assertTrue(query.contains("tags['mountpoint']"))
         assertTrue(query.contains("max(pct)"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.percent')"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.used')"))
@@ -360,6 +362,8 @@ class MonitorAlertServiceCoverageTest {
             assertTrue(query.contains("metric_name = 'system.disk.percent'"))
             assertTrue(query.contains("metric_name = 'system.disk.used'"))
             assertTrue(query.contains("metric_name = 'system.disk.total'"))
+            assertTrue(query.contains("GROUP BY bucket_start, metric_identity"))
+            assertTrue(query.contains("SELECT bucket_start, max(pct) as pct"))
             assertTrue(query.contains("HAVING pct <= 90.0"))
             assertFalse(query.contains("system.disk.in_use"))
         }

@@ -116,8 +116,13 @@ object OperationalMetrics {
         ).increment()
     }
 
-    fun registerWorkerQueues(workerName: String, queueKey: String, dlqKey: String) {
-        registerQueue(workerName, queueKey, "primary")
+    fun registerWorkerQueues(
+        workerName: String,
+        queueKey: String,
+        dlqKey: String,
+        consumerGroup: String? = null,
+    ) {
+        registerQueue(workerName, queueKey, "primary", consumerGroup)
         registerQueue(workerName, dlqKey, "dlq")
         registerDlq(workerName, dlqKey)
     }
@@ -174,12 +179,17 @@ object OperationalMetrics {
         }
     }
 
-    fun registerQueue(workerName: String, queueKey: String, queueType: String) {
+    fun registerQueue(
+        workerName: String,
+        queueKey: String,
+        queueType: String,
+        consumerGroup: String? = null,
+    ) {
         val normalizedWorkerName = workerName.normalizedLabelValue()
         val normalizedQueueType = queueType.normalizedLabelValue()
         val meterKey = "$normalizedWorkerName|$queueKey|$normalizedQueueType"
         registeredQueueMeters.computeIfAbsent(meterKey) {
-            Gauge.builder(WORKER_QUEUE_DEPTH, queueKey) { key -> readQueueDepth(key) }
+            Gauge.builder(WORKER_QUEUE_DEPTH, queueKey) { key -> readQueueDepth(key, consumerGroup) }
                 .description("Current Redis queue depth for registered worker queues.")
                 .tags(
                     tags(
@@ -645,12 +655,26 @@ object OperationalMetrics {
             .register(registry)
     }
 
-    private fun readQueueDepth(queueKey: String): Double {
+    private fun readQueueDepth(queueKey: String, consumerGroup: String? = null): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
+        if (consumerGroup != null) return readStreamBacklogMessages(queueKey, consumerGroup)
         return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
             .recoverCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
             .getOrElse { Double.NaN }
     }
+
+    private fun readStreamBacklogMessages(streamKey: String, consumerGroup: String): Double =
+        runCatching {
+            val redis = RedisConfig.sync()
+            val pendingMessages = redis.xpending(streamKey, consumerGroup).count
+            val lagMessages = redis.xinfoGroups(streamKey)
+                .asSequence()
+                .mapNotNull { parseStreamGroupInfo(it) }
+                .firstOrNull { group -> group.name == consumerGroup }
+                ?.lag
+                ?: 0L
+            (pendingMessages + lagMessages).toDouble()
+        }.getOrElse { Double.NaN }
 
     private fun readStreamPendingMessages(streamKey: String, consumerGroup: String): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
@@ -674,6 +698,37 @@ object OperationalMetrics {
         val ageMs = System.currentTimeMillis() - createdAtMs
         return ageMs.coerceAtLeast(0L).toDouble() / MILLIS_PER_SECOND
     }
+
+    private fun parseStreamGroupInfo(group: Any?): StreamGroupInfo? =
+        when (group) {
+            is List<*> -> parseStreamGroupListInfo(group)
+            is Map<*, *> -> parseStreamGroupMapInfo(group)
+            else -> null
+        }
+
+    private fun parseStreamGroupListInfo(group: List<*>): StreamGroupInfo? {
+        var name: String? = null
+        var lag = 0L
+        for (index in 0 until group.lastIndex step XINFO_GROUP_FIELD_STEP) {
+            when (group[index]?.toString()) {
+                "name" -> name = group[index + XINFO_GROUP_VALUE_OFFSET]?.toString()
+                "lag" -> lag = group[index + XINFO_GROUP_VALUE_OFFSET].toLongOrZero()
+            }
+        }
+        return name?.let { StreamGroupInfo(it, lag) }
+    }
+
+    private fun parseStreamGroupMapInfo(group: Map<*, *>): StreamGroupInfo? {
+        val name = group["name"]?.toString() ?: return null
+        return StreamGroupInfo(name, group["lag"].toLongOrZero())
+    }
+
+    private fun Any?.toLongOrZero(): Long =
+        when (this) {
+            is Number -> toLong()
+            is String -> toLongOrNull() ?: 0L
+            else -> toString().toLongOrNull() ?: 0L
+        }
 
     private fun tags(vararg pairs: Pair<String, String>): Iterable<Tag> =
         pairs.map { (key, value) -> Tag.of(key.micrometerTagName(), value.normalizedLabelValue()) }
@@ -704,6 +759,11 @@ object OperationalMetrics {
     }
 
     private fun currentEpochSeconds(): Long = System.currentTimeMillis() / MILLIS_PER_SECOND
+
+    private data class StreamGroupInfo(
+        val name: String,
+        val lag: Long,
+    )
 
     private fun newRegistry(): PrometheusMeterRegistry =
         PrometheusMeterRegistry(PrometheusConfig.DEFAULT).also { registry ->
@@ -751,4 +811,6 @@ object OperationalMetrics {
     private const val MILLIS_PER_SECOND = 1_000
     private const val HEALTHY_VALUE = 1L
     private const val UNHEALTHY_VALUE = 0L
+    private const val XINFO_GROUP_FIELD_STEP = 2
+    private const val XINFO_GROUP_VALUE_OFFSET = 1
 }

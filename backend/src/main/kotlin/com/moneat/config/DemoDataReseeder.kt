@@ -16,6 +16,7 @@
 
 package com.moneat.config
 
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.utils.suspendRunCatching
 import mu.KotlinLogging
 
@@ -147,7 +148,7 @@ private suspend fun runStaleDemoReseed(snap: ReseedSnapshot) {
     maybeReseedSbom(snap.freshSbomCount)
     maybeReseedDashboards(snap.demoDashboardCount)
     maybeReseedSecurity(snap.freshSecurityCount)
-    seedDemoDetectionRules()
+    FeatureRegistry.seedDemoData()
     maybeReseedSynthetics(snap.freshSyntheticsCount)
 
     logger.info { "Demo data reseed complete" }

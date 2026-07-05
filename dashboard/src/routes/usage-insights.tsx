@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {type ComponentType} from 'react'
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -47,11 +47,6 @@ const MONEY_DIVISOR = 100
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 export const Route = createFileRoute('/usage-insights')({
-  beforeLoad: async ({location}) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login', search: {redirect: location.href}})
-    }
-  },
   component: UsageInsightsPage,
 })
 
@@ -162,7 +157,7 @@ function UsageInsightsPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(360px,0.8fr)]">
         <SectionCard title="Forecast Timeline" icon={LineChart} flushBody>
             <div className="w-full overflow-x-auto">
               <Table className="min-w-[640px]">

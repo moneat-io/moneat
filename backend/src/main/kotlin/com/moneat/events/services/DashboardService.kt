@@ -31,6 +31,7 @@ import com.moneat.events.models.ReleaseDetailStats
 import com.moneat.events.models.ReleaseListResponse
 import com.moneat.events.models.ReplayDetailResponse
 import com.moneat.events.models.ReplayListItem
+import com.moneat.events.models.ReplayRecordingDiagnosticsResponse
 import com.moneat.events.models.ReplayRecordingResponse
 import com.moneat.events.models.ReplayTimelineResponse
 import com.moneat.events.models.SpanDetailResponse
@@ -283,6 +284,9 @@ class DashboardService(
 
     suspend fun getReplayRecording(replayId: String): ReplayRecordingResponse? =
         replayService.getReplayRecording(replayId)
+
+    suspend fun getReplayRecordingDiagnostics(replayId: String): ReplayRecordingDiagnosticsResponse? =
+        replayService.getReplayRecordingDiagnostics(replayId)
 
     suspend fun getReplaysForIssue(
         issueId: String,

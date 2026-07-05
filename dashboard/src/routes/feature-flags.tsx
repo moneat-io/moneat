@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {useMemo, useState, type ReactNode} from 'react'
-import {createFileRoute, redirect} from '@tanstack/react-router'
+import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import type {
@@ -64,12 +64,6 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/feature-flags')({
-  beforeLoad: async ({location}) => {
-    if (!api.isAuthenticated()) {
-      const hasSession = await api.checkAuth()
-      if (!hasSession) throw redirect({to: '/login', search: {redirect: location.href}})
-    }
-  },
   component: FeatureFlagsPage,
 })
 
@@ -553,7 +547,7 @@ val enabled = client.getBooleanValue("checkout.enabled", false, evaluationContex
           />
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(260px,320px)_1fr]">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(260px,320px)_1fr]">
         <Card>
           <CardHeader className="space-y-2 p-3 pb-2">
             <div className="flex items-center justify-between gap-2">
@@ -946,7 +940,7 @@ function FlagDetail(props: Readonly<{
         </TabsContent>
 
       <TabsContent value="segments">
-        <div className="grid gap-3 lg:grid-cols-[300px_1fr]">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[300px_1fr]">
           <Card>
             <CardHeader className="p-3 pb-2">
               <CardTitle className="flex items-center gap-1.5 text-base">
@@ -1093,7 +1087,7 @@ function FlagDetail(props: Readonly<{
       </TabsContent>
 
       <TabsContent value="setup">
-        <div className="grid gap-3 lg:grid-cols-[300px_1fr]">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[300px_1fr]">
           <Card>
             <CardHeader className="p-3 pb-2">
               <CardTitle className="flex items-center gap-1.5 text-base">

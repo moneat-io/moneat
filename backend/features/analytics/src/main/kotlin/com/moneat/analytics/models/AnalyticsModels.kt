@@ -162,6 +162,13 @@ data class AnalyticsFilter(
 )
 
 @Serializable
+data class EventPropertyFilter(
+    val key: String,
+    val operator: String,
+    val value: String,
+)
+
+@Serializable
 data class ProductKpiMetric(
     val value: Double,
     val previous: Double? = null,

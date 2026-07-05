@@ -465,6 +465,8 @@ class MonitorServiceExtendedTest {
         assertTrue(query.contains("system.mem.used"))
         assertFalse(query.contains("system.disk.in_use"))
         assertTrue(query.indexOf("system.disk.percent") < query.indexOf("system.disk.used"))
+        assertTrue(query.contains("GROUP BY ts, metric_identity"))
+        assertTrue(query.contains("max(disk) as disk"))
     }
 
     @Test

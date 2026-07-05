@@ -24,21 +24,21 @@ const {
     getUptimeMonitors: vi.fn(),
     getUptimeHeartbeats: vi.fn(),
     getMonitorHosts: vi.fn(),
-    getIncidents: vi.fn(),
+    getAlerts: vi.fn(),
     getOnCallSchedules: vi.fn(),
     getEscalationPolicies: vi.fn(),
     getPriorities: vi.fn(),
     getBusinessHours: vi.fn(),
     getStatusPages: vi.fn(),
     getStatusPage: vi.fn(),
-    getIncident: vi.fn(),
-    getIncidentTimeline: vi.fn(),
-    viewIncident: vi.fn(),
-    acknowledgeIncident: vi.fn(),
-    resolveIncident: vi.fn(),
-    markUnavailable: vi.fn(),
-    addIncidentNote: vi.fn(),
-    declareIncident: vi.fn(),
+    getAlert: vi.fn(),
+    getAlertTimeline: vi.fn(),
+    viewAlert: vi.fn(),
+    acknowledgeAlert: vi.fn(),
+    resolveAlert: vi.fn(),
+    markAlertUnavailable: vi.fn(),
+    addAlertNote: vi.fn(),
+    declareIncidentFromAlert: vi.fn(),
     getOnCallIncidents: vi.fn(),
     getOnCallIncident: vi.fn(),
     getOnCallIncidentTimeline: vi.fn(),
@@ -417,7 +417,7 @@ describe('overview alert and incident dashboard', () => {
       {timestamp: Date.now(), status: 1, responseTimeMs: 123, statusCode: 200, message: 'ok'},
     ])
     mockApi.getMonitorHosts.mockResolvedValue([host])
-    mockApi.getIncidents.mockResolvedValue([alert])
+    mockApi.getAlerts.mockResolvedValue([alert])
     mockApi.getOnCallSchedules.mockResolvedValue([schedule])
     mockApi.getEscalationPolicies.mockResolvedValue([
       {
@@ -459,14 +459,14 @@ describe('overview alert and incident dashboard', () => {
       ],
       customDomains: [],
     })
-    mockApi.getIncident.mockResolvedValue({...alert, description: 'Payments API is down'})
-    mockApi.getIncidentTimeline.mockResolvedValue(alertTimeline)
-    mockApi.viewIncident.mockResolvedValue(undefined)
-    mockApi.acknowledgeIncident.mockResolvedValue({...alert, status: 'ACKNOWLEDGED'})
-    mockApi.resolveIncident.mockResolvedValue({...alert, status: 'RESOLVED'})
-    mockApi.markUnavailable.mockResolvedValue(undefined)
-    mockApi.addIncidentNote.mockResolvedValue(alertTimeline[1])
-    mockApi.declareIncident.mockResolvedValue(declaredIncident)
+    mockApi.getAlert.mockResolvedValue({...alert, description: 'Payments API is down'})
+    mockApi.getAlertTimeline.mockResolvedValue(alertTimeline)
+    mockApi.viewAlert.mockResolvedValue(undefined)
+    mockApi.acknowledgeAlert.mockResolvedValue({message: 'Alert acknowledged'})
+    mockApi.resolveAlert.mockResolvedValue({message: 'Alert resolved'})
+    mockApi.markAlertUnavailable.mockResolvedValue(undefined)
+    mockApi.addAlertNote.mockResolvedValue(alertTimeline[1])
+    mockApi.declareIncidentFromAlert.mockResolvedValue(declaredIncident)
     mockApi.getOnCallIncidents.mockResolvedValue([declaredIncident])
     mockApi.getOnCallIncident.mockResolvedValue(declaredIncident)
     mockApi.getOnCallIncidentTimeline.mockResolvedValue(declaredIncidentTimeline)
@@ -518,7 +518,7 @@ describe('overview alert and incident dashboard', () => {
     mockApi.getOnCallSchedules.mockResolvedValue([
       {...schedule, id: resourceId(702), name: 'Backup Rotation', currentOnCall: null},
     ])
-    mockApi.getIncidents.mockResolvedValue([
+    mockApi.getAlerts.mockResolvedValue([
       makeAlert({id: resourceId(201), title: 'Primary P0', priority: 'P0', status: 'TRIGGERED'}),
       makeAlert({id: resourceId(202), title: 'Primary P1', priority: 'P1', status: 'ACKNOWLEDGED'}),
       makeAlert({id: resourceId(203), title: 'Primary P2', priority: 'P2', status: 'TRIGGERED'}),
@@ -558,7 +558,7 @@ describe('overview alert and incident dashboard', () => {
     expect((await screen.findAllByText('+1 more')).length).toBeGreaterThan(0)
 
     mockApi.getOnCallSchedules.mockResolvedValue([])
-    mockApi.getIncidents.mockResolvedValue([])
+    mockApi.getAlerts.mockResolvedValue([])
     mockApi.getBusinessHours.mockResolvedValue({
       id: resourceId(135),
       organizationId: ORGANIZATION_RESOURCE_ID,
@@ -599,7 +599,7 @@ describe('overview alert and incident dashboard', () => {
       },
       {...schedule, id: resourceId(713), name: 'Fallback Rotation', currentOnCall: {userName: 'Fallback User'}},
     ])
-    mockApi.getIncidents.mockResolvedValue([])
+    mockApi.getAlerts.mockResolvedValue([])
     mockApi.getBusinessHours.mockResolvedValue({
       id: resourceId(136),
       organizationId: ORGANIZATION_RESOURCE_ID,
@@ -639,7 +639,7 @@ describe('overview alert and incident dashboard', () => {
 
   it('renders the alert list route with P-priority alerts', async () => {
     mockRoutePathname.current = '/on-call/alerts'
-    mockApi.getIncidents.mockResolvedValue([
+    mockApi.getAlerts.mockResolvedValue([
       makeAlert({
         id: resourceId(401),
         title: 'Escalating payment alert',
@@ -689,17 +689,17 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('to Ada Lovelace via email')).toBeInTheDocument()
     expect(await screen.findByText('"Investigating payment failures"')).toBeInTheDocument()
     expect(await screen.findByText('Declare Incident')).toBeInTheDocument()
-    expect(mockApi.viewIncident).toHaveBeenCalledWith(ALERT_RESOURCE_ID)
+    expect(mockApi.viewAlert).toHaveBeenCalledWith(ALERT_RESOURCE_ID)
 
     fireEvent.click(await screen.findByText('Acknowledge'))
-    await waitFor(() => expect(mockApi.acknowledgeIncident).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
+    await waitFor(() => expect(mockApi.acknowledgeAlert).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
     fireEvent.click(await screen.findByText('Resolve'))
-    await waitFor(() => expect(mockApi.resolveIncident).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
+    await waitFor(() => expect(mockApi.resolveAlert).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
     fireEvent.click(await screen.findByText("I'm not available"))
-    await waitFor(() => expect(mockApi.markUnavailable).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
+    await waitFor(() => expect(mockApi.markAlertUnavailable).toHaveBeenCalledWith(ALERT_RESOURCE_ID))
     fireEvent.change(screen.getByPlaceholderText('Enter your note...'), {target: {value: 'Adding context'}})
     clickLastText('Add note')
-    await waitFor(() => expect(mockApi.addIncidentNote).toHaveBeenCalledWith(ALERT_RESOURCE_ID, 'Adding context'))
+    await waitFor(() => expect(mockApi.addAlertNote).toHaveBeenCalledWith(ALERT_RESOURCE_ID, 'Adding context'))
   })
 
   it('rejects numeric alert identifiers without fetching alert data', async () => {
@@ -708,7 +708,7 @@ describe('overview alert and incident dashboard', () => {
     renderRoute(AlertDetailRoute)
 
     expect(await screen.findByText('Invalid alert ID')).toBeInTheDocument()
-    expect(mockApi.getIncident).not.toHaveBeenCalled()
+    expect(mockApi.getAlert).not.toHaveBeenCalled()
   })
 
   it('renders declared incident list route with SEV severity', async () => {
@@ -773,7 +773,7 @@ describe('overview alert and incident dashboard', () => {
 
   it('renders empty alert and declared incident list states', async () => {
     mockRoutePathname.current = '/on-call/alerts'
-    mockApi.getIncidents.mockResolvedValue([])
+    mockApi.getAlerts.mockResolvedValue([])
     renderRoute(AlertsRoute)
     expect(await screen.findByText('No alerts found')).toBeInTheDocument()
     expect(await screen.findByText('No alerts match your current filters. Try adjusting or clearing filters.'))
@@ -789,12 +789,12 @@ describe('overview alert and incident dashboard', () => {
 
   it('renders alert detail not-found, acknowledged, and resolved states', async () => {
     mockRouteParams.current = {alertId: UNKNOWN_RESOURCE_ID}
-    mockApi.getIncident.mockResolvedValueOnce(null)
+    mockApi.getAlert.mockResolvedValueOnce(null)
     renderRoute(AlertDetailRoute)
     expect(await screen.findByText('Alert not found')).toBeInTheDocument()
 
     mockRouteParams.current = {alertId: ACKNOWLEDGED_ALERT_RESOURCE_ID}
-    mockApi.getIncident.mockResolvedValueOnce({
+    mockApi.getAlert.mockResolvedValueOnce({
       ...alert,
       id: ACKNOWLEDGED_ALERT_RESOURCE_ID,
       status: 'ACKNOWLEDGED',
@@ -804,7 +804,7 @@ describe('overview alert and incident dashboard', () => {
       acknowledgedAt: '2026-06-05T12:05:00.000Z',
       description: '',
     })
-    mockApi.getIncidentTimeline.mockResolvedValueOnce([
+    mockApi.getAlertTimeline.mockResolvedValueOnce([
       {
         id: resourceId(141),
         incidentId: ACKNOWLEDGED_ALERT_RESOURCE_ID,
@@ -835,7 +835,7 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('UNKNOWN EVENT')).toBeInTheDocument()
 
     mockRouteParams.current = {alertId: RESOLVED_ALERT_RESOURCE_ID}
-    mockApi.getIncident.mockResolvedValueOnce({
+    mockApi.getAlert.mockResolvedValueOnce({
       ...alert,
       id: RESOLVED_ALERT_RESOURCE_ID,
       status: 'RESOLVED',
@@ -844,7 +844,7 @@ describe('overview alert and incident dashboard', () => {
       resolvedByName: 'Grace Hopper',
       resolvedAt: '2026-06-05T12:09:00.000Z',
     })
-    mockApi.getIncidentTimeline.mockResolvedValueOnce([])
+    mockApi.getAlertTimeline.mockResolvedValueOnce([])
     renderRoute(AlertDetailRoute)
     expect(await screen.findByText('Resolved By')).toBeInTheDocument()
     expect(await screen.findByText('Grace Hopper')).toBeInTheDocument()

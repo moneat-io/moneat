@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect} from '@tanstack/react-router'
+import {createFileRoute, Link} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {type RefObject, useCallback, useMemo, useRef, useState} from 'react'
 import {api, type ReplayDetail, type ReplayTimelineItem} from '@/lib/api'
@@ -47,11 +47,6 @@ import {
 } from 'lucide-react'
 
 export const Route = createFileRoute('/replays/$replayId')({
-  beforeLoad: ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ReplayDetailPage,
 })
 
@@ -120,6 +115,19 @@ function isMobileVideoSegment(event: unknown): event is MobileVideoSegment {
   return typeof event === 'object' && event !== null && (event as { type?: unknown }).type === 'mobile_replay_video'
 }
 
+function uniqueMobileVideoSegments(events: unknown[]): MobileVideoSegment[] {
+  const seenSegmentIds = new Set<number>()
+  return events
+    .filter(isMobileVideoSegment)
+    .sort((a, b) => (a.segment_id ?? 0) - (b.segment_id ?? 0))
+    .filter((segment) => {
+      if (typeof segment.segment_id !== 'number') return true
+      if (seenSegmentIds.has(segment.segment_id)) return false
+      seenSegmentIds.add(segment.segment_id)
+      return true
+    })
+}
+
 function getRrwebRecordingDurationMs(events: unknown[]): number {
   let minTs = Infinity
   let maxTs = -Infinity
@@ -148,9 +156,7 @@ function mobileSegmentDurations(events: unknown[]): Map<number, number> {
 
 function getMobileRecordingDurationMs(events: unknown[]): number {
   const segmentDurations = mobileSegmentDurations(events)
-  const videoSegments = events
-    .filter(isMobileVideoSegment)
-    .sort((a, b) => (a.segment_id ?? 0) - (b.segment_id ?? 0))
+  const videoSegments = uniqueMobileVideoSegments(events)
 
   return videoSegments.reduce((total, segment, index) => {
     const segmentId = typeof segment.segment_id === 'number' ? segment.segment_id : index
@@ -274,9 +280,7 @@ function createMobileCompressedTimeMapper(events: unknown[]): ((absoluteTimestam
     return true
   }
 
-  const videoSegments = events
-    .filter(isMobileVideoSegment)
-    .sort((a, b) => (a.segment_id ?? 0) - (b.segment_id ?? 0))
+  const videoSegments = uniqueMobileVideoSegments(events)
 
   if (videoSegments.length === 0) return null
 

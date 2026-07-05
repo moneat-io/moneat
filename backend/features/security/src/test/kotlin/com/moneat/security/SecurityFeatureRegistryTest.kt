@@ -16,6 +16,8 @@
 
 package com.moneat.security
 
+import com.moneat.enterprise.DemoDataFeatureSeeder
+import com.moneat.enterprise.DetectionSignalEvidenceBridge
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.plugins.FeaturesResponse
@@ -67,6 +69,20 @@ class SecurityFeatureRegistryTest {
             .map { module -> module.name }
 
         assertTrue("Security" in moduleNames)
+    }
+
+    @Test
+    fun `ServiceLoader Security module exposes detection feature bridges`() {
+        val securityModule = ServiceLoader
+            .load(EnterpriseModule::class.java)
+            .first { module -> module.name == "Security" }
+
+        assertTrue(securityModule is DemoDataFeatureSeeder)
+        assertTrue(securityModule is DetectionSignalEvidenceBridge)
+        assertEquals(
+            "service = 'api'",
+            (securityModule as DetectionSignalEvidenceBridge).entityPredicate("service", "api", ::escapeSqlForTest),
+        )
     }
 
     @Test
@@ -146,5 +162,7 @@ class SecurityFeatureRegistryTest {
         )
         private const val TEST_RATE_LIMIT = 1000
         private val TEST_RATE_LIMIT_REFILL = 1.seconds
+
+        private fun escapeSqlForTest(value: String): String = value.replace("'", "''")
     }
 }

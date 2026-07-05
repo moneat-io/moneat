@@ -7,13 +7,9 @@
 // (at your option) any later version.
 
 import {createFileRoute, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
 
 export const Route = createFileRoute('/monitoring/service-map')({
   beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
     throw redirect({to: '/monitoring/map', search: {scope: 'services'}})
   },
   component: () => null,

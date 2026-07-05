@@ -47,7 +47,21 @@ import com.moneat.utils.suspendRunCatching
 private val logger = KotlinLogging.logger {}
 
 private const val DANGER_COLOR = "#dc2626"
-private const val SUCCESS_COLOR = "#16a34a"
+private const val EMAIL_SUBTLE = "#eef0f4"
+private const val EMAIL_TEXT = "#161922"
+private const val EMAIL_TEXT_STRONG = "#0e1016"
+private const val EMAIL_TEXT_MUTED = "#6b7280"
+private const val EMAIL_BORDER = "#d8dce3"
+private const val EMAIL_BORDER_MUTED = "#e4e7ec"
+private const val EMAIL_ACCENT = "#0ea5e9"
+private const val EMAIL_LINK = "#0369a1"
+private const val EMAIL_DANGER = "#cf2126"
+private const val EMAIL_WARNING = "#e0a100"
+private const val EMAIL_SUCCESS = "#0e8c6b"
+private const val EMAIL_MONO =
+    "'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace"
+private const val EMAIL_SANS =
+    "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
 
 /** Escapes HTML special characters for safe inclusion in email templates. */
 private fun String.escapeHtml(): String =
@@ -55,33 +69,13 @@ private fun String.escapeHtml(): String =
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
+        .replace("'", "&#39;")
 
-private const val BADGE_STYLE = "margin:0;font-size:0.75rem;font-weight:600;" +
-    "display:inline-block;border-radius:4px;padding:1px 8px;"
-private const val BADGE_POSITIVE =
-    "background-color:#f0fdf4;border:1px solid #bbf7d0;color:" + SUCCESS_COLOR + ";"
-private const val BADGE_NEGATIVE =
-    "background-color:#fef2f2;border:1px solid #fecaca;color:" + DANGER_COLOR + ";"
-private const val BADGE_NEUTRAL = "font-weight:500;background-color:#f5f5f5;" +
-    "border:1px solid #e5e5e5;color:#737373;"
-private const val BILLING_ROW_CELL_STYLE =
-    "padding:0.875rem 1rem;border-bottom:1px solid #f5f5f5;" +
-        "word-break:normal;overflow-wrap:break-word;"
-private const val BILLING_PERCENT_TEXT_STYLE =
-    "margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;" +
-        "white-space:nowrap;word-break:normal;"
-private const val BILLING_STATUS_BADGE_STYLE =
-    "margin:0;font-size:0.6875rem;line-height:1rem;font-weight:600;display:inline-block;" +
-        "border-radius:999px;padding:1px 8px;background-color:#f5f5f5;border:1px solid #e5e5e5;" +
-        "color:#525252;white-space:nowrap;word-break:normal;"
-private const val BILLING_PROGRESS_TRACK_STYLE =
-    "width:100%;height:6px;line-height:6px;font-size:0;background-color:#e5e5e5;" +
-        "border-radius:999px;overflow:hidden;"
-private const val BILLING_PROGRESS_FILL_STYLE =
-    "height:6px;line-height:6px;font-size:0;border-radius:999px;"
 private const val FULL_PROGRESS_PERCENT = 100
 private const val MIN_VISIBLE_PROGRESS_PERCENT = 2
 private const val TOP_ISSUES_COUNT = 5
+private const val SPARKLINE_HEIGHT = 46
+private const val EMAIL_STACK_FRAMES_COUNT = 5
 private const val SETTINGS_URL_PLACEHOLDER = "{{ settingsUrl }}"
 private const val YEAR_PLACEHOLDER = "{{ year }}"
 
@@ -185,20 +179,24 @@ class EmailService {
 
     fun sendInvitationEmail(
         toEmail: String,
-        inviterName: String,
-        orgName: String,
-        role: String,
-        token: String
+        data: InvitationEmailData
     ) {
-        val inviteUrl = "$frontendUrl/accept-invite?token=$token"
+        val inviteUrl = "$frontendUrl/accept-invite?token=${data.token}"
 
-        val subject = "You've been invited to join $orgName on Moneat"
-        val htmlBody = loadInvitationTemplate(inviterName, orgName, role, inviteUrl)
+        val subject = "You've been invited to join ${data.orgName} on Moneat"
+        val htmlBody =
+            loadInvitationTemplate(
+                data.inviterName,
+                data.orgName,
+                data.role,
+                inviteUrl,
+                data.inviterEmail
+            )
         val textBody =
             """
-            You've been invited to join $orgName on Moneat
+            You've been invited to join ${data.orgName} on Moneat
             
-            $inviterName has invited you to join their team as a ${role.lowercase()}.
+            ${data.inviterName} has invited you to join their team as a ${data.role.lowercase()}.
             
             Click the link below to accept the invitation:
             
@@ -373,19 +371,57 @@ class EmailService {
         }
     }
 
+    private fun loadTemplate(templateName: String): String? =
+        this::class.java.classLoader
+            .getResourceAsStream("email-templates/$templateName")
+            ?.bufferedReader()
+            ?.use { it.readText() }
+
+    private fun commonEmailTokens(
+        settingsUrl: String = "$frontendUrl/settings/notifications",
+        unsubscribeUrl: String = "$frontendUrl/settings/notifications"
+    ): Map<String, String> =
+        mapOf(
+            "settingsUrl" to settingsUrl,
+            "unsubscribeUrl" to unsubscribeUrl,
+            "year" to java.time.Year.now().value.toString()
+        )
+
+    private fun String.replaceTokens(replacements: Map<String, String>): String =
+        replacements.entries.fold(this) { html, (token, value) ->
+            html.replace(Regex("""\{\{\s*${Regex.escape(token)}\s*}}"""), value)
+        }
+
+    private fun String.replaceSentinels(replacements: Map<String, String>): String =
+        replacements.entries.fold(this) { html, (token, value) ->
+            html.replace(token, value)
+        }
+
+    private fun invitationInviterDetails(
+        inviterName: String,
+        inviterEmail: String?
+    ): String {
+        val safeName = inviterName.escapeHtml()
+        val safeEmail =
+            inviterEmail
+                ?.takeIf { it.isNotBlank() && it != inviterName }
+                ?.escapeHtml()
+        return if (safeEmail == null) safeName else "$safeName &middot; $safeEmail"
+    }
+
     private fun loadVerificationTemplate(
         userName: String,
         verificationUrl: String
     ): String {
-        // Try to load the built email template from classpath
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/verify-email.html")
+        val template = loadTemplate("verify-email.html")
 
-        return if (templateResource != null) {
-            templateResource
-                .bufferedReader()
-                .use { it.readText() }
-                .replace("{{ userName }}", userName)
-                .replace("{{ verificationUrl }}", verificationUrl)
+        return if (template != null) {
+            template.replaceTokens(
+                commonEmailTokens() + mapOf(
+                    "userName" to userName.escapeHtml(),
+                    "verificationUrl" to verificationUrl.escapeHtml()
+                )
+            )
         } else {
             // Fallback to inline HTML if template doesn't exist
             """
@@ -418,15 +454,15 @@ class EmailService {
         userName: String,
         resetUrl: String
     ): String {
-        // Try to load the built email template from classpath
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/reset-password.html")
+        val template = loadTemplate("reset-password.html")
 
-        return if (templateResource != null) {
-            templateResource
-                .bufferedReader()
-                .use { it.readText() }
-                .replace("{{ userName }}", userName)
-                .replace("{{ resetUrl }}", resetUrl)
+        return if (template != null) {
+            template.replaceTokens(
+                commonEmailTokens() + mapOf(
+                    "userName" to userName.escapeHtml(),
+                    "resetUrl" to resetUrl.escapeHtml()
+                )
+            )
         } else {
             // Fallback to inline HTML if template doesn't exist
             """
@@ -459,18 +495,21 @@ class EmailService {
         inviterName: String,
         orgName: String,
         role: String,
-        inviteUrl: String
+        inviteUrl: String,
+        inviterEmail: String?
     ): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/org-invitation.html")
+        val template = loadTemplate("org-invitation.html")
 
-        return if (templateResource != null) {
-            templateResource
-                .bufferedReader()
-                .use { it.readText() }
-                .replace("{{ inviterName }}", inviterName)
-                .replace("{{ orgName }}", orgName)
-                .replace("{{ role }}", role)
-                .replace("{{ inviteUrl }}", inviteUrl)
+        return if (template != null) {
+            template.replaceTokens(
+                commonEmailTokens() + mapOf(
+                    "inviterName" to inviterName.escapeHtml(),
+                    "inviterDetails" to invitationInviterDetails(inviterName, inviterEmail),
+                    "orgName" to orgName.escapeHtml(),
+                    "role" to role.replaceFirstChar { it.uppercase() }.escapeHtml(),
+                    "inviteUrl" to inviteUrl.escapeHtml()
+                )
+            )
         } else {
             """
             <!DOCTYPE html>
@@ -510,7 +549,126 @@ class EmailService {
         val timestamp: String,
         val stackTrace: String,
         val settingsUrl: String,
-        val unsubscribeUrl: String
+        val unsubscribeUrl: String,
+        val errorRate: String = "—",
+        val errorRateDelta: String = "—",
+        val p95Latency: String = "—",
+        val p95LatencyDelta: String = "—",
+        val throughput: String = "—",
+        val throughputDelta: String = "—",
+        val usersAffected: String = "—",
+        val firstSeen: String = timestamp,
+        val lastSeen: String = timestamp,
+        val eventSeries: List<Int> = emptyList(),
+        val spikeIndex: Int? = null,
+        val issueFunction: String = issueCulprit.substringBefore(" ").ifBlank { issueCulprit },
+        val issueLocation: String = issueCulprit.substringAfter(" ", issueCulprit),
+        val release: String = "—",
+        val deploySummary: String = "No deploy context available",
+        val contextTags: List<ContextTag> = emptyList(),
+        val codeOwner: String = "—",
+        val stackFrames: List<StackFrame> = emptyList()
+    )
+
+    data class ContextTag(
+        val key: String,
+        val value: String
+    )
+
+    data class StackFrame(
+        val text: String,
+        val inApp: Boolean = false,
+        val heading: Boolean = false
+    )
+
+    data class InvitationEmailData(
+        val inviterName: String,
+        val inviterEmail: String?,
+        val orgName: String,
+        val role: String,
+        val token: String
+    )
+
+    data class HostProcessRow(
+        val name: String,
+        val cpu: String,
+        val memory: String
+    )
+
+    data class HostAlertData(
+        val hostName: String,
+        val lastSeenText: String,
+        val hostUrl: String,
+        val settingsUrl: String,
+        val unsubscribeUrl: String,
+        val severity: String = "Critical",
+        val metricName: String = "CPU",
+        val condition: String = "CPU above threshold",
+        val currentValue: String = "—",
+        val baselineSummary: String = "baseline unavailable",
+        val sustainedDuration: String = "—",
+        val threshold: String = "90%",
+        val environment: String = "production",
+        val triggeredAt: String = lastSeenText,
+        val cpuLabel: String = "CPU",
+        val cpuPercent: String = "0",
+        val memoryLabel: String = "Memory",
+        val memoryPercent: String = "0",
+        val diskLabel: String = "Disk",
+        val diskPercent: String = "0",
+        val load1m: String = "—",
+        val vcpu: String = "—",
+        val privateIp: String = "—",
+        val region: String = "—",
+        val instanceType: String = "—",
+        val memoryTotal: String = "—",
+        val os: String = "—",
+        val agentVersion: String = "—",
+        val uptime: String = "—",
+        val processes: List<HostProcessRow> = emptyList(),
+        val historySeries: List<Int> = emptyList()
+    )
+
+    data class MonitorAlertData(
+        val monitorName: String,
+        val status: String,
+        val message: String,
+        val monitorUrl: String,
+        val settingsUrl: String,
+        val unsubscribeUrl: String,
+        val metricName: String = "Monitor status",
+        val currentValue: String = "down",
+        val baselineSummary: String = "baseline unavailable",
+        val threshold: String = "threshold",
+        val condition: String = "condition unavailable",
+        val cadence: String = "configured interval",
+        val triggeredAt: String = Clock.System.now().toString(),
+        val scope: String = "all monitored targets",
+        val dashboardName: String = monitorName,
+        val widgetName: String = monitorName,
+        val environment: String = "production",
+        val projectName: String = monitorName,
+        val breachSummary: String = "Samples in breach are highlighted.",
+        val historySeries: List<Int> = emptyList(),
+        val breachIndex: Int? = null
+    )
+
+    data class ResolvedAlertData(
+        val targetName: String,
+        val metricName: String,
+        val alertUrl: String,
+        val settingsUrl: String,
+        val unsubscribeUrl: String,
+        val duration: String = "—",
+        val peakValue: String = "—",
+        val currentValue: String = "normal",
+        val monitorName: String = metricName,
+        val triggeredAt: String = "—",
+        val recoveredAt: String = Clock.System.now().toString(),
+        val acknowledgedBy: String = "—",
+        val environment: String = "production",
+        val resolutionSummary: String =
+            "The metric returned to normal levels and the alert closed automatically."
     )
 
     data class WeeklySummaryData(
@@ -526,7 +684,8 @@ class EmailService {
         val projects: List<ProjectSummary>,
         val dashboardUrl: String,
         val settingsUrl: String,
-        val unsubscribeUrl: String
+        val unsubscribeUrl: String,
+        val organizationName: String = "your organization"
     )
 
     data class TopIssue(
@@ -561,7 +720,10 @@ class EmailService {
         val dashboardUrl: String,
         val settingsUrl: String,
         val rows: List<BillingInsightRow>,
-        val totalOverage: String
+        val totalOverage: String,
+        val topDriver: String = "—",
+        val topDriverUsage: String = "—",
+        val unsubscribeUrl: String = settingsUrl
     )
 
     fun sendErrorAlertEmail(
@@ -678,44 +840,42 @@ class EmailService {
         lastSeenText: String,
         hostUrl: String
     ) {
-        val safeHostName = hostName.escapeHtml()
-        val safeLastSeenText = lastSeenText.escapeHtml()
-        val safeHostUrl = hostUrl.escapeHtml()
-        val subject = "🔴 Host Down: $hostName"
-        val htmlBody =
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: #fef2f2; border-left: 4px solid $DANGER_COLOR; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: $DANGER_COLOR; margin-bottom: 20px;">🔴 Host Down</h1>
-                    <p><strong>Host:</strong> $safeHostName</p>
-                    <p><strong>Status:</strong> $safeLastSeenText</p>
-                    <p>The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.</p>
-                    <div style="margin: 30px 0;">
-                        <a href="$safeHostUrl" style="display: inline-block; background-color: $DANGER_COLOR; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
-                    </div>
-                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                    <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
-                </div>
-            </body>
-            </html>
-            """.trimIndent()
+        sendHostAlertEmail(
+            to = to,
+            data =
+            HostAlertData(
+                hostName = hostName,
+                lastSeenText = lastSeenText,
+                hostUrl = hostUrl,
+                settingsUrl = "$frontendUrl/settings/notifications",
+                unsubscribeUrl = "$frontendUrl/settings/notifications",
+                currentValue = "not reporting",
+                baselineSummary = "last seen $lastSeenText",
+                sustainedDuration = lastSeenText,
+                condition = "agent heartbeat missing",
+                triggeredAt = lastSeenText
+            )
+        )
+    }
 
+    fun sendHostAlertEmail(
+        to: String,
+        data: HostAlertData
+    ) {
+        val subject = "Host alert: ${data.hostName}"
+        val htmlBody = loadHostAlertTemplate(data)
         val textBody =
             """
-            🔴 Host Down
+            Host alert: ${data.hostName}
             
-            Host: $hostName
-            Status: $lastSeenText
+            Metric: ${data.metricName}
+            Current value: ${data.currentValue}
+            Threshold: ${data.threshold}
+            Status: ${data.lastSeenText}
             
-            The monitoring agent has stopped reporting metrics. Please check if the host is online and the agent is running.
+            The monitoring agent or host metric is in an alert state.
             
-            View: $hostUrl
+            View: ${data.hostUrl}
             
             ---
             Moneat Server Monitoring
@@ -732,44 +892,64 @@ class EmailService {
         monitorUrl: String
     ) {
         val isDown = status.lowercase() == "down"
-        val emoji = if (isDown) "🔴" else "✅"
-        val subject = "$emoji Uptime Monitor ${if (isDown) "Down" else "Up"}: $monitorName"
-        val bgColor = if (isDown) "#fef2f2" else "#f0fdf4"
-        val borderColor = if (isDown) DANGER_COLOR else SUCCESS_COLOR
-        val headingColor = if (isDown) DANGER_COLOR else SUCCESS_COLOR
-        val buttonColor = if (isDown) DANGER_COLOR else SUCCESS_COLOR
+        if (!isDown) {
+            sendResolvedAlertEmail(
+                to = to,
+                emailType = "uptime_alert",
+                data =
+                ResolvedAlertData(
+                    targetName = monitorName,
+                    metricName = "Uptime monitor",
+                    alertUrl = monitorUrl,
+                    settingsUrl = "$frontendUrl/settings/notifications",
+                    unsubscribeUrl = "$frontendUrl/settings/notifications",
+                    monitorName = monitorName,
+                    currentValue = status.uppercase(),
+                    resolutionSummary = message.ifBlank {
+                        "The monitor is back up and the alert closed automatically."
+                    }
+                )
+            )
+            return
+        }
 
-        val htmlBody =
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: $bgColor; border-left: 4px solid $borderColor; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: $headingColor; margin-bottom: 20px;">$emoji Uptime Monitor ${if (isDown) "Down" else "Recovered"}</h1>
-                    <p><strong>Monitor:</strong> $monitorName</p>
-                    <p><strong>Status:</strong> ${status.uppercase()}</p>
-                    ${if (message.isNotBlank()) "<p><strong>Message:</strong> $message</p>" else ""}
-                    <div style="margin: 30px 0;">
-                        <a href="$monitorUrl" style="display: inline-block; background-color: $buttonColor; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
-                    </div>
-                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                    <p style="color: #999; font-size: 12px;">Moneat Uptime Monitoring</p>
-                </div>
-            </body>
-            </html>
-            """.trimIndent()
+        sendMonitorAlertEmail(
+            to = to,
+            data =
+            MonitorAlertData(
+                monitorName = monitorName,
+                status = status,
+                message = message,
+                monitorUrl = monitorUrl,
+                settingsUrl = "$frontendUrl/settings/notifications",
+                unsubscribeUrl = "$frontendUrl/settings/notifications",
+                metricName = "Uptime status",
+                currentValue = status.uppercase(),
+                threshold = "up",
+                condition = "status != up",
+                dashboardName = monitorName,
+                widgetName = monitorName,
+                breachSummary = message.ifBlank { "The latest check failed." }
+            )
+        )
+    }
+
+    fun sendMonitorAlertEmail(
+        to: String,
+        data: MonitorAlertData
+    ) {
+        val subject = "Monitor alert: ${data.monitorName}"
+        val htmlBody = loadMonitorAlertTemplate(data)
         val textBody =
             """
-            Uptime Monitor ${if (isDown) "Down" else "Recovered"}: $monitorName
+            Monitor alert: ${data.monitorName}
             
-            Status: ${status.uppercase()}
-            ${if (message.isNotBlank()) "Message: $message" else ""}
+            Metric: ${data.metricName}
+            Current value: ${data.currentValue}
+            Condition: ${data.condition}
+            ${if (data.message.isNotBlank()) "Message: ${data.message}" else ""}
             
-            View: $monitorUrl
+            View: ${data.monitorUrl}
             """.trimIndent()
 
         sendEmail(to, subject, htmlBody, textBody, "uptime_alert")
@@ -780,74 +960,88 @@ class EmailService {
         hostName: String,
         hostUrl: String
     ) {
-        val safeHostName = hostName.escapeHtml()
-        val safeHostUrl = hostUrl.escapeHtml()
-        val subject = "✅ Host Recovered: $hostName"
-        val htmlBody =
-            """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            </head>
-            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="background-color: #f0fdf4; border-left: 4px solid $SUCCESS_COLOR; padding: 30px; border-radius: 8px;">
-                    <h1 style="color: $SUCCESS_COLOR; margin-bottom: 20px;">✅ Host Recovered</h1>
-                    <p><strong>Host:</strong> $safeHostName</p>
-                    <p>The host is now reporting metrics again.</p>
-                    <div style="margin: 30px 0;">
-                        <a href="$safeHostUrl" style="display: inline-block; background-color: $SUCCESS_COLOR; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 500;">View</a>
-                    </div>
-                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-                    <p style="color: #999; font-size: 12px;">Moneat Server Monitoring</p>
-                </div>
-            </body>
-            </html>
-            """.trimIndent()
+        sendResolvedAlertEmail(
+            to = to,
+            emailType = "host_up",
+            data =
+            ResolvedAlertData(
+                targetName = hostName,
+                metricName = "Host heartbeat",
+                alertUrl = hostUrl,
+                settingsUrl = "$frontendUrl/settings/notifications",
+                unsubscribeUrl = "$frontendUrl/settings/notifications",
+                monitorName = "Host heartbeat",
+                currentValue = "reporting",
+                resolutionSummary = "The host is reporting metrics again."
+            )
+        )
+    }
 
+    fun sendResolvedAlertEmail(
+        to: String,
+        emailType: String,
+        data: ResolvedAlertData
+    ) {
+        val subject = "Resolved: ${data.targetName}"
+        val htmlBody = loadResolvedTemplate(data)
         val textBody =
             """
-            ✅ Host Recovered
+            Resolved: ${data.targetName}
             
-            Host: $hostName
+            Metric: ${data.metricName}
+            Current value: ${data.currentValue}
             
-            The host is now reporting metrics again.
+            ${data.resolutionSummary}
             
-            View: $hostUrl
+            View: ${data.alertUrl}
             
             ---
-            Moneat Server Monitoring
+            Moneat
             """.trimIndent()
 
-        sendEmail(to, subject, htmlBody, textBody, "host_up")
+        sendEmail(to, subject, htmlBody, textBody, emailType)
     }
 
     private fun loadErrorAlertTemplate(data: ErrorAlertData): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/error-alert.html")
-        val year =
-            java.time.Year
-                .now()
-                .value
-                .toString()
+        val template = loadTemplate("error-alert.html")
 
-        return if (templateResource != null) {
-            templateResource
-                .bufferedReader()
-                .use { it.readText() }
-                .replace("{{ issueTitle }}", data.issueTitle)
-                .replace("{{ issueLevel }}", data.issueLevel)
-                .replace("{{ issueCulprit }}", data.issueCulprit)
-                .replace("{{ issueMessage }}", data.issueMessage)
-                .replace("{{ issueCount }}", data.issueCount)
-                .replace("{{ issueUrl }}", data.issueUrl)
-                .replace("{{ projectName }}", data.projectName)
-                .replace("{{ environment }}", data.environment)
-                .replace("{{ timestamp }}", data.timestamp)
-                .replace("{{ stackTrace }}", data.stackTrace)
-                .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl)
-                .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
-                .replace(YEAR_PLACEHOLDER, year)
+        return if (template != null) {
+            template
+                .replaceTokens(
+                    commonEmailTokens(data.settingsUrl, data.unsubscribeUrl) + mapOf(
+                        "issueTitle" to data.issueTitle.escapeHtml(),
+                        "issueLevel" to data.issueLevel.escapeHtml(),
+                        "issueCulprit" to data.issueCulprit.escapeHtml(),
+                        "issueMessage" to data.issueMessage.escapeHtml(),
+                        "issueCount" to data.issueCount.escapeHtml(),
+                        "issueUrl" to data.issueUrl.escapeHtml(),
+                        "projectName" to data.projectName.escapeHtml(),
+                        "environment" to data.environment.escapeHtml(),
+                        "timestamp" to data.timestamp.escapeHtml(),
+                        "stackTrace" to data.stackTrace.escapeHtml(),
+                        "errorRate" to data.errorRate.escapeHtml(),
+                        "errorRateDelta" to data.errorRateDelta.escapeHtml(),
+                        "p95Latency" to data.p95Latency.escapeHtml(),
+                        "p95LatencyDelta" to data.p95LatencyDelta.escapeHtml(),
+                        "throughput" to data.throughput.escapeHtml(),
+                        "throughputDelta" to data.throughputDelta.escapeHtml(),
+                        "usersAffected" to data.usersAffected.escapeHtml(),
+                        "firstSeen" to data.firstSeen.escapeHtml(),
+                        "lastSeen" to data.lastSeen.escapeHtml(),
+                        "issueFunction" to data.issueFunction.escapeHtml(),
+                        "issueLocation" to data.issueLocation.escapeHtml(),
+                        "release" to data.release.escapeHtml(),
+                        "deploySummary" to data.deploySummary.escapeHtml(),
+                        "codeOwner" to data.codeOwner.escapeHtml()
+                    )
+                )
+                .replaceSentinels(
+                    mapOf(
+                        "ISSUE_SPARKLINE_PLACEHOLDER" to sparklineHtml(data.eventSeries, data.spikeIndex),
+                        "STACK_FRAMES_PLACEHOLDER" to stackFramesHtml(data),
+                        "ISSUE_CONTEXT_TAGS_PLACEHOLDER" to contextTagsHtml(data.contextTags)
+                    )
+                )
         } else {
             // Fallback HTML
             """
@@ -866,96 +1060,151 @@ class EmailService {
         }
     }
 
-    private fun loadWeeklySummaryTemplate(data: WeeklySummaryData): String {
-        val templateResource = this::class.java.classLoader.getResourceAsStream("email-templates/weekly-summary.html")
-        val year =
-            java.time.Year
-                .now()
-                .value
-                .toString()
+    private fun loadHostAlertTemplate(data: HostAlertData): String {
+        val template = loadTemplate("host-alert-v1.html")
+        return if (template != null) {
+            template
+                .replaceTokens(
+                    commonEmailTokens(data.settingsUrl, data.unsubscribeUrl) + mapOf(
+                        "hostName" to data.hostName.escapeHtml(),
+                        "severity" to data.severity.escapeHtml(),
+                        "metricName" to data.metricName.escapeHtml(),
+                        "currentValue" to data.currentValue.escapeHtml(),
+                        "threshold" to data.threshold.escapeHtml(),
+                        "sustainedDuration" to data.sustainedDuration.escapeHtml(),
+                        "vcpu" to data.vcpu.escapeHtml(),
+                        "region" to data.region.escapeHtml(),
+                        "environment" to data.environment.escapeHtml(),
+                        "triggeredAt" to data.triggeredAt.escapeHtml(),
+                        "condition" to data.condition.escapeHtml(),
+                        "baselineSummary" to data.baselineSummary.escapeHtml(),
+                        "cpuLabel" to data.cpuLabel.escapeHtml(),
+                        "cpuPercent" to data.cpuPercent.escapeHtml(),
+                        "memoryLabel" to data.memoryLabel.escapeHtml(),
+                        "memoryPercent" to data.memoryPercent.escapeHtml(),
+                        "diskLabel" to data.diskLabel.escapeHtml(),
+                        "diskPercent" to data.diskPercent.escapeHtml(),
+                        "load1m" to data.load1m.escapeHtml(),
+                        "privateIp" to data.privateIp.escapeHtml(),
+                        "instanceType" to data.instanceType.escapeHtml(),
+                        "memoryTotal" to data.memoryTotal.escapeHtml(),
+                        "os" to data.os.escapeHtml(),
+                        "agentVersion" to data.agentVersion.escapeHtml(),
+                        "uptime" to data.uptime.escapeHtml(),
+                        "hostUrl" to data.hostUrl.escapeHtml()
+                    )
+                )
+                .replaceSentinels(
+                    mapOf(
+                        "HOST_PROCESSES_PLACEHOLDER" to hostProcessesHtml(data.processes),
+                        "HOST_HISTORY_PLACEHOLDER" to sparklineHtml(data.historySeries, null)
+                    )
+                )
+        } else {
+            """
+            <!DOCTYPE html>
+            <html><body>
+            <h2>Host alert: ${data.hostName.escapeHtml()}</h2>
+            <p>${data.metricName.escapeHtml()}: ${data.currentValue.escapeHtml()}</p>
+            <p><a href="${data.hostUrl.escapeHtml()}">View host</a></p>
+            </body></html>
+            """.trimIndent()
+        }
+    }
 
-        return if (templateResource != null) {
+    private fun loadMonitorAlertTemplate(data: MonitorAlertData): String {
+        val template = loadTemplate("dashboard-alert-v1.html")
+        return if (template != null) {
+            template
+                .replaceTokens(
+                    commonEmailTokens(data.settingsUrl, data.unsubscribeUrl) + mapOf(
+                        "dashboardName" to data.dashboardName.escapeHtml(),
+                        "metricName" to data.metricName.escapeHtml(),
+                        "currentValue" to data.currentValue.escapeHtml(),
+                        "threshold" to data.threshold.escapeHtml(),
+                        "condition" to data.condition.escapeHtml(),
+                        "environment" to data.environment.escapeHtml(),
+                        "triggeredAt" to data.triggeredAt.escapeHtml(),
+                        "baselineSummary" to data.baselineSummary.escapeHtml(),
+                        "widgetName" to data.widgetName.escapeHtml(),
+                        "cadence" to data.cadence.escapeHtml(),
+                        "scope" to data.scope.escapeHtml(),
+                        "projectName" to data.projectName.escapeHtml(),
+                        "breachSummary" to data.breachSummary.escapeHtml(),
+                        "monitorUrl" to data.monitorUrl.escapeHtml()
+                    )
+                )
+                .replaceSentinels(
+                    mapOf(
+                        "MONITOR_HISTORY_PLACEHOLDER" to sparklineHtml(data.historySeries, data.breachIndex)
+                    )
+                )
+        } else {
+            """
+            <!DOCTYPE html>
+            <html><body>
+            <h2>Monitor alert: ${data.monitorName.escapeHtml()}</h2>
+            <p>${data.message.escapeHtml()}</p>
+            <p><a href="${data.monitorUrl.escapeHtml()}">View monitor</a></p>
+            </body></html>
+            """.trimIndent()
+        }
+    }
+
+    private fun loadResolvedTemplate(data: ResolvedAlertData): String {
+        val template = loadTemplate("host-recovered.html")
+        return if (template != null) {
+            template.replaceTokens(
+                commonEmailTokens(data.settingsUrl, data.unsubscribeUrl) + mapOf(
+                    "targetName" to data.targetName.escapeHtml(),
+                    "metricName" to data.metricName.escapeHtml(),
+                    "duration" to data.duration.escapeHtml(),
+                    "currentValue" to data.currentValue.escapeHtml(),
+                    "peakValue" to data.peakValue.escapeHtml(),
+                    "monitorName" to data.monitorName.escapeHtml(),
+                    "triggeredAt" to data.triggeredAt.escapeHtml(),
+                    "recoveredAt" to data.recoveredAt.escapeHtml(),
+                    "acknowledgedBy" to data.acknowledgedBy.escapeHtml(),
+                    "environment" to data.environment.escapeHtml(),
+                    "resolutionSummary" to data.resolutionSummary.escapeHtml(),
+                    "alertUrl" to data.alertUrl.escapeHtml()
+                )
+            )
+        } else {
+            """
+            <!DOCTYPE html>
+            <html><body>
+            <h2>Resolved: ${data.targetName.escapeHtml()}</h2>
+            <p>${data.resolutionSummary.escapeHtml()}</p>
+            <p><a href="${data.alertUrl.escapeHtml()}">View alert</a></p>
+            </body></html>
+            """.trimIndent()
+        }
+    }
+
+    private fun loadWeeklySummaryTemplate(data: WeeklySummaryData): String {
+        val template = loadTemplate("weekly-summary.html")
+
+        return if (template != null) {
             var html =
-                templateResource
-                    .bufferedReader()
-                    .use { it.readText() }
-                    .replace("{{ startDate }}", data.startDate)
-                    .replace("{{ endDate }}", data.endDate)
-                    .replace("{{ totalEvents }}", data.totalEvents)
-                    .replace("{{ newIssues }}", data.newIssues)
-                    .replace("{{ affectedUsers }}", data.affectedUsers)
-                    .replace("{{ dashboardUrl }}", data.dashboardUrl)
-                    .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl)
-                    .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl)
-                    .replace(YEAR_PLACEHOLDER, year)
+                template.replaceTokens(
+                    commonEmailTokens(data.settingsUrl, data.unsubscribeUrl) + mapOf(
+                        "startDate" to data.startDate.escapeHtml(),
+                        "endDate" to data.endDate.escapeHtml(),
+                        "totalEvents" to data.totalEvents.escapeHtml(),
+                        "newIssues" to data.newIssues.escapeHtml(),
+                        "affectedUsers" to data.affectedUsers.escapeHtml(),
+                        "dashboardUrl" to data.dashboardUrl.escapeHtml(),
+                        "organizationName" to data.organizationName.escapeHtml()
+                    )
+                )
 
             html = html.replace("EVENTS_TREND_PLACEHOLDER", trendBadgeHtml(data.eventsTrend, positiveIsGood = true))
             html = html.replace("ISSUES_TREND_PLACEHOLDER", trendBadgeHtml(data.issuesTrend, positiveIsGood = false))
             html = html.replace("USERS_TREND_PLACEHOLDER", trendBadgeHtml(data.usersTrend, positiveIsGood = false))
 
-            val issuesHtml =
-                data.topIssues.joinToString("\n") { issue ->
-                    """
-                <tr>
-                  <td style="padding:0.75rem 1rem;border-bottom:1px solid #f5f5f5;">
-                    <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-                      <tr>
-                        <td style="vertical-align:top;">
-                          <p style="margin:0;font-size:0.875rem;font-weight:500;color:#0a0a0a;">${issue.title.escapeHtml()}</p>
-                          <table cellpadding="0" cellspacing="0" role="presentation" style="margin-top:0.25rem;">
-                            <tr>
-                              <td style="padding-right:0.5rem;">
-                                <p style="margin:0;font-size:0.75rem;color:#737373;font-family:ui-monospace,monospace;">${issue.culprit.escapeHtml()}</p>
-                              </td>
-                              <td>
-                                <p style="margin:0;font-size:0.75rem;font-weight:500;display:inline-block;background-color:#f5f5f5;border:1px solid #e5e5e5;border-radius:4px;padding:0 6px;color:#525252;">${issue.project.escapeHtml()}</p>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                        <td style="text-align:right;vertical-align:middle;white-space:nowrap;">
-                          <p style="margin:0;font-size:0.875rem;font-weight:700;color:#0a0a0a;">${issue.count.escapeHtml()}</p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                    """.trimIndent()
-                }
-            html = html.replace("ISSUES_PLACEHOLDER", issuesHtml)
-
-            val projectsHtml =
-                data.projects.joinToString("\n") { project ->
-                    """
-                <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-radius:8px;border:1px solid #e5e5e5;overflow:hidden;margin-bottom:12px;">
-                  <tr>
-                    <td style="height:4px;background:linear-gradient(90deg,#3b82f6 0%,#8b5cf6 100%);line-height:1px;font-size:1px;">&nbsp;</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:1rem;">
-                      <p style="margin:0;margin-bottom:0.75rem;font-size:0.875rem;font-weight:600;color:#0a0a0a;">${project.name.escapeHtml()}</p>
-                      <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-                        <tr>
-                          <td style="width:33%;">
-                            <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Events</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.events.escapeHtml()}</p>
-                          </td>
-                          <td style="width:33%;">
-                            <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Issues</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:#0a0a0a;">${project.issues.escapeHtml()}</p>
-                          </td>
-                          <td style="width:33%;">
-                            <p style="margin:0;margin-bottom:0.25rem;font-size:0.75rem;font-weight:500;color:#737373;">Crash-Free</p>
-                            <p style="margin:0;font-size:1.125rem;font-weight:700;color:$SUCCESS_COLOR;">${project.crashFree.escapeHtml()}</p>
-                          </td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-                    """.trimIndent()
-                }
-            html = html.replace("PROJECTS_PLACEHOLDER", projectsHtml)
+            html = html.replace("ISSUES_PLACEHOLDER", weeklyIssuesHtml(data.topIssues))
+            html = html.replace("PROJECTS_PLACEHOLDER", weeklyProjectsHtml(data.projects))
 
             html
         } else {
@@ -994,7 +1243,10 @@ class EmailService {
                     .replace("{{ summary }}", data.summary.escapeHtml())
                     .replace("{{ dashboardUrl }}", data.dashboardUrl.escapeHtml())
                     .replace(SETTINGS_URL_PLACEHOLDER, data.settingsUrl.escapeHtml())
+                    .replace("{{ unsubscribeUrl }}", data.unsubscribeUrl.escapeHtml())
                     .replace("{{ totalOverage }}", data.totalOverage.escapeHtml())
+                    .replace("{{ topDriver }}", data.topDriver.escapeHtml())
+                    .replace("{{ topDriverUsage }}", data.topDriverUsage.escapeHtml())
                     .replace(YEAR_PLACEHOLDER, year)
 
             html = html.replace("BILLING_ROWS_PLACEHOLDER", billingInsightRowsHtml(data.rows))
@@ -1019,9 +1271,9 @@ class EmailService {
     private fun billingInsightRowsHtml(rows: List<BillingInsightRow>): String {
         if (rows.isEmpty()) {
             return """
-            <tr>
-              <td colspan="2" style="padding:1rem;color:#737373;text-align:center;">No billable usage yet.</td>
-            </tr>
+            <p style="margin:0;font:400 13px/1.5 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;">
+              No billable usage yet.
+            </p>
             """.trimIndent()
         }
         return rows.joinToString("\n") { row ->
@@ -1029,52 +1281,34 @@ class EmailService {
             val remainingPercent = FULL_PROGRESS_PERCENT - progressPercent
             val progressColor = billingProgressColor(row.status)
             """
-            <tr>
-              <td colspan="2" style="$BILLING_ROW_CELL_STYLE">
-                <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
-                  <tr>
-                    <td style="vertical-align:top;padding-right:12px;">
-                      <p style="margin:0;font-size:0.875rem;font-weight:600;color:#0a0a0a;">
-                        ${row.label.escapeHtml()}
-                      </p>
-                    </td>
-                    <td style="vertical-align:top;text-align:right;width:84px;white-space:nowrap;">
-                      <p style="$BILLING_PERCENT_TEXT_STYLE">${row.percent.escapeHtml()}</p>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding-top:0.25rem;padding-right:12px;">
-                      <p style="margin:0;font-size:0.75rem;color:#737373;">
-                        ${row.used.escapeHtml()} / ${row.limit.escapeHtml()}
-                      </p>
-                    </td>
-                    <td style="padding-top:0.25rem;text-align:right;white-space:nowrap;">
-                      <p style="$BILLING_STATUS_BADGE_STYLE">${row.status.escapeHtml()}</p>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colspan="2" style="padding-top:0.625rem;">
-                      <table
-                        width="100%"
-                        cellpadding="0"
-                        cellspacing="0"
-                        role="presentation"
-                        aria-label="${row.percent.escapeHtml()} used"
-                        style="$BILLING_PROGRESS_TRACK_STYLE"
-                      >
-                        <tr>
-                          <td
-                            width="$progressPercent%"
-                            style="$BILLING_PROGRESS_FILL_STYLE background-color:$progressColor;"
-                          >&nbsp;</td>
-                          <td width="$remainingPercent%" style="line-height:6px;font-size:0;">&nbsp;</td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
+            <div style="border-top:1px solid $EMAIL_BORDER_MUTED;padding-top:13px;margin-top:13px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td style="font:600 13px/1.4 $EMAIL_SANS;color:$EMAIL_TEXT_STRONG;">
+                  ${row.label.escapeHtml()}
+                </td>
+                <td align="right" style="font:500 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT;">
+                  ${row.used.escapeHtml()} / ${row.limit.escapeHtml()}
+                  <span style="color:$progressColor;font-weight:600;">${row.percent.escapeHtml()}</span>
+                </td>
+              </tr></table>
+              <div style="height:8px;"></div>
+              <table
+                role="presentation"
+                width="100%"
+                cellpadding="0"
+                cellspacing="0"
+                aria-label="${row.percent.escapeHtml()} used"
+                style="border-radius:999px;overflow:hidden;background:$EMAIL_SUBTLE;"
+              >
+                <tr>
+                  <td width="$progressPercent%" style="height:7px;background:$progressColor;line-height:7px;font-size:0;">&nbsp;</td>
+                  <td width="$remainingPercent%" style="height:7px;background:$EMAIL_SUBTLE;line-height:7px;font-size:0;">&nbsp;</td>
+                </tr>
+              </table>
+              <div style="margin-top:7px;font:500 11px/1.3 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;">
+                ${row.status.escapeHtml()}
+              </div>
+            </div>
             """.trimIndent()
         }
     }
@@ -1088,10 +1322,10 @@ class EmailService {
 
     private fun billingProgressColor(status: String): String {
         return when (status) {
-            "Over limit" -> DANGER_COLOR
-            "Critical" -> "#f59e0b"
-            "Approaching" -> "#2563eb"
-            else -> "#38bdf8"
+            "Over limit" -> EMAIL_DANGER
+            "Critical" -> EMAIL_WARNING
+            "Approaching" -> EMAIL_LINK
+            else -> EMAIL_ACCENT
         }
     }
 
@@ -1102,20 +1336,215 @@ class EmailService {
 
     private fun trendBadgeHtml(trend: Int?, positiveIsGood: Boolean): String {
         if (trend == null) {
-            return """<p style="$BADGE_STYLE $BADGE_NEUTRAL">&mdash;</p>"""
+            return "&mdash;"
         }
         return when {
             trend > 0 && positiveIsGood ->
-                """<p style="$BADGE_STYLE $BADGE_POSITIVE">&uarr; $trend%</p>"""
+                "&uarr; $trend%"
             trend > 0 ->
-                """<p style="$BADGE_STYLE $BADGE_NEGATIVE">&uarr; $trend%</p>"""
+                "&uarr; $trend%"
             trend < 0 && positiveIsGood ->
-                """<p style="$BADGE_STYLE $BADGE_NEGATIVE">&darr; ${-trend}%</p>"""
+                "&darr; ${-trend}%"
             trend < 0 ->
-                """<p style="$BADGE_STYLE $BADGE_POSITIVE">&darr; ${-trend}%</p>"""
+                "&darr; ${-trend}%"
             else ->
-                """<p style="$BADGE_STYLE $BADGE_NEUTRAL">&rarr; 0%</p>"""
+                "&rarr; 0%"
         }
+    }
+
+    private fun weeklyIssuesHtml(issues: List<TopIssue>): String {
+        if (issues.isEmpty()) {
+            return """
+            <p style="margin:0;font:400 13px/1.5 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;">
+              No new issues this week.
+            </p>
+            """.trimIndent()
+        }
+        val rows =
+            issues.joinToString("\n") { issue ->
+                """
+                <tr>
+                  <td style="padding:11px 0;border-top:1px solid $EMAIL_BORDER_MUTED;width:14px;vertical-align:top;">
+                    <div style="padding-top:4px;">
+                      <span style="display:inline-block;width:8px;height:8px;border-radius:999px;background:$EMAIL_DANGER;vertical-align:middle;"></span>
+                    </div>
+                  </td>
+                  <td style="padding:11px 0 11px 10px;border-top:1px solid $EMAIL_BORDER_MUTED;">
+                    <div style="font:600 13px/1.4 $EMAIL_SANS;color:$EMAIL_TEXT_STRONG;">
+                      ${issue.title.escapeHtml()}
+                    </div>
+                    <div style="margin-top:3px;font:500 11px/1 $EMAIL_MONO;color:$EMAIL_TEXT_MUTED;">
+                      ${issue.project.escapeHtml()} · ${issue.culprit.escapeHtml()}
+                    </div>
+                  </td>
+                  <td align="right" style="padding:11px 0;border-top:1px solid $EMAIL_BORDER_MUTED;vertical-align:top;">
+                    <span style="font:600 13px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT;">${issue.count.escapeHtml()}</span>
+                    <div style="font:500 10px/1.3 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;text-transform:uppercase;letter-spacing:0.05em;">
+                      events
+                    </div>
+                  </td>
+                </tr>
+                """.trimIndent()
+            }
+        return """
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        $rows
+        </table>
+        """.trimIndent()
+    }
+
+    private fun weeklyProjectsHtml(projects: List<ProjectSummary>): String {
+        if (projects.isEmpty()) {
+            return """
+            <p style="margin:0;font:400 13px/1.5 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;">
+              No service activity in this period.
+            </p>
+            """.trimIndent()
+        }
+        val rows =
+            projects.joinToString("\n") { project ->
+                """
+                <tr>
+                  <td style="padding:10px 0;border-top:1px solid $EMAIL_BORDER_MUTED;font:500 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT;white-space:nowrap;">
+                    ${project.name.escapeHtml()}
+                  </td>
+                  <td style="padding:10px 12px;border-top:1px solid $EMAIL_BORDER_MUTED;font:500 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT_MUTED;">
+                    ${project.issues.escapeHtml()} issues
+                  </td>
+                  <td align="right" style="padding:10px 0;border-top:1px solid $EMAIL_BORDER_MUTED;font:500 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT_MUTED;">
+                    ${project.events.escapeHtml()} · ${project.crashFree.escapeHtml()} crash-free
+                  </td>
+                </tr>
+                """.trimIndent()
+            }
+        return """
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:0 0 9px;font:600 10px/1 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;letter-spacing:0.05em;text-transform:uppercase;">
+              Service
+            </td>
+            <td style="padding:0 12px 9px;font:600 10px/1 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;letter-spacing:0.05em;text-transform:uppercase;">
+              Issues
+            </td>
+            <td align="right" style="padding:0 0 9px;font:600 10px/1 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;letter-spacing:0.05em;text-transform:uppercase;">
+              Events
+            </td>
+          </tr>
+          $rows
+        </table>
+        """.trimIndent()
+    }
+
+    private fun hostProcessesHtml(processes: List<HostProcessRow>): String {
+        val rows = processes.ifEmpty {
+            listOf(HostProcessRow("No process data", "—", "—"))
+        }.joinToString("\n") { process ->
+            """
+            <tr>
+              <td style="padding:9px 0;border-top:1px solid $EMAIL_BORDER_MUTED;font:500 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT;">
+                ${process.name.escapeHtml()}
+              </td>
+              <td align="right" style="padding:9px 0;border-top:1px solid $EMAIL_BORDER_MUTED;font:600 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT;">
+                ${process.cpu.escapeHtml()}
+              </td>
+              <td align="right" style="padding:9px 0;border-top:1px solid $EMAIL_BORDER_MUTED;font:500 12px/1.4 $EMAIL_MONO;color:$EMAIL_TEXT_MUTED;">
+                ${process.memory.escapeHtml()}
+              </td>
+            </tr>
+            """.trimIndent()
+        }
+        return """
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="padding:0 0 8px;font:600 10px/1 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;letter-spacing:0.05em;text-transform:uppercase;">
+              Process
+            </td>
+            <td align="right" style="padding:0 0 8px;font:600 10px/1 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;letter-spacing:0.05em;text-transform:uppercase;">
+              CPU
+            </td>
+            <td align="right" style="padding:0 0 8px;font:600 10px/1 $EMAIL_SANS;color:$EMAIL_TEXT_MUTED;letter-spacing:0.05em;text-transform:uppercase;">
+              Mem
+            </td>
+          </tr>
+          $rows
+        </table>
+        """.trimIndent()
+    }
+
+    private fun sparklineHtml(
+        values: List<Int>,
+        spikeIndex: Int?
+    ): String {
+        val normalized = values.ifEmpty { listOf(1, 1, 1, 1, 1, 1, 1, 1) }
+        val max = normalized.maxOrNull()?.coerceAtLeast(1) ?: 1
+        val bars =
+            normalized.mapIndexed { index, value ->
+                val height = ((value.toDouble() / max) * SPARKLINE_HEIGHT).roundToInt().coerceAtLeast(2)
+                val color = if (spikeIndex != null && index >= spikeIndex) EMAIL_DANGER else EMAIL_ACCENT
+                """
+                <td style="vertical-align:bottom;padding:0 1px;">
+                  <div style="width:9px;height:${height}px;background:$color;border-radius:2px 2px 0 0;"></div>
+                </td>
+                """.trimIndent()
+            }.joinToString("")
+        return """
+        <table role="presentation" cellpadding="0" cellspacing="0" style="height:${SPARKLINE_HEIGHT}px;">
+          <tr style="vertical-align:bottom;">$bars</tr>
+        </table>
+        """.trimIndent()
+    }
+
+    private fun contextTagsHtml(tags: List<ContextTag>): String {
+        val effectiveTags = tags.ifEmpty { listOf(ContextTag("context", "unavailable")) }
+        return effectiveTags.joinToString("") { tag ->
+            """
+            <span style="display:inline-block;margin:0 6px 7px 0;padding:3px 8px;border-radius:6px;background:$EMAIL_SUBTLE;border:1px solid $EMAIL_BORDER;font:500 11px/1.5 $EMAIL_MONO;color:$EMAIL_TEXT;white-space:nowrap;">
+              <span style="color:$EMAIL_TEXT_MUTED;">${tag.key.escapeHtml()}</span> ${tag.value.escapeHtml()}
+            </span>
+            """.trimIndent()
+        }
+    }
+
+    private fun stackFramesHtml(data: ErrorAlertData): String {
+        val frames = data.stackFrames.ifEmpty {
+            data.stackTrace
+                .lines()
+                .filter { it.isNotBlank() }
+                .take(EMAIL_STACK_FRAMES_COUNT)
+                .mapIndexed { index, frame -> StackFrame(frame.trim(), inApp = index == 0, heading = index == 0) }
+                .ifEmpty { listOf(StackFrame("No stack trace available", heading = true)) }
+        }
+        val frameRows =
+            frames.joinToString("") { frame ->
+                when {
+                    frame.heading ->
+                        """<div style="font:500 12px/1.7 $EMAIL_MONO;color:#f3b3b5;">${frame.text.escapeHtml()}</div>"""
+                    frame.inApp ->
+                        """
+                        <div style="font:500 12px/1.7 $EMAIL_MONO;color:#d7e1ec;background:rgba(56,189,248,0.12);border-left:2px solid $EMAIL_ACCENT;padding:1px 0 1px 10px;margin:2px 0 2px -2px;">
+                          ${frame.text.escapeHtml()} <span style="color:$EMAIL_ACCENT;font-size:10px;">in&nbsp;app</span>
+                        </div>
+                        """.trimIndent()
+                    else ->
+                        """
+                        <div style="font:500 12px/1.7 $EMAIL_MONO;color:#8a99a9;padding-left:10px;">
+                          ${frame.text.escapeHtml()}
+                        </div>
+                        """.trimIndent()
+                }
+            }
+        return """
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:8px;overflow:hidden;background:#0f1620;border:1px solid #21303f;">
+          <tr>
+            <td style="padding:9px 14px;background:#16202c;border-bottom:1px solid #21303f;">
+              <span style="font:500 11px/1 $EMAIL_MONO;color:#8a99a9;letter-spacing:0.04em;">
+                ${data.issueLocation.escapeHtml()} · stack trace
+              </span>
+            </td>
+          </tr>
+          <tr><td style="padding:13px 14px;">$frameRows</td></tr>
+        </table>
+        """.trimIndent()
     }
 
     /**

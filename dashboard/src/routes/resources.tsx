@@ -14,29 +14,76 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute} from '@tanstack/react-router'
+import {useMemo} from 'react'
 import {MonitoringTabBar} from '@/components/monitoring/MonitoringTabBar'
-import {ResourceCatalog} from '@/components/monitoring/catalog/ResourceCatalog'
+import {ResourceCatalog, type ResourceCatalogUrlState} from '@/components/monitoring/catalog/ResourceCatalog'
+import {
+  clearReadableFacetSearch,
+  parseReadableFacetFilters,
+  type ReadableFacetSearchValue,
+  serializeReadableFacetFilters,
+} from '@/lib/filters/urlState'
+
+const RESOURCE_FACET_URL_KEYS = ['kind', 'env', 'health', 'team', 'cloud', 'tag'] as const
+
+type ResourceFacetUrlKey = (typeof RESOURCE_FACET_URL_KEYS)[number]
+type ResourceExcludeFacetUrlKey = `exclude_${ResourceFacetUrlKey}`
+
+type ResourcesSearch = {
+  q?: string
+} & Partial<Record<ResourceFacetUrlKey | ResourceExcludeFacetUrlKey, ReadableFacetSearchValue>>
+
+function resourceCatalogUrlStateFromSearch(search: ResourcesSearch): ResourceCatalogUrlState {
+  return {
+    query: search.q ?? '',
+    facetFilters: parseReadableFacetFilters(search, RESOURCE_FACET_URL_KEYS) ?? [],
+  }
+}
+
+function parseResourcesSearch(search: Record<string, unknown>): ResourcesSearch {
+  const result: ResourcesSearch = {}
+  if (typeof search.q === 'string' && search.q.trim()) {
+    result.q = search.q.trim()
+  }
+  const facetFilters = parseReadableFacetFilters(search, RESOURCE_FACET_URL_KEYS)
+  if (facetFilters) {
+    Object.assign(result, serializeReadableFacetFilters(facetFilters, RESOURCE_FACET_URL_KEYS))
+  }
+  return result
+}
 
 // /resources sits outside the /monitoring layout, so it renders the shared
 // Infrastructure tab strip itself to stay in step with Map, Processes, etc.
 // The catalog already reserves the bar's 43px in its viewport height calc.
 function ResourcesPage() {
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const urlStateKey = JSON.stringify(resourceCatalogUrlStateFromSearch(search))
+  const urlState = useMemo(
+    () => JSON.parse(urlStateKey) as ResourceCatalogUrlState,
+    [urlStateKey]
+  )
+  const handleUrlStateChange = (next: ResourceCatalogUrlState) => {
+    navigate({
+      replace: true,
+      search: (prev) => ({
+        ...clearReadableFacetSearch(prev, RESOURCE_FACET_URL_KEYS),
+        q: next.query.trim() || undefined,
+        ...serializeReadableFacetFilters(next.facetFilters, RESOURCE_FACET_URL_KEYS),
+      }),
+    })
+  }
+
   return (
     <>
       <MonitoringTabBar />
-      <ResourceCatalog />
+      <ResourceCatalog urlState={urlState} onUrlStateChange={handleUrlStateChange} />
     </>
   )
 }
 
 export const Route = createFileRoute('/resources')({
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      const hasSession = await api.checkAuth()
-      if (!hasSession) throw redirect({to: '/login'})
-    }
-  },
+  validateSearch: parseResourcesSearch,
   component: ResourcesPage,
 })

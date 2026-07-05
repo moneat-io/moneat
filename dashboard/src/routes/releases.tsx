@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, redirect, useMatches} from '@tanstack/react-router'
+import {createFileRoute, Link, Outlet, useMatches} from '@tanstack/react-router'
 import {useQuery} from '@tanstack/react-query'
 import {api, formatErrorForLogging} from '@/lib/api'
 import {type ReactNode, useMemo, useState} from 'react'
@@ -29,20 +29,18 @@ import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot} from '@/components/ui/status-dot'
 import {Activity, AlertCircle, Flame, Package, Search, ShieldCheck, Users} from 'lucide-react'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
   serviceScopeKey,
 } from '@/lib/service-facet-scope'
-import type {FacetFilter} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import {parseDate} from '@/lib/date-format'
+import {compareReleaseVersionPrecedence} from '@/lib/release-version'
+import type {Release} from '@/lib/api/types'
 
 export const Route = createFileRoute('/releases')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: ReleasesLayout,
 })
 
@@ -72,10 +70,25 @@ function crashFreeTextClass(tone: CrashFreeTone): string {
   return 'text-danger-fg'
 }
 
+function compareReleasesByLastSeen(left: Release, right: Release): number {
+  return parseDate(right.lastSeen).getTime() - parseDate(left.lastSeen).getTime()
+}
+
+function compareReleasesByLatest(left: Release, right: Release): number {
+  const versionOrder = compareReleaseVersionPrecedence(right.version, left.version)
+  if (versionOrder !== 0) return versionOrder
+
+  return compareReleasesByLastSeen(left, right)
+}
+
 function ReleasesPage() {
-  const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('latest')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: SERVICE_FACET_URL_KEYS})
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useQuery({
     queryKey: ['projects'],
@@ -140,9 +153,7 @@ function ReleasesPage() {
         : null
 
     const mostActive = [...releaseList].sort((a, b) => b.eventCount - a.eventCount)[0]
-    const latest = [...releaseList].sort(
-      (a, b) => parseDate(b.lastSeen).getTime() - parseDate(a.lastSeen).getTime()
-    )[0]
+    const latest = [...releaseList].sort(compareReleasesByLatest)[0]
 
     return {
       healthyCount,
@@ -167,7 +178,7 @@ function ReleasesPage() {
         return bRate - aRate
       }
 
-      return parseDate(b.lastSeen).getTime() - parseDate(a.lastSeen).getTime()
+      return compareReleasesByLatest(a, b)
     })
   }, [releaseList, searchQuery, sortBy])
 
@@ -277,7 +288,7 @@ function ReleasesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="latest">Sort: Latest seen</SelectItem>
+                    <SelectItem value="latest">Sort: Latest release</SelectItem>
                     <SelectItem value="events">Sort: Most signals</SelectItem>
                     <SelectItem value="issues">Sort: Most new issues</SelectItem>
                     <SelectItem value="stability">Sort: Most stable</SelectItem>

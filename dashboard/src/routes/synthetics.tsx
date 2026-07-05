@@ -14,21 +14,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute, Outlet} from '@tanstack/react-router'
 
 export const Route = createFileRoute('/synthetics')({
-  beforeLoad: async () => {
-    if (!api.isAuthenticated()) {
-      const hasSession = await api.checkAuth()
-      if (!hasSession) throw redirect({to: '/login'})
-    }
-  },
   component: SyntheticsLayout,
 })
 
 // Child routes own their full chrome (the overview fills the viewport via ExplorerShell;
-// the builder and result drill-in are full-page). The layout is just the auth gate.
+// the builder and result drill-in are full-page).
 function SyntheticsLayout() {
   return <Outlet />
 }

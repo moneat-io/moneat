@@ -21,7 +21,7 @@
 // split into the reusable ResourceDetailPanel. Compact density throughout.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {useMemo, useState, type ComponentType, type KeyboardEvent, type ReactNode} from 'react'
+import {useEffect, useMemo, useRef, useState, type ComponentType, type KeyboardEvent, type ReactNode} from 'react'
 import {Link} from '@tanstack/react-router'
 import {
   Activity,
@@ -477,13 +477,66 @@ function CompactList({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-export function ResourceCatalog() {
+export type ResourceCatalogUrlState = Readonly<{
+  query: string
+  facetFilters: FacetFilter[]
+}>
+
+type ResourceCatalogProps = Readonly<{
+  urlState?: ResourceCatalogUrlState
+  onUrlStateChange?: (state: ResourceCatalogUrlState) => void
+}>
+
+function catalogUrlStateKey(state: ResourceCatalogUrlState | undefined): string {
+  return state ? JSON.stringify(state) : ''
+}
+
+function releaseHydrationGuard(ref: {current: boolean}): () => void {
+  const release = globalThis.setTimeout(() => {
+    ref.current = false
+  }, 0)
+  return () => {
+    globalThis.clearTimeout(release)
+    ref.current = false
+  }
+}
+
+export function ResourceCatalog({urlState, onUrlStateChange}: ResourceCatalogProps = {}) {
   const {data: resources = [], isLoading} = useResourceCatalog()
-  const [query, setQuery] = useState('')
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const [query, setQuery] = useState(() => urlState?.query ?? '')
+  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>(() => urlState?.facetFilters ?? [])
   const [sortKey, setSortKey] = useState<SortKey>('health')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const didMountRef = useRef(false)
+  const isHydratingRef = useRef(false)
+  const urlStateKey = catalogUrlStateKey(urlState)
+  const stableUrlState = useMemo<ResourceCatalogUrlState | undefined>(
+    () => urlStateKey ? JSON.parse(urlStateKey) as ResourceCatalogUrlState : undefined,
+    [urlStateKey]
+  )
+
+  useEffect(() => {
+    if (!stableUrlState) return undefined
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return undefined
+    }
+    if (isHydratingRef.current) return undefined
+    isHydratingRef.current = true
+    setQuery(stableUrlState.query)
+    setFacetFilters(stableUrlState.facetFilters)
+    return releaseHydrationGuard(isHydratingRef)
+  }, [stableUrlState])
+
+  useEffect(() => {
+    if (!onUrlStateChange || isHydratingRef.current) return
+    const nextState = {query, facetFilters}
+    if (catalogUrlStateKey(nextState) === urlStateKey) return
+    isHydratingRef.current = true
+    onUrlStateChange(nextState)
+    releaseHydrationGuard(isHydratingRef)
+  }, [query, facetFilters, onUrlStateChange, urlStateKey])
 
   const sections = useMemo(() => buildCatalogSections(resources), [resources])
   const filtered = useMemo(

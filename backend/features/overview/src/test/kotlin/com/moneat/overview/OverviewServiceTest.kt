@@ -84,7 +84,7 @@ class OverviewServiceTest {
         assertEquals("v1.2.3", overview.deploys.single().version)
         assertEquals("Backend API", overview.deploys.single().service)
         assertEquals("v1.2.3", overview.telemetry.deployLabel)
-        assertEquals(100, overview.telemetry.deployAtPct)
+        assertEquals(75, overview.telemetry.deployAtPct)
 
         assertTrue(overview.triage.incidents.isEmpty())
         assertEquals("error", overview.triage.alerts.single().level)
@@ -155,6 +155,49 @@ class OverviewServiceTest {
         } finally {
             unmockkObject(ClickHouseClient)
         }
+    }
+
+    @Test
+    fun `overview positions telemetry deploy marker from first seen timestamp`() = runBlocking {
+        val orgId = seedOverviewData()
+
+        transaction {
+            TransactionManager.current().exec(
+                """
+                UPDATE releases
+                SET created_at = ${DEMO_EPOCH_MS - HOUR_MILLIS},
+                    first_seen = ${DEMO_EPOCH_MS - 12 * HOUR_MILLIS}
+                WHERE version = 'v1.2.3'
+                """.trimIndent(),
+            )
+        }
+
+        val overview = OverviewService().getOverview(orgId, demoEpochMs = DEMO_EPOCH_MS)
+
+        assertEquals("v1.2.3", overview.telemetry.deployLabel)
+        assertEquals(50, overview.telemetry.deployAtPct)
+    }
+
+    @Test
+    fun `overview omits telemetry deploy marker outside current window`() = runBlocking {
+        val orgId = seedOverviewData()
+
+        transaction {
+            TransactionManager.current().exec(
+                """
+                UPDATE releases
+                SET created_at = ${DEMO_EPOCH_MS - 25 * HOUR_MILLIS},
+                    first_seen = ${DEMO_EPOCH_MS - 25 * HOUR_MILLIS}
+                WHERE version = 'v1.2.3'
+                """.trimIndent(),
+            )
+        }
+
+        val overview = OverviewService().getOverview(orgId, demoEpochMs = DEMO_EPOCH_MS)
+
+        assertEquals("No deploys", overview.telemetry.deployLabel)
+        assertEquals(0, overview.telemetry.deployAtPct)
+        assertEquals("v1.2.3", overview.deploys.single().version)
     }
 
     @Test
@@ -297,7 +340,8 @@ class OverviewServiceTest {
             Releases.insert {
                 it[project_id] = projectId
                 it[version] = "v1.2.3"
-                it[created_at] = Clock.System.now().toEpochMilliseconds() - HOUR_MILLIS
+                it[created_at] = DEMO_EPOCH_MS - 6 * HOUR_MILLIS
+                it[first_seen] = DEMO_EPOCH_MS - 6 * HOUR_MILLIS
             }
             seedDashboardAlertTablesForFallbackTest()
             AlertEpisodes.insert {

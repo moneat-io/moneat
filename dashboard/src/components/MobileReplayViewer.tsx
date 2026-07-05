@@ -339,8 +339,9 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
   ref
 ) {
   const videoSegments = useMemo(
-    (): MobileVideoSegment[] =>
-      events
+    (): MobileVideoSegment[] => {
+      const seenSegmentIds = new Set<number>()
+      return events
         .map((event, index) => ({ event, index }))
         .filter((entry): entry is { event: MobileVideoEvent; index: number } => isMobileVideoEvent(entry.event))
         .sort((a, b) => {
@@ -349,11 +350,17 @@ export const MobileReplayViewer = forwardRef<MobileReplayViewerHandle, MobileRep
           if (aSegment !== bSegment) return aSegment - bSegment
           return a.index - b.index
         })
-        .map((entry) => entry.event)
-        .map((segment, index) => ({
-          ...segment,
-          resolvedSegmentId: typeof segment.segment_id === 'number' ? segment.segment_id : index,
-        })),
+        .map((entry, index) => ({
+          ...entry.event,
+          resolvedSegmentId: typeof entry.event.segment_id === 'number' ? entry.event.segment_id : index,
+        }))
+        .filter((segment) => {
+          if (typeof segment.segment_id !== 'number') return true
+          if (seenSegmentIds.has(segment.segment_id)) return false
+          seenSegmentIds.add(segment.segment_id)
+          return true
+        })
+    },
     [events]
   )
 

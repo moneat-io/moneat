@@ -39,7 +39,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import {useCallback, useEffect, useMemo, useState} from 'react'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {AttributesPanel} from './AttributesPanel'
 import {ContentPanel} from './ContentPanel'
 import {ContextPanel} from './ContextPanel'
@@ -263,6 +263,7 @@ export function LogContextViewer({
   const {timezone} = useTimezone()
   const [activeTab, setActiveTab] = useState<TabId>('content')
   const [linkCopied, setLinkCopied] = useState(false)
+  const linkCopiedResetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const level = normalizeLevel(log.level)
   const message = stripAnsi(log.message || log.body || '')
@@ -286,6 +287,14 @@ export function LogContextViewer({
   // Keyboard: J/K to move between events, Esc to close. Ignore while typing.
   useLogContextKeyboard({canPrev, canNext, onNavigate, onClose})
 
+  useEffect(() => {
+    return () => {
+      if (linkCopiedResetTimer.current !== undefined) {
+        clearTimeout(linkCopiedResetTimer.current)
+      }
+    }
+  }, [])
+
   const handleCopyLink = useCallback(async () => {
     const url = globalThis.window?.location?.href
     const clipboard = globalThis.navigator?.clipboard
@@ -293,7 +302,10 @@ export function LogContextViewer({
     try {
       await clipboard.writeText(url)
       setLinkCopied(true)
-      setTimeout(() => setLinkCopied(false), 1100)
+      if (linkCopiedResetTimer.current !== undefined) {
+        clearTimeout(linkCopiedResetTimer.current)
+      }
+      linkCopiedResetTimer.current = setTimeout(() => setLinkCopied(false), 1100)
     } catch {
       // no-op in insecure contexts
     }

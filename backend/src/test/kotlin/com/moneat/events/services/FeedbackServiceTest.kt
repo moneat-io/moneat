@@ -16,6 +16,7 @@
 
 package com.moneat.events.services
 
+import com.moneat.events.models.FeedbackUpdateRequest
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -26,6 +27,7 @@ import kotlinx.serialization.json.put
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 private const val FEEDBACK_UUID = "4f01ede1-5802-4ff1-81b7-f2fe9add31e5"
@@ -170,5 +172,17 @@ class FeedbackServiceTest {
         assertEquals("00000000000000000000000000000001", result.single().traceId)
         assertEquals("0000000000000001", result.single().spanId)
         assertEquals(mapOf("service.name" to "checkout-api"), result.single().resourceAttributes)
+    }
+
+    @Test
+    fun `updateFeedback does not mutate replacing tree version column`() = runBlocking {
+        val querySlot = slot<String>()
+        coEvery { queryHelper.executeMutation(capture(querySlot), "Feedback update") } returns Unit
+
+        service.updateFeedback(FEEDBACK_UUID, FeedbackUpdateRequest(status = "resolved"))
+
+        val query = querySlot.captured
+        assertEquals(true, query.contains("UPDATE status = 'resolved'"))
+        assertFalse(query.contains("updated_at"))
     }
 }

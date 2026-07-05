@@ -180,11 +180,27 @@ object FeatureRegistry {
         return modules.filterIsInstance<PermissionBridge>().firstOrNull()
     }
 
+    /** Get the detection evidence bridge if the security feature module is loaded. */
+    fun getDetectionSignalEvidenceBridge(): DetectionSignalEvidenceBridge? {
+        return modules.filterIsInstance<DetectionSignalEvidenceBridge>().firstOrNull()
+    }
+
     fun resolveIngestionRateLimitKey(rateLimitName: String, call: ApplicationCall): String? =
         modules
             .filterIsInstance<IngestionRateLimitKeyResolver>()
             .firstOrNull { it.rateLimitName == rateLimitName }
             ?.resolveRateLimitKey(call)
+
+    suspend fun seedDemoData() {
+        for (module in modules) {
+            val seeder = module as? DemoDataFeatureSeeder ?: continue
+            suspendRunCatching {
+                seeder.seedDemoData()
+            }.getOrElse { e ->
+                logger.warn(e) { "Feature demo data seed failed for module: ${module.name}" }
+            }
+        }
+    }
 
     // For testing
     fun resetForTest() {

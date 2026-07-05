@@ -18,6 +18,7 @@ package com.moneat.dashboards
 
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.CustomDataSourceType
+import com.moneat.dashboards.models.TimeRangeDef
 import com.moneat.dashboards.services.CustomDataSourceExecutor
 import com.moneat.dashboards.services.handlers.PostgresHandler
 import com.moneat.dashboards.services.handlers.PrometheusHandler
@@ -110,6 +111,23 @@ class CustomDataSourceExecutorTest {
     }
 
     @Test
+    fun `validateSqlQuery allows read only CTE queries`() {
+        postgresHandler.validateSqlQuery(
+            "WITH recent_users AS (SELECT id FROM users) SELECT count(*) FROM recent_users"
+        )
+    }
+
+    @Test
+    fun `validateSqlQuery rejects mutating CTE queries`() {
+        val ex = assertFailsWith<IllegalArgumentException> {
+            postgresHandler.validateSqlQuery(
+                "WITH deleted AS (DELETE FROM users RETURNING id) SELECT count(*) FROM deleted"
+            )
+        }
+        assertTrue(ex.message?.contains("DELETE") == true)
+    }
+
+    @Test
     fun `validateSqlQuery is case insensitive`() {
         val ex = assertFailsWith<IllegalArgumentException> {
             postgresHandler.validateSqlQuery("delete from users")
@@ -120,6 +138,11 @@ class CustomDataSourceExecutorTest {
     @Test
     fun `validateSqlQuery allows semicolon inside string literal`() {
         postgresHandler.validateSqlQuery("SELECT 'a;b' FROM t")
+    }
+
+    @Test
+    fun `validateSqlQuery allows trailing semicolon`() {
+        postgresHandler.validateSqlQuery("WITH users AS (SELECT 1 AS id) SELECT id FROM users;")
     }
 
     @Test
@@ -206,6 +229,36 @@ class CustomDataSourceExecutorTest {
     @Test
     fun `validateSqlQuery allows legitimate inline comment`() {
         postgresHandler.validateSqlQuery("SELECT /* fetch all */ * FROM users LIMIT 10")
+    }
+
+    @Test
+    fun `prepareSqlQuery expands Grafana time macros for PostgreSQL`() {
+        val query = """
+            SELECT ${'$'}__timeGroupAlias(created_at, '5m'), count(*) AS count
+            FROM app_events
+            WHERE ${'$'}__timeFilter(created_at)
+            GROUP BY 1
+            ORDER BY 1
+        """.trimIndent()
+
+        val prepared = postgresHandler.prepareSqlQuery(
+            query,
+            TimeRangeDef(
+                from = "2026-07-01T00:00:00Z",
+                to = "2026-07-01T01:00:00Z",
+            )
+        )
+
+        assertContains(
+            prepared,
+            "to_timestamp(floor(extract(epoch from created_at) / 300) * 300) AS time"
+        )
+        assertContains(
+            prepared,
+            "created_at BETWEEN TIMESTAMPTZ '2026-07-01 00:00:00+00' " +
+                "AND TIMESTAMPTZ '2026-07-01 01:00:00+00'"
+        )
+        postgresHandler.validateSqlQuery(prepared)
     }
 
     // ──── Prometheus URL building (PrometheusHandler uses HttpApiHandler.buildUrl) ────

@@ -42,6 +42,7 @@ import com.moneat.dashboards.services.DataSourceCredentials
 import com.moneat.dashboards.services.DashboardAlertService
 import com.moneat.dashboards.services.DashboardQueryEngine
 import com.moneat.dashboards.services.DashboardTemplateCatalogService
+import com.moneat.dashboards.services.DashboardVariableResolver
 import com.moneat.dashboards.translation.DataDogTranslator
 import com.moneat.dashboards.translation.GrafanaTranslator
 import com.moneat.shared.models.Memberships
@@ -70,6 +71,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.serialization.json.JsonPrimitive
+import java.sql.SQLException
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -119,6 +121,8 @@ class DashboardRoutesTest {
         mockk<CustomDataSourceService>(relaxed = true)
     private val mockDataSourceExecutor =
         mockk<CustomDataSourceExecutor>(relaxed = true)
+    private val mockVariableResolver =
+        mockk<DashboardVariableResolver>(relaxed = true)
     private val mockAlertService =
         mockk<DashboardAlertService>(relaxed = true)
 
@@ -336,6 +340,7 @@ class DashboardRoutesTest {
                     dataSources = DashboardDataSourceRouteDependencies(
                         dataSourceService = mockDataSourceService,
                         dataSourceExecutor = mockDataSourceExecutor,
+                        variableResolver = mockVariableResolver,
                     ),
                     dashboardAlertService = mockAlertService,
                     templateCatalogService = DashboardTemplateCatalogService(),
@@ -1028,6 +1033,55 @@ class DashboardRoutesTest {
         }
 
     @Test
+    fun `POST query returns data source error detail when custom query fails`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val projectId = seedProject(orgId)
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val sourceName = "custom:$DATA_SOURCE_RESOURCE_ID"
+            val dataSource = makeDataSource(id = 1L, orgId = orgId.toLong())
+            coEvery { mockRetentionService.getRetentionDaysForProject(projectId) } returns null
+            every { mockQueryEngine.applyVariables(any(), any()) } answers { firstArg() }
+            every {
+                mockQueryEngine.resolveTemplateDataSource(any(), orgId.toLong(), any())
+            } answers { firstArg() }
+            every { mockQueryEngine.isCustomDataSource(sourceName) } returns true
+            every { mockQueryEngine.parseCustomDataSourceId(sourceName) } returns DATA_SOURCE_RESOURCE_ID
+            every { mockDataSourceService.getDataSource(1L, orgId.toLong()) } returns dataSource
+            every {
+                mockDataSourceService.getDecryptedCredentials(1L, orgId.toLong())
+            } returns DataSourceCredentials(username = "user", password = "pass")
+            coEvery {
+                mockDataSourceExecutor.executeQuery(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any()
+                )
+            } throws SQLException("ERROR: relation \"missing_table\" does not exist\n  Position: 15")
+            application { installRoutes(this) }
+
+            val r = client.post(
+                "/v1/dashboards/${resourceId(dashboardId)}/query?projectId=${projectResourceId(projectId)}"
+            ) {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "query_config": {
+                        "dataSource": "$sourceName",
+                        "rawQuery": "select * from missing_table"
+                      }
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            val body = r.bodyAsText()
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(body.contains("Data source query failed"))
+            assertTrue(body.contains("relation \\\"missing_table\\\" does not exist"))
+        }
+
+    @Test
     fun `POST query returns 404 when custom data source resource id is unresolved`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
@@ -1222,7 +1276,7 @@ class DashboardRoutesTest {
         }
 
     @Test
-    fun `POST variables resolve returns label values from matching sources`() =
+    fun `POST variables resolve returns resolver output`() =
         testApplication {
             val (userId, orgId) = seedUserAndOrg()
             val dashboardId = seedDashboardScope(orgId.toLong())
@@ -1247,59 +1301,18 @@ class DashboardRoutesTest {
                     DashboardVariable(name = "ignored", query = "up"),
                 )
             )
-            val prometheus = makeDataSource(id = 10L, orgId = orgId.toLong()).copy(
-                name = "Prometheus",
-                sourceType = "prometheus",
-                port = 9090,
-            )
-            val loki = makeDataSource(id = 11L, orgId = orgId.toLong()).copy(
-                name = "Loki",
-                sourceType = "loki",
-                port = 3100,
-            )
-            val redis = makeDataSource(id = 12L, orgId = orgId.toLong()).copy(
-                name = "Redis",
-                sourceType = "redis",
-                port = 6379,
-            )
             every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
-            every { mockDataSourceService.listDataSources(orgId.toLong()) } returns listOf(prometheus, loki, redis)
-            every {
-                mockDataSourceService.getDecryptedCredentials(prometheus.numericId, orgId.toLong())
-            } returns DataSourceCredentials(apiKey = "prom-token")
-            every {
-                mockDataSourceService.getDecryptedCredentials(loki.numericId, orgId.toLong())
-            } returns DataSourceCredentials(apiKey = "loki-token")
-            every {
-                mockDataSourceService.getDecryptedCredentials(redis.numericId, orgId.toLong())
-            } returns DataSourceCredentials(password = "redis-token")
             coEvery {
-                mockDataSourceExecutor.executeLabelValuesQuery(
-                    any(),
-                    prometheus.host,
-                    prometheus.port,
-                    any(),
-                    "label_values(up{job=\"api\"}, namespace)",
+                mockVariableResolver.resolve(
+                    dashboard.variables,
+                    mapOf("job" to "api", "namespace" to "default"),
+                    orgId.toLong(),
                 )
-            } returns listOf("default")
-            coEvery {
-                mockDataSourceExecutor.executeLabelValuesQuery(
-                    any(),
-                    loki.host,
-                    loki.port,
-                    any(),
-                    "label_values({namespace=\"default\"}, pod)",
-                )
-            } returns listOf("api-0")
-            coEvery {
-                mockDataSourceExecutor.executeLabelValuesQuery(
-                    any(),
-                    redis.host,
-                    redis.port,
-                    any(),
-                    "label_values(redis_up, instance)",
-                )
-            } returns listOf("cache-0")
+            } returns mapOf(
+                "namespace" to listOf("default"),
+                "pod" to listOf("api-0"),
+                "cache" to listOf("cache-0"),
+            )
             application { installRoutes(this) }
 
             val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/variables/resolve") {
@@ -1313,6 +1326,82 @@ class DashboardRoutesTest {
             assertTrue(r.bodyAsText().contains("default"))
             assertTrue(r.bodyAsText().contains("api-0"))
             assertTrue(r.bodyAsText().contains("cache-0"))
+        }
+
+    @Test
+    fun `POST variables resolve passes SQL variable dashboards to resolver`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val dashboard = makeDashboard(id = dashboardId, orgId = orgId.toLong()).copy(
+                variables = listOf(
+                    DashboardVariable(
+                        name = "Dags",
+                        query = "select dag_id from public.dag where owner = '\$owner'",
+                        datasource = "__postgresql",
+                    ),
+                    DashboardVariable(name = "ignored", query = "up", datasource = "__postgresql"),
+                )
+            )
+            every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
+            coEvery {
+                mockVariableResolver.resolve(
+                    dashboard.variables,
+                    mapOf("owner" to "analytics"),
+                    orgId.toLong(),
+                )
+            } returns mapOf(
+                "Dags" to listOf("etl_daily", "sync_hourly"),
+            )
+            application { installRoutes(this) }
+
+            val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/variables/resolve") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"owner":"analytics"}""")
+            }
+
+            val body = r.bodyAsText()
+            assertEquals(HttpStatusCode.OK, r.status)
+            assertTrue(body.contains("Dags"))
+            assertTrue(body.contains("etl_daily"))
+            assertTrue(body.contains("sync_hourly"))
+        }
+
+    @Test
+    fun `POST variables resolve returns data source error detail when resolver query fails`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dashboardId = seedDashboardScope(orgId.toLong())
+            val dashboard = makeDashboard(id = dashboardId, orgId = orgId.toLong()).copy(
+                variables = listOf(
+                    DashboardVariable(
+                        name = "Dags",
+                        query = "select dag_id from public.dag where owner = '${'$'}owner'",
+                        datasource = "__postgresql",
+                    )
+                )
+            )
+            every { mockDashboardService.getDashboard(dashboardId, orgId.toLong()) } returns dashboard
+            coEvery {
+                mockVariableResolver.resolve(
+                    dashboard.variables,
+                    mapOf("owner" to "analytics"),
+                    orgId.toLong(),
+                )
+            } throws SQLException("ERROR: relation \"public.dag\" does not exist")
+            application { installRoutes(this) }
+
+            val r = client.post("/v1/dashboards/${resourceId(dashboardId)}/variables/resolve") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody("""{"owner":"analytics"}""")
+            }
+
+            val body = r.bodyAsText()
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(body.contains("Data source query failed"))
+            assertTrue(body.contains("relation \\\"public.dag\\\" does not exist"))
         }
 
     // ──── Import / Export ────
@@ -1912,6 +2001,42 @@ class DashboardRoutesTest {
             }
             assertEquals(HttpStatusCode.BadRequest, r.status)
             assertTrue(r.bodyAsText().contains("bad query"))
+        }
+
+    @Test
+    fun `POST custom datasource query returns database error detail`() =
+        testApplication {
+            val (userId, orgId) = seedUserAndOrg()
+            val dataSource = makeDataSource(id = 1L, orgId = orgId.toLong())
+            every { mockDataSourceService.getDataSource(1L, orgId.toLong()) } returns dataSource
+            every {
+                mockDataSourceService.getDecryptedCredentials(1L, orgId.toLong())
+            } returns DataSourceCredentials(username = "user", password = "pass")
+            coEvery {
+                mockDataSourceExecutor.executeQuery(
+                    any(), any(), any(), any(), any(), any(), any(), any(), any()
+                )
+            } throws SQLException("ERROR: column \"duration\" does not exist")
+            application { installRoutes(this) }
+
+            val r = client.post("$DATASOURCES_1/query") {
+                withAuth(token(userId, orgId))
+                contentType(ContentType.Application.Json)
+                setBody(
+                    """
+                    {
+                      "data_source_id": "$DATA_SOURCE_RESOURCE_ID",
+                      "query": "select avg(duration) from task_instance",
+                      "limit": 10
+                    }
+                    """.trimIndent()
+                )
+            }
+
+            val body = r.bodyAsText()
+            assertEquals(HttpStatusCode.BadRequest, r.status)
+            assertTrue(body.contains("Data source query failed"))
+            assertTrue(body.contains("column \\\"duration\\\" does not exist"))
         }
 
     @Test

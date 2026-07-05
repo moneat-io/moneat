@@ -374,7 +374,7 @@ function AdminOrgDetailPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-end">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-end">
             <div className="space-y-2">
               <Label htmlFor="quota-type">Type</Label>
               <Select value={quotaType} onValueChange={(value) => setQuotaType(value as AdminQuotaType)}>

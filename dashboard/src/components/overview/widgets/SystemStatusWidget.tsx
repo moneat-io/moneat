@@ -23,10 +23,13 @@ import {useSystemStatus} from '../overviewData'
 import {toneBgSolid, toneBorder, toneSoftBg, toneText} from '../overviewTone'
 
 type StatusAction = Readonly<{
-  to: string
+  to?: string
+  href?: string
   label: string
   ariaLabel: string
 }>
+
+const NEEDS_ATTENTION_ANCHOR = '#overview-needs-attention'
 
 function nounLabel(count: number, singular: string, plural = `${singular}s`) {
   return count === 1 ? singular : plural
@@ -37,7 +40,11 @@ function statusAction(counts: OverviewCounts): StatusAction | null {
     return {to: '/on-call/incidents', label: 'View incidents', ariaLabel: 'View active incidents'}
   }
   if (counts.alerts > 0) {
-    return {to: '/on-call/alerts', label: 'View alerts', ariaLabel: 'View firing alerts'}
+    return {
+      href: NEEDS_ATTENTION_ANCHOR,
+      label: 'Review attention',
+      ariaLabel: 'Review firing alerts in needs attention',
+    }
   }
   if (counts.hostsOffline > 0) {
     return {to: '/monitoring/hosts', label: 'View hosts', ariaLabel: 'View offline hosts'}
@@ -99,9 +106,15 @@ export function SystemStatusWidget() {
         {action && (
           <div className="flex shrink-0 items-center gap-1.5">
             <Button asChild size="sm" className="h-6 px-2 text-[11px]">
-              <Link to={action.to} aria-label={action.ariaLabel}>
-                {action.label}
-              </Link>
+              {action.href ? (
+                <a href={action.href} aria-label={action.ariaLabel}>
+                  {action.label}
+                </a>
+              ) : (
+                <Link to={action.to ?? '/'} aria-label={action.ariaLabel}>
+                  {action.label}
+                </Link>
+              )}
             </Button>
           </div>
         )}

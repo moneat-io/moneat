@@ -520,7 +520,7 @@ class DatadogMetricServiceTest {
                             timestampMs = 1_700_000_000_000L,
                             value = 0.42,
                             host = "web-01",
-                            tags = mapOf("host_id" to "7"),
+                            tags = mapOf("host_id" to "7", "device" to "/dev/vda1", "mountpoint" to "/"),
                         ),
                         QueuedMetricEntry(
                             name = "system.net.bytes_rcvd",
@@ -559,6 +559,8 @@ class DatadogMetricServiceTest {
             val latestRollup = queries.single { it.contains("metrics_latest_by_host") }
             assertTrue(latestRollup.contains("'system.disk.percent'"))
             assertTrue(latestRollup.contains("42.0"))
+            assertTrue(latestRollup.contains("metric_identity"))
+            assertTrue(latestRollup.contains("'device=/dev/vda1|mountpoint=/'"))
             assertTrue(latestRollup.contains("'system.net.recv_bytes'"))
             assertTrue(latestRollup.contains("'system.mem.available'"))
             assertTrue(latestRollup.contains("928.0"))
@@ -566,6 +568,9 @@ class DatadogMetricServiceTest {
             assertFalse(latestRollup.contains("system.net.bytes_rcvd"))
             assertFalse(latestRollup.contains("system.mem.pct_usable"))
             assertFalse(latestRollup.contains("system.mem.usable"))
+
+            val minuteRollup = queries.single { it.contains("metrics_rollup_1m") }
+            assertTrue(minuteRollup.contains("'device=/dev/vda1|mountpoint=/'"))
         } finally {
             unmockkObject(ClickHouseClient)
         }

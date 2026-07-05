@@ -1,10 +1,9 @@
 import {describe, expect, it, vi} from 'vitest'
-import {api, type ReplayDetail} from '@/lib/api'
+import type {ReplayDetail} from '@/lib/api'
 
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => options,
   Link: ({children}: {children: unknown}) => children,
-  redirect: (options: Record<string, unknown>) => options,
 }))
 
 vi.mock('@/components/ReplayPlayer', () => ({
@@ -31,7 +30,7 @@ vi.mock('@/components/replay-containers/MobileDeviceContainer', () => ({
   MobileDeviceContainer: ({children}: {children: unknown}) => children,
 }))
 
-import {Route as ReplayRoute, replayDetailHelperTestHooks as helpers} from '../replays.$replayId'
+import {replayDetailHelperTestHooks as helpers} from '../replays.$replayId'
 
 function replay(overrides: Partial<ReplayDetail> = {}): ReplayDetail {
   return {
@@ -79,26 +78,6 @@ function elementProps(value: unknown): Record<string, unknown> {
 }
 
 describe('replay detail helper coverage', () => {
-  it('redirects unauthenticated replay route loads', () => {
-    const beforeLoad = (ReplayRoute as unknown as {
-      beforeLoad: (args: {location: {href: string}}) => void
-    }).beforeLoad
-    const isAuthenticated = vi.spyOn(api, 'isAuthenticated')
-
-    isAuthenticated.mockReturnValueOnce(false)
-    let thrown: unknown
-    try {
-      beforeLoad({location: {href: '/replays/replay-1'}})
-    } catch (error) {
-      thrown = error
-    }
-    expect(thrown).toEqual({to: '/login', search: {redirect: '/replays/replay-1'}})
-
-    isAuthenticated.mockReturnValueOnce(true)
-    expect(() => beforeLoad({location: {href: '/replays/replay-1'}})).not.toThrow()
-    isAuthenticated.mockRestore()
-  })
-
   it('formats replay labels, dates, and identifiers', () => {
     expect(helpers.formatDuration(999)).toBe('999ms')
     expect(helpers.formatDuration(1500)).toBe('1.50s')
@@ -149,6 +128,7 @@ describe('replay detail helper coverage', () => {
       {type: 5, timestamp: 1000, segment_id: 1, data: {tag: 'video', payload: {duration: '1200'}}},
       {type: 5, timestamp: 1100, segment_id: 1, data: {tag: 'breadcrumb', payload: {category: 'ui.click'}}},
       {type: 'mobile_replay_video', segment_id: 1},
+      {type: 'mobile_replay_video', segment_id: 1},
       {type: 'mobile_replay_video', segment_id: 2},
     ]
     expect(helpers.getRecordingDurationMs(mobileEvents, true)).toBe(6200)
@@ -166,6 +146,7 @@ describe('replay detail helper coverage', () => {
       {type: 5, timestamp: 2200, segment_id: 2, data: {tag: 'breadcrumb', payload: {category: 'navigation'}}},
       {type: 5, timestamp: 2300, data: {tag: 'breadcrumb', payload: {category: 'ui.click'}}},
       {type: 'mobile_replay_video', segment_id: 1},
+      {type: 'mobile_replay_video', segment_id: 2},
       {type: 'mobile_replay_video', segment_id: 2},
     ]
 

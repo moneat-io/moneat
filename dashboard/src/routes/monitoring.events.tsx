@@ -6,19 +6,13 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-import {createFileRoute, redirect} from '@tanstack/react-router'
-import {api} from '@/lib/api'
+import {createFileRoute} from '@tanstack/react-router'
 import {EventStream} from '@/components/monitoring/EventStream'
 import {ServiceCheckList} from '@/components/monitoring/ServiceCheckList'
 import {Tabs, TabsContent, TabsList, TabsTrigger} from '@/components/ui/tabs'
 import {ShieldCheck, Zap} from 'lucide-react'
 
 export const Route = createFileRoute('/monitoring/events')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringEventsPage,
 })
 

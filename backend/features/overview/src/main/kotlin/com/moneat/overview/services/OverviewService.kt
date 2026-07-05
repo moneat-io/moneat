@@ -103,6 +103,7 @@ private const val NANOS_PER_MILLI = 1_000_000
 private const val MILLIS_PER_SECOND = 1_000L
 private const val SECONDS_PER_MINUTE = 60L
 private const val MINUTES_PER_HOUR = 60L
+private const val MILLIS_PER_HOUR = MILLIS_PER_SECOND * SECONDS_PER_MINUTE * MINUTES_PER_HOUR
 private const val HOURS_PER_DAY = 24L
 private const val DAYS_PER_MONTH = 30L
 private const val WARN_RESOURCE_PCT = 70
@@ -175,7 +176,8 @@ class OverviewService(
         val traceMetrics = traceMetricsDeferred.await()
         val logMetrics = logMetricsDeferred.await()
         val issueItems = issueItemsDeferred.await()
-        val deploys = deploysDeferred.await()
+        val deploySnapshots = deploysDeferred.await()
+        val deploys = deploySnapshots.map { snapshot -> snapshot.row }
         val alertItems = alertsDeferred.await()
         val incidents = emptyList<OverviewIncidentItem>()
         val serviceRows = serviceRowsDeferred.await()
@@ -191,7 +193,7 @@ class OverviewService(
             systemStatus = systemStatus(counts),
             kpis = kpis(eventMetrics, traceMetrics, logMetrics, issueItems.size, monitors),
             serviceHealth = serviceRows,
-            telemetry = telemetry(eventMetrics, traceMetrics, logMetrics, deploys),
+            telemetry = telemetry(eventMetrics, traceMetrics, logMetrics, deploySnapshots, demoEpochMs),
             triage = OverviewTriageData(
                 incidents = incidents,
                 alerts = alertItems,
@@ -338,18 +340,34 @@ class OverviewService(
         eventMetrics: EventMetrics,
         traceMetrics: TraceMetrics,
         logMetrics: LogMetrics,
-        deploys: List<OverviewDeployRow>,
+        deploys: List<OverviewDeploySnapshot>,
+        demoEpochMs: Long?,
     ): OverviewTelemetryData {
-        val deployAtPct = if (deploys.isEmpty()) 0 else PERCENT.roundToInt()
-        val deployLabel = deploys.firstOrNull()?.version ?: DEFAULT_DEPLOY_LABEL
+        val deployMarker = deployMarker(deploys, demoEpochMs)
         return OverviewTelemetryData(
             errors = filledSeries(sumSeries(eventMetrics.errorSpark, logMetrics.errorSpark)),
             latency = filledSeries(traceMetrics.latencySpark),
             throughput = filledSeries(traceMetrics.throughputSpark),
             logs = filledSeries(logMetrics.volumeSpark),
-            deployAtPct = deployAtPct,
-            deployLabel = deployLabel,
+            deployAtPct = deployMarker?.pct ?: 0,
+            deployLabel = deployMarker?.label ?: DEFAULT_DEPLOY_LABEL,
         )
+    }
+
+    private fun deployMarker(
+        deploys: List<OverviewDeploySnapshot>,
+        demoEpochMs: Long?,
+    ): TelemetryDeployMarker? {
+        val nowMs = demoEpochMs ?: Clock.System.now().toEpochMilliseconds()
+        val windowStartMs = nowMs - CURRENT_WINDOW_HOURS * MILLIS_PER_HOUR
+        val deploy = deploys
+            .filter { snapshot -> snapshot.markerAtMs in windowStartMs..nowMs }
+            .maxByOrNull { snapshot -> snapshot.markerAtMs }
+            ?: return null
+        val pct = ((deploy.markerAtMs - windowStartMs).toDouble() / (nowMs - windowStartMs) * PERCENT)
+            .roundToInt()
+            .coerceIn(MIN_PERCENT_INT, MAX_PERCENT_INT)
+        return TelemetryDeployMarker(pct = pct, label = deploy.row.version)
     }
 
     private fun infra(
@@ -433,7 +451,7 @@ class OverviewService(
                 .map { row -> ProjectRef(row[Projects.id], row[Projects.name]) }
         }
 
-    private fun loadDeploys(organizationId: Int): List<OverviewDeployRow> =
+    private fun loadDeploys(organizationId: Int): List<OverviewDeploySnapshot> =
         transaction {
             Releases
                 .innerJoin(Projects)
@@ -442,13 +460,16 @@ class OverviewService(
                 .orderBy(Releases.created_at to SortOrder.DESC)
                 .limit(MAX_DEPLOY_ROWS)
                 .map { row ->
-                    val age = ageLabel(row[Releases.created_at])
-                    OverviewDeployRow(
-                        version = row[Releases.version],
-                        service = row[Projects.name],
-                        status = "neutral",
-                        label = "released",
-                        ageLabel = age,
+                    val createdAt = row[Releases.created_at]
+                    OverviewDeploySnapshot(
+                        row = OverviewDeployRow(
+                            version = row[Releases.version],
+                            service = row[Projects.name],
+                            status = "neutral",
+                            label = "released",
+                            ageLabel = ageLabel(createdAt),
+                        ),
+                        markerAtMs = row[Releases.first_seen] ?: createdAt,
                     )
                 }
         }
@@ -1213,6 +1234,16 @@ class OverviewService(
 private data class ProjectRef(
     val id: Long,
     val name: String,
+)
+
+private data class OverviewDeploySnapshot(
+    val row: OverviewDeployRow,
+    val markerAtMs: Long,
+)
+
+private data class TelemetryDeployMarker(
+    val pct: Int,
+    val label: String,
 )
 
 private data class MetricKpiSpec(

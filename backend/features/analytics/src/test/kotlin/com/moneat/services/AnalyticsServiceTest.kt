@@ -17,6 +17,9 @@
 package com.moneat.services
 
 import com.moneat.analytics.models.AnalyticsFilter
+import com.moneat.analytics.models.EventPropertyFilter
+import com.moneat.analytics.services.AnalyticsEventsQuery
+import com.moneat.analytics.services.AnalyticsFunnelQuery
 import com.moneat.analytics.services.AnalyticsQueryScope
 import com.moneat.analytics.services.AnalyticsService
 import com.moneat.analytics.services.ProductRetentionRequest
@@ -34,6 +37,7 @@ import java.time.LocalDate
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class AnalyticsServiceTest {
@@ -375,7 +379,7 @@ class AnalyticsServiceTest {
 
     @Test
     fun `getFunnel returns empty steps when fewer than 2 steps`() = runBlocking {
-        val result = service.getFunnel(projectId, dateFrom, dateTo, listOf("pageview"))
+        val result = service.getFunnel(projectId, AnalyticsFunnelQuery(dateFrom, dateTo, listOf("pageview")))
 
         assertTrue(result.steps.isEmpty())
     }
@@ -394,7 +398,7 @@ class AnalyticsServiceTest {
         }) { _ ->
 
             val steps = listOf("page_load", "signup_click", "signup_complete")
-            val result = service.getFunnel(projectId, dateFrom, dateTo, steps)
+            val result = service.getFunnel(projectId, AnalyticsFunnelQuery(dateFrom, dateTo, steps))
 
             assertEquals(3, result.steps.size)
             // Step 1: level>=1 => 50+30+10 = 90
@@ -428,7 +432,7 @@ class AnalyticsServiceTest {
         }) { _ ->
 
             val steps = listOf("step_a", "step_b")
-            val result = service.getFunnel(projectId, dateFrom, dateTo, steps)
+            val result = service.getFunnel(projectId, AnalyticsFunnelQuery(dateFrom, dateTo, steps))
 
             assertEquals(2, result.steps.size)
             assertEquals(0L, result.steps[0].visitors)
@@ -447,17 +451,36 @@ class AnalyticsServiceTest {
 
             service.getFunnel(
                 projectId,
-                dateFrom,
-                dateTo,
-                listOf("signup.completed", "recording.started"),
-                groupBy = "user_id",
-                source = "server"
+                AnalyticsFunnelQuery(
+                    dateFrom = dateFrom,
+                    dateTo = dateTo,
+                    steps = listOf("signup.completed", "recording.started"),
+                    groupBy = "user_id",
+                    source = "server",
+                ),
             )
 
-            assertTrue(queries.any { it.contains("GROUP BY project_id, user_id") })
+            assertTrue(queries.any { it.contains("GROUP BY e.project_id, e.user_id") })
             assertTrue(queries.any { it.contains("source = 'server'") })
             assertTrue(queries.any { it.contains("user_id != ''") })
         }
+    }
+
+    @Test
+    fun `getFunnel rejects unsupported property filter operators`() = runBlocking {
+        val error = assertFailsWith<IllegalArgumentException> {
+            service.getFunnel(
+                projectId,
+                AnalyticsFunnelQuery(
+                    dateFrom = dateFrom,
+                    dateTo = dateTo,
+                    steps = listOf("signup.completed", "recording.started"),
+                    propFilters = listOf(EventPropertyFilter("destination", "starts_with", "private")),
+                ),
+            )
+        }
+
+        assertTrue(error.message!!.contains("Unsupported event property filter operator"))
     }
 
     @Test
@@ -517,7 +540,7 @@ class AnalyticsServiceTest {
             )
         }) { _ ->
 
-            val result = service.getEvents(projectId, dateFrom, dateTo, emptyList())
+            val result = service.getEvents(projectId, AnalyticsEventsQuery(dateFrom, dateTo, emptyList()))
 
             assertEquals(2, result.results.size)
             assertEquals("button_click", result.results[0].name)
@@ -534,7 +557,7 @@ class AnalyticsServiceTest {
             exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
-            service.getEvents(projectId, dateFrom, dateTo, emptyList())
+            service.getEvents(projectId, AnalyticsEventsQuery(dateFrom, dateTo, emptyList()))
 
             assertTrue(queries.any { it.contains("event_name != 'pageview'") })
         }
@@ -550,11 +573,13 @@ class AnalyticsServiceTest {
 
             service.getEvents(
                 projectId,
-                dateFrom,
-                dateTo,
-                emptyList(),
-                groupBy = "user_id",
-                source = "server",
+                AnalyticsEventsQuery(
+                    dateFrom = dateFrom,
+                    dateTo = dateTo,
+                    filters = emptyList(),
+                    groupBy = "user_id",
+                    source = "server",
+                ),
             )
 
             assertTrue(queries.any { it.contains("uniq(e.project_id, e.user_id)") })
@@ -956,7 +981,7 @@ class AnalyticsServiceTest {
             exchange.respond(200, "", contentType = CONTENT_TYPE_TEXT_PLAIN)
         }) { _ ->
 
-            service.getFunnel(projectId, dateFrom, dateTo, listOf("step1", "step2"))
+            service.getFunnel(projectId, AnalyticsFunnelQuery(dateFrom, dateTo, listOf("step1", "step2")))
 
             assertTrue(queries.any { it.contains("windowFunnel") })
         }
@@ -972,13 +997,11 @@ class AnalyticsServiceTest {
 
             service.getFunnel(
                 AnalyticsQueryScope.services(listOf(projectId, 43)),
-                dateFrom,
-                dateTo,
-                listOf("step1", "step2")
+                AnalyticsFunnelQuery(dateFrom, dateTo, listOf("step1", "step2")),
             )
 
             assertTrue(queries.any { it.contains("project_id IN (toUInt64(42), toUInt64(43))") })
-            assertTrue(queries.any { it.contains("GROUP BY project_id, session_id") })
+            assertTrue(queries.any { it.contains("GROUP BY e.project_id, e.session_id") })
         }
     }
 
@@ -1048,7 +1071,7 @@ class AnalyticsServiceTest {
         }) { _ ->
 
             val filters = listOf(AnalyticsFilter("page", "is", "/home"))
-            service.getEvents(projectId, dateFrom, dateTo, filters)
+            service.getEvents(projectId, AnalyticsEventsQuery(dateFrom, dateTo, filters))
 
             assertTrue(queries.any { it.contains("pathname") && it.contains("'/home'") })
         }

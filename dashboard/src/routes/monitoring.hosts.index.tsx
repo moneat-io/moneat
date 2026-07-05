@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, redirect, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, Link, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api, type DdHostResponse} from '@/lib/api'
 import {
@@ -80,11 +80,6 @@ function MonitoringPage() {
 }
 
 export const Route = createFileRoute('/monitoring/hosts/')({
-  beforeLoad: () => {
-    if (!api.isAuthenticated()) {
-      throw redirect({to: '/login'})
-    }
-  },
   component: MonitoringPage,
 })
 
@@ -1195,7 +1190,7 @@ function MonitoringHostsPage() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
                 {([
                   {key: 'all' as const, tone: 'neutral' as const, count: hosts.length},
                   {key: 'online' as const, tone: 'success' as const, count: onlineCount},
@@ -1217,7 +1212,7 @@ function MonitoringHostsPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1 rounded-lg border bg-background p-1">
+              <div className="flex items-center gap-1 rounded-lg border bg-background p-1 max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>button]:shrink-0">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={cn(

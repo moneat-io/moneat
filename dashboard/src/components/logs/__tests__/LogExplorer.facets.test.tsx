@@ -499,7 +499,7 @@ describe('LogExplorer facets', () => {
       urlSearch: {
         q: 'timeout',
         levels: 'error,warn',
-        facets: JSON.stringify(facetFilters),
+        facets: facetFilters,
         timePreset: 'custom',
         from: '2026-06-03T11:00:00.000Z',
         to: '2026-06-03T12:00:00.000Z',

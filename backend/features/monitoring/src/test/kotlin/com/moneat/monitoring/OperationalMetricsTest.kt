@@ -31,6 +31,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class OperationalMetricsTest {
     @BeforeTest
@@ -131,6 +132,140 @@ class OperationalMetricsTest {
         assertContains(rendered, "moneat_worker_dlq_depth")
         assertContains(rendered, "dlq_key=\"moneat:events:dlq\"")
         assertHasApplicationTag(rendered)
+    }
+
+    @Test
+    fun `renders stream queue depth from consumer backlog instead of retained stream length`() {
+        val streamKey = "moneat:logs:queue:stream"
+        val dlqKey = "moneat:logs:dlq:stream"
+        val consumerGroup = "moneat:logs:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every {
+            redis.xpending(streamKey, consumerGroup)
+        } returns PendingMessages(3, Range.create("1-0", "3-0"), mapOf("worker-1" to 3L))
+        every {
+            redis.xinfoGroups(streamKey)
+        } returns listOf(
+            listOf(
+                "name",
+                consumerGroup,
+                "consumers",
+                1L,
+                "pending",
+                3L,
+                "lag",
+                7L,
+            )
+        )
+        every { redis.llen(dlqKey) } returns 0L
+
+        OperationalMetrics.registerWorkerQueues("Log", streamKey, dlqKey, consumerGroup)
+
+        val rendered = OperationalMetrics.scrape()
+        val queueLine = metricLine(
+            rendered,
+            "moneat_worker_queue_depth",
+            "queue_key=\"$streamKey\"",
+            "queue_type=\"primary\"",
+            "worker=\"Log\"",
+        )
+
+        assertTrue(queueLine.endsWith(" 10.0"), queueLine)
+    }
+
+    @Test
+    fun `renders stream queue depth from map shaped consumer group info`() {
+        val streamKey = "moneat:metrics:queue:stream"
+        val dlqKey = "moneat:metrics:dlq:stream"
+        val consumerGroup = "moneat:metrics:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every {
+            redis.xpending(streamKey, consumerGroup)
+        } returns PendingMessages(4, Range.create("1-0", "4-0"), mapOf("worker-1" to 4L))
+        every {
+            redis.xinfoGroups(streamKey)
+        } returns listOf(mapOf("name" to consumerGroup, "lag" to "6"))
+        every { redis.llen(dlqKey) } returns 0L
+
+        OperationalMetrics.registerWorkerQueues("Metric", streamKey, dlqKey, consumerGroup)
+
+        val queueLine = metricLine(
+            OperationalMetrics.scrape(),
+            "moneat_worker_queue_depth",
+            "queue_key=\"$streamKey\"",
+            "queue_type=\"primary\"",
+            "worker=\"Metric\"",
+        )
+
+        assertTrue(queueLine.endsWith(" 10.0"), queueLine)
+    }
+
+    @Test
+    fun `renders stream queue depth from pending messages when consumer group lag is absent`() {
+        val streamKey = "moneat:events:queue:stream"
+        val dlqKey = "moneat:events:dlq:stream"
+        val consumerGroup = "moneat:events:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every {
+            redis.xpending(streamKey, consumerGroup)
+        } returns PendingMessages(5, Range.create("1-0", "5-0"), mapOf("worker-1" to 5L))
+        every {
+            redis.xinfoGroups(streamKey)
+        } returns listOf(
+            "unexpected-shape",
+            listOf("name", "other-workers", "lag", 7L),
+        )
+        every { redis.llen(dlqKey) } returns 0L
+
+        OperationalMetrics.registerWorkerQueues("Event", streamKey, dlqKey, consumerGroup)
+
+        val queueLine = metricLine(
+            OperationalMetrics.scrape(),
+            "moneat_worker_queue_depth",
+            "queue_key=\"$streamKey\"",
+            "queue_type=\"primary\"",
+            "worker=\"Event\"",
+        )
+
+        assertTrue(queueLine.endsWith(" 5.0"), queueLine)
+    }
+
+    @Test
+    fun `renders nan stream queue depth when consumer backlog read fails`() {
+        val streamKey = "moneat:errors:queue:stream"
+        val dlqKey = "moneat:errors:dlq:stream"
+        val consumerGroup = "moneat:errors:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every { redis.xpending(streamKey, consumerGroup) } throws IllegalStateException("redis down")
+        every { redis.llen(dlqKey) } returns 0L
+
+        OperationalMetrics.registerWorkerQueues("Error", streamKey, dlqKey, consumerGroup)
+
+        val queueLine = metricLine(
+            OperationalMetrics.scrape(),
+            "moneat_worker_queue_depth",
+            "queue_key=\"$streamKey\"",
+            "queue_type=\"primary\"",
+            "worker=\"Error\"",
+        )
+
+        assertTrue(queueLine.endsWith(" NaN"), queueLine)
     }
 
     @Test
@@ -276,4 +411,11 @@ class OperationalMetricsTest {
     private fun assertHasApplicationTag(rendered: String) {
         assertContains(rendered, "application=\"moneat-backend\"")
     }
+
+    private fun metricLine(rendered: String, metricName: String, vararg labels: String): String =
+        rendered.lineSequence()
+            .firstOrNull { line ->
+                line.startsWith(metricName) && labels.all { label -> line.contains(label) }
+            }
+            ?: error("Missing metric $metricName with labels ${labels.joinToString()}")
 }

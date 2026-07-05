@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Outlet, redirect, useMatches, useNavigate} from '@tanstack/react-router'
+import {createFileRoute, Outlet, useMatches, useNavigate} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
 import {formatRelativeTime, cn} from '@/lib/utils'
@@ -46,6 +46,7 @@ import {
 import {useMemo, useState, type ReactNode} from 'react'
 import {useToast} from '@/hooks/useToast'
 import {
+  SERVICE_FACET_URL_KEYS,
   facetValues,
   serviceNamesForQuery,
   serviceRailSections,
@@ -53,14 +54,10 @@ import {
 } from '@/lib/service-facet-scope'
 import {feedbackSourceLabel} from '@/lib/telemetry-sources'
 import type {FacetFilter} from '@/lib/filters/types'
+import {useReadableFacetUrlState} from '@/lib/filters/useReadableFacetUrlState'
 import type {Feedback} from '@/lib/api/types/replays'
 
 export const Route = createFileRoute('/feedback')({
-  beforeLoad: async ({ location }) => {
-    if (!api.isAuthenticated()) {
-      throw redirect({ to: '/login', search: { redirect: location.href } })
-    }
-  },
   component: FeedbackLayout,
 })
 
@@ -584,10 +581,14 @@ function FeedbackMainContent(props: FeedbackMainContentProps) {
 }
 
 function FeedbackPage() {
-  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('unresolved')
   const [selectedFeedback, setSelectedFeedback] = useState<Set<string>>(new Set())
-  const [facetFilters, setFacetFilters] = useState<FacetFilter[]>([])
+  const {
+    query: searchQuery,
+    setQuery: setSearchQuery,
+    facetFilters,
+    setFacetFilters,
+  } = useReadableFacetUrlState({facetKeys: SERVICE_FACET_URL_KEYS})
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()

@@ -22,7 +22,6 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 const {mockApi, mockToast} = vi.hoisted(() => ({
   mockApi: {
     isAuthenticated: vi.fn(() => true),
-    checkAuth: vi.fn(),
     getWorkflowOverview: vi.fn(),
     getWorkflowUsage: vi.fn(),
     getWorkflowBlueprints: vi.fn(),
@@ -42,14 +41,12 @@ vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (options: Record<string, unknown>) => ({...options, options}),
   Link: ({children, ...props}: {children: React.ReactNode}) =>
     React.createElement('a', props, children),
-  redirect: (opts: Record<string, unknown>) => ({...opts, __redirect: true}),
 }))
 
 import {Route as InsightsRouteImport} from '../workflows.insights'
 
 const InsightsRoute = InsightsRouteImport as unknown as {
   component: React.ComponentType
-  beforeLoad: () => Promise<unknown>
 }
 
 const overview = {
@@ -101,20 +98,6 @@ describe('workflows insights route', () => {
     mockApi.getWorkflowBlueprints.mockResolvedValue(blueprints)
     mockApi.getWorkflowAudit.mockResolvedValue(audit)
     mockApi.instantiateBlueprint.mockResolvedValue({id: WORKFLOW_RESOURCE_ID, name: 'Error spike alert'})
-  })
-
-  it('guards the route via beforeLoad when unauthenticated', async () => {
-    mockApi.isAuthenticated.mockReturnValue(false)
-    mockApi.checkAuth.mockResolvedValue(false)
-    await expect(InsightsRoute.beforeLoad()).rejects.toMatchObject({
-      to: '/login',
-      __redirect: true,
-    })
-  })
-
-  it('passes the guard when authenticated', async () => {
-    mockApi.isAuthenticated.mockReturnValue(true)
-    await expect(InsightsRoute.beforeLoad()).resolves.toBeUndefined()
   })
 
   it('renders overview, usage, blueprints, and audit', async () => {
