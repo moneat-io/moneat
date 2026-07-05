@@ -101,13 +101,24 @@ private suspend fun RoutingContext.handleDatadogLogs(
 private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {
     return suspendRunCatching {
         val trimmed = bodyStr.trimStart()
-        if (trimmed.startsWith("[")) {
-            json.decodeFromString<List<DatadogLogEntry>>(trimmed)
-        } else {
-            listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
+        when {
+            trimmed.startsWith("[") -> json.decodeFromString<List<DatadogLogEntry>>(trimmed)
+            else -> parseSingleOrLineDelimitedLogEntries(trimmed)
         }
     }.getOrElse { e ->
         logger.warn(e) { "Failed to parse DD log payload" }
         null
     }
 }
+
+private fun parseSingleOrLineDelimitedLogEntries(trimmed: String): List<DatadogLogEntry> =
+    runCatching {
+        listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
+    }.getOrElse {
+        trimmed
+            .lineSequence()
+            .map { line -> line.trim() }
+            .filter { line -> line.isNotEmpty() }
+            .map { line -> json.decodeFromString<DatadogLogEntry>(line) }
+            .toList()
+    }

@@ -29,9 +29,33 @@ describe('initDatadog', () => {
     vi.clearAllMocks()
   })
 
-  it('initializes RUM and Logs with proxy pointing to Moneat', async () => {
+  it('initializes browser logs with proxy pointing to Moneat', async () => {
     const {datadogRum} = await import('@datadog/browser-rum')
     const {datadogLogs} = await import('@datadog/browser-logs')
+
+    initDatadog({
+      clientToken: 'tok-456',
+      backendUrl: 'https://api.moneat.io',
+    })
+
+    expect(datadogRum.init).not.toHaveBeenCalled()
+    expect(datadogLogs.init).toHaveBeenCalledOnce()
+
+    const logsCall = vi.mocked(datadogLogs.init).mock.calls[0][0]
+    expect(logsCall.clientToken).toBe('tok-456')
+    expect(logsCall.service).toBe('moneat-dashboard')
+    expect(logsCall.env).toBe('production')
+    expect(logsCall.forwardErrorsToLogs).toBe(true)
+    expect(logsCall.forwardConsoleLogs).toEqual(['error'])
+
+    // Verify proxy function routes to Moneat
+    const proxyFn = logsCall.proxy as ({path, parameters}: {path: string; parameters: string}) => string
+    expect(proxyFn({path: '/api/v2/logs', parameters: 'ddsource=browser'}))
+      .toBe('https://api.moneat.io/dd/api/v2/logs?ddsource=browser')
+  })
+
+  it('initializes RUM when an application id is provided', async () => {
+    const {datadogRum} = await import('@datadog/browser-rum')
 
     initDatadog({
       applicationId: 'app-123',
@@ -40,18 +64,12 @@ describe('initDatadog', () => {
     })
 
     expect(datadogRum.init).toHaveBeenCalledOnce()
-    expect(datadogLogs.init).toHaveBeenCalledOnce()
 
     const rumCall = vi.mocked(datadogRum.init).mock.calls[0][0]
     expect(rumCall.applicationId).toBe('app-123')
     expect(rumCall.clientToken).toBe('tok-456')
     expect(rumCall.service).toBe('moneat-dashboard')
     expect(rumCall.env).toBe('production')
-
-    // Verify proxy function routes to Moneat
-    const proxyFn = rumCall.proxy as ({path, parameters}: {path: string; parameters: string}) => string
-    expect(proxyFn({path: '/api/v2/rum', parameters: 'ddsource=browser'}))
-      .toBe('https://api.moneat.io/dd/api/v2/rum?ddsource=browser')
   })
 
   it('uses custom service and env when provided', async () => {
@@ -87,9 +105,8 @@ describe('initDatadog', () => {
   })
 
   it.each([
-    {desc: 'applicationId is empty', applicationId: '', clientToken: 'tok-456'},
     {desc: 'clientToken is empty', applicationId: 'app-123', clientToken: ''},
-    {desc: 'values are unreplaced placeholders', applicationId: '__MONEAT_DD_APPLICATION_ID__', clientToken: '__MONEAT_DD_CLIENT_TOKEN__'},
+    {desc: 'clientToken is an unreplaced placeholder', applicationId: 'app-123', clientToken: '__MONEAT_DD_CLIENT_TOKEN__'},
   ])('skips init when $desc', async ({applicationId, clientToken}) => {
     const {datadogRum} = await import('@datadog/browser-rum')
     const {datadogLogs} = await import('@datadog/browser-logs')

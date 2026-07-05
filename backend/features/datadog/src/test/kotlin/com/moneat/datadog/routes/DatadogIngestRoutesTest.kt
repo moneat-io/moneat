@@ -485,6 +485,32 @@ class DatadogIngestRoutesTest {
         assertEquals(HttpStatusCode.OK, response.status)
     }
 
+    @Test
+    fun `v2 logs accepts newline-delimited browser log batches`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val body = """
+            {"message":"first console error","ddsource":"browser","ddtags":"env:production","hostname":"moneat.io"}
+            {"message":"second console error","ddsource":"browser","ddtags":"env:production","hostname":"moneat.io"}
+        """.trimIndent()
+        val response = client.post("/dd/api/v2/logs") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Text.Plain)
+            setBody(body)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify {
+            DatadogLogService.enqueueLogs(
+                ORG_ID.toLong(),
+                match {
+                    it.size == 2 &&
+                        it[0].message == "first console error" &&
+                        it[1].message == "second console error"
+                },
+            )
+        }
+    }
+
     // ──── Events ────
 
     @Test
