@@ -121,4 +121,18 @@ describe('main telemetry setup', () => {
     expect(mocks.initDatadog).not.toHaveBeenCalled()
     expect(mocks.render).toHaveBeenCalledTimes(1)
   })
+
+  it('enables browser logging when only the Datadog-compatible client token is configured', async () => {
+    vi.stubEnv('VITE_BACKEND_URL', 'https://api.moneat.io')
+    vi.stubEnv('VITE_DD_CLIENT_TOKEN', 'magt_browser_logs')
+
+    await importMainEntrypoint()
+
+    expect(mocks.initDatadog).toHaveBeenCalledWith(expect.objectContaining({
+      applicationId: undefined,
+      backendUrl: 'https://api.moneat.io',
+      clientToken: 'magt_browser_logs',
+    }))
+    expect(mocks.render).toHaveBeenCalledTimes(1)
+  })
 })
