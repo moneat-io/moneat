@@ -29,6 +29,7 @@ import com.moneat.datadog.routes.datadogInfraQueryRoutes
 import com.moneat.datadog.routes.datadogInfraRoutes
 import com.moneat.datadog.routes.datadogLogRoutes
 import com.moneat.datadog.routes.datadogMetricRoutes
+import com.moneat.datadog.routes.datadogReplayRoutes
 import com.moneat.datadog.routes.datadogValidateRoutes
 import com.moneat.datadog.routes.dbmIngestRoutes
 import com.moneat.datadog.routes.debuggerIngestRoutes
@@ -106,6 +107,7 @@ class DatadogModule : EnterpriseModule, IngestionRateLimitKeyResolver {
             rateLimit(RateLimitName("datadog-ingestion")) {
                 datadogLogRoutes()
                 datadogMetricRoutes()
+                datadogReplayRoutes()
                 datadogDogStatsDRoutes()
                 traceIngestRoutes()
                 profileIngestRoutes()

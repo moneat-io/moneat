@@ -171,4 +171,5 @@ object DatadogAuthMiddleware {
         API_KEY_HEADER_NAMES.firstNotNullOfOrNull { call.request.headers[it] }
             ?: call.request.queryParameters["api_key"]
             ?: call.request.queryParameters["api-key"]
+            ?: call.request.queryParameters["dd-api-key"]
 }
