@@ -1002,6 +1002,9 @@ class AdminService(
                         }
                     }
 
+                    // Delete user's sso links
+                    UserSsoLinks.deleteWhere { UserSsoLinks.userId eq userId  }
+
                     // Delete user's memberships
                     Memberships.deleteWhere { Memberships.user_id eq userId }
 
