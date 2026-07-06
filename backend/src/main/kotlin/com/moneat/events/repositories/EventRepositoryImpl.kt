@@ -351,6 +351,18 @@ class EventRepositoryImpl(
     }
 
     override suspend fun insertReplayRecording(data: ReplayRecordingInsertData) {
+        insertReplayRecordingResult(data)
+    }
+
+    override suspend fun insertReplayEventWithRecording(
+        event: ReplayEventInsertData,
+        recording: ReplayRecordingInsertData,
+    ): Boolean {
+        if (!insertReplayRecordingResult(recording)) return false
+        return insertReplayEvent(event)
+    }
+
+    private suspend fun insertReplayRecordingResult(data: ReplayRecordingInsertData): Boolean {
         val sql = """
             INSERT INTO `$db`.replay_segments (
                 replay_id, service_id, project_id, organization_id, segment_id, timestamp, recording_data
@@ -364,7 +376,7 @@ class EventRepositoryImpl(
                 '${escapeSql(data.recordingData)}'
             )
         """.trimIndent()
-        executeInsertNoResult(sql)
+        return executeInsert(sql)
     }
 
     override suspend fun insertLlmGenerations(rows: List<LlmGenerationInsertData>): Boolean {

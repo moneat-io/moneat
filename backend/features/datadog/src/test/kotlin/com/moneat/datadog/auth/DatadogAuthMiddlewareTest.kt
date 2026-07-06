@@ -63,8 +63,8 @@ class DatadogAuthMiddlewareTest {
         val ctor = entryClass.declaredConstructors.single().apply { isAccessible = true }
         repeat(count) { index ->
             cache["cached-$fieldName-$index"] = when (fieldName) {
-                "cache" -> ctor.newInstance(index, 0L)
-                else -> ctor.newInstance(DatadogAuthContext(index, index), 0L)
+                "cache" -> ctor.newInstance(index, Long.MAX_VALUE)
+                else -> ctor.newInstance(DatadogAuthContext(index, index), Long.MAX_VALUE)
             }
         }
     }

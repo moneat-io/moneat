@@ -133,9 +133,8 @@ object DatadogReplayIngestionService {
         )
 
         suspendRunCatching {
-            val replayStored = eventRepository.insertReplayEvent(replayEvent)
-            check(replayStored) { "Failed to insert replay event" }
-            eventRepository.insertReplayRecording(recording)
+            val replayStored = eventRepository.insertReplayEventWithRecording(replayEvent, recording)
+            check(replayStored) { "Failed to insert replay event and recording" }
         }.getOrElse { error ->
             logger.error(error) { "Failed to ingest Datadog replay segment" }
             throw error

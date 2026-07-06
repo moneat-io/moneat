@@ -45,6 +45,10 @@ private const val REPLAY_EVENT_TYPE = "replay"
 private const val DD_TAGS_QUERY_PARAM = "ddtags"
 private const val DD_ENCODING_QUERY_PARAM = "dd-evp-encoding"
 private const val DD_ORIGIN_VERSION_QUERY_PARAM = "dd-evp-origin-version"
+private const val BYTES_PER_MEBIBYTE = 1024 * 1024
+private const val MAX_REPLAY_MULTIPART_PART_MEBIBYTES = 50
+internal const val MAX_REPLAY_MULTIPART_PART_BYTES =
+    MAX_REPLAY_MULTIPART_PART_MEBIBYTES * BYTES_PER_MEBIBYTE
 
 private val logger = KotlinLogging.logger {}
 private val replayRouteJson = Json {
@@ -93,7 +97,7 @@ private suspend fun RoutingContext.handleDatadogReplayUpload(
         receiveDatadogReplayUpload()
     }.getOrElse { error ->
         logger.warn(error) { "Failed to parse Datadog replay multipart upload" }
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to (error.message ?: "Invalid replay upload")))
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid replay upload"))
         return
     }
     val event = upload.event
@@ -149,21 +153,28 @@ private suspend fun RoutingContext.receiveDatadogReplayUpload(): DatadogReplayUp
     var segmentBytes: ByteArray? = null
     var segmentEncoding: String? = null
 
-    call.receiveMultipart().forEachPart { part ->
+    call.receiveMultipart(MAX_REPLAY_MULTIPART_PART_BYTES.toLong()).forEachPart { part ->
         try {
             when {
                 part.name == "event" && part is PartData.FormItem -> {
+                    part.requireContentLengthWithinLimit()
                     val bytes = part.value.toByteArray()
+                    requirePartWithinLimit("event", bytes.size.toLong())
                     eventBytes = bytes.size
                     event = parseReplayEvent(part.value)
                 }
                 part.name == "event" && part is PartData.FileItem -> {
+                    part.requireContentLengthWithinLimit()
                     val bytes = part.provider().toByteArray()
+                    requirePartWithinLimit("event", bytes.size.toLong())
                     eventBytes = bytes.size
                     event = parseReplayEvent(bytes.decodeToString())
                 }
                 part.name == "segment" && part is PartData.FileItem -> {
-                    segmentBytes = part.provider().toByteArray()
+                    part.requireContentLengthWithinLimit()
+                    val bytes = part.provider().toByteArray()
+                    requirePartWithinLimit("segment", bytes.size.toLong())
+                    segmentBytes = bytes
                     segmentEncoding = part.headers[HttpHeaders.ContentEncoding]
                 }
             }
@@ -178,6 +189,17 @@ private suspend fun RoutingContext.receiveDatadogReplayUpload(): DatadogReplayUp
         segmentBytes = segmentBytes,
         segmentEncoding = segmentEncoding,
     )
+}
+
+private fun PartData.requireContentLengthWithinLimit() {
+    val declaredLength = headers[HttpHeaders.ContentLength]?.toLongOrNull() ?: return
+    requirePartWithinLimit(name ?: "multipart", declaredLength)
+}
+
+internal fun requirePartWithinLimit(partName: String, bytes: Long) {
+    require(bytes <= MAX_REPLAY_MULTIPART_PART_BYTES) {
+        "Replay $partName part exceeds $MAX_REPLAY_MULTIPART_PART_BYTES byte limit"
+    }
 }
 
 private fun parseReplayEvent(value: String): DdReplaySegmentEvent =

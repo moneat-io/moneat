@@ -48,8 +48,9 @@ class DatadogReplayIngestionServiceTest {
         val repository = mockk<EventRepository>()
         val replaySlot = slot<ReplayEventInsertData>()
         val recordingSlot = slot<ReplayRecordingInsertData>()
-        coEvery { repository.insertReplayEvent(capture(replaySlot)) } returns true
-        coEvery { repository.insertReplayRecording(capture(recordingSlot)) } returns Unit
+        coEvery {
+            repository.insertReplayEventWithRecording(capture(replaySlot), capture(recordingSlot))
+        } returns true
 
         val result = DatadogReplayIngestionService.ingestReplaySegment(
             request = DatadogReplayIngestRequest(
@@ -90,8 +91,7 @@ class DatadogReplayIngestionServiceTest {
         assertTrue(recording.recordingData.startsWith("["))
         assertContains(recording.recordingData, "https://example.com/cart")
 
-        coVerify(exactly = 1) { repository.insertReplayEvent(any()) }
-        coVerify(exactly = 1) { repository.insertReplayRecording(any()) }
+        coVerify(exactly = 1) { repository.insertReplayEventWithRecording(any(), any()) }
     }
 
     @Test
@@ -125,8 +125,6 @@ class DatadogReplayIngestionServiceTest {
     @Test
     fun `ingestReplaySegment requires project-scoped api key`() = runBlocking {
         val repository = mockk<EventRepository>()
-        coEvery { repository.insertReplayEvent(any()) } returns true
-        coEvery { repository.insertReplayRecording(any()) } returns Unit
 
         val error = assertFailsWith<IllegalArgumentException> {
             DatadogReplayIngestionService.ingestReplaySegment(
@@ -147,8 +145,6 @@ class DatadogReplayIngestionServiceTest {
     @Test
     fun `ingestReplaySegment requires replay session id`() = runBlocking {
         val repository = mockk<EventRepository>()
-        coEvery { repository.insertReplayEvent(any()) } returns true
-        coEvery { repository.insertReplayRecording(any()) } returns Unit
 
         val error = assertFailsWith<IllegalArgumentException> {
             DatadogReplayIngestionService.ingestReplaySegment(
@@ -169,8 +165,6 @@ class DatadogReplayIngestionServiceTest {
     @Test
     fun `ingestReplaySegment rejects segments with no records`() = runBlocking {
         val repository = mockk<EventRepository>()
-        coEvery { repository.insertReplayEvent(any()) } returns true
-        coEvery { repository.insertReplayRecording(any()) } returns Unit
 
         val error = assertFailsWith<IllegalArgumentException> {
             DatadogReplayIngestionService.ingestReplaySegment(
@@ -193,8 +187,9 @@ class DatadogReplayIngestionServiceTest {
     fun `ingestReplaySegment defaults missing source to browser`() = runBlocking {
         val repository = mockk<EventRepository>()
         val replaySlot = slot<ReplayEventInsertData>()
-        coEvery { repository.insertReplayEvent(capture(replaySlot)) } returns true
-        coEvery { repository.insertReplayRecording(any()) } returns Unit
+        coEvery {
+            repository.insertReplayEventWithRecording(capture(replaySlot), any())
+        } returns true
 
         DatadogReplayIngestionService.ingestReplaySegment(
             request = DatadogReplayIngestRequest(
@@ -215,8 +210,9 @@ class DatadogReplayIngestionServiceTest {
     fun `ingestReplaySegment ignores blank source tags`() = runBlocking {
         val repository = mockk<EventRepository>()
         val replaySlot = slot<ReplayEventInsertData>()
-        coEvery { repository.insertReplayEvent(capture(replaySlot)) } returns true
-        coEvery { repository.insertReplayRecording(any()) } returns Unit
+        coEvery {
+            repository.insertReplayEventWithRecording(capture(replaySlot), any())
+        } returns true
 
         DatadogReplayIngestionService.ingestReplaySegment(
             request = DatadogReplayIngestRequest(
@@ -239,8 +235,7 @@ class DatadogReplayIngestionServiceTest {
     @Test
     fun `ingestReplaySegment throws when inserting replay fails`() = runBlocking {
         val repository = mockk<EventRepository>()
-        coEvery { repository.insertReplayEvent(any()) } returns false
-        coEvery { repository.insertReplayRecording(any()) } returns Unit
+        coEvery { repository.insertReplayEventWithRecording(any(), any()) } returns false
 
         val error = assertFailsWith<IllegalStateException> {
             DatadogReplayIngestionService.ingestReplaySegment(
@@ -255,7 +250,7 @@ class DatadogReplayIngestionServiceTest {
             )
         }
 
-        assertEquals("Failed to insert replay event", error.message)
+        assertEquals("Failed to insert replay event and recording", error.message)
     }
 
     private fun replayEvent(

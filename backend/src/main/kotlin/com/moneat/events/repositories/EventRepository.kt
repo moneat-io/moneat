@@ -44,6 +44,10 @@ interface EventRepository {
     suspend fun insertFeedback(data: FeedbackInsertData): Boolean
     suspend fun insertReplayEvent(data: ReplayEventInsertData): Boolean
     suspend fun insertReplayRecording(data: ReplayRecordingInsertData)
+    suspend fun insertReplayEventWithRecording(
+        event: ReplayEventInsertData,
+        recording: ReplayRecordingInsertData,
+    ): Boolean
     suspend fun insertLlmGenerations(rows: List<LlmGenerationInsertData>): Boolean
     suspend fun insertProfile(data: ProfileInsertData): Boolean
 }

@@ -56,6 +56,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -196,8 +197,19 @@ class DatadogReplayRoutesTest {
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
-        assertTrue(response.bodyAsText().contains("Invalid replay event JSON"))
+        val body = response.bodyAsText()
+        assertTrue(body.contains("Invalid replay upload"))
+        assertFalse(body.contains("Invalid replay event JSON"))
         coVerify(exactly = 0) { DatadogReplayIngestionService.ingestReplaySegment(any()) }
+    }
+
+    @Test
+    fun `replay multipart size limit rejects oversized parts`() {
+        val error = assertFailsWith<IllegalArgumentException> {
+            requirePartWithinLimit("segment", MAX_REPLAY_MULTIPART_PART_BYTES + 1L)
+        }
+
+        assertTrue(error.message.orEmpty().contains("Replay segment part exceeds"))
     }
 
     @Test
@@ -347,22 +359,6 @@ class DatadogReplayRoutesTest {
                     name = "event",
                     fileName = "event.json",
                     bytes = replayEventJson().toByteArray(),
-                    contentType = ContentType.Application.Json,
-                )
-                appendFile("segment", "segment.bin", segmentBytes)
-            }
-        )
-
-    private fun replayMultipartBody(
-        eventJson: String,
-        segmentBytes: ByteArray,
-    ): MultiPartFormDataContent =
-        MultiPartFormDataContent(
-            formData {
-                appendFile(
-                    name = "event",
-                    fileName = "event.json",
-                    bytes = eventJson.toByteArray(),
                     contentType = ContentType.Application.Json,
                 )
                 appendFile("segment", "segment.bin", segmentBytes)
