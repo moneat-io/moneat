@@ -111,14 +111,28 @@ private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {
     }
 }
 
-private fun parseSingleOrLineDelimitedLogEntries(trimmed: String): List<DatadogLogEntry> =
+private fun parseSingleOrLineDelimitedLogEntries(trimmed: String): List<DatadogLogEntry>? =
     runCatching {
         listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
     }.getOrElse {
-        trimmed
-            .lineSequence()
-            .map { line -> line.trim() }
-            .filter { line -> line.isNotEmpty() }
-            .map { line -> json.decodeFromString<DatadogLogEntry>(line) }
-            .toList()
+        parseLineDelimitedLogEntries(trimmed)
     }
+
+private fun parseLineDelimitedLogEntries(trimmed: String): List<DatadogLogEntry>? {
+    var skippedMalformedLine = false
+    val entries = trimmed
+        .lineSequence()
+        .map { line -> line.trim() }
+        .filter { line -> line.isNotEmpty() }
+        .mapNotNull { line ->
+            runCatching {
+                json.decodeFromString<DatadogLogEntry>(line)
+            }.getOrElse { error ->
+                skippedMalformedLine = true
+                logger.warn(error) { "Skipping malformed DD log line" }
+                null
+            }
+        }
+        .toList()
+    return entries.ifEmpty { if (skippedMalformedLine) null else emptyList() }
+}
