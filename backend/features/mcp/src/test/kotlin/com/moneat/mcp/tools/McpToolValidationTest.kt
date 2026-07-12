@@ -565,6 +565,18 @@ class McpToolValidationTest {
                 "interval_seconds must be a valid integer",
             ),
             case(
+                "update_uptime_retries",
+                UpdateUptimeMonitorTool(),
+                obj("monitor_id" to uuid, "retries" to "bad"),
+                "retries must be a valid integer",
+            ),
+            case(
+                "update_uptime_retry_interval",
+                UpdateUptimeMonitorTool(),
+                obj("monitor_id" to uuid, "retry_interval_seconds" to "bad"),
+                "retry_interval_seconds must be a valid integer",
+            ),
+            case(
                 "delete_uptime_uuid",
                 DeleteUptimeMonitorTool(),
                 obj("monitor_id" to "bad"),

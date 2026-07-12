@@ -343,6 +343,17 @@ class DashboardCrudToolTest {
     }
 
     @Test
+    fun `list dashboard alerts reports missing dashboard`() = runBlocking {
+        val result = ListDashboardAlertsTool().execute(
+            JsonObject(mapOf("dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID))),
+            context,
+        )
+
+        assertTrue(result.isError)
+        assertEquals("Dashboard not found", result.content.first().text)
+    }
+
+    @Test
     fun `update dashboard alert can update duration priority and gte condition`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)

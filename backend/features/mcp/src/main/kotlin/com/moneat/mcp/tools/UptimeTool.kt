@@ -90,7 +90,9 @@ class GetMonitorHeartbeatsTool : McpTool {
     }
 }
 
-class CreateUptimeMonitorTool : McpTool {
+class CreateUptimeMonitorTool(
+    private val service: UptimeService = uptimeService,
+) : McpTool {
     override val name = "create_uptime_monitor"
     override val description = "Create a new uptime monitor"
     override val readOnly = false
@@ -142,7 +144,7 @@ class CreateUptimeMonitorTool : McpTool {
                 retries = retries,
                 retryIntervalSeconds = retryInterval,
             )
-        val monitor = uptimeService.createMonitor(
+        val monitor = service.createMonitor(
             context.organizationId,
             request
         )

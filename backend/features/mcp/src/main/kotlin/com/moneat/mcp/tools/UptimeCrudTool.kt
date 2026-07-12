@@ -31,7 +31,9 @@ import java.util.UUID
 
 private val uptimeCrudService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
-class UpdateUptimeMonitorTool : McpTool {
+class UpdateUptimeMonitorTool(
+    private val service: UptimeService = uptimeCrudService,
+) : McpTool {
     override val name = "update_uptime_monitor"
     override val description = "Update an uptime monitor"
     override val readOnly = false
@@ -103,7 +105,7 @@ class UpdateUptimeMonitorTool : McpTool {
             retryIntervalSeconds = retryIntervalSeconds,
             active = active,
         )
-        val monitor = uptimeCrudService.updateMonitor(
+        val monitor = service.updateMonitor(
             uuid, context.organizationId, request
         ) ?: return errorResult("Monitor not found: $monitorId")
         return jsonResult(monitor)
