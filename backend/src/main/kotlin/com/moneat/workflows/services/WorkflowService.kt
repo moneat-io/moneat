@@ -831,20 +831,36 @@ class WorkflowService(
             ?.let { resolvedWorkflowId -> verifyWebhookSignature(resolvedWorkflowId, payload, signatureHeader) }
             ?: false
 
-    suspend fun publishAlertTriggered(event: AlertLifecycleEvent) {
+    /**
+     * Publish an alert lifecycle event when the episode is due for notification.
+     *
+     * The return value lets callers that fan out to external incident providers
+     * share the same episode/reminder gate instead of sending a provider alert
+     * for every evaluator pass.
+     */
+    suspend fun publishAlertTriggered(event: AlertLifecycleEvent): Boolean {
         if (event.status == AlertStatus.RESOLVED) {
-            publishResolvedAlertEvent(event)
-            return
+            return publishResolvedAlertEvent(event)
         }
-        val episode = alertEpisodeService.recordFiring(event) ?: return
-        if (!episode.shouldPublish) return
-        publishAlertWorkflowTriggers(event, episode)
+        val episode = alertEpisodeService.recordFiring(event) ?: return true
+        if (!episode.shouldPublish) return false
+        suspendRunCatching {
+            publishAlertWorkflowTriggers(event, episode)
+        }.onFailure { e ->
+            logger.error(e) { "Failed to publish alert workflow triggers" }
+        }
+        return true
     }
 
-    private suspend fun publishResolvedAlertEvent(event: AlertLifecycleEvent) {
-        val episode = alertEpisodeService.recordResolved(event) ?: return
-        if (!episode.shouldPublish) return
-        publishAlertWorkflowTriggers(event, episode)
+    private suspend fun publishResolvedAlertEvent(event: AlertLifecycleEvent): Boolean {
+        val episode = alertEpisodeService.recordResolved(event) ?: return true
+        if (!episode.shouldPublish) return false
+        suspendRunCatching {
+            publishAlertWorkflowTriggers(event, episode)
+        }.onFailure { e ->
+            logger.error(e) { "Failed to publish resolved alert workflow triggers" }
+        }
+        return true
     }
 
     private suspend fun publishAlertWorkflowTriggers(

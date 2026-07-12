@@ -817,12 +817,12 @@ class DashboardAlertService(
                 moneatUrl = "$baseUrl/dashboards/${alert.dashboardResourceId}"
             )
 
-        suspendRunCatching {
+        val shouldNotifyIncidentProvider = suspendRunCatching {
             workflowService.publishAlertTriggered(event)
         }.onFailure { e ->
             logger.error(e) { "Failed to publish dashboard alert workflow" }
-        }
-        if (configuredAlertPriority != null) {
+        }.getOrElse { true }
+        if (configuredAlertPriority != null && shouldNotifyIncidentProvider) {
             suspendRunCatching {
                 incidentService.fireAlert(event.copy(priority = configuredAlertPriority), publishWorkflow = false)
             }.onFailure { e ->

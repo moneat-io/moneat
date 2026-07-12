@@ -90,6 +90,7 @@ object McpScopes {
         "list_alerts",
         "list_containers",
         "list_dashboards",
+        "list_dashboard_alerts",
         "list_datasources",
         "list_hosts",
         "list_processes",

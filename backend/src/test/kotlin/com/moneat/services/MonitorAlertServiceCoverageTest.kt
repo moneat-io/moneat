@@ -140,6 +140,7 @@ class MonitorAlertServiceCoverageTest {
 
         incidentService = mockk(relaxed = true)
         workflowService = mockk(relaxed = true)
+        coEvery { workflowService.publishAlertTriggered(any()) } returns true
         service =
             MonitorAlertService(
                 incidentService = incidentService,
@@ -744,6 +745,54 @@ class MonitorAlertServiceCoverageTest {
             coVerify(exactly = 1) {
                 incidentService.fireAlert(any(), false)
             }
+        }
+
+    @Test
+    fun `triggerAlert suppresses provider fanout when the episode gate declines`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            every { RedisConfig.isConnected() } returns true
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.sync() } returns redis
+            every { redis.set(alertKey, "TRIGGERED") } returns "OK"
+            coEvery { workflowService.publishAlertTriggered(any()) } returns false
+
+            callPrivateSuspend(
+                "triggerAlert",
+                fixture.alert,
+                "host-alert-workflow",
+                fixture.orgId,
+                91.0,
+                alertKey,
+                Clock.System.now(),
+            )
+
+            coVerify(exactly = 0) { incidentService.fireAlert(any(), false) }
+        }
+
+    @Test
+    fun `triggerAlert fails open to provider fanout when workflow publication fails`() =
+        runBlocking {
+            val fixture = createHostAlertFixture()
+            val alertKey = "alert_state:${fixture.hostId}:id_${fixture.alert.id}"
+            every { RedisConfig.isConnected() } returns true
+            val redis = mockk<RedisCommands<String, String>>()
+            every { RedisConfig.sync() } returns redis
+            every { redis.set(alertKey, "TRIGGERED") } returns "OK"
+            coEvery { workflowService.publishAlertTriggered(any()) } throws RuntimeException("redis down")
+
+            callPrivateSuspend(
+                "triggerAlert",
+                fixture.alert,
+                "host-alert-workflow",
+                fixture.orgId,
+                91.0,
+                alertKey,
+                Clock.System.now(),
+            )
+
+            coVerify(exactly = 1) { incidentService.fireAlert(any(), false) }
         }
 
     // ──── Key helpers ────

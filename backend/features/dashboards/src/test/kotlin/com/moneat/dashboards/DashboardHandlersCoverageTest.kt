@@ -209,6 +209,33 @@ class DashboardHandlersCoverageTest {
         assertEquals("30d", handler.resolvePrometheusStep(40L * 86_400L, 1))
     }
 
+    @Test
+    fun `expandQueryMacros resolves Grafana interval variables`() {
+        val handler = PrometheusHandler()
+
+        assertEquals(
+            "rate(http_requests_total[1m]) + histogram_quantile(0.95, rate(latency_bucket[10s]))",
+            handler.expandQueryMacros(
+                "rate(http_requests_total[\$__rate_interval]) + " +
+                    "histogram_quantile(0.95, rate(latency_bucket[\$__interval]))",
+                rangeSec = 10_800L,
+            ),
+        )
+    }
+
+    @Test
+    fun `expandQueryMacros uses safe instant defaults`() {
+        val handler = PrometheusHandler()
+
+        assertEquals(
+            "rate(requests_total[4m]) / scalar(up[1m])",
+            handler.expandQueryMacros(
+                "rate(requests_total[\$__rate_interval]) / scalar(up[\$__interval])",
+                rangeSec = null,
+            ),
+        )
+    }
+
     // ──── PrometheusHandler — parsePrometheusResponse ────
 
     @Test

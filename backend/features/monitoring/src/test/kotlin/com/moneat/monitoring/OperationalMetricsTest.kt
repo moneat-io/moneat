@@ -315,6 +315,95 @@ class OperationalMetricsTest {
     }
 
     @Test
+    fun `reports zero oldest age when a consumer group has no backlog`() {
+        val streamKey = "moneat:logs:queue:stream"
+        val consumerGroup = "moneat:logs:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every { redis.xpending(streamKey, consumerGroup) } returns
+            PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
+        every { redis.xinfoGroups(streamKey) } returns listOf(
+            listOf(
+                "name",
+                consumerGroup,
+                "pending",
+                0L,
+                "last-delivered-id",
+                "${System.currentTimeMillis() - 86_400_000L}-0",
+                "lag",
+                0L,
+            )
+        )
+
+        OperationalMetrics.registerWorkerStream(
+            workerName = "Log",
+            streamKey = streamKey,
+            streamType = "primary",
+            consumerGroup = consumerGroup,
+        )
+
+        val oldestLine = metricLine(
+            OperationalMetrics.scrape(),
+            "moneat_worker_stream_oldest_message_age_seconds",
+            "stream_key=\"$streamKey\"",
+            "stream_type=\"primary\"",
+        )
+
+        assertTrue(oldestLine.endsWith(" 0.0"), oldestLine)
+    }
+
+    @Test
+    fun `registers grouped and ungrouped stream age gauges with stable tags`() {
+        val primaryKey = "moneat:logs:queue:stream"
+        val dlqKey = "moneat:logs:dlq:stream"
+        val consumerGroup = "moneat:logs:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every { redis.xpending(primaryKey, consumerGroup) } returns
+            PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
+        every { redis.xrange(any(), any<Range<String>>(), any()) } returns emptyList()
+
+        OperationalMetrics.registerWorkerStream("Log", primaryKey, "primary", consumerGroup)
+        OperationalMetrics.registerWorkerStream("Log", dlqKey, "dlq")
+
+        val rendered = OperationalMetrics.scrape()
+
+        assertContains(rendered, "stream_key=\"$primaryKey\"")
+        assertContains(rendered, "stream_key=\"$dlqKey\"")
+        assertContains(rendered, "consumer_group=\"unknown\"")
+    }
+
+    @Test
+    fun `reports zero oldest age when consumer group is missing`() {
+        val streamKey = "moneat:logs:queue:stream"
+        val consumerGroup = "moneat:logs:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every { redis.xpending(streamKey, consumerGroup) } throws
+            IllegalStateException("NOGROUP No such key '$streamKey' or consumer group '$consumerGroup'")
+
+        OperationalMetrics.registerWorkerStream("Log", streamKey, "primary", consumerGroup)
+
+        val oldestLine = metricLine(
+            OperationalMetrics.scrape(),
+            "moneat_worker_stream_oldest_message_age_seconds",
+            "stream_key=\"$streamKey\"",
+            "stream_type=\"primary\"",
+        )
+
+        assertTrue(oldestLine.endsWith(" 0.0"), oldestLine)
+    }
+
+    @Test
     fun `renders datadog metric ingest health metrics`() {
         // ──── Arrange ────
         OperationalMetrics.registerWorkerQueues("DD metric", "moneat:metrics:queue:stream", "moneat:metrics:dlq:stream")

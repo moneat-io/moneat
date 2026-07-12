@@ -58,6 +58,8 @@ class PrometheusHandler : HttpApiHandler() {
         private const val DEFAULT_PROMETHEUS_RESULT_LIMIT =
             DEFAULT_PROMETHEUS_MAX_DATA_POINTS * PROMETHEUS_RESULT_SERIES_HEADROOM
         private const val MIN_PROMETHEUS_MAX_DATA_POINTS = 1
+        private const val DEFAULT_PROMETHEUS_INTERVAL_MS = 60_000L
+        private const val PROMETHEUS_RATE_INTERVAL_MULTIPLIER = 4L
         private const val MILLIS_PER_MINUTE_LONG = 60_000L
         private const val MILLIS_PER_HOUR_LONG = 3_600_000L
         private const val MILLIS_PER_DAY_LONG = 86_400_000L
@@ -198,18 +200,20 @@ class PrometheusHandler : HttpApiHandler() {
                 val fromSec = resolveRelativeTimeSec(timeRange.from, nowSec)
                 val toSec = resolveRelativeTimeSec(timeRange.to, nowSec)
                 val step = resolvePrometheusStep(toSec - fromSec)
+                val effectiveQuery = expandQueryMacros(query, toSec - fromSec)
 
                 httpClient.get("$baseUrl/api/v1/query_range") {
                     applyHttpAuth(credentials)
-                    parameter("query", query)
+                    parameter("query", effectiveQuery)
                     parameter("start", fromSec)
                     parameter("end", toSec)
                     parameter("step", step)
                 }
             } else {
+                val effectiveQuery = expandQueryMacros(query, null)
                 httpClient.get("$baseUrl/api/v1/query") {
                     applyHttpAuth(credentials)
-                    parameter("query", query)
+                    parameter("query", effectiveQuery)
                 }
             }
 
@@ -353,10 +357,29 @@ class PrometheusHandler : HttpApiHandler() {
         rangeSec: Long,
         maxDataPoints: Int = DEFAULT_PROMETHEUS_MAX_DATA_POINTS,
     ): String {
+        return formatPrometheusDuration(resolvePrometheusStepMs(rangeSec, maxDataPoints))
+    }
+
+    internal fun expandQueryMacros(query: String, rangeSec: Long?): String {
+        val stepMs = rangeSec?.let { resolvePrometheusStepMs(it, DEFAULT_PROMETHEUS_MAX_DATA_POINTS) }
+            ?: DEFAULT_PROMETHEUS_INTERVAL_MS
+        val step = formatPrometheusDuration(stepMs)
+        val rateInterval = formatPrometheusDuration(
+            maxOf(stepMs * PROMETHEUS_RATE_INTERVAL_MULTIPLIER, DEFAULT_PROMETHEUS_INTERVAL_MS)
+        )
+        return query
+            .replace("\$__rate_interval", rateInterval)
+            .replace("\$__interval", step)
+    }
+
+    private fun resolvePrometheusStepMs(
+        rangeSec: Long,
+        maxDataPoints: Int,
+    ): Long {
         val resolution = maxDataPoints.coerceAtLeast(MIN_PROMETHEUS_MAX_DATA_POINTS)
         val rangeMs = rangeSec.coerceAtLeast(0) * MILLIS_PER_SECOND_LONG
         val intervalMs = roundAutoStepIntervalMs(rangeMs.toDouble() / resolution)
-        return formatPrometheusDuration(intervalMs)
+        return intervalMs
     }
 
     private fun roundAutoStepIntervalMs(intervalMs: Double): Long {

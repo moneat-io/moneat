@@ -309,6 +309,35 @@ class UptimeServiceTest {
         }
 
     @Test
+    fun `createMonitor rejects unsafe retry settings`() =
+        runBlocking {
+            val orgId = seedOrg()
+
+            assertFailsWith<IllegalArgumentException> {
+                service.createMonitor(
+                    orgId,
+                    CreateUptimeMonitorRequest(
+                        name = "Too many retries",
+                        type = "http",
+                        url = EXAMPLE_COM_URL,
+                        retries = 11,
+                    )
+                )
+            }
+            assertFailsWith<IllegalArgumentException> {
+                service.createMonitor(
+                    orgId,
+                    CreateUptimeMonitorRequest(
+                        name = "Tight retry loop",
+                        type = "http",
+                        url = EXAMPLE_COM_URL,
+                        retryIntervalSeconds = 0,
+                    )
+                )
+            }
+        }
+
+    @Test
     fun `updateMonitor returns updated monitor with new name`() =
         runBlocking {
             val orgId = seedOrg()

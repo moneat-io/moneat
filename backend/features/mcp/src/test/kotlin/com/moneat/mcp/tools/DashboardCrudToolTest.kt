@@ -315,6 +315,34 @@ class DashboardCrudToolTest {
     }
 
     @Test
+    fun `list dashboard alerts returns alert configurations`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+        CreateDashboardAlertTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
+                    "name" to JsonPrimitive("CPU high"),
+                    "condition" to JsonPrimitive("gt"),
+                    "threshold" to JsonPrimitive(0.85),
+                )
+            ),
+            context
+        )
+
+        val result = ListDashboardAlertsTool().execute(
+            JsonObject(mapOf("dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)))),
+            context
+        )
+
+        assertFalse(result.isError, result.content.first().text.orEmpty())
+        val alerts = json.parseToJsonElement(result.content.first().text.orEmpty()).jsonArray
+        assertEquals(1, alerts.size)
+        assertEquals("CPU high", alerts.single().jsonObject["name"]?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun `update dashboard alert can update duration priority and gte condition`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
@@ -392,6 +420,11 @@ class DashboardCrudToolTest {
                         "threshold" to JsonPrimitive(0.85),
                     )
                 ),
+                "dashboard_id is required",
+            ),
+            ToolCase(
+                ListDashboardAlertsTool(),
+                JsonObject(emptyMap()),
                 "dashboard_id is required",
             ),
             ToolCase(

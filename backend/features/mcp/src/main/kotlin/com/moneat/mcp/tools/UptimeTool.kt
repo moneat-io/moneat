@@ -33,6 +33,8 @@ private val uptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRe
 private const val DEFAULT_HEARTBEAT_HOURS = 24
 private const val MAX_HEARTBEAT_HOURS = 168
 private const val DEFAULT_INTERVAL = 60
+private const val DEFAULT_RETRIES = 1
+private const val DEFAULT_RETRY_INTERVAL_SECONDS = 60
 private const val MILLIS_PER_HOUR = 3_600_000L
 
 class ListUptimeMonitorsTool : McpTool {
@@ -103,7 +105,13 @@ class CreateUptimeMonitorTool : McpTool {
                 ),
                 "interval_seconds" to schemaNumber(
                     "Check interval in seconds (default 60)"
-                )
+                ),
+                "retries" to schemaNumber(
+                    "Retries after a failed check (default 1)"
+                ),
+                "retry_interval_seconds" to schemaNumber(
+                    "Seconds between failed-check retries (default 60)"
+                ),
             )
         ),
         required = listOf("name", "url", "type")
@@ -121,13 +129,18 @@ class CreateUptimeMonitorTool : McpTool {
             ?: return errorResult("type is required")
         val interval = args["interval_seconds"]?.jsonPrimitive?.intOrNull
             ?: DEFAULT_INTERVAL
+        val retries = args["retries"]?.jsonPrimitive?.intOrNull ?: DEFAULT_RETRIES
+        val retryInterval = args["retry_interval_seconds"]?.jsonPrimitive?.intOrNull
+            ?: DEFAULT_RETRY_INTERVAL_SECONDS
 
         val request =
             com.moneat.uptime.models.CreateUptimeMonitorRequest(
                 name = name,
                 url = url,
                 type = type,
-                intervalSeconds = interval
+                intervalSeconds = interval,
+                retries = retries,
+                retryIntervalSeconds = retryInterval,
             )
         val monitor = uptimeService.createMonitor(
             context.organizationId,

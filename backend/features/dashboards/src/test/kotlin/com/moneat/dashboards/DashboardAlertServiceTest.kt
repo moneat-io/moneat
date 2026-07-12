@@ -127,6 +127,7 @@ class DashboardAlertServiceTest {
         every { queryEngine.isTemplateDataSourceMarker(any()) } answers {
             firstArg<String>().startsWith("__")
         }
+        coEvery { workflowService.publishAlertTriggered(any()) } returns true
         transaction {
             exec(
                 """
@@ -1040,6 +1041,72 @@ class DashboardAlertServiceTest {
                             it.metadata["alert.channels.discord"]?.jsonPrimitive?.content == "false"
                     }
                 )
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts does not fan out suppressed workflow episodes to incident providers`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
+            coEvery { workflowService.publishAlertTriggered(any()) } returns false
+
+            val dashboardId = seedDashboard()
+            val widgetId = seedWidget(dashboardId, queryConfigs = "[{\"dataSource\":\"events\"}]")
+            service.createAlert(
+                dashboardId,
+                ORG_ID,
+                CREATED_BY,
+                buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(threshold = 100.0, alertPriority = "P1"),
+                ),
+            )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 0) {
+                incidentService.fireAlert(any(), publishWorkflow = false)
+            }
+        }
+
+    @Test
+    fun `evaluateAlerts fails open to incident providers when workflow publication fails`() =
+        runBlocking {
+            mockkObject(RedisConfig)
+            redisConfigMocked = true
+            every { RedisConfig.isConnected() } returns false
+            coEvery {
+                retentionPolicyService.getRetentionDaysForProject(any())
+            } returns RECOVERY_RETENTION_DAYS
+            coEvery {
+                queryEngine.executeQuery(any(), any(), any(), any(), any())
+            } returns listOf(mapOf("total" to JsonPrimitive(125.0)))
+            coEvery { workflowService.publishAlertTriggered(any()) } throws RuntimeException("workflow unavailable")
+
+            val dashboardId = seedDashboard()
+            val widgetId = seedWidget(dashboardId, queryConfigs = "[{\"dataSource\":\"events\"}]")
+            service.createAlert(
+                dashboardId,
+                ORG_ID,
+                CREATED_BY,
+                buildCreateRequest(
+                    widgetId,
+                    AlertRequestOverrides(threshold = 100.0, alertPriority = "P1"),
+                ),
+            )
+
+            callPrivateSuspend("evaluateAlerts")
+
+            coVerify(exactly = 1) {
+                incidentService.fireAlert(any(), publishWorkflow = false)
             }
         }
 

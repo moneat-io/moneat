@@ -44,6 +44,12 @@ class UpdateUptimeMonitorTool : McpTool {
                 "interval_seconds" to schemaInteger(
                     "Check interval in seconds"
                 ),
+                "retries" to schemaInteger(
+                    "Retries after a failed check"
+                ),
+                "retry_interval_seconds" to schemaInteger(
+                    "Seconds between failed-check retries"
+                ),
                 "active" to schemaBoolean("Enable/disable")
             )
         ),
@@ -77,11 +83,25 @@ class UpdateUptimeMonitorTool : McpTool {
         } else {
             null
         }
+        val retries = if (args.containsKey("retries")) {
+            args["retries"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retries must be a valid integer")
+        } else {
+            null
+        }
+        val retryIntervalSeconds = if (args.containsKey("retry_interval_seconds")) {
+            args["retry_interval_seconds"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retry_interval_seconds must be a valid integer")
+        } else {
+            null
+        }
         val request = UpdateUptimeMonitorRequest(
             name = args["name"]?.jsonPrimitive?.content,
             url = args["url"]?.jsonPrimitive?.content,
             intervalSeconds = intervalSeconds,
-            active = active
+            retries = retries,
+            retryIntervalSeconds = retryIntervalSeconds,
+            active = active,
         )
         val monitor = uptimeCrudService.updateMonitor(
             uuid, context.organizationId, request
