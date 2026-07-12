@@ -23,7 +23,6 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
-    Cell,
     Legend,
     Line,
     LineChart,
@@ -597,7 +596,7 @@ function getLegendProps(dc: DisplayConfig, visibility?: SeriesVisibility) {
   }
 }
 
-function ChartLegend({payload, placement = 'bottom', hiddenKeys, onToggle}: ChartLegendProps) {
+function ChartLegend({payload, placement = 'bottom', hiddenKeys, onToggle}: Readonly<ChartLegendProps>) {
   const items = payload ?? []
   if (items.length === 0) return null
 
@@ -619,33 +618,39 @@ function ChartLegend({payload, placement = 'bottom', hiddenKeys, onToggle}: Char
         const label = String(item.value ?? '')
         const key = String(item.dataKey ?? item.value ?? index)
         const inactive = hiddenKeys ? hiddenKeys.has(key) : item.inactive
-        return (
-          <div
-            key={`${key}-${index}`}
-            className={itemClass}
-            style={inactive ? {opacity: 0.45} : undefined}
-            title={interactive ? `${label} — click to isolate, ⌘/Ctrl-click to toggle` : label}
-            role={interactive ? 'button' : undefined}
-            tabIndex={interactive ? 0 : undefined}
-            aria-pressed={interactive ? !inactive : undefined}
-            onClick={interactive ? (e) => onToggle!(key, e.metaKey || e.ctrlKey || e.shiftKey) : undefined}
-            onKeyDown={
-              interactive
-                ? (e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onToggle!(key, e.metaKey || e.ctrlKey || e.shiftKey)
-                    }
-                  }
-                : undefined
-            }
-          >
+        const content = (
+          <>
             <span
               className="h-0.5 w-3 shrink-0 rounded-full"
               style={{backgroundColor: item.color ?? 'currentColor'}}
             />
             <span className="min-w-0 truncate">{label}</span>
-          </div>
+          </>
+        )
+        if (!interactive) {
+          return (
+            <div
+              key={`${key}-${index}`}
+              className={itemClass}
+              style={inactive ? {opacity: 0.45} : undefined}
+              title={label}
+            >
+              {content}
+            </div>
+          )
+        }
+        return (
+          <button
+            key={`${key}-${index}`}
+            type="button"
+            className={itemClass}
+            style={inactive ? {opacity: 0.45} : undefined}
+            title={`${label} — click to isolate, ⌘/Ctrl-click to toggle`}
+            aria-pressed={!inactive}
+            onClick={(event) => onToggle?.(key, event.metaKey || event.ctrlKey || event.shiftKey)}
+          >
+            {content}
+          </button>
         )
       })}
     </div>
@@ -890,11 +895,14 @@ const BarChartWidget = memo(function BarChartWidget({
   // Series are derived here — before any early return — so series visibility can
   // be tracked with a hook that always runs.
   const pivot = useMemo(() => {
-    if (!isPivot) return null
-    const {pivoted, series} = pivotData(data, timeKey!, labelKeys, valueKeys)
+    if (!isPivot || timeKey == null) return null
+    const {pivoted, series} = pivotData(data, timeKey, labelKeys, valueKeys)
     const normalized = pivoted.map((row) => {
-      const v = row[timeKey!]
-      if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
+      const v = row[timeKey]
+      if (typeof v === 'string') {
+        const ms = parseUtcTimestamp(v)
+        return Number.isNaN(ms) ? row : {...row, [timeKey]: ms}
+      }
       return row
     })
     return {pivoted: normalized, series}
@@ -908,7 +916,7 @@ const BarChartWidget = memo(function BarChartWidget({
   }, [isPivot, data, valueKeys])
 
   const series = useMemo<SeriesDef[]>(
-    () => (pivot ? pivot.series : categoryKeys.map((k) => ({key: k, name: k.replace(/_/g, ' ')}))),
+    () => (pivot ? pivot.series : categoryKeys.map((k) => ({key: k, name: k.replaceAll('_', ' ')}))),
     [pivot, categoryKeys],
   )
   const seriesKeys = useMemo(() => series.map((s) => s.key), [series])
@@ -1027,6 +1035,10 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
   const labelKey = labelKeys[0]
   const valueKey = valueKeys[0]
   const legendProps = getLegendProps(dc)
+  const donutData = useMemo(
+    () => data.map((row, index) => ({...row, fill: seriesColor(index)})),
+    [data],
+  )
 
   if (!labelKey || !valueKey) return <div className="text-xs text-muted-foreground">Invalid data</div>
 
@@ -1035,7 +1047,7 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
       {(w, h) => (
         <PieChart width={w} height={h}>
           <Pie
-            data={data}
+            data={donutData}
             dataKey={valueKey}
             nameKey={labelKey}
             cx="50%"
@@ -1045,11 +1057,7 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
             paddingAngle={2}
             label={({percent}) => `${((percent ?? 0) * 100).toFixed(0)}%`}
             labelLine={false}
-          >
-            {data.map((_, i) => (
-              <Cell key={i} fill={seriesColor(i)} />
-            ))}
-          </Pie>
+          />
           <Tooltip wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
           {legendProps && (
             <Legend
