@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class UptimeToolTest {
@@ -72,10 +73,9 @@ class UptimeToolTest {
         val service = mockk<UptimeService>()
         val response = sampleResponse()
         val monitorId = UUID.fromString(response.id)
+        val requests = mutableListOf<UpdateUptimeMonitorRequest>()
         every { service.updateMonitor(monitorId, 42, any<UpdateUptimeMonitorRequest>()) } answers {
-            val request = thirdArg<UpdateUptimeMonitorRequest>()
-            assertEquals(2, request.retries)
-            assertEquals(120, request.retryIntervalSeconds)
+            requests += thirdArg<UpdateUptimeMonitorRequest>()
             response
         }
 
@@ -91,6 +91,60 @@ class UptimeToolTest {
         )
 
         assertFalse(result.isError, result.content.first().text.orEmpty())
+        val omittedResult = UpdateUptimeMonitorTool(service).execute(
+            JsonObject(mapOf("monitor_id" to JsonPrimitive(response.id))),
+            context,
+        )
+
+        assertFalse(omittedResult.isError, omittedResult.content.first().text.orEmpty())
+        assertEquals(2, requests[0].retries)
+        assertEquals(120, requests[0].retryIntervalSeconds)
+        assertNull(requests[1].retries)
+        assertNull(requests[1].retryIntervalSeconds)
+    }
+
+    @Test
+    fun `create uptime monitor forwards explicit retry settings`() = runBlocking {
+        val service = mockk<UptimeService>()
+        val response = sampleResponse()
+        every { service.createMonitor(42, any<CreateUptimeMonitorRequest>()) } answers {
+            val request = secondArg<CreateUptimeMonitorRequest>()
+            assertEquals(3, request.retries)
+            assertEquals(90, request.retryIntervalSeconds)
+            response
+        }
+
+        val result = CreateUptimeMonitorTool(service).execute(
+            JsonObject(
+                mapOf(
+                    "name" to JsonPrimitive("Checkout API"),
+                    "url" to JsonPrimitive("https://example.com/health"),
+                    "type" to JsonPrimitive("http"),
+                    "retries" to JsonPrimitive(3),
+                    "retry_interval_seconds" to JsonPrimitive(90),
+                )
+            ),
+            context,
+        )
+
+        assertFalse(result.isError, result.content.first().text.orEmpty())
+    }
+
+    @Test
+    fun `update uptime monitor reports missing monitor`() = runBlocking {
+        val service = mockk<UptimeService>()
+        val response = sampleResponse()
+        every {
+            service.updateMonitor(UUID.fromString(response.id), 42, any<UpdateUptimeMonitorRequest>())
+        } returns null
+
+        val result = UpdateUptimeMonitorTool(service).execute(
+            JsonObject(mapOf("monitor_id" to JsonPrimitive(response.id))),
+            context,
+        )
+
+        assertTrue(result.isError)
+        assertTrue(result.content.first().text?.contains("Monitor not found") == true)
     }
 
     private fun sampleResponse(): UptimeMonitorResponse = UptimeMonitorResponse(
