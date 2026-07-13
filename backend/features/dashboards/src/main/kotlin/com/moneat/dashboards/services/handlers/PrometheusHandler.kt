@@ -195,12 +195,20 @@ class PrometheusHandler : HttpApiHandler() {
         val promLimit = limit.coerceAtLeast(DEFAULT_PROMETHEUS_RESULT_LIMIT)
 
         return suspendRunCatching {
-            val response = if (timeRange != null) {
+            val rangeSeconds = timeRange?.let { range ->
                 val nowSec = System.currentTimeMillis() / MILLIS_PER_SECOND
-                val fromSec = resolveRelativeTimeSec(timeRange.from, nowSec)
-                val toSec = resolveRelativeTimeSec(timeRange.to, nowSec)
+                val fromSec = resolveRelativeTimeSec(range.from, nowSec)
+                val toSec = resolveRelativeTimeSec(range.to, nowSec)
+                fromSec to toSec
+            }
+            val effectiveQuery = expandQueryMacros(
+                query,
+                rangeSeconds?.let { (fromSec, toSec) -> toSec - fromSec }
+            )
+            val response = if (rangeSeconds != null) {
+                val fromSec = rangeSeconds.first
+                val toSec = rangeSeconds.second
                 val step = resolvePrometheusStep(toSec - fromSec)
-                val effectiveQuery = expandQueryMacros(query, toSec - fromSec)
 
                 httpClient.get("$baseUrl/api/v1/query_range") {
                     applyHttpAuth(credentials)
@@ -210,7 +218,6 @@ class PrometheusHandler : HttpApiHandler() {
                     parameter("step", step)
                 }
             } else {
-                val effectiveQuery = expandQueryMacros(query, null)
                 httpClient.get("$baseUrl/api/v1/query") {
                     applyHttpAuth(credentials)
                     parameter("query", effectiveQuery)
@@ -223,7 +230,9 @@ class PrometheusHandler : HttpApiHandler() {
                     "query",
                     httpStatusLabel(response.status.value)
                 )
-                logger.error { "Prometheus query failed: ${response.status} | query=$query" }
+                logger.error {
+                    "Prometheus query failed: ${response.status} | query=$query | effectiveQuery=$effectiveQuery"
+                }
                 return emptyList()
             }
             parsePrometheusResponse(response.bodyAsText(), promLimit)
