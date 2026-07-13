@@ -108,10 +108,10 @@ class CreateUptimeMonitorTool(
                 "interval_seconds" to schemaNumber(
                     "Check interval in seconds (default 60)"
                 ),
-                "retries" to schemaNumber(
+                "retries" to schemaInteger(
                     "Retries after a failed check (default 1)"
                 ),
-                "retry_interval_seconds" to schemaNumber(
+                "retry_interval_seconds" to schemaInteger(
                     "Seconds between failed-check retries (default 60)"
                 ),
             )
@@ -131,9 +131,18 @@ class CreateUptimeMonitorTool(
             ?: return errorResult("type is required")
         val interval = args["interval_seconds"]?.jsonPrimitive?.intOrNull
             ?: DEFAULT_INTERVAL
-        val retries = args["retries"]?.jsonPrimitive?.intOrNull ?: DEFAULT_RETRIES
-        val retryInterval = args["retry_interval_seconds"]?.jsonPrimitive?.intOrNull
-            ?: DEFAULT_RETRY_INTERVAL_SECONDS
+        val retries = if (args.containsKey("retries")) {
+            args["retries"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retries must be a valid integer")
+        } else {
+            DEFAULT_RETRIES
+        }
+        val retryInterval = if (args.containsKey("retry_interval_seconds")) {
+            args["retry_interval_seconds"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retry_interval_seconds must be a valid integer")
+        } else {
+            DEFAULT_RETRY_INTERVAL_SECONDS
+        }
 
         val request =
             com.moneat.uptime.models.CreateUptimeMonitorRequest(

@@ -481,6 +481,11 @@ class DashboardCrudToolTest {
                 "Dashboard not found",
             ),
             ToolCase(
+                ListDashboardAlertsTool(),
+                JsonObject(mapOf("dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID))),
+                "Dashboard not found",
+            ),
+            ToolCase(
                 DeleteDashboardAlertTool(),
                 JsonObject(
                     mapOf(

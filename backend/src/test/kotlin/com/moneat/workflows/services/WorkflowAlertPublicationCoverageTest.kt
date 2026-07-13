@@ -23,8 +23,14 @@ import com.moneat.alerts.models.AlertStatus
 import com.moneat.alerts.services.AlertEpisodeContext
 import com.moneat.alerts.services.AlertEpisodeDecision
 import com.moneat.alerts.services.AlertEpisodeService
+import com.moneat.shared.services.organizationResourceId
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.spyk
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -36,18 +42,34 @@ class WorkflowAlertPublicationCoverageTest {
     fun `firing workflow publication failure fails open for provider fanout`() = runBlocking {
         val episodeService = mockk<AlertEpisodeService>()
         every { episodeService.recordFiring(any(), any()) } returns alertDecision()
-        val service = WorkflowService(alertEpisodeService = episodeService)
+        mockkStatic("com.moneat.shared.services.PublicResourceIdsKt")
+        try {
+            every { organizationResourceId(any<Int>()) } returns "org-resource"
+            val service = spyk(WorkflowService(alertEpisodeService = episodeService))
+            coEvery { service.publishTrigger(any()) } throws IllegalStateException("workflow unavailable")
 
-        assertTrue(service.publishAlertTriggered(alertEvent()))
+            assertTrue(service.publishAlertTriggered(alertEvent()))
+            coVerify(exactly = 1) { service.publishTrigger(any()) }
+        } finally {
+            unmockkStatic("com.moneat.shared.services.PublicResourceIdsKt")
+        }
     }
 
     @Test
     fun `resolved workflow publication failure fails open for provider fanout`() = runBlocking {
         val episodeService = mockk<AlertEpisodeService>()
         every { episodeService.recordResolved(any(), any()) } returns alertDecision()
-        val service = WorkflowService(alertEpisodeService = episodeService)
+        mockkStatic("com.moneat.shared.services.PublicResourceIdsKt")
+        try {
+            every { organizationResourceId(any<Int>()) } returns "org-resource"
+            val service = spyk(WorkflowService(alertEpisodeService = episodeService))
+            coEvery { service.publishTrigger(any()) } throws IllegalStateException("workflow unavailable")
 
-        assertTrue(service.publishAlertTriggered(alertEvent().copy(status = AlertStatus.RESOLVED)))
+            assertTrue(service.publishAlertTriggered(alertEvent().copy(status = AlertStatus.RESOLVED)))
+            coVerify(exactly = 1) { service.publishTrigger(any()) }
+        } finally {
+            unmockkStatic("com.moneat.shared.services.PublicResourceIdsKt")
+        }
     }
 
     private fun alertDecision(): AlertEpisodeDecision {

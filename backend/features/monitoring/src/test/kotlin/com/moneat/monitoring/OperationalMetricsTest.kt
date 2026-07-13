@@ -367,6 +367,9 @@ class OperationalMetricsTest {
         every { RedisConfig.sync() } returns redis
         every { redis.xpending(primaryKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
+        every { redis.xinfoGroups(primaryKey) } returns listOf(
+            listOf("name", consumerGroup, "last-delivered-id", "0-0", "lag", 0L)
+        )
         every { redis.xrange(any(), any<Range<String>>(), any()) } returns emptyList()
 
         OperationalMetrics.registerWorkerStream("Log", primaryKey, "primary", consumerGroup)
@@ -377,6 +380,14 @@ class OperationalMetricsTest {
         assertContains(rendered, "stream_key=\"$primaryKey\"")
         assertContains(rendered, "stream_key=\"$dlqKey\"")
         assertContains(rendered, "consumer_group=\"unknown\"")
+
+        val primaryAge = metricLine(
+            rendered,
+            "moneat_worker_stream_oldest_message_age_seconds",
+            "stream_key=\"$primaryKey\"",
+            "stream_type=\"primary\"",
+        )
+        assertTrue(primaryAge.endsWith(" 0.0"), primaryAge)
     }
 
     @Test
