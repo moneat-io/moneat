@@ -23,7 +23,6 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
-    Cell,
     Legend,
     Line,
     LineChart,
@@ -43,20 +42,12 @@ import {isQueryDrivenExtendedWidget, isExtendedWidgetType} from './extendedWidge
 import ReactMarkdown from 'react-markdown'
 import type {ValueMapping} from './formatValue'
 import {formatValue} from './formatValue'
-import {pivotData, valueKeySeries} from './widgetSeries'
+import {pivotData, valueKeySeries, type SeriesDef} from './widgetSeries'
+import {seriesColor} from './chartColors'
+import {useSeriesVisibility, type SeriesVisibility} from './useSeriesVisibility'
 import {isWarningThresholdValid, type AlertThresholdPreview} from './alertThresholds'
 import {widgetQueryFingerprint} from './widgetQueryFingerprint'
 import {fetchWidgetRows, TIME_KEYS} from './widgetRows'
-
-const COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00C49F',
-  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-]
 
 /**
  * Parse a ClickHouse datetime string as UTC epoch ms.
@@ -323,11 +314,14 @@ interface LegendPayloadItem {
   color?: string
   inactive?: boolean
   value?: string | number
+  dataKey?: string | number
 }
 
 interface ChartLegendProps {
   payload?: LegendPayloadItem[]
   placement?: 'bottom' | 'right'
+  hiddenKeys?: ReadonlySet<string>
+  onToggle?: (key: string, additive: boolean) => void
 }
 
 const GRAFANA_COLORS: Record<string, string> = {
@@ -570,7 +564,7 @@ function renderAlertThresholdOverlay(overlay: AlertThresholdOverlay) {
   )
 }
 
-function getLegendProps(dc: DisplayConfig) {
+function getLegendProps(dc: DisplayConfig, visibility?: SeriesVisibility) {
   const mode = dc.legendMode || 'list'
   if (mode === 'hidden') return null
   const placement = dc.legendPlacement || 'bottom'
@@ -585,7 +579,13 @@ function getLegendProps(dc: DisplayConfig) {
   }
   return {
     wrapperStyle,
-    content: <ChartLegend placement={isRight ? 'right' : 'bottom'} />,
+    content: (
+      <ChartLegend
+        placement={isRight ? 'right' : 'bottom'}
+        hiddenKeys={visibility?.hidden}
+        onToggle={visibility?.toggle}
+      />
+    ),
     height: isRight ? undefined : 56,
     iconType: 'line' as const,
     iconSize: 8,
@@ -596,35 +596,61 @@ function getLegendProps(dc: DisplayConfig) {
   }
 }
 
-function ChartLegend({payload, placement = 'bottom'}: ChartLegendProps) {
+function ChartLegend({payload, placement = 'bottom', hiddenKeys, onToggle}: Readonly<ChartLegendProps>) {
   const items = payload ?? []
   if (items.length === 0) return null
 
   const isRight = placement === 'right'
+  const interactive = !!onToggle
   const containerClass = isRight
     ? 'flex h-full max-h-full flex-col gap-1 overflow-y-auto overflow-x-hidden pr-1'
     : 'flex max-h-14 flex-wrap gap-x-3 gap-y-1 overflow-y-auto overflow-x-hidden px-1 pt-1'
-  const itemClass = isRight
+  const baseItemClass = isRight
     ? 'flex min-w-0 max-w-44 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground'
     : 'flex min-w-0 max-w-56 items-center gap-1.5 text-[10px] leading-3 text-muted-foreground'
+  const itemClass = interactive
+    ? `${baseItemClass} cursor-pointer select-none rounded transition-colors hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring`
+    : baseItemClass
 
   return (
     <div className={containerClass}>
       {items.map((item, index) => {
         const label = String(item.value ?? '')
-        return (
-          <div
-            key={`${label}-${index}`}
-            className={itemClass}
-            style={item.inactive ? {opacity: 0.45} : undefined}
-            title={label}
-          >
+        const key = String(item.dataKey ?? item.value ?? index)
+        const inactive = hiddenKeys ? hiddenKeys.has(key) : item.inactive
+        const content = (
+          <>
             <span
               className="h-0.5 w-3 shrink-0 rounded-full"
               style={{backgroundColor: item.color ?? 'currentColor'}}
             />
             <span className="min-w-0 truncate">{label}</span>
-          </div>
+          </>
+        )
+        if (!interactive) {
+          return (
+            <div
+              key={`${key}-${index}`}
+              className={itemClass}
+              style={inactive ? {opacity: 0.45} : undefined}
+              title={label}
+            >
+              {content}
+            </div>
+          )
+        }
+        return (
+          <button
+            key={`${key}-${index}`}
+            type="button"
+            className={itemClass}
+            style={inactive ? {opacity: 0.45} : undefined}
+            title={`${label} — click to isolate, ⌘/Ctrl-click to toggle`}
+            aria-pressed={!inactive}
+            onClick={(event) => onToggle?.(key, event.metaKey || event.ctrlKey || event.shiftKey)}
+          >
+            {content}
+          </button>
         )
       })}
     </div>
@@ -672,6 +698,12 @@ function classifyColumns(data: Record<string, unknown>[]) {
 }
 
 const CHART_MARGIN = {top: 5, right: 5, left: 20, bottom: 20}
+// Axis + grid styling. Recharts defaults render as a dim mid-gray that is hard
+// to read on the dark card, so we drive tick text, axis lines, and grid lines
+// from theme tokens: legible labels, a quiet axis frame, and a faint grid.
+const AXIS_TICK = {fontSize: 10, fill: 'hsl(var(--muted-foreground))'}
+const AXIS_LINE = {stroke: 'hsl(var(--border))'}
+const GRID_STROKE = 'hsl(var(--foreground) / 0.09)'
 const TOOLTIP_STYLE = {
   backgroundColor: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
@@ -706,6 +738,7 @@ const TimeseriesChart = memo(function TimeseriesChart({
     [data, xKey, labelKeys, valueKeys, hasLabels]
   )
   const seriesKeys = useMemo(() => series.map(({key}) => key), [series])
+  const visibility = useSeriesVisibility(seriesKeys)
 
   // Recharts type="number" scale="time" requires numeric epoch ms values.
   // ClickHouse returns time_bucket as a string ("2026-02-24 19:00:00.000"), so
@@ -723,7 +756,7 @@ const TimeseriesChart = memo(function TimeseriesChart({
   )
 
   const thresholds = parseThresholds(dc)
-  const legendProps = getLegendProps(dc)
+  const legendProps = getLegendProps(dc, visibility)
   const yDomain = getAlertAwareYAxisDomain(dc, chartData, seriesKeys, alertThresholdPreview)
   const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
   const lineWidth = parseFloat(dc.lineWidth || '1.5')
@@ -745,17 +778,17 @@ const TimeseriesChart = memo(function TimeseriesChart({
     <DebouncedChartContainer>
       {(w, h) => useArea ? (
         <AreaChart width={w} height={h} data={chartData} margin={CHART_MARGIN}>
-          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
+          {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />}
           <XAxis
             dataKey={xKey}
-            tick={{fontSize: 10}}
+            tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
             tickFormatter={(v) => formatXAxisTick(v, spanMs)}
             type="number"
             domain={['dataMin', 'dataMax']}
             scale="time"
           />
           <YAxis
-            tick={{fontSize: 10}}
+            tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
             width={50}
             domain={yDomain}
             scale={dc.yAxisScale === 'log' ? 'log' : 'auto'}
@@ -779,9 +812,10 @@ const TimeseriesChart = memo(function TimeseriesChart({
               type={interpolation}
               dataKey={s.key}
               name={s.name}
-              stroke={COLORS[i % COLORS.length]}
+              hide={visibility.hidden.has(s.key)}
+              stroke={seriesColor(i)}
               strokeWidth={lineWidth}
-              fill={COLORS[i % COLORS.length]}
+              fill={seriesColor(i)}
               fillOpacity={fillOpacity || 0.3}
               dot={dotProp}
               activeDot={{r: 3}}
@@ -792,17 +826,17 @@ const TimeseriesChart = memo(function TimeseriesChart({
         </AreaChart>
       ) : (
         <LineChart width={w} height={h} data={chartData} margin={CHART_MARGIN}>
-          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
+          {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />}
           <XAxis
             dataKey={xKey}
-            tick={{fontSize: 10}}
+            tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
             tickFormatter={(v) => formatXAxisTick(v, spanMs)}
             type="number"
             domain={['dataMin', 'dataMax']}
             scale="time"
           />
           <YAxis
-            tick={{fontSize: 10}}
+            tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
             width={50}
             domain={yDomain}
             scale={dc.yAxisScale === 'log' ? 'log' : 'auto'}
@@ -826,7 +860,8 @@ const TimeseriesChart = memo(function TimeseriesChart({
               type={interpolation}
               dataKey={s.key}
               name={s.name}
-              stroke={COLORS[i % COLORS.length]}
+              hide={visibility.hidden.has(s.key)}
+              stroke={seriesColor(i)}
               strokeWidth={lineWidth}
               dot={dotProp}
               activeDot={{r: 3}}
@@ -853,9 +888,42 @@ const BarChartWidget = memo(function BarChartWidget({
   const {timeKey, labelKeys, valueKeys} = useMemo(() => classifyColumns(data), [data])
   const spanMs = getTimeSpanMs(timeRange)
   const hasTime = !!timeKey
+  const isPivot = hasTime && labelKeys.length > 0 && valueKeys.length > 0
+
+  // Time-bucketed multi-series bars pivot to one row per timestamp (with the
+  // time key normalized to epoch ms); everything else is a flat category chart.
+  // Series are derived here — before any early return — so series visibility can
+  // be tracked with a hook that always runs.
+  const pivot = useMemo(() => {
+    if (!isPivot || timeKey == null) return null
+    const {pivoted, series} = pivotData(data, timeKey, labelKeys, valueKeys)
+    const normalized = pivoted.map((row) => {
+      const v = row[timeKey]
+      if (typeof v === 'string') {
+        const ms = parseUtcTimestamp(v)
+        return Number.isNaN(ms) ? row : {...row, [timeKey]: ms}
+      }
+      return row
+    })
+    return {pivoted: normalized, series}
+  }, [isPivot, data, timeKey, labelKeys, valueKeys])
+
+  const categoryKeys = useMemo(() => {
+    if (isPivot) return [] as string[]
+    return valueKeys.length > 0
+      ? valueKeys
+      : Object.keys(data[0] || {}).filter((k) => !isTimeKey(k) && typeof data[0][k] === 'number')
+  }, [isPivot, data, valueKeys])
+
+  const series = useMemo<SeriesDef[]>(
+    () => (pivot ? pivot.series : categoryKeys.map((k) => ({key: k, name: k.replaceAll('_', ' ')}))),
+    [pivot, categoryKeys],
+  )
+  const seriesKeys = useMemo(() => series.map((s) => s.key), [series])
+  const visibility = useSeriesVisibility(seriesKeys)
 
   const thresholds = parseThresholds(dc)
-  const legendProps = getLegendProps(dc)
+  const legendProps = getLegendProps(dc, visibility)
   const showGrid = dc.showGrid !== 'false'
   const barMode = dc.barMode || 'grouped'
   const unit = dc.unit
@@ -865,31 +933,25 @@ const BarChartWidget = memo(function BarChartWidget({
     : undefined
   const tooltipFormatter: TooltipFormatterFn = (value) => formatUnitTooltipValue(value, unit, decimals)
 
-  if (hasTime && labelKeys.length > 0 && valueKeys.length > 0) {
-    const {pivoted: rawPivoted, series} = pivotData(data, timeKey!, labelKeys, valueKeys)
-    const seriesKeys = series.map(({key}) => key)
-    const pivoted = rawPivoted.map(row => {
-      const v = row[timeKey!]
-      if (typeof v === 'string') { const ms = parseUtcTimestamp(v); return isNaN(ms) ? row : {...row, [timeKey!]: ms} }
-      return row
-    })
+  if (pivot) {
+    const pivoted = pivot.pivoted
     const yDomain = getAlertAwareYAxisDomain(dc, pivoted, seriesKeys, alertThresholdPreview)
     const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
     return (
       <DebouncedChartContainer>
         {(w, h) => (
           <BarChart width={w} height={h} data={pivoted} margin={CHART_MARGIN}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />}
             <XAxis
               dataKey={timeKey}
-              tick={{fontSize: 10}}
+              tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
               tickFormatter={(v) => formatXAxisTick(v, spanMs)}
               type="number"
               domain={['dataMin', 'dataMax']}
               scale="time"
             />
             <YAxis
-              tick={{fontSize: 10}}
+              tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
               width={50}
               domain={yDomain}
               scale={dc.yAxisScale === 'log' ? 'log' : 'auto'}
@@ -913,7 +975,8 @@ const BarChartWidget = memo(function BarChartWidget({
                 key={s.key}
                 dataKey={s.key}
                 name={s.name}
-                fill={COLORS[i % COLORS.length]}
+                hide={visibility.hidden.has(s.key)}
+                fill={seriesColor(i)}
                 stackId={barMode === 'stacked' ? 'stack' : undefined}
               />
             ))}
@@ -924,20 +987,17 @@ const BarChartWidget = memo(function BarChartWidget({
   }
 
   const xKey = labelKeys[0] || timeKey || 'category'
-  const barKeys = valueKeys.length > 0 ? valueKeys : Object.keys(data[0] || {}).filter(
-    k => !isTimeKey(k) && typeof data[0][k] === 'number'
-  )
-  const yDomain = getAlertAwareYAxisDomain(dc, data, barKeys, alertThresholdPreview)
+  const yDomain = getAlertAwareYAxisDomain(dc, data, seriesKeys, alertThresholdPreview)
   const alertOverlay = buildAlertThresholdOverlay(alertThresholdPreview, yDomain)
 
   return (
     <DebouncedChartContainer>
       {(w, h) => (
         <BarChart width={w} height={h} data={data} margin={CHART_MARGIN}>
-          {showGrid && <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />}
-          <XAxis dataKey={xKey} tick={{fontSize: 10}} />
+          {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />}
+          <XAxis dataKey={xKey} tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE} />
           <YAxis
-            tick={{fontSize: 10}}
+            tick={AXIS_TICK} axisLine={AXIS_LINE} tickLine={AXIS_LINE}
             width={50}
             domain={yDomain}
             label={dc.yAxisLabel ? {value: dc.yAxisLabel, angle: -90, position: 'insideLeft', style: {fontSize: 10}} : undefined}
@@ -953,12 +1013,13 @@ const BarChartWidget = memo(function BarChartWidget({
           {thresholds.map((t, i) => (
             <ReferenceLine key={`t-${i}`} y={t.value} stroke={t.color} strokeDasharray="4 4" label={t.label} />
           ))}
-          {barKeys.map((key, i) => (
+          {series.map((s, i) => (
             <Bar
-              key={key}
-              dataKey={key}
-              name={key.replace(/_/g, ' ')}
-              fill={COLORS[i % COLORS.length]}
+              key={s.key}
+              dataKey={s.key}
+              name={s.name}
+              hide={visibility.hidden.has(s.key)}
+              fill={seriesColor(i)}
               radius={[2, 2, 0, 0]}
               stackId={barMode === 'stacked' ? 'stack' : undefined}
             />
@@ -974,6 +1035,10 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
   const labelKey = labelKeys[0]
   const valueKey = valueKeys[0]
   const legendProps = getLegendProps(dc)
+  const donutData = useMemo(
+    () => data.map((row, index) => ({...row, fill: seriesColor(index)})),
+    [data],
+  )
 
   if (!labelKey || !valueKey) return <div className="text-xs text-muted-foreground">Invalid data</div>
 
@@ -982,7 +1047,7 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
       {(w, h) => (
         <PieChart width={w} height={h}>
           <Pie
-            data={data}
+            data={donutData}
             dataKey={valueKey}
             nameKey={labelKey}
             cx="50%"
@@ -992,11 +1057,7 @@ const DonutChartWidget = memo(function DonutChartWidget({data, displayConfig: dc
             paddingAngle={2}
             label={({percent}) => `${((percent ?? 0) * 100).toFixed(0)}%`}
             labelLine={false}
-          >
-            {data.map((_, i) => (
-              <Cell key={i} fill={COLORS[i % COLORS.length]} />
-            ))}
-          </Pie>
+          />
           <Tooltip wrapperStyle={TOOLTIP_WRAPPER_STYLE} />
           {legendProps && (
             <Legend
@@ -1098,7 +1159,7 @@ const StatWidget = memo(function StatWidget({
           const label = labelKeys.map((k) => String(row[k] ?? '')).join(' ')
           const value = Number(row[valueKey]) || 0
           const pctWidth = (value / maxValue) * 100
-          const barColor = getThresholdColor(value, thresholds) || COLORS[i % COLORS.length]
+          const barColor = getThresholdColor(value, thresholds) || seriesColor(i)
           return (
             <div key={i} className="relative">
               <div
