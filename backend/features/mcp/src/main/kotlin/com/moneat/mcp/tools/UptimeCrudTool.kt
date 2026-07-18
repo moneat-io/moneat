@@ -31,7 +31,9 @@ import java.util.UUID
 
 private val uptimeCrudService = UptimeService(BillingQuotaService(), UptimeMonitorRepositoryImpl())
 
-class UpdateUptimeMonitorTool : McpTool {
+class UpdateUptimeMonitorTool(
+    private val service: UptimeService = uptimeCrudService,
+) : McpTool {
     override val name = "update_uptime_monitor"
     override val description = "Update an uptime monitor"
     override val readOnly = false
@@ -43,6 +45,12 @@ class UpdateUptimeMonitorTool : McpTool {
                 "url" to schemaString("URL to monitor"),
                 "interval_seconds" to schemaInteger(
                     "Check interval in seconds"
+                ),
+                "retries" to schemaInteger(
+                    "Retries after a failed check"
+                ),
+                "retry_interval_seconds" to schemaInteger(
+                    "Seconds between failed-check retries"
                 ),
                 "active" to schemaBoolean("Enable/disable")
             )
@@ -77,13 +85,27 @@ class UpdateUptimeMonitorTool : McpTool {
         } else {
             null
         }
+        val retries = if (args.containsKey("retries")) {
+            args["retries"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retries must be a valid integer")
+        } else {
+            null
+        }
+        val retryIntervalSeconds = if (args.containsKey("retry_interval_seconds")) {
+            args["retry_interval_seconds"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retry_interval_seconds must be a valid integer")
+        } else {
+            null
+        }
         val request = UpdateUptimeMonitorRequest(
             name = args["name"]?.jsonPrimitive?.content,
             url = args["url"]?.jsonPrimitive?.content,
             intervalSeconds = intervalSeconds,
-            active = active
+            retries = retries,
+            retryIntervalSeconds = retryIntervalSeconds,
+            active = active,
         )
-        val monitor = uptimeCrudService.updateMonitor(
+        val monitor = service.updateMonitor(
             uuid, context.organizationId, request
         ) ?: return errorResult("Monitor not found: $monitorId")
         return jsonResult(monitor)

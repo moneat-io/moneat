@@ -147,8 +147,8 @@ class ApmServiceCatalogServiceTest {
                             "\"first_seen\":\"2026-06-06T02:10:00.000Z\",\"last_seen\":\"2026-06-06T03:00:00.000Z\"}"
                     "GROUP BY trace_id_out" in query ->
                         "{" +
-                            "\"trace_id_out\":\"trace-1\",\"resource\":\"POST /checkout\"," +
-                            "\"name\":\"http.request\",\"http_status\":0,\"duration_ms\":620," +
+                            "\"trace_id_out\":\"trace-1\",\"resource_out\":\"POST /checkout\"," +
+                            "\"name_out\":\"http.request\",\"http_status\":0,\"duration_ms\":620," +
                             "\"span_count\":4,\"time\":\"03:01:00\"}"
                     "GROUP BY service" in query ->
                         "{" +
@@ -322,8 +322,8 @@ class ApmServiceCatalogServiceTest {
                             "\"avg_latency_ms\":180,\"p95_latency_ms\":700}"
                     "GROUP BY trace_id_out" in query ->
                         "{" +
-                            "\"trace_id_out\":\"trace-resource-1\",\"resource\":\"POST /checkout/pay\"," +
-                            "\"name\":\"POST\",\"http_status\":500,\"duration_ms\":1400," +
+                            "\"trace_id_out\":\"trace-resource-1\",\"resource_out\":\"POST /checkout/pay\"," +
+                            "\"name_out\":\"POST\",\"http_status\":500,\"duration_ms\":1400," +
                             "\"span_count\":8,\"time\":\"03:01:00\"}"
                     "previous_span_count" in query ->
                         "{" +
@@ -376,6 +376,9 @@ class ApmServiceCatalogServiceTest {
             assertEquals("2", detail.errors.single().users)
             assertTrue(detail.errors.single().unhandled)
             assertTrue(queries.any { query -> "uniqExactIf(user_key" in query })
+            val traceQuery = queries.single { query -> "GROUP BY trace_id_out" in query }
+            assertTrue("argMax(resource, duration) as resource," !in traceQuery)
+            assertTrue("argMax(resource, duration) as resource_out" in traceQuery)
             assertEquals("trace-resource-1", detail.exemplar.traceId)
             assertEquals(500, detail.exemplar.httpStatus)
             assertTrue(detail.exemplar.rows.any { row -> row.tone == "db" && row.indent != null })

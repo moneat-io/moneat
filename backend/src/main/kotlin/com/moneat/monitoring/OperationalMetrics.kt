@@ -20,6 +20,7 @@ import com.moneat.config.RedisConfig
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.lettuce.core.Limit
 import io.lettuce.core.Range
+import io.lettuce.core.api.sync.RedisCommands
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Gauge
@@ -138,14 +139,15 @@ object OperationalMetrics {
         val baseKey = "$normalizedWorkerName|$streamKey|${consumerGroup.orEmpty()}|$normalizedStreamType"
         registeredStreamMeters.computeIfAbsent(baseKey) {
             Gauge.builder(WORKER_STREAM_OLDEST_MESSAGE_AGE_SECONDS, streamKey) { key ->
-                readStreamOldestMessageAgeSeconds(key)
+                readStreamOldestMessageAgeSeconds(key, consumerGroup)
             }
-                .description("Age in seconds of the oldest Redis stream entry for registered ingestion streams.")
+                .description("Age in seconds of the oldest pending or unconsumed Redis stream message.")
                 .tags(
                     tags(
                         "worker" to normalizedWorkerName,
                         "stream_key" to streamKey,
-                        "stream_type" to normalizedStreamType
+                        "stream_type" to normalizedStreamType,
+                        "consumer_group" to consumerGroup.orEmpty()
                     )
                 )
                 .register(registry)
@@ -682,15 +684,46 @@ object OperationalMetrics {
             .getOrElse { Double.NaN }
     }
 
-    private fun readStreamOldestMessageAgeSeconds(streamKey: String): Double {
+    private fun readStreamOldestMessageAgeSeconds(streamKey: String, consumerGroup: String?): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
         return runCatching {
-            val first = RedisConfig.sync()
-                .xrange(streamKey, Range.create("-", "+"), Limit.from(1))
-                .firstOrNull()
+            val redis = RedisConfig.sync()
+            if (consumerGroup == null) {
+                return readOldestStreamEntryAgeSeconds(redis, streamKey)
+            }
+
+            val pending = redis.xpending(streamKey, consumerGroup)
+            if (pending.count > 0) {
+                return streamIdAgeSeconds(pending.messageIds.lower.value)
+            }
+
+            val group = redis.xinfoGroups(streamKey)
+                .asSequence()
+                .mapNotNull(::parseStreamGroupInfo)
+                .firstOrNull { info -> info.name == consumerGroup }
+            if (group == null) return 0.0
+            val lag = group.lag ?: return readOldestStreamEntryAgeSeconds(redis, streamKey)
+            if (lag <= 0 || group.lastDeliveredId == null) return 0.0
+
+            val firstUnconsumed = redis
+                .xrange(streamKey, Range.create(group.lastDeliveredId, "+"), Limit.from(2))
+                .firstOrNull { message -> message.id != group.lastDeliveredId }
                 ?: return 0.0
-            streamIdAgeSeconds(first.id)
-        }.getOrElse { Double.NaN }
+            streamIdAgeSeconds(firstUnconsumed.id)
+        }.getOrElse { error ->
+            if (error.isMissingRedisStreamError()) 0.0 else Double.NaN
+        }
+    }
+
+    private fun readOldestStreamEntryAgeSeconds(
+        redis: RedisCommands<String, String>,
+        streamKey: String
+    ): Double {
+        val first = redis
+            .xrange(streamKey, Range.create("-", "+"), Limit.from(1))
+            .firstOrNull()
+            ?: return 0.0
+        return streamIdAgeSeconds(first.id)
     }
 
     private fun streamIdAgeSeconds(id: String): Double {
@@ -708,26 +741,28 @@ object OperationalMetrics {
 
     private fun parseStreamGroupListInfo(group: List<*>): StreamGroupInfo? {
         var name: String? = null
-        var lag = 0L
+        var lag: Long? = null
+        var lastDeliveredId: String? = null
         for (index in 0 until group.lastIndex step XINFO_GROUP_FIELD_STEP) {
             when (group[index]?.toString()) {
                 "name" -> name = group[index + XINFO_GROUP_VALUE_OFFSET]?.toString()
-                "lag" -> lag = group[index + XINFO_GROUP_VALUE_OFFSET].toLongOrZero()
+                "lag" -> lag = group[index + XINFO_GROUP_VALUE_OFFSET].toLongOrNullValue()
+                "last-delivered-id" -> lastDeliveredId = group[index + XINFO_GROUP_VALUE_OFFSET]?.toString()
             }
         }
-        return name?.let { StreamGroupInfo(it, lag) }
+        return name?.let { StreamGroupInfo(it, lag, lastDeliveredId) }
     }
 
     private fun parseStreamGroupMapInfo(group: Map<*, *>): StreamGroupInfo? {
         val name = group["name"]?.toString() ?: return null
-        return StreamGroupInfo(name, group["lag"].toLongOrZero())
+        return StreamGroupInfo(name, group["lag"].toLongOrNullValue(), group["last-delivered-id"]?.toString())
     }
 
-    private fun Any?.toLongOrZero(): Long =
+    private fun Any?.toLongOrNullValue(): Long? =
         when (this) {
             is Number -> toLong()
-            is String -> toLongOrNull() ?: 0L
-            else -> toString().toLongOrNull() ?: 0L
+            is String -> toLongOrNull()
+            else -> toString().toLongOrNull()
         }
 
     private fun tags(vararg pairs: Pair<String, String>): Iterable<Tag> =
@@ -740,6 +775,12 @@ object OperationalMetrics {
             }
 
     private fun String.normalizedLabelValue(): String = trim().ifBlank { "unknown" }
+
+    private fun Throwable.isMissingRedisStreamError(): Boolean =
+        message?.let {
+            it.contains("NOGROUP", ignoreCase = true) ||
+                it.contains("no such key", ignoreCase = true)
+        } == true || cause?.isMissingRedisStreamError() == true
 
     private fun Throwable.metricExceptionName(): String =
         this::class.simpleName ?: javaClass.simpleName.ifBlank { "Throwable" }
@@ -762,7 +803,8 @@ object OperationalMetrics {
 
     private data class StreamGroupInfo(
         val name: String,
-        val lag: Long,
+        val lag: Long?,
+        val lastDeliveredId: String? = null,
     )
 
     private fun newRegistry(): PrometheusMeterRegistry =

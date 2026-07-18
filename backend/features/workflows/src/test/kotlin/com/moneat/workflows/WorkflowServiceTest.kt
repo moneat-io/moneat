@@ -738,8 +738,8 @@ class WorkflowServiceTest {
                 )
             publish(workflow.id)
 
-            service.publishAlertTriggered(alertEvent())
-            service.publishAlertTriggered(alertEvent())
+            assertTrue(service.publishAlertTriggered(alertEvent()))
+            assertFalse(service.publishAlertTriggered(alertEvent()))
             service.publishTrigger(
                 com.moneat.workflows.models.WorkflowTriggerEvent(
                     triggerName = "missing.trigger",
@@ -1496,7 +1496,7 @@ class WorkflowServiceTest {
                 )
             publish(workflow.id)
 
-            service.publishAlertTriggered(alertEvent())
+            assertTrue(service.publishAlertTriggered(alertEvent()))
 
             val run = service.listRuns(orgId, workflow.id).single()
             assertEquals("failed", run.status)

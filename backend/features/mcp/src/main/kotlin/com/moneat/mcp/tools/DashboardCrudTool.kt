@@ -77,6 +77,30 @@ private fun dashboardAlertPriority(input: String?): String? {
 private fun JsonObject.requiredStringArg(name: String): String? =
     this[name]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
 
+class ListDashboardAlertsTool : McpTool {
+    override val name = "list_dashboard_alerts"
+    override val description = "List alert configurations for a dashboard"
+    override val inputSchema = InputSchema(
+        properties = JsonObject(
+            mapOf(DASHBOARD_ID_ARG to schemaString(DASHBOARD_RESOURCE_ID_DESCRIPTION))
+        ),
+        required = listOf(DASHBOARD_ID_ARG)
+    )
+
+    override suspend fun execute(
+        args: JsonObject,
+        context: McpContext
+    ): ToolCallResult {
+        val dashboardResourceId = args.requiredStringArg(DASHBOARD_ID_ARG)
+            ?: return errorResult("$DASHBOARD_ID_ARG is required")
+        val dashboardId = dashCrudService.resolveDashboardId(
+            dashboardResourceId,
+            context.organizationId.toLong()
+        ) ?: return errorResult(ERR_DASHBOARD_NOT_FOUND)
+        return jsonResult(dashAlertService.listAlerts(dashboardId, context.organizationId.toLong()))
+    }
+}
+
 class UpdateDashboardTool : McpTool {
     override val name = "update_dashboard"
     override val description =
