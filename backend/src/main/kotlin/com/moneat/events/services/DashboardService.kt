@@ -290,8 +290,9 @@ class DashboardService(
 
     suspend fun getReplaysForIssue(
         issueId: String,
-        limit: Int = 10
-    ): List<ReplayListItem> = replayService.getReplaysForIssue(issueId, limit)
+        limit: Int = 10,
+        projectId: Long? = null
+    ): List<ReplayListItem> = replayService.getReplaysForIssue(issueId, limit, projectId)
 
     suspend fun getFeedback(
         projectId: Long,

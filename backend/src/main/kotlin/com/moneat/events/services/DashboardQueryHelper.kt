@@ -27,6 +27,7 @@ import com.moneat.events.models.TopIssue
 import com.moneat.events.models.UserInfo
 import com.moneat.shared.services.RetentionPolicyService
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
+import com.moneat.utils.normalizeUuidOrNull
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpStatusCode
@@ -181,22 +182,7 @@ class DashboardQueryHelper(
         return body
     }
 
-    fun normalizeUuid(value: String): String? {
-        val trimmed = value.trim().lowercase()
-        val uuidRegex = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-        if (uuidRegex.matches(trimmed)) return trimmed
-
-        val hexRegex = Regex("^[0-9a-f]{32}$")
-        if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(0, UUID_HEX_BLOCK1_END)}-" +
-                "${trimmed.substring(UUID_HEX_BLOCK1_END, UUID_HEX_BLOCK2_END)}-" +
-                "${trimmed.substring(UUID_HEX_BLOCK2_END, UUID_HEX_BLOCK3_END)}-" +
-                "${trimmed.substring(UUID_HEX_BLOCK3_END, UUID_HEX_BLOCK4_END)}-" +
-                trimmed.substring(UUID_HEX_BLOCK4_END)
-        }
-
-        return null
-    }
+    fun normalizeUuid(value: String): String? = normalizeUuidOrNull(value)
 
     fun extractUserInfo(obj: JsonObject): UserInfo? {
         val userId = obj["user_id"]?.jsonPrimitive?.contentOrNull
@@ -525,9 +511,5 @@ class DashboardQueryHelper(
         private const val LOG_BODY_CHARS = 400
         private const val LOG_SNIPPET_CHARS = 200
         private const val MILLIS_PER_SECOND = 1000.0
-        private const val UUID_HEX_BLOCK1_END = 8
-        private const val UUID_HEX_BLOCK2_END = 12
-        private const val UUID_HEX_BLOCK3_END = 16
-        private const val UUID_HEX_BLOCK4_END = 20
     }
 }

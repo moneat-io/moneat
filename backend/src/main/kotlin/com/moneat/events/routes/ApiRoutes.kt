@@ -1290,7 +1290,7 @@ fun Route.apiRoutes() {
                     }
 
                     val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: DEFAULT_REPLAYS_LIMIT
-                    val replays = dashboardService.getReplaysForIssue(issueId, limit)
+                    val replays = dashboardService.getReplaysForIssue(issueId, limit, projectId)
                     call.respond(replays)
                 }
 

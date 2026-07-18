@@ -1734,6 +1734,37 @@ class EventServiceCoverageTest {
         assertEquals(3, replaySlot.captured.segmentId)
     }
 
+    @Test
+    fun `storeReplayEvent normalizes compact error ids and preserves unknown ids`() = runBlocking {
+        val replaySlot = slot<ReplayEventInsertData>()
+        coEvery { eventRepository.insertReplayEvent(capture(replaySlot)) } returns true
+
+        val replayJson = Json.encodeToString(
+            SentryReplayEvent(
+                replayId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                errorIds = listOf(
+                    "550e8400e29b41d4a716446655440000",
+                    "550E8400-E29B-41D4-A716-446655440000",
+                    "unknown-error-id",
+                    "   "
+                )
+            )
+        )
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                items = listOf(EnvelopeItem("replay_event", replayJson))
+            )
+        )
+
+        assertEquals(
+            listOf("550e8400-e29b-41d4-a716-446655440000", "unknown-error-id"),
+            replaySlot.captured.errorIds
+        )
+    }
+
     // ===================== processStoreEvent =====================
 
     @Test
