@@ -25,8 +25,9 @@ import com.moneat.datadog.models.DdDbmMetricRow
 import com.moneat.datadog.models.DdDbmMetricsPayload
 import com.moneat.datadog.models.DdDbmQueryPayload
 import com.moneat.datadog.models.DdDbmQueryRow
-import io.lettuce.core.XAddArgs
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.CapturingSlot
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -41,6 +42,43 @@ import kotlin.test.assertTrue
 private const val TEST_DBM_QUEUE = "test:dd:dbm:queue"
 
 class DbmIngestionServiceTest {
+
+    private fun mockQueueAdmission(
+        redis: RedisCommands<String, String>,
+        streamKey: String? = null,
+    ): CapturingSlot<String> {
+        val payload = slot<String>()
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                if (streamKey == null) any<Array<String>>() else arrayOf(streamKey),
+                any<String>(),
+                capture(payload),
+                any<String>(),
+                any<String>(),
+            )
+        } returns "1-0"
+        return payload
+    }
+
+    private fun verifyQueueAdmission(
+        redis: RedisCommands<String, String>,
+        exactly: Int = 1,
+        streamKey: String? = null,
+    ) {
+        verify(exactly = exactly) {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                if (streamKey == null) any<Array<String>>() else arrayOf(streamKey),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+            )
+        }
+    }
 
     // ──── MAP QUERIES TESTS ────
 
@@ -282,12 +320,11 @@ class DbmIngestionServiceTest {
     @Test
     fun `enqueueQueryPayloads writes one combined Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = DbmIngestionService.enqueueQueryPayloads(
                 organizationId = 42,
@@ -303,12 +340,12 @@ class DbmIngestionServiceTest {
                 ),
             )
 
-            val batch = DbmIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals(42, batch.organizationId)
             assertEquals("queries", batch.batchType)
             assertEquals(listOf("sig-a", "sig-b"), batch.queries.map { it.querySignature })
-            verify(exactly = 1) { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -327,7 +364,7 @@ class DbmIngestionServiceTest {
 
             assertEquals(0, count)
             verify(exactly = 0) { RedisConfig.sync() }
-            verify(exactly = 0) { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis, exactly = 0)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -336,12 +373,11 @@ class DbmIngestionServiceTest {
     @Test
     fun `enqueueMetricPayloads writes one combined Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = DbmIngestionService.enqueueMetricPayloads(
                 organizationId = 42,
@@ -357,12 +393,12 @@ class DbmIngestionServiceTest {
                 ),
             )
 
-            val batch = DbmIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals("metrics", batch.batchType)
             assertEquals(listOf("sig-a", "sig-b"), batch.metrics.map { it.querySignature })
             assertEquals(listOf(10L, 20L), batch.metrics.map { it.calls })
-            verify(exactly = 1) { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -371,12 +407,11 @@ class DbmIngestionServiceTest {
     @Test
     fun `enqueueActivityPayloads writes one combined Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = DbmIngestionService.enqueueActivityPayloads(
                 organizationId = 42,
@@ -396,12 +431,12 @@ class DbmIngestionServiceTest {
                 ),
             )
 
-            val batch = DbmIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals("activity", batch.batchType)
             assertEquals(listOf("sig-a", "sig-b"), batch.activity.map { it.querySignature })
             assertEquals(listOf("active", "idle"), batch.activity.map { it.state })
-            verify(exactly = 1) { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -410,12 +445,11 @@ class DbmIngestionServiceTest {
     @Test
     fun `enqueueMetadataPayloads writes one combined Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = DbmIngestionService.enqueueMetadataPayloads(
                 organizationId = 42,
@@ -425,12 +459,12 @@ class DbmIngestionServiceTest {
                 ),
             )
 
-            val batch = DbmIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals("metadata", batch.batchType)
             assertEquals(listOf("pg-a", "pg-b"), batch.metadata.map { it.host })
             assertEquals("plan-b", batch.metadata[1].explainPlanHash)
-            verify(exactly = 1) { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -439,12 +473,11 @@ class DbmIngestionServiceTest {
     @Test
     fun `enqueueHealthPayloads writes one combined Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = DbmIngestionService.enqueueHealthPayloads(
                 organizationId = 42,
@@ -454,12 +487,12 @@ class DbmIngestionServiceTest {
                 ),
             )
 
-            val batch = DbmIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = DbmIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals("health", batch.batchType)
             assertEquals(listOf("pg-a", "pg-b"), batch.health.map { it.host })
             assertEquals(listOf("ok", "degraded"), batch.health.map { it.status })
-            verify(exactly = 1) { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -472,7 +505,7 @@ class DbmIngestionServiceTest {
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd("$TEST_DBM_QUEUE:stream", any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
+            mockQueueAdmission(redis, "$TEST_DBM_QUEUE:stream")
 
             val counts = listOf(
                 DbmIngestionService.enqueueQueries(
@@ -503,9 +536,7 @@ class DbmIngestionServiceTest {
             )
 
             assertEquals(listOf(1, 1, 1, 1, 1), counts)
-            verify(exactly = 5) {
-                redis.xadd("$TEST_DBM_QUEUE:stream", any<XAddArgs>(), any<Map<String, String>>())
-            }
+            verifyQueueAdmission(redis, exactly = 5, streamKey = "$TEST_DBM_QUEUE:stream")
         } finally {
             unmockkObject(RedisConfig)
         }
