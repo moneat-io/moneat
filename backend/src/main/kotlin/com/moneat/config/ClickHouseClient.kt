@@ -41,6 +41,7 @@ import io.sentry.ISpan
 import io.sentry.Sentry
 import kotlinx.coroutines.CancellationException
 import mu.KotlinLogging
+import java.security.MessageDigest
 import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
@@ -62,6 +63,7 @@ object ClickHouseClient {
     private const val SOCKET_TIMEOUT_MS = 30_000L
     private const val MIGRATION_MAX_CONNECTIONS = 4
     private const val QUERY_LOG_MAX_LEN = 8192
+    private const val QUERY_FINGERPRINT_HEX_CHARS = 16
     private const val ERROR_BODY_MAX_LEN = 500
     private const val NANOS_PER_SECOND = 1_000_000_000.0
     private const val READ_QUERY_MAX_EXECUTION_SECONDS = 10
@@ -180,6 +182,12 @@ object ClickHouseClient {
             val elapsed = elapsedSeconds(startedAt)
             val status = if (response.status.isSuccess()) "success" else "http_${response.status.value}"
             OperationalMetrics.recordClickHouseRequest(operation, status, elapsed)
+            if (!response.status.isSuccess()) {
+                logger.error {
+                    "ClickHouse request failed: operation=$operation status=${response.status.value} " +
+                        "query_kind=${queryKind(query)} query_fp=${queryFingerprint(query)}"
+                }
+            }
             if (elapsed >= SLOW_QUERY_THRESHOLD_SECONDS) {
                 val elapsedText = String.format("%.1f", elapsed)
                 val truncatedQuery = query.take(QUERY_LOG_MAX_LEN)
@@ -199,6 +207,18 @@ object ClickHouseClient {
 
     private fun elapsedSeconds(startedAt: Long): Double =
         (System.nanoTime() - startedAt) / NANOS_PER_SECOND
+
+    private fun queryFingerprint(query: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(query.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> "%02x".format(byte) }
+            .take(QUERY_FINGERPRINT_HEX_CHARS)
+
+    private fun queryKind(query: String): String =
+        query.trimStart()
+            .takeWhile { it.isLetter() }
+            .lowercase(Locale.ROOT)
+            .ifBlank { "unknown" }
 
     private fun isClickHouseParameterName(name: String): Boolean {
         val first = name.firstOrNull() ?: return false

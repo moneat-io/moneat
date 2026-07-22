@@ -246,6 +246,15 @@ class LogQueryParserSqlTest {
     }
 
     @Test
+    fun `free text with an underscore generates ILIKE SQL`() {
+        val result = parser.parse("query_logs")
+        val sql = parser.toClickHouseSql(result.rootNode, ::escapeSql)
+
+        assertTrue(sql.contains("ILIKE '%query_logs%'"), "Separated token should use ILIKE: $sql")
+        assertFalse(sql.contains("hasTokenCaseInsensitive"), "Separated token should not use hasToken: $sql")
+    }
+
+    @Test
     fun `all new features generate balanced parentheses`() {
         val queries =
             listOf(

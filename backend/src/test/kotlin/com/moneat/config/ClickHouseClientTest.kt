@@ -99,6 +99,24 @@ class ClickHouseClientTest {
     }
 
     @Test
+    fun `execute records HTTP failures and preserves the response body`() = runBlocking {
+        OperationalMetrics.resetForTest()
+        val errorBody = "Code: 36. DB::Exception: Invalid query"
+        withClickHouseMockServer({ exchange ->
+            exchange.respond(400, errorBody, "text/plain")
+        }) {
+            val response = ClickHouseClient.execute("SELECT * FROM logs")
+            assertEquals(400, response.status.value)
+            assertEquals(errorBody, response.bodyAsText())
+        }
+
+        val rendered = OperationalMetrics.scrape()
+        assertContains(rendered, "moneat_clickhouse_requests_total")
+        assertContains(rendered, "operation=\"execute\"")
+        assertContains(rendered, "status=\"http_400\"")
+    }
+
+    @Test
     fun `executeWithFormat records ClickHouse error body codes`() = runBlocking {
         OperationalMetrics.resetForTest()
         withClickHouseMockServer({ exchange ->
