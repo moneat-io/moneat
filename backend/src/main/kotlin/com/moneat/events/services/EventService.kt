@@ -756,7 +756,13 @@ class EventService(
             feedbackContext?.string("associated_event_id")
                 ?: feedback.associatedEventId
                 ?: if (itemType == "user_report") feedback.eventId.orEmpty() else ""
-        val replayId = feedbackContext?.string("replay_id") ?: feedback.replayId ?: ""
+        val replayContext = feedback.contexts?.get("replay") as? JsonObject
+        val replayId = sequenceOf(
+            feedbackContext?.string("replay_id"),
+            replayContext?.string("replay_id"),
+            feedback.replayId,
+            feedback.tags?.get("replayId")
+        ).filterNotNull().firstOrNull(String::isNotBlank).orEmpty()
 
         val userId = feedback.user?.id ?: ""
         val userEmail = feedback.user?.email ?: contactEmail
