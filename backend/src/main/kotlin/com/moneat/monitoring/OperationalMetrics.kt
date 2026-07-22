@@ -17,6 +17,7 @@
 package com.moneat.monitoring
 
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.lettuce.core.Limit
 import io.lettuce.core.Range
@@ -51,6 +52,9 @@ object OperationalMetrics {
     private val registeredDlqMeters = ConcurrentHashMap<String, Unit>()
     private val registeredQueueMeters = ConcurrentHashMap<String, Unit>()
     private val registeredStreamMeters = ConcurrentHashMap<String, Unit>()
+    private val ingestionCapacityValues = ConcurrentHashMap<String, AtomicLong>()
+    private val registeredIngestionCapacityMeters = ConcurrentHashMap<String, Unit>()
+    private val registeredIngestionQueueMeters = ConcurrentHashMap<String, Unit>()
     private val workerLastSuccessSeconds = ConcurrentHashMap<String, AtomicLong>()
     private val workerLastSuccessMeters = ConcurrentHashMap<String, Unit>()
     private val dependencyHealthValues = ConcurrentHashMap<String, AtomicLong>()
@@ -216,6 +220,68 @@ object OperationalMetrics {
                 "status" to status
             )
         ).increment()
+    }
+
+    fun recordIngestionAdmission(pipeline: IngestionPipeline, outcome: String) {
+        counter(
+            INGESTION_ADMISSION,
+            "Ingestion queue admission attempts by pipeline and outcome.",
+            tags(
+                "pipeline" to pipeline.id,
+                "outcome" to outcome,
+            ),
+        ).increment()
+    }
+
+    fun recordIngestionDlqPush(pipeline: IngestionPipeline, status: String) {
+        counter(
+            INGESTION_DLQ_PUSHES,
+            "Ingestion dead-letter queue growth by pipeline and result.",
+            tags(
+                "pipeline" to pipeline.id,
+                "status" to status,
+            ),
+        ).increment()
+    }
+
+    fun registerIngestionQueueCapacity(pipeline: IngestionPipeline, capacity: Long) {
+        val pipelineId = pipeline.id
+        val capacityValue = ingestionCapacityValues.computeIfAbsent(pipelineId) { AtomicLong(capacity) }
+        capacityValue.set(capacity)
+        registeredIngestionCapacityMeters.computeIfAbsent(pipelineId) {
+            Gauge.builder(INGESTION_QUEUE_CAPACITY, capacityValue) { value -> value.get().toDouble() }
+                .description("Configured maximum entries accepted by an ingestion queue.")
+                .tags(tags("pipeline" to pipelineId))
+                .register(registry)
+            Unit
+        }
+    }
+
+    fun registerIngestionQueue(
+        pipeline: IngestionPipeline,
+        streamKey: String,
+        dlqStreamKey: String,
+        consumerGroup: String,
+        capacity: Long,
+    ) {
+        registerIngestionQueueCapacity(pipeline, capacity)
+        registeredIngestionQueueMeters.computeIfAbsent(pipeline.id) {
+            Gauge.builder(INGESTION_QUEUE_DEPTH, streamKey) { key -> readQueueDepth(key) }
+                .description("Current number of retained entries in an ingestion queue.")
+                .tags(tags("pipeline" to pipeline.id))
+                .register(registry)
+            Gauge.builder(INGESTION_QUEUE_OLDEST_MESSAGE_AGE_SECONDS, streamKey) { key ->
+                readStreamOldestMessageAgeSeconds(key, consumerGroup)
+            }
+                .description("Age in seconds of the oldest pending or unconsumed ingestion message.")
+                .tags(tags("pipeline" to pipeline.id))
+                .register(registry)
+            Gauge.builder(INGESTION_DLQ_DEPTH, dlqStreamKey) { key -> readQueueDepth(key) }
+                .description("Current retained entries in an ingestion dead-letter queue.")
+                .tags(tags("pipeline" to pipeline.id))
+                .register(registry)
+            Unit
+        }
     }
 
     fun recordDatadogMetricPayloadQueued(metricRows: Int) {
@@ -440,6 +506,9 @@ object OperationalMetrics {
         registeredDlqMeters.clear()
         registeredQueueMeters.clear()
         registeredStreamMeters.clear()
+        ingestionCapacityValues.clear()
+        registeredIngestionCapacityMeters.clear()
+        registeredIngestionQueueMeters.clear()
         workerLastSuccessSeconds.clear()
         workerLastSuccessMeters.clear()
         dependencyHealthValues.clear()
@@ -824,6 +893,13 @@ object OperationalMetrics {
     private const val WORKER_STREAM_OLDEST_MESSAGE_AGE_SECONDS =
         "moneat_worker_stream_oldest_message_age_seconds"
     private const val INGESTION_QUEUE_MODE = "moneat_ingestion_queue_mode"
+    private const val INGESTION_ADMISSION = "moneat_ingestion_admission"
+    private const val INGESTION_QUEUE_CAPACITY = "moneat_ingestion_queue_capacity_entries"
+    private const val INGESTION_QUEUE_DEPTH = "moneat_ingestion_queue_depth"
+    private const val INGESTION_QUEUE_OLDEST_MESSAGE_AGE_SECONDS =
+        "moneat_ingestion_queue_oldest_message_age_seconds"
+    private const val INGESTION_DLQ_DEPTH = "moneat_ingestion_dlq_depth"
+    private const val INGESTION_DLQ_PUSHES = "moneat_ingestion_dlq_pushes"
     private const val DD_METRIC_PAYLOADS_QUEUED = "moneat_datadog_metric_payloads_queued"
     private const val DD_METRIC_POINTS_QUEUED = "moneat_datadog_metric_points_queued"
     private const val DD_METRIC_INSERT_CHUNKS = "moneat_datadog_metric_insert_chunks"

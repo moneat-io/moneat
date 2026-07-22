@@ -142,7 +142,7 @@ class RedisStreamQueueOperationsTest {
             claimIdleMs = 300_000,
             maxDeliveries = 5,
             readTimeoutMs = 5_000,
-            streamMaxLen = 250_000,
+            maxPendingEntries = 250_000,
             dlqStreamMaxLen = 10_000,
         )
 }

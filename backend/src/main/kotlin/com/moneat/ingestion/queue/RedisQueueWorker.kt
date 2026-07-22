@@ -276,7 +276,9 @@ class RedisQueueWorker(
     ) {
         try {
             withClickHouseDeduplication(messages) {
-                batchProcessor(workerId, messages)
+                IngestionBatchLimiter.withPermit {
+                    batchProcessor(workerId, messages)
+                }
             }
             ack(conn, messages)
         } catch (e: CancellationException) {
@@ -293,7 +295,9 @@ class RedisQueueWorker(
     ) {
         try {
             withClickHouseDeduplication(listOf(message)) {
-                processMessage(workerId, message.payload)
+                IngestionBatchLimiter.withPermit {
+                    processMessage(workerId, message.payload)
+                }
             }
             ack(conn, listOf(message))
         } catch (e: CancellationException) {
@@ -368,6 +372,13 @@ class RedisQueueWorker(
             workerName = spec.pipeline.workerName,
             streamKey = spec.dlqStreamKey,
             streamType = "dlq",
+        )
+        OperationalMetrics.registerIngestionQueue(
+            pipeline = spec.pipeline,
+            streamKey = spec.streamKey,
+            dlqStreamKey = spec.dlqStreamKey,
+            consumerGroup = spec.consumerGroup,
+            capacity = spec.maxPendingEntries,
         )
     }
 

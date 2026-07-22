@@ -18,6 +18,8 @@ package com.moneat.ingestion.queue
 
 import com.moneat.config.RedisConfig
 import com.moneat.monitoring.OperationalMetrics
+import io.lettuce.core.RedisException
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.XAddArgs
 import mu.KLogger
 
@@ -28,6 +30,33 @@ private const val FIELD_ERROR_TYPE = "error_type"
 private const val FIELD_ERROR_MESSAGE = "error_message"
 private const val FIELD_ORIGINAL_STREAM_ID = "original_stream_id"
 private const val ERROR_MESSAGE_PREVIEW_CHARS = 1_000
+private const val DEFAULT_RETRY_AFTER_SECONDS = 5
+
+private val ADMIT_TO_STREAM_SCRIPT =
+    """
+    local depth = redis.call('XLEN', KEYS[1])
+    if depth >= tonumber(ARGV[1]) then
+        return nil
+    end
+    return redis.call(
+        'XADD', KEYS[1], '*',
+        'payload', ARGV[2],
+        'pipeline', ARGV[3],
+        'enqueued_at_ms', ARGV[4]
+    )
+    """.trimIndent()
+
+class IngestionQueueCapacityException(
+    val pipeline: IngestionPipeline,
+    val capacity: Long,
+    val retryAfterSeconds: Int = DEFAULT_RETRY_AFTER_SECONDS,
+) : RuntimeException("Ingestion queue ${pipeline.id} is at its configured capacity of $capacity entries")
+
+class IngestionQueueUnavailableException(
+    val pipeline: IngestionPipeline,
+    cause: Throwable,
+    val retryAfterSeconds: Int = DEFAULT_RETRY_AFTER_SECONDS,
+) : RuntimeException("Ingestion queue ${pipeline.id} is temporarily unavailable", cause)
 
 data class IngestionDlqRequest(
     val spec: IngestionQueueSpec,
@@ -44,7 +73,32 @@ object IngestionQueueClient {
         payload: String,
     ): String? {
         val spec = IngestionQueueSettings.spec(pipeline, queueKey, "$queueKey:dlq", workerCount = 1)
-        return RedisConfig.sync().xadd(spec.streamKey, streamAddArgs(spec.streamMaxLen), streamBody(pipeline, payload))
+        OperationalMetrics.registerIngestionQueueCapacity(pipeline, spec.maxPendingEntries)
+        return try {
+            val streamId: String? = RedisConfig.sync().eval(
+                ADMIT_TO_STREAM_SCRIPT,
+                ScriptOutputType.VALUE,
+                arrayOf(spec.streamKey),
+                spec.maxPendingEntries.toString(),
+                payload,
+                pipeline.id,
+                System.currentTimeMillis().toString(),
+            )
+            if (streamId == null) {
+                OperationalMetrics.recordIngestionAdmission(pipeline, "capacity_rejected")
+                throw IngestionQueueCapacityException(pipeline, spec.maxPendingEntries)
+            }
+            OperationalMetrics.recordIngestionAdmission(pipeline, "accepted")
+            streamId
+        } catch (e: IngestionQueueCapacityException) {
+            throw e
+        } catch (e: RedisException) {
+            OperationalMetrics.recordIngestionAdmission(pipeline, "unavailable")
+            throw IngestionQueueUnavailableException(pipeline, e)
+        } catch (e: IllegalStateException) {
+            OperationalMetrics.recordIngestionAdmission(pipeline, "unavailable")
+            throw IngestionQueueUnavailableException(pipeline, e)
+        }
     }
 
     fun pushToDlq(
@@ -65,8 +119,10 @@ object IngestionQueueClient {
             1L
         }.onSuccess {
             OperationalMetrics.recordDlqPush(spec.pipeline.workerName, spec.dlqStreamKey, "success")
+            OperationalMetrics.recordIngestionDlqPush(spec.pipeline, "success")
         }.onFailure { dlqErr ->
             OperationalMetrics.recordDlqPush(spec.pipeline.workerName, spec.dlqStreamKey, "failure")
+            OperationalMetrics.recordIngestionDlqPush(spec.pipeline, "failure")
             logger.error(dlqErr) {
                 "Failed to write to DLQ for worker ${request.workerId}, dlqKey=${spec.dlqStreamKey}"
             }

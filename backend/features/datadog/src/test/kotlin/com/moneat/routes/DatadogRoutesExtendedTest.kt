@@ -67,8 +67,6 @@ import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.QueuedConnectionEntry
 import com.moneat.datadog.services.QueuedInfraBatch
 import com.moneat.datadog.services.QueuedProcessEntry
-import com.moneat.datadog.services.QueuedServiceCheckBatch
-import com.moneat.datadog.services.QueuedServiceCheckEntry
 import com.moneat.datadog.services.TelemetryProxyService
 import com.moneat.datadog.services.TraceIngestionService
 import com.moneat.shared.models.Memberships
@@ -236,13 +234,9 @@ class DatadogRoutesExtendedTest {
         every { DatadogHostService.upsertFromIntake(any(), any()) } just Runs
         every { DatadogHostService.touchHostLastSeen(any(), any()) } just Runs
         coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 1
-        every { DatadogMetricService.mapSketches(any(), any(), any()) } returns
-            com.moneat.datadog.services.QueuedSketchBatch(1L, emptyList())
-        coEvery { DatadogMetricService.insertSketchBatch(any()) } just Runs
-        every { DatadogEventService.mapServiceChecks(any(), any()) } returns
-            com.moneat.datadog.services.QueuedServiceCheckBatch(1L, emptyList())
-        coEvery { DatadogEventService.insertServiceCheckBatch(any()) } just Runs
+        coEvery { DatadogMetricService.enqueueSketches(any(), any(), any()) } returns 1
         coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 1
+        coEvery { DatadogEventService.enqueueServiceChecks(any(), any()) } returns 1
         coEvery { DatadogLogService.enqueueLogs(any(), any()) } returns 1
         every { MiscIngestionService.enqueueSymbolDb(any(), any()) } just Runs
         every { MiscIngestionService.enqueuePipelineStats(any(), any()) } returns 1
@@ -1340,26 +1334,14 @@ class DatadogRoutesExtendedTest {
                 requestedBytesByType = mapOf("infra_metric" to body.toByteArray().size.toLong()),
             )
         }
-        verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
+        verify(exactly = 0) { DatadogHostService.touchHostLastSeen(any(), any()) }
         coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any(), any()) }
     }
 
     @Test
-    fun `POST dd service checks touches host before quota rejection`() = testApplication {
+    fun `POST dd service checks rejects quota before enqueue`() = testApplication {
         val quotaService = rejectingQuotaService()
         val body = """{"service_checks":[{"check":"disk","host_name":"h1","status":0}]}"""
-        every {
-            DatadogEventService.mapServiceChecks(any(), any())
-        } returns QueuedServiceCheckBatch(
-            organizationId = TEST_ORG_ID.toLong(),
-            serviceChecks = listOf(
-                QueuedServiceCheckEntry(
-                    checkName = "disk",
-                    host = "h1",
-                    timestampMs = 0L
-                )
-            )
-        )
 
         application {
             install(ContentNegotiation) { json() }
@@ -1381,8 +1363,8 @@ class DatadogRoutesExtendedTest {
                 requestedBytes = body.toByteArray().size.toLong(),
             )
         }
-        verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
-        coVerify(exactly = 0) { DatadogEventService.insertServiceCheckBatch(any()) }
+        verify(exactly = 0) { DatadogHostService.touchHostLastSeen(any(), any()) }
+        coVerify(exactly = 0) { DatadogEventService.enqueueServiceChecks(any(), any()) }
     }
 
     @Test

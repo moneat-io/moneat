@@ -49,6 +49,8 @@ import com.moneat.datadog.services.ProfileStorageService
 import com.moneat.datadog.workers.DatadogEventIngestionWorker
 import com.moneat.datadog.workers.DatadogInfraIngestionWorker
 import com.moneat.datadog.workers.DatadogMetricIngestionWorker
+import com.moneat.datadog.workers.DatadogServiceCheckIngestionWorker
+import com.moneat.datadog.workers.DatadogSketchIngestionWorker
 import com.moneat.datadog.workers.DbmIngestionWorker
 import com.moneat.datadog.workers.DebuggerIngestionWorker
 import com.moneat.datadog.workers.MiscIngestionWorker
@@ -70,8 +72,12 @@ private val logger = KotlinLogging.logger {}
 
 private const val METRICS_QUEUE = "moneat:metrics:queue"
 private const val METRICS_DLQ = "moneat:metrics:dlq"
+private const val SKETCHES_QUEUE = "moneat:sketches:queue"
+private const val SKETCHES_DLQ = "moneat:sketches:dlq"
 private const val EVENTS_QUEUE = "moneat:infra_events:queue"
 private const val EVENTS_DLQ = "moneat:infra_events:dlq"
+private const val SERVICE_CHECKS_QUEUE = "moneat:service_checks:queue"
+private const val SERVICE_CHECKS_DLQ = "moneat:service_checks:dlq"
 private const val INFRA_QUEUE = "moneat:infra:queue"
 private const val INFRA_DLQ = "moneat:infra:dlq"
 private const val MISC_QUEUE = "moneat:dd:misc:queue"
@@ -85,7 +91,9 @@ class DatadogModule : EnterpriseModule, IngestionRateLimitKeyResolver {
     private lateinit var dbmWorker: DbmIngestionWorker
     private lateinit var debuggerWorker: DebuggerIngestionWorker
     private var metricWorker: DatadogMetricIngestionWorker? = null
+    private var sketchWorker: DatadogSketchIngestionWorker? = null
     private var eventWorker: DatadogEventIngestionWorker? = null
+    private var serviceCheckWorker: DatadogServiceCheckIngestionWorker? = null
     private var infraWorker: DatadogInfraIngestionWorker? = null
     private var miscWorker: MiscIngestionWorker? = null
     private var ndmWorker: NdmIngestionWorker? = null
@@ -174,9 +182,21 @@ class DatadogModule : EnterpriseModule, IngestionRateLimitKeyResolver {
             metricWorker = DatadogMetricIngestionWorker(METRICS_QUEUE, METRICS_DLQ, WORKER_COUNT_2)
             metricWorker?.start()
         }
+        if (shouldStart(IngestionPipeline.DD_SKETCHES)) {
+            sketchWorker = DatadogSketchIngestionWorker(SKETCHES_QUEUE, SKETCHES_DLQ, WORKER_COUNT_1)
+            sketchWorker?.start()
+        }
         if (shouldStart(IngestionPipeline.DD_EVENTS)) {
             eventWorker = DatadogEventIngestionWorker(EVENTS_QUEUE, EVENTS_DLQ, WORKER_COUNT_2)
             eventWorker?.start()
+        }
+        if (shouldStart(IngestionPipeline.DD_SERVICE_CHECKS)) {
+            serviceCheckWorker = DatadogServiceCheckIngestionWorker(
+                SERVICE_CHECKS_QUEUE,
+                SERVICE_CHECKS_DLQ,
+                WORKER_COUNT_1,
+            )
+            serviceCheckWorker?.start()
         }
         if (shouldStart(IngestionPipeline.DD_INFRA)) {
             infraWorker = DatadogInfraIngestionWorker(INFRA_QUEUE, INFRA_DLQ, WORKER_COUNT_1)
@@ -203,7 +223,9 @@ class DatadogModule : EnterpriseModule, IngestionRateLimitKeyResolver {
         if (::dbmWorker.isInitialized) dbmWorker.stop()
         if (::debuggerWorker.isInitialized) debuggerWorker.stop()
         metricWorker?.stop()
+        sketchWorker?.stop()
         eventWorker?.stop()
+        serviceCheckWorker?.stop()
         infraWorker?.stop()
         miscWorker?.stop()
         ndmWorker?.stop()
@@ -214,7 +236,9 @@ class DatadogModule : EnterpriseModule, IngestionRateLimitKeyResolver {
         listOf(
             WorkerQueue("Trace", "moneat:traces:queue", "moneat:traces:dlq"),
             WorkerQueue("DD metric", METRICS_QUEUE, METRICS_DLQ),
+            WorkerQueue("DD sketch", SKETCHES_QUEUE, SKETCHES_DLQ),
             WorkerQueue("DD event", EVENTS_QUEUE, EVENTS_DLQ),
+            WorkerQueue("DD service check", SERVICE_CHECKS_QUEUE, SERVICE_CHECKS_DLQ),
             WorkerQueue("DD infra", INFRA_QUEUE, INFRA_DLQ),
             WorkerQueue("Misc", MISC_QUEUE, MISC_DLQ),
             WorkerQueue("Orchestrator", "moneat:dd:orchestrator:queue", "moneat:dd:orchestrator:dlq"),

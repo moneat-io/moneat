@@ -20,6 +20,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.config.RedisConfig
 import com.moneat.monitoring.OperationalMetrics
 import io.lettuce.core.RedisException
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.XAddArgs
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
@@ -33,7 +34,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -59,18 +60,65 @@ class IngestionQueueClientTest {
 
     @Test
     fun `enqueue writes structured body to redis stream`() {
-        val bodySlot = slot<Map<String, String>>()
-        val argsSlot = slot<XAddArgs>()
-        every { redis.xadd("logs:queue:stream", capture(argsSlot), capture(bodySlot)) } returns "1-0"
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                arrayOf("logs:queue:stream"),
+                "250000",
+                "payload",
+                "logs",
+                any<String>(),
+            )
+        } returns "1-0"
 
         val streamId = IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "logs:queue", "payload")
 
         assertEquals("1-0", streamId)
-        assertEquals(250_000L, xaddMaxLen(argsSlot.captured))
-        assertTrue(xaddApproximateTrimming(argsSlot.captured))
-        assertEquals("payload", bodySlot.captured["payload"])
-        assertEquals("logs", bodySlot.captured["pipeline"])
-        assertNotNull(bodySlot.captured["enqueued_at_ms"]?.toLongOrNull())
+        assertTrue(OperationalMetrics.scrape().contains("outcome=\"accepted\""))
+    }
+
+    @Test
+    fun `enqueue rejects a full stream without trimming it`() {
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                any<Array<String>>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+            )
+        } returns null
+
+        val error = assertFailsWith<IngestionQueueCapacityException> {
+            IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "logs:queue", "payload")
+        }
+
+        assertEquals(250_000L, error.capacity)
+        assertTrue(OperationalMetrics.scrape().contains("outcome=\"capacity_rejected\""))
+    }
+
+    @Test
+    fun `enqueue reports redis failures as queue unavailability`() {
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                any<Array<String>>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+            )
+        } throws RedisException("redis down")
+
+        assertFailsWith<IngestionQueueUnavailableException> {
+            IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "logs:queue", "payload")
+        }
+
+        assertTrue(OperationalMetrics.scrape().contains("outcome=\"unavailable\""))
     }
 
     @Test

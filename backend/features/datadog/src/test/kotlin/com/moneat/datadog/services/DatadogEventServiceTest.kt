@@ -16,9 +16,18 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogEvent
 import com.moneat.datadog.models.DatadogServiceCheck
 import com.moneat.datadog.models.DatadogServiceCheckPayload
+import io.lettuce.core.ScriptOutputType
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.slot
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -30,6 +39,42 @@ private val json = Json {
 }
 
 class DatadogEventServiceTest {
+
+    @Test
+    fun `enqueueServiceChecks serializes checks for the dedicated queue`() = runBlocking {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+        val checks = listOf(DatadogServiceCheck(check = "ready", hostName = "host-1", status = 0))
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every {
+                redis.eval<String>(
+                    any<String>(),
+                    ScriptOutputType.VALUE,
+                    arrayOf("test:dd:service-check:queue:stream"),
+                    any<String>(),
+                    capture(queuedPayload),
+                    "dd-service-checks",
+                    any<String>(),
+                )
+            } returns "1-0"
+
+            val count = DatadogEventService.enqueueServiceChecks(
+                organizationId = 42L,
+                checks = checks,
+                queueKey = "test:dd:service-check:queue",
+            )
+
+            val batch = DatadogEventService.decodeServiceCheckBatch(queuedPayload.captured)
+            assertEquals(1, count)
+            assertEquals(42L, batch.organizationId)
+            assertEquals("host-1", batch.serviceChecks.single().host)
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
 
     @Test
     fun `mapEvents maps fields correctly`() {

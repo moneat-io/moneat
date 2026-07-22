@@ -40,7 +40,8 @@ class IngestionQueueSettingsTest {
         assertNull(IngestionPipeline.parse("unknown"))
     }
 
-    fun `spec applies env overrides and clamps worker count`() {
+    @Test
+    fun `spec applies env overrides and worker controls`() {
         mockkObject(EnvConfig)
         every { EnvConfig.get(any()) } returns null
         every { EnvConfig.get("INGESTION_LOGS_STREAM_KEY") } returns "custom:logs:stream"
@@ -50,12 +51,13 @@ class IngestionQueueSettingsTest {
         every { EnvConfig.get("INGESTION_LOGS_CLAIM_IDLE_MS") } returns "1234"
         every { EnvConfig.get("INGESTION_LOGS_MAX_DELIVERIES") } returns "9"
         every { EnvConfig.get("INGESTION_LOGS_READ_TIMEOUT_MS") } returns "321"
-        every { EnvConfig.get("INGESTION_LOGS_STREAM_MAXLEN") } returns "12345"
+        every { EnvConfig.get("INGESTION_LOGS_WORKER_COUNT") } returns "3"
+        every { EnvConfig.get("INGESTION_LOGS_MAX_PENDING_ENTRIES") } returns "12345"
         every { EnvConfig.get("INGESTION_LOGS_DLQ_STREAM_MAXLEN") } returns "5678"
 
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 0)
 
-        assertEquals(1, spec.workerCount)
+        assertEquals(3, spec.workerCount)
         assertEquals("custom:logs:stream", spec.streamKey)
         assertEquals("custom:logs:dlq:stream", spec.dlqStreamKey)
         assertEquals("custom-group", spec.consumerGroup)
@@ -63,7 +65,7 @@ class IngestionQueueSettingsTest {
         assertEquals(1_234L, spec.claimIdleMs)
         assertEquals(9, spec.maxDeliveries)
         assertEquals(321L, spec.readTimeoutMs)
-        assertEquals(12_345L, spec.streamMaxLen)
+        assertEquals(12_345L, spec.maxPendingEntries)
         assertEquals(5_678L, spec.dlqStreamMaxLen)
     }
 
@@ -75,7 +77,8 @@ class IngestionQueueSettingsTest {
         every { EnvConfig.get("INGESTION_LOGS_CLAIM_IDLE_MS") } returns "-1"
         every { EnvConfig.get("INGESTION_LOGS_MAX_DELIVERIES") } returns "not-a-number"
         every { EnvConfig.get("INGESTION_LOGS_READ_TIMEOUT_MS") } returns "0"
-        every { EnvConfig.get("INGESTION_LOGS_STREAM_MAXLEN") } returns "-1"
+        every { EnvConfig.get("INGESTION_LOGS_MAX_PENDING_ENTRIES") } returns "-1"
+        every { EnvConfig.get("INGESTION_QUEUE_MAX_PENDING_ENTRIES") } returns "0"
         every { EnvConfig.get("INGESTION_LOGS_DLQ_STREAM_MAXLEN") } returns "0"
 
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 2)
@@ -87,8 +90,21 @@ class IngestionQueueSettingsTest {
         assertEquals(300_000L, spec.claimIdleMs)
         assertEquals(5, spec.maxDeliveries)
         assertEquals(5_000L, spec.readTimeoutMs)
-        assertEquals(250_000L, spec.streamMaxLen)
+        assertEquals(250_000L, spec.maxPendingEntries)
         assertEquals(10_000L, spec.dlqStreamMaxLen)
+    }
+
+    @Test
+    fun `global queue capacity and concurrency controls are applied`() {
+        mockkObject(EnvConfig)
+        every { EnvConfig.get(any()) } returns null
+        every { EnvConfig.get("INGESTION_QUEUE_MAX_PENDING_ENTRIES") } returns "42000"
+        every { EnvConfig.get("INGESTION_MAX_CONCURRENT_BATCHES") } returns "2"
+
+        val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 4)
+
+        assertEquals(42_000L, spec.maxPendingEntries)
+        assertEquals(2, IngestionQueueSettings.maxConcurrentBatches())
     }
 
     @Test

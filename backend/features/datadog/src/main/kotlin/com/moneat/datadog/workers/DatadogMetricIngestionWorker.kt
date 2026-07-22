@@ -17,6 +17,7 @@
 package com.moneat.datadog.workers
 
 import com.moneat.config.EnvConfig
+import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.QueuedMetricBatch
 import com.moneat.ingestion.queue.IngestionPipeline
@@ -32,7 +33,6 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 private const val COMBINED_INSERT_MODE = "combined"
-private const val SINGLE_INSERT_MODE = "single"
 private const val SUCCESS_STATUS = "success"
 private const val FAILURE_STATUS = "failure"
 private const val WORKER_NAME = "DD metric"
@@ -42,7 +42,6 @@ private const val MAX_ROWS_ENV = "DD_METRIC_BATCH_MAX_ROWS"
 private const val MAX_PAYLOADS_ENV = "DD_METRIC_BATCH_MAX_PAYLOADS"
 
 private data class DecodedMetricPayload(
-    val originalPayload: String,
     val batch: QueuedMetricBatch,
 )
 
@@ -104,7 +103,6 @@ class DatadogMetricIngestionWorker(
     ): DecodedMetricPayload? {
         return try {
             DecodedMetricPayload(
-                originalPayload = payload,
                 batch = DatadogMetricService.decodeMetricBatch(payload),
             )
         } catch (e: SerializationException) {
@@ -172,20 +170,9 @@ class DatadogMetricIngestionWorker(
         }
 
         val combinedResult = insertCombinedBatch(nonEmptyBatches)
-        if (combinedResult.isSuccess) {
-            markProcessed(workerId, payloads.size)
-            return
-        }
-
-        logger.warn(combinedResult.exceptionOrNull()) {
-            "Combined Datadog metric insert failed; falling back to per-payload inserts"
-        }
-        OperationalMetrics.recordDatadogMetricInsertFallback(
-            payloadCount = payloads.size,
-            rowCount = totalRows(payloads),
-            cause = combinedResult.exceptionOrNull(),
-        )
-        payloads.forEach { insertSinglePayload(workerId, it) }
+        combinedResult.getOrThrow()
+        touchHostsBestEffort(nonEmptyBatches)
+        markProcessed(workerId, payloads.size)
     }
 
     private suspend fun insertCombinedBatch(
@@ -206,26 +193,17 @@ class DatadogMetricIngestionWorker(
         return result
     }
 
-    private suspend fun insertSinglePayload(
-        workerId: Int,
-        payload: DecodedMetricPayload,
-    ) {
-        val startedAt = System.nanoTime()
-        val result = suspendRunCatching {
-            DatadogMetricService.insertMetricBatch(payload.batch)
-        }
-        OperationalMetrics.recordDatadogMetricInsert(
-            mode = SINGLE_INSERT_MODE,
-            status = result.metricStatus(),
-            payloadCount = 1,
-            rowCount = payload.batch.metrics.size,
-            durationSeconds = elapsedSecondsSince(startedAt),
-            cause = result.exceptionOrNull(),
-        )
-        result.onSuccess {
-            markProcessed(workerId, 1)
-        }.onFailure { e ->
-            pushToDlq(logger, dlqKey, payload.originalPayload, workerId, WORKER_NAME, e)
+    private fun touchHostsBestEffort(batches: List<QueuedMetricBatch>) {
+        batches.groupBy { it.organizationId }.forEach { (organizationId, organizationBatches) ->
+            val hosts = organizationBatches
+                .flatMap { batch -> batch.metrics.map { metric -> metric.host } }
+                .filter { it.isNotBlank() }
+                .toSet()
+            runCatching {
+                DatadogHostService.touchHostLastSeen(organizationId.toInt(), hosts)
+            }.onFailure { error ->
+                logger.warn(error) { "Failed to update host freshness after metric persistence" }
+            }
         }
     }
 
@@ -242,9 +220,6 @@ class DatadogMetricIngestionWorker(
         OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
     }
 }
-
-private fun totalRows(payloads: List<DecodedMetricPayload>): Int =
-    payloads.sumOf { it.batch.metrics.size }
 
 private fun Result<Unit>.metricStatus(): String =
     if (isSuccess) SUCCESS_STATUS else FAILURE_STATUS
