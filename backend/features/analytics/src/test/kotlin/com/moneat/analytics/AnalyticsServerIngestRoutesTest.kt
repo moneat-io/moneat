@@ -23,7 +23,7 @@ import com.moneat.otlp.services.OtlpApiKeyService
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Projects
 import com.moneat.testsupport.TestDatabaseHelper
-import io.lettuce.core.XAddArgs
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.sync.RedisCommands
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -153,10 +153,14 @@ class AnalyticsServerIngestRoutesTest {
         val mockRedis = mockk<RedisCommands<String, String>>()
         mockkObject(RedisConfig)
         every {
-            mockRedis.xadd(
-                "${AnalyticsIngestionWorker.QUEUE_KEY}:stream",
-                any<XAddArgs>(),
-                any<Map<String, String>>(),
+            mockRedis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                arrayOf("${AnalyticsIngestionWorker.QUEUE_KEY}:stream"),
+                any<String>(),
+                any<String>(),
+                "analytics",
+                any<String>(),
             )
         } returns "1-0"
         every { RedisConfig.sync() } returns mockRedis
@@ -185,10 +189,14 @@ class AnalyticsServerIngestRoutesTest {
 
         assertEquals(HttpStatusCode.Accepted, response.status, response.bodyAsText())
         verify(exactly = 2) {
-            mockRedis.xadd(
-                "${AnalyticsIngestionWorker.QUEUE_KEY}:stream",
-                any<XAddArgs>(),
-                any<Map<String, String>>(),
+            mockRedis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                arrayOf("${AnalyticsIngestionWorker.QUEUE_KEY}:stream"),
+                any<String>(),
+                any<String>(),
+                "analytics",
+                any<String>(),
             )
         }
     }
