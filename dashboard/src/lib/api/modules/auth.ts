@@ -16,7 +16,12 @@
 
 import { setDemoEpoch } from '../../demo'
 import type { ApiClientCore } from '../client'
-import type { AuthResponse, SignupLegalConsent, SsoConfig } from '../types'
+import type {
+  AuthResponse,
+  MobileAuthResponse,
+  SignupLegalConsent,
+  SsoConfig,
+} from '../types'
 
 export function authMethods(core: ApiClientCore) {
   const base = core.API_BASE
@@ -54,6 +59,15 @@ export function authMethods(core: ApiClientCore) {
       globalThis.sessionStorage?.setItem('authenticated', 'true')
       return response
     },
+
+    mobileLogin: async (
+      email: string,
+      password: string
+    ): Promise<MobileAuthResponse> =>
+      core.request<MobileAuthResponse>(`${authBase}/auth/mobile/login`, {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }),
 
     initSso: async (
       email?: string,

@@ -35,8 +35,24 @@ interface InternalRouteTarget {
   readonly hash?: string
 }
 
+const MOBILE_AUTH_CALLBACK_URL = 'moneat://auth'
+
 function normalizePostLoginRedirect(value: unknown): string | undefined {
   return normalizeInternalRedirectPath(value)
+}
+
+function normalizeMobileAuthCallback(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  return value.trim() === MOBILE_AUTH_CALLBACK_URL ? MOBILE_AUTH_CALLBACK_URL : undefined
+}
+
+function mobileAuthCallbackUrl(
+  redirectUri: string,
+  token: string,
+  refreshToken: string
+): string {
+  const params = new URLSearchParams({token, refreshToken})
+  return `${redirectUri}#${params.toString()}`
 }
 
 function buildInviteRedirectPath(value: unknown): string | undefined {
@@ -89,12 +105,12 @@ function resolveSubmitPostLoginPath(queryPostLoginPath: string | undefined): str
 export const Route = createFileRoute('/login')({
   beforeLoad: ({ search }) => {
     const s = search as Record<string, unknown>
-    const redirectUri = s.redirect_uri as string | undefined
+    const mobileAuthCallback = normalizeMobileAuthCallback(s.redirect_uri)
     const postLoginRedirect = normalizePostLoginRedirect(s.redirect)
 
     // If user is already authenticated AND redirect_uri exists (mobile login),
     // log them out automatically so they can log in fresh
-    if (api.isAuthenticated() && redirectUri) {
+    if (api.isAuthenticated() && mobileAuthCallback) {
       api.logout()
       return
     }
@@ -120,6 +136,7 @@ export const Route = createFileRoute('/login')({
 function LoginPage() {
   const navigate = useNavigate()
   const searchParams = new URLSearchParams(window.location.search)
+  const mobileAuthCallback = normalizeMobileAuthCallback(searchParams.get('redirect_uri'))
   const [queryPostLoginPath] = useState(() => resolveQueryPostLoginPath(searchParams))
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -135,6 +152,13 @@ function LoginPage() {
     setError('')
 
     try {
+      if (mobileAuthCallback) {
+        const {token, refreshToken} = await api.mobileLogin(email, password)
+        trackEvent('Login', { method: 'email' })
+        globalThis.window.location.assign(mobileAuthCallbackUrl(mobileAuthCallback, token, refreshToken))
+        return
+      }
+
       await api.login(email, password)
       trackEvent('Login', { method: 'email' })
       const target = internalRouteTarget(resolveSubmitPostLoginPath(queryPostLoginPath))
