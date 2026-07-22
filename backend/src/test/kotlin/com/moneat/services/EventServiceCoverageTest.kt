@@ -531,7 +531,11 @@ class EventServiceCoverageTest {
                 "event_id": "a4bad9a2e3774046977a21440ddb39b2",
                 "contexts": {
                     "feedback": {
-                        "message": "Replay metadata is attached as a tag"
+                        "message": "Replay metadata is attached as a tag",
+                        "replay_id": {"invalid": true}
+                    },
+                    "replay": {
+                        "replay_id": "   "
                     }
                 },
                 "tags": {

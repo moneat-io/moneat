@@ -845,7 +845,8 @@ class EventService(
         }
     }
 
-    private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+    private fun JsonObject.string(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNull
 
     private fun SentrySession.toInsertData(projectId: Long): SessionInsertData? {
         val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return null
