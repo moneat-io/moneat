@@ -114,6 +114,8 @@ object RedisConfig {
 
     fun isConnected(): Boolean = connection?.isOpen == true
 
+    fun isMonitoringConnected(): Boolean = monitoringConnection?.isOpen == true
+
     fun isInitialized(): Boolean = connection != null
 
     fun close() {
