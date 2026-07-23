@@ -100,7 +100,12 @@ object IngestionQueueClient {
         queueKey: String,
         payload: String,
     ): String? {
-        val spec = IngestionQueueSettings.spec(pipeline, queueKey, "$queueKey:dlq", workerCount = 1)
+        val spec = IngestionQueueSettings.spec(
+            pipeline,
+            queueKey,
+            IngestionQueueSettings.defaultDlqKey(queueKey),
+            workerCount = 1,
+        )
         OperationalMetrics.registerIngestionQueue(
             pipeline = pipeline,
             streamKey = spec.streamKey,

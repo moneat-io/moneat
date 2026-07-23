@@ -24,10 +24,13 @@ import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.XAddArgs
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkObject
+import io.mockk.runs
 import io.mockk.slot
 import io.mockk.unmockkObject
+import io.mockk.verify
 import mu.KLogger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -76,6 +79,42 @@ class IngestionQueueClientTest {
 
         assertEquals("1-0", streamId)
         assertTrue(OperationalMetrics.scrape().contains("outcome=\"accepted\""))
+    }
+
+    @Test
+    fun `enqueue registers the sibling dlq stream key`() {
+        mockkObject(OperationalMetrics)
+        every {
+            OperationalMetrics.registerIngestionQueue(any(), any(), any(), any(), any())
+        } just runs
+        every { OperationalMetrics.recordIngestionAdmission(any(), any()) } just runs
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                arrayOf("moneat:logs:queue:stream"),
+                "250000",
+                "payload",
+                "logs",
+                any<String>(),
+            )
+        } returns "1-0"
+
+        try {
+            IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "moneat:logs:queue", "payload")
+
+            verify(exactly = 1) {
+                OperationalMetrics.registerIngestionQueue(
+                    pipeline = IngestionPipeline.LOGS,
+                    streamKey = "moneat:logs:queue:stream",
+                    dlqStreamKey = "moneat:logs:dlq:stream",
+                    consumerGroup = IngestionPipeline.LOGS.consumerGroup,
+                    capacity = 250_000L,
+                )
+            }
+        } finally {
+            unmockkObject(OperationalMetrics)
+        }
     }
 
     @Test
