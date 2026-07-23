@@ -286,6 +286,33 @@ class OperationalMetricsTest {
     }
 
     @Test
+    fun `renders zero stream queue depth when the stream does not exist`() {
+        val streamKey = "moneat:empty:queue:stream"
+        val dlqKey = "moneat:empty:dlq:stream"
+        val consumerGroup = "moneat:empty:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isConnected() } returns true
+        every { RedisConfig.sync() } returns redis
+        every { redis.xpending(streamKey, consumerGroup) } throws
+            IllegalStateException("ERR no such key '$streamKey'")
+        every { redis.llen(dlqKey) } returns 0L
+
+        OperationalMetrics.registerWorkerQueues("Empty", streamKey, dlqKey, consumerGroup)
+
+        val queueLine = metricLine(
+            OperationalMetrics.scrape(),
+            "moneat_worker_queue_depth",
+            "queue_key=\"$streamKey\"",
+            "queue_type=\"primary\"",
+            "worker=\"Empty\"",
+        )
+
+        assertTrue(queueLine.endsWith(" 0.0"), queueLine)
+    }
+
+    @Test
     fun `renders ingestion queue mode defaults`() {
         OperationalMetrics.bindSystemMetrics()
 
