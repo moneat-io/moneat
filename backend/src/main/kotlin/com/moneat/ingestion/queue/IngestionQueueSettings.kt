@@ -27,6 +27,8 @@ private const val DEFAULT_MAX_PENDING_ENTRIES = 250_000L
 private const val DEFAULT_DLQ_STREAM_MAX_LEN = 10_000L
 private const val DEFAULT_MAX_CONCURRENT_BATCHES = 2
 private const val MIN_STREAM_BATCH_SIZE = 1
+private const val QUEUE_KEY_SUFFIX = ":queue"
+private const val DLQ_KEY_SUFFIX = ":dlq"
 
 data class IngestionQueueSpec(
     val pipeline: IngestionPipeline,
@@ -43,6 +45,9 @@ data class IngestionQueueSpec(
 )
 
 object IngestionQueueSettings {
+    fun defaultDlqKey(queueKey: String): String =
+        queueKey.removeSuffix(QUEUE_KEY_SUFFIX) + DLQ_KEY_SUFFIX
+
     fun spec(
         pipeline: IngestionPipeline,
         queueKey: String,

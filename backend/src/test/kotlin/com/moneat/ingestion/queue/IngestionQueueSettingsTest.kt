@@ -41,6 +41,12 @@ class IngestionQueueSettingsTest {
     }
 
     @Test
+    fun `default dlq key is a sibling of the queue key`() {
+        assertEquals("moneat:logs:dlq", IngestionQueueSettings.defaultDlqKey("moneat:logs:queue"))
+        assertEquals("custom:dlq", IngestionQueueSettings.defaultDlqKey("custom"))
+    }
+
+    @Test
     fun `spec applies env overrides and worker controls`() {
         mockkObject(EnvConfig)
         every { EnvConfig.get(any()) } returns null
