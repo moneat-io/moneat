@@ -35,6 +35,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 private const val BLOCKING_COMMAND_TIMEOUT_SECONDS = 15L
 private const val MONITORING_COMMAND_TIMEOUT_SECONDS = 2L
 private const val MONITORING_RECONNECT_COOLDOWN_SECONDS = 10L
+private const val REDIS_NOT_INITIALIZED_MESSAGE = "RedisConfig is not initialized. Call init() first."
 
 // Blocking command timeout for workers using XREADGROUP BLOCK. Each worker gets its own connection.
 private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BLOCKING_COMMAND_TIMEOUT_SECONDS)
@@ -80,7 +81,7 @@ object RedisConfig {
     }
 
     fun sync(): RedisCommands<String, String> {
-        val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        val conn = checkNotNull(connection) { REDIS_NOT_INITIALIZED_MESSAGE }
         return conn.sync()
     }
 
@@ -131,7 +132,7 @@ object RedisConfig {
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
     fun newStatefulBlockingConnection(): StatefulRedisConnection<String, String> {
-        val c = checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }
+        val c = checkNotNull(client) { REDIS_NOT_INITIALIZED_MESSAGE }
         val conn = c.connect().also { it.timeout = BLOCKING_COMMAND_TIMEOUT }
         synchronized(blockingConnections) { blockingConnections.add(conn) }
         return conn
@@ -158,12 +159,12 @@ object RedisConfig {
     }
 
     fun async(): RedisAsyncCommands<String, String> {
-        val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        val conn = checkNotNull(connection) { REDIS_NOT_INITIALIZED_MESSAGE }
         return conn.async()
     }
 
     fun reactive(): RedisReactiveCommands<String, String> {
-        val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        val conn = checkNotNull(connection) { REDIS_NOT_INITIALIZED_MESSAGE }
         return conn.reactive()
     }
 
@@ -201,7 +202,7 @@ internal fun reconnectClosedMonitoringConnection(
     if (current?.isOpen == true) return current
     return runCatching {
         current?.close()
-        checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }
+        checkNotNull(client) { REDIS_NOT_INITIALIZED_MESSAGE }
             .connect()
             .also { it.timeout = MONITORING_COMMAND_TIMEOUT }
     }.getOrNull()
