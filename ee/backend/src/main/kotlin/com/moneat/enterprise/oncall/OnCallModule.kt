@@ -117,8 +117,8 @@ class OnCallModule :
     }
 
     override fun contributeTools(registry: McpToolRegistry) {
-        registry.register(ListIncidentsTool())
-        registry.register(GetIncidentTool())
+        registry.register(ListIncidentsTool { onCallAlertService })
+        registry.register(GetIncidentTool { onCallAlertService })
         registry.register(ListSchedulesTool())
     }
 

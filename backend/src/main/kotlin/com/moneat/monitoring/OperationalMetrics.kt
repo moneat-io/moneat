@@ -745,7 +745,9 @@ object OperationalMetrics {
                 ?.lag
                 ?: 0L
             (pendingMessages + lagMessages).toDouble()
-        }.getOrElse { Double.NaN }
+        }.getOrElse { error ->
+            if (error.isMissingRedisStreamError()) 0.0 else Double.NaN
+        }
 
     private fun readStreamPendingMessages(streamKey: String, consumerGroup: String): Double {
         if (!RedisConfig.isConnected()) return Double.NaN

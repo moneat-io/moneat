@@ -5,7 +5,6 @@
 package com.moneat.enterprise.oncall.mcp
 
 import com.moneat.enterprise.oncall.alertIdForResource
-import com.moneat.enterprise.oncall.services.EscalationEngineHolder
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.mcp.models.McpContext
@@ -28,12 +27,9 @@ private val scheduleService = OnCallScheduleService()
 private const val DEFAULT_INCIDENT_LIMIT = 50
 private const val MAX_INCIDENT_LIMIT = 200
 
-private fun getIncidentService(): OnCallAlertService? {
-    val engine = EscalationEngineHolder.instance ?: return null
-    return OnCallAlertService(engine)
-}
-
-class ListIncidentsTool : McpTool {
+class ListIncidentsTool(
+    private val incidentService: () -> OnCallAlertService,
+) : McpTool {
     override val name = "list_incidents"
     override val description = "List on-call incidents"
     override val inputSchema = InputSchema(
@@ -60,8 +56,7 @@ class ListIncidentsTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val svc = getIncidentService()
-            ?: return errorResult("On-call module not initialized")
+        val svc = incidentService()
         val status = args["status"]?.jsonPrimitive?.content
         val priority = args["priority"]?.jsonPrimitive?.content
         val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_INCIDENT_LIMIT)
@@ -78,7 +73,9 @@ class ListIncidentsTool : McpTool {
     }
 }
 
-class GetIncidentTool : McpTool {
+class GetIncidentTool(
+    private val incidentService: () -> OnCallAlertService,
+) : McpTool {
     override val name = "get_incident"
     override val description =
         "Get on-call incident details and timeline"
@@ -93,8 +90,7 @@ class GetIncidentTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val svc = getIncidentService()
-            ?: return errorResult("On-call module not initialized")
+        val svc = incidentService()
         val incidentResourceId = args.stringContent("incident_id")
             ?: return errorResult("incident_id is required")
         val incidentId = transaction {
