@@ -19,6 +19,8 @@ package com.moneat.otlp
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.models.BillingUsageResponse
 import com.moneat.billing.services.QuotaReservationResult
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueCapacityException
 import com.moneat.otlp.routes.otlpMetricsRoutes
 import com.moneat.otlp.routes.otlpFeedbackRoutes
 import com.moneat.otlp.routes.otlpTraceRoutes
@@ -34,6 +36,7 @@ import com.moneat.otlp.services.OtlpServiceRoutingService
 import com.moneat.otlp.services.OtlpSignalType
 import com.moneat.otlp.services.OtlpSpanInsert
 import com.moneat.otlp.services.OtlpTraceService
+import com.moneat.plugins.installErrorHandling
 import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import io.ktor.client.request.header
@@ -223,6 +226,35 @@ class OtlpIngestRoutesTest {
                 OtlpSignalType.TRACES
             )
         }
+    }
+
+    @Test
+    fun `POST traces refunds reserved quota when queue capacity rejects`() = testApplication {
+        val spans = listOf(traceSpan(serviceNamespace = "checkout", service = "api", env = "production"))
+        every { otlpApiKeyService.validateKey(VALID_KEY) } returns ORG_ID
+        every { traceService.parseOtlpTracesJson(any()) } returns spans
+        every { quotaService.isEnforcementEnabled() } returns true
+        every { quotaService.reserveUnits(ORG_ID, spans.size, "otlp_trace", any()) } returns
+            QuotaReservationResult(allowed = true, usage = mockk())
+        every { traceService.enqueueTraces(ORG_ID.toLong(), any(), any()) } throws
+            IngestionQueueCapacityException(IngestionPipeline.OTLP_TRACES, 100)
+        application {
+            install(ContentNegotiation) { json() }
+            installErrorHandling()
+            routing {
+                otlpTraceRoutes(traceService, quotaService, otlpApiKeyService, routingService)
+            }
+        }
+
+        val response = client.post("/v1/traces") {
+            header(HttpHeaders.Authorization, "Bearer $VALID_KEY")
+            contentType(ContentType.Application.Json)
+            setBody("""{"resourceSpans":[{}]}""")
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        assertEquals("5", response.headers[HttpHeaders.RetryAfter])
+        verify { quotaService.refundUnits(ORG_ID, spans.size, "otlp_trace", any()) }
     }
 
     @Test

@@ -18,6 +18,9 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
+import com.moneat.datadog.rethrowIfQueueAdmission
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.decompression.MiscPayloadDecoder
@@ -101,7 +104,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSymbolDb(quotaSe
     withDatadogPayload("symbol_db") { orgId, body ->
         val payload = json.decodeFromString<DdSymbolDbPayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, 1, body.bytes)) return@withDatadogPayload
-        MiscIngestionService.enqueueSymbolDb(orgId, payload)
+        admitMiscWithQuotaRefund(quotaService, orgId, 1, body.bytes) {
+            MiscIngestionService.enqueueSymbolDb(orgId, payload)
+        }
         logger.debug { "Accepted DD symbol_db for org $orgId" }
         respondAccepted()
     }
@@ -110,7 +115,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handlePipelineStats(qu
     withDatadogPayload("pipeline_stats") { orgId, body ->
         val payload = json.decodeFromString<DdPipelineStatsPayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body.bytes)) return@withDatadogPayload
-        val count = MiscIngestionService.enqueuePipelineStats(orgId, payload)
+        val count = admitMiscWithQuotaRefund(quotaService, orgId, payload.stats.size, body.bytes) {
+            MiscIngestionService.enqueuePipelineStats(orgId, payload)
+        }
         logger.debug { "Accepted $count DD pipeline_stats for org $orgId" }
         respondAccepted()
     }
@@ -119,7 +126,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataLineage(quot
     withDatadogPayload("data_lineage") { orgId, body ->
         val payload = json.decodeFromString<DdDataLineagePayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, 1, body.bytes)) return@withDatadogPayload
-        MiscIngestionService.enqueueDataLineage(orgId, payload)
+        admitMiscWithQuotaRefund(quotaService, orgId, 1, body.bytes) {
+            MiscIngestionService.enqueueDataLineage(orgId, payload)
+        }
         logger.debug { "Accepted DD data_lineage for org $orgId" }
         respondAccepted()
     }
@@ -128,7 +137,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDataStreams(quot
     withDatadogPayload("data_streams") { orgId, body ->
         val payload = json.decodeFromString<DdDataStreamsPayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, payload.stats.size, body.bytes)) return@withDatadogPayload
-        val count = MiscIngestionService.enqueueDataStreams(orgId, payload)
+        val count = admitMiscWithQuotaRefund(quotaService, orgId, payload.stats.size, body.bytes) {
+            MiscIngestionService.enqueueDataStreams(orgId, payload)
+        }
         logger.debug { "Accepted $count DD data_streams for org $orgId" }
         respondAccepted()
     }
@@ -137,7 +148,9 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSynthetics(quota
     withDatadogPayload("synthetics") { orgId, body ->
         val payload = json.decodeFromString<DdSyntheticsPayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, payload.results.size, body.bytes)) return@withDatadogPayload
-        val count = MiscIngestionService.enqueueSynthetics(orgId, payload)
+        val count = admitMiscWithQuotaRefund(quotaService, orgId, payload.results.size, body.bytes) {
+            MiscIngestionService.enqueueSynthetics(orgId, payload)
+        }
         logger.debug { "Accepted $count DD synthetics for org $orgId" }
         respondAccepted()
     }
@@ -147,14 +160,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerImage(q
         if (body.isProtobuf) {
             val payloads = MiscPayloadDecoder.decodeContainerImages(body.bytes)
             if (!reserveMiscQuota(quotaService, orgId, payloads.size, body.bytes)) return@withDatadogPayload
-            val count = MiscIngestionService.enqueueContainerImages(orgId, payloads)
+            val count = admitMiscWithQuotaRefund(quotaService, orgId, payloads.size, body.bytes) {
+                MiscIngestionService.enqueueContainerImages(orgId, payloads)
+            }
             logger.debug { "Accepted $count DD contimage protobuf images for org $orgId" }
             respondAccepted()
             return@withDatadogPayload
         }
         val payload = json.decodeFromString<DdContainerImagePayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, 1, body.bytes)) return@withDatadogPayload
-        MiscIngestionService.enqueueContainerImage(orgId, payload)
+        admitMiscWithQuotaRefund(quotaService, orgId, 1, body.bytes) {
+            MiscIngestionService.enqueueContainerImage(orgId, payload)
+        }
         logger.debug { "Accepted DD contimage for org $orgId" }
         respondAccepted()
     }
@@ -166,14 +183,18 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSbom(quotaServic
             if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body.bytes)) {
                 return@withDatadogPayload
             }
-            val count = MiscIngestionService.enqueueSbom(orgId, payload)
+            val count = admitMiscWithQuotaRefund(quotaService, orgId, payload.packages.size, body.bytes) {
+                MiscIngestionService.enqueueSbom(orgId, payload)
+            }
             logger.debug { "Accepted $count DD sbom protobuf packages for org $orgId" }
             respondAccepted()
             return@withDatadogPayload
         }
         val payload = json.decodeFromString<DdSbomPayload>(body.text())
         if (!reserveMiscQuota(quotaService, orgId, payload.packages.size, body.bytes)) return@withDatadogPayload
-        val count = MiscIngestionService.enqueueSbom(orgId, payload)
+        val count = admitMiscWithQuotaRefund(quotaService, orgId, payload.packages.size, body.bytes) {
+            MiscIngestionService.enqueueSbom(orgId, payload)
+        }
         logger.debug { "Accepted $count DD sbom packages for org $orgId" }
         respondAccepted()
     }
@@ -189,7 +210,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleContainerLifecyc
         throw IllegalArgumentException("Container lifecycle payload must be protobuf")
     }
     if (!reserveEventQuota(quotaService, orgId, events.size, body.bytes)) return@withDatadogPayload
-    val count = DatadogEventService.enqueueEvents(orgId.toLong(), events)
+    val count = admitEventWithQuotaRefund(
+        quotaService,
+        orgId,
+        events.size,
+        body.bytes,
+    ) {
+        DatadogEventService.enqueueEvents(orgId.toLong(), events)
+    }
     logger.debug { "Accepted $count DD container lifecycle events for org $orgId" }
     respondAccepted()
 }
@@ -199,7 +227,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleEventManagement(
 ) = withDatadogPayload("event-management events") { orgId, body ->
     val payload = json.decodeFromString<DatadogEventPayload>(body.text())
     if (!reserveEventQuota(quotaService, orgId, payload.events.size, body.bytes)) return@withDatadogPayload
-    val count = DatadogEventService.enqueueEvents(orgId.toLong(), payload.events)
+    val count = admitEventWithQuotaRefund(
+        quotaService,
+        orgId,
+        payload.events.size,
+        body.bytes,
+    ) {
+        DatadogEventService.enqueueEvents(orgId.toLong(), payload.events)
+    }
     logger.debug { "Accepted $count DD event-management events for org $orgId" }
     respondAccepted()
 }
@@ -222,6 +257,7 @@ private suspend fun io.ktor.server.routing.RoutingContext.withDatadogPayload(
     suspendRunCatching {
         block(orgId, receiveMiscIngestBody())
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process $failureName" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to INVALID_PAYLOAD_ERROR))
     }
@@ -270,6 +306,32 @@ private suspend fun io.ktor.server.routing.RoutingContext.reserveEventQuota(
         requestedBytes = bytes.size.toLong(),
     )
 }
+
+private inline fun <T> admitMiscWithQuotaRefund(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+    admit: () -> T,
+): T =
+    admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(organizationId, requestedUnits, "dd_misc", bytes.size.toLong()),
+        admit,
+    )
+
+private inline fun <T> admitEventWithQuotaRefund(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+    admit: () -> T,
+): T =
+    admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(organizationId, requestedUnits, "dd_event", bytes.size.toLong()),
+        admit,
+    )
 
 private fun String.isProtobufContent(): Boolean =
     contains("protobuf", ignoreCase = true)

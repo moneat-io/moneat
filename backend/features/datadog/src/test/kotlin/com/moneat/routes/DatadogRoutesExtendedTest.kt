@@ -69,6 +69,9 @@ import com.moneat.datadog.services.QueuedInfraBatch
 import com.moneat.datadog.services.QueuedProcessEntry
 import com.moneat.datadog.services.TelemetryProxyService
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueCapacityException
+import com.moneat.plugins.installErrorHandling
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -1336,6 +1339,37 @@ class DatadogRoutesExtendedTest {
         }
         verify(exactly = 0) { DatadogHostService.touchHostLastSeen(any(), any()) }
         coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any(), any()) }
+    }
+
+    @Test
+    fun `POST dd metrics refunds quota when queue capacity rejects`() = testApplication {
+        val quotaService = mockk<BillingQuotaService>(relaxed = true)
+        val body = """{"series":[{"metric":"system.cpu","host":"h1","points":[[1700000000,42.0]]}]}"""
+        val requestedBytes = mapOf("infra_metric" to body.toByteArray().size.toLong())
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnitsBatch(TEST_ORG_ID, mapOf("infra_metric" to 1), requestedBytes)
+        } returns QuotaReservationResult(allowed = true, usage = quotaUsage())
+        coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } throws
+            IngestionQueueCapacityException(IngestionPipeline.DD_METRICS, 100)
+
+        application {
+            install(ContentNegotiation) { json() }
+            installErrorHandling()
+            routing { datadogMetricRoutes(quotaService) }
+        }
+
+        val response = client.post("/dd/api/v1/series") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        assertEquals("5", response.headers[HttpHeaders.RetryAfter])
+        verify {
+            quotaService.refundUnitsBatch(TEST_ORG_ID, mapOf("infra_metric" to 1), requestedBytes)
+        }
     }
 
     @Test

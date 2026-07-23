@@ -18,6 +18,8 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.decompression.ProcessAgentPayloadDecoder
 import com.moneat.datadog.services.DatadogInfraService
@@ -114,7 +116,12 @@ private suspend fun handleConnections(
     ) {
         return
     }
-    val count = DatadogInfraService.enqueueInfra(batch)
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, batch.connections.size, "dd_infra", proto.size.toLong()),
+    ) {
+        DatadogInfraService.enqueueInfra(batch)
+    }
     logger.debug { "Accepted $count DD network connections for org $orgId" }
     respondProcessAgentCollectorOk(call)
 }
@@ -169,7 +176,12 @@ private suspend fun handleProcessAgentPayload(
             ) {
                 return
             }
-            val count = DatadogInfraService.enqueueInfra(batch)
+            val count = admitDatadogWithQuotaRefund(
+                quotaService,
+                DatadogQuotaCharge(orgId, batch.containers.size, "dd_infra", proto.size.toLong()),
+            ) {
+                DatadogInfraService.enqueueInfra(batch)
+            }
             logger.debug { "Accepted $count DD containers for org $orgId" }
         }
         ProcessAgentPayloadDecoder.TYPE_COLLECTOR_PROC,
@@ -196,7 +208,12 @@ private suspend fun handleProcessAgentPayload(
             ) {
                 return
             }
-            val count = DatadogInfraService.enqueueInfra(batch)
+            val count = admitDatadogWithQuotaRefund(
+                quotaService,
+                DatadogQuotaCharge(orgId, batch.processes.size, "dd_infra", proto.size.toLong()),
+            ) {
+                DatadogInfraService.enqueueInfra(batch)
+            }
             logger.debug { "Accepted $count DD processes for org $orgId" }
         }
         else -> {

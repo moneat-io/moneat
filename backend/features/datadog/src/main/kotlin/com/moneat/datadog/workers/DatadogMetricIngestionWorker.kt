@@ -106,10 +106,10 @@ class DatadogMetricIngestionWorker(
                 batch = DatadogMetricService.decodeMetricBatch(payload),
             )
         } catch (e: SerializationException) {
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
+            if (!pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)) throw e
             null
         } catch (e: IllegalArgumentException) {
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
+            if (!pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)) throw e
             null
         }
     }

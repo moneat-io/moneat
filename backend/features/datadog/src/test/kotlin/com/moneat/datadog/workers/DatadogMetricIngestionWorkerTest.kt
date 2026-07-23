@@ -51,28 +51,46 @@ class DatadogMetricIngestionWorkerTest {
     // ──── Payload Handling ────
 
     @Test
-    fun `processMessage with invalid payload does not throw`() {
+    fun `processMessage with invalid payload writes to dlq`() {
         val worker =
             DatadogMetricIngestionWorker(
                 "test:dd:metric:queue",
                 "test:dd:metric:dlq",
                 1,
             )
-        runBlocking {
-            worker.processMessage(1, "{not valid json")
+
+        mockkObject(RedisConfig)
+        try {
+            every {
+                RedisConfig.sync().xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+            } returns "1-0"
+            runBlocking {
+                worker.processMessage(1, "{not valid json")
+            }
+        } finally {
+            unmockkObject(RedisConfig)
         }
     }
 
     @Test
-    fun `processMessage with empty payload does not throw`() {
+    fun `processMessage with empty payload writes to dlq`() {
         val worker =
             DatadogMetricIngestionWorker(
                 "test:dd:metric:queue",
                 "test:dd:metric:dlq",
                 1,
             )
-        runBlocking {
-            worker.processMessage(1, "")
+
+        mockkObject(RedisConfig)
+        try {
+            every {
+                RedisConfig.sync().xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+            } returns "1-0"
+            runBlocking {
+                worker.processMessage(1, "")
+            }
+        } finally {
+            unmockkObject(RedisConfig)
         }
     }
 

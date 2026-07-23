@@ -18,6 +18,8 @@ package com.moneat.datadog
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
+import com.moneat.ingestion.queue.admitWithQuotaRefund
+import com.moneat.ingestion.queue.IngestionQueueAdmissionException
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.response.respond
@@ -76,4 +78,54 @@ internal suspend fun reserveDatadogQuotaBatch(
         QuotaExceededResponse(reason = reservation.reason, usage = reservation.usage)
     )
     return false
+}
+
+internal data class DatadogQuotaCharge(
+    val organizationId: Int,
+    val requestedUnits: Int,
+    val eventType: String,
+    val requestedBytes: Long,
+)
+
+internal inline fun <T> admitDatadogWithQuotaRefund(
+    quotaService: BillingQuotaService,
+    charge: DatadogQuotaCharge,
+    admit: () -> T,
+): T {
+    val shouldRefund = quotaService.isEnforcementEnabled()
+    return admitWithQuotaRefund(
+        refund = {
+            if (shouldRefund) {
+                quotaService.refundUnits(
+                    charge.organizationId,
+                    charge.requestedUnits,
+                    charge.eventType,
+                    charge.requestedBytes,
+                )
+            }
+        },
+        admit = admit,
+    )
+}
+
+internal inline fun <T> admitDatadogBatchWithQuotaRefund(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnitsByType: Map<String, Int>,
+    requestedBytesByType: Map<String, Long>,
+    admit: () -> T,
+): T {
+    val shouldRefund = quotaService.isEnforcementEnabled()
+    return admitWithQuotaRefund(
+        refund = {
+            if (shouldRefund) {
+                quotaService.refundUnitsBatch(organizationId, requestedUnitsByType, requestedBytesByType)
+            }
+        },
+        admit = admit,
+    )
+}
+
+internal fun Throwable.rethrowIfQueueAdmission() {
+    if (this is IngestionQueueAdmissionException) throw this
 }

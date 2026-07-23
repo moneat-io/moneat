@@ -73,10 +73,10 @@ class DatadogSketchIngestionWorker(
         try {
             DatadogMetricService.decodeSketchBatch(payload)
         } catch (error: SerializationException) {
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)
+            if (!pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)) throw error
             null
         } catch (error: IllegalArgumentException) {
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)
+            if (!pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)) throw error
             null
         }
 

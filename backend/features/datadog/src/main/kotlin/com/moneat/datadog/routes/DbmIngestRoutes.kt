@@ -18,6 +18,9 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
+import com.moneat.datadog.rethrowIfQueueAdmission
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DdDbmActivityPayload
@@ -86,12 +89,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmQueries(
         val body = bytes.decodeToString()
 
         val payloads = decodeDbmPayloads<DdDbmQueryPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.rows.size }, bytes)) return
-        val count = DbmIngestionService.enqueueQueryPayloads(organizationId, payloads)
+        val requestedUnits = payloads.sumOf { it.rows.size }
+        if (!reserveDbmQuota(quotaService, organizationId, requestedUnits, bytes)) return
+        val count = admitDbmWithQuotaRefund(quotaService, organizationId, requestedUnits, bytes) {
+            DbmIngestionService.enqueueQueryPayloads(organizationId, payloads)
+        }
 
         logger.debug { "Enqueued $count DBM queries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process DBM queries" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -107,12 +114,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetrics(
         val body = bytes.decodeToString()
 
         val payloads = decodeDbmPayloads<DdDbmMetricsPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.rows.size }, bytes)) return
-        val count = DbmIngestionService.enqueueMetricPayloads(organizationId, payloads)
+        val requestedUnits = payloads.sumOf { it.rows.size }
+        if (!reserveDbmQuota(quotaService, organizationId, requestedUnits, bytes)) return
+        val count = admitDbmWithQuotaRefund(quotaService, organizationId, requestedUnits, bytes) {
+            DbmIngestionService.enqueueMetricPayloads(organizationId, payloads)
+        }
 
         logger.debug { "Enqueued $count DBM metrics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process DBM metrics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -128,12 +139,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmActivity(
         val body = bytes.decodeToString()
 
         val payloads = decodeDbmPayloads<DdDbmActivityPayload>(body)
-        if (!reserveDbmQuota(quotaService, organizationId, payloads.sumOf { it.activity.size }, bytes)) return
-        val count = DbmIngestionService.enqueueActivityPayloads(organizationId, payloads)
+        val requestedUnits = payloads.sumOf { it.activity.size }
+        if (!reserveDbmQuota(quotaService, organizationId, requestedUnits, bytes)) return
+        val count = admitDbmWithQuotaRefund(quotaService, organizationId, requestedUnits, bytes) {
+            DbmIngestionService.enqueueActivityPayloads(organizationId, payloads)
+        }
 
         logger.debug { "Enqueued $count DBM activity for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process DBM activity" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -150,11 +165,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmMetadata(
 
         val payloads = decodeDbmPayloads<DdDbmMetadataPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.size, bytes)) return
-        val count = DbmIngestionService.enqueueMetadataPayloads(organizationId, payloads)
+        val count = admitDbmWithQuotaRefund(quotaService, organizationId, payloads.size, bytes) {
+            DbmIngestionService.enqueueMetadataPayloads(organizationId, payloads)
+        }
 
         logger.debug { "Enqueued $count DBM metadata for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process DBM metadata" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -171,11 +189,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDbmHealth(
 
         val payloads = decodeDbmPayloads<DdDbmHealthPayload>(body)
         if (!reserveDbmQuota(quotaService, organizationId, payloads.size, bytes)) return
-        val count = DbmIngestionService.enqueueHealthPayloads(organizationId, payloads)
+        val count = admitDbmWithQuotaRefund(quotaService, organizationId, payloads.size, bytes) {
+            DbmIngestionService.enqueueHealthPayloads(organizationId, payloads)
+        }
 
         logger.debug { "Enqueued $count DBM health for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process DBM health" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -196,6 +217,19 @@ private suspend fun io.ktor.server.routing.RoutingContext.reserveDbmQuota(
         requestedBytes = bytes.size.toLong(),
     )
 }
+
+private inline fun <T> admitDbmWithQuotaRefund(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+    admit: () -> T,
+): T =
+    admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(organizationId, requestedUnits, "dd_dbm", bytes.size.toLong()),
+        admit,
+    )
 
 private inline fun <reified T> decodeDbmPayloads(body: String): List<T> {
     return when (val root = json.parseToJsonElement(body)) {

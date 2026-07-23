@@ -18,9 +18,18 @@ package com.moneat.ingestion.queue
 
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.ConcurrentHashMap
 
 internal object IngestionBatchLimiter {
-    private val semaphore by lazy { Semaphore(IngestionQueueSettings.maxConcurrentBatches()) }
+    private val semaphores = ConcurrentHashMap<IngestionPipeline, Semaphore>()
 
-    suspend fun <T> withPermit(block: suspend () -> T): T = semaphore.withPermit { block() }
+    suspend fun <T> withPermit(
+        pipeline: IngestionPipeline,
+        block: suspend () -> T,
+    ): T = semaphore(pipeline).withPermit { block() }
+
+    private fun semaphore(pipeline: IngestionPipeline): Semaphore =
+        semaphores.computeIfAbsent(pipeline) {
+            Semaphore(IngestionQueueSettings.maxConcurrentBatches(pipeline))
+        }
 }

@@ -17,10 +17,13 @@
 package com.moneat.ingestion.queue
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,7 +36,7 @@ class IngestionBatchLimiterTest {
 
         (1..6).map {
             async(Dispatchers.Default) {
-                IngestionBatchLimiter.withPermit {
+                IngestionBatchLimiter.withPermit(IngestionPipeline.LOGS) {
                     val current = active.incrementAndGet()
                     maximum.accumulateAndGet(current, ::maxOf)
                     delay(50)
@@ -43,5 +46,27 @@ class IngestionBatchLimiterTest {
         }.awaitAll()
 
         assertEquals(2, maximum.get())
+    }
+
+    @Test
+    fun `one saturated pipeline does not block another pipeline`() = runBlocking {
+        val started = AtomicInteger()
+        val bothStarted = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val holders = (1..2).map {
+            launch(Dispatchers.Default) {
+                IngestionBatchLimiter.withPermit(IngestionPipeline.EVENTS) {
+                    if (started.incrementAndGet() == 2) bothStarted.complete(Unit)
+                    release.await()
+                }
+            }
+        }
+
+        withTimeout(1_000) { bothStarted.await() }
+        withTimeout(1_000) {
+            IngestionBatchLimiter.withPermit(IngestionPipeline.LOGS) { Unit }
+        }
+        release.complete(Unit)
+        holders.forEach { it.join() }
     }
 }

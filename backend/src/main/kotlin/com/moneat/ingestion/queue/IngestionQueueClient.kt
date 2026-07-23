@@ -21,6 +21,7 @@ import com.moneat.monitoring.OperationalMetrics
 import io.lettuce.core.RedisException
 import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.XAddArgs
+import io.lettuce.core.api.sync.RedisCommands
 import mu.KLogger
 
 private const val FIELD_PAYLOAD = "payload"
@@ -46,17 +47,44 @@ private val ADMIT_TO_STREAM_SCRIPT =
     )
     """.trimIndent()
 
-class IngestionQueueCapacityException(
+sealed class IngestionQueueAdmissionException(
     val pipeline: IngestionPipeline,
+    val retryAfterSeconds: Int,
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)
+
+class IngestionQueueCapacityException(
+    pipeline: IngestionPipeline,
     val capacity: Long,
-    val retryAfterSeconds: Int = DEFAULT_RETRY_AFTER_SECONDS,
-) : RuntimeException("Ingestion queue ${pipeline.id} is at its configured capacity of $capacity entries")
+    retryAfterSeconds: Int = DEFAULT_RETRY_AFTER_SECONDS,
+) : IngestionQueueAdmissionException(
+    pipeline = pipeline,
+    retryAfterSeconds = retryAfterSeconds,
+    message = "Ingestion queue ${pipeline.id} is at its configured capacity of $capacity entries",
+)
 
 class IngestionQueueUnavailableException(
-    val pipeline: IngestionPipeline,
+    pipeline: IngestionPipeline,
     cause: Throwable,
-    val retryAfterSeconds: Int = DEFAULT_RETRY_AFTER_SECONDS,
-) : RuntimeException("Ingestion queue ${pipeline.id} is temporarily unavailable", cause)
+    retryAfterSeconds: Int = DEFAULT_RETRY_AFTER_SECONDS,
+) : IngestionQueueAdmissionException(
+    pipeline = pipeline,
+    retryAfterSeconds = retryAfterSeconds,
+    message = "Ingestion queue ${pipeline.id} is temporarily unavailable",
+    cause = cause,
+)
+
+inline fun <T> admitWithQuotaRefund(
+    refund: () -> Unit,
+    admit: () -> T,
+): T =
+    try {
+        admit()
+    } catch (e: IngestionQueueAdmissionException) {
+        refund()
+        throw e
+    }
 
 data class IngestionDlqRequest(
     val spec: IngestionQueueSpec,
@@ -73,17 +101,15 @@ object IngestionQueueClient {
         payload: String,
     ): String? {
         val spec = IngestionQueueSettings.spec(pipeline, queueKey, "$queueKey:dlq", workerCount = 1)
-        OperationalMetrics.registerIngestionQueueCapacity(pipeline, spec.maxPendingEntries)
+        OperationalMetrics.registerIngestionQueue(
+            pipeline = pipeline,
+            streamKey = spec.streamKey,
+            dlqStreamKey = spec.dlqStreamKey,
+            consumerGroup = spec.consumerGroup,
+            capacity = spec.maxPendingEntries,
+        )
         return try {
-            val streamId: String? = RedisConfig.sync().eval(
-                ADMIT_TO_STREAM_SCRIPT,
-                ScriptOutputType.VALUE,
-                arrayOf(spec.streamKey),
-                spec.maxPendingEntries.toString(),
-                payload,
-                pipeline.id,
-                System.currentTimeMillis().toString(),
-            )
+            val streamId = admit(RedisConfig.sync(), spec, payload, System.currentTimeMillis())
             if (streamId == null) {
                 OperationalMetrics.recordIngestionAdmission(pipeline, "capacity_rejected")
                 throw IngestionQueueCapacityException(pipeline, spec.maxPendingEntries)
@@ -130,6 +156,22 @@ object IngestionQueueClient {
     }
 
     internal fun payloadField(body: Map<String, String>): String? = body[FIELD_PAYLOAD]
+
+    fun admit(
+        redis: RedisCommands<String, String>,
+        spec: IngestionQueueSpec,
+        payload: String,
+        enqueuedAtMs: Long,
+    ): String? =
+        redis.eval(
+            ADMIT_TO_STREAM_SCRIPT,
+            ScriptOutputType.VALUE,
+            arrayOf(spec.streamKey),
+            spec.maxPendingEntries.toString(),
+            payload,
+            spec.pipeline.id,
+            enqueuedAtMs.toString(),
+        )
 
     private fun streamBody(
         pipeline: IngestionPipeline,

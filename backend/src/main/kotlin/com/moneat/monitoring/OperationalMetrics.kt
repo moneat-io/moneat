@@ -729,8 +729,8 @@ object OperationalMetrics {
     private fun readQueueDepth(queueKey: String, consumerGroup: String? = null): Double {
         if (!RedisConfig.isConnected()) return Double.NaN
         if (consumerGroup != null) return readStreamBacklogMessages(queueKey, consumerGroup)
-        return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
-            .recoverCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
+        return runCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
+            .recoverCatching { RedisConfig.sync().llen(queueKey).toDouble() }
             .getOrElse { Double.NaN }
     }
 

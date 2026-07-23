@@ -104,7 +104,30 @@ class IngestionQueueSettingsTest {
         val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 4)
 
         assertEquals(42_000L, spec.maxPendingEntries)
-        assertEquals(2, IngestionQueueSettings.maxConcurrentBatches())
+        assertEquals(2, IngestionQueueSettings.maxConcurrentBatches(IngestionPipeline.LOGS))
+    }
+
+    @Test
+    fun `pipeline concurrency overrides the global default`() {
+        mockkObject(EnvConfig)
+        every { EnvConfig.get(any()) } returns null
+        every { EnvConfig.get("INGESTION_MAX_CONCURRENT_BATCHES") } returns "2"
+        every { EnvConfig.get("INGESTION_LOGS_MAX_CONCURRENT_BATCHES") } returns "4"
+
+        assertEquals(4, IngestionQueueSettings.maxConcurrentBatches(IngestionPipeline.LOGS))
+        assertEquals(2, IngestionQueueSettings.maxConcurrentBatches(IngestionPipeline.EVENTS))
+    }
+
+    @Test
+    fun `legacy pipeline capacity overrides the global default`() {
+        mockkObject(EnvConfig)
+        every { EnvConfig.get(any()) } returns null
+        every { EnvConfig.get("INGESTION_QUEUE_MAX_PENDING_ENTRIES") } returns "42000"
+        every { EnvConfig.get("INGESTION_LOGS_STREAM_MAXLEN") } returns "12000"
+
+        val spec = IngestionQueueSettings.spec(IngestionPipeline.LOGS, "logs:q", "logs:dlq", workerCount = 1)
+
+        assertEquals(12_000L, spec.maxPendingEntries)
     }
 
     @Test

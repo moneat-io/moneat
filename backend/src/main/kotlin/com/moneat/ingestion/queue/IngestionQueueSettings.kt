@@ -81,13 +81,15 @@ object IngestionQueueSettings {
     fun isSelected(pipeline: IngestionPipeline): Boolean =
         selectedPipelines()?.contains(pipeline) ?: true
 
-    fun maxConcurrentBatches(): Int =
-        positiveInt("INGESTION_MAX_CONCURRENT_BATCHES", DEFAULT_MAX_CONCURRENT_BATCHES)
+    fun maxConcurrentBatches(pipeline: IngestionPipeline): Int {
+        val globalDefault = positiveInt("INGESTION_MAX_CONCURRENT_BATCHES", DEFAULT_MAX_CONCURRENT_BATCHES)
+        return positiveInt("INGESTION_${pipeline.envKey}_MAX_CONCURRENT_BATCHES", globalDefault)
+    }
 
     private fun maxPendingEntries(prefix: String): Long {
-        val legacyDefault = positiveLong("INGESTION_${prefix}_STREAM_MAXLEN", DEFAULT_MAX_PENDING_ENTRIES)
-        val globalDefault = positiveLong("INGESTION_QUEUE_MAX_PENDING_ENTRIES", legacyDefault)
-        return positiveLong("INGESTION_${prefix}_MAX_PENDING_ENTRIES", globalDefault)
+        val globalDefault = positiveLong("INGESTION_QUEUE_MAX_PENDING_ENTRIES", DEFAULT_MAX_PENDING_ENTRIES)
+        val legacyDefault = positiveLong("INGESTION_${prefix}_STREAM_MAXLEN", globalDefault)
+        return positiveLong("INGESTION_${prefix}_MAX_PENDING_ENTRIES", legacyDefault)
     }
 
     private fun positiveInt(

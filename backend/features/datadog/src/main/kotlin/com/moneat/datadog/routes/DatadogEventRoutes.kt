@@ -18,6 +18,8 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DatadogEventPayload
@@ -77,7 +79,12 @@ private suspend fun RoutingContext.handleV1CheckRun(
     ) ?: return
     if (!reserveEventQuota(quotaService, orgId, checks.size, body)) return
 
-    val count = DatadogEventService.enqueueServiceChecks(orgId.toLong(), checks)
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, checks.size, "dd_event", body.size.toLong()),
+    ) {
+        DatadogEventService.enqueueServiceChecks(orgId.toLong(), checks)
+    }
     logger.debug {
         "Accepted $count DD V1 check_run service checks for org $orgId"
     }
@@ -96,10 +103,15 @@ private suspend fun RoutingContext.handleV2Events(
 
     if (!reserveEventQuota(quotaService, orgId, payload.events.size, body)) return
 
-    val count = DatadogEventService.enqueueEvents(
-        organizationId = orgId.toLong(),
-        events = payload.events
-    )
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, payload.events.size, "dd_event", body.size.toLong()),
+    ) {
+        DatadogEventService.enqueueEvents(
+            organizationId = orgId.toLong(),
+            events = payload.events
+        )
+    }
     logger.debug { "Accepted $count DD events for org $orgId" }
     call.respondAccepted()
 }
@@ -115,7 +127,12 @@ private suspend fun RoutingContext.handleV2ServiceChecks(
     ) ?: return
     if (!reserveEventQuota(quotaService, orgId, payload.serviceChecks.size, body)) return
 
-    val count = DatadogEventService.enqueueServiceChecks(orgId.toLong(), payload.serviceChecks)
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, payload.serviceChecks.size, "dd_event", body.size.toLong()),
+    ) {
+        DatadogEventService.enqueueServiceChecks(orgId.toLong(), payload.serviceChecks)
+    }
     logger.debug { "Accepted $count DD service checks for org $orgId" }
     call.respondAccepted()
 }
