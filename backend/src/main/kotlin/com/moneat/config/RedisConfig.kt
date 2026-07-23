@@ -20,7 +20,10 @@ import com.moneat.utils.suspendRunCatching
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.lettuce.core.ClientOptions
+import io.lettuce.core.RedisCommandTimeoutException
 import io.lettuce.core.RedisClient
+import io.lettuce.core.RedisConnectionException
+import io.lettuce.core.RedisException
 import io.lettuce.core.RedisURI
 import io.lettuce.core.SocketOptions
 import io.lettuce.core.api.StatefulRedisConnection
@@ -42,7 +45,13 @@ private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BLOCKING_COM
 private val MONITORING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(MONITORING_COMMAND_TIMEOUT_SECONDS)
 private val MONITORING_RECONNECT_COOLDOWN: Duration = Duration.ofSeconds(MONITORING_RECONNECT_COOLDOWN_SECONDS)
 
-private data class MonitoringRead<T>(val value: T)
+private sealed interface MonitoringRead<out T> {
+    data class Success<T>(val value: T) : MonitoringRead<T>
+
+    data class ConnectionFailure(
+        val connection: StatefulRedisConnection<String, String>
+    ) : MonitoringRead<Nothing>
+}
 
 object RedisConfig {
     @Volatile
@@ -92,9 +101,20 @@ object RedisConfig {
      * separate connection prevents Prometheus gauges from degrading to NaN while queue admission is active.
      */
     fun <T> withMonitoringSync(operation: (RedisCommands<String, String>) -> T): T {
-        withOpenMonitoringConnection(operation)?.let { return it.value }
+        when (val initialRead = withOpenMonitoringConnection(operation)) {
+            is MonitoringRead.Success -> return initialRead.value
+            is MonitoringRead.ConnectionFailure -> invalidateMonitoringConnection(initialRead.connection)
+            null -> Unit
+        }
         reconnectMonitoringConnectionIfDue()
-        return withOpenMonitoringConnection(operation)?.value ?: operation(sync())
+        return when (val retriedRead = withOpenMonitoringConnection(operation)) {
+            is MonitoringRead.Success -> retriedRead.value
+            is MonitoringRead.ConnectionFailure -> {
+                invalidateMonitoringConnection(retriedRead.connection)
+                operation(sync())
+            }
+            null -> operation(sync())
+        }
     }
 
     private fun <T> withOpenMonitoringConnection(
@@ -104,9 +124,29 @@ object RedisConfig {
         if (!readLock.tryLock()) return null
         return try {
             val monitoring = monitoringConnection?.takeIf { it.isOpen } ?: return null
-            MonitoringRead(operation(monitoring.sync()))
+            try {
+                MonitoringRead.Success(operation(monitoring.sync()))
+            } catch (error: RedisException) {
+                if (!isMonitoringConnectionFailure(error)) throw error
+                MonitoringRead.ConnectionFailure(monitoring)
+            }
         } finally {
             readLock.unlock()
+        }
+    }
+
+    private fun invalidateMonitoringConnection(
+        failedConnection: StatefulRedisConnection<String, String>
+    ) {
+        val writeLock = monitoringConnectionLock.writeLock()
+        if (!writeLock.tryLock()) return
+        try {
+            if (monitoringConnection !== failedConnection) return
+            failedConnection.close()
+            monitoringConnection = null
+            monitoringReconnectAllowedAtNanos = 0L
+        } finally {
+            writeLock.unlock()
         }
     }
 
@@ -208,6 +248,9 @@ internal fun reconnectClosedMonitoringConnection(
     }.getOrNull()
 }
 
+internal fun isMonitoringConnectionFailure(error: RedisException): Boolean =
+    error is RedisCommandTimeoutException || error is RedisConnectionException
+
 fun Application.configureRedis() {
     // Skip Redis in test environment if REDIS_URL is not set
     val redisUrl =
@@ -219,7 +262,7 @@ fun Application.configureRedis() {
         }
 
     suspendRunCatching {
-        log.info("Connecting to Redis at $redisUrl...")
+        log.info("Connecting to Redis...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering

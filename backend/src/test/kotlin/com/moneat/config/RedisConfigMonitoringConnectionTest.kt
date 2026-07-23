@@ -17,6 +17,9 @@
 package com.moneat.config
 
 import io.lettuce.core.RedisClient
+import io.lettuce.core.RedisCommandExecutionException
+import io.lettuce.core.RedisCommandTimeoutException
+import io.lettuce.core.RedisConnectionException
 import io.lettuce.core.api.StatefulRedisConnection
 import io.mockk.every
 import io.mockk.just
@@ -24,8 +27,10 @@ import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class RedisConfigMonitoringConnectionTest {
     @Test
@@ -60,5 +65,12 @@ class RedisConfigMonitoringConnectionTest {
         every { client.connect() } throws IllegalStateException("redis unavailable")
 
         assertNull(reconnectClosedMonitoringConnection(null, client))
+    }
+
+    @Test
+    fun `classifies monitoring connection failures for recovery`() {
+        assertTrue(isMonitoringConnectionFailure(RedisCommandTimeoutException("timed out")))
+        assertTrue(isMonitoringConnectionFailure(RedisConnectionException("disconnected")))
+        assertFalse(isMonitoringConnectionFailure(RedisCommandExecutionException("NOGROUP")))
     }
 }
