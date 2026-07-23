@@ -43,6 +43,7 @@ object RedisConfig {
 
     @Volatile
     private var monitoringConnection: StatefulRedisConnection<String, String>? = null
+    private val monitoringConnectionLock = Any()
     private val blockingConnections = mutableListOf<StatefulRedisConnection<String, String>>()
 
     fun init(redisUrl: String) {
@@ -68,10 +69,16 @@ object RedisConfig {
      * separate connection prevents Prometheus gauges from degrading to NaN while queue admission is active.
      */
     fun monitoringSync(): RedisCommands<String, String> {
-        val conn = checkNotNull(monitoringConnection) {
-            "RedisConfig monitoring connection is not initialized. Call init() first."
+        val conn = activeMonitoringConnection()
+        return conn?.sync() ?: sync()
+    }
+
+    private fun activeMonitoringConnection(): StatefulRedisConnection<String, String>? {
+        monitoringConnection?.takeIf { it.isOpen }?.let { return it }
+        return synchronized(monitoringConnectionLock) {
+            reconnectClosedMonitoringConnection(monitoringConnection, client)
+                .also { monitoringConnection = it }
         }
-        return conn.sync()
     }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
@@ -114,13 +121,15 @@ object RedisConfig {
 
     fun isConnected(): Boolean = connection?.isOpen == true
 
-    fun isMonitoringConnected(): Boolean = monitoringConnection?.isOpen == true
+    fun isMonitoringConnected(): Boolean = monitoringConnection?.isOpen == true || isConnected()
 
     fun isInitialized(): Boolean = connection != null
 
     fun close() {
-        monitoringConnection?.close()
-        monitoringConnection = null
+        synchronized(monitoringConnectionLock) {
+            monitoringConnection?.close()
+            monitoringConnection = null
+        }
         connection?.close()
         connection = null
         synchronized(blockingConnections) {
@@ -130,6 +139,17 @@ object RedisConfig {
         client?.shutdown()
         client = null
     }
+}
+
+internal fun reconnectClosedMonitoringConnection(
+    current: StatefulRedisConnection<String, String>?,
+    client: RedisClient?,
+): StatefulRedisConnection<String, String>? {
+    if (current?.isOpen == true) return current
+    return runCatching {
+        current?.close()
+        checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }.connect()
+    }.getOrNull()
 }
 
 fun Application.configureRedis() {
