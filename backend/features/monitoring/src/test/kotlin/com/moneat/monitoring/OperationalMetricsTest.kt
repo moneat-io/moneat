@@ -84,6 +84,47 @@ class OperationalMetricsTest {
     }
 
     @Test
+    fun `renders source neutral queue gauges from consumer backlog on the monitoring connection`() {
+        val streamKey = "moneat:logs:queue:stream"
+        val dlqKey = "moneat:logs:dlq:stream"
+        val consumerGroup = "moneat:logs:workers"
+        val redis = mockk<RedisCommands<String, String>>()
+        val pendingStart = "${System.currentTimeMillis() - 10_000L}-0"
+
+        mockkObject(RedisConfig)
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
+        every {
+            redis.xpending(streamKey, consumerGroup)
+        } returns PendingMessages(2, Range.create(pendingStart, pendingStart), mapOf("worker-1" to 2L))
+        every {
+            redis.xinfoGroups(streamKey)
+        } returns listOf(mapOf("name" to consumerGroup, "lag" to 3L))
+        every { redis.xlen(dlqKey) } returns 4L
+
+        OperationalMetrics.registerIngestionQueue(
+            pipeline = IngestionPipeline.LOGS,
+            streamKey = streamKey,
+            dlqStreamKey = dlqKey,
+            consumerGroup = consumerGroup,
+            capacity = 250_000,
+        )
+
+        val rendered = OperationalMetrics.scrape()
+        val queueLine = metricLine(rendered, "moneat_ingestion_queue_depth", "pipeline=\"logs\"")
+        val ageLine = metricLine(
+            rendered,
+            "moneat_ingestion_queue_oldest_message_age_seconds",
+            "pipeline=\"logs\"",
+        )
+        val dlqLine = metricLine(rendered, "moneat_ingestion_dlq_depth", "pipeline=\"logs\"")
+
+        assertTrue(queueLine.endsWith(" 5.0"), queueLine)
+        assertTrue(ageLine.substringAfterLast(' ').toDouble() >= 9.0, ageLine)
+        assertTrue(dlqLine.endsWith(" 4.0"), dlqLine)
+    }
+
+    @Test
     fun `renders clickhouse request counters and histogram`() {
         OperationalMetrics.recordClickHouseRequest("execute", "success", 0.02)
 
@@ -159,8 +200,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(3, Range.create("1-0", "3-0"), mapOf("worker-1" to 3L))
@@ -202,8 +243,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(4, Range.create("1-0", "4-0"), mapOf("worker-1" to 4L))
@@ -233,8 +274,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(5, Range.create("1-0", "5-0"), mapOf("worker-1" to 5L))
@@ -267,8 +308,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } throws IllegalStateException("redis down")
         every { redis.llen(dlqKey) } returns 0L
 
@@ -293,8 +334,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } throws
             IllegalStateException("ERR no such key '$streamKey'")
         every { redis.llen(dlqKey) } returns 0L
@@ -331,8 +372,8 @@ class OperationalMetricsTest {
         val oldStreamId = "${System.currentTimeMillis() - 10_000L}-0"
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(2, Range.create(oldStreamId, oldStreamId), mapOf("worker-1" to 2L))
@@ -365,8 +406,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(streamKey) } returns listOf(
@@ -407,8 +448,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(primaryKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(primaryKey) } returns listOf(
@@ -441,8 +482,8 @@ class OperationalMetricsTest {
         val redis = mockk<RedisCommands<String, String>>()
 
         mockkObject(RedisConfig)
-        every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.isMonitoringConnected() } returns true
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } throws
             IllegalStateException("NOGROUP No such key '$streamKey' or consumer group '$consumerGroup'")
 

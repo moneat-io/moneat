@@ -40,6 +40,9 @@ object RedisConfig {
 
     @Volatile
     private var connection: StatefulRedisConnection<String, String>? = null
+
+    @Volatile
+    private var monitoringConnection: StatefulRedisConnection<String, String>? = null
     private val blockingConnections = mutableListOf<StatefulRedisConnection<String, String>>()
 
     fun init(redisUrl: String) {
@@ -50,10 +53,24 @@ object RedisConfig {
             .build()
         client = RedisClient.create(resources, uri)
         connection = client!!.connect()
+        monitoringConnection = client!!.connect()
     }
 
     fun sync(): RedisCommands<String, String> {
         val conn = checkNotNull(connection) { "RedisConfig is not initialized. Call init() first." }
+        return conn.sync()
+    }
+
+    /**
+     * Returns commands on the connection reserved for operational metric reads.
+     *
+     * Intake requests can keep the primary Redis connection busy during bursts. Keeping metric reads on a
+     * separate connection prevents Prometheus gauges from degrading to NaN while queue admission is active.
+     */
+    fun monitoringSync(): RedisCommands<String, String> {
+        val conn = checkNotNull(monitoringConnection) {
+            "RedisConfig monitoring connection is not initialized. Call init() first."
+        }
         return conn.sync()
     }
 
@@ -97,9 +114,13 @@ object RedisConfig {
 
     fun isConnected(): Boolean = connection?.isOpen == true
 
+    fun isMonitoringConnected(): Boolean = monitoringConnection?.isOpen == true
+
     fun isInitialized(): Boolean = connection != null
 
     fun close() {
+        monitoringConnection?.close()
+        monitoringConnection = null
         connection?.close()
         connection = null
         synchronized(blockingConnections) {

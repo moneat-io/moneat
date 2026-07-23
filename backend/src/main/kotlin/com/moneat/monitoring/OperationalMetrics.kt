@@ -196,7 +196,7 @@ object OperationalMetrics {
         val meterKey = "$normalizedWorkerName|$queueKey|$normalizedQueueType"
         registeredQueueMeters.computeIfAbsent(meterKey) {
             Gauge.builder(WORKER_QUEUE_DEPTH, queueKey) { key -> readQueueDepth(key, consumerGroup) }
-                .description("Current Redis queue depth for registered worker queues.")
+                .description("Current Redis queue depth, using pending plus lag for stream consumer groups.")
                 .tags(
                     tags(
                         "worker" to normalizedWorkerName,
@@ -266,8 +266,10 @@ object OperationalMetrics {
     ) {
         registerIngestionQueueCapacity(pipeline, capacity)
         registeredIngestionQueueMeters.computeIfAbsent(pipeline.id) {
-            Gauge.builder(INGESTION_QUEUE_DEPTH, streamKey) { key -> readQueueDepth(key) }
-                .description("Current number of retained entries in an ingestion queue.")
+            Gauge.builder(INGESTION_QUEUE_DEPTH, streamKey) { key ->
+                readStreamBacklogMessages(key, consumerGroup)
+            }
+                .description("Current pending and unconsumed entries in an ingestion queue.")
                 .tags(tags("pipeline" to pipeline.id))
                 .register(registry)
             Gauge.builder(INGESTION_QUEUE_OLDEST_MESSAGE_AGE_SECONDS, streamKey) { key ->
@@ -727,16 +729,16 @@ object OperationalMetrics {
     }
 
     private fun readQueueDepth(queueKey: String, consumerGroup: String? = null): Double {
-        if (!RedisConfig.isConnected()) return Double.NaN
+        if (!RedisConfig.isMonitoringConnected()) return Double.NaN
         if (consumerGroup != null) return readStreamBacklogMessages(queueKey, consumerGroup)
-        return runCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
-            .recoverCatching { RedisConfig.sync().llen(queueKey).toDouble() }
+        return runCatching { RedisConfig.monitoringSync().xlen(queueKey).toDouble() }
+            .recoverCatching { RedisConfig.monitoringSync().llen(queueKey).toDouble() }
             .getOrElse { Double.NaN }
     }
 
     private fun readStreamBacklogMessages(streamKey: String, consumerGroup: String): Double =
         runCatching {
-            val redis = RedisConfig.sync()
+            val redis = RedisConfig.monitoringSync()
             val pendingMessages = redis.xpending(streamKey, consumerGroup).count
             val lagMessages = redis.xinfoGroups(streamKey)
                 .asSequence()
@@ -750,15 +752,15 @@ object OperationalMetrics {
         }
 
     private fun readStreamPendingMessages(streamKey: String, consumerGroup: String): Double {
-        if (!RedisConfig.isConnected()) return Double.NaN
-        return runCatching { RedisConfig.sync().xpending(streamKey, consumerGroup).count.toDouble() }
+        if (!RedisConfig.isMonitoringConnected()) return Double.NaN
+        return runCatching { RedisConfig.monitoringSync().xpending(streamKey, consumerGroup).count.toDouble() }
             .getOrElse { Double.NaN }
     }
 
     private fun readStreamOldestMessageAgeSeconds(streamKey: String, consumerGroup: String?): Double {
-        if (!RedisConfig.isConnected()) return Double.NaN
+        if (!RedisConfig.isMonitoringConnected()) return Double.NaN
         return runCatching {
-            val redis = RedisConfig.sync()
+            val redis = RedisConfig.monitoringSync()
             if (consumerGroup == null) {
                 return readOldestStreamEntryAgeSeconds(redis, streamKey)
             }
