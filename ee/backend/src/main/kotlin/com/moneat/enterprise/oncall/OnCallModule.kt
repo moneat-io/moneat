@@ -56,35 +56,47 @@ class OnCallModule :
     private val escalationPolicyService = EscalationPolicyService()
     private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
-    private val pushNotificationService = PushNotificationService()
-    private val slackService = SlackService()
-    private val redisClient = RedisClient()
-    private val escalationEngine =
-        EscalationEngine(
-            escalationPolicyService = escalationPolicyService,
-            onCallScheduleService = onCallScheduleService,
-            pushNotificationService = pushNotificationService,
-            slackService = slackService,
-            redisClient = redisClient,
-        )
-    private val onCallAlertService = OnCallAlertService(escalationEngine = escalationEngine)
-    private val slackUserGroupSyncService =
-        SlackUserGroupSyncService(
-            onCallScheduleService = onCallScheduleService,
-            slackService = slackService,
-            redisClient = redisClient,
-        )
-    private val onCallHandoffService =
-        OnCallHandoffService(
-            onCallScheduleService = onCallScheduleService,
-            pushNotificationService = pushNotificationService,
-            redisClient = redisClient,
-        )
-    private val shiftChangeNotifier =
-        ShiftChangeNotifier(
-            onCallScheduleService = onCallScheduleService,
-            pushNotificationService = pushNotificationService,
-        )
+    private val pushNotificationService by lazy { PushNotificationService() }
+    private val slackService by lazy { SlackService() }
+    private val redisClient by lazy { RedisClient() }
+    private val escalationEngineDelegate =
+        lazy {
+            EscalationEngine(
+                escalationPolicyService = escalationPolicyService,
+                onCallScheduleService = onCallScheduleService,
+                pushNotificationService = pushNotificationService,
+                slackService = slackService,
+                redisClient = redisClient,
+            )
+        }
+    private val escalationEngine by escalationEngineDelegate
+    private val onCallAlertService by lazy { OnCallAlertService(escalationEngine = escalationEngine) }
+    private val slackUserGroupSyncServiceDelegate =
+        lazy {
+            SlackUserGroupSyncService(
+                onCallScheduleService = onCallScheduleService,
+                slackService = slackService,
+                redisClient = redisClient,
+            )
+        }
+    private val slackUserGroupSyncService by slackUserGroupSyncServiceDelegate
+    private val onCallHandoffServiceDelegate =
+        lazy {
+            OnCallHandoffService(
+                onCallScheduleService = onCallScheduleService,
+                pushNotificationService = pushNotificationService,
+                redisClient = redisClient,
+            )
+        }
+    private val onCallHandoffService by onCallHandoffServiceDelegate
+    private val shiftChangeNotifierDelegate =
+        lazy {
+            ShiftChangeNotifier(
+                onCallScheduleService = onCallScheduleService,
+                pushNotificationService = pushNotificationService,
+            )
+        }
+    private val shiftChangeNotifier by shiftChangeNotifierDelegate
 
     override val name: String = "On-Call"
     override val licenseFeature: String = "oncall"
@@ -120,10 +132,10 @@ class OnCallModule :
 
     override fun stopBackgroundJobs() {
         logger.info { "Stopping on-call enterprise background jobs" }
-        escalationEngine.stop()
-        slackUserGroupSyncService.stop()
-        onCallHandoffService.stop()
-        shiftChangeNotifier.stop()
+        if (escalationEngineDelegate.isInitialized()) escalationEngine.stop()
+        if (slackUserGroupSyncServiceDelegate.isInitialized()) slackUserGroupSyncService.stop()
+        if (onCallHandoffServiceDelegate.isInitialized()) onCallHandoffService.stop()
+        if (shiftChangeNotifierDelegate.isInitialized()) shiftChangeNotifier.stop()
     }
 
     // OnCallBridge implementation
