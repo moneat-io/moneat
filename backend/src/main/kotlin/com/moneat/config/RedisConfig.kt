@@ -20,7 +20,10 @@ import com.moneat.utils.suspendRunCatching
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
 import io.lettuce.core.ClientOptions
+import io.lettuce.core.RedisCommandTimeoutException
 import io.lettuce.core.RedisClient
+import io.lettuce.core.RedisConnectionException
+import io.lettuce.core.RedisException
 import io.lettuce.core.RedisURI
 import io.lettuce.core.SocketOptions
 import io.lettuce.core.api.StatefulRedisConnection
@@ -42,7 +45,13 @@ private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BLOCKING_COM
 private val MONITORING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(MONITORING_COMMAND_TIMEOUT_SECONDS)
 private val MONITORING_RECONNECT_COOLDOWN: Duration = Duration.ofSeconds(MONITORING_RECONNECT_COOLDOWN_SECONDS)
 
-private data class MonitoringRead<T>(val value: T)
+internal sealed interface MonitoringRead<out T> {
+    data class Success<T>(val value: T) : MonitoringRead<T>
+
+    data class ConnectionFailure(
+        val connection: StatefulRedisConnection<String, String>
+    ) : MonitoringRead<Nothing>
+}
 
 object RedisConfig {
     @Volatile
@@ -53,7 +62,7 @@ object RedisConfig {
 
     @Volatile
     private var monitoringConnection: StatefulRedisConnection<String, String>? = null
-    private val monitoringConnectionLock = ReentrantReadWriteLock()
+    private val monitoringConnectionLock = ReentrantReadWriteLock(true)
 
     @Volatile
     private var monitoringReconnectAllowedAtNanos = 0L
@@ -92,9 +101,12 @@ object RedisConfig {
      * separate connection prevents Prometheus gauges from degrading to NaN while queue admission is active.
      */
     fun <T> withMonitoringSync(operation: (RedisCommands<String, String>) -> T): T {
-        withOpenMonitoringConnection(operation)?.let { return it.value }
-        reconnectMonitoringConnectionIfDue()
-        return withOpenMonitoringConnection(operation)?.value ?: operation(sync())
+        return readMonitoringWithRecovery(
+            read = { withOpenMonitoringConnection(operation) },
+            invalidate = ::invalidateMonitoringConnection,
+            reconnect = ::reconnectMonitoringConnectionIfDue,
+            primaryRead = { operation(sync()) },
+        )
     }
 
     private fun <T> withOpenMonitoringConnection(
@@ -104,30 +116,48 @@ object RedisConfig {
         if (!readLock.tryLock()) return null
         return try {
             val monitoring = monitoringConnection?.takeIf { it.isOpen } ?: return null
-            MonitoringRead(operation(monitoring.sync()))
+            executeMonitoringRead(monitoring, operation)
         } finally {
             readLock.unlock()
         }
     }
 
+    private fun invalidateMonitoringConnection(
+        failedConnection: StatefulRedisConnection<String, String>
+    ) {
+        val writeLock = monitoringConnectionLock.writeLock()
+        writeLock.lock()
+        try {
+            if (monitoringConnection !== failedConnection) return
+            failedConnection.close()
+            monitoringConnection = null
+        } finally {
+            writeLock.unlock()
+        }
+    }
+
     private fun reconnectMonitoringConnectionIfDue() {
         val now = System.nanoTime()
-        if (now < monitoringReconnectAllowedAtNanos) return
+        if (isMonitoringReconnectCoolingDown(now)) return
 
         val writeLock = monitoringConnectionLock.writeLock()
         if (!writeLock.tryLock()) return
         try {
             if (monitoringConnection?.isOpen == true) return
             val attemptStartedAt = System.nanoTime()
-            if (attemptStartedAt < monitoringReconnectAllowedAtNanos) return
+            if (isMonitoringReconnectCoolingDown(attemptStartedAt)) return
             monitoringReconnectAllowedAtNanos = attemptStartedAt + MONITORING_RECONNECT_COOLDOWN.toNanos()
             reconnectClosedMonitoringConnection(monitoringConnection, client)?.let { replacement ->
                 monitoringConnection = replacement
-                monitoringReconnectAllowedAtNanos = 0L
             }
         } finally {
             writeLock.unlock()
         }
+    }
+
+    private fun isMonitoringReconnectCoolingDown(now: Long): Boolean {
+        val allowedAt = monitoringReconnectAllowedAtNanos
+        return allowedAt != 0L && now - allowedAt < 0L
     }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
@@ -208,6 +238,42 @@ internal fun reconnectClosedMonitoringConnection(
     }.getOrNull()
 }
 
+internal fun isMonitoringConnectionFailure(error: RedisException): Boolean =
+    error is RedisCommandTimeoutException || error is RedisConnectionException
+
+internal fun <T> executeMonitoringRead(
+    connection: StatefulRedisConnection<String, String>,
+    operation: (RedisCommands<String, String>) -> T,
+): MonitoringRead<T> =
+    try {
+        MonitoringRead.Success(operation(connection.sync()))
+    } catch (error: RedisException) {
+        if (!isMonitoringConnectionFailure(error)) throw error
+        MonitoringRead.ConnectionFailure(connection)
+    }
+
+internal fun <T> readMonitoringWithRecovery(
+    read: () -> MonitoringRead<T>?,
+    invalidate: (StatefulRedisConnection<String, String>) -> Unit,
+    reconnect: () -> Unit,
+    primaryRead: () -> T,
+): T {
+    when (val initialRead = read()) {
+        is MonitoringRead.Success -> return initialRead.value
+        is MonitoringRead.ConnectionFailure -> invalidate(initialRead.connection)
+        null -> Unit
+    }
+    reconnect()
+    return when (val retriedRead = read()) {
+        is MonitoringRead.Success -> retriedRead.value
+        is MonitoringRead.ConnectionFailure -> {
+            invalidate(retriedRead.connection)
+            primaryRead()
+        }
+        null -> primaryRead()
+    }
+}
+
 fun Application.configureRedis() {
     // Skip Redis in test environment if REDIS_URL is not set
     val redisUrl =
@@ -219,7 +285,7 @@ fun Application.configureRedis() {
         }
 
     suspendRunCatching {
-        log.info("Connecting to Redis at $redisUrl...")
+        log.info("Connecting to Redis...")
         RedisConfig.init(redisUrl)
         log.info("Redis connection established")
         // Note: Shutdown is handled by BackgroundJobs to ensure correct ordering
