@@ -12,6 +12,7 @@ import com.moneat.enterprise.oncall.models.UserDeviceTokens
 import com.moneat.enterprise.oncall.userResourceId
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -52,6 +53,7 @@ private const val INCIDENT_CATEGORY_ID = "INCIDENT_ALERT"
 private const val DEVICE_NOT_REGISTERED_ERROR = "DeviceNotRegistered"
 private const val EXPO_PUSH_ENDPOINT = "https://exp.host/--/api/v2/push/send"
 private const val EXPO_RECEIPTS_ENDPOINT = "https://exp.host/--/api/v2/push/getReceipts"
+private const val EXPO_REQUEST_TIMEOUT_MILLIS = 10_000L
 private const val RECEIPT_CHECK_ATTEMPTS = 3
 private val RECEIPT_INITIAL_DELAY = 15.minutes
 private val RECEIPT_RETRY_DELAY = 5.minutes
@@ -113,6 +115,11 @@ class PushNotificationService {
 
     private val httpClient =
         HttpClient(CIO) {
+            install(HttpTimeout) {
+                requestTimeoutMillis = EXPO_REQUEST_TIMEOUT_MILLIS
+                connectTimeoutMillis = EXPO_REQUEST_TIMEOUT_MILLIS
+                socketTimeoutMillis = EXPO_REQUEST_TIMEOUT_MILLIS
+            }
             install(ContentNegotiation) {
                 json(
                     EXPO_JSON,
