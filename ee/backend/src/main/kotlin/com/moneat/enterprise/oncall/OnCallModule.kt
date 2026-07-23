@@ -51,17 +51,52 @@ class OnCallModule :
     EnterpriseModule,
     McpToolContributor,
     OnCallBridge {
-    private lateinit var escalationEngine: EscalationEngine
-    private lateinit var onCallAlertService: OnCallAlertService
-    private lateinit var pushNotificationService: PushNotificationService
-    private var slackUserGroupSyncService: SlackUserGroupSyncService? = null
-    private var onCallHandoffService: OnCallHandoffService? = null
-    private var shiftChangeNotifier: ShiftChangeNotifier? = null
     private val priorityService = PriorityService()
     private val businessHoursService = BusinessHoursService()
     private val escalationPolicyService = EscalationPolicyService()
     private val onCallScheduleService = OnCallScheduleService()
     private val onCallIncidentService = OnCallIncidentService()
+    private val pushNotificationService by lazy { PushNotificationService() }
+    private val slackService by lazy { SlackService() }
+    private val redisClient by lazy { RedisClient() }
+    private val escalationEngineDelegate =
+        lazy {
+            EscalationEngine(
+                escalationPolicyService = escalationPolicyService,
+                onCallScheduleService = onCallScheduleService,
+                pushNotificationService = pushNotificationService,
+                slackService = slackService,
+                redisClient = redisClient,
+            )
+        }
+    private val escalationEngine by escalationEngineDelegate
+    private val onCallAlertService by lazy { OnCallAlertService(escalationEngine = escalationEngine) }
+    private val slackUserGroupSyncServiceDelegate =
+        lazy {
+            SlackUserGroupSyncService(
+                onCallScheduleService = onCallScheduleService,
+                slackService = slackService,
+                redisClient = redisClient,
+            )
+        }
+    private val slackUserGroupSyncService by slackUserGroupSyncServiceDelegate
+    private val onCallHandoffServiceDelegate =
+        lazy {
+            OnCallHandoffService(
+                onCallScheduleService = onCallScheduleService,
+                pushNotificationService = pushNotificationService,
+                redisClient = redisClient,
+            )
+        }
+    private val onCallHandoffService by onCallHandoffServiceDelegate
+    private val shiftChangeNotifierDelegate =
+        lazy {
+            ShiftChangeNotifier(
+                onCallScheduleService = onCallScheduleService,
+                pushNotificationService = pushNotificationService,
+            )
+        }
+    private val shiftChangeNotifier by shiftChangeNotifierDelegate
 
     override val name: String = "On-Call"
     override val licenseFeature: String = "oncall"
@@ -88,58 +123,19 @@ class OnCallModule :
     }
 
     override fun startBackgroundJobs(application: Application) {
-        val escalationPolicyService = EscalationPolicyService()
-        pushNotificationService = PushNotificationService()
-        val slackService = SlackService()
-        val redisClient = RedisClient()
-
-        escalationEngine =
-            EscalationEngine(
-                escalationPolicyService = escalationPolicyService,
-                onCallScheduleService = onCallScheduleService,
-                pushNotificationService = pushNotificationService,
-                slackService = slackService,
-                redisClient = redisClient,
-            )
-
-        onCallAlertService =
-            OnCallAlertService(
-                escalationEngine = escalationEngine,
-            )
-
-        slackUserGroupSyncService =
-            SlackUserGroupSyncService(
-                onCallScheduleService = onCallScheduleService,
-                slackService = slackService,
-                redisClient = redisClient,
-            )
-
-        onCallHandoffService =
-            OnCallHandoffService(
-                onCallScheduleService = onCallScheduleService,
-                pushNotificationService = pushNotificationService,
-                redisClient = redisClient,
-            )
-
-        shiftChangeNotifier =
-            ShiftChangeNotifier(
-                onCallScheduleService = onCallScheduleService,
-                pushNotificationService = pushNotificationService,
-            )
-
         logger.info { "Starting on-call enterprise background jobs" }
         escalationEngine.start()
-        slackUserGroupSyncService?.start()
-        onCallHandoffService?.start()
-        shiftChangeNotifier?.start()
+        slackUserGroupSyncService.start()
+        onCallHandoffService.start()
+        shiftChangeNotifier.start()
     }
 
     override fun stopBackgroundJobs() {
         logger.info { "Stopping on-call enterprise background jobs" }
-        escalationEngine.stop()
-        slackUserGroupSyncService?.stop()
-        onCallHandoffService?.stop()
-        shiftChangeNotifier?.stop()
+        if (escalationEngineDelegate.isInitialized()) escalationEngine.stop()
+        if (slackUserGroupSyncServiceDelegate.isInitialized()) slackUserGroupSyncService.stop()
+        if (onCallHandoffServiceDelegate.isInitialized()) onCallHandoffService.stop()
+        if (shiftChangeNotifierDelegate.isInitialized()) shiftChangeNotifier.stop()
     }
 
     // OnCallBridge implementation
