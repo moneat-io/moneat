@@ -157,7 +157,21 @@ class RefreshTokenService {
     }
 
     /**
-     * Revoke all refresh tokens for a user (for logout or security)
+     * Revoke one refresh-token session without signing the user out on other devices.
+     */
+    fun revokeToken(token: String): Boolean {
+        val tokenHash = hashToken(token)
+        return transaction {
+            RefreshTokens.update({
+                (RefreshTokens.token_hash eq tokenHash) and (RefreshTokens.revoked eq false)
+            }) {
+                it[revoked] = true
+            } > 0
+        }
+    }
+
+    /**
+     * Revoke all refresh tokens for a user after a security-sensitive account change.
      */
     fun revokeAllUserTokens(userId: Int): Int {
         return transaction {

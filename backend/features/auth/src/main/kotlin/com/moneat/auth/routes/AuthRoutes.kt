@@ -78,6 +78,7 @@ fun Route.authRoutes(
         post("/refresh") { handleRefreshToken(authService) }
         route("/mobile") {
             post("/login") { handleMobileLogin(authService) }
+            post("/logout") { handleMobileLogout(authService) }
             post("/refresh") { handleMobileRefreshToken(authService) }
         }
         get("/github") { handleGitHubOAuth(oauthService) }
@@ -92,6 +93,7 @@ fun Route.authRoutes(
         route("/auth") {
             get("/check-slug") { handleCheckSlug() }
             post("/complete-onboarding") { handleCompleteOnboarding(authService) }
+            post("/mobile/session") { handleCreateMobileSession(authService) }
         }
     }
 }
@@ -227,39 +229,27 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleResetPassword(au
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleLogout(authService: AuthService) {
-    val jwtSecret =
-        io.ktor.server.config
-            .ApplicationConfig("application.conf")
-            .property("jwt.secret")
-            .getString()
-
-    // Get userId from auth if available to revoke refresh tokens
-    val authHeader = call.request.headers["Authorization"]
-    val tokenFromHeader = authHeader?.removePrefix("Bearer ")?.removePrefix("bearer ")?.trim()
-    val tokenFromCookie = call.request.cookies["auth_token"]
-    val token = tokenFromHeader ?: tokenFromCookie
-
-    if (token != null) {
-        suspendRunCatching {
-            val jwtVerifier =
-                com.auth0.jwt.JWT
-                    .require(
-                        com.auth0.jwt.algorithms.Algorithm
-                            .HMAC256(jwtSecret)
-                    ).build()
-            val decodedJWT = jwtVerifier.verify(token)
-            val userId = decodedJWT?.getClaim("userId")?.asInt()
-            if (userId != null) {
-                authService.logout(userId)
-            }
-        }.getOrElse { _ ->
-            // Token invalid or expired, continue with logout
-        }
-    }
+    call.request.cookies["refresh_token"]?.let(authService::logout)
 
     AuthCookieUtils.clearAuthCookie(call)
     AuthCookieUtils.clearRefreshCookie(call)
     call.respond(MessageResponse("Logged out"))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleMobileLogout(authService: AuthService) {
+    val request = call.receive<RefreshTokenRequest>()
+    authService.logout(request.refreshToken)
+    call.respond(MessageResponse("Logged out"))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleCreateMobileSession(authService: AuthService) {
+    val userId = call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
+    val result = userId?.let(authService::createMobileSession)
+    if (result == null) {
+        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unable to create mobile session"))
+        return
+    }
+    call.respond(result)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleRefreshToken(authService: AuthService) {

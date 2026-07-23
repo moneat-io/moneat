@@ -2,6 +2,7 @@ import {fireEvent, render, screen, waitFor} from '@testing-library/react'
 import type {ComponentType, ReactNode} from 'react'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {storePendingAuthRedirect} from '@/lib/auth-redirect'
+import {consumeMobileAuthCallback} from '@/lib/mobile-auth'
 
 const {mockApi, mockNavigate, mockTrackEvent} = vi.hoisted(() => ({
   mockApi: {
@@ -86,6 +87,7 @@ describe('login route', () => {
     mockApi.isAuthenticated.mockReturnValue(false)
     mockApi.login.mockResolvedValue({token: 'token-1'})
     mockApi.mobileLogin.mockResolvedValue({token: 'token-1', refreshToken: 'refresh-token-1'})
+    window.sessionStorage.clear()
     window.history.replaceState(null, '', '/login')
   })
 
@@ -152,12 +154,12 @@ describe('login route', () => {
     }).toThrow(expect.objectContaining({to: '/replays/replay-1'}))
   })
 
-  it('logs out authenticated mobile redirect sessions before loading the page', () => {
+  it('preserves other sessions when an authenticated browser opens mobile login', () => {
     mockApi.isAuthenticated.mockReturnValue(true)
 
     Route.options.beforeLoad?.(beforeLoadContext({redirect_uri: 'moneat://auth'}))
 
-    expect(mockApi.logout).toHaveBeenCalled()
+    expect(mockApi.logout).not.toHaveBeenCalled()
   })
 
   it('does not treat unapproved redirect URIs as mobile login callbacks', () => {
@@ -221,6 +223,23 @@ describe('login route', () => {
     })
   })
 
+  it('preserves the native callback while starting mobile SSO', async () => {
+    window.history.replaceState(null, '', '/login?redirect_uri=moneat%3A%2F%2Fauth')
+    mockApi.initSso.mockResolvedValue({redirectUrl: 'https://sso.example.test/start'})
+    const LoginPage = Route.options.component as ComponentType
+
+    render(<LoginPage />)
+
+    fireEvent.click(screen.getByRole('button', {name: 'Sign in with SSO instead'}))
+    fireEvent.change(screen.getByLabelText('Work email'), {target: {value: 'sso@example.com'}})
+    fireEvent.click(screen.getByRole('button', {name: 'Continue with SSO'}))
+
+    await waitFor(() => {
+      expect(mockApi.initSso).toHaveBeenCalledWith('sso@example.com')
+      expect(consumeMobileAuthCallback()).toBe('moneat://auth')
+    })
+  })
+
   it('rejects non-HTTPS SSO redirect URLs', async () => {
     mockApi.initSso.mockResolvedValue({redirectUrl: 'javascript:alert(1)'})
     const LoginPage = Route.options.component as ComponentType
@@ -281,5 +300,16 @@ describe('login route', () => {
     fireEvent.click(screen.getByRole('button', {name: 'GitHub'}))
 
     expect(screen.getByRole('button', {name: 'GitHub'})).toBeTruthy()
+  })
+
+  it('preserves the native callback while starting mobile GitHub OAuth', () => {
+    window.history.replaceState(null, '', '/login?redirect_uri=moneat%3A%2F%2Fauth')
+    const LoginPage = Route.options.component as ComponentType
+
+    render(<LoginPage />)
+
+    fireEvent.click(screen.getByRole('button', {name: 'GitHub'}))
+
+    expect(consumeMobileAuthCallback()).toBe('moneat://auth')
   })
 })

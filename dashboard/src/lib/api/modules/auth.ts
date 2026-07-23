@@ -69,6 +69,11 @@ export function authMethods(core: ApiClientCore) {
         body: JSON.stringify({ email, password }),
       }),
 
+    createMobileSession: async (): Promise<MobileAuthResponse> =>
+      core.request<MobileAuthResponse>(`${authBase}/auth/mobile/session`, {
+        method: 'POST',
+      }),
+
     initSso: async (
       email?: string,
       orgSlug?: string

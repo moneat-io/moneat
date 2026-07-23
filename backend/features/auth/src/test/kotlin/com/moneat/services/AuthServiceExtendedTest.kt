@@ -371,11 +371,13 @@ class AuthServiceExtendedTest {
     // ── AuthService - logout ────────────────────────────────────────
 
     @Test
-    fun `logout revokes all refresh tokens for user`() {
+    fun `logout revokes only the current refresh token session`() {
         val (userId, orgId) = insertUserWithOrg(email = LOGOUT_EMAIL)
         val refreshTokenService = RefreshTokenService()
-        refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
-        refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
+        val currentSession =
+            refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
+        val otherDeviceSession =
+            refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
 
         val authService = AuthService(
             UserRepositoryImpl(),
@@ -385,14 +387,30 @@ class AuthServiceExtendedTest {
             workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
-        authService.logout(userId)
+        assertTrue(authService.logout(currentSession.refreshToken))
 
-        val activeTokens = transaction {
-            RefreshTokens.selectAll()
-                .where { (RefreshTokens.user_id eq userId) and (RefreshTokens.revoked eq false) }
-                .count()
-        }
-        assertEquals(0L, activeTokens)
+        assertNull(refreshTokenService.validateAndRotate(currentSession.refreshToken))
+        assertNotNull(refreshTokenService.validateAndRotate(otherDeviceSession.refreshToken))
+    }
+
+    @Test
+    fun `createMobileSession issues a separate refresh token for an authenticated user`() {
+        val (userId, _) = insertUserWithOrg(email = "mobile-session@test.com")
+        val authService = AuthService(
+            UserRepositoryImpl(),
+            MembershipRepositoryImpl(),
+            OrganizationRepositoryImpl(),
+            refreshTokenService = RefreshTokenService(),
+            workflowService = mockk<WorkflowService>(relaxed = true),
+        )
+
+        val session = authService.createMobileSession(userId)
+
+        assertNotNull(session)
+        assertTrue(session.token.isNotBlank())
+        val refreshToken = assertNotNull(session.refreshToken)
+        assertTrue(refreshToken.isNotBlank())
+        assertEquals("mobile-session@test.com", session.user.email)
     }
 
     // ── AuthService - refreshToken ──────────────────────────────────

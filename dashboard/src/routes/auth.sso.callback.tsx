@@ -19,6 +19,8 @@ import { useEffect, useMemo } from 'react'
 import { Logo } from '@/components/Logo'
 import { APP_OVERVIEW_SEARCH } from '@/lib/overview-route'
 import { setDemoEpoch } from '@/lib/demo'
+import { api } from '@/lib/api'
+import { consumeMobileAuthCallback, mobileAuthCallbackUrl } from '@/lib/mobile-auth'
 
 export const Route = createFileRoute('/auth/sso/callback')({
   component: SsoCallbackPage,
@@ -40,13 +42,36 @@ function SsoCallbackPage() {
       return
     }
 
-    // Auth token is now set as httpOnly cookie by the backend redirect
-    setDemoEpoch(null)
-    globalThis.sessionStorage?.setItem('authenticated', 'true')
-    const timer = setTimeout(() => {
-      navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
-    }, 100)
-    return () => clearTimeout(timer)
+    let active = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const completeLogin = async () => {
+      // Auth token is now set as an HTTP-only cookie by the backend redirect.
+      setDemoEpoch(null)
+      globalThis.sessionStorage?.setItem('authenticated', 'true')
+      const mobileCallback = consumeMobileAuthCallback()
+      if (mobileCallback) {
+        try {
+          const { token, refreshToken } = await api.createMobileSession()
+          if (active) {
+            globalThis.window.location.assign(
+              mobileAuthCallbackUrl(mobileCallback, token, refreshToken)
+            )
+          }
+          return
+        } catch {
+          if (active) navigate({ to: '/login' })
+          return
+        }
+      }
+      timer = setTimeout(() => {
+        navigate({ to: '/', search: APP_OVERVIEW_SEARCH })
+      }, 100)
+    }
+    void completeLogin()
+    return () => {
+      active = false
+      if (timer) clearTimeout(timer)
+    }
   }, [navigate, error])
 
   if (error) {

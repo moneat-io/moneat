@@ -34,6 +34,7 @@ import com.moneat.testsupport.startTestKoin
 import com.moneat.testsupport.stopTestKoin
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.request.cookie
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -52,6 +53,7 @@ import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -198,6 +200,87 @@ class AuthRoutesTest {
 
         assertEquals(HttpStatusCode.Unauthorized, response.status)
         assertTrue(response.bodyAsText().contains("Invalid or expired refresh token"))
+    }
+
+    @Test
+    fun `authenticated browser can create a separate mobile session`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every { authService.createMobileSession(42) } returns
+            authResponse("mobile-access-token", "mobile-refresh-token")
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/mobile/session") {
+                bearerAuth(authToken(userId = 42))
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"token\":\"mobile-access-token\""))
+        assertTrue(response.bodyAsText().contains("\"refreshToken\":\"mobile-refresh-token\""))
+    }
+
+    @Test
+    fun `mobile session creation requires an authenticated browser`() = testApplication {
+        installPlugins()
+        routing {
+            authRoutes(
+                authService = mockk(relaxed = true),
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response = client.post("/auth/mobile/session")
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `browser logout revokes only its refresh token`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every { authService.logout("browser-refresh-token") } returns true
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/logout") {
+                cookie("refresh_token", "browser-refresh-token")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify(exactly = 1) { authService.logout("browser-refresh-token") }
+    }
+
+    @Test
+    fun `mobile logout revokes its submitted refresh token`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every { authService.logout("mobile-refresh-token") } returns true
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/mobile/logout") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"refreshToken":"mobile-refresh-token"}""")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify(exactly = 1) { authService.logout("mobile-refresh-token") }
     }
 
     @Test
@@ -389,6 +472,14 @@ class AuthRoutesTest {
                 name = "On Call"
             )
         )
+
+    private fun authToken(userId: Int): String =
+        JWT
+            .create()
+            .withIssuer("moneat")
+            .withAudience("moneat-users")
+            .withClaim("userId", userId)
+            .sign(Algorithm.HMAC256(jwtSecret))
 
     @AfterTest
     fun teardownKoin() {
