@@ -52,7 +52,7 @@ class OperationalMetricsAlertCoverageTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(streamKey) } returns listOf(
@@ -91,7 +91,7 @@ class OperationalMetricsAlertCoverageTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(streamKey) } returns listOf(
@@ -129,7 +129,7 @@ class OperationalMetricsAlertCoverageTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(streamKey) } returns listOf(
@@ -166,7 +166,7 @@ class OperationalMetricsAlertCoverageTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isConnected() } returns true
-        every { RedisConfig.sync() } returns redis
+        every { RedisConfig.monitoringSync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } returns
             PendingMessages(4, Range.create("1-0", "4-0"), mapOf("worker-1" to 4L))
         every { redis.xinfoGroups(streamKey) } returns listOf(
