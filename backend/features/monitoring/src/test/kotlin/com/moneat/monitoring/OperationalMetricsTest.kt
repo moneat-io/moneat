@@ -93,7 +93,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(2, Range.create(pendingStart, pendingStart), mapOf("worker-1" to 2L))
@@ -201,7 +201,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(3, Range.create("1-0", "3-0"), mapOf("worker-1" to 3L))
@@ -244,7 +244,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(4, Range.create("1-0", "4-0"), mapOf("worker-1" to 4L))
@@ -275,7 +275,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(5, Range.create("1-0", "5-0"), mapOf("worker-1" to 5L))
@@ -309,7 +309,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every { redis.xpending(streamKey, consumerGroup) } throws IllegalStateException("redis down")
         every { redis.llen(dlqKey) } returns 0L
 
@@ -335,7 +335,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every { redis.xpending(streamKey, consumerGroup) } throws
             IllegalStateException("ERR no such key '$streamKey'")
         every { redis.llen(dlqKey) } returns 0L
@@ -373,7 +373,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every {
             redis.xpending(streamKey, consumerGroup)
         } returns PendingMessages(2, Range.create(oldStreamId, oldStreamId), mapOf("worker-1" to 2L))
@@ -407,7 +407,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every { redis.xpending(streamKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(streamKey) } returns listOf(
@@ -449,7 +449,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every { redis.xpending(primaryKey, consumerGroup) } returns
             PendingMessages(0, Range.create("0-0", "0-0"), emptyMap())
         every { redis.xinfoGroups(primaryKey) } returns listOf(
@@ -483,7 +483,7 @@ class OperationalMetricsTest {
 
         mockkObject(RedisConfig)
         every { RedisConfig.isMonitoringConnected() } returns true
-        every { RedisConfig.monitoringSync() } returns redis
+        mockMonitoringRedis(redis)
         every { redis.xpending(streamKey, consumerGroup) } throws
             IllegalStateException("NOGROUP No such key '$streamKey' or consumer group '$consumerGroup'")
 
@@ -595,6 +595,12 @@ class OperationalMetricsTest {
 
     private fun assertHasApplicationTag(rendered: String) {
         assertContains(rendered, "application=\"moneat-backend\"")
+    }
+
+    private fun mockMonitoringRedis(redis: RedisCommands<String, String>) {
+        every { RedisConfig.withMonitoringSync<Double>(any()) } answers {
+            firstArg<(RedisCommands<String, String>) -> Double>()(redis)
+        }
     }
 
     private fun metricLine(rendered: String, metricName: String, vararg labels: String): String =
