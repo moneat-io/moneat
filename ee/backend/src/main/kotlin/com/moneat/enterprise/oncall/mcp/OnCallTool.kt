@@ -90,12 +90,12 @@ class GetIncidentTool(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val svc = incidentService()
         val incidentResourceId = args.stringContent("incident_id")
             ?: return errorResult("incident_id is required")
         val incidentId = transaction {
             alertIdForResource(context.organizationId, incidentResourceId)
         } ?: return errorResult("Incident not found: $incidentResourceId")
+        val svc = incidentService()
         val incident = svc.getAlert(
             incidentId,
             context.userId

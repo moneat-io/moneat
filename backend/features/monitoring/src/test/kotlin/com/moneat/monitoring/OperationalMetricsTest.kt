@@ -296,7 +296,7 @@ class OperationalMetricsTest {
         every { RedisConfig.isConnected() } returns true
         every { RedisConfig.sync() } returns redis
         every { redis.xpending(streamKey, consumerGroup) } throws
-            IllegalStateException("NOGROUP No such key '$streamKey' or consumer group '$consumerGroup'")
+            IllegalStateException("ERR no such key '$streamKey'")
         every { redis.llen(dlqKey) } returns 0L
 
         OperationalMetrics.registerWorkerQueues("Empty", streamKey, dlqKey, consumerGroup)

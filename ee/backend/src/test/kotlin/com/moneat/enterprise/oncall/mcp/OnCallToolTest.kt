@@ -56,4 +56,21 @@ class OnCallToolTest {
         assertFalse(result.isError)
         assertEquals("[]", result.content.single().text)
     }
+
+    @Test
+    fun `get incident validates its id before initializing the service`() {
+        var serviceInitialized = false
+        val tool = GetIncidentTool {
+            serviceInitialized = true
+            mockk()
+        }
+
+        val result = runBlocking {
+            tool.execute(JsonObject(emptyMap()), context)
+        }
+
+        assertFalse(serviceInitialized)
+        assertTrue(result.isError)
+        assertEquals("incident_id is required", result.content.single().text)
+    }
 }
