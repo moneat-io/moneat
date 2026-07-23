@@ -53,7 +53,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-private const val EXPECTED_CORE_MCP_TOOL_COUNT = 161
+private const val EXPECTED_CORE_MCP_TOOL_COUNT = 162
 
 class McpToolRegistryTest {
 

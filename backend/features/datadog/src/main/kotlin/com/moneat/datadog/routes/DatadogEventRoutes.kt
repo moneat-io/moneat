@@ -18,14 +18,14 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DatadogEventPayload
 import com.moneat.datadog.models.DatadogServiceCheck
 import com.moneat.datadog.models.DatadogServiceCheckPayload
 import com.moneat.datadog.services.DatadogEventService
-import com.moneat.datadog.services.DatadogHostService
-import com.moneat.datadog.services.QueuedServiceCheckBatch
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
@@ -77,14 +77,16 @@ private suspend fun RoutingContext.handleV1CheckRun(
         body,
         "Failed to parse DD V1 check_run payload"
     ) ?: return
-    val batch = mapServiceChecks(orgId, checks)
+    if (!reserveEventQuota(quotaService, orgId, checks.size, body)) return
 
-    touchServiceCheckHosts(orgId, checks)
-    if (!reserveEventQuota(quotaService, orgId, batch.serviceChecks.size, body)) return
-
-    insertServiceCheckBatchIfPresent(batch)
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, checks.size, "dd_event", body.size.toLong()),
+    ) {
+        DatadogEventService.enqueueServiceChecks(orgId.toLong(), checks)
+    }
     logger.debug {
-        "Accepted ${batch.serviceChecks.size} DD V1 check_run service checks for org $orgId"
+        "Accepted $count DD V1 check_run service checks for org $orgId"
     }
     call.respondAccepted()
 }
@@ -101,10 +103,15 @@ private suspend fun RoutingContext.handleV2Events(
 
     if (!reserveEventQuota(quotaService, orgId, payload.events.size, body)) return
 
-    val count = DatadogEventService.enqueueEvents(
-        organizationId = orgId.toLong(),
-        events = payload.events
-    )
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, payload.events.size, "dd_event", body.size.toLong()),
+    ) {
+        DatadogEventService.enqueueEvents(
+            organizationId = orgId.toLong(),
+            events = payload.events
+        )
+    }
     logger.debug { "Accepted $count DD events for org $orgId" }
     call.respondAccepted()
 }
@@ -118,13 +125,15 @@ private suspend fun RoutingContext.handleV2ServiceChecks(
         body,
         "Failed to parse DD service checks"
     ) ?: return
-    val batch = mapServiceChecks(orgId, payload.serviceChecks)
+    if (!reserveEventQuota(quotaService, orgId, payload.serviceChecks.size, body)) return
 
-    touchServiceCheckHosts(orgId, payload.serviceChecks)
-    if (!reserveEventQuota(quotaService, orgId, batch.serviceChecks.size, body)) return
-
-    insertServiceCheckBatchIfPresent(batch)
-    logger.debug { "Accepted ${batch.serviceChecks.size} DD service checks for org $orgId" }
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, payload.serviceChecks.size, "dd_event", body.size.toLong()),
+    ) {
+        DatadogEventService.enqueueServiceChecks(orgId.toLong(), payload.serviceChecks)
+    }
+    logger.debug { "Accepted $count DD service checks for org $orgId" }
     call.respondAccepted()
 }
 
@@ -147,16 +156,6 @@ private suspend inline fun <reified T> RoutingContext.decodeJsonPayload(
     }
 }
 
-private fun mapServiceChecks(
-    orgId: Int,
-    checks: List<DatadogServiceCheck>
-): QueuedServiceCheckBatch {
-    return DatadogEventService.mapServiceChecks(
-        organizationId = orgId.toLong(),
-        checks = checks
-    )
-}
-
 private suspend fun RoutingContext.reserveEventQuota(
     quotaService: BillingQuotaService,
     orgId: Int,
@@ -171,20 +170,6 @@ private suspend fun RoutingContext.reserveEventQuota(
         "dd_event",
         body.size.toLong(),
     )
-}
-
-private suspend fun insertServiceCheckBatchIfPresent(batch: QueuedServiceCheckBatch) {
-    if (batch.serviceChecks.isNotEmpty()) {
-        DatadogEventService.insertServiceCheckBatch(batch)
-    }
-}
-
-private fun touchServiceCheckHosts(orgId: Int, checks: List<DatadogServiceCheck>) {
-    val hosts = checks
-        .map { it.hostName }
-        .filter { it.isNotBlank() }
-        .toSet()
-    DatadogHostService.touchHostLastSeen(orgId, hosts)
 }
 
 private suspend fun ApplicationCall.respondInvalidPayload() {

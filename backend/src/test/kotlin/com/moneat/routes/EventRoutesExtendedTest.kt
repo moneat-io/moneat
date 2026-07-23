@@ -774,18 +774,22 @@ class EventRoutesExtendedTest {
     }
 
     @Test
-    fun `GET issue replays returns 200`() = testApplication {
-        val (userId, _) = seedUserWithProject()
-        coEvery { mockDashboardService.hasIssueAccess(userId, "issue-rep-1") } returns true
+    fun `GET issue replays returns 200 and preserves project scope`() = testApplication {
+        val (userId, projectId) = seedUserWithProject()
+        val projectResourceId = projectResourceId(projectId)
+        coEvery { mockDashboardService.hasProjectAccess(userId, projectId) } returns true
         coEvery {
-            mockDashboardService.getReplaysForIssue("issue-rep-1", 10)
+            mockDashboardService.getReplaysForIssue("issue-rep-1", 10, projectId)
         } returns emptyList()
 
         application { installTestApp() }
-        val response = client.get("/v1/issues/issue-rep-1/replays") {
+        val response = client.get("/v1/issues/issue-rep-1/replays?projectId=$projectResourceId") {
             withAuth(token(userId))
         }
         assertEquals(HttpStatusCode.OK, response.status)
+        coVerify(exactly = 1) {
+            mockDashboardService.getReplaysForIssue("issue-rep-1", 10, projectId)
+        }
     }
 
     @Test

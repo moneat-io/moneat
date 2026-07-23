@@ -62,6 +62,23 @@ class UptimeService(
         private const val HOURS_PER_WEEK = 168
         private const val HOURS_PER_MONTH = 720
         private const val TOKEN_BYTES_SIZE = 32
+        private const val MIN_RETRIES = 0
+        private const val MAX_RETRIES = 10
+        private const val MIN_RETRY_INTERVAL_SECONDS = 1
+        private const val MAX_RETRY_INTERVAL_SECONDS = 3600
+    }
+
+    private fun validateRetrySettings(retries: Int?, retryIntervalSeconds: Int?) {
+        require(retries == null || retries in MIN_RETRIES..MAX_RETRIES) {
+            "Retries must be between $MIN_RETRIES and $MAX_RETRIES"
+        }
+        require(
+            retryIntervalSeconds == null ||
+                retryIntervalSeconds in MIN_RETRY_INTERVAL_SECONDS..MAX_RETRY_INTERVAL_SECONDS
+        ) {
+            "Retry interval must be between $MIN_RETRY_INTERVAL_SECONDS and " +
+                "$MAX_RETRY_INTERVAL_SECONDS seconds"
+        }
     }
 
     /**
@@ -71,6 +88,7 @@ class UptimeService(
         organizationId: Int,
         request: CreateUptimeMonitorRequest
     ): UptimeMonitorResponse {
+        validateRetrySettings(request.retries, request.retryIntervalSeconds)
         // Check quota
         checkUptimeMonitorQuota(organizationId)
 
@@ -95,6 +113,7 @@ class UptimeService(
         organizationId: Int,
         request: UpdateUptimeMonitorRequest
     ): UptimeMonitorResponse? {
+        validateRetrySettings(request.retries, request.retryIntervalSeconds)
         val updated = uptimeMonitorRepository.update(monitorId, organizationId, request)
 
         return if (updated) getMonitor(monitorId, organizationId) else null

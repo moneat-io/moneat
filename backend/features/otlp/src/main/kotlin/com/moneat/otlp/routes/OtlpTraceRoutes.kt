@@ -19,6 +19,7 @@ package com.moneat.otlp.routes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.ingest.DecompressionService
+import com.moneat.ingestion.queue.admitWithQuotaRefund
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.calculateBillableBytes
 import com.moneat.otlp.services.OtlpApiKeyService
@@ -122,13 +123,14 @@ private suspend fun handleOtlpTraceIngest(
         return
     }
 
+    var reservedBillableBytes: Long? = null
     if (quotaService.isEnforcementEnabled()) {
-        val billableBytes = parsedSpans.calculateBillableBytes()
+        val billableBytes = parsedSpans.calculateBillableBytes().toLong()
         val reservation = quotaService.reserveUnits(
             organizationId = organizationId,
             requestedUnits = parsedSpans.size,
             eventType = "otlp_trace",
-            requestedBytes = billableBytes.toLong()
+            requestedBytes = billableBytes
         )
         if (!reservation.allowed) {
             call.respond(
@@ -137,6 +139,7 @@ private suspend fun handleOtlpTraceIngest(
             )
             return
         }
+        reservedBillableBytes = billableBytes
     }
 
     val queueKey = call.application.environment.config
@@ -144,10 +147,19 @@ private suspend fun handleOtlpTraceIngest(
         ?.getString()
         ?: DEFAULT_QUEUE_KEY
     val routedSpans = routeTraceSpans(organizationId, parsedSpans, otlpServiceRoutingService)
-    val accepted = traceService.enqueueTraces(
-        organizationId.toLong(),
-        routedSpans,
-        queueKey
+    val accepted = admitWithQuotaRefund(
+        refund = {
+            reservedBillableBytes?.let { billableBytes ->
+                quotaService.refundUnits(organizationId, parsedSpans.size, "otlp_trace", billableBytes)
+            }
+        },
+        admit = {
+            traceService.enqueueTraces(
+                organizationId.toLong(),
+                routedSpans,
+                queueKey
+            )
+        },
     )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
 }

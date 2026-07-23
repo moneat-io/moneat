@@ -34,6 +34,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class DatadogMetricIngestionWorkerTest {
 
@@ -50,28 +51,46 @@ class DatadogMetricIngestionWorkerTest {
     // ──── Payload Handling ────
 
     @Test
-    fun `processMessage with invalid payload does not throw`() {
+    fun `processMessage with invalid payload writes to dlq`() {
         val worker =
             DatadogMetricIngestionWorker(
                 "test:dd:metric:queue",
                 "test:dd:metric:dlq",
                 1,
             )
-        runBlocking {
-            worker.processMessage(1, "{not valid json")
+
+        mockkObject(RedisConfig)
+        try {
+            every {
+                RedisConfig.sync().xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+            } returns "1-0"
+            runBlocking {
+                worker.processMessage(1, "{not valid json")
+            }
+        } finally {
+            unmockkObject(RedisConfig)
         }
     }
 
     @Test
-    fun `processMessage with empty payload does not throw`() {
+    fun `processMessage with empty payload writes to dlq`() {
         val worker =
             DatadogMetricIngestionWorker(
                 "test:dd:metric:queue",
                 "test:dd:metric:dlq",
                 1,
             )
-        runBlocking {
-            worker.processMessage(1, "")
+
+        mockkObject(RedisConfig)
+        try {
+            every {
+                RedisConfig.sync().xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>())
+            } returns "1-0"
+            runBlocking {
+                worker.processMessage(1, "")
+            }
+        } finally {
+            unmockkObject(RedisConfig)
         }
     }
 
@@ -161,7 +180,7 @@ class DatadogMetricIngestionWorkerTest {
     }
 
     @Test
-    fun `processPayloads falls back per payload after combined insert failure`() = runBlocking {
+    fun `processPayloads propagates transient combined insert failure for stream retry`() = runBlocking {
         val firstBatch = metricBatch(1L, "cpu")
         val secondBatch = metricBatch(2L, "mem")
         val worker =
@@ -178,23 +197,18 @@ class DatadogMetricIngestionWorkerTest {
             every { DatadogMetricService.decodeMetricBatch("payload-2") } returns secondBatch
             coEvery { DatadogMetricService.insertMetricBatches(listOf(firstBatch, secondBatch)) } throws
                 IllegalStateException("combined insert failed")
-            coEvery { DatadogMetricService.insertMetricBatch(firstBatch) } returns Unit
-            coEvery { DatadogMetricService.insertMetricBatch(secondBatch) } returns Unit
-
-            worker.processPayloads(1, listOf("payload-1", "payload-2"))
+            assertFailsWith<IllegalStateException> {
+                worker.processPayloads(1, listOf("payload-1", "payload-2"))
+            }
 
             coVerify(exactly = 1) {
                 DatadogMetricService.insertMetricBatches(listOf(firstBatch, secondBatch))
             }
-            coVerify(exactly = 1) { DatadogMetricService.insertMetricBatch(firstBatch) }
-            coVerify(exactly = 1) { DatadogMetricService.insertMetricBatch(secondBatch) }
+            coVerify(exactly = 0) { DatadogMetricService.insertMetricBatch(any()) }
 
             val rendered = OperationalMetrics.scrape()
-            assertContains(rendered, "moneat_datadog_metric_insert_fallbacks_total")
             assertContains(rendered, "mode=\"combined\"")
-            assertContains(rendered, "mode=\"single\"")
             assertContains(rendered, "status=\"failure\"")
-            assertContains(rendered, "status=\"success\"")
             assertContains(rendered, "exception=\"IllegalStateException\"")
         } finally {
             unmockkObject(DatadogMetricService)

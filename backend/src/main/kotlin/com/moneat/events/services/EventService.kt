@@ -52,6 +52,7 @@ import com.moneat.shared.services.UsageTrackingService
 import com.moneat.utils.ClickHouseSqlUtils.doubleMapToSqlMap
 import com.moneat.utils.ClickHouseSqlUtils.escapeSql
 import com.moneat.utils.ClickHouseSqlUtils.mapToSqlMap
+import com.moneat.utils.normalizeUuidOrNull
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
@@ -92,10 +93,6 @@ class EventService(
         private const val FINGERPRINT_HASH_LENGTH = 16
         private const val MS_PER_SECOND = 1000.0
         private const val NS_PER_SECOND = 1_000_000_000.0
-        private const val UUID_SEG1 = 8
-        private const val UUID_SEG2 = 12
-        private const val UUID_SEG3 = 16
-        private const val UUID_SEG4 = 20
         private val OTLP_STACK_FRAME_PATTERN = Regex("""[\w.$/<>-]+\([^)]*\)""")
         private const val SENTRY_SOURCE = "sentry"
         private const val SERVICE_TAG = "service"
@@ -759,7 +756,13 @@ class EventService(
             feedbackContext?.string("associated_event_id")
                 ?: feedback.associatedEventId
                 ?: if (itemType == "user_report") feedback.eventId.orEmpty() else ""
-        val replayId = feedbackContext?.string("replay_id") ?: feedback.replayId ?: ""
+        val replayContext = feedback.contexts?.get("replay") as? JsonObject
+        val replayId = sequenceOf(
+            feedbackContext?.string("replay_id"),
+            replayContext?.string("replay_id"),
+            feedback.replayId,
+            feedback.tags?.get("replayId")
+        ).filterNotNull().firstOrNull(String::isNotBlank).orEmpty()
 
         val userId = feedback.user?.id ?: ""
         val userEmail = feedback.user?.email ?: contactEmail
@@ -842,7 +845,8 @@ class EventService(
         }
     }
 
-    private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
+    private fun JsonObject.string(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNull
 
     private fun SentrySession.toInsertData(projectId: Long): SessionInsertData? {
         val release = attrs?.release?.takeIf { it.isNotBlank() } ?: return null
@@ -963,7 +967,12 @@ class EventService(
         val startTs = replayEvent.replayStartTimestamp?.let { unixSecondsToMillis(it) } ?: ts
 
         val urls = replayEvent.urls?.take(MAX_REPLAY_URLS) ?: emptyList()
-        val errorIds = replayEvent.errorIds ?: emptyList()
+        val errorIds =
+            replayEvent.errorIds
+                .orEmpty()
+                .mapNotNull { errorId ->
+                    normalizeUuidOrNull(errorId) ?: errorId.trim().takeIf { it.isNotEmpty() }
+                }.distinct()
         val traceIds = replayEvent.traceIds ?: emptyList()
         val tags = replayEvent.tags?.let { JsonObject(it.mapValues { (_, v) -> JsonPrimitive(v) }).toString() } ?: "{}"
 
@@ -1315,20 +1324,8 @@ class EventService(
         return hash.joinToString("") { "%02x".format(it) }.take(FINGERPRINT_HASH_LENGTH)
     }
 
-    private fun normalizeUuid(value: String): String {
-        val trimmed = value.trim().lowercase()
-        val uuidRegex = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-        if (uuidRegex.matches(trimmed)) return trimmed
-
-        val hexRegex = Regex("^[0-9a-f]{32}$")
-        if (hexRegex.matches(trimmed)) {
-            return "${trimmed.substring(0, UUID_SEG1)}-${trimmed.substring(UUID_SEG1, UUID_SEG2)}" +
-                "-${trimmed.substring(UUID_SEG2, UUID_SEG3)}-${trimmed.substring(UUID_SEG3, UUID_SEG4)}" +
-                "-${trimmed.substring(UUID_SEG4)}"
-        }
-
-        return UUID.randomUUID().toString()
-    }
+    private fun normalizeUuid(value: String): String =
+        normalizeUuidOrNull(value) ?: UUID.randomUUID().toString()
 
     private suspend fun insertAiSpansAsLlmGenerations(
         projectId: Long,

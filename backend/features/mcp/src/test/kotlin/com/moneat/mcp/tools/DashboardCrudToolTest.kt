@@ -315,6 +315,45 @@ class DashboardCrudToolTest {
     }
 
     @Test
+    fun `list dashboard alerts returns alert configurations`() = runBlocking {
+        val dashboardId = seedDashboard()
+        val widgetId = seedWidget(dashboardId)
+        CreateDashboardAlertTool().execute(
+            JsonObject(
+                mapOf(
+                    "dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)),
+                    "widget_id" to JsonPrimitive(widgetResourceId(widgetId)),
+                    "name" to JsonPrimitive("CPU high"),
+                    "condition" to JsonPrimitive("gt"),
+                    "threshold" to JsonPrimitive(0.85),
+                )
+            ),
+            context
+        )
+
+        val result = ListDashboardAlertsTool().execute(
+            JsonObject(mapOf("dashboard_id" to JsonPrimitive(dashboardResourceId(dashboardId)))),
+            context
+        )
+
+        assertFalse(result.isError, result.content.first().text.orEmpty())
+        val alerts = json.parseToJsonElement(result.content.first().text.orEmpty()).jsonArray
+        assertEquals(1, alerts.size)
+        assertEquals("CPU high", alerts.single().jsonObject["name"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `list dashboard alerts reports missing dashboard`() = runBlocking {
+        val result = ListDashboardAlertsTool().execute(
+            JsonObject(mapOf("dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID))),
+            context,
+        )
+
+        assertTrue(result.isError)
+        assertEquals("Dashboard not found", result.content.first().text)
+    }
+
+    @Test
     fun `update dashboard alert can update duration priority and gte condition`() = runBlocking {
         val dashboardId = seedDashboard()
         val widgetId = seedWidget(dashboardId)
@@ -395,6 +434,11 @@ class DashboardCrudToolTest {
                 "dashboard_id is required",
             ),
             ToolCase(
+                ListDashboardAlertsTool(),
+                JsonObject(emptyMap()),
+                "dashboard_id is required",
+            ),
+            ToolCase(
                 DeleteDashboardAlertTool(),
                 JsonObject(mapOf("alert_id" to JsonPrimitive(MISSING_ALERT_RESOURCE_ID))),
                 "dashboard_id is required",
@@ -434,6 +478,11 @@ class DashboardCrudToolTest {
             ToolCase(
                 CreateDashboardAlertTool(),
                 JsonObject(alertArgs),
+                "Dashboard not found",
+            ),
+            ToolCase(
+                ListDashboardAlertsTool(),
+                JsonObject(mapOf("dashboard_id" to JsonPrimitive(MISSING_DASHBOARD_RESOURCE_ID))),
                 "Dashboard not found",
             ),
             ToolCase(

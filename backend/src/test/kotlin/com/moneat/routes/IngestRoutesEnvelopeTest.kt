@@ -25,7 +25,11 @@ import com.moneat.events.routes.ingestRoutes
 import com.moneat.events.routes.mapEnvelopeItemToQuotaType
 import com.moneat.events.routes.mapEnvelopeItemTypeToQuotaType
 import com.moneat.events.services.EventService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueCapacityException
+import com.moneat.ingestion.queue.IngestionQueueUnavailableException
 import com.moneat.logs.services.LogService
+import com.moneat.plugins.installErrorHandling
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
@@ -37,6 +41,7 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
@@ -49,6 +54,7 @@ import io.mockk.coVerify
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.lettuce.core.RedisException
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -596,6 +602,94 @@ class IngestRoutesEnvelopeTest {
 
             assertEquals(HttpStatusCode.TooManyRequests, response.status)
             assertTrue(response.bodyAsText().contains("Quota exceeded"))
+        }
+
+    @Test
+    fun `envelope capacity rejection refunds quota and preserves retryable 429`() =
+        testApplication {
+            var refundedUnits: Map<String, Int>? = null
+            var refundedBytes: Map<String, Long>? = null
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                installErrorHandling()
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, _, _ ->
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                            refundQuota = { _, unitsByType, bytesByType ->
+                                refundedUnits = unitsByType
+                                refundedBytes = bytesByType
+                            }
+                            enqueueEnvelope = { _, _ ->
+                                throw IngestionQueueCapacityException(IngestionPipeline.EVENTS, 100)
+                            }
+                        },
+                    )
+                }
+            }
+
+            val payload = """{"event_id":"txn-capacity","type":"transaction"}""".toByteArray()
+            val response = client.post("/api/$testProjectId/envelope/") {
+                contentType(ContentType.Application.OctetStream)
+                header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                setBody(buildEnvelope("evt-capacity", listOf("transaction" to payload)))
+            }
+
+            assertEquals(HttpStatusCode.TooManyRequests, response.status)
+            assertEquals("5", response.headers[HttpHeaders.RetryAfter])
+            assertEquals(mapOf("transaction" to 1), refundedUnits)
+            assertEquals(mapOf("transaction" to payload.size.toLong()), refundedBytes)
+        }
+
+    @Test
+    fun `envelope redis failure refunds quota and preserves retryable 503`() =
+        testApplication {
+            var refundCount = 0
+            environment {
+                config = MapApplicationConfig("ingest.queueKey" to "test:ingest:q")
+            }
+            application {
+                install(ContentNegotiation) { json() }
+                installErrorHandling()
+                routing {
+                    ingestRoutes(
+                        dependencies = IngestRouteDependencies().apply {
+                            isQuotaEnforcementEnabled = { true }
+                            reserveEnvelopeQuota = { orgId, _, _ ->
+                                QuotaReservationResult(allowed = true, usage = emptyUsage(orgId))
+                            }
+                            refundQuota = { _, _, _ -> refundCount += 1 }
+                            enqueueEnvelope = { _, _ ->
+                                throw IngestionQueueUnavailableException(
+                                    IngestionPipeline.EVENTS,
+                                    RedisException("down"),
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+
+            val response = client.post("/api/$testProjectId/envelope/") {
+                contentType(ContentType.Application.OctetStream)
+                header("X-Sentry-Auth", "Sentry sentry_key=$testPublicKey, sentry_version=7")
+                setBody(
+                    buildEnvelope(
+                        "evt-unavailable",
+                        listOf("event" to """{"event_id":"evt-unavailable"}""".toByteArray()),
+                    )
+                )
+            }
+
+            assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+            assertEquals("5", response.headers[HttpHeaders.RetryAfter])
+            assertEquals(1, refundCount)
         }
 
     @Test

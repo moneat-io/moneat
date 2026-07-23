@@ -42,6 +42,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.SerializationException
 import mu.KLogger
 import java.io.IOException
 import java.time.Duration
@@ -240,22 +241,47 @@ class RedisQueueWorker(
     ) {
         val messages = readStreamMessages(workerId, conn)
         if (messages.isEmpty()) return
-        val queuedMessages = messages.mapNotNull { message ->
-            val payload = IngestionQueueClient.payloadField(message.body) ?: return@mapNotNull null
-            QueuedIngestionMessage(
-                id = message.id,
-                payload = payload,
-                deliveryCount = message.deliveredCount ?: 1L,
-            )
-        }
-        if (queuedMessages.isEmpty()) return
         val batchProcessor = processBatch
-        if (batchProcessor != null && queuedMessages.size > 1) {
-            processStreamBatch(workerId, conn, queuedMessages, batchProcessor)
-        } else {
-            queuedMessages.forEach { message ->
-                processStreamMessage(workerId, conn, message)
+        messages.forEach { streamMessage ->
+            val payload = IngestionQueueClient.payloadField(streamMessage.body)
+            if (payload == null) {
+                handleMalformedStreamMessage(workerId, conn, streamMessage)
+                return@forEach
             }
+            val message = QueuedIngestionMessage(
+                id = streamMessage.id,
+                payload = payload,
+                deliveryCount = streamMessage.deliveredCount ?: 1L,
+            )
+            if (batchProcessor == null) {
+                processStreamMessage(workerId, conn, message)
+            } else {
+                processStreamBatch(workerId, conn, listOf(message), batchProcessor)
+            }
+        }
+    }
+
+    private fun handleMalformedStreamMessage(
+        workerId: Int,
+        conn: StatefulRedisConnection<String, String>,
+        message: StreamMessage<String, String>,
+    ) {
+        val error = IllegalArgumentException("Redis stream entry is missing the payload field")
+        val pushed = IngestionQueueClient.pushToDlq(
+            logger = logger,
+            request = IngestionDlqRequest(
+                spec = spec,
+                payload = message.body.toString(),
+                workerId = workerId,
+                cause = error,
+                streamId = message.id,
+            ),
+        )
+        if (pushed) {
+            ack(
+                conn,
+                listOf(QueuedIngestionMessage(message.id, message.body.toString())),
+            )
         }
     }
 
@@ -274,15 +300,9 @@ class RedisQueueWorker(
         messages: List<QueuedIngestionMessage>,
         batchProcessor: suspend (workerId: Int, messages: List<QueuedIngestionMessage>) -> Unit,
     ) {
-        try {
-            withClickHouseDeduplication(messages) {
-                batchProcessor(workerId, messages)
-            }
-            ack(conn, messages)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            handleStreamFailure(workerId, conn, messages, e)
+        check(messages.size == 1) { "Redis stream retries require one stable message per processing unit" }
+        processWithRetry(workerId, conn, messages.single()) { message ->
+            batchProcessor(workerId, listOf(message))
         }
     }
 
@@ -291,43 +311,64 @@ class RedisQueueWorker(
         conn: StatefulRedisConnection<String, String>,
         message: QueuedIngestionMessage,
     ) {
-        try {
-            withClickHouseDeduplication(listOf(message)) {
-                processMessage(workerId, message.payload)
-            }
-            ack(conn, listOf(message))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            handleStreamFailure(workerId, conn, listOf(message), e)
+        processWithRetry(workerId, conn, message) { current ->
+            processMessage(workerId, current.payload)
         }
     }
 
-    private suspend fun handleStreamFailure(
+    private suspend fun processWithRetry(
         workerId: Int,
         conn: StatefulRedisConnection<String, String>,
-        messages: List<QueuedIngestionMessage>,
+        initialMessage: QueuedIngestionMessage,
+        processor: suspend (QueuedIngestionMessage) -> Unit,
+    ) {
+        var message = initialMessage
+        while (scope.isActive) {
+            try {
+                withClickHouseDeduplication(listOf(message)) {
+                    IngestionBatchLimiter.withPermit(spec.pipeline) {
+                        processor(message)
+                    }
+                }
+                ack(conn, listOf(message))
+                return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                if (shouldMoveToDlq(e, message.deliveryCount, spec.maxDeliveries)) {
+                    moveToDlqWithRetry(workerId, conn, message, e)
+                    return
+                }
+                OperationalMetrics.recordWorkerProcessingFailure(spec.pipeline.workerName, workerId, e)
+                delay(ERROR_RETRY_DELAY_MS)
+                message = message.copy(deliveryCount = message.deliveryCount + 1)
+            }
+        }
+    }
+
+    private suspend fun moveToDlqWithRetry(
+        workerId: Int,
+        conn: StatefulRedisConnection<String, String>,
+        message: QueuedIngestionMessage,
         cause: Throwable,
     ) {
-        val shouldDlq = messages.any { message -> message.deliveryCount >= spec.maxDeliveries }
-        if (shouldDlq) {
-            messages.forEach { message ->
-                IngestionQueueClient.pushToDlq(
-                    logger = logger,
-                    request = IngestionDlqRequest(
-                        spec = spec,
-                        payload = message.payload,
-                        workerId = workerId,
-                        cause = cause,
-                        streamId = message.id,
-                    ),
-                )
+        while (scope.isActive) {
+            val pushed = IngestionQueueClient.pushToDlq(
+                logger = logger,
+                request = IngestionDlqRequest(
+                    spec = spec,
+                    payload = message.payload,
+                    workerId = workerId,
+                    cause = cause,
+                    streamId = message.id,
+                ),
+            )
+            if (pushed) {
+                ack(conn, listOf(message))
+                return
             }
-            ack(conn, messages)
-            return
+            delay(ERROR_RETRY_DELAY_MS)
         }
-        OperationalMetrics.recordWorkerProcessingFailure(spec.pipeline.workerName, workerId, cause)
-        delay(ERROR_RETRY_DELAY_MS)
     }
 
     private fun ack(
@@ -369,6 +410,13 @@ class RedisQueueWorker(
             streamKey = spec.dlqStreamKey,
             streamType = "dlq",
         )
+        OperationalMetrics.registerIngestionQueue(
+            pipeline = spec.pipeline,
+            streamKey = spec.streamKey,
+            dlqStreamKey = spec.dlqStreamKey,
+            consumerGroup = spec.consumerGroup,
+            capacity = spec.maxPendingEntries,
+        )
     }
 
     private fun consumerName(workerId: Int): String =
@@ -393,3 +441,12 @@ class RedisQueueWorker(
         }
     }
 }
+
+internal fun shouldMoveToDlq(
+    cause: Throwable,
+    deliveryCount: Long,
+    maxDeliveries: Int,
+): Boolean =
+    cause is SerializationException ||
+        cause is IllegalArgumentException ||
+        deliveryCount >= maxDeliveries

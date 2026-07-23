@@ -32,6 +32,7 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.services.WorkflowService
+import io.mockk.coEvery
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -93,6 +94,7 @@ class MonitorAlertServiceExtendedTest {
 
         incidentService = mockk(relaxed = true)
         workflowService = mockk(relaxed = true)
+        coEvery { workflowService.publishAlertTriggered(any()) } returns true
 
         service = MonitorAlertService(
             incidentService = incidentService,

@@ -2,7 +2,7 @@ import {datadogRum} from '@datadog/browser-rum'
 import {datadogLogs} from '@datadog/browser-logs'
 
 export interface DatadogInitOptions {
-  applicationId: string
+  applicationId?: string
   clientToken: string
   proxyUrl?: string
   backendUrl?: string
@@ -27,7 +27,7 @@ function isConfigured(value: string | undefined): value is string {
 }
 
 export function initDatadog(options: DatadogInitOptions): void {
-  if (!isConfigured(options.applicationId) || !isConfigured(options.clientToken)) {
+  if (!isConfigured(options.clientToken)) {
     return
   }
 
@@ -38,21 +38,23 @@ export function initDatadog(options: DatadogInitOptions): void {
   const proxyFn = ({path, parameters}: {path: string; parameters: string}) =>
     joinUrl(ddProxyUrl, path) + (parameters ? `?${parameters}` : '')
 
-  datadogRum.init({
-    applicationId: options.applicationId,
-    clientToken: options.clientToken,
-    site: 'datadoghq.com',
-    proxy: proxyFn,
-    service,
-    env,
-    version,
-    sessionSampleRate: 100,
-    sessionReplaySampleRate: 100,
-    trackUserInteractions: true,
-    trackResources: true,
-    trackLongTasks: true,
-    defaultPrivacyLevel: 'mask-user-input',
-  })
+  if (isConfigured(options.applicationId)) {
+    datadogRum.init({
+      applicationId: options.applicationId,
+      clientToken: options.clientToken,
+      site: 'datadoghq.com',
+      proxy: proxyFn,
+      service,
+      env,
+      version,
+      sessionSampleRate: 100,
+      sessionReplaySampleRate: 100,
+      trackUserInteractions: true,
+      trackResources: true,
+      trackLongTasks: true,
+      defaultPrivacyLevel: 'mask-user-input',
+    })
+  }
 
   datadogLogs.init({
     clientToken: options.clientToken,
@@ -62,6 +64,7 @@ export function initDatadog(options: DatadogInitOptions): void {
     env,
     version,
     forwardErrorsToLogs: true,
+    forwardConsoleLogs: ['error'],
     sessionSampleRate: 100,
   })
 }

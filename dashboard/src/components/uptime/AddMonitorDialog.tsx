@@ -138,7 +138,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
     method: 'GET',
     intervalSeconds: 60,
     timeoutSeconds: 30,
-    retries: 0,
+    retries: 1,
   })
 
   const createMutation = useMutation({
@@ -164,7 +164,7 @@ export default function AddMonitorDialog({open, onOpenChange}: AddMonitorDialogP
       method: 'GET',
       intervalSeconds: 60,
       timeoutSeconds: 30,
-      retries: 0,
+      retries: 1,
     })
     onOpenChange(false)
   }

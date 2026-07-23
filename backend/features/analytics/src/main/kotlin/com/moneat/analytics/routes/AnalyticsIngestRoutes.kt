@@ -30,6 +30,7 @@ import com.moneat.config.RedisConfig
 import com.moneat.events.services.EventService
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.IngestionQueueAdmissionException
 import com.moneat.shared.models.ProjectKeys
 import com.moneat.shared.models.Projects
 import com.moneat.shared.services.GeoIpService
@@ -239,6 +240,11 @@ private suspend fun processAndEnqueueEvent(
     val message = json.encodeToString(enriched)
     try {
         enqueueEvent(message)
+    } catch (e: IngestionQueueAdmissionException) {
+        quotaReservation.reservedOrganizationId?.let { orgId ->
+            quotaService.refundUnits(orgId, 1, "analytics_pageview", 0)
+        }
+        throw e
     } catch (e: RuntimeException) {
         quotaReservation.reservedOrganizationId?.let { orgId ->
             quotaService.refundUnits(orgId, 1, "analytics_pageview", 0)

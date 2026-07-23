@@ -18,6 +18,9 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
+import com.moneat.datadog.rethrowIfQueueAdmission
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DdDebuggerDiagnostic
@@ -68,11 +71,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerInput(
 
         val entries = json.decodeFromString<List<DdDebuggerInput>>(body)
         if (!reserveDebuggerQuota(quotaService, organizationId, entries.size, bytes)) return
-        val count = DebuggerIngestionService.enqueueDebuggerLogs(organizationId, entries)
+        val count = admitDebuggerWithQuotaRefund(quotaService, organizationId, entries.size, bytes) {
+            DebuggerIngestionService.enqueueDebuggerLogs(organizationId, entries)
+        }
 
         logger.debug { "Enqueued $count debugger entries for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process debugger input" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -89,11 +95,14 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleDebuggerDiagnost
 
         val entries = json.decodeFromString<List<DdDebuggerDiagnostic>>(body)
         if (!reserveDebuggerQuota(quotaService, organizationId, entries.size, bytes)) return
-        val count = DebuggerIngestionService.enqueueDiagnostics(organizationId, entries)
+        val count = admitDebuggerWithQuotaRefund(quotaService, organizationId, entries.size, bytes) {
+            DebuggerIngestionService.enqueueDiagnostics(organizationId, entries)
+        }
 
         logger.debug { "Enqueued $count debugger diagnostics for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process debugger diagnostics" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -114,3 +123,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.reserveDebuggerQuota(
         requestedBytes = bytes.size.toLong(),
     )
 }
+
+private inline fun <T> admitDebuggerWithQuotaRefund(
+    quotaService: BillingQuotaService,
+    organizationId: Int,
+    requestedUnits: Int,
+    bytes: ByteArray,
+    admit: () -> T,
+): T =
+    admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(organizationId, requestedUnits, "dd_debugger", bytes.size.toLong()),
+        admit,
+    )

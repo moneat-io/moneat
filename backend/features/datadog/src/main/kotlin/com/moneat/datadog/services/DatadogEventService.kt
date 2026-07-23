@@ -32,6 +32,7 @@ import com.moneat.utils.TimeConstants.MILLIS_PER_SECOND_LONG
 
 private val logger = KotlinLogging.logger {}
 private const val EVENT_QUEUE_KEY = "moneat:infra_events:queue"
+private const val SERVICE_CHECK_QUEUE_KEY = "moneat:service_checks:queue"
 private const val ERROR_BODY_MAX_LEN = 600
 
 @Serializable
@@ -157,26 +158,43 @@ object DatadogEventService {
         return batch.events.size
     }
 
+    suspend fun enqueueServiceChecks(
+        organizationId: Long,
+        checks: List<DatadogServiceCheck>,
+        queueKey: String = SERVICE_CHECK_QUEUE_KEY,
+    ): Int {
+        val batch = mapServiceChecks(organizationId, checks)
+        if (batch.serviceChecks.isEmpty()) return 0
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_SERVICE_CHECKS, queueKey, json.encodeToString(batch))
+        logger.debug { "Enqueued ${batch.serviceChecks.size} DD service checks for org $organizationId" }
+        return batch.serviceChecks.size
+    }
+
     suspend fun insertEventBatch(batch: QueuedEventBatch) {
-        if (batch.events.isEmpty()) return
+        insertEventBatches(listOf(batch))
+    }
+
+    suspend fun insertEventBatches(batches: List<QueuedEventBatch>) {
+        val rowsToInsert = batches.flatMap { batch -> batch.events.map { event -> batch.organizationId to event } }
+        if (rowsToInsert.isEmpty()) return
         val db = ClickHouseClient.getDatabase()
 
-        val rows = batch.events.joinToString(",\n") { e ->
-            val tagsMap = e.tags.entries.joinToString(",") { (k, v) ->
+        val rows = rowsToInsert.joinToString(",\n") { (organizationId, event) ->
+            val tagsMap = event.tags.entries.joinToString(",") { (k, v) ->
                 "'${escapeSql(k)}','${escapeSql(v)}'"
             }
             """(
-                ${batch.organizationId},
-                '${escapeSql(e.title)}',
-                '${escapeSql(e.text)}',
-                fromUnixTimestamp64Milli(${e.timestampMs}),
-                '${escapeSql(e.priority)}',
-                '${escapeSql(e.host)}',
+                $organizationId,
+                '${escapeSql(event.title)}',
+                '${escapeSql(event.text)}',
+                fromUnixTimestamp64Milli(${event.timestampMs}),
+                '${escapeSql(event.priority)}',
+                '${escapeSql(event.host)}',
                 map($tagsMap),
-                '${escapeSql(e.alertType)}',
-                '${escapeSql(e.aggregationKey)}',
-                '${escapeSql(e.sourceTypeName)}',
-                '${escapeSql(e.deviceName)}'
+                '${escapeSql(event.alertType)}',
+                '${escapeSql(event.aggregationKey)}',
+                '${escapeSql(event.sourceTypeName)}',
+                '${escapeSql(event.deviceName)}'
             )"""
         }
 
@@ -200,27 +218,34 @@ object DatadogEventService {
     suspend fun insertServiceCheckBatch(
         batch: QueuedServiceCheckBatch
     ) {
-        if (batch.serviceChecks.isEmpty()) return
+        insertServiceCheckBatches(listOf(batch))
+    }
+
+    suspend fun insertServiceCheckBatches(batches: List<QueuedServiceCheckBatch>) {
+        val rowsToInsert = batches.flatMap { batch ->
+            batch.serviceChecks.map { serviceCheck -> batch.organizationId to serviceCheck }
+        }
+        if (rowsToInsert.isEmpty()) return
         val db = ClickHouseClient.getDatabase()
 
-        val rows = batch.serviceChecks.joinToString(",\n") { sc ->
-            val tagsMap = sc.tags.entries.joinToString(",") { (k, v) ->
+        val rows = rowsToInsert.joinToString(",\n") { (organizationId, serviceCheck) ->
+            val tagsMap = serviceCheck.tags.entries.joinToString(",") { (k, v) ->
                 "'${escapeSql(k)}','${escapeSql(v)}'"
             }
-            val statusStr = when (sc.status) {
+            val statusStr = when (serviceCheck.status) {
                 0 -> "ok"
                 1 -> "warning"
                 2 -> "critical"
                 else -> "unknown"
             }
             """(
-                ${batch.organizationId},
-                '${escapeSql(sc.checkName)}',
-                '${escapeSql(sc.host)}',
+                $organizationId,
+                '${escapeSql(serviceCheck.checkName)}',
+                '${escapeSql(serviceCheck.host)}',
                 '$statusStr',
-                fromUnixTimestamp64Milli(${sc.timestampMs}),
+                fromUnixTimestamp64Milli(${serviceCheck.timestampMs}),
                 map($tagsMap),
-                '${escapeSql(sc.message)}'
+                '${escapeSql(serviceCheck.message)}'
             )"""
         }
 

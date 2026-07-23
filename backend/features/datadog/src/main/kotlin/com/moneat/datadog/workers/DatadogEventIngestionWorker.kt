@@ -17,12 +17,15 @@
 package com.moneat.datadog.workers
 
 import com.moneat.datadog.services.DatadogEventService
+import com.moneat.datadog.services.DatadogHostService
+import com.moneat.datadog.services.QueuedEventBatch
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueSettings
+import com.moneat.ingestion.queue.QueuedIngestionMessage
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.pushToDlq
-import com.moneat.utils.suspendRunCatching
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -42,7 +45,12 @@ class DatadogEventIngestionWorker(
                 "$workerCount workers, queue=$queueKey"
         }
         val spec = IngestionQueueSettings.spec(IngestionPipeline.DD_EVENTS, queueKey, dlqKey, workerCount)
-        queueWorker = RedisQueueWorker(spec, logger, ::processMessage).also { it.start() }
+        queueWorker = RedisQueueWorker(
+            spec = spec,
+            logger = logger,
+            processMessage = ::processMessage,
+            processBatch = ::processBatch,
+        ).also { it.start() }
     }
 
     fun stop() {
@@ -54,13 +62,44 @@ class DatadogEventIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        suspendRunCatching {
-            val batch =
-                DatadogEventService.decodeEventBatch(payload)
-            DatadogEventService.insertEventBatch(batch)
+        processPayloads(workerId, listOf(payload))
+    }
+
+    private suspend fun processBatch(workerId: Int, messages: List<QueuedIngestionMessage>) {
+        processPayloads(workerId, messages.map { it.payload })
+    }
+
+    internal suspend fun processPayloads(workerId: Int, payloads: List<String>) {
+        val batches = payloads.mapNotNull { payload -> decodePayload(workerId, payload) }
+        DatadogEventService.insertEventBatches(batches)
+        touchHostsBestEffort(batches)
+        repeat(batches.size) {
             OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
-        }.getOrElse { e ->
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
+        }
+    }
+
+    private fun decodePayload(workerId: Int, payload: String): QueuedEventBatch? =
+        try {
+            DatadogEventService.decodeEventBatch(payload)
+        } catch (error: SerializationException) {
+            if (!pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)) throw error
+            null
+        } catch (error: IllegalArgumentException) {
+            if (!pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)) throw error
+            null
+        }
+
+    private fun touchHostsBestEffort(batches: List<QueuedEventBatch>) {
+        batches.groupBy { it.organizationId }.forEach { (organizationId, organizationBatches) ->
+            val hosts = organizationBatches
+                .flatMap { batch -> batch.events.map { event -> event.host } }
+                .filter { it.isNotBlank() }
+                .toSet()
+            runCatching {
+                DatadogHostService.touchHostLastSeen(organizationId.toInt(), hosts)
+            }.onFailure { error ->
+                logger.warn(error) { "Failed to update host freshness after event persistence" }
+            }
         }
     }
 }

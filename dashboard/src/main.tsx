@@ -86,7 +86,7 @@ if (analyticsKey) {
 // Data is sent to Moneat's DD-compatible intake via the proxy parameter.
 const datadogApplicationId = configuredEnv(import.meta.env.VITE_DD_APPLICATION_ID)
 const datadogClientToken = configuredEnv(import.meta.env.VITE_DD_CLIENT_TOKEN)
-if (datadogApplicationId && datadogClientToken) {
+if (datadogClientToken) {
   const {initDatadog} = await import('./lib/datadog')
   initDatadog({
     applicationId: datadogApplicationId,

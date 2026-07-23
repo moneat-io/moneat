@@ -33,6 +33,8 @@ private val uptimeService = UptimeService(BillingQuotaService(), UptimeMonitorRe
 private const val DEFAULT_HEARTBEAT_HOURS = 24
 private const val MAX_HEARTBEAT_HOURS = 168
 private const val DEFAULT_INTERVAL = 60
+private const val DEFAULT_RETRIES = 1
+private const val DEFAULT_RETRY_INTERVAL_SECONDS = 60
 private const val MILLIS_PER_HOUR = 3_600_000L
 
 class ListUptimeMonitorsTool : McpTool {
@@ -88,7 +90,9 @@ class GetMonitorHeartbeatsTool : McpTool {
     }
 }
 
-class CreateUptimeMonitorTool : McpTool {
+class CreateUptimeMonitorTool(
+    private val service: UptimeService = uptimeService,
+) : McpTool {
     override val name = "create_uptime_monitor"
     override val description = "Create a new uptime monitor"
     override val readOnly = false
@@ -103,7 +107,13 @@ class CreateUptimeMonitorTool : McpTool {
                 ),
                 "interval_seconds" to schemaNumber(
                     "Check interval in seconds (default 60)"
-                )
+                ),
+                "retries" to schemaInteger(
+                    "Retries after a failed check (default 1)"
+                ),
+                "retry_interval_seconds" to schemaInteger(
+                    "Seconds between failed-check retries (default 60)"
+                ),
             )
         ),
         required = listOf("name", "url", "type")
@@ -121,15 +131,29 @@ class CreateUptimeMonitorTool : McpTool {
             ?: return errorResult("type is required")
         val interval = args["interval_seconds"]?.jsonPrimitive?.intOrNull
             ?: DEFAULT_INTERVAL
+        val retries = if (args.containsKey("retries")) {
+            args["retries"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retries must be a valid integer")
+        } else {
+            DEFAULT_RETRIES
+        }
+        val retryInterval = if (args.containsKey("retry_interval_seconds")) {
+            args["retry_interval_seconds"]?.jsonPrimitive?.intOrNull
+                ?: return errorResult("retry_interval_seconds must be a valid integer")
+        } else {
+            DEFAULT_RETRY_INTERVAL_SECONDS
+        }
 
         val request =
             com.moneat.uptime.models.CreateUptimeMonitorRequest(
                 name = name,
                 url = url,
                 type = type,
-                intervalSeconds = interval
+                intervalSeconds = interval,
+                retries = retries,
+                retryIntervalSeconds = retryInterval,
             )
-        val monitor = uptimeService.createMonitor(
+        val monitor = service.createMonitor(
             context.organizationId,
             request
         )

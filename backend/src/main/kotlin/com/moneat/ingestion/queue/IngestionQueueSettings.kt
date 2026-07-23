@@ -23,9 +23,12 @@ private const val DEFAULT_STREAM_BATCH_SIZE = 50
 private const val DEFAULT_CLAIM_IDLE_MS = 300_000L
 private const val DEFAULT_MAX_DELIVERIES = 5
 private const val DEFAULT_READ_TIMEOUT_MS = 5_000L
-private const val DEFAULT_STREAM_MAX_LEN = 250_000L
+private const val DEFAULT_MAX_PENDING_ENTRIES = 250_000L
 private const val DEFAULT_DLQ_STREAM_MAX_LEN = 10_000L
+private const val DEFAULT_MAX_CONCURRENT_BATCHES = 2
 private const val MIN_STREAM_BATCH_SIZE = 1
+private const val QUEUE_KEY_SUFFIX = ":queue"
+private const val DLQ_KEY_SUFFIX = ":dlq"
 
 data class IngestionQueueSpec(
     val pipeline: IngestionPipeline,
@@ -37,11 +40,14 @@ data class IngestionQueueSpec(
     val claimIdleMs: Long,
     val maxDeliveries: Int,
     val readTimeoutMs: Long,
-    val streamMaxLen: Long,
+    val maxPendingEntries: Long,
     val dlqStreamMaxLen: Long,
 )
 
 object IngestionQueueSettings {
+    fun defaultDlqKey(queueKey: String): String =
+        queueKey.removeSuffix(QUEUE_KEY_SUFFIX) + DLQ_KEY_SUFFIX
+
     fun spec(
         pipeline: IngestionPipeline,
         queueKey: String,
@@ -51,7 +57,7 @@ object IngestionQueueSettings {
         val prefix = pipeline.envKey
         return IngestionQueueSpec(
             pipeline = pipeline,
-            workerCount = max(workerCount, 1),
+            workerCount = positiveInt("INGESTION_${prefix}_WORKER_COUNT", max(workerCount, 1)),
             streamKey = EnvConfig.get("INGESTION_${prefix}_STREAM_KEY") ?: "$queueKey:stream",
             dlqStreamKey = EnvConfig.get("INGESTION_${prefix}_DLQ_STREAM_KEY") ?: "$dlqKey:stream",
             consumerGroup = EnvConfig.get("INGESTION_${prefix}_CONSUMER_GROUP") ?: pipeline.consumerGroup,
@@ -59,7 +65,7 @@ object IngestionQueueSettings {
             claimIdleMs = positiveLong("INGESTION_${prefix}_CLAIM_IDLE_MS", DEFAULT_CLAIM_IDLE_MS),
             maxDeliveries = positiveInt("INGESTION_${prefix}_MAX_DELIVERIES", DEFAULT_MAX_DELIVERIES),
             readTimeoutMs = positiveLong("INGESTION_${prefix}_READ_TIMEOUT_MS", DEFAULT_READ_TIMEOUT_MS),
-            streamMaxLen = positiveLong("INGESTION_${prefix}_STREAM_MAXLEN", DEFAULT_STREAM_MAX_LEN),
+            maxPendingEntries = maxPendingEntries(prefix),
             dlqStreamMaxLen = positiveLong("INGESTION_${prefix}_DLQ_STREAM_MAXLEN", DEFAULT_DLQ_STREAM_MAX_LEN),
         )
     }
@@ -79,6 +85,17 @@ object IngestionQueueSettings {
 
     fun isSelected(pipeline: IngestionPipeline): Boolean =
         selectedPipelines()?.contains(pipeline) ?: true
+
+    fun maxConcurrentBatches(pipeline: IngestionPipeline): Int {
+        val globalDefault = positiveInt("INGESTION_MAX_CONCURRENT_BATCHES", DEFAULT_MAX_CONCURRENT_BATCHES)
+        return positiveInt("INGESTION_${pipeline.envKey}_MAX_CONCURRENT_BATCHES", globalDefault)
+    }
+
+    private fun maxPendingEntries(prefix: String): Long {
+        val globalDefault = positiveLong("INGESTION_QUEUE_MAX_PENDING_ENTRIES", DEFAULT_MAX_PENDING_ENTRIES)
+        val legacyDefault = positiveLong("INGESTION_${prefix}_STREAM_MAXLEN", globalDefault)
+        return positiveLong("INGESTION_${prefix}_MAX_PENDING_ENTRIES", legacyDefault)
+    }
 
     private fun positiveInt(
         key: String,

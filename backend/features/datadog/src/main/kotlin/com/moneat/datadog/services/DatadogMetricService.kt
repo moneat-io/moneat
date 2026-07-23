@@ -39,6 +39,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 private const val METRIC_QUEUE_KEY = "moneat:metrics:queue"
+private const val SKETCH_QUEUE_KEY = "moneat:sketches:queue"
 private const val ERROR_BODY_MAX_LEN = 600
 private const val PERCENTAGE_SCALE = 100.0
 private const val DD_DISK_IN_USE_METRIC = "system.disk.in_use"
@@ -209,6 +210,19 @@ object DatadogMetricService {
         return batch.metrics.size
     }
 
+    suspend fun enqueueSketches(
+        organizationId: Long,
+        payload: DatadogSketchPayload,
+        projectId: Long? = null,
+        queueKey: String = SKETCH_QUEUE_KEY,
+    ): Int {
+        val batch = mapSketches(organizationId, payload, projectId)
+        if (batch.sketches.isEmpty()) return 0
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_SKETCHES, queueKey, json.encodeToString(batch))
+        logger.debug { "Enqueued ${batch.sketches.size} DD sketches for org $organizationId" }
+        return batch.sketches.size
+    }
+
     suspend fun insertMetricBatch(batch: QueuedMetricBatch) {
         if (batch.metrics.isEmpty()) return
         val normalizedBatch = normalizeMetricBatchBestEffort(batch)
@@ -276,28 +290,35 @@ object DatadogMetricService {
         )
 
     suspend fun insertSketchBatch(batch: QueuedSketchBatch) {
-        if (batch.sketches.isEmpty()) return
+        insertSketchBatches(listOf(batch))
+    }
+
+    suspend fun insertSketchBatches(batches: List<QueuedSketchBatch>) {
+        val rowsToInsert = batches.flatMap { batch ->
+            batch.sketches.map { sketch -> batch to sketch }
+        }
+        if (rowsToInsert.isEmpty()) return
         val db = ClickHouseClient.getDatabase()
 
-        val rows = batch.sketches.joinToString(",\n") { s ->
-            val tagsMap = s.tags.entries.joinToString(",") { (k, v) ->
+        val rows = rowsToInsert.joinToString(",\n") { (batch, sketch) ->
+            val tagsMap = sketch.tags.entries.joinToString(",") { (k, v) ->
                 "'${escapeSql(k)}','${escapeSql(v)}'"
             }
-            val kArray = s.k.joinToString(",")
-            val nArray = s.n.joinToString(",")
+            val kArray = sketch.k.joinToString(",")
+            val nArray = sketch.n.joinToString(",")
             """(
                 ${batch.organizationId},
                 ${batch.projectId ?: 0L},
                 ${batch.projectId ?: 0L},
-                '${escapeSql(s.name)}',
-                fromUnixTimestamp64Milli(${s.timestampMs}),
-                '${escapeSql(s.host)}',
+                '${escapeSql(sketch.name)}',
+                fromUnixTimestamp64Milli(${sketch.timestampMs}),
+                '${escapeSql(sketch.host)}',
                 map($tagsMap),
-                ${s.count},
-                ${s.min},
-                ${s.max},
-                ${s.avg},
-                ${s.sum},
+                ${sketch.count},
+                ${sketch.min},
+                ${sketch.max},
+                ${sketch.avg},
+                ${sketch.sum},
                 [$kArray],
                 [$nArray]
             )"""

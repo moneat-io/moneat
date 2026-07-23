@@ -26,6 +26,7 @@ import com.moneat.events.services.EventService
 import com.moneat.events.services.IngestionWorker
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.admitWithQuotaRefund
 import com.moneat.logs.models.LogIngestEntry
 import com.moneat.logs.services.LogService
 import com.moneat.shared.services.ProjectIdResolver
@@ -71,6 +72,23 @@ class IngestRouteDependencies {
         { orgId, units, bytes -> quotaService.reserveUnits(orgId, units, "log", bytes) }
     var reserveSingleQuota: (Int, Int, String, Long) -> QuotaReservationResult =
         { orgId, units, eventType, bytes -> quotaService.reserveUnits(orgId, units, eventType, bytes) }
+    var refundQuota: (Int, Map<String, Int>, Map<String, Long>) -> Unit =
+        { orgId, unitsByType, bytesByType -> quotaService.refundUnitsBatch(orgId, unitsByType, bytesByType) }
+}
+
+private data class ParsedEnvelope(
+    val envelope: SentryEnvelope,
+    val bytes: ByteArray,
+)
+
+private data class ReservedQuota(
+    val organizationId: Int? = null,
+    val unitsByType: Map<String, Int> = emptyMap(),
+    val bytesByType: Map<String, Long> = emptyMap(),
+) {
+    fun refund(dependencies: IngestRouteDependencies) {
+        organizationId?.let { dependencies.refundQuota(it, unitsByType, bytesByType) }
+    }
 }
 
 private fun sha256HexPrefix(bytes: ByteArray, maxHexChars: Int): String {
@@ -117,7 +135,7 @@ private suspend fun RoutingContext.handleEnvelopeIngest(dependencies: IngestRout
         return
     }
 
-    suspendRunCatching {
+    val parsed = suspendRunCatching {
         val contentEncoding = call.request.header("Content-Encoding")
         val bodyBytes = call.receive<ByteArray>()
         val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
@@ -128,28 +146,35 @@ private suspend fun RoutingContext.handleEnvelopeIngest(dependencies: IngestRout
         }
         val envelope = SentryEnvelope.parse(decompressedBytes)
         logger.debug { "Envelope parsed successfully, items: ${envelope.items.size}" }
-        if (!reserveEnvelopeQuota(projectId, envelope, dependencies)) return
-        dependencies.enqueueEnvelope(queueKey, IngestionWorker.encodeMessage(projectId, decompressedBytes))
-        call.respond(HttpStatusCode.Accepted, mapOf("id" to envelope.eventId))
+        ParsedEnvelope(envelope, decompressedBytes)
     }.getOrElse { e ->
         logger.error(e) { "Failed to process envelope: ${e.message}" }
         call.respond(
             HttpStatusCode.BadRequest,
             DetailedErrorResponse("Invalid envelope format", e.message ?: "Unknown error")
         )
+        return
     }
+    val reservedQuota = reserveEnvelopeQuota(projectId, parsed.envelope, dependencies) ?: return
+    admitWithQuotaRefund(
+        refund = { reservedQuota.refund(dependencies) },
+        admit = {
+            dependencies.enqueueEnvelope(queueKey, IngestionWorker.encodeMessage(projectId, parsed.bytes))
+        },
+    )
+    call.respond(HttpStatusCode.Accepted, mapOf("id" to parsed.envelope.eventId))
 }
 
 private suspend fun RoutingContext.reserveEnvelopeQuota(
     projectId: Long,
     envelope: SentryEnvelope,
     dependencies: IngestRouteDependencies,
-): Boolean {
-    if (!dependencies.isQuotaEnforcementEnabled()) return true
+): ReservedQuota? {
+    if (!dependencies.isQuotaEnforcementEnabled()) return ReservedQuota()
     val orgId = dependencies.eventService.getOrganizationIdForProject(projectId)
     if (orgId == null) {
         call.respond(HttpStatusCode.NotFound, ErrorResponse(PROJECT_ORGANIZATION_NOT_FOUND))
-        return false
+        return null
     }
     val groupedReservations =
         envelope.items
@@ -164,12 +189,14 @@ private suspend fun RoutingContext.reserveEnvelopeQuota(
                 }
             }
     val reservation = dependencies.reserveEnvelopeQuota(orgId, groupedReservations, groupedBytes)
-    if (reservation.allowed) return true
+    if (reservation.allowed) {
+        return ReservedQuota(orgId, groupedReservations, groupedBytes)
+    }
     call.respond(
         HttpStatusCode.TooManyRequests,
         ErrorResponse("Quota exceeded: ${reservation.reason}")
     )
-    return false
+    return null
 }
 
 private suspend fun RoutingContext.handleLogIngest(dependencies: IngestRouteDependencies) {
@@ -202,10 +229,13 @@ private suspend fun RoutingContext.handleLogIngest(dependencies: IngestRouteDepe
         call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
         return
     }
-    if (!reserveLogQuota(organizationId, entries, dependencies)) return
+    val reservedQuota = reserveLogQuota(organizationId, entries, dependencies) ?: return
     val queueKey = call.application.environment.config.propertyOrNull("logs.queueKey")?.getString()
         ?: "moneat:logs:queue"
-    val accepted = dependencies.logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey)
+    val accepted = admitWithQuotaRefund(
+        refund = { reservedQuota.refund(dependencies) },
+        admit = { dependencies.logService.enqueueSdkLogs(organizationId.toLong(), entries, queueKey) },
+    )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
 }
 
@@ -231,16 +261,22 @@ private suspend fun RoutingContext.reserveLogQuota(
     organizationId: Int,
     entries: List<LogIngestEntry>,
     dependencies: IngestRouteDependencies,
-): Boolean {
-    if (!dependencies.isQuotaEnforcementEnabled()) return true
+): ReservedQuota? {
+    if (!dependencies.isQuotaEnforcementEnabled()) return ReservedQuota()
     val billableBytes = dependencies.logService.estimateBillableBytes(entries)
     val reservation = dependencies.reserveLogQuota(organizationId, entries.size, billableBytes)
-    if (reservation.allowed) return true
+    if (reservation.allowed) {
+        return ReservedQuota(
+            organizationId = organizationId,
+            unitsByType = mapOf("log" to entries.size),
+            bytesByType = mapOf("log" to billableBytes),
+        )
+    }
     call.respond(
         HttpStatusCode.TooManyRequests,
         ErrorResponse("Quota exceeded: ${reservation.reason}")
     )
-    return false
+    return null
 }
 
 private suspend fun RoutingContext.handleStoreIngest(dependencies: IngestRouteDependencies) {

@@ -26,7 +26,7 @@ import com.moneat.datadog.models.DatadogSketchPoint
 import com.moneat.monitoring.OperationalMetrics
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.HttpStatusCode
-import io.lettuce.core.XAddArgs
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.every
@@ -204,7 +204,7 @@ class DatadogMetricServiceTest {
     @Test
     fun `enqueueMetrics serializes project id in queued batch`() = runBlocking {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = slot<String>()
         val payload = DatadogMetricSeriesV1(
             series = listOf(
                 DatadogMetricV1(
@@ -217,7 +217,17 @@ class DatadogMetricServiceTest {
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd("test:dd:metric:queue:stream", any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
+            every {
+                redis.eval<String>(
+                    any<String>(),
+                    ScriptOutputType.VALUE,
+                    arrayOf("test:dd:metric:queue:stream"),
+                    any<String>(),
+                    capture(queuedPayload),
+                    "dd-metrics",
+                    any<String>(),
+                )
+            } returns "1-0"
 
             val count = DatadogMetricService.enqueueMetrics(
                 organizationId = 42L,
@@ -226,7 +236,7 @@ class DatadogMetricServiceTest {
                 queueKey = "test:dd:metric:queue",
             )
 
-            val batch = DatadogMetricService.decodeMetricBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = DatadogMetricService.decodeMetricBatch(queuedPayload.captured)
             assertEquals(1, count)
             assertEquals(42L, batch.organizationId)
             assertEquals(7L, batch.projectId)
@@ -234,6 +244,50 @@ class DatadogMetricServiceTest {
             val rendered = OperationalMetrics.scrape()
             assertContains(rendered, "moneat_datadog_metric_payloads_queued_total")
             assertContains(rendered, "moneat_datadog_metric_points_queued_total")
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueSketches serializes sketches for the dedicated queue`() = runBlocking {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+        val payload = DatadogSketchPayload(
+            sketches = listOf(
+                DatadogSketch(
+                    metric = "latency",
+                    distributions = listOf(DatadogSketchPoint(ts = 1, cnt = 1)),
+                )
+            )
+        )
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every {
+                redis.eval<String>(
+                    any<String>(),
+                    ScriptOutputType.VALUE,
+                    arrayOf("test:dd:sketch:queue:stream"),
+                    any<String>(),
+                    capture(queuedPayload),
+                    "dd-sketches",
+                    any<String>(),
+                )
+            } returns "2-0"
+
+            val count = DatadogMetricService.enqueueSketches(
+                organizationId = 42L,
+                payload = payload,
+                projectId = 7L,
+                queueKey = "test:dd:sketch:queue",
+            )
+
+            val batch = DatadogMetricService.decodeSketchBatch(queuedPayload.captured)
+            assertEquals(1, count)
+            assertEquals(42L, batch.organizationId)
+            assertEquals(7L, batch.projectId)
         } finally {
             unmockkObject(RedisConfig)
         }

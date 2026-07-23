@@ -349,23 +349,17 @@ object DatadogHostService {
         }
     }
 
-    /**
-     * Lightweight update: only touch last_seen_at and status for known hosts.
-     * Called from metric series routes so the host stays "online" even when
-     * metadata/intake payloads arrive with blank hostnames.
-     */
+    /** Lightweight batched update for host freshness after queued telemetry is persisted. */
     fun touchHostLastSeen(organizationId: Int, hostnames: Set<String>) {
         if (hostnames.isEmpty()) return
         val now = Clock.System.now()
         transaction {
-            for (hostname in hostnames) {
-                DdHostsTable.update({
-                    (DdHostsTable.organizationId eq organizationId) and
-                        (DdHostsTable.hostname eq hostname)
-                }) {
-                    it[lastSeenAt] = now
-                    it[status] = "up"
-                }
+            DdHostsTable.update({
+                (DdHostsTable.organizationId eq organizationId) and
+                    (DdHostsTable.hostname inList hostnames)
+            }) {
+                it[lastSeenAt] = now
+                it[status] = "up"
             }
         }
     }

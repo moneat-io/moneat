@@ -17,9 +17,11 @@
 package com.moneat.monitoring
 
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.lettuce.core.Limit
 import io.lettuce.core.Range
+import io.lettuce.core.api.sync.RedisCommands
 import io.micrometer.core.instrument.Counter
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.Gauge
@@ -50,6 +52,9 @@ object OperationalMetrics {
     private val registeredDlqMeters = ConcurrentHashMap<String, Unit>()
     private val registeredQueueMeters = ConcurrentHashMap<String, Unit>()
     private val registeredStreamMeters = ConcurrentHashMap<String, Unit>()
+    private val ingestionCapacityValues = ConcurrentHashMap<String, AtomicLong>()
+    private val registeredIngestionCapacityMeters = ConcurrentHashMap<String, Unit>()
+    private val registeredIngestionQueueMeters = ConcurrentHashMap<String, Unit>()
     private val workerLastSuccessSeconds = ConcurrentHashMap<String, AtomicLong>()
     private val workerLastSuccessMeters = ConcurrentHashMap<String, Unit>()
     private val dependencyHealthValues = ConcurrentHashMap<String, AtomicLong>()
@@ -138,14 +143,15 @@ object OperationalMetrics {
         val baseKey = "$normalizedWorkerName|$streamKey|${consumerGroup.orEmpty()}|$normalizedStreamType"
         registeredStreamMeters.computeIfAbsent(baseKey) {
             Gauge.builder(WORKER_STREAM_OLDEST_MESSAGE_AGE_SECONDS, streamKey) { key ->
-                readStreamOldestMessageAgeSeconds(key)
+                readStreamOldestMessageAgeSeconds(key, consumerGroup)
             }
-                .description("Age in seconds of the oldest Redis stream entry for registered ingestion streams.")
+                .description("Age in seconds of the oldest pending or unconsumed Redis stream message.")
                 .tags(
                     tags(
                         "worker" to normalizedWorkerName,
                         "stream_key" to streamKey,
-                        "stream_type" to normalizedStreamType
+                        "stream_type" to normalizedStreamType,
+                        "consumer_group" to consumerGroup.orEmpty()
                     )
                 )
                 .register(registry)
@@ -190,7 +196,7 @@ object OperationalMetrics {
         val meterKey = "$normalizedWorkerName|$queueKey|$normalizedQueueType"
         registeredQueueMeters.computeIfAbsent(meterKey) {
             Gauge.builder(WORKER_QUEUE_DEPTH, queueKey) { key -> readQueueDepth(key, consumerGroup) }
-                .description("Current Redis queue depth for registered worker queues.")
+                .description("Current Redis queue depth, using pending plus lag for stream consumer groups.")
                 .tags(
                     tags(
                         "worker" to normalizedWorkerName,
@@ -214,6 +220,70 @@ object OperationalMetrics {
                 "status" to status
             )
         ).increment()
+    }
+
+    fun recordIngestionAdmission(pipeline: IngestionPipeline, outcome: String) {
+        counter(
+            INGESTION_ADMISSION,
+            "Ingestion queue admission attempts by pipeline and outcome.",
+            tags(
+                "pipeline" to pipeline.id,
+                "outcome" to outcome,
+            ),
+        ).increment()
+    }
+
+    fun recordIngestionDlqPush(pipeline: IngestionPipeline, status: String) {
+        counter(
+            INGESTION_DLQ_PUSHES,
+            "Ingestion dead-letter queue growth by pipeline and result.",
+            tags(
+                "pipeline" to pipeline.id,
+                "status" to status,
+            ),
+        ).increment()
+    }
+
+    fun registerIngestionQueueCapacity(pipeline: IngestionPipeline, capacity: Long) {
+        val pipelineId = pipeline.id
+        val capacityValue = ingestionCapacityValues.computeIfAbsent(pipelineId) { AtomicLong(capacity) }
+        capacityValue.set(capacity)
+        registeredIngestionCapacityMeters.computeIfAbsent(pipelineId) {
+            Gauge.builder(INGESTION_QUEUE_CAPACITY, capacityValue) { value -> value.get().toDouble() }
+                .description("Configured maximum entries accepted by an ingestion queue.")
+                .tags(tags("pipeline" to pipelineId))
+                .register(registry)
+            Unit
+        }
+    }
+
+    fun registerIngestionQueue(
+        pipeline: IngestionPipeline,
+        streamKey: String,
+        dlqStreamKey: String,
+        consumerGroup: String,
+        capacity: Long,
+    ) {
+        registerIngestionQueueCapacity(pipeline, capacity)
+        registeredIngestionQueueMeters.computeIfAbsent(pipeline.id) {
+            Gauge.builder(INGESTION_QUEUE_DEPTH, streamKey) { key ->
+                readStreamBacklogMessages(key, consumerGroup)
+            }
+                .description("Current pending and unconsumed entries in an ingestion queue.")
+                .tags(tags("pipeline" to pipeline.id))
+                .register(registry)
+            Gauge.builder(INGESTION_QUEUE_OLDEST_MESSAGE_AGE_SECONDS, streamKey) { key ->
+                readStreamOldestMessageAgeSeconds(key, consumerGroup)
+            }
+                .description("Age in seconds of the oldest pending or unconsumed ingestion message.")
+                .tags(tags("pipeline" to pipeline.id))
+                .register(registry)
+            Gauge.builder(INGESTION_DLQ_DEPTH, dlqStreamKey) { key -> readQueueDepth(key) }
+                .description("Current retained entries in an ingestion dead-letter queue.")
+                .tags(tags("pipeline" to pipeline.id))
+                .register(registry)
+            Unit
+        }
     }
 
     fun recordDatadogMetricPayloadQueued(metricRows: Int) {
@@ -438,6 +508,9 @@ object OperationalMetrics {
         registeredDlqMeters.clear()
         registeredQueueMeters.clear()
         registeredStreamMeters.clear()
+        ingestionCapacityValues.clear()
+        registeredIngestionCapacityMeters.clear()
+        registeredIngestionQueueMeters.clear()
         workerLastSuccessSeconds.clear()
         workerLastSuccessMeters.clear()
         dependencyHealthValues.clear()
@@ -656,41 +729,82 @@ object OperationalMetrics {
     }
 
     private fun readQueueDepth(queueKey: String, consumerGroup: String? = null): Double {
-        if (!RedisConfig.isConnected()) return Double.NaN
+        if (!RedisConfig.isMonitoringConnected()) return Double.NaN
         if (consumerGroup != null) return readStreamBacklogMessages(queueKey, consumerGroup)
-        return runCatching { RedisConfig.sync().llen(queueKey).toDouble() }
-            .recoverCatching { RedisConfig.sync().xlen(queueKey).toDouble() }
+        return runCatching { RedisConfig.withMonitoringSync { it.xlen(queueKey).toDouble() } }
+            .recoverCatching { RedisConfig.withMonitoringSync { it.llen(queueKey).toDouble() } }
             .getOrElse { Double.NaN }
     }
 
     private fun readStreamBacklogMessages(streamKey: String, consumerGroup: String): Double =
         runCatching {
-            val redis = RedisConfig.sync()
-            val pendingMessages = redis.xpending(streamKey, consumerGroup).count
-            val lagMessages = redis.xinfoGroups(streamKey)
-                .asSequence()
-                .mapNotNull { parseStreamGroupInfo(it) }
-                .firstOrNull { group -> group.name == consumerGroup }
-                ?.lag
-                ?: 0L
-            (pendingMessages + lagMessages).toDouble()
-        }.getOrElse { Double.NaN }
+            RedisConfig.withMonitoringSync { redis ->
+                val pendingMessages = redis.xpending(streamKey, consumerGroup).count
+                val lagMessages = redis.xinfoGroups(streamKey)
+                    .asSequence()
+                    .mapNotNull { parseStreamGroupInfo(it) }
+                    .firstOrNull { group -> group.name == consumerGroup }
+                    ?.lag
+                    ?: 0L
+                (pendingMessages + lagMessages).toDouble()
+            }
+        }.getOrElse { error ->
+            if (error.isMissingRedisStreamError()) 0.0 else Double.NaN
+        }
 
     private fun readStreamPendingMessages(streamKey: String, consumerGroup: String): Double {
-        if (!RedisConfig.isConnected()) return Double.NaN
-        return runCatching { RedisConfig.sync().xpending(streamKey, consumerGroup).count.toDouble() }
+        if (!RedisConfig.isMonitoringConnected()) return Double.NaN
+        return runCatching {
+            RedisConfig.withMonitoringSync { it.xpending(streamKey, consumerGroup).count.toDouble() }
+        }
             .getOrElse { Double.NaN }
     }
 
-    private fun readStreamOldestMessageAgeSeconds(streamKey: String): Double {
-        if (!RedisConfig.isConnected()) return Double.NaN
+    private fun readStreamOldestMessageAgeSeconds(streamKey: String, consumerGroup: String?): Double {
+        if (!RedisConfig.isMonitoringConnected()) return Double.NaN
         return runCatching {
-            val first = RedisConfig.sync()
-                .xrange(streamKey, Range.create("-", "+"), Limit.from(1))
-                .firstOrNull()
-                ?: return 0.0
-            streamIdAgeSeconds(first.id)
-        }.getOrElse { Double.NaN }
+            RedisConfig.withMonitoringSync { redis ->
+                readStreamOldestMessageAgeSeconds(redis, streamKey, consumerGroup)
+            }
+        }.getOrElse { error ->
+            if (error.isMissingRedisStreamError()) 0.0 else Double.NaN
+        }
+    }
+
+    private fun readStreamOldestMessageAgeSeconds(
+        redis: RedisCommands<String, String>,
+        streamKey: String,
+        consumerGroup: String?,
+    ): Double {
+        if (consumerGroup == null) return readOldestStreamEntryAgeSeconds(redis, streamKey)
+
+        val pending = redis.xpending(streamKey, consumerGroup)
+        if (pending.count > 0) return streamIdAgeSeconds(pending.messageIds.lower.value)
+
+        val group = redis.xinfoGroups(streamKey)
+            .asSequence()
+            .mapNotNull(::parseStreamGroupInfo)
+            .firstOrNull { info -> info.name == consumerGroup }
+        if (group == null) return 0.0
+        val lag = group.lag ?: return readOldestStreamEntryAgeSeconds(redis, streamKey)
+        if (lag <= 0 || group.lastDeliveredId == null) return 0.0
+
+        val firstUnconsumed = redis
+            .xrange(streamKey, Range.create(group.lastDeliveredId, "+"), Limit.from(2))
+            .firstOrNull { message -> message.id != group.lastDeliveredId }
+            ?: return 0.0
+        return streamIdAgeSeconds(firstUnconsumed.id)
+    }
+
+    private fun readOldestStreamEntryAgeSeconds(
+        redis: RedisCommands<String, String>,
+        streamKey: String
+    ): Double {
+        val first = redis
+            .xrange(streamKey, Range.create("-", "+"), Limit.from(1))
+            .firstOrNull()
+            ?: return 0.0
+        return streamIdAgeSeconds(first.id)
     }
 
     private fun streamIdAgeSeconds(id: String): Double {
@@ -708,26 +822,28 @@ object OperationalMetrics {
 
     private fun parseStreamGroupListInfo(group: List<*>): StreamGroupInfo? {
         var name: String? = null
-        var lag = 0L
+        var lag: Long? = null
+        var lastDeliveredId: String? = null
         for (index in 0 until group.lastIndex step XINFO_GROUP_FIELD_STEP) {
             when (group[index]?.toString()) {
                 "name" -> name = group[index + XINFO_GROUP_VALUE_OFFSET]?.toString()
-                "lag" -> lag = group[index + XINFO_GROUP_VALUE_OFFSET].toLongOrZero()
+                "lag" -> lag = group[index + XINFO_GROUP_VALUE_OFFSET].toLongOrNullValue()
+                "last-delivered-id" -> lastDeliveredId = group[index + XINFO_GROUP_VALUE_OFFSET]?.toString()
             }
         }
-        return name?.let { StreamGroupInfo(it, lag) }
+        return name?.let { StreamGroupInfo(it, lag, lastDeliveredId) }
     }
 
     private fun parseStreamGroupMapInfo(group: Map<*, *>): StreamGroupInfo? {
         val name = group["name"]?.toString() ?: return null
-        return StreamGroupInfo(name, group["lag"].toLongOrZero())
+        return StreamGroupInfo(name, group["lag"].toLongOrNullValue(), group["last-delivered-id"]?.toString())
     }
 
-    private fun Any?.toLongOrZero(): Long =
+    private fun Any?.toLongOrNullValue(): Long? =
         when (this) {
             is Number -> toLong()
-            is String -> toLongOrNull() ?: 0L
-            else -> toString().toLongOrNull() ?: 0L
+            is String -> toLongOrNull()
+            else -> toString().toLongOrNull()
         }
 
     private fun tags(vararg pairs: Pair<String, String>): Iterable<Tag> =
@@ -740,6 +856,12 @@ object OperationalMetrics {
             }
 
     private fun String.normalizedLabelValue(): String = trim().ifBlank { "unknown" }
+
+    private fun Throwable.isMissingRedisStreamError(): Boolean =
+        message?.let {
+            it.contains("NOGROUP", ignoreCase = true) ||
+                it.contains("no such key", ignoreCase = true)
+        } == true || cause?.isMissingRedisStreamError() == true
 
     private fun Throwable.metricExceptionName(): String =
         this::class.simpleName ?: javaClass.simpleName.ifBlank { "Throwable" }
@@ -762,7 +884,8 @@ object OperationalMetrics {
 
     private data class StreamGroupInfo(
         val name: String,
-        val lag: Long,
+        val lag: Long?,
+        val lastDeliveredId: String? = null,
     )
 
     private fun newRegistry(): PrometheusMeterRegistry =
@@ -782,6 +905,13 @@ object OperationalMetrics {
     private const val WORKER_STREAM_OLDEST_MESSAGE_AGE_SECONDS =
         "moneat_worker_stream_oldest_message_age_seconds"
     private const val INGESTION_QUEUE_MODE = "moneat_ingestion_queue_mode"
+    private const val INGESTION_ADMISSION = "moneat_ingestion_admission"
+    private const val INGESTION_QUEUE_CAPACITY = "moneat_ingestion_queue_capacity_entries"
+    private const val INGESTION_QUEUE_DEPTH = "moneat_ingestion_queue_depth"
+    private const val INGESTION_QUEUE_OLDEST_MESSAGE_AGE_SECONDS =
+        "moneat_ingestion_queue_oldest_message_age_seconds"
+    private const val INGESTION_DLQ_DEPTH = "moneat_ingestion_dlq_depth"
+    private const val INGESTION_DLQ_PUSHES = "moneat_ingestion_dlq_pushes"
     private const val DD_METRIC_PAYLOADS_QUEUED = "moneat_datadog_metric_payloads_queued"
     private const val DD_METRIC_POINTS_QUEUED = "moneat_datadog_metric_points_queued"
     private const val DD_METRIC_INSERT_CHUNKS = "moneat_datadog_metric_insert_chunks"

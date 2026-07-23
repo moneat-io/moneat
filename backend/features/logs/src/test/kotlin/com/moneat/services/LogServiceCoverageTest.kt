@@ -26,7 +26,7 @@ import com.moneat.logs.models.QueuedLogBatch
 import com.moneat.logs.models.QueuedLogEntry
 import com.moneat.logs.repositories.LogRepository
 import com.moneat.logs.services.LogService
-import io.lettuce.core.XAddArgs
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.sync.RedisCommands
 import io.mockk.coEvery
 import io.mockk.every
@@ -42,6 +42,20 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LogServiceCoverageTest {
+    private fun mockQueueAdmission(redis: RedisCommands<String, String>) {
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                any<Array<String>>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+            )
+        } returns "1-0"
+    }
+
     @AfterTest
     fun tearDown() {
         unmockkAll()
@@ -53,7 +67,7 @@ class LogServiceCoverageTest {
             mockkObject(RedisConfig)
             val redis = mockk<RedisCommands<String, String>>()
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
+            mockQueueAdmission(redis)
 
             mockkObject(ClickHouseClient)
             every { ClickHouseClient.getDatabase() } returns "test"
@@ -76,7 +90,7 @@ class LogServiceCoverageTest {
             mockkObject(RedisConfig)
             val redis = mockk<RedisCommands<String, String>>()
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd(any<String>(), any<XAddArgs>(), any<Map<String, String>>()) } returns "1-0"
+            mockQueueAdmission(redis)
             mockkObject(ClickHouseClient)
             every { ClickHouseClient.getDatabase() } returns "test"
 

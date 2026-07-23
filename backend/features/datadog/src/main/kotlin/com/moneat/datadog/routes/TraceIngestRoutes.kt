@@ -18,6 +18,8 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.services.TraceIngestionService
@@ -173,7 +175,12 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleTraceIntake(
         }.toString()
     }
 
-    IngestionQueueClient.enqueue(IngestionPipeline.DD_TRACES, QUEUE_KEY, queuePayload)
+    admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(organizationId, requestedUnits, "dd_trace", bytes.size.toLong()),
+    ) {
+        IngestionQueueClient.enqueue(IngestionPipeline.DD_TRACES, QUEUE_KEY, queuePayload)
+    }
 
     // Return rate_by_service response (DD agent expects this)
     call.respond(

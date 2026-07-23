@@ -18,6 +18,8 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DatadogLogEntry
@@ -86,10 +88,15 @@ private suspend fun RoutingContext.handleDatadogLogs(
         return
     }
 
-    val count = DatadogLogService.enqueueLogs(
-        organizationId = orgId.toLong(),
-        entries = entries
-    )
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, entries.size, "dd_log", body.size.toLong()),
+    ) {
+        DatadogLogService.enqueueLogs(
+            organizationId = orgId.toLong(),
+            entries = entries
+        )
+    }
 
     logger.debug {
         "Accepted $count DD logs for org $orgId"
@@ -101,13 +108,38 @@ private suspend fun RoutingContext.handleDatadogLogs(
 private fun parseLogEntries(bodyStr: String): List<DatadogLogEntry>? {
     return suspendRunCatching {
         val trimmed = bodyStr.trimStart()
-        if (trimmed.startsWith("[")) {
-            json.decodeFromString<List<DatadogLogEntry>>(trimmed)
-        } else {
-            listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
+        when {
+            trimmed.startsWith("[") -> json.decodeFromString<List<DatadogLogEntry>>(trimmed)
+            else -> parseSingleOrLineDelimitedLogEntries(trimmed)
         }
     }.getOrElse { e ->
         logger.warn(e) { "Failed to parse DD log payload" }
         null
     }
+}
+
+private fun parseSingleOrLineDelimitedLogEntries(trimmed: String): List<DatadogLogEntry>? =
+    runCatching {
+        listOf(json.decodeFromString<DatadogLogEntry>(trimmed))
+    }.getOrElse {
+        parseLineDelimitedLogEntries(trimmed)
+    }
+
+private fun parseLineDelimitedLogEntries(trimmed: String): List<DatadogLogEntry>? {
+    var skippedMalformedLine = false
+    val entries = trimmed
+        .lineSequence()
+        .map { line -> line.trim() }
+        .filter { line -> line.isNotEmpty() }
+        .mapNotNull { line ->
+            runCatching {
+                json.decodeFromString<DatadogLogEntry>(line)
+            }.getOrElse { error ->
+                skippedMalformedLine = true
+                logger.warn(error) { "Skipping malformed DD log line" }
+                null
+            }
+        }
+        .toList()
+    return entries.ifEmpty { if (skippedMalformedLine) null else emptyList() }
 }

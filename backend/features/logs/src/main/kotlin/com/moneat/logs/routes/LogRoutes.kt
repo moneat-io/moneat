@@ -24,6 +24,7 @@ import java.io.Writer
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.ingest.DecompressionService
+import com.moneat.ingestion.queue.admitWithQuotaRefund
 import com.moneat.events.services.EventService
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.logs.LogPermissions
@@ -776,6 +777,7 @@ fun Route.logIngestRoutes(
                 return@post
             }
 
+            var reservedBillableBytes: Long? = null
             if (quotaService.isEnforcementEnabled()) {
                 val billableBytes = logService.estimateBillableBytes(entries)
                 val reservation =
@@ -792,6 +794,7 @@ fun Route.logIngestRoutes(
                     )
                     return@post
                 }
+                reservedBillableBytes = billableBytes
             }
 
             val queueKey =
@@ -800,7 +803,14 @@ fun Route.logIngestRoutes(
                     ?.getString()
                     ?: "moneat:logs:queue"
             val routedEntries = routeLogEntries(organizationId, entries, otlpServiceRoutingService)
-            val accepted = logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey)
+            val accepted = admitWithQuotaRefund(
+                refund = {
+                    reservedBillableBytes?.let { billableBytes ->
+                        quotaService.refundUnits(organizationId, entries.size, "log", billableBytes)
+                    }
+                },
+                admit = { logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey) },
+            )
             call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
         }
     }
@@ -855,6 +865,7 @@ private suspend fun handleOtlpLogIngest(
         return
     }
 
+    var reservedBillableBytes: Long? = null
     if (quotaService.isEnforcementEnabled()) {
         val billableBytes = logService.estimateBillableBytes(parsedEntries)
         val reservation =
@@ -871,6 +882,7 @@ private suspend fun handleOtlpLogIngest(
             )
             return
         }
+        reservedBillableBytes = billableBytes
     }
 
     val queueKey =
@@ -879,7 +891,14 @@ private suspend fun handleOtlpLogIngest(
             ?.getString()
             ?: "moneat:logs:queue"
     val routedEntries = routeLogEntries(organizationId, parsedEntries, otlpServiceRoutingService)
-    val accepted = logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey)
+    val accepted = admitWithQuotaRefund(
+        refund = {
+            reservedBillableBytes?.let { billableBytes ->
+                quotaService.refundUnits(organizationId, parsedEntries.size, "log", billableBytes)
+            }
+        },
+        admit = { logService.enqueueSdkLogs(organizationId.toLong(), routedEntries, queueKey) },
+    )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
 }
 

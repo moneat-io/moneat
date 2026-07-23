@@ -26,6 +26,10 @@ export interface AuthResponse {
   }
 }
 
+export interface MobileAuthResponse extends AuthResponse {
+  refreshToken: string
+}
+
 export interface SignupLegalConsent {
   acceptTerms: boolean
   acceptPrivacy: boolean

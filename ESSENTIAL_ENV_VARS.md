@@ -44,11 +44,21 @@ These variables are optional. Ingestion queues use Redis Streams by default.
 | `MONEAT_PROCESS_ROLE` | `all` | Start only one deployable role: `all`, `api`, `scheduler`, `ingestion-worker`, or `workflow-egress`. |
 | `INGESTION_PIPELINES` | `all` | Comma-separated ingestion workers to run on an `ingestion-worker`, for example `logs,otlp-traces`. |
 | `INGESTION_<PIPELINE>_BATCH_SIZE` | `50` | Redis Streams `XREADGROUP COUNT` batch size for a pipeline. |
+| `INGESTION_<PIPELINE>_WORKER_COUNT` | Pipeline default | Override the number of consumers for one pipeline. Per-pipeline processing concurrency still applies. |
 | `INGESTION_<PIPELINE>_CLAIM_IDLE_MS` | `300000` | Minimum idle time before `XAUTOCLAIM`; keep above worst-case batch processing time. |
 | `INGESTION_<PIPELINE>_MAX_DELIVERIES` | `5` | Delivery count before a stream message is written to the DLQ stream. |
-| `INGESTION_<PIPELINE>_STREAM_MAXLEN` | `250000` | Approximate maximum length for the primary stream before Redis trims old acknowledged entries. |
+| `INGESTION_QUEUE_MAX_PENDING_ENTRIES` | `250000` | Default hard admission capacity for every primary ingestion stream. Full queues reject requests without trimming. |
+| `INGESTION_<PIPELINE>_MAX_PENDING_ENTRIES` | Global default | Override hard admission capacity for one pipeline. |
+| `INGESTION_MAX_CONCURRENT_BATCHES` | `2` | Default maximum concurrently processed batches for each ingestion pipeline. |
+| `INGESTION_<PIPELINE>_MAX_CONCURRENT_BATCHES` | Global default | Override maximum concurrently processed batches for one pipeline. |
+| `INGESTION_<PIPELINE>_STREAM_MAXLEN` | `250000` | Deprecated compatibility alias for that pipeline's admission capacity. Primary streams are no longer trimmed. |
 | `INGESTION_<PIPELINE>_DLQ_STREAM_MAXLEN` | `10000` | Approximate maximum length for the DLQ stream. |
 | `GOOGLE_ADS_API_VERSION` | `v24` | Google Ads API version used by the connector client. |
 
 Redis Streams are the durable ingestion buffer. Run Redis with persistence and HA appropriate for production, and
 alert on pending entries, oldest pending age, and DLQ growth.
+
+Use `scripts/ingestion-load-test.py` to exercise normal mixed intake, bursts, queue saturation, a manually
+controlled ClickHouse interruption, and recovery. Run the test against a disposable environment with deliberately
+small per-pipeline capacities so the saturation phase produces `429` responses. The test fails on any HTTP `5xx`,
+transport failure, missing `Retry-After` header, absent saturation rejection, or lack of accepted recovery traffic.

@@ -598,8 +598,8 @@ class LogQueryParser {
         // which cause "Block structure mismatch" when SELECT aliases them with toString())
         val fields = listOf("message", "body", "service", "environment", "host", "container_name")
 
-        // hasTokenCaseInsensitive rejects needles containing separator chars (hyphens, dots, etc.)
-        val hasSeparators = term.any { it == '-' || it == '.' || it == '/' || it == ':' || it == ' ' }
+        // ClickHouse rejects any hasTokenCaseInsensitive needle containing non-alphanumeric separators.
+        val isSimpleToken = term.all { it.isLetterOrDigit() }
 
         return if (isWildcard) {
             val pattern = wildcardToLikePattern(term)
@@ -607,7 +607,7 @@ class LogQueryParser {
             "(" + fields.joinToString(" OR ") { field ->
                 "$field ILIKE '$escaped'"
             } + ")"
-        } else if (isPhrase || hasSeparators) {
+        } else if (isPhrase || !isSimpleToken) {
             // Phrase search or terms with separators: use ILIKE for substring match
             val escaped = escapeFn(term)
             "(" + fields.joinToString(" OR ") { field ->

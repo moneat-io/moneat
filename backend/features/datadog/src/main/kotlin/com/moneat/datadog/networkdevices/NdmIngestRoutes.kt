@@ -18,6 +18,9 @@ package com.moneat.datadog.networkdevices
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
+import com.moneat.datadog.rethrowIfQueueAdmission
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DdNdmPayload
@@ -81,10 +84,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleNdmPayload(
             return
         }
 
-        val count = NdmIngestionService.enqueue(orgId, payload)
+        val count = admitDatadogWithQuotaRefund(
+            quotaService,
+            DatadogQuotaCharge(orgId, requestedUnits, "dd_ndm", body.size.toLong()),
+        ) {
+            NdmIngestionService.enqueue(orgId, payload)
+        }
         logger.debug { "Accepted $count NDM entries (type=${payload.type}) for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process NDM payload" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

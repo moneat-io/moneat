@@ -23,7 +23,6 @@ import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.DatadogHostService
-import com.moneat.datadog.services.QueuedServiceCheckBatch
 import com.moneat.datadog.services.DatadogLogService
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.DatadogService
@@ -126,11 +125,10 @@ class DatadogIngestRoutesTest {
             }
         }
         coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 0
+        coEvery { DatadogMetricService.enqueueSketches(any(), any(), any()) } returns 0
         coEvery { DatadogLogService.enqueueLogs(any(), any()) } returns 0
         coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 0
-        every { DatadogEventService.mapServiceChecks(any(), any()) } returns
-            QueuedServiceCheckBatch(0L, emptyList())
-        coEvery { DatadogEventService.insertServiceCheckBatch(any()) } returns Unit
+        coEvery { DatadogEventService.enqueueServiceChecks(any(), any()) } returns 0
         every { DatadogHostService.touchHostLastSeen(any(), any()) } returns Unit
         every { MiscIngestionService.enqueueSymbolDb(any(), any()) } returns Unit
         every { MiscIngestionService.enqueuePipelineStats(any(), any()) } returns 0
@@ -401,7 +399,6 @@ class DatadogIngestRoutesTest {
     @Test
     fun `v1 sketches accepts valid json payload`() = testApplication {
         every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
-        coEvery { DatadogMetricService.insertSketchBatch(any()) } returns Unit
         installRoutes()()
         val response = client.post("/dd/api/v1/sketches") {
             header(DD_API_KEY_HEADER, VALID_KEY)
@@ -483,6 +480,59 @@ class DatadogIngestRoutesTest {
             setBody(body)
         }
         assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `v2 logs accepts newline-delimited browser log batches`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val body = """
+            {"message":"first console error","ddsource":"browser","ddtags":"env:production","hostname":"moneat.io"}
+            {"message":"second console error","ddsource":"browser","ddtags":"env:production","hostname":"moneat.io"}
+        """.trimIndent()
+        val response = client.post("/dd/api/v2/logs") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Text.Plain)
+            setBody(body)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify {
+            DatadogLogService.enqueueLogs(
+                ORG_ID.toLong(),
+                match {
+                    it.size == 2 &&
+                        it[0].message == "first console error" &&
+                        it[1].message == "second console error"
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `v2 logs skips malformed lines in newline-delimited browser batches`() = testApplication {
+        every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
+        installRoutes()()
+        val body = """
+            {"message":"first console error","ddsource":"browser","ddtags":"env:production","hostname":"moneat.io"}
+            {not json}
+            {"message":"second console error","ddsource":"browser","ddtags":"env:production","hostname":"moneat.io"}
+        """.trimIndent()
+        val response = client.post("/dd/api/v2/logs") {
+            header(DD_API_KEY_HEADER, VALID_KEY)
+            contentType(ContentType.Text.Plain)
+            setBody(body)
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+        coVerify {
+            DatadogLogService.enqueueLogs(
+                ORG_ID.toLong(),
+                match {
+                    it.size == 2 &&
+                        it[0].message == "first console error" &&
+                        it[1].message == "second console error"
+                },
+            )
+        }
     }
 
     // ──── Events ────

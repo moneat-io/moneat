@@ -565,6 +565,18 @@ class McpToolValidationTest {
                 "interval_seconds must be a valid integer",
             ),
             case(
+                "update_uptime_retries",
+                UpdateUptimeMonitorTool(),
+                obj("monitor_id" to uuid, "retries" to "bad"),
+                "retries must be a valid integer",
+            ),
+            case(
+                "update_uptime_retry_interval",
+                UpdateUptimeMonitorTool(),
+                obj("monitor_id" to uuid, "retry_interval_seconds" to "bad"),
+                "retry_interval_seconds must be a valid integer",
+            ),
+            case(
                 "delete_uptime_uuid",
                 DeleteUptimeMonitorTool(),
                 obj("monitor_id" to "bad"),
@@ -590,6 +602,23 @@ class McpToolValidationTest {
             ),
             case("create_uptime_name", CreateUptimeMonitorTool(), obj(), "name is required"),
             case("create_uptime_url", CreateUptimeMonitorTool(), obj("name" to "API"), "url is required"),
+            case(
+                "create_uptime_retries",
+                CreateUptimeMonitorTool(),
+                obj("name" to "API", "url" to "https://example.com", "type" to "http", "retries" to "bad"),
+                "retries must be a valid integer",
+            ),
+            case(
+                "create_uptime_retry_interval",
+                CreateUptimeMonitorTool(),
+                obj(
+                    "name" to "API",
+                    "url" to "https://example.com",
+                    "type" to "http",
+                    "retry_interval_seconds" to "bad",
+                ),
+                "retry_interval_seconds must be a valid integer",
+            ),
             case("get_synthetic_id", GetSyntheticTestTool(), obj(), "synthetic_test_id is required"),
             case("update_synthetic_id", UpdateSyntheticTestTool(), obj(), "synthetic_test_id is required"),
             case("delete_synthetic_id", DeleteSyntheticTestTool(), obj(), "synthetic_test_id is required"),

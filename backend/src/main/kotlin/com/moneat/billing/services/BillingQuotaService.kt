@@ -517,6 +517,21 @@ class BillingQuotaService(
         }
     }
 
+    fun refundUnitsBatch(
+        organizationId: Int,
+        requestedUnitsByType: Map<String, Int>,
+        requestedBytesByType: Map<String, Long> = emptyMap(),
+    ) {
+        (requestedUnitsByType.keys + requestedBytesByType.keys).forEach { eventType ->
+            refundUnits(
+                organizationId = organizationId,
+                units = requestedUnitsByType[eventType] ?: 0,
+                eventType = eventType,
+                requestedBytes = requestedBytesByType[eventType] ?: 0L,
+            )
+        }
+    }
+
     fun resetUsageForQuotaType(
         organizationId: Int,
         quotaType: String,

@@ -709,8 +709,8 @@ object ApmServiceCatalogService {
             SELECT
                 count() as previous_span_count,
                 sum(error) as previous_error_count,
-                toUInt64(quantile(0.95)(duration)) as previous_p95_ns,
-                toUInt64(quantile(0.99)(duration)) as previous_p99_ns,
+                if(count() = 0, 0., quantile(0.95)(duration)) as previous_p95_ns,
+                if(count() = 0, 0., quantile(0.99)(duration)) as previous_p99_ns,
                 countIf(error = 0 AND duration <= $apdexTargetNs) as previous_apdex_satisfied,
                 countIf(
                     error = 0 AND duration > $apdexTargetNs
@@ -949,8 +949,8 @@ object ApmServiceCatalogService {
             """
             SELECT
                 if(trace_id_hex != '', trace_id_hex, toString(trace_id)) as trace_id_out,
-                argMax(resource, duration) as resource,
-                argMax(name, duration) as name,
+                argMax(resource, duration) as resource_out,
+                argMax(name, duration) as name_out,
                 max(status_code) as http_status,
                 toUInt64(max(duration) / $NANOSECONDS_PER_MILLISECOND) as duration_ms,
                 count() as span_count,
@@ -968,8 +968,8 @@ object ApmServiceCatalogService {
             ApmTraceRow(
                 time = row.stringValue("time"),
                 traceId = row.stringValue("trace_id_out"),
-                resource = row.stringValue("resource"),
-                method = methodFromResource(row.stringValue("resource")),
+                resource = row.stringValue("resource_out"),
+                method = methodFromResource(row.stringValue("resource_out")),
                 httpStatus = row.longValue("http_status").toInt().takeIf { it > 0 } ?: 0,
                 durationMs = row.longValue("duration_ms"),
                 spans = row.longValue("span_count").toInt(),

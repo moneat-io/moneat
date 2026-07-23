@@ -16,7 +16,21 @@
 
 package com.moneat.plugins
 
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueCapacityException
+import com.moneat.ingestion.queue.IngestionQueueUnavailableException
+import io.ktor.client.request.get
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.install
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import io.lettuce.core.RedisException
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -71,5 +85,44 @@ class MonitoringTest {
         assertFalse(shouldSkipTracing("/v1/services/map", "GET"))
         assertFalse(shouldSkipTracing("/v1/apm-errors", "GET"))
         assertFalse(shouldSkipTracing("/v1/projects/1/stats", "GET"))
+    }
+
+    @Test
+    fun `queue capacity maps to retryable 429`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            installErrorHandling()
+            routing {
+                get("/capacity") {
+                    throw IngestionQueueCapacityException(IngestionPipeline.LOGS, 100)
+                }
+            }
+        }
+
+        val response = client.get("/capacity")
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        assertEquals("5", response.headers[HttpHeaders.RetryAfter])
+    }
+
+    @Test
+    fun `redis queue failure maps to retryable 503`() = testApplication {
+        application {
+            install(ContentNegotiation) { json() }
+            installErrorHandling()
+            routing {
+                get("/unavailable") {
+                    throw IngestionQueueUnavailableException(
+                        IngestionPipeline.LOGS,
+                        RedisException("down"),
+                    )
+                }
+            }
+        }
+
+        val response = client.get("/unavailable")
+
+        assertEquals(HttpStatusCode.ServiceUnavailable, response.status)
+        assertEquals("5", response.headers[HttpHeaders.RetryAfter])
     }
 }

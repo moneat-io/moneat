@@ -75,7 +75,7 @@ object UptimeMonitors : Table("uptime_monitors") {
     // Check config
     val intervalSeconds = integer("interval_seconds").default(60)
     val timeoutSeconds = integer("timeout_seconds").default(30)
-    val retries = integer("retries").default(0)
+    val retries = integer("retries").default(1)
     val retryIntervalSeconds = integer("retry_interval_seconds").default(60)
 
     // Status tracking
@@ -146,7 +146,7 @@ data class CreateUptimeMonitorRequest(
     // Check config
     val intervalSeconds: Int = 60,
     val timeoutSeconds: Int = 30,
-    val retries: Int = 0,
+    val retries: Int = 1,
     val retryIntervalSeconds: Int = 60,
     val alertPriority: String? = null,
     @SerialName("incidentSeverity") val legacyIncidentSeverity: String? = null

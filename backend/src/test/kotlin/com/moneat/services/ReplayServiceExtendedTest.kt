@@ -197,6 +197,7 @@ class ReplayServiceExtendedTest {
 
     @Test
     fun `getReplaysForIssue returns replays linked to issue`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         val replayRow =
             """
             {"replay_id":"$REPLAY_UUID","project_id":1,"started_at":"2026-01-01T00:00:00.000Z","finished_at":"2026-01-01T00:05:00.000Z","duration_ms":"300000","urls":["https://app.example.com"],"error_count":3,"user_id":"u-1","user_email":"a@b.com","user_username":"u","browser_name":"Chrome","browser_version":"120","os_name":"macOS","os_version":"14","activity":5}
@@ -204,6 +205,7 @@ class ReplayServiceExtendedTest {
         val issueId = "ISSUE-ABC-123"
         withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
+            queries += query
             when {
                 query.contains("issues") && query.contains("FINAL") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
@@ -213,12 +215,18 @@ class ReplayServiceExtendedTest {
                     exchange.respond(200, "", TEXT_PLAIN)
             }
         }) {
-            val result = service.getReplaysForIssue(issueId, limit = 5)
+            val result = service.getReplaysForIssue(issueId, limit = 5, projectId = 1)
             assertEquals(1, result.size)
             assertEquals(REPLAY_UUID, result[0].replayId)
             assertEquals(defaultProjectResourceId(), result[0].projectId)
             assertEquals(3, result[0].errorCount)
             assertEquals("Chrome", result[0].browserName)
+            assertTrue(
+                queries.any { query ->
+                    query.contains("issues FINAL") && query.contains("AND project_id = 1")
+                }
+            )
+            assertTrue(queries.any { it.contains("toUUIDOrNull(error_id) = e.event_id") })
         }
     }
 

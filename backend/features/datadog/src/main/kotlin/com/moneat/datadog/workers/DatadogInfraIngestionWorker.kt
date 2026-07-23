@@ -22,7 +22,7 @@ import com.moneat.ingestion.queue.IngestionQueueSettings
 import com.moneat.ingestion.queue.RedisQueueWorker
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.pushToDlq
-import com.moneat.utils.suspendRunCatching
+import kotlinx.serialization.SerializationException
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
@@ -54,13 +54,16 @@ class DatadogInfraIngestionWorker(
         workerId: Int,
         payload: String,
     ) {
-        suspendRunCatching {
-            val batch =
-                DatadogInfraService.decodeInfraBatch(payload)
-            DatadogInfraService.insertInfraBatch(batch)
-            OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
-        }.getOrElse { e ->
-            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, e)
+        val batch = try {
+            DatadogInfraService.decodeInfraBatch(payload)
+        } catch (error: SerializationException) {
+            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)
+            return
+        } catch (error: IllegalArgumentException) {
+            pushToDlq(logger, dlqKey, payload, workerId, WORKER_NAME, error)
+            return
         }
+        DatadogInfraService.insertInfraBatch(batch)
+        OperationalMetrics.recordWorkerMessageProcessed(WORKER_NAME, workerId)
     }
 }

@@ -18,17 +18,20 @@ package com.moneat.plugins
 
 import com.moneat.config.ClickHouseQueryException
 import com.moneat.config.SentryConfig
+import com.moneat.ingestion.queue.IngestionQueueCapacityException
+import com.moneat.ingestion.queue.IngestionQueueUnavailableException
 import com.moneat.monitoring.OperationalMetrics
 import com.moneat.utils.ErrorResponse
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MAX
 import com.moneat.utils.HttpConstants.HTTP_SUCCESS_MIN
 import com.moneat.utils.SentryUtils
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.http.HttpStatusCode
 import io.ktor.server.metrics.micrometer.MicrometerMetrics
 import io.ktor.server.plugins.BadRequestException
 import io.ktor.server.plugins.calllogging.CallLogging
@@ -36,6 +39,7 @@ import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.request.queryString
+import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.util.AttributeKey
 import io.sentry.ITransaction
@@ -173,6 +177,14 @@ fun Application.installErrorHandling() {
     install(StatusPages) {
         exception<BadRequestException> { call, cause ->
             handleBadRequest(call, cause)
+        }
+        exception<IngestionQueueCapacityException> { call, cause ->
+            call.response.header(HttpHeaders.RetryAfter, cause.retryAfterSeconds.toString())
+            call.respond(HttpStatusCode.TooManyRequests, ErrorResponse("Ingestion queue is at capacity"))
+        }
+        exception<IngestionQueueUnavailableException> { call, cause ->
+            call.response.header(HttpHeaders.RetryAfter, cause.retryAfterSeconds.toString())
+            call.respond(HttpStatusCode.ServiceUnavailable, ErrorResponse("Ingestion queue is temporarily unavailable"))
         }
         exception<ClickHouseQueryException> { call, cause ->
             handleClickHouseQueryException(call, cause)

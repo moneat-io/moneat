@@ -416,7 +416,8 @@ class EventServiceCoverageTest {
                 "event_id": "$eventId",
                 "name": "Jane Smith",
                 "email": "jane@example.com",
-                "comments": "It broke!"
+                "comments": "It broke!",
+                "replay_id": "04bad9a2e3774046977a21440ddb39b2"
             }
             """.trimIndent()
 
@@ -430,6 +431,7 @@ class EventServiceCoverageTest {
         assertEquals("jane@example.com", feedbackSlot.captured.contactEmail)
         assertEquals("Jane Smith", feedbackSlot.captured.name)
         assertEquals(eventId, feedbackSlot.captured.associatedEventId)
+        assertEquals("04bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.replayId)
         assertNotEquals("14bad9a2-e377-4046-977a-21440ddb39b2", feedbackSlot.captured.feedbackId)
         coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
     }
@@ -477,6 +479,81 @@ class EventServiceCoverageTest {
         assertEquals("24bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.associatedEventId)
         assertEquals("34bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.replayId)
         coVerify(exactly = 0) { eventRepository.insertErrorEvent(any()) }
+    }
+
+    @Test
+    fun `processEnvelope resolves feedback replay ID from replay context`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val fbJson =
+            """
+            {
+                "event_id": "64bad9a2e3774046977a21440ddb39b2",
+                "platform": "cocoa",
+                "contexts": {
+                    "feedback": {
+                        "message": "The sync button does not work",
+                        "associated_event_id": "74bad9a2e3774046977a21440ddb39b2"
+                    },
+                    "replay": {
+                        "replay_id": "84bad9a2e3774046977a21440ddb39b2"
+                    }
+                },
+                "tags": {
+                    "replayId": "94bad9a2e3774046977a21440ddb39b2"
+                },
+                "sdk": {"name": "sentry.cocoa", "version": "8.57.3"}
+            }
+            """.trimIndent()
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "64bad9a2e3774046977a21440ddb39b2",
+                items = listOf(EnvelopeItem("feedback", fbJson))
+            )
+        )
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("84bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.replayId)
+        assertEquals("74bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.associatedEventId)
+    }
+
+    @Test
+    fun `processEnvelope resolves feedback replay ID from tags`() = runBlocking {
+        val feedbackSlot = slot<FeedbackInsertData>()
+        coEvery { eventRepository.insertFeedback(capture(feedbackSlot)) } returns true
+
+        val fbJson =
+            """
+            {
+                "event_id": "a4bad9a2e3774046977a21440ddb39b2",
+                "contexts": {
+                    "feedback": {
+                        "message": "Replay metadata is attached as a tag",
+                        "replay_id": {"invalid": true}
+                    },
+                    "replay": {
+                        "replay_id": "   "
+                    }
+                },
+                "tags": {
+                    "replayId": "b4bad9a2e3774046977a21440ddb39b2"
+                }
+            }
+            """.trimIndent()
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "a4bad9a2e3774046977a21440ddb39b2",
+                items = listOf(EnvelopeItem("feedback", fbJson))
+            )
+        )
+
+        assertTrue(feedbackSlot.isCaptured)
+        assertEquals("b4bad9a2e3774046977a21440ddb39b2", feedbackSlot.captured.replayId)
     }
 
     @Test
@@ -1732,6 +1809,37 @@ class EventServiceCoverageTest {
         assertEquals("Mac", replaySlot.captured.deviceFamily)
         assertEquals(8, replaySlot.captured.activity)
         assertEquals(3, replaySlot.captured.segmentId)
+    }
+
+    @Test
+    fun `storeReplayEvent normalizes compact error ids and preserves unknown ids`() = runBlocking {
+        val replaySlot = slot<ReplayEventInsertData>()
+        coEvery { eventRepository.insertReplayEvent(capture(replaySlot)) } returns true
+
+        val replayJson = Json.encodeToString(
+            SentryReplayEvent(
+                replayId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                errorIds = listOf(
+                    "550e8400e29b41d4a716446655440000",
+                    "550E8400-E29B-41D4-A716-446655440000",
+                    "unknown-error-id",
+                    "   "
+                )
+            )
+        )
+
+        eventService.processEnvelope(
+            testProjectId,
+            SentryEnvelope(
+                eventId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                items = listOf(EnvelopeItem("replay_event", replayJson))
+            )
+        )
+
+        assertEquals(
+            listOf("550e8400-e29b-41d4-a716-446655440000", "unknown-error-id"),
+            replaySlot.captured.errorIds
+        )
     }
 
     // ===================== processStoreEvent =====================

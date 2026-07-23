@@ -119,13 +119,18 @@ class ReplayService(
         return queryHelper.executeProjectIdQuery(query, "Replay", replayId)
     }
 
-    private suspend fun getProjectIdForIssue(issueId: String): Long? {
+    private suspend fun getProjectIdForIssue(
+        issueId: String,
+        projectId: Long? = null
+    ): Long? {
         val escapedIssueId = escapeSql(issueId)
+        val projectFilter = projectId?.let { "AND project_id = $it" } ?: ""
         val query =
             """
             SELECT toInt64(project_id) as project_id
             FROM `$clickhouseDb`.issues FINAL
             WHERE issue_id = '$escapedIssueId'
+                $projectFilter
             LIMIT 1
             FORMAT JSONEachRow
             """.trimIndent()
@@ -1746,20 +1751,21 @@ class ReplayService(
 
     suspend fun getReplaysForIssue(
         issueId: String,
-        limit: Int = 10
+        limit: Int = 10,
+        projectId: Long? = null
     ): List<ReplayListItem> {
-        val projectId = getProjectIdForIssue(issueId) ?: return emptyList()
-        val retentionDays = queryHelper.getProjectRetentionDays(projectId)
+        val resolvedProjectId = getProjectIdForIssue(issueId, projectId) ?: return emptyList()
+        val retentionDays = queryHelper.getProjectRetentionDays(resolvedProjectId)
         val escapedIssueId = escapeSql(issueId)
         val retentionClause = queryHelper.timestampRetentionClause(EVENT_TIMESTAMP_COLUMN, retentionDays)
         val replayEventsWhereClause =
             """
-            raw.project_id = $projectId
+            raw.project_id = $resolvedProjectId
                 AND raw.timestamp >= now64(3) - INTERVAL $retentionDays DAY
             """.trimIndent()
         val replaySegmentsWhereClause =
             """
-            project_id = $projectId
+            project_id = $resolvedProjectId
                 AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
             """.trimIndent()
 
@@ -1791,9 +1797,9 @@ class ReplayService(
             ) r
             ARRAY JOIN arrayDistinct(r.error_ids) AS error_id
             INNER JOIN `$clickhouseDb`.events e
-                ON toString(e.event_id) = error_id
+                ON toUUIDOrNull(error_id) = e.event_id
                 AND e.issue_id = '$escapedIssueId'
-                AND e.project_id = $projectId
+                AND e.project_id = $resolvedProjectId
                 AND e.event_type = 'error'
                 AND $retentionClause
             LEFT JOIN (
@@ -1811,7 +1817,7 @@ class ReplayService(
                 suspendRunCatching {
                     buildReplayListItemFromJson(
                         obj,
-                        projectId,
+                        resolvedProjectId,
                         obj["error_count"]?.jsonPrimitive?.intOrNull ?: 0
                     )
                 }.getOrElse { e ->

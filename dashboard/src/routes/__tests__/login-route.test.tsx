@@ -7,6 +7,7 @@ const {mockApi, mockNavigate, mockTrackEvent} = vi.hoisted(() => ({
   mockApi: {
     isAuthenticated: vi.fn(),
     login: vi.fn(),
+    mobileLogin: vi.fn(),
     logout: vi.fn(),
     initSso: vi.fn(),
   },
@@ -64,7 +65,7 @@ function beforeLoadContext(search: Record<string, unknown>): LoginBeforeLoadCont
   return {search} as unknown as LoginBeforeLoadContext
 }
 
-async function submitEmailLogin() {
+async function submitEmailLogin(method: 'web' | 'mobile' = 'web') {
   const LoginPage = Route.options.component as ComponentType
 
   render(<LoginPage />)
@@ -74,7 +75,8 @@ async function submitEmailLogin() {
   fireEvent.click(screen.getByRole('button', {name: 'Sign in'}))
 
   await waitFor(() => {
-    expect(mockApi.login).toHaveBeenCalledWith('test@example.com', 'password')
+    const login = method === 'mobile' ? mockApi.mobileLogin : mockApi.login
+    expect(login).toHaveBeenCalledWith('test@example.com', 'password')
   })
 }
 
@@ -83,6 +85,7 @@ describe('login route', () => {
     vi.clearAllMocks()
     mockApi.isAuthenticated.mockReturnValue(false)
     mockApi.login.mockResolvedValue({token: 'token-1'})
+    mockApi.mobileLogin.mockResolvedValue({token: 'token-1', refreshToken: 'refresh-token-1'})
     window.history.replaceState(null, '', '/login')
   })
 
@@ -152,9 +155,47 @@ describe('login route', () => {
   it('logs out authenticated mobile redirect sessions before loading the page', () => {
     mockApi.isAuthenticated.mockReturnValue(true)
 
-    Route.options.beforeLoad?.(beforeLoadContext({redirect_uri: 'bandapella://auth'}))
+    Route.options.beforeLoad?.(beforeLoadContext({redirect_uri: 'moneat://auth'}))
 
     expect(mockApi.logout).toHaveBeenCalled()
+  })
+
+  it('does not treat unapproved redirect URIs as mobile login callbacks', () => {
+    mockApi.isAuthenticated.mockReturnValue(true)
+
+    expect(() => {
+      Route.options.beforeLoad?.(beforeLoadContext({redirect_uri: 'moneat://settings'}))
+    }).toThrow(expect.objectContaining({to: '/', search: {view: 'overview'}}))
+    expect(mockApi.logout).not.toHaveBeenCalled()
+  })
+
+  it('returns mobile login tokens to the native callback fragment', async () => {
+    window.history.replaceState(null, '', '/login?redirect_uri=moneat%3A%2F%2Fauth')
+    const originalLocation = window.location
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: {...originalLocation, assign} as Location,
+      writable: true,
+      configurable: true,
+    })
+
+    try {
+      await submitEmailLogin('mobile')
+
+      await waitFor(() => {
+        expect(mockApi.mobileLogin).toHaveBeenCalledWith('test@example.com', 'password')
+        expect(mockApi.login).not.toHaveBeenCalled()
+        expect(assign).toHaveBeenCalledWith(
+          'moneat://auth#token=token-1&refreshToken=refresh-token-1'
+        )
+      })
+    } finally {
+      Object.defineProperty(window, 'location', {
+        value: originalLocation,
+        writable: true,
+        configurable: true,
+      })
+    }
   })
 
   it('redirects authenticated users without special params to the app overview', () => {

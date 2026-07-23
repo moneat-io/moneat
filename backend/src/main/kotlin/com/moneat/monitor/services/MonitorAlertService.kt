@@ -941,12 +941,13 @@ class MonitorAlertService(
                 moneatUrl = dashboardUrl
             )
 
-        suspendRunCatching {
+        val shouldNotifyIncidentProvider = suspendRunCatching {
             workflowService.publishAlertTriggered(alertLifecycleEvent)
         }.getOrElse { e ->
             logger.error(e) { "Failed to publish host alert workflow" }
+            true
         }
-        if (alertPriority != null) {
+        if (alertPriority != null && shouldNotifyIncidentProvider) {
             suspendRunCatching {
                 incidentService.fireAlert(alertLifecycleEvent, publishWorkflow = false)
             }.getOrElse { e ->

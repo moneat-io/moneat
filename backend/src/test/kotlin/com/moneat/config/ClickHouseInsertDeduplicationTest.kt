@@ -54,28 +54,30 @@ class ClickHouseInsertDeduplicationTest {
     }
 
     @Test
-    fun `token is scoped to ingestion seed and normalized query`() = runBlocking {
-        assertNull(ClickHouseInsertDeduplication.tokenForQuery("INSERT INTO logs VALUES (1)"))
+    fun `token sequence is stable for a retried ingestion message`() = runBlocking {
+        assertNull(ClickHouseInsertDeduplication.nextToken())
 
-        val first =
+        val firstAttempt =
             ClickHouseInsertDeduplication.withTokenSeed("logs:1-0") {
-                ClickHouseInsertDeduplication.tokenForQuery(" INSERT INTO logs VALUES (1) ")
+                listOf(
+                    ClickHouseInsertDeduplication.nextToken(),
+                    ClickHouseInsertDeduplication.nextToken(),
+                )
             }
-        val second =
+        val retriedAttempt =
             ClickHouseInsertDeduplication.withTokenSeed("logs:1-0") {
-                ClickHouseInsertDeduplication.tokenForQuery("INSERT INTO logs VALUES (1)")
+                listOf(
+                    ClickHouseInsertDeduplication.nextToken(),
+                    ClickHouseInsertDeduplication.nextToken(),
+                )
             }
         val differentSeed =
             ClickHouseInsertDeduplication.withTokenSeed("logs:2-0") {
-                ClickHouseInsertDeduplication.tokenForQuery("INSERT INTO logs VALUES (1)")
-            }
-        val differentQuery =
-            ClickHouseInsertDeduplication.withTokenSeed("logs:1-0") {
-                ClickHouseInsertDeduplication.tokenForQuery("INSERT INTO logs VALUES (2)")
+                ClickHouseInsertDeduplication.nextToken()
             }
 
-        assertEquals(first, second)
-        assertNotEquals(first, differentSeed)
-        assertNotEquals(first, differentQuery)
+        assertEquals(firstAttempt, retriedAttempt)
+        assertNotEquals(firstAttempt.first(), firstAttempt.last())
+        assertNotEquals(firstAttempt.first(), differentSeed)
     }
 }

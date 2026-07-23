@@ -21,6 +21,7 @@ import com.moneat.mcp.tools.AddStatusPageMonitorTool
 import com.moneat.mcp.tools.AggregateLogsTool
 import com.moneat.mcp.tools.CreateAlertTool
 import com.moneat.mcp.tools.CreateDashboardAlertTool
+import com.moneat.mcp.tools.ListDashboardAlertsTool
 import com.moneat.mcp.tools.CreateDashboardTool
 import com.moneat.mcp.tools.CreateDashboardWidgetTool
 import com.moneat.mcp.tools.CreateDataSourceTool
@@ -343,6 +344,7 @@ object McpToolRegistrar {
         toolRegistry.register(ListComplianceFindingsTool())
 
         // Dashboard alert tools (Phase 1)
+        toolRegistry.register(ListDashboardAlertsTool())
         toolRegistry.register(CreateDashboardAlertTool())
         toolRegistry.register(UpdateDashboardAlertTool())
         toolRegistry.register(DeleteDashboardAlertTool())
