@@ -106,13 +106,6 @@ object IngestionQueueClient {
             IngestionQueueSettings.defaultDlqKey(queueKey),
             workerCount = 1,
         )
-        OperationalMetrics.registerIngestionQueue(
-            pipeline = pipeline,
-            streamKey = spec.streamKey,
-            dlqStreamKey = spec.dlqStreamKey,
-            consumerGroup = spec.consumerGroup,
-            capacity = spec.maxPendingEntries,
-        )
         return try {
             val streamId = admit(RedisConfig.sync(), spec, payload, System.currentTimeMillis())
             if (streamId == null) {

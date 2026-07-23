@@ -82,7 +82,7 @@ class IngestionQueueClientTest {
     }
 
     @Test
-    fun `enqueue registers the sibling dlq stream key`() {
+    fun `enqueue leaves queue state metrics to workers`() {
         mockkObject(OperationalMetrics)
         every {
             OperationalMetrics.registerIngestionQueue(any(), any(), any(), any(), any())
@@ -103,14 +103,8 @@ class IngestionQueueClientTest {
         try {
             IngestionQueueClient.enqueue(IngestionPipeline.LOGS, "moneat:logs:queue", "payload")
 
-            verify(exactly = 1) {
-                OperationalMetrics.registerIngestionQueue(
-                    pipeline = IngestionPipeline.LOGS,
-                    streamKey = "moneat:logs:queue:stream",
-                    dlqStreamKey = "moneat:logs:dlq:stream",
-                    consumerGroup = IngestionPipeline.LOGS.consumerGroup,
-                    capacity = 250_000L,
-                )
+            verify(exactly = 0) {
+                OperationalMetrics.registerIngestionQueue(any(), any(), any(), any(), any())
             }
         } finally {
             unmockkObject(OperationalMetrics)
