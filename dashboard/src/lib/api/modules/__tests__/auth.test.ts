@@ -107,6 +107,25 @@ describe('authMethods', () => {
       expect(result).toEqual(authResponse)
       expect(globalThis.sessionStorage?.getItem('authenticated')).toBe('true')
     })
+
+    it('logs a native app in without marking the browser authenticated', async () => {
+      const authResponse = {
+        token: 'jwt-token',
+        refreshToken: 'refresh-token',
+        user: { id: USER_ID_ALICE, email: 'a@b.com' },
+      }
+      server.use(
+        http.post(`${API_BASE}/auth/mobile/login`, async ({ request }) => {
+          const body = await request.json()
+          expect(body).toEqual({ email: 'a@b.com', password: TEST_PASSWORD })
+          return HttpResponse.json(authResponse)
+        })
+      )
+
+      const result = await api.mobileLogin('a@b.com', TEST_PASSWORD)
+      expect(result).toEqual(authResponse)
+      expect(globalThis.sessionStorage?.getItem('authenticated')).toBeNull()
+    })
   })
 
   // ──── SSO ────

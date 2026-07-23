@@ -19,7 +19,11 @@ package com.moneat.routes
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.auth.routes.authRoutes
+import com.moneat.auth.services.AuthService
 import com.moneat.auth.services.OAuthService
+import com.moneat.events.models.AuthResponse
+import com.moneat.events.models.LoginRequest
+import com.moneat.events.models.UserResponse
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -31,8 +35,13 @@ import com.moneat.testsupport.stopTestKoin
 import com.moneat.workflows.services.WorkflowService
 import io.ktor.client.request.cookie
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
@@ -41,6 +50,7 @@ import io.ktor.server.auth.jwt.jwt
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import io.mockk.every
 import io.mockk.mockk
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -93,6 +103,101 @@ class AuthRoutesTest {
 
         // Ensure schema exists (idempotent in H2) and clean between tests
         TestDatabaseHelper.resetSchema(Users, Organizations, Memberships)
+    }
+
+    @Test
+    fun `mobile login returns refresh token without browser cookies`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every {
+            authService.login(LoginRequest("oncall@example.com", "correct-password"))
+        } returns authResponse("access-token", "refresh-token")
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/mobile/login") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"email":"oncall@example.com","password":"correct-password"}""")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"token\":\"access-token\""))
+        assertTrue(response.bodyAsText().contains("\"refreshToken\":\"refresh-token\""))
+        assertTrue(response.headers.getAll(HttpHeaders.SetCookie).isNullOrEmpty())
+    }
+
+    @Test
+    fun `mobile login rejects invalid credentials`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every { authService.login(any()) } returns null
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/mobile/login") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"email":"oncall@example.com","password":"wrong-password"}""")
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid credentials"))
+    }
+
+    @Test
+    fun `mobile refresh rotates token pair without browser cookies`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every { authService.refreshToken("refresh-token") } returns
+            authResponse("rotated-access-token", "rotated-refresh-token")
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/mobile/refresh") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"refreshToken":"refresh-token"}""")
+            }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"token\":\"rotated-access-token\""))
+        assertTrue(response.bodyAsText().contains("\"refreshToken\":\"rotated-refresh-token\""))
+        assertTrue(response.headers.getAll(HttpHeaders.SetCookie).isNullOrEmpty())
+    }
+
+    @Test
+    fun `mobile refresh rejects invalid refresh token`() = testApplication {
+        installPlugins()
+        val authService = mockk<AuthService>()
+        every { authService.refreshToken("invalid-refresh-token") } returns null
+        routing {
+            authRoutes(
+                authService = authService,
+                oauthService = mockk(relaxed = true)
+            )
+        }
+
+        val response =
+            client.post("/auth/mobile/refresh") {
+                contentType(ContentType.Application.Json)
+                setBody("""{"refreshToken":"invalid-refresh-token"}""")
+            }
+
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+        assertTrue(response.bodyAsText().contains("Invalid or expired refresh token"))
     }
 
     @Test
@@ -272,6 +377,18 @@ class AuthRoutesTest {
             }
         }
     }
+
+    private fun authResponse(token: String, refreshToken: String) =
+        AuthResponse(
+            token = token,
+            refreshToken = refreshToken,
+            expiresIn = 3600,
+            user = UserResponse(
+                id = "019f8f42-0000-7000-8000-000000000001",
+                email = "oncall@example.com",
+                name = "On Call"
+            )
+        )
 
     @AfterTest
     fun teardownKoin() {

@@ -23,6 +23,7 @@ import com.moneat.config.EnvConfig
 import com.moneat.events.models.CompleteOnboardingRequest
 import com.moneat.events.models.ForgotPasswordRequest
 import com.moneat.events.models.LoginRequest
+import com.moneat.events.models.RefreshTokenRequest
 import com.moneat.events.models.ResendVerificationRequest
 import com.moneat.events.models.ResetPasswordRequest
 import com.moneat.events.models.SignupRequest
@@ -75,6 +76,10 @@ fun Route.authRoutes(
         post("/reset-password") { handleResetPassword(authService) }
         post("/logout") { handleLogout(authService) }
         post("/refresh") { handleRefreshToken(authService) }
+        route("/mobile") {
+            post("/login") { handleMobileLogin(authService) }
+            post("/refresh") { handleMobileRefreshToken(authService) }
+        }
         get("/github") { handleGitHubOAuth(oauthService) }
         get("/github/callback") { handleGitHubCallback(oauthService) }
         get("/apple") { handleAppleOAuth(oauthService) }
@@ -149,6 +154,21 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLogin(authServic
                 AuthCookieUtils.clearRefreshCookie(call)
             }
             call.respond(result.copy(refreshToken = null))
+        } else {
+            call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid credentials"))
+        }
+    } catch (e: IllegalArgumentException) {
+        call.respond(HttpStatusCode.Forbidden, ErrorResponse(e.message))
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleMobileLogin(authService: AuthService) {
+    val request = call.receive<LoginRequest>()
+
+    try {
+        val result = authService.login(request)
+        if (result != null) {
+            call.respond(result)
         } else {
             call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Invalid credentials"))
         }
@@ -275,6 +295,27 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleRefreshToken(aut
     } catch (e: IllegalArgumentException) {
         AuthCookieUtils.clearAuthCookie(call)
         AuthCookieUtils.clearRefreshCookie(call)
+        call.respond(
+            HttpStatusCode.Unauthorized,
+            ErrorResponse(e.message)
+        )
+    }
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleMobileRefreshToken(authService: AuthService) {
+    val request = call.receive<RefreshTokenRequest>()
+
+    try {
+        val result = authService.refreshToken(request.refreshToken)
+        if (result != null) {
+            call.respond(result)
+        } else {
+            call.respond(
+                HttpStatusCode.Unauthorized,
+                ErrorResponse("Invalid or expired refresh token")
+            )
+        }
+    } catch (e: IllegalArgumentException) {
         call.respond(
             HttpStatusCode.Unauthorized,
             ErrorResponse(e.message)
