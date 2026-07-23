@@ -441,15 +441,14 @@ class PushNotificationService {
     ) {
         if (receipt.status == "ok") {
             logger.info(
-                "Push receipt ok for user $userId, ticketId=${pending.ticketId}, " +
-                    "token=${redactToken(pending.token)}",
+                "Push receipt ok for user $userId, ticketId=${pending.ticketId}",
             )
             return
         }
 
         logger.error(
             "Push receipt failed for user $userId, ticketId=${pending.ticketId}, " +
-                "token=${redactToken(pending.token)}: ${receipt.message} (details: ${receipt.details})",
+                "message=${receipt.message} (details: ${receipt.details})",
         )
         if (receipt.details?.get("error") == DEVICE_NOT_REGISTERED_ERROR) {
             removeDeviceToken(pending.token)
