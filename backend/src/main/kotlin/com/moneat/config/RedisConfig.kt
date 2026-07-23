@@ -68,18 +68,12 @@ object RedisConfig {
      * Intake requests can keep the primary Redis connection busy during bursts. Keeping metric reads on a
      * separate connection prevents Prometheus gauges from degrading to NaN while queue admission is active.
      */
-    fun monitoringSync(): RedisCommands<String, String> {
-        val conn = activeMonitoringConnection()
-        return conn?.sync() ?: sync()
-    }
-
-    private fun activeMonitoringConnection(): StatefulRedisConnection<String, String>? {
-        monitoringConnection?.takeIf { it.isOpen }?.let { return it }
-        return synchronized(monitoringConnectionLock) {
-            reconnectClosedMonitoringConnection(monitoringConnection, client)
+    fun <T> withMonitoringSync(operation: (RedisCommands<String, String>) -> T): T =
+        synchronized(monitoringConnectionLock) {
+            val monitoring = reconnectClosedMonitoringConnection(monitoringConnection, client)
                 .also { monitoringConnection = it }
+            operation(monitoring?.sync() ?: sync())
         }
-    }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
     fun newStatefulBlockingConnection(): StatefulRedisConnection<String, String> {
@@ -129,15 +123,15 @@ object RedisConfig {
         synchronized(monitoringConnectionLock) {
             monitoringConnection?.close()
             monitoringConnection = null
+            connection?.close()
+            connection = null
+            synchronized(blockingConnections) {
+                blockingConnections.forEach { it.close() }
+                blockingConnections.clear()
+            }
+            client?.shutdown()
+            client = null
         }
-        connection?.close()
-        connection = null
-        synchronized(blockingConnections) {
-            blockingConnections.forEach { it.close() }
-            blockingConnections.clear()
-        }
-        client?.shutdown()
-        client = null
     }
 }
 

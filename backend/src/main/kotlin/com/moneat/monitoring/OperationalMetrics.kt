@@ -731,61 +731,69 @@ object OperationalMetrics {
     private fun readQueueDepth(queueKey: String, consumerGroup: String? = null): Double {
         if (!RedisConfig.isMonitoringConnected()) return Double.NaN
         if (consumerGroup != null) return readStreamBacklogMessages(queueKey, consumerGroup)
-        return runCatching { RedisConfig.monitoringSync().xlen(queueKey).toDouble() }
-            .recoverCatching { RedisConfig.monitoringSync().llen(queueKey).toDouble() }
+        return runCatching { RedisConfig.withMonitoringSync { it.xlen(queueKey).toDouble() } }
+            .recoverCatching { RedisConfig.withMonitoringSync { it.llen(queueKey).toDouble() } }
             .getOrElse { Double.NaN }
     }
 
     private fun readStreamBacklogMessages(streamKey: String, consumerGroup: String): Double =
         runCatching {
-            val redis = RedisConfig.monitoringSync()
-            val pendingMessages = redis.xpending(streamKey, consumerGroup).count
-            val lagMessages = redis.xinfoGroups(streamKey)
-                .asSequence()
-                .mapNotNull { parseStreamGroupInfo(it) }
-                .firstOrNull { group -> group.name == consumerGroup }
-                ?.lag
-                ?: 0L
-            (pendingMessages + lagMessages).toDouble()
+            RedisConfig.withMonitoringSync { redis ->
+                val pendingMessages = redis.xpending(streamKey, consumerGroup).count
+                val lagMessages = redis.xinfoGroups(streamKey)
+                    .asSequence()
+                    .mapNotNull { parseStreamGroupInfo(it) }
+                    .firstOrNull { group -> group.name == consumerGroup }
+                    ?.lag
+                    ?: 0L
+                (pendingMessages + lagMessages).toDouble()
+            }
         }.getOrElse { error ->
             if (error.isMissingRedisStreamError()) 0.0 else Double.NaN
         }
 
     private fun readStreamPendingMessages(streamKey: String, consumerGroup: String): Double {
         if (!RedisConfig.isMonitoringConnected()) return Double.NaN
-        return runCatching { RedisConfig.monitoringSync().xpending(streamKey, consumerGroup).count.toDouble() }
+        return runCatching {
+            RedisConfig.withMonitoringSync { it.xpending(streamKey, consumerGroup).count.toDouble() }
+        }
             .getOrElse { Double.NaN }
     }
 
     private fun readStreamOldestMessageAgeSeconds(streamKey: String, consumerGroup: String?): Double {
         if (!RedisConfig.isMonitoringConnected()) return Double.NaN
         return runCatching {
-            val redis = RedisConfig.monitoringSync()
-            if (consumerGroup == null) {
-                return readOldestStreamEntryAgeSeconds(redis, streamKey)
+            RedisConfig.withMonitoringSync { redis ->
+                readStreamOldestMessageAgeSeconds(redis, streamKey, consumerGroup)
             }
-
-            val pending = redis.xpending(streamKey, consumerGroup)
-            if (pending.count > 0) {
-                return streamIdAgeSeconds(pending.messageIds.lower.value)
-            }
-
-            val group = redis.xinfoGroups(streamKey)
-                .asSequence()
-                .mapNotNull(::parseStreamGroupInfo)
-                .firstOrNull { info -> info.name == consumerGroup }
-            if (group == null) return 0.0
-            val lag = group.lag ?: return readOldestStreamEntryAgeSeconds(redis, streamKey)
-            if (lag <= 0 || group.lastDeliveredId == null) return 0.0
-
-            val firstUnconsumed = redis
-                .xrange(streamKey, Range.create(group.lastDeliveredId, "+"), Limit.from(2))
-                .firstOrNull { message -> message.id != group.lastDeliveredId }
-                ?: return 0.0
-            streamIdAgeSeconds(firstUnconsumed.id)
         }.getOrElse { error ->
             if (error.isMissingRedisStreamError()) 0.0 else Double.NaN
         }
+    }
+
+    private fun readStreamOldestMessageAgeSeconds(
+        redis: RedisCommands<String, String>,
+        streamKey: String,
+        consumerGroup: String?,
+    ): Double {
+        if (consumerGroup == null) return readOldestStreamEntryAgeSeconds(redis, streamKey)
+
+        val pending = redis.xpending(streamKey, consumerGroup)
+        if (pending.count > 0) return streamIdAgeSeconds(pending.messageIds.lower.value)
+
+        val group = redis.xinfoGroups(streamKey)
+            .asSequence()
+            .mapNotNull(::parseStreamGroupInfo)
+            .firstOrNull { info -> info.name == consumerGroup }
+        if (group == null) return 0.0
+        val lag = group.lag ?: return readOldestStreamEntryAgeSeconds(redis, streamKey)
+        if (lag <= 0 || group.lastDeliveredId == null) return 0.0
+
+        val firstUnconsumed = redis
+            .xrange(streamKey, Range.create(group.lastDeliveredId, "+"), Limit.from(2))
+            .firstOrNull { message -> message.id != group.lastDeliveredId }
+            ?: return 0.0
+        return streamIdAgeSeconds(firstUnconsumed.id)
     }
 
     private fun readOldestStreamEntryAgeSeconds(
