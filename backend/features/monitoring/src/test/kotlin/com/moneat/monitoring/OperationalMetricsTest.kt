@@ -17,6 +17,7 @@
 package com.moneat.monitoring
 
 import com.moneat.config.RedisConfig
+import com.moneat.ingestion.queue.IngestionPipeline
 import io.lettuce.core.Range
 import io.lettuce.core.StreamMessage
 import io.lettuce.core.api.sync.RedisCommands
@@ -64,6 +65,22 @@ class OperationalMetricsTest {
         assertContains(rendered, "status=\"success\"")
         assertContains(rendered, "moneat_worker_last_success_timestamp_seconds")
         assertHasApplicationTag(rendered)
+    }
+
+    @Test
+    fun `renders source neutral ingestion admission and capacity metrics`() {
+        OperationalMetrics.recordIngestionAdmission(IngestionPipeline.LOGS, "accepted")
+        OperationalMetrics.recordIngestionAdmission(IngestionPipeline.LOGS, "capacity_rejected")
+        OperationalMetrics.registerIngestionQueueCapacity(IngestionPipeline.LOGS, 250_000)
+        OperationalMetrics.recordIngestionDlqPush(IngestionPipeline.LOGS, "success")
+
+        val rendered = OperationalMetrics.scrape()
+
+        assertContains(rendered, "moneat_ingestion_admission_total")
+        assertContains(rendered, "outcome=\"capacity_rejected\"")
+        assertContains(rendered, "moneat_ingestion_queue_capacity_entries")
+        assertContains(rendered, "moneat_ingestion_dlq_pushes_total")
+        assertContains(rendered, "pipeline=\"logs\"")
     }
 
     @Test

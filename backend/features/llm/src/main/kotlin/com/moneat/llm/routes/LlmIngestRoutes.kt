@@ -22,6 +22,7 @@ import com.moneat.events.routes.extractPublicKey
 import com.moneat.events.services.EventService
 import com.moneat.ingestion.queue.IngestionPipeline
 import com.moneat.ingestion.queue.IngestionQueueClient
+import com.moneat.ingestion.queue.admitWithQuotaRefund
 import com.moneat.llm.models.LlmIngestPayload
 import com.moneat.llm.services.LlmIngestionWorker
 import com.moneat.utils.ErrorResponse
@@ -74,49 +75,61 @@ fun Route.llmIngestRoutes() {
                 return@post
             }
 
-            suspendRunCatching {
+            val parsed = suspendRunCatching {
                 val contentEncoding = call.request.header("Content-Encoding")
                 val bodyBytes = call.receive<ByteArray>()
                 val decompressedBytes = DecompressionService.decompress(bodyBytes, contentEncoding)
-
                 val payload = json.decodeFromString<LlmIngestPayload>(decompressedBytes.decodeToString())
-
-                if (payload.generations.isEmpty()) {
-                    call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
-                    return@post
-                }
-
-                if (quotaService.isEnforcementEnabled()) {
-                    val orgId = eventService.getOrganizationIdForProject(projectId)
-                    if (orgId == null) {
-                        call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
-                        return@post
-                    }
-                    val billableBytes = decompressedBytes.size.toLong()
-                    val reservation =
-                        quotaService.reserveUnits(
-                            organizationId = orgId,
-                            requestedUnits = payload.generations.size,
-                            eventType = "llm",
-                            requestedBytes = billableBytes
-                        )
-                    if (!reservation.allowed) {
-                        call.respond(
-                            HttpStatusCode.TooManyRequests,
-                            ErrorResponse("Quota exceeded: ${reservation.reason}")
-                        )
-                        return@post
-                    }
-                }
-
-                val message = LlmIngestionWorker.encodeMessage(projectId, decompressedBytes)
-                IngestionQueueClient.enqueue(IngestionPipeline.LLM, queueKey, message)
-
-                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to payload.generations.size))
+                payload to decompressedBytes
             }.getOrElse { e ->
                 logger.error(e) { "Failed to process LLM ingest payload: ${e.message}" }
                 call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid LLM payload"))
+                return@post
             }
+            val (payload, decompressedBytes) = parsed
+            if (payload.generations.isEmpty()) {
+                call.respond(HttpStatusCode.Accepted, mapOf("accepted" to 0))
+                return@post
+            }
+
+            var reservedOrganizationId: Int? = null
+            if (quotaService.isEnforcementEnabled()) {
+                val orgId = eventService.getOrganizationIdForProject(projectId)
+                if (orgId == null) {
+                    call.respond(HttpStatusCode.NotFound, ErrorResponse("Project organization not found"))
+                    return@post
+                }
+                val reservation = quotaService.reserveUnits(
+                    organizationId = orgId,
+                    requestedUnits = payload.generations.size,
+                    eventType = "llm",
+                    requestedBytes = decompressedBytes.size.toLong()
+                )
+                if (!reservation.allowed) {
+                    call.respond(
+                        HttpStatusCode.TooManyRequests,
+                        ErrorResponse("Quota exceeded: ${reservation.reason}")
+                    )
+                    return@post
+                }
+                reservedOrganizationId = orgId
+            }
+
+            val message = LlmIngestionWorker.encodeMessage(projectId, decompressedBytes)
+            admitWithQuotaRefund(
+                refund = {
+                    reservedOrganizationId?.let { orgId ->
+                        quotaService.refundUnits(
+                            orgId,
+                            payload.generations.size,
+                            "llm",
+                            decompressedBytes.size.toLong(),
+                        )
+                    }
+                },
+                admit = { IngestionQueueClient.enqueue(IngestionPipeline.LLM, queueKey, message) },
+            )
+            call.respond(HttpStatusCode.Accepted, mapOf("accepted" to payload.generations.size))
         }
     }
 }

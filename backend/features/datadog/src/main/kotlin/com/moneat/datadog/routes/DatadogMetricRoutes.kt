@@ -18,6 +18,7 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.DatadogMetricBillingRequest
+import com.moneat.datadog.admitDatadogBatchWithQuotaRefund
 import com.moneat.datadog.auth.DatadogAuthContext
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
@@ -27,9 +28,7 @@ import com.moneat.datadog.metricSeriesBillingRequest
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogSketchPayload
 import com.moneat.datadog.reserveDatadogQuotaBatch
-import com.moneat.datadog.services.DatadogHostService
 import com.moneat.datadog.services.DatadogMetricService
-import com.moneat.datadog.services.QueuedSketchBatch
 import com.moneat.datadog.sketchBillingRequest
 import com.moneat.utils.suspendRunCatching
 import io.ktor.http.HttpStatusCode
@@ -120,15 +119,21 @@ private suspend fun RoutingContext.acceptMetricSeries(
     apiVersion: String
 ) {
     val orgId = authContext.organizationId
-    touchMetricHosts(orgId, payload)
     val billingRequest = metricSeriesBillingRequest(payload, body.size.toLong())
     if (!reserveMetricQuota(quotaService, orgId, billingRequest)) return
 
-    val count = DatadogMetricService.enqueueMetrics(
-        organizationId = orgId.toLong(),
-        payload = payload,
-        projectId = authContext.projectId?.toLong(),
-    )
+    val count = admitDatadogBatchWithQuotaRefund(
+        quotaService = quotaService,
+        organizationId = orgId,
+        requestedUnitsByType = billingRequest.requestedUnitsByType,
+        requestedBytesByType = billingRequest.requestedBytesByType,
+    ) {
+        DatadogMetricService.enqueueMetrics(
+            organizationId = orgId.toLong(),
+            payload = payload,
+            projectId = authContext.projectId?.toLong(),
+        )
+    }
     logger.debug { "Accepted $count DD $apiVersion metrics for org $orgId" }
     call.respondAccepted()
 }
@@ -191,20 +196,24 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSketches(
         return
     }
 
-    val batch = DatadogMetricService.mapSketches(
-        organizationId = orgId.toLong(),
-        payload = payload,
-        projectId = authContext.projectId?.toLong(),
-    )
-
-    touchSketchHosts(orgId, payload)
     val billingRequest = sketchBillingRequest(payload, body.size.toLong())
     if (!reserveMetricQuota(quotaService, orgId, billingRequest)) return
 
-    insertSketchBatchIfPresent(batch)
+    val count = admitDatadogBatchWithQuotaRefund(
+        quotaService = quotaService,
+        organizationId = orgId,
+        requestedUnitsByType = billingRequest.requestedUnitsByType,
+        requestedBytesByType = billingRequest.requestedBytesByType,
+    ) {
+        DatadogMetricService.enqueueSketches(
+            organizationId = orgId.toLong(),
+            payload = payload,
+            projectId = authContext.projectId?.toLong(),
+        )
+    }
 
     logger.debug {
-        "Accepted ${batch.sketches.size} DD sketches " +
+        "Accepted $count DD sketches " +
             "for org $orgId"
     }
 
@@ -229,28 +238,6 @@ private suspend fun RoutingContext.reserveMetricQuota(
         billingRequest.requestedUnitsByType,
         billingRequest.requestedBytesByType,
     )
-}
-
-private fun touchMetricHosts(orgId: Int, payload: DatadogMetricSeriesV1) {
-    val hosts = payload.series
-        .map { it.host }
-        .filter { it.isNotBlank() }
-        .toSet()
-    DatadogHostService.touchHostLastSeen(orgId, hosts)
-}
-
-private fun touchSketchHosts(orgId: Int, payload: DatadogSketchPayload) {
-    val hosts = payload.sketches
-        .map { it.host }
-        .filter { it.isNotBlank() }
-        .toSet()
-    DatadogHostService.touchHostLastSeen(orgId, hosts)
-}
-
-private suspend fun insertSketchBatchIfPresent(batch: QueuedSketchBatch) {
-    if (batch.sketches.isNotEmpty()) {
-        DatadogMetricService.insertSketchBatch(batch)
-    }
 }
 
 private suspend fun ApplicationCall.respondInvalidPayload() {

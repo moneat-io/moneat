@@ -19,6 +19,7 @@ package com.moneat.otlp.routes
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.billing.services.QuotaExceededResponse
 import com.moneat.ingest.DecompressionService
+import com.moneat.ingestion.queue.admitWithQuotaRefund
 import com.moneat.otlp.METRIC_BILLABLE_OVERHEAD_BYTES
 import com.moneat.otlp.OtlpAuth
 import com.moneat.otlp.services.OtlpApiKeyService
@@ -130,6 +131,7 @@ private suspend fun handleOtlpMetricsIngest(
         return
     }
 
+    var reservedBillableBytes: Long? = null
     if (quotaService.isEnforcementEnabled()) {
         val billableBytes =
             parsedMetrics.sumOf { it.metricName.length + METRIC_BILLABLE_OVERHEAD_BYTES }.toLong()
@@ -146,6 +148,7 @@ private suspend fun handleOtlpMetricsIngest(
             )
             return
         }
+        reservedBillableBytes = billableBytes
     }
 
     val queueKey = call.application.environment.config
@@ -153,10 +156,19 @@ private suspend fun handleOtlpMetricsIngest(
         ?.getString()
         ?: DEFAULT_QUEUE_KEY
     val routedMetrics = routeMetrics(organizationId, parsedMetrics, otlpServiceRoutingService)
-    val accepted = metricsService.enqueueMetrics(
-        organizationId.toLong(),
-        routedMetrics,
-        queueKey
+    val accepted = admitWithQuotaRefund(
+        refund = {
+            reservedBillableBytes?.let { billableBytes ->
+                quotaService.refundUnits(organizationId, parsedMetrics.size, "otlp_metric", billableBytes)
+            }
+        },
+        admit = {
+            metricsService.enqueueMetrics(
+                organizationId.toLong(),
+                routedMetrics,
+                queueKey
+            )
+        },
     )
     call.respond(HttpStatusCode.Accepted, mapOf("accepted" to accepted))
 }

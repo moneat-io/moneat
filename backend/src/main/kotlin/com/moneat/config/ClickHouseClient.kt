@@ -168,7 +168,7 @@ object ClickHouseClient {
                     parameter("param_$name", value)
                 }
                 if (!isReadQuery) {
-                    ClickHouseInsertDeduplication.tokenForQuery(query)?.let { token ->
+                    ClickHouseInsertDeduplication.nextToken()?.let { token ->
                         parameter("insert_deduplicate", "1")
                         parameter("insert_deduplication_token", token)
                     }

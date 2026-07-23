@@ -233,6 +233,30 @@ class BillingQuotaServiceTest {
         assertEquals(80, result.usage.usedFeedback, "50 initial + 30 requested = 80")
     }
 
+    @Test
+    fun `refundUnitsBatch refunds counts and bytes for each quota type`() {
+        transaction {
+            insertTestUsageCounter(
+                organizationId = testOrgId,
+                usedErrors = 10,
+                usedTransactions = 8,
+                usedBytes = 300,
+            )
+        }
+
+        billingQuotaService.refundUnitsBatch(
+            organizationId = testOrgId,
+            requestedUnitsByType = mapOf("error" to 3, "transaction" to 2),
+            requestedBytesByType = mapOf("error" to 30, "transaction" to 20),
+        )
+
+        val usage = billingQuotaService.getUsageForOrganization(testOrgId)
+        assertEquals(7, usage.usedErrors)
+        assertEquals(6, usage.usedTransactions)
+        assertEquals(13, usage.usedUnits)
+        assertEquals(250, usage.usedBytes)
+    }
+
     // ──── PAYG Budget Limits Tests ────
 
     @Test

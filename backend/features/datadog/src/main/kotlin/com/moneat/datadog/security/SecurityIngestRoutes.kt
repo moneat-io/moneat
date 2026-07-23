@@ -18,6 +18,9 @@ package com.moneat.datadog.security
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
+import com.moneat.datadog.rethrowIfQueueAdmission
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DdActivityDumpPayload
@@ -60,10 +63,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleSecurityEvents(
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdSecurityEventPayload>(body.decodeToString())
         if (!reserveSecurityQuota(quotaService, orgId, payload.events.size, body)) return
-        val count = SecurityIngestionService.enqueueSecurityEvents(orgId, payload)
+        val count = admitDatadogWithQuotaRefund(
+            quotaService,
+            DatadogQuotaCharge(orgId, payload.events.size, "dd_security", body.size.toLong()),
+        ) {
+            SecurityIngestionService.enqueueSecurityEvents(orgId, payload)
+        }
         logger.debug { "Accepted $count security events for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process security events" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -78,10 +87,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleActivityDumps(
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdActivityDumpPayload>(body.decodeToString())
         if (!reserveSecurityQuota(quotaService, orgId, payload.dumps.size, body)) return
-        val count = SecurityIngestionService.enqueueActivityDumps(orgId, payload)
+        val count = admitDatadogWithQuotaRefund(
+            quotaService,
+            DatadogQuotaCharge(orgId, payload.dumps.size, "dd_security", body.size.toLong()),
+        ) {
+            SecurityIngestionService.enqueueActivityDumps(orgId, payload)
+        }
         logger.debug { "Accepted $count activity dumps for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process activity dumps" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -96,10 +111,16 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleComplianceFindin
         val body = DecompressionService.decompress(rawBody, contentEncoding)
         val payload = json.decodeFromString<DdCompliancePayload>(body.decodeToString())
         if (!reserveSecurityQuota(quotaService, orgId, payload.findings.size, body)) return
-        val count = SecurityIngestionService.enqueueCompliance(orgId, payload)
+        val count = admitDatadogWithQuotaRefund(
+            quotaService,
+            DatadogQuotaCharge(orgId, payload.findings.size, "dd_security", body.size.toLong()),
+        ) {
+            SecurityIngestionService.enqueueCompliance(orgId, payload)
+        }
         logger.debug { "Accepted $count compliance findings for org $orgId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process compliance findings" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

@@ -26,8 +26,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import mu.KLogger
+import kotlinx.serialization.SerializationException
+import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class RedisStreamQueueOperationsTest {
     private val redis = mockk<RedisCommands<String, String>>()
@@ -131,6 +135,18 @@ class RedisStreamQueueOperationsTest {
         verify(exactly = 0) { redis.xdel("moneat:logs:queue:stream", "1-0") }
     }
 
+    @Test
+    fun `permanent payload errors move to dlq immediately`() {
+        assertTrue(shouldMoveToDlq(SerializationException("bad payload"), deliveryCount = 1, maxDeliveries = 5))
+        assertTrue(shouldMoveToDlq(IllegalArgumentException("bad payload"), deliveryCount = 1, maxDeliveries = 5))
+    }
+
+    @Test
+    fun `transient failures retry until the delivery limit`() {
+        assertFalse(shouldMoveToDlq(IOException("ClickHouse down"), deliveryCount = 1, maxDeliveries = 5))
+        assertTrue(shouldMoveToDlq(IOException("ClickHouse down"), deliveryCount = 5, maxDeliveries = 5))
+    }
+
     private fun logQueueSpec(): IngestionQueueSpec =
         IngestionQueueSpec(
             pipeline = IngestionPipeline.LOGS,
@@ -142,7 +158,7 @@ class RedisStreamQueueOperationsTest {
             claimIdleMs = 300_000,
             maxDeliveries = 5,
             readTimeoutMs = 5_000,
-            streamMaxLen = 250_000,
+            maxPendingEntries = 250_000,
             dlqStreamMaxLen = 10_000,
         )
 }

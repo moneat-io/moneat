@@ -23,7 +23,6 @@ import com.moneat.billing.services.QuotaReservationResult
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.datadog.services.DatadogEventService
 import com.moneat.datadog.services.DatadogHostService
-import com.moneat.datadog.services.QueuedServiceCheckBatch
 import com.moneat.datadog.services.DatadogLogService
 import com.moneat.datadog.services.DatadogMetricService
 import com.moneat.datadog.services.DatadogService
@@ -126,11 +125,10 @@ class DatadogIngestRoutesTest {
             }
         }
         coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 0
+        coEvery { DatadogMetricService.enqueueSketches(any(), any(), any()) } returns 0
         coEvery { DatadogLogService.enqueueLogs(any(), any()) } returns 0
         coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 0
-        every { DatadogEventService.mapServiceChecks(any(), any()) } returns
-            QueuedServiceCheckBatch(0L, emptyList())
-        coEvery { DatadogEventService.insertServiceCheckBatch(any()) } returns Unit
+        coEvery { DatadogEventService.enqueueServiceChecks(any(), any()) } returns 0
         every { DatadogHostService.touchHostLastSeen(any(), any()) } returns Unit
         every { MiscIngestionService.enqueueSymbolDb(any(), any()) } returns Unit
         every { MiscIngestionService.enqueuePipelineStats(any(), any()) } returns 0
@@ -401,7 +399,6 @@ class DatadogIngestRoutesTest {
     @Test
     fun `v1 sketches accepts valid json payload`() = testApplication {
         every { DatadogService.validateApiKey(VALID_KEY) } returns ORG_ID
-        coEvery { DatadogMetricService.insertSketchBatch(any()) } returns Unit
         installRoutes()()
         val response = client.post("/dd/api/v1/sketches") {
             header(DD_API_KEY_HEADER, VALID_KEY)

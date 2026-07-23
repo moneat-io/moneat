@@ -18,6 +18,9 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
+import com.moneat.datadog.rethrowIfQueueAdmission
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DdManifestPayload
@@ -73,11 +76,22 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorReso
         ) {
             return
         }
-        val count = OrchestratorIngestionService.enqueueResources(organizationId, payload)
+        val count = admitDatadogWithQuotaRefund(
+            quotaService,
+            DatadogQuotaCharge(
+                organizationId,
+                payload.resources.size,
+                "dd_orchestrator",
+                bytes.size.toLong(),
+            ),
+        ) {
+            OrchestratorIngestionService.enqueueResources(organizationId, payload)
+        }
 
         logger.debug { "Enqueued $count K8s resources for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process orchestrator resources" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }
@@ -104,11 +118,22 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleOrchestratorMani
         ) {
             return
         }
-        val count = OrchestratorIngestionService.enqueueManifests(organizationId, payload)
+        val count = admitDatadogWithQuotaRefund(
+            quotaService,
+            DatadogQuotaCharge(
+                organizationId,
+                payload.manifests.size,
+                "dd_orchestrator",
+                bytes.size.toLong(),
+            ),
+        ) {
+            OrchestratorIngestionService.enqueueManifests(organizationId, payload)
+        }
 
         logger.debug { "Enqueued $count K8s manifests for org=$organizationId" }
         call.respond(HttpStatusCode.Accepted, mapOf("status" to "ok"))
     }.getOrElse { e ->
+        e.rethrowIfQueueAdmission()
         logger.error(e) { "Failed to process orchestrator manifests" }
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid payload"))
     }

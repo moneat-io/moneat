@@ -19,23 +19,30 @@ package com.moneat.config
 import kotlinx.coroutines.asContextElement
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
 
 object ClickHouseInsertDeduplication {
-    private val tokenSeed = ThreadLocal<String?>()
+    private data class DeduplicationState(
+        val seed: String,
+        val nextSequence: AtomicInteger = AtomicInteger(0),
+    )
+
+    private val state = ThreadLocal<DeduplicationState?>()
 
     suspend fun <T> withTokenSeed(
         seed: String?,
         block: suspend () -> T,
     ): T {
         if (seed.isNullOrBlank()) return block()
-        return withContext(tokenSeed.asContextElement(seed)) {
+        return withContext(state.asContextElement(DeduplicationState(seed))) {
             block()
         }
     }
 
-    fun tokenForQuery(query: String): String? {
-        val seed = tokenSeed.get()?.takeIf { it.isNotBlank() } ?: return null
-        return sha256Hex("$seed\n${query.trim()}")
+    fun nextToken(): String? {
+        val activeState = state.get() ?: return null
+        val sequence = activeState.nextSequence.incrementAndGet()
+        return sha256Hex("${activeState.seed}|$sequence")
     }
 
     private fun sha256Hex(value: String): String =

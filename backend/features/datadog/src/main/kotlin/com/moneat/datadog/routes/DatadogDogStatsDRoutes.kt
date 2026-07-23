@@ -20,6 +20,7 @@ import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.dogStatsDBillingRequest
+import com.moneat.datadog.admitDatadogBatchWithQuotaRefund
 import com.moneat.datadog.models.DatadogMetricSeriesV1
 import com.moneat.datadog.models.DatadogMetricV1
 import com.moneat.datadog.reserveDatadogQuotaBatch
@@ -75,11 +76,18 @@ fun Route.datadogDogStatsDRoutes(
                     val payload = DatadogMetricSeriesV1(
                         series = metrics
                     )
-                    DatadogMetricService.enqueueMetrics(
-                        organizationId = orgId.toLong(),
-                        payload = payload,
-                        projectId = authContext.projectId?.toLong(),
-                    )
+                    admitDatadogBatchWithQuotaRefund(
+                        quotaService = quotaService,
+                        organizationId = orgId,
+                        requestedUnitsByType = billingRequest.requestedUnitsByType,
+                        requestedBytesByType = billingRequest.requestedBytesByType,
+                    ) {
+                        DatadogMetricService.enqueueMetrics(
+                            organizationId = orgId.toLong(),
+                            payload = payload,
+                            projectId = authContext.projectId?.toLong(),
+                        )
+                    }
                 }
 
                 logger.debug {

@@ -18,6 +18,8 @@ package com.moneat.datadog.routes
 
 import com.moneat.billing.services.BillingQuotaService
 import com.moneat.datadog.reserveDatadogQuota
+import com.moneat.datadog.admitDatadogWithQuotaRefund
+import com.moneat.datadog.DatadogQuotaCharge
 import com.moneat.datadog.auth.DatadogAuthMiddleware
 import com.moneat.ingest.DecompressionService
 import com.moneat.datadog.models.DatadogLogEntry
@@ -86,10 +88,15 @@ private suspend fun RoutingContext.handleDatadogLogs(
         return
     }
 
-    val count = DatadogLogService.enqueueLogs(
-        organizationId = orgId.toLong(),
-        entries = entries
-    )
+    val count = admitDatadogWithQuotaRefund(
+        quotaService,
+        DatadogQuotaCharge(orgId, entries.size, "dd_log", body.size.toLong()),
+    ) {
+        DatadogLogService.enqueueLogs(
+            organizationId = orgId.toLong(),
+            entries = entries
+        )
+    }
 
     logger.debug {
         "Accepted $count DD logs for org $orgId"

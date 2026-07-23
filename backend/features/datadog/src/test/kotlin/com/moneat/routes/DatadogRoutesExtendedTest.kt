@@ -67,10 +67,11 @@ import com.moneat.datadog.services.ProfileIngestionService
 import com.moneat.datadog.services.QueuedConnectionEntry
 import com.moneat.datadog.services.QueuedInfraBatch
 import com.moneat.datadog.services.QueuedProcessEntry
-import com.moneat.datadog.services.QueuedServiceCheckBatch
-import com.moneat.datadog.services.QueuedServiceCheckEntry
 import com.moneat.datadog.services.TelemetryProxyService
 import com.moneat.datadog.services.TraceIngestionService
+import com.moneat.ingestion.queue.IngestionPipeline
+import com.moneat.ingestion.queue.IngestionQueueCapacityException
+import com.moneat.plugins.installErrorHandling
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
@@ -236,13 +237,9 @@ class DatadogRoutesExtendedTest {
         every { DatadogHostService.upsertFromIntake(any(), any()) } just Runs
         every { DatadogHostService.touchHostLastSeen(any(), any()) } just Runs
         coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } returns 1
-        every { DatadogMetricService.mapSketches(any(), any(), any()) } returns
-            com.moneat.datadog.services.QueuedSketchBatch(1L, emptyList())
-        coEvery { DatadogMetricService.insertSketchBatch(any()) } just Runs
-        every { DatadogEventService.mapServiceChecks(any(), any()) } returns
-            com.moneat.datadog.services.QueuedServiceCheckBatch(1L, emptyList())
-        coEvery { DatadogEventService.insertServiceCheckBatch(any()) } just Runs
+        coEvery { DatadogMetricService.enqueueSketches(any(), any(), any()) } returns 1
         coEvery { DatadogEventService.enqueueEvents(any(), any()) } returns 1
+        coEvery { DatadogEventService.enqueueServiceChecks(any(), any()) } returns 1
         coEvery { DatadogLogService.enqueueLogs(any(), any()) } returns 1
         every { MiscIngestionService.enqueueSymbolDb(any(), any()) } just Runs
         every { MiscIngestionService.enqueuePipelineStats(any(), any()) } returns 1
@@ -1340,26 +1337,45 @@ class DatadogRoutesExtendedTest {
                 requestedBytesByType = mapOf("infra_metric" to body.toByteArray().size.toLong()),
             )
         }
-        verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
+        verify(exactly = 0) { DatadogHostService.touchHostLastSeen(any(), any()) }
         coVerify(exactly = 0) { DatadogMetricService.enqueueMetrics(any(), any(), any()) }
     }
 
     @Test
-    fun `POST dd service checks touches host before quota rejection`() = testApplication {
+    fun `POST dd metrics refunds quota when queue capacity rejects`() = testApplication {
+        val quotaService = mockk<BillingQuotaService>(relaxed = true)
+        val body = """{"series":[{"metric":"system.cpu","host":"h1","points":[[1700000000,42.0]]}]}"""
+        val requestedBytes = mapOf("infra_metric" to body.toByteArray().size.toLong())
+        every { quotaService.isEnforcementEnabled() } returns true
+        every {
+            quotaService.reserveUnitsBatch(TEST_ORG_ID, mapOf("infra_metric" to 1), requestedBytes)
+        } returns QuotaReservationResult(allowed = true, usage = quotaUsage())
+        coEvery { DatadogMetricService.enqueueMetrics(any(), any(), any()) } throws
+            IngestionQueueCapacityException(IngestionPipeline.DD_METRICS, 100)
+
+        application {
+            install(ContentNegotiation) { json() }
+            installErrorHandling()
+            routing { datadogMetricRoutes(quotaService) }
+        }
+
+        val response = client.post("/dd/api/v1/series") {
+            header(DD_API_KEY_HEADER, TEST_API_KEY)
+            contentType(ContentType.Application.Json)
+            setBody(body)
+        }
+
+        assertEquals(HttpStatusCode.TooManyRequests, response.status)
+        assertEquals("5", response.headers[HttpHeaders.RetryAfter])
+        verify {
+            quotaService.refundUnitsBatch(TEST_ORG_ID, mapOf("infra_metric" to 1), requestedBytes)
+        }
+    }
+
+    @Test
+    fun `POST dd service checks rejects quota before enqueue`() = testApplication {
         val quotaService = rejectingQuotaService()
         val body = """{"service_checks":[{"check":"disk","host_name":"h1","status":0}]}"""
-        every {
-            DatadogEventService.mapServiceChecks(any(), any())
-        } returns QueuedServiceCheckBatch(
-            organizationId = TEST_ORG_ID.toLong(),
-            serviceChecks = listOf(
-                QueuedServiceCheckEntry(
-                    checkName = "disk",
-                    host = "h1",
-                    timestampMs = 0L
-                )
-            )
-        )
 
         application {
             install(ContentNegotiation) { json() }
@@ -1381,8 +1397,8 @@ class DatadogRoutesExtendedTest {
                 requestedBytes = body.toByteArray().size.toLong(),
             )
         }
-        verify { DatadogHostService.touchHostLastSeen(TEST_ORG_ID, setOf("h1")) }
-        coVerify(exactly = 0) { DatadogEventService.insertServiceCheckBatch(any()) }
+        verify(exactly = 0) { DatadogHostService.touchHostLastSeen(any(), any()) }
+        coVerify(exactly = 0) { DatadogEventService.enqueueServiceChecks(any(), any()) }
     }
 
     @Test

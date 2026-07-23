@@ -16,12 +16,26 @@
 
 package com.moneat.datadog.services
 
+import com.moneat.config.ClickHouseClient
+import com.moneat.config.RedisConfig
 import com.moneat.datadog.models.DatadogEvent
 import com.moneat.datadog.models.DatadogServiceCheck
 import com.moneat.datadog.models.DatadogServiceCheckPayload
+import com.moneat.testsupport.MockHttpServer
+import com.moneat.testsupport.requestBodyText
+import com.moneat.testsupport.respond
+import io.lettuce.core.ScriptOutputType
+import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.slot
+import io.mockk.unmockkObject
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 private val json = Json {
@@ -30,6 +44,214 @@ private val json = Json {
 }
 
 class DatadogEventServiceTest {
+
+    @Test
+    fun `insert event batches writes one escaped ClickHouse insert`() = runBlocking {
+        val queries = mutableListOf<String>()
+        MockHttpServer { exchange ->
+            queries += exchange.requestBodyText()
+            exchange.respond(200, "", contentType = "text/plain")
+        }.use { server ->
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            try {
+                DatadogEventService.insertEventBatches(
+                    listOf(
+                        QueuedEventBatch(
+                            organizationId = 1,
+                            events = listOf(
+                                QueuedEventEntry(
+                                    title = "O'Reilly deploy",
+                                    text = "ready",
+                                    timestampMs = 1_700_000_000_000,
+                                    tags = mapOf("env" to "prod"),
+                                )
+                            ),
+                        ),
+                        QueuedEventBatch(
+                            organizationId = 2,
+                            events = listOf(QueuedEventEntry(title = "second", timestampMs = 1_700_000_001_000)),
+                        ),
+                    )
+                )
+            } finally {
+                ClickHouseClient.close()
+            }
+        }
+
+        val query = queries.single()
+        assertTrue(query.contains("INSERT INTO `test`.infra_events"))
+        assertTrue(query.contains("O\\'Reilly deploy"))
+        assertTrue(query.contains("'env','prod'"))
+        assertTrue(query.contains("\n"))
+    }
+
+    @Test
+    fun `insert service check batches maps every status in one ClickHouse insert`() = runBlocking {
+        val queries = mutableListOf<String>()
+        MockHttpServer { exchange ->
+            queries += exchange.requestBodyText()
+            exchange.respond(200, "", contentType = "text/plain")
+        }.use { server ->
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            try {
+                DatadogEventService.insertServiceCheckBatch(
+                    QueuedServiceCheckBatch(
+                        organizationId = 3,
+                        serviceChecks = (0..3).map { status ->
+                            QueuedServiceCheckEntry(
+                                checkName = "check-$status",
+                                status = status,
+                                timestampMs = 1_700_000_000_000,
+                                tags = if (status == 0) mapOf("env" to "prod") else emptyMap(),
+                            )
+                        },
+                    )
+                )
+            } finally {
+                ClickHouseClient.close()
+            }
+        }
+
+        val query = queries.single()
+        assertTrue(query.contains("INSERT INTO `test`.service_checks"))
+        listOf("ok", "warning", "critical", "unknown").forEach { status ->
+            assertTrue(query.contains("'$status'"))
+        }
+    }
+
+    @Test
+    fun `insert service check batch surfaces ClickHouse rejection`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.requestBodyText()
+            exchange.respond(500, "service check insert failed", contentType = "text/plain")
+        }.use { server ->
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            try {
+                val error = assertFailsWith<IllegalStateException> {
+                    DatadogEventService.insertServiceCheckBatch(
+                        QueuedServiceCheckBatch(
+                            organizationId = 5,
+                            serviceChecks = listOf(
+                                QueuedServiceCheckEntry(
+                                    checkName = "failed",
+                                    timestampMs = 1_700_000_000_000,
+                                )
+                            ),
+                        )
+                    )
+                }
+                assertTrue(error.message.orEmpty().contains("service check insert failed"))
+            } finally {
+                ClickHouseClient.close()
+            }
+        }
+    }
+
+    @Test
+    fun `insert event batches surfaces ClickHouse rejection`() = runBlocking {
+        MockHttpServer { exchange ->
+            exchange.requestBodyText()
+            exchange.respond(500, "insert failed", contentType = "text/plain")
+        }.use { server ->
+            ClickHouseClient.init(server.baseUrl, "test", "default", "")
+            try {
+                val error = assertFailsWith<IllegalStateException> {
+                    DatadogEventService.insertEventBatch(
+                        QueuedEventBatch(
+                            organizationId = 4,
+                            events = listOf(QueuedEventEntry(title = "failed", timestampMs = 1_700_000_000_000)),
+                        )
+                    )
+                }
+                assertTrue(error.message.orEmpty().contains("insert failed"))
+            } finally {
+                ClickHouseClient.close()
+            }
+        }
+    }
+
+    @Test
+    fun `empty event and service check batches skip ClickHouse`() = runBlocking {
+        DatadogEventService.insertEventBatches(emptyList())
+        DatadogEventService.insertServiceCheckBatches(emptyList())
+    }
+
+    @Test
+    fun `enqueueEvents serializes events for the dedicated queue`() = runBlocking {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every {
+                redis.eval<String>(
+                    any<String>(),
+                    ScriptOutputType.VALUE,
+                    arrayOf("test:dd:event:queue:stream"),
+                    any<String>(),
+                    capture(queuedPayload),
+                    "dd-events",
+                    any<String>(),
+                )
+            } returns "1-0"
+
+            val count = DatadogEventService.enqueueEvents(
+                organizationId = 42,
+                events = listOf(DatadogEvent(title = "queued")),
+                queueKey = "test:dd:event:queue",
+            )
+            val emptyCount = DatadogEventService.enqueueEvents(
+                organizationId = 42,
+                events = emptyList(),
+                queueKey = "test:dd:event:queue",
+            )
+
+            val batch = DatadogEventService.decodeEventBatch(queuedPayload.captured)
+            assertEquals(1, count)
+            assertEquals(0, emptyCount)
+            assertEquals(42, batch.organizationId)
+            assertEquals("queued", batch.events.single().title)
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
+
+    @Test
+    fun `enqueueServiceChecks serializes checks for the dedicated queue`() = runBlocking {
+        val redis = mockk<RedisCommands<String, String>>()
+        val queuedPayload = slot<String>()
+        val checks = listOf(DatadogServiceCheck(check = "ready", hostName = "host-1", status = 0))
+
+        mockkObject(RedisConfig)
+        try {
+            every { RedisConfig.sync() } returns redis
+            every {
+                redis.eval<String>(
+                    any<String>(),
+                    ScriptOutputType.VALUE,
+                    arrayOf("test:dd:service-check:queue:stream"),
+                    any<String>(),
+                    capture(queuedPayload),
+                    "dd-service-checks",
+                    any<String>(),
+                )
+            } returns "1-0"
+
+            val count = DatadogEventService.enqueueServiceChecks(
+                organizationId = 42L,
+                checks = checks,
+                queueKey = "test:dd:service-check:queue",
+            )
+
+            val batch = DatadogEventService.decodeServiceCheckBatch(queuedPayload.captured)
+            assertEquals(1, count)
+            assertEquals(42L, batch.organizationId)
+            assertEquals("host-1", batch.serviceChecks.single().host)
+        } finally {
+            unmockkObject(RedisConfig)
+        }
+    }
 
     @Test
     fun `mapEvents maps fields correctly`() {

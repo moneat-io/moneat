@@ -30,8 +30,9 @@ import com.moneat.datadog.services.QueuedPipelineStatEntry
 import com.moneat.datadog.services.QueuedSbomEntry
 import com.moneat.datadog.services.QueuedSymbolDbEntry
 import com.moneat.datadog.services.QueuedSyntheticEntry
-import io.lettuce.core.XAddArgs
+import io.lettuce.core.ScriptOutputType
 import io.lettuce.core.api.sync.RedisCommands
+import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -88,17 +89,46 @@ class MiscIngestionServiceCoverageTest {
         }
     }
 
+    private fun mockQueueAdmission(redis: RedisCommands<String, String>): CapturingSlot<String> {
+        val payload = slot<String>()
+        every {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                arrayOf("$MISC_QUEUE_KEY:stream"),
+                any<String>(),
+                capture(payload),
+                any<String>(),
+                any<String>(),
+            )
+        } returns "1-0"
+        return payload
+    }
+
+    private fun verifyQueueAdmission(redis: RedisCommands<String, String>) {
+        verify(exactly = 1) {
+            redis.eval<String>(
+                any<String>(),
+                ScriptOutputType.VALUE,
+                arrayOf("$MISC_QUEUE_KEY:stream"),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+                any<String>(),
+            )
+        }
+    }
+
     // ===================== enqueue batches =====================
 
     @Test
     fun `enqueueContainerImages writes one Redis batch with parsed tags`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd("$MISC_QUEUE_KEY:stream", any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = MiscIngestionService.enqueueContainerImages(
                 orgId = 42,
@@ -128,7 +158,7 @@ class MiscIngestionServiceCoverageTest {
                 ),
             )
 
-            val batch = MiscIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = MiscIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals(42, batch.organizationId)
             assertEquals("container_images", batch.batchType)
@@ -137,7 +167,7 @@ class MiscIngestionServiceCoverageTest {
             assertEquals("prod", batch.containerImages.first().tags["env"])
             assertEquals("", batch.containerImages.first().tags["standalone"])
             assertEquals(batch.containerImages.first().timestampMs, batch.containerImages.last().timestampMs)
-            verify(exactly = 1) { redis.xadd("$MISC_QUEUE_KEY:stream", any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -146,12 +176,11 @@ class MiscIngestionServiceCoverageTest {
     @Test
     fun `enqueueContainerImage delegates to a single-entry Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd("$MISC_QUEUE_KEY:stream", any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             MiscIngestionService.enqueueContainerImage(
                 orgId = 7,
@@ -164,13 +193,13 @@ class MiscIngestionServiceCoverageTest {
                 ),
             )
 
-            val batch = MiscIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = MiscIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(7, batch.organizationId)
             assertEquals("container_images", batch.batchType)
             assertEquals(1, batch.containerImages.size)
             assertEquals("api", batch.containerImages.single().imageName)
             assertEquals("api", batch.containerImages.single().tags["service"])
-            verify(exactly = 1) { redis.xadd("$MISC_QUEUE_KEY:stream", any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
@@ -192,12 +221,11 @@ class MiscIngestionServiceCoverageTest {
     @Test
     fun `enqueueSbom writes package rows in one Redis batch`() {
         val redis = mockk<RedisCommands<String, String>>()
-        val queuedBody = slot<Map<String, String>>()
+        val queuedPayload = mockQueueAdmission(redis)
 
         mockkObject(RedisConfig)
         try {
             every { RedisConfig.sync() } returns redis
-            every { redis.xadd("$MISC_QUEUE_KEY:stream", any<XAddArgs>(), capture(queuedBody)) } returns "1-0"
 
             val count = MiscIngestionService.enqueueSbom(
                 orgId = 99,
@@ -223,7 +251,7 @@ class MiscIngestionServiceCoverageTest {
                 ),
             )
 
-            val batch = MiscIngestionService.decodeBatch(requireNotNull(queuedBody.captured["payload"]))
+            val batch = MiscIngestionService.decodeBatch(queuedPayload.captured)
             assertEquals(2, count)
             assertEquals(99, batch.organizationId)
             assertEquals("sbom_packages", batch.batchType)
@@ -232,7 +260,7 @@ class MiscIngestionServiceCoverageTest {
             assertEquals(listOf("CVE-2024-0001"), batch.sbomPackages.first().cveIds)
             assertEquals("prod", batch.sbomPackages.first().tags["env"])
             assertEquals(batch.sbomPackages.first().timestampMs, batch.sbomPackages.last().timestampMs)
-            verify(exactly = 1) { redis.xadd("$MISC_QUEUE_KEY:stream", any<XAddArgs>(), any<Map<String, String>>()) }
+            verifyQueueAdmission(redis)
         } finally {
             unmockkObject(RedisConfig)
         }
