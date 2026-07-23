@@ -83,7 +83,7 @@ internal fun expoSound(
     platform: String,
     isCritical: Boolean,
 ): JsonElement =
-    if (isCritical && platform.equals(IOS_PLATFORM, ignoreCase = true)) {
+    if (isCritical && platform.uppercase() == IOS_PLATFORM) {
         IOS_CRITICAL_SOUND
     } else {
         DEFAULT_SOUND
