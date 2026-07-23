@@ -19,8 +19,10 @@ package com.moneat.config
 import com.moneat.utils.suspendRunCatching
 import io.ktor.server.application.Application
 import io.ktor.server.application.log
+import io.lettuce.core.ClientOptions
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
+import io.lettuce.core.SocketOptions
 import io.lettuce.core.api.StatefulRedisConnection
 import io.lettuce.core.api.async.RedisAsyncCommands
 import io.lettuce.core.api.reactive.RedisReactiveCommands
@@ -28,11 +30,18 @@ import io.lettuce.core.api.sync.RedisCommands
 import io.lettuce.core.resource.ClientResources
 import io.netty.resolver.DefaultAddressResolverGroup
 import java.time.Duration
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 private const val BLOCKING_COMMAND_TIMEOUT_SECONDS = 15L
+private const val MONITORING_COMMAND_TIMEOUT_SECONDS = 2L
+private const val MONITORING_RECONNECT_COOLDOWN_SECONDS = 10L
 
 // Blocking command timeout for workers using XREADGROUP BLOCK. Each worker gets its own connection.
 private val BLOCKING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(BLOCKING_COMMAND_TIMEOUT_SECONDS)
+private val MONITORING_COMMAND_TIMEOUT: Duration = Duration.ofSeconds(MONITORING_COMMAND_TIMEOUT_SECONDS)
+private val MONITORING_RECONNECT_COOLDOWN: Duration = Duration.ofSeconds(MONITORING_RECONNECT_COOLDOWN_SECONDS)
+
+private data class MonitoringRead<T>(val value: T)
 
 object RedisConfig {
     @Volatile
@@ -43,7 +52,10 @@ object RedisConfig {
 
     @Volatile
     private var monitoringConnection: StatefulRedisConnection<String, String>? = null
-    private val monitoringConnectionLock = Any()
+    private val monitoringConnectionLock = ReentrantReadWriteLock()
+
+    @Volatile
+    private var monitoringReconnectAllowedAtNanos = 0L
     private val blockingConnections = mutableListOf<StatefulRedisConnection<String, String>>()
 
     fun init(redisUrl: String) {
@@ -52,9 +64,19 @@ object RedisConfig {
         val resources = ClientResources.builder()
             .addressResolverGroup(DefaultAddressResolverGroup.INSTANCE)
             .build()
-        client = RedisClient.create(resources, uri)
+        client = RedisClient.create(resources, uri).also {
+            it.setOptions(
+                ClientOptions.builder()
+                    .socketOptions(
+                        SocketOptions.builder()
+                            .connectTimeout(MONITORING_COMMAND_TIMEOUT)
+                            .build()
+                    )
+                    .build()
+            )
+        }
         connection = client!!.connect()
-        monitoringConnection = client!!.connect()
+        monitoringConnection = client!!.connect().also { it.timeout = MONITORING_COMMAND_TIMEOUT }
     }
 
     fun sync(): RedisCommands<String, String> {
@@ -68,12 +90,44 @@ object RedisConfig {
      * Intake requests can keep the primary Redis connection busy during bursts. Keeping metric reads on a
      * separate connection prevents Prometheus gauges from degrading to NaN while queue admission is active.
      */
-    fun <T> withMonitoringSync(operation: (RedisCommands<String, String>) -> T): T =
-        synchronized(monitoringConnectionLock) {
-            val monitoring = reconnectClosedMonitoringConnection(monitoringConnection, client)
-                .also { monitoringConnection = it }
-            operation(monitoring?.sync() ?: sync())
+    fun <T> withMonitoringSync(operation: (RedisCommands<String, String>) -> T): T {
+        withOpenMonitoringConnection(operation)?.let { return it.value }
+        reconnectMonitoringConnectionIfDue()
+        return withOpenMonitoringConnection(operation)?.value ?: operation(sync())
+    }
+
+    private fun <T> withOpenMonitoringConnection(
+        operation: (RedisCommands<String, String>) -> T
+    ): MonitoringRead<T>? {
+        val readLock = monitoringConnectionLock.readLock()
+        if (!readLock.tryLock()) return null
+        return try {
+            val monitoring = monitoringConnection?.takeIf { it.isOpen } ?: return null
+            MonitoringRead(operation(monitoring.sync()))
+        } finally {
+            readLock.unlock()
         }
+    }
+
+    private fun reconnectMonitoringConnectionIfDue() {
+        val now = System.nanoTime()
+        if (now < monitoringReconnectAllowedAtNanos) return
+
+        val writeLock = monitoringConnectionLock.writeLock()
+        if (!writeLock.tryLock()) return
+        try {
+            if (monitoringConnection?.isOpen == true) return
+            val attemptStartedAt = System.nanoTime()
+            if (attemptStartedAt < monitoringReconnectAllowedAtNanos) return
+            monitoringReconnectAllowedAtNanos = attemptStartedAt + MONITORING_RECONNECT_COOLDOWN.toNanos()
+            reconnectClosedMonitoringConnection(monitoringConnection, client)?.let { replacement ->
+                monitoringConnection = replacement
+                monitoringReconnectAllowedAtNanos = 0L
+            }
+        } finally {
+            writeLock.unlock()
+        }
+    }
 
     /** Returns a dedicated blocking connection for a single worker. Each call creates a new connection. */
     fun newStatefulBlockingConnection(): StatefulRedisConnection<String, String> {
@@ -120,9 +174,12 @@ object RedisConfig {
     fun isInitialized(): Boolean = connection != null
 
     fun close() {
-        synchronized(monitoringConnectionLock) {
+        val writeLock = monitoringConnectionLock.writeLock()
+        writeLock.lock()
+        try {
             monitoringConnection?.close()
             monitoringConnection = null
+            monitoringReconnectAllowedAtNanos = 0L
             connection?.close()
             connection = null
             synchronized(blockingConnections) {
@@ -131,6 +188,8 @@ object RedisConfig {
             }
             client?.shutdown()
             client = null
+        } finally {
+            writeLock.unlock()
         }
     }
 }
@@ -142,7 +201,9 @@ internal fun reconnectClosedMonitoringConnection(
     if (current?.isOpen == true) return current
     return runCatching {
         current?.close()
-        checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }.connect()
+        checkNotNull(client) { "RedisConfig is not initialized. Call init() first." }
+            .connect()
+            .also { it.timeout = MONITORING_COMMAND_TIMEOUT }
     }.getOrNull()
 }
 

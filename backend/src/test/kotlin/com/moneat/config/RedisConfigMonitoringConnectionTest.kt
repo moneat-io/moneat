@@ -46,10 +46,12 @@ class RedisConfigMonitoringConnectionTest {
         every { current.isOpen } returns false
         every { current.close() } just runs
         every { client.connect() } returns replacement
+        every { replacement.timeout = any() } just runs
 
         assertSame(replacement, reconnectClosedMonitoringConnection(current, client))
         verify(exactly = 1) { current.close() }
         verify(exactly = 1) { client.connect() }
+        verify(exactly = 1) { replacement.timeout = any() }
     }
 
     @Test
