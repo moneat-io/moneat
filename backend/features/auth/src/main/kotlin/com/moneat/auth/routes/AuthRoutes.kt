@@ -40,6 +40,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.ContentTransformationException
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveParameters
@@ -78,6 +80,7 @@ fun Route.authRoutes(
         post("/refresh") { handleRefreshToken(authService) }
         route("/mobile") {
             post("/login") { handleMobileLogin(authService) }
+            post("/logout") { handleMobileLogout(authService) }
             post("/refresh") { handleMobileRefreshToken(authService) }
         }
         get("/github") { handleGitHubOAuth(oauthService) }
@@ -227,38 +230,24 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleResetPassword(au
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleLogout(authService: AuthService) {
-    val jwtSecret =
-        io.ktor.server.config
-            .ApplicationConfig("application.conf")
-            .property("jwt.secret")
-            .getString()
-
-    // Get userId from auth if available to revoke refresh tokens
-    val authHeader = call.request.headers["Authorization"]
-    val tokenFromHeader = authHeader?.removePrefix("Bearer ")?.removePrefix("bearer ")?.trim()
-    val tokenFromCookie = call.request.cookies["auth_token"]
-    val token = tokenFromHeader ?: tokenFromCookie
-
-    if (token != null) {
-        suspendRunCatching {
-            val jwtVerifier =
-                com.auth0.jwt.JWT
-                    .require(
-                        com.auth0.jwt.algorithms.Algorithm
-                            .HMAC256(jwtSecret)
-                    ).build()
-            val decodedJWT = jwtVerifier.verify(token)
-            val userId = decodedJWT?.getClaim("userId")?.asInt()
-            if (userId != null) {
-                authService.logout(userId)
-            }
-        }.getOrElse { _ ->
-            // Token invalid or expired, continue with logout
-        }
-    }
+    call.request.cookies["refresh_token"]?.let(authService::logout)
 
     AuthCookieUtils.clearAuthCookie(call)
     AuthCookieUtils.clearRefreshCookie(call)
+    call.respond(MessageResponse("Logged out"))
+}
+
+private suspend fun io.ktor.server.routing.RoutingContext.handleMobileLogout(authService: AuthService) {
+    val request =
+        try {
+            call.receive<RefreshTokenRequest>()
+        } catch (e: ContentTransformationException) {
+            throw BadRequestException("Refresh token is required", e)
+        }
+    if (request.refreshToken.isBlank()) {
+        throw BadRequestException("Refresh token is required")
+    }
+    authService.logout(request.refreshToken)
     call.respond(MessageResponse("Logged out"))
 }
 

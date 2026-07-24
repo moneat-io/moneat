@@ -93,6 +93,18 @@ class AuthServicePasswordResetTest {
                 )
             }
 
+        transaction {
+            val now = System.currentTimeMillis()
+            RefreshTokens.insert {
+                it[RefreshTokens.user_id] = userId
+                it[RefreshTokens.token_hash] = "a".repeat(64)
+                it[RefreshTokens.created_at] = now
+                it[RefreshTokens.expires_at] = now + (30L * 24 * 60 * 60 * 1000)
+                it[RefreshTokens.last_used_at] = null
+                it[RefreshTokens.revoked] = false
+            }
+        }
+
         val result = authService.resetPassword(token, newPassword)
 
         assertTrue(result, "Password reset should succeed")
@@ -106,6 +118,9 @@ class AuthServicePasswordResetTest {
             assertFalse(BCrypt.checkpw(oldPassword, newHash), "Old password should not work")
             assertNull(user[Users.password_reset_token], "Reset token should be cleared")
             assertNull(user[Users.password_reset_expires_at], "Expiration should be cleared")
+
+            val refreshToken = RefreshTokens.selectAll().where { RefreshTokens.user_id eq userId }.single()
+            assertTrue(refreshToken[RefreshTokens.revoked], "Existing sessions should be revoked")
         }
     }
 

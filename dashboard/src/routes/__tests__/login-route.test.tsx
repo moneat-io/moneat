@@ -152,12 +152,12 @@ describe('login route', () => {
     }).toThrow(expect.objectContaining({to: '/replays/replay-1'}))
   })
 
-  it('logs out authenticated mobile redirect sessions before loading the page', () => {
+  it('preserves other sessions when an authenticated browser opens mobile login', () => {
     mockApi.isAuthenticated.mockReturnValue(true)
 
     Route.options.beforeLoad?.(beforeLoadContext({redirect_uri: 'moneat://auth'}))
 
-    expect(mockApi.logout).toHaveBeenCalled()
+    expect(mockApi.logout).not.toHaveBeenCalled()
   })
 
   it('does not treat unapproved redirect URIs as mobile login callbacks', () => {

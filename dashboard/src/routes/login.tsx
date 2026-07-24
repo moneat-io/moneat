@@ -108,10 +108,9 @@ export const Route = createFileRoute('/login')({
     const mobileAuthCallback = normalizeMobileAuthCallback(s.redirect_uri)
     const postLoginRedirect = normalizePostLoginRedirect(s.redirect)
 
-    // If user is already authenticated AND redirect_uri exists (mobile login),
-    // log them out automatically so they can log in fresh
+    // Let the native password flow create its own device session without
+    // logging out an existing browser or other device.
     if (api.isAuthenticated() && mobileAuthCallback) {
-      api.logout()
       return
     }
 

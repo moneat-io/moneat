@@ -511,6 +511,7 @@ class AuthService(
         val passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt())
         userRepository.updatePassword(user.id, passwordHash)
         userRepository.clearPasswordResetToken(user.id)
+        refreshTokenService.revokeAllUserTokens(user.id)
         return true
     }
 
@@ -582,13 +583,13 @@ class AuthService(
         )
     }
 
-    fun logout(userId: Int) {
-        refreshTokenService.revokeAllUserTokens(userId)
+    fun logout(refreshToken: String): Boolean {
+        return refreshTokenService.revokeToken(refreshToken)
     }
 
     fun refreshToken(token: String): AuthResponse? {
         val tokenPair =
-            refreshTokenService.validateAndRotate(token)
+            refreshTokenService.validateAndRefresh(token)
                 ?: return null
 
         // Get user info from the new access token to build response

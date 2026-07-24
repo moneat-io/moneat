@@ -106,13 +106,18 @@ class RefreshTokenService {
     }
 
     /**
-     * Validate a refresh token and rotate it (issue new access + refresh tokens)
+     * Validate a device session and renew its access token and sliding expiry.
+     *
+     * The opaque refresh token remains stable for the lifetime of the device
+     * session. This makes refresh retries idempotent when a response is lost:
+     * the client can safely submit the same token again without orphaning the
+     * session.
      */
-    fun validateAndRotate(token: String): RefreshTokenResponse? {
+    fun validateAndRefresh(token: String): RefreshTokenResponse? {
         val tokenHash = hashToken(token)
 
         return transaction {
-            // Find the refresh token
+            val now = System.currentTimeMillis()
             val tokenRow =
                 RefreshTokens
                     .selectAll()
@@ -123,8 +128,7 @@ class RefreshTokenService {
             val expiresAt = tokenRow[RefreshTokens.expires_at]
             val userId = tokenRow[RefreshTokens.user_id]
 
-            // Check if expired
-            if (expiresAt < System.currentTimeMillis()) {
+            if (expiresAt < now) {
                 return@transaction null
             }
 
@@ -145,19 +149,41 @@ class RefreshTokenService {
             val orgId = membership[com.moneat.shared.models.Memberships.organization_id]
             val orgRole = membership[com.moneat.shared.models.Memberships.role]
 
-            // Revoke old refresh token
-            RefreshTokens.update({ RefreshTokens.token_hash eq tokenHash }) {
-                it[revoked] = true
-                it[last_used_at] = System.currentTimeMillis()
+            val renewed =
+                RefreshTokens.update({
+                    (RefreshTokens.token_hash eq tokenHash) and (RefreshTokens.revoked eq false)
+                }) {
+                    it[last_used_at] = now
+                    it[expires_at] = now + (REFRESH_TOKEN_EXPIRY_DAYS * MILLIS_PER_DAY)
+                }
+            if (renewed == 0) {
+                return@transaction null
             }
 
-            // Generate new refresh token
-            generateRefreshToken(userId, email, orgId, orgRole)
+            RefreshTokenResponse(
+                accessToken = generateAccessToken(userId, email, orgId, orgRole),
+                refreshToken = token,
+                expiresIn = ACCESS_TOKEN_EXPIRY_HOURS * 3600
+            )
         }
     }
 
     /**
-     * Revoke all refresh tokens for a user (for logout or security)
+     * Revoke one refresh-token session without signing the user out on other devices.
+     */
+    fun revokeToken(token: String): Boolean {
+        val tokenHash = hashToken(token)
+        return transaction {
+            RefreshTokens.update({
+                (RefreshTokens.token_hash eq tokenHash) and (RefreshTokens.revoked eq false)
+            }) {
+                it[revoked] = true
+            } > 0
+        }
+    }
+
+    /**
+     * Revoke all refresh tokens for a user after a security-sensitive account change.
      */
     fun revokeAllUserTokens(userId: Int): Int {
         return transaction {

@@ -184,29 +184,28 @@ class AuthServiceExtendedTest {
     }
 
     @Test
-    fun `validateAndRotate returns new tokens for valid refresh token`() {
+    fun `validateAndRefresh returns a new access token for a stable device session`() {
         val (userId, orgId) = insertUserWithOrg()
         val service = RefreshTokenService()
 
         val original = service.generateRefreshToken(userId, TEST_EMAIL, orgId, "owner")
-        val rotated = service.validateAndRotate(original.refreshToken)
+        val refreshed = service.validateAndRefresh(original.refreshToken)
 
-        assertNotNull(rotated)
-        assertNotEquals(original.refreshToken, rotated.refreshToken)
-        assertNotEquals(original.accessToken, rotated.accessToken)
+        assertNotNull(refreshed)
+        assertEquals(original.refreshToken, refreshed.refreshToken)
+        assertNotEquals(original.accessToken, refreshed.accessToken)
 
-        // Original token should now be revoked
-        assertNull(service.validateAndRotate(original.refreshToken))
+        assertNotNull(service.validateAndRefresh(original.refreshToken))
     }
 
     @Test
-    fun `validateAndRotate returns null for invalid token`() {
+    fun `validateAndRefresh returns null for invalid token`() {
         val service = RefreshTokenService()
-        assertNull(service.validateAndRotate("invalid-token-value"))
+        assertNull(service.validateAndRefresh("invalid-token-value"))
     }
 
     @Test
-    fun `validateAndRotate returns null for expired token`() {
+    fun `validateAndRefresh returns null for expired token`() {
         val (userId, orgId) = insertUserWithOrg()
         val service = RefreshTokenService()
 
@@ -229,7 +228,7 @@ class AuthServiceExtendedTest {
             }
         }
 
-        assertNull(service.validateAndRotate(rawToken))
+        assertNull(service.validateAndRefresh(rawToken))
     }
 
     @Test
@@ -371,11 +370,13 @@ class AuthServiceExtendedTest {
     // ── AuthService - logout ────────────────────────────────────────
 
     @Test
-    fun `logout revokes all refresh tokens for user`() {
+    fun `logout revokes only the current refresh token session`() {
         val (userId, orgId) = insertUserWithOrg(email = LOGOUT_EMAIL)
         val refreshTokenService = RefreshTokenService()
-        refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
-        refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
+        val currentSession =
+            refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
+        val otherDeviceSession =
+            refreshTokenService.generateRefreshToken(userId, LOGOUT_EMAIL, orgId, "owner")
 
         val authService = AuthService(
             UserRepositoryImpl(),
@@ -385,14 +386,10 @@ class AuthServiceExtendedTest {
             workflowService = mockk<WorkflowService>(relaxed = true),
         )
 
-        authService.logout(userId)
+        assertTrue(authService.logout(currentSession.refreshToken))
 
-        val activeTokens = transaction {
-            RefreshTokens.selectAll()
-                .where { (RefreshTokens.user_id eq userId) and (RefreshTokens.revoked eq false) }
-                .count()
-        }
-        assertEquals(0L, activeTokens)
+        assertNull(refreshTokenService.validateAndRefresh(currentSession.refreshToken))
+        assertNotNull(refreshTokenService.validateAndRefresh(otherDeviceSession.refreshToken))
     }
 
     // ── AuthService - refreshToken ──────────────────────────────────
@@ -428,21 +425,21 @@ class AuthServiceExtendedTest {
     }
 
     @Test
-    fun `refreshToken response uses org context from rotated access token`() {
+    fun `refreshToken response uses org context from refreshed access token`() {
         val userId = 123
         val tokenOrgId = 202
         val firstOrgId = 101
         val email = "refresh-context@test.com"
         val tokenPair = RefreshTokenResponse(
             accessToken = testAccessToken(userId, email, tokenOrgId, "admin"),
-            refreshToken = "rotated-refresh-token"
+            refreshToken = "refresh-token"
         )
         val userRepository = mockk<UserRepository>()
         val membershipRepository = mockk<MembershipRepository>()
         val organizationRepository = mockk<OrganizationRepository>()
         val refreshTokenService = mockk<RefreshTokenService>()
 
-        every { refreshTokenService.validateAndRotate("refresh-token") } returns tokenPair
+        every { refreshTokenService.validateAndRefresh("refresh-token") } returns tokenPair
         every { userRepository.findById(userId) } returns userRow(userId, email)
         every { membershipRepository.getFirstMembershipForUser(userId) } returns
             MembershipRow(id = 1, userId = userId, organizationId = firstOrgId, role = "viewer")
