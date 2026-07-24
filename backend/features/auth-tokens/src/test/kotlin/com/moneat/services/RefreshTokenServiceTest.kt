@@ -93,31 +93,37 @@ class RefreshTokenServiceTest {
     }
 
     @Test
-    fun `validateAndRotate revokes old token and issues new token`() {
+    fun `validateAndRefresh is idempotent when a response is lost`() {
         val (userId, orgId) = createUserWithMembership()
         val first = refreshTokenService.generateRefreshToken(userId, "user@test.com", orgId, "owner")
+        val nearExpiry = System.currentTimeMillis() + 1_000
+        transaction {
+            RefreshTokens.update({ RefreshTokens.token_hash eq sha256(first.refreshToken) }) {
+                it[expires_at] = nearExpiry
+            }
+        }
 
-        val rotated = refreshTokenService.validateAndRotate(first.refreshToken)
-        assertNotNull(rotated)
-        assertNotEquals(first.refreshToken, rotated.refreshToken)
-        assertNotEquals(first.accessToken, rotated.accessToken)
+        val refreshed = refreshTokenService.validateAndRefresh(first.refreshToken)
+        val retry = refreshTokenService.validateAndRefresh(first.refreshToken)
+
+        assertNotNull(refreshed)
+        assertNotNull(retry)
+        assertEquals(first.refreshToken, refreshed.refreshToken)
+        assertEquals(first.refreshToken, retry.refreshToken)
+        assertNotEquals(first.accessToken, refreshed.accessToken)
+        assertNotEquals(refreshed.accessToken, retry.accessToken)
 
         transaction {
             val rows = RefreshTokens.selectAll().toList()
-            assertEquals(2, rows.size)
-            val revokedCount = rows.count { it[RefreshTokens.revoked] }
-            val activeCount = rows.count { !it[RefreshTokens.revoked] }
-            assertEquals(1, revokedCount)
-            assertEquals(1, activeCount)
-            val revokedRow = rows.first { it[RefreshTokens.revoked] }
-            assertNotNull(revokedRow[RefreshTokens.last_used_at])
+            assertEquals(1, rows.size)
+            assertEquals(false, rows.single()[RefreshTokens.revoked])
+            assertNotNull(rows.single()[RefreshTokens.last_used_at])
+            assertTrue(rows.single()[RefreshTokens.expires_at] > nearExpiry)
         }
-
-        assertNull(refreshTokenService.validateAndRotate(first.refreshToken))
     }
 
     @Test
-    fun `validateAndRotate returns null for expired token`() {
+    fun `validateAndRefresh returns null for expired token`() {
         val (userId, orgId) = createUserWithMembership()
         val generated = refreshTokenService.generateRefreshToken(userId, "user@test.com", orgId, "owner")
 
@@ -125,7 +131,7 @@ class RefreshTokenServiceTest {
             RefreshTokens.update { it[expires_at] = System.currentTimeMillis() - 1_000 }
         }
 
-        val result = refreshTokenService.validateAndRotate(generated.refreshToken)
+        val result = refreshTokenService.validateAndRefresh(generated.refreshToken)
         assertNull(result)
     }
 
@@ -156,8 +162,7 @@ class RefreshTokenServiceTest {
         val revoked = refreshTokenService.generateRefreshToken(userId, "user@test.com", orgId, "owner")
         val expired = refreshTokenService.generateRefreshToken(userId, "user@test.com", orgId, "owner")
 
-        // Touch tokens to derive hashes via service path.
-        refreshTokenService.validateAndRotate(revoked.refreshToken)
+        refreshTokenService.revokeToken(revoked.refreshToken)
         transaction {
             val expiredHash = sha256(expired.refreshToken)
             RefreshTokens.update({ RefreshTokens.token_hash eq expiredHash }) {

@@ -511,6 +511,7 @@ class AuthService(
         val passwordHash = BCrypt.hashpw(newPassword, BCrypt.gensalt())
         userRepository.updatePassword(user.id, passwordHash)
         userRepository.clearPasswordResetToken(user.id)
+        refreshTokenService.revokeAllUserTokens(user.id)
         return true
     }
 
@@ -586,38 +587,9 @@ class AuthService(
         return refreshTokenService.revokeToken(refreshToken)
     }
 
-    fun createMobileSession(userId: Int): AuthResponse? {
-        val user = userRepository.findById(userId) ?: return null
-        val membership = membershipRepository.getFirstMembershipForUser(userId) ?: return null
-        val tokenPair =
-            refreshTokenService.generateRefreshToken(
-                userId,
-                user.email,
-                membership.organizationId,
-                membership.role
-            )
-        val organization = organizationRepository.findById(membership.organizationId)
-        return AuthResponse(
-            token = tokenPair.accessToken,
-            refreshToken = tokenPair.refreshToken,
-            expiresIn = tokenPair.expiresIn,
-            user = UserResponse(
-                id = user.resourceId,
-                email = user.email,
-                name = user.name,
-                emailVerified = user.emailVerified,
-                onboardingCompleted = user.onboardingCompleted,
-                isAdmin = user.isAdmin,
-                organizationSlug = organization?.slug,
-                orgRole = membership.role,
-                orgId = organization?.resourceId,
-            )
-        )
-    }
-
     fun refreshToken(token: String): AuthResponse? {
         val tokenPair =
-            refreshTokenService.validateAndRotate(token)
+            refreshTokenService.validateAndRefresh(token)
                 ?: return null
 
         // Get user info from the new access token to build response

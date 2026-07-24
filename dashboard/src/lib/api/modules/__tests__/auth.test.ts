@@ -126,23 +126,6 @@ describe('authMethods', () => {
       expect(result).toEqual(authResponse)
       expect(globalThis.sessionStorage?.getItem('authenticated')).toBeNull()
     })
-
-    it('creates a separate native session from an authenticated browser', async () => {
-      const authResponse = {
-        token: 'mobile-jwt-token',
-        refreshToken: 'mobile-refresh-token',
-        user: { id: USER_ID_ALICE, email: 'a@b.com' },
-      }
-      server.use(
-        http.post(`${API_BASE}/auth/mobile/session`, () =>
-          HttpResponse.json(authResponse)
-        )
-      )
-
-      const result = await api.createMobileSession()
-
-      expect(result).toEqual(authResponse)
-    })
   })
 
   // ──── SSO ────

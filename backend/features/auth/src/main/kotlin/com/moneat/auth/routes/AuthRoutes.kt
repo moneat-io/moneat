@@ -40,6 +40,8 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.ContentTransformationException
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveParameters
@@ -93,7 +95,6 @@ fun Route.authRoutes(
         route("/auth") {
             get("/check-slug") { handleCheckSlug() }
             post("/complete-onboarding") { handleCompleteOnboarding(authService) }
-            post("/mobile/session") { handleCreateMobileSession(authService) }
         }
     }
 }
@@ -237,19 +238,17 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleLogout(authServi
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleMobileLogout(authService: AuthService) {
-    val request = call.receive<RefreshTokenRequest>()
+    val request =
+        try {
+            call.receive<RefreshTokenRequest>()
+        } catch (e: ContentTransformationException) {
+            throw BadRequestException("Refresh token is required", e)
+        }
+    if (request.refreshToken.isBlank()) {
+        throw BadRequestException("Refresh token is required")
+    }
     authService.logout(request.refreshToken)
     call.respond(MessageResponse("Logged out"))
-}
-
-private suspend fun io.ktor.server.routing.RoutingContext.handleCreateMobileSession(authService: AuthService) {
-    val userId = call.principal<JWTPrincipal>()?.payload?.getClaim("userId")?.asInt()
-    val result = userId?.let(authService::createMobileSession)
-    if (result == null) {
-        call.respond(HttpStatusCode.Unauthorized, ErrorResponse("Unable to create mobile session"))
-        return
-    }
-    call.respond(result)
 }
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleRefreshToken(authService: AuthService) {
