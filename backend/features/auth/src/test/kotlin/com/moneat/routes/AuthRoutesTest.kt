@@ -236,12 +236,14 @@ class AuthRoutesTest {
 
         val response =
             client.post("/auth/mobile/logout") {
+                cookie("refresh_token", "browser-refresh-token")
                 contentType(ContentType.Application.Json)
                 setBody("""{"refreshToken":"mobile-refresh-token"}""")
             }
 
         assertEquals(HttpStatusCode.OK, response.status)
         verify(exactly = 1) { authService.logout("mobile-refresh-token") }
+        verify(exactly = 0) { authService.logout("browser-refresh-token") }
     }
 
     @Test
