@@ -18,6 +18,7 @@ package com.moneat.dashboards.services
 
 import com.moneat.config.ClickHouseClient
 import com.moneat.config.isClickHouseError
+import com.moneat.dashboards.models.AggFunction
 import com.moneat.dashboards.models.CustomDataSourceResponse
 import com.moneat.dashboards.models.DataSource
 import com.moneat.dashboards.models.DataSourceField
@@ -78,6 +79,16 @@ class DashboardQueryEngine {
         )
 
         private val TIME_RANGE_REGEX = Regex("""^now-(\d+)([smhdwMy])$""")
+        private val ANALYTICS_PROPERTY_FIELD_REGEX = Regex("""^props\.([a-zA-Z0-9_]+)$""")
+        private val NUMERIC_ANALYTICS_PROPERTY_AGGREGATIONS = setOf(
+            AggFunction.AVG,
+            AggFunction.SUM,
+            AggFunction.P50,
+            AggFunction.P75,
+            AggFunction.P90,
+            AggFunction.P95,
+            AggFunction.P99,
+        )
         private val ORG_SCOPED_TABLES = setOf("logs", "metrics", "containers")
 
         /** Multi-select variable values arrive comma-joined (e.g. "pod-a,pod-b"). */
@@ -314,19 +325,24 @@ class DashboardQueryEngine {
                     clauses.add("toStartOfInterval($tsCol, INTERVAL $interval) AS time_bucket")
                 }
                 GroupByType.FIELD -> {
-                    ClickHouseSqlUtils.validateFieldName(gb.field)
-                    clauses.add(gb.field)
+                    val fieldExpression = resolveFieldExpression(dsl, gb.field)
+                    clauses.add(
+                        if (fieldExpression == gb.field) {
+                            fieldExpression
+                        } else {
+                            "$fieldExpression AS ${renderFieldAlias(gb.field)}"
+                        }
+                    )
                 }
             }
         }
 
         // Add metric aggregations
         for (metric in dsl.metrics) {
-            metric.field?.let { ClickHouseSqlUtils.validateFieldName(it) }
-            val aggExpr = metric.function.toClickHouse(metric.field)
+            val metricField = metric.field?.let { resolveMetricFieldExpression(dsl, metric.function, it) }
+            val aggExpr = metric.function.toClickHouse(metricField)
             val alias = metric.alias ?: "${metric.function.value}_${metric.field ?: "all"}"
-            ClickHouseSqlUtils.validateFieldName(alias)
-            clauses.add("$aggExpr AS $alias")
+            clauses.add("$aggExpr AS ${renderFieldAlias(alias)}")
         }
 
         if (clauses.isEmpty()) {
@@ -351,7 +367,7 @@ class DashboardQueryEngine {
         clauses.addAll(buildTimeRangeClauses(dsl.timeRange, tsCol, demoEpochMs))
 
         for (filter in dsl.filters) {
-            clauses.add(buildFilterClause(filter))
+            clauses.add(buildFilterClause(filter, DataSource.fromString(dsl.dataSource)))
         }
         buildLogRawQueryClause(dsl)?.let { clauses.add(it) }
 
@@ -418,24 +434,39 @@ class DashboardQueryEngine {
         return "toDateTime64('$escaped', 3)"
     }
 
-    internal fun buildFilterClause(filter: FilterDef): String {
-        ClickHouseSqlUtils.validateFieldName(filter.field)
+    internal fun buildFilterClause(filter: FilterDef, dataSource: DataSource? = null): String {
+        val property = analyticsPropertyName(dataSource, filter.field)
+        if (property != null) {
+            val containsExpression = "mapContains(props, '$property')"
+            return when (filter.op) {
+                FilterOp.IS_NULL -> "NOT $containsExpression"
+                FilterOp.IS_NOT_NULL -> containsExpression
+                else -> {
+                    val valueClause = buildValueFilterClause(filter, "props['$property']")
+                    "($containsExpression AND $valueClause)"
+                }
+            }
+        }
 
+        return buildValueFilterClause(filter, filter.field)
+    }
+
+    private fun buildValueFilterClause(filter: FilterDef, fieldExpression: String): String {
         return when (filter.op) {
-            FilterOp.IS_NULL -> "${filter.field} IS NULL"
-            FilterOp.IS_NOT_NULL -> "${filter.field} IS NOT NULL"
+            FilterOp.IS_NULL -> "$fieldExpression IS NULL"
+            FilterOp.IS_NOT_NULL -> "$fieldExpression IS NOT NULL"
             FilterOp.IN, FilterOp.NOT_IN -> {
                 val vals = (filter.values ?: listOfNotNull(filter.value))
                     .joinToString(", ") { "'${ClickHouseSqlUtils.escapeSql(it)}'" }
-                "${filter.field} ${filter.op.value} ($vals)"
+                "$fieldExpression ${filter.op.value} ($vals)"
             }
             FilterOp.LIKE, FilterOp.NOT_LIKE -> {
                 val escaped = ClickHouseSqlUtils.escapeLikePattern(filter.value)
-                "${filter.field} ${filter.op.value} '%$escaped%'"
+                "$fieldExpression ${filter.op.value} '%$escaped%'"
             }
             else -> {
                 val escaped = ClickHouseSqlUtils.escapeSql(filter.value)
-                "${filter.field} ${filter.op.value} '$escaped'"
+                "$fieldExpression ${filter.op.value} '$escaped'"
             }
         }
     }
@@ -444,10 +475,7 @@ class DashboardQueryEngine {
         return dsl.groupBy.map { gb ->
             when (gb.type) {
                 GroupByType.TIME -> "time_bucket"
-                GroupByType.FIELD -> {
-                    ClickHouseSqlUtils.validateFieldName(gb.field)
-                    gb.field
-                }
+                GroupByType.FIELD -> resolveFieldExpression(dsl, gb.field)
             }
         }
     }
@@ -455,13 +483,48 @@ class DashboardQueryEngine {
     internal fun buildOrderByClause(dsl: QueryDsl): String {
         val orderBy = dsl.orderBy
         if (orderBy != null) {
-            ClickHouseSqlUtils.validateFieldName(orderBy.field)
+            val fieldExpression = resolveFieldExpression(dsl, orderBy.field)
             val dir = if (orderBy.direction.lowercase() == "asc") "ASC" else "DESC"
-            return "${orderBy.field} $dir"
+            return "$fieldExpression $dir"
         }
         // Default: order by time_bucket if time grouping exists
         val hasTimeGroup = dsl.groupBy.any { it.type == GroupByType.TIME }
         return if (hasTimeGroup) "time_bucket ASC" else ""
+    }
+
+    private fun resolveFieldExpression(dsl: QueryDsl, field: String): String =
+        resolveFieldExpression(DataSource.fromString(dsl.dataSource), field)
+
+    private fun resolveFieldExpression(dataSource: DataSource?, field: String): String {
+        val property = analyticsPropertyName(dataSource, field) ?: return field
+        return analyticsPropertyValueExpression(property)
+    }
+
+    private fun resolveMetricFieldExpression(dsl: QueryDsl, function: AggFunction, field: String): String {
+        val property = analyticsPropertyName(DataSource.fromString(dsl.dataSource), field)
+            ?: return field
+        return if (function in NUMERIC_ANALYTICS_PROPERTY_AGGREGATIONS) {
+            "toFloat64OrNull(props['$property'])"
+        } else {
+            analyticsPropertyValueExpression(property)
+        }
+    }
+
+    private fun analyticsPropertyName(dataSource: DataSource?, field: String): String? {
+        ClickHouseSqlUtils.validateFieldName(field)
+        if (dataSource != DataSource.ANALYTICS_EVENTS || !field.startsWith("props.")) {
+            return null
+        }
+        return ANALYTICS_PROPERTY_FIELD_REGEX.matchEntire(field)?.groupValues?.get(1)
+            ?: throw IllegalArgumentException("Invalid analytics property field: $field")
+    }
+
+    private fun analyticsPropertyValueExpression(property: String): String =
+        "if(mapContains(props, '$property'), props['$property'], NULL)"
+
+    private fun renderFieldAlias(alias: String): String {
+        ClickHouseSqlUtils.validateFieldName(alias)
+        return if ('.' in alias) "`$alias`" else alias
     }
 
     suspend fun executeQuery(

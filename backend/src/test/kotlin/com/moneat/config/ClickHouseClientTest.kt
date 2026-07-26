@@ -30,6 +30,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 private const val READ_QUERY_MAX_EXECUTION_SECONDS = "10"
 
@@ -103,6 +104,8 @@ class ClickHouseClientTest {
         OperationalMetrics.resetForTest()
         val errorBody = "Code: 36. DB::Exception: Invalid query"
         withClickHouseMockServer({ exchange ->
+            exchange.responseHeaders.add("X-ClickHouse-Exception-Code", "36")
+            exchange.responseHeaders.add("X-ClickHouse-Query-Id", "query-id-123")
             exchange.respond(400, errorBody, "text/plain")
         }) {
             val response = ClickHouseClient.execute("SELECT * FROM logs")
@@ -114,6 +117,8 @@ class ClickHouseClientTest {
         assertContains(rendered, "moneat_clickhouse_requests_total")
         assertContains(rendered, "operation=\"execute\"")
         assertContains(rendered, "status=\"http_400\"")
+        assertContains(rendered, "moneat_clickhouse_query_errors_total")
+        assertContains(rendered, "code=\"36\"")
     }
 
     @Test
@@ -137,6 +142,29 @@ class ClickHouseClientTest {
         assertContains(rendered, "moneat_clickhouse_query_errors_total")
         assertContains(rendered, "operation=\"execute\"")
         assertContains(rendered, "code=\"159\"")
+    }
+
+    @Test
+    fun `executeWithFormat records header error code only once`() = runBlocking {
+        OperationalMetrics.resetForTest()
+        withClickHouseMockServer({ exchange ->
+            exchange.responseHeaders.add("X-ClickHouse-Exception-Code", "43")
+            exchange.respond(500, "Code: 43. DB::Exception: Invalid argument type", "text/plain")
+        }) {
+            assertFailsWith<ClickHouseQueryException> {
+                ClickHouseClient.executeWithFormat("SELECT 1", "TabSeparated")
+            }
+        }
+
+        val samples = OperationalMetrics.scrape().lineSequence()
+            .filter { line ->
+                line.startsWith("moneat_clickhouse_query_errors_total") &&
+                    line.contains("operation=\"execute\"") &&
+                    line.contains("code=\"43\"")
+            }
+            .toList()
+        assertEquals(1, samples.size)
+        assertTrue(samples.single().endsWith(" 1.0"))
     }
 
     @Test

@@ -203,10 +203,12 @@ class TransactionServiceTest {
     @Test
     fun `getTransaction returns detail for valid event`() = runBlocking {
         val eventId = TXN_UUID
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         val row = """
 {"event_id":"$eventId","name":"GET /api","op":"http.server","start_ts_ms":1000,"duration":250.0,"trace_id":"$TRACE_1","timestamp":"2026-01-01T00:00:00.000Z","environment":"prod","release":"1.0","status":"ok","tags":{"env":"prod"},"contexts":{},"breadcrumbs":[],"request":{}}
         """.trimIndent()
         withClickHouseMockServer({ exchange ->
+            queries += exchange.requestBodyText()
             exchange.respond(200, row, CONTENT_TYPE_TEXT_PLAIN)
         }) {
             val detail = service.getTransaction(eventId)
@@ -218,6 +220,8 @@ class TransactionServiceTest {
             assertEquals("prod", detail.environment)
             assertEquals(1.0, detail.startTimestamp)
         }
+        assertTrue(queries.single().contains("toUnixTimestamp64Milli(e.timestamp)"))
+        assertTrue(queries.single().contains("FROM `test`.events AS e"))
     }
 
     @Test
