@@ -149,6 +149,18 @@ class DashboardQueryEngineTest {
         assertEquals(3, clauses.size)
     }
 
+    @Test
+    fun `buildSelectClauses casts numeric analytics properties`() {
+        val dsl = QueryDsl(
+            dataSource = "analytics_events",
+            metrics = listOf(MetricDef(AggFunction.AVG, "props.amount", "avg_amount")),
+        )
+
+        val clauses = engine.buildSelectClauses(dsl, "timestamp")
+
+        assertEquals("avg(toFloat64OrNull(props['amount'])) AS avg_amount", clauses.single())
+    }
+
     // ──── buildFilterClause ────
 
     @Test
@@ -495,10 +507,26 @@ class DashboardQueryEngineTest {
 
         val sql = engine.buildQuery(dsl, 123)
 
-        assertContains(sql, "props['platform'] AS `props.platform`")
-        assertContains(sql, "props['plan'] = 'team'")
-        assertContains(sql, "GROUP BY props['platform']")
-        assertContains(sql, "ORDER BY props['platform'] ASC")
+        val platformExpression = "if(mapContains(props, 'platform'), props['platform'], NULL)"
+        assertContains(sql, "$platformExpression AS `props.platform`")
+        assertContains(sql, "(mapContains(props, 'plan') AND props['plan'] = 'team')")
+        assertContains(sql, "GROUP BY $platformExpression")
+        assertContains(sql, "ORDER BY $platformExpression ASC")
+    }
+
+    @Test
+    fun `buildQuery preserves analytics property presence filters`() {
+        val nullDsl = QueryDsl(
+            dataSource = "analytics_events",
+            filters = listOf(FilterDef("props.plan", FilterOp.IS_NULL)),
+        )
+        val notNullDsl = QueryDsl(
+            dataSource = "analytics_events",
+            filters = listOf(FilterDef("props.plan", FilterOp.IS_NOT_NULL)),
+        )
+
+        assertContains(engine.buildQuery(nullDsl, 123), "NOT mapContains(props, 'plan')")
+        assertContains(engine.buildQuery(notNullDsl, 123), "mapContains(props, 'plan')")
     }
 
     @Test

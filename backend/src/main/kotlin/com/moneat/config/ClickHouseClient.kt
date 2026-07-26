@@ -218,9 +218,32 @@ object ClickHouseClient {
 
         val errorCode = clickHouseErrorCode(response)
         errorCode?.let { OperationalMetrics.recordClickHouseQueryError(operation, it) }
+        logQueryFailure(response, operation, query, errorCode ?: "unknown")
+    }
+
+    private fun recordBodyError(
+        response: HttpResponse,
+        operation: String,
+        query: String,
+        errorCode: String,
+    ) {
+        if (response.status.isSuccess() || clickHouseErrorCode(response) == null) {
+            OperationalMetrics.recordClickHouseQueryError(operation, errorCode)
+        }
+        if (response.status.isSuccess()) {
+            logQueryFailure(response, operation, query, errorCode)
+        }
+    }
+
+    private fun logQueryFailure(
+        response: HttpResponse,
+        operation: String,
+        query: String,
+        errorCode: String,
+    ) {
         logger.error {
             "ClickHouse request failed: operation=$operation status=${response.status.value} " +
-                "error_code=${errorCode ?: "unknown"} query_id=${clickHouseQueryId(response)} " +
+                "error_code=$errorCode query_id=${clickHouseQueryId(response)} " +
                 "query_kind=${queryKind(query)} query_fp=${queryFingerprint(query)}"
         }
     }
@@ -264,11 +287,8 @@ object ClickHouseClient {
         val isError = response.isClickHouseError(body)
         if (isError) {
             val errorCode = clickHouseErrorCode(body)
-            if (response.status.isSuccess() || clickHouseErrorCode(response) == null) {
-                OperationalMetrics.recordClickHouseQueryError("execute", errorCode)
-            }
+            recordBodyError(response, "execute", query, errorCode)
             val detail = "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
-            logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
             throw ClickHouseQueryException(
                 isTimeout = isClickHouseTimeout(body, errorCode),
                 internalDetail = detail,
@@ -379,11 +399,8 @@ object ClickHouseClient {
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
             val errorCode = clickHouseErrorCode(body)
-            if (response.status.isSuccess() || clickHouseErrorCode(response) == null) {
-                OperationalMetrics.recordClickHouseQueryError(operation, errorCode)
-            }
+            recordBodyError(response, operation, query, errorCode)
             val detail = "ClickHouse $operation failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
-            logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
             throw ClickHouseQueryException(
                 isTimeout = isClickHouseTimeout(body, errorCode),
                 internalDetail = detail,
