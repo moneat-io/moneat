@@ -591,6 +591,7 @@ class ReplayServiceTest {
 
     @Test
     fun `getReplayRecording decodes json payload variants`() = runBlocking {
+        val queries = java.util.Collections.synchronizedList(mutableListOf<String>())
         val rawJsonEvents = """[{"type":2,"timestamp":1000}]"""
         val encodedJsonEvents =
             Base64.getEncoder().encodeToString("""[{"type":3,"timestamp":2000}]""".toByteArray())
@@ -601,6 +602,7 @@ class ReplayServiceTest {
 
         withClickHouseMockServer({ exchange ->
             val query = exchange.requestBodyText()
+            queries += query
             when {
                 query.contains("SELECT toInt64(project_id)") ->
                     exchange.respond(200, """{"project_id":1}""", TEXT_PLAIN)
@@ -616,6 +618,9 @@ class ReplayServiceTest {
             assertEquals(2, result.events[0].jsonObject["type"]?.jsonPrimitive?.int)
             assertEquals(3, result.events[1].jsonObject["type"]?.jsonPrimitive?.int)
         }
+        val recordingQuery = queries.single { isRecordingSegmentsQuery(it) }
+        assertTrue(recordingQuery.contains("toUnixTimestamp64Milli(min(rs.timestamp))"))
+        assertTrue(recordingQuery.contains("FROM `test`.replay_segments AS rs"))
     }
 
     @Test

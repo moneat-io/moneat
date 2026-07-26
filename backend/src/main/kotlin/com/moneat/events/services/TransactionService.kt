@@ -310,22 +310,22 @@ class TransactionService(
         val normalizedEventId = queryHelper.normalizeUuid(eventId) ?: return null
         val query = """
             SELECT
-                toString(event_id) as event_id,
-                transaction_name as name,
-                transaction_op as op,
-                toUnixTimestamp64Milli(timestamp) - duration_ms as start_ts_ms,
-                duration_ms as duration,
-                JSONExtractString(contexts, 'trace', 'trace_id') as trace_id,
-                formatDateTime(timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
-                environment,
-                release,
-                JSONExtractString(contexts, 'trace', 'status') as status,
-                tags,
-                contexts,
-                breadcrumbs,
-                request
-            FROM `$clickhouseDb`.events
-            WHERE toString(event_id) = '$normalizedEventId' AND event_type = 'transaction'
+                toString(e.event_id) as event_id,
+                e.transaction_name as name,
+                e.transaction_op as op,
+                toUnixTimestamp64Milli(e.timestamp) - e.duration_ms as start_ts_ms,
+                e.duration_ms as duration,
+                JSONExtractString(e.contexts, 'trace', 'trace_id') as trace_id,
+                formatDateTime(e.timestamp, '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                e.environment,
+                e.release,
+                JSONExtractString(e.contexts, 'trace', 'status') as status,
+                e.tags,
+                e.contexts,
+                e.breadcrumbs,
+                e.request
+            FROM `$clickhouseDb`.events AS e
+            WHERE toString(e.event_id) = '$normalizedEventId' AND e.event_type = 'transaction'
             LIMIT 1
             FORMAT JSONEachRow
         """.trimIndent()

@@ -1696,21 +1696,21 @@ class ReplayService(
         projectId: Long,
         retentionDays: Int
     ): List<DecodedReplayRecordingSegment>? {
-        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId)
+        val projectIdClause = ClickHouseQueryUtils.projectIdClause(projectId, "rs.project_id")
 
         val query =
             """
             SELECT
-                segment_id,
-                argMin(recording_data, timestamp) as recording_data,
-                formatDateTime(min(timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
-                toUnixTimestamp64Milli(min(timestamp)) as timestamp_ms
-            FROM `$clickhouseDb`.replay_segments
-            WHERE toString(replay_id) = '$normalizedReplayId'
+                rs.segment_id,
+                argMin(rs.recording_data, rs.timestamp) as recording_data,
+                formatDateTime(min(rs.timestamp), '%Y-%m-%dT%H:%i:%S.000Z', 'UTC') as timestamp,
+                toUnixTimestamp64Milli(min(rs.timestamp)) as timestamp_ms
+            FROM `$clickhouseDb`.replay_segments AS rs
+            WHERE toString(rs.replay_id) = '$normalizedReplayId'
                 AND $projectIdClause
-                AND timestamp >= now64(3) - INTERVAL $retentionDays DAY
-            GROUP BY segment_id
-            ORDER BY segment_id ASC
+                AND rs.timestamp >= now64(3) - INTERVAL $retentionDays DAY
+            GROUP BY rs.segment_id
+            ORDER BY rs.segment_id ASC
             FORMAT JSONEachRow
             """.trimIndent()
 

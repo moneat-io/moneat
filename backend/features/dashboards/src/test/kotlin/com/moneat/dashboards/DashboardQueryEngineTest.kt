@@ -483,6 +483,36 @@ class DashboardQueryEngineTest {
         assertContains(sql, "FORMAT JSONEachRow")
     }
 
+    @Test
+    fun `buildQuery resolves analytics map properties across clauses`() {
+        val dsl = QueryDsl(
+            dataSource = "analytics_events",
+            metrics = listOf(MetricDef(AggFunction.UNIQ, "user_id", "users")),
+            groupBy = listOf(GroupByDef("props.platform")),
+            filters = listOf(FilterDef("props.plan", FilterOp.EQ, "team")),
+            orderBy = OrderByDef("props.platform", "asc"),
+        )
+
+        val sql = engine.buildQuery(dsl, 123)
+
+        assertContains(sql, "props['platform'] AS `props.platform`")
+        assertContains(sql, "props['plan'] = 'team'")
+        assertContains(sql, "GROUP BY props['platform']")
+        assertContains(sql, "ORDER BY props['platform'] ASC")
+    }
+
+    @Test
+    fun `buildQuery rejects nested analytics map properties`() {
+        val dsl = QueryDsl(
+            dataSource = "analytics_events",
+            groupBy = listOf(GroupByDef("props.device.platform")),
+        )
+
+        assertFailsWith<IllegalArgumentException> {
+            engine.buildQuery(dsl, 123)
+        }
+    }
+
     // ──── getDataSources ────
 
     @Test

@@ -45,8 +45,11 @@ import java.security.MessageDigest
 import java.util.Locale
 
 private val CLICKHOUSE_ERROR_CODE = Regex("""^Code:\s*(\d+)""")
+private val CLICKHOUSE_QUERY_ID = Regex("""^[a-zA-Z0-9-]{1,128}$""")
 private val logger = KotlinLogging.logger {}
 private const val CLICKHOUSE_FORMAT_KEYWORD = "FORMAT"
+private const val CLICKHOUSE_EXCEPTION_CODE_HEADER = "X-ClickHouse-Exception-Code"
+private const val CLICKHOUSE_QUERY_ID_HEADER = "X-ClickHouse-Query-Id"
 
 class ClickHouseQueryException(
     val isTimeout: Boolean,
@@ -180,14 +183,7 @@ object ClickHouseClient {
                 setBody(query)
             }
             val elapsed = elapsedSeconds(startedAt)
-            val status = if (response.status.isSuccess()) "success" else "http_${response.status.value}"
-            OperationalMetrics.recordClickHouseRequest(operation, status, elapsed)
-            if (!response.status.isSuccess()) {
-                logger.error {
-                    "ClickHouse request failed: operation=$operation status=${response.status.value} " +
-                        "query_kind=${queryKind(query)} query_fp=${queryFingerprint(query)}"
-                }
-            }
+            recordResponseMetrics(response, operation, query, elapsed)
             if (elapsed >= SLOW_QUERY_THRESHOLD_SECONDS) {
                 val elapsedText = String.format("%.1f", elapsed)
                 val truncatedQuery = query.take(QUERY_LOG_MAX_LEN)
@@ -207,6 +203,27 @@ object ClickHouseClient {
 
     private fun elapsedSeconds(startedAt: Long): Double =
         (System.nanoTime() - startedAt) / NANOS_PER_SECOND
+
+    private fun recordResponseMetrics(
+        response: HttpResponse,
+        operation: String,
+        query: String,
+        elapsed: Double,
+    ) {
+        val status = if (response.status.isSuccess()) "success" else "http_${response.status.value}"
+        OperationalMetrics.recordClickHouseRequest(operation, status, elapsed)
+        if (response.status.isSuccess()) {
+            return
+        }
+
+        val errorCode = clickHouseErrorCode(response)
+        errorCode?.let { OperationalMetrics.recordClickHouseQueryError(operation, it) }
+        logger.error {
+            "ClickHouse request failed: operation=$operation status=${response.status.value} " +
+                "error_code=${errorCode ?: "unknown"} query_id=${clickHouseQueryId(response)} " +
+                "query_kind=${queryKind(query)} query_fp=${queryFingerprint(query)}"
+        }
+    }
 
     private fun queryFingerprint(query: String): String =
         MessageDigest.getInstance("SHA-256")
@@ -247,7 +264,9 @@ object ClickHouseClient {
         val isError = response.isClickHouseError(body)
         if (isError) {
             val errorCode = clickHouseErrorCode(body)
-            OperationalMetrics.recordClickHouseQueryError("execute", errorCode)
+            if (response.status.isSuccess() || clickHouseErrorCode(response) == null) {
+                OperationalMetrics.recordClickHouseQueryError("execute", errorCode)
+            }
             val detail = "ClickHouse query failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
             logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
             throw ClickHouseQueryException(
@@ -360,7 +379,9 @@ object ClickHouseClient {
         val body = response.bodyAsText()
         if (response.isClickHouseError(body)) {
             val errorCode = clickHouseErrorCode(body)
-            OperationalMetrics.recordClickHouseQueryError(operation, errorCode)
+            if (response.status.isSuccess() || clickHouseErrorCode(response) == null) {
+                OperationalMetrics.recordClickHouseQueryError(operation, errorCode)
+            }
             val detail = "ClickHouse $operation failed (${response.status.value}): ${body.take(ERROR_BODY_MAX_LEN)}"
             logger.error { "$detail | query: ${query.take(QUERY_LOG_MAX_LEN)}" }
             throw ClickHouseQueryException(
@@ -399,6 +420,16 @@ private fun Char.isAsciiLetterOrDigitOrUnderscore(): Boolean =
 
 private fun clickHouseErrorCode(body: String): String =
     CLICKHOUSE_ERROR_CODE.find(body.trimStart())?.groupValues?.get(1) ?: "unknown"
+
+private fun clickHouseErrorCode(response: HttpResponse): String? =
+    response.headers[CLICKHOUSE_EXCEPTION_CODE_HEADER]
+        ?.toIntOrNull()
+        ?.toString()
+
+private fun clickHouseQueryId(response: HttpResponse): String =
+    response.headers[CLICKHOUSE_QUERY_ID_HEADER]
+        ?.takeIf(CLICKHOUSE_QUERY_ID::matches)
+        ?: "unknown"
 
 /** Returns true if the response body represents a ClickHouse error (e.g. "Code: 60, DB::Exception..."). */
 fun String.isClickHouseError(): Boolean = trimStart().startsWith("Code:")
