@@ -54,8 +54,14 @@ export function CopyField({label, value, hint, mono = true, id, className, onCop
     }
   }, [])
 
-  const handleCopy = () => {
-    navigator.clipboard?.writeText(value)
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+    } catch {
+      // No clipboard (insecure context) or the user denied it — leave the
+      // button alone rather than reporting a copy that never happened.
+      return
+    }
     onCopied?.()
     setCopied(true)
     if (resetId.current !== null) globalThis.clearTimeout(resetId.current)
