@@ -23,6 +23,7 @@ import {
   Copy,
   ExternalLink,
   Gamepad2,
+  KeyRound,
   Layers,
   Loader2,
   Monitor,
@@ -35,11 +36,13 @@ import {
   Trash2,
 } from 'lucide-react'
 import {api} from '@/lib/api'
+import {backendBaseUrl} from '@/lib/backend-url'
 import {trackEvent} from '@/lib/analytics'
 import {APP_OVERVIEW_SEARCH} from '@/lib/overview-route'
 import {getPlatformInfo, platforms, type PlatformType} from '@/routes/projects'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
+import {CopyField} from '@/components/ui/copy-field'
 import {SectionCard} from '@/components/ui/section-card'
 import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from '@/components/ui/dialog'
 import {Input} from '@/components/ui/input'
@@ -72,8 +75,10 @@ interface ServiceSettingsCardProps {
 /**
  * Editing surface for a single service, shared by the Setup page and the
  * legacy /projects/$projectId/settings route. Sections are gated by the service's
- * enabled telemetry sources: Sentry slug/CLI/DSN-targets only with the Sentry SDK
- * source; short OTLP/Datadog pointers with those sources. General + Danger always.
+ * enabled telemetry sources: slug, CLI config, and copyable DSNs with the Sentry
+ * SDK source; endpoint plus key/doc pointers with OTLP and Datadog. Because this
+ * card also renders inside /setup, those pointers link off the page (settings,
+ * the infrastructure tab, docs) rather than back at it. General + Danger always.
  *
  * Loads its own service by id, so callers that switch services should pass a
  * `key={serviceId}` to reset local edits on change.
@@ -94,10 +99,8 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
   const [localFramework, setLocalFramework] = useState<string | undefined>(undefined)
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('all')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [copiedSlug, setCopiedSlug] = useState(false)
   const [copiedConfig, setCopiedConfig] = useState(false)
   const [orgSlug, setOrgSlug] = useState<string | null>(null)
-  const copiedSlugResetId = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
   const copiedConfigResetId = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
 
   const hasSentry = sourceIds.includes('sentry-sdk')
@@ -122,9 +125,6 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
 
   useEffect(() => {
     return () => {
-      if (copiedSlugResetId.current !== null) {
-        globalThis.clearTimeout(copiedSlugResetId.current)
-      }
       if (copiedConfigResetId.current !== null) {
         globalThis.clearTimeout(copiedConfigResetId.current)
       }
@@ -189,10 +189,22 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
     return <div className="text-sm text-muted-foreground">Loading service…</div>
   }
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://api.moneat.io'
   const sentryCliConfig = orgSlug
-    ? `[defaults]\nurl=${backendUrl}\norg=${orgSlug}\nproject=${project.slug}`
+    ? `[defaults]\nurl=${backendBaseUrl}\norg=${orgSlug}\nproject=${project.slug}`
     : null
+
+  // One DSN per platform target for multiplatform frameworks, otherwise the
+  // single default key. `project.dsn` is the default key repeated, so it is only
+  // a fallback for services whose keys the API did not expand.
+  const targetDsns = project.keys
+    .filter((key) => Boolean(key.dsn))
+    .map((key) => ({
+      id: key.platformTarget ?? 'default',
+      label: key.platformTarget ? getPlatformInfo(key.platformTarget)?.name ?? key.platformTarget : 'DSN',
+      dsn: key.dsn,
+    }))
+  const fallbackDsns = project.dsn ? [{id: 'default', label: 'DSN', dsn: project.dsn}] : []
+  const dsnEntries = targetDsns.length > 0 ? targetDsns : fallbackDsns
 
   const initialFramework = getPlatformInfo(project.framework)?.id ?? 'other'
   const name = localName ?? project.name
@@ -223,18 +235,6 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
 
     if (Object.keys(updates).length === 0) return
     updateServiceMutation.mutate(updates)
-  }
-
-  const copySlug = () => {
-    navigator.clipboard.writeText(project.slug)
-    setCopiedSlug(true)
-    if (copiedSlugResetId.current !== null) {
-      globalThis.clearTimeout(copiedSlugResetId.current)
-    }
-    copiedSlugResetId.current = globalThis.setTimeout(() => {
-      setCopiedSlug(false)
-      copiedSlugResetId.current = null
-    }, COPIED_STATE_RESET_MS)
   }
 
   const copyConfig = () => {
@@ -288,18 +288,12 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
 
         {hasSentry && (
           <>
-            <div className="space-y-1.5">
-              <Label htmlFor="service-slug" className="text-xs">
-                Service slug
-              </Label>
-              <div className="flex gap-2">
-                <Input id="service-slug" value={project.slug} readOnly className="h-8 bg-muted" />
-                <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={copySlug}>
-                  {copiedSlug ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground">Used for Sentry CLI and API endpoints</p>
-            </div>
+            <CopyField
+              id="service-slug"
+              label="Service slug"
+              value={project.slug}
+              hint="Used for Sentry CLI and API endpoints"
+            />
 
             {sentryCliConfig && (
               <div className="space-y-1.5">
@@ -459,32 +453,76 @@ export function ServiceSettingsCard({serviceId, sourceIds, onDeleted}: ServiceSe
         )}
       </SectionCard>
 
-      {hasOtel && (
-        <SectionCard title="OpenTelemetry" icon={RadioTower} bodyClassName="space-y-2">
+      {hasSentry && (
+        <SectionCard title="DSN" icon={KeyRound} bodyClassName="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Send telemetry with the resource attribute <code className="font-mono text-[11px]">service.name</code> set
-            to this service.
+            Pass this to <code className="font-mono text-[11px]">Sentry.init()</code> in a Sentry-compatible SDK to
+            send events to this service. A DSN is safe to ship in client apps — it only allows sending.
           </p>
-          <Link to="/setup" search={{tab: 'services', service: serviceId}}>
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-              <ExternalLink className="h-3.5 w-3.5" />
-              View ingestion setup
+          {dsnEntries.length > 0 ? (
+            dsnEntries.map((entry) => <CopyField key={entry.id} label={entry.label} value={entry.dsn} />)
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No DSN yet. Add a target platform above to generate one.
+            </p>
+          )}
+        </SectionCard>
+      )}
+
+      {hasOtel && (
+        <SectionCard title="OpenTelemetry" icon={RadioTower} bodyClassName="space-y-3">
+          <CopyField
+            label="OTLP endpoint"
+            value={backendBaseUrl}
+            hint={
+              <>
+                Set <code className="font-mono">OTEL_EXPORTER_OTLP_ENDPOINT</code> to this — exporters append{' '}
+                <code className="font-mono">/v1/traces</code>, <code className="font-mono">/v1/metrics</code>, and{' '}
+                <code className="font-mono">/v1/logs</code>.
+              </>
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Authenticate with an OTLP API key, then map the incoming{' '}
+            <code className="font-mono text-[11px]">service.name</code> resource attribute to this service.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <Link to="/settings" search={{tab: 'api-keys'}}>
+                <KeyRound className="h-3.5 w-3.5" />
+                OTLP API keys
+              </Link>
             </Button>
-          </Link>
+            <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <a href="/docs/opentelemetry" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                Ingestion docs
+              </a>
+            </Button>
+          </div>
         </SectionCard>
       )}
 
       {hasDatadog && (
-        <SectionCard title="Datadog Agent" icon={ServerCog} bodyClassName="space-y-2">
+        <SectionCard title="Datadog Agent" icon={ServerCog} bodyClassName="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Point a compatible agent at Moneat and tag it with this service.
+            Point a compatible agent at Moneat and tag it with this service. The agent setup builder generates a
+            ready-to-paste config with an organization agent key.
           </p>
-          <Link to="/setup" search={{tab: 'services', service: serviceId}}>
-            <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-              <ExternalLink className="h-3.5 w-3.5" />
-              View ingestion setup
+          <div className="flex flex-wrap gap-1.5">
+            <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <Link to="/setup" search={{tab: 'infrastructure'}}>
+                <ServerCog className="h-3.5 w-3.5" />
+                Agent setup
+              </Link>
             </Button>
-          </Link>
+            <Button asChild variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
+              <a href="/docs/datadog-agent/agent-setup" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+                Ingestion docs
+              </a>
+            </Button>
+          </div>
         </SectionCard>
       )}
 
