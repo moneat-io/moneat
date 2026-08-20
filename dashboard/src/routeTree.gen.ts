@@ -120,6 +120,7 @@ import { Route as MonitoringEventsRouteImport } from './routes/monitoring.events
 import { Route as MonitoringDebuggerRouteImport } from './routes/monitoring.debugger'
 import { Route as MonitoringDatabasesRouteImport } from './routes/monitoring.databases'
 import { Route as MonitoringContainersRouteImport } from './routes/monitoring.containers'
+import { Route as MonitoringAlertsRouteImport } from './routes/monitoring.alerts'
 import { Route as LegalTermsRouteImport } from './routes/legal.terms'
 import { Route as LegalSmsConsentRouteImport } from './routes/legal.sms-consent'
 import { Route as LegalPrivacyRouteImport } from './routes/legal.privacy'
@@ -156,7 +157,6 @@ import { Route as MonitoringNetworkDevicesTrapsRouteImport } from './routes/moni
 import { Route as MonitoringNetworkDevicesPathsRouteImport } from './routes/monitoring.network-devices.paths'
 import { Route as MonitoringNetworkDevicesFlowsRouteImport } from './routes/monitoring.network-devices.flows'
 import { Route as MonitoringKubernetesResourceTypeRouteImport } from './routes/monitoring.kubernetes.$resourceType'
-import { Route as MonitoringHostsHostIdRouteImport } from './routes/monitoring.hosts.$hostId'
 import { Route as AuthSsoCallbackRouteImport } from './routes/auth.sso.callback'
 import { Route as AuthOauthCallbackRouteImport } from './routes/auth.oauth.callback'
 import { Route as AiTracesTraceIdRouteImport } from './routes/ai.traces.$traceId'
@@ -724,6 +724,11 @@ const MonitoringContainersRoute = MonitoringContainersRouteImport.update({
   path: '/containers',
   getParentRoute: () => MonitoringRoute,
 } as any)
+const MonitoringAlertsRoute = MonitoringAlertsRouteImport.update({
+  id: '/alerts',
+  path: '/alerts',
+  getParentRoute: () => MonitoringRoute,
+} as any)
 const LegalTermsRoute = LegalTermsRouteImport.update({
   id: '/legal/terms',
   path: '/legal/terms',
@@ -912,11 +917,6 @@ const MonitoringKubernetesResourceTypeRoute =
     path: '/$resourceType',
     getParentRoute: () => MonitoringKubernetesRoute,
   } as any)
-const MonitoringHostsHostIdRoute = MonitoringHostsHostIdRouteImport.update({
-  id: '/hosts/$hostId',
-  path: '/hosts/$hostId',
-  getParentRoute: () => MonitoringRoute,
-} as any)
 const AuthSsoCallbackRoute = AuthSsoCallbackRouteImport.update({
   id: '/auth/sso/callback',
   path: '/auth/sso/callback',
@@ -1039,6 +1039,7 @@ export interface FileRoutesByFullPath {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/monitoring/alerts': typeof MonitoringAlertsRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
@@ -1094,7 +1095,6 @@ export interface FileRoutesByFullPath {
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
-  '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
   '/monitoring/kubernetes/$resourceType': typeof MonitoringKubernetesResourceTypeRoute
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
@@ -1183,6 +1183,7 @@ export interface FileRoutesByTo {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/monitoring/alerts': typeof MonitoringAlertsRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
@@ -1235,7 +1236,6 @@ export interface FileRoutesByTo {
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
-  '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
   '/monitoring/kubernetes/$resourceType': typeof MonitoringKubernetesResourceTypeRoute
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
@@ -1338,6 +1338,7 @@ export interface FileRoutesById {
   '/legal/privacy': typeof LegalPrivacyRoute
   '/legal/sms-consent': typeof LegalSmsConsentRoute
   '/legal/terms': typeof LegalTermsRoute
+  '/monitoring/alerts': typeof MonitoringAlertsRoute
   '/monitoring/containers': typeof MonitoringContainersRoute
   '/monitoring/databases': typeof MonitoringDatabasesRoute
   '/monitoring/debugger': typeof MonitoringDebuggerRoute
@@ -1393,7 +1394,6 @@ export interface FileRoutesById {
   '/ai/traces/$traceId': typeof AiTracesTraceIdRoute
   '/auth/oauth/callback': typeof AuthOauthCallbackRoute
   '/auth/sso/callback': typeof AuthSsoCallbackRoute
-  '/monitoring/hosts/$hostId': typeof MonitoringHostsHostIdRoute
   '/monitoring/kubernetes/$resourceType': typeof MonitoringKubernetesResourceTypeRoute
   '/monitoring/network-devices/flows': typeof MonitoringNetworkDevicesFlowsRoute
   '/monitoring/network-devices/paths': typeof MonitoringNetworkDevicesPathsRoute
@@ -1497,6 +1497,7 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
+    | '/monitoring/alerts'
     | '/monitoring/containers'
     | '/monitoring/databases'
     | '/monitoring/debugger'
@@ -1552,7 +1553,6 @@ export interface FileRouteTypes {
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
-    | '/monitoring/hosts/$hostId'
     | '/monitoring/kubernetes/$resourceType'
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
@@ -1641,6 +1641,7 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
+    | '/monitoring/alerts'
     | '/monitoring/containers'
     | '/monitoring/databases'
     | '/monitoring/debugger'
@@ -1693,7 +1694,6 @@ export interface FileRouteTypes {
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
-    | '/monitoring/hosts/$hostId'
     | '/monitoring/kubernetes/$resourceType'
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
@@ -1795,6 +1795,7 @@ export interface FileRouteTypes {
     | '/legal/privacy'
     | '/legal/sms-consent'
     | '/legal/terms'
+    | '/monitoring/alerts'
     | '/monitoring/containers'
     | '/monitoring/databases'
     | '/monitoring/debugger'
@@ -1850,7 +1851,6 @@ export interface FileRouteTypes {
     | '/ai/traces/$traceId'
     | '/auth/oauth/callback'
     | '/auth/sso/callback'
-    | '/monitoring/hosts/$hostId'
     | '/monitoring/kubernetes/$resourceType'
     | '/monitoring/network-devices/flows'
     | '/monitoring/network-devices/paths'
@@ -2725,6 +2725,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringContainersRouteImport
       parentRoute: typeof MonitoringRoute
     }
+    '/monitoring/alerts': {
+      id: '/monitoring/alerts'
+      path: '/alerts'
+      fullPath: '/monitoring/alerts'
+      preLoaderRoute: typeof MonitoringAlertsRouteImport
+      parentRoute: typeof MonitoringRoute
+    }
     '/legal/terms': {
       id: '/legal/terms'
       path: '/legal/terms'
@@ -2977,13 +2984,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MonitoringKubernetesResourceTypeRouteImport
       parentRoute: typeof MonitoringKubernetesRoute
     }
-    '/monitoring/hosts/$hostId': {
-      id: '/monitoring/hosts/$hostId'
-      path: '/hosts/$hostId'
-      fullPath: '/monitoring/hosts/$hostId'
-      preLoaderRoute: typeof MonitoringHostsHostIdRouteImport
-      parentRoute: typeof MonitoringRoute
-    }
     '/auth/sso/callback': {
       id: '/auth/sso/callback'
       path: '/auth/sso/callback'
@@ -3202,6 +3202,7 @@ const MonitoringNetworkDevicesRouteWithChildren =
   )
 
 interface MonitoringRouteChildren {
+  MonitoringAlertsRoute: typeof MonitoringAlertsRoute
   MonitoringContainersRoute: typeof MonitoringContainersRoute
   MonitoringDatabasesRoute: typeof MonitoringDatabasesRoute
   MonitoringDebuggerRoute: typeof MonitoringDebuggerRoute
@@ -3213,11 +3214,11 @@ interface MonitoringRouteChildren {
   MonitoringProcessesRoute: typeof MonitoringProcessesRoute
   MonitoringSbomRoute: typeof MonitoringSbomRoute
   MonitoringServiceMapRoute: typeof MonitoringServiceMapRoute
-  MonitoringHostsHostIdRoute: typeof MonitoringHostsHostIdRoute
   MonitoringHostsIndexRoute: typeof MonitoringHostsIndexRoute
 }
 
 const MonitoringRouteChildren: MonitoringRouteChildren = {
+  MonitoringAlertsRoute: MonitoringAlertsRoute,
   MonitoringContainersRoute: MonitoringContainersRoute,
   MonitoringDatabasesRoute: MonitoringDatabasesRoute,
   MonitoringDebuggerRoute: MonitoringDebuggerRoute,
@@ -3229,7 +3230,6 @@ const MonitoringRouteChildren: MonitoringRouteChildren = {
   MonitoringProcessesRoute: MonitoringProcessesRoute,
   MonitoringSbomRoute: MonitoringSbomRoute,
   MonitoringServiceMapRoute: MonitoringServiceMapRoute,
-  MonitoringHostsHostIdRoute: MonitoringHostsHostIdRoute,
   MonitoringHostsIndexRoute: MonitoringHostsIndexRoute,
 }
 

@@ -88,6 +88,26 @@ function mapHostAlert(row: Record<string, unknown>): HostAlert {
   }
 }
 
+/**
+ * Host alert writes go out under the snake_case keys the API declares. The
+ * response mapper above is tolerant of either casing, but the request side is
+ * not: a camelCase `durationSeconds` is dropped on the floor and the rule
+ * silently saves with no duration at all.
+ */
+function hostAlertWriteBody(
+  alert: Partial<HostAlert> & {durationSeconds?: number}
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  if (alert.metric !== undefined) body.metric = alert.metric
+  if (alert.condition !== undefined) body.condition = alert.condition
+  if (alert.threshold !== undefined) body.threshold = alert.threshold
+  if (alert.durationSeconds !== undefined) body.duration_seconds = alert.durationSeconds
+  if (alert.enabled !== undefined) body.enabled = alert.enabled
+  // Explicit null clears the override, so only `undefined` is omitted.
+  if (alert.alertPriority !== undefined) body.alert_priority = alert.alertPriority
+  return body
+}
+
 function mapSilencePeriod(row: Record<string, unknown>): SilencePeriod {
   return {
     id: row.id as string,
@@ -452,7 +472,7 @@ export function monitoringMethods(core: ApiClientCore) {
     ) => {
       const payload = await core.request<Record<string, unknown>>(
         `${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts?scope=${scope}`,
-        { method: 'POST', body: JSON.stringify(alert) }
+        { method: 'POST', body: JSON.stringify(hostAlertWriteBody(alert)) }
       )
       return mapHostAlert(payload)
     },
@@ -465,7 +485,7 @@ export function monitoringMethods(core: ApiClientCore) {
     ) => {
       const payload = await core.request<Record<string, unknown> | undefined>(
         `${base}/monitor/hosts/${encodeURIComponent(hostId)}/alerts/${encodeURIComponent(alertId)}?scope=${scope}`,
-        { method: 'PUT', body: JSON.stringify(updates) }
+        { method: 'PUT', body: JSON.stringify(hostAlertWriteBody(updates)) }
       )
       return payload === undefined ? undefined : mapHostAlert(payload)
     },

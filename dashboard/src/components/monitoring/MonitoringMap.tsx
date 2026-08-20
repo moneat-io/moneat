@@ -989,7 +989,7 @@ function HostDetailDock({node, resourceKind, onClose}: HostDetailDockProps) {
 
       {node.hostId !== undefined && (
         <Button asChild size="sm" className="mt-1 h-8 w-full justify-center">
-          <Link to="/monitoring/hosts/$hostId" params={{hostId: String(node.hostId)}}>
+          <Link to="/resources" search={{q: node.label}}>
             Open host
           </Link>
         </Button>

@@ -318,8 +318,8 @@ function OverviewTab({
             <div className="flex items-center gap-2">
               {metricsHostId && (
                 <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs" asChild>
-                  <Link to="/monitoring/hosts/$hostId" params={{hostId: metricsHostId}}>
-                    Open in Metrics <ExternalLink className="h-3 w-3" />
+                  <Link to="/monitoring/alerts" search={{host: metricsHostId}}>
+                    Alert rules <ExternalLink className="h-3 w-3" />
                   </Link>
                 </Button>
               )}

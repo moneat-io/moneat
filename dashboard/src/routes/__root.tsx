@@ -48,6 +48,7 @@ const STATIC_TITLES: Record<string, string> = {
   '/error-tracking': 'Error Tracking',
   '/log-management': 'Log Management',
   '/infrastructure-monitoring': 'Infrastructure Monitoring',
+  '/monitoring/alerts': 'Alert Rules',
   '/uptime-monitoring': 'Uptime Monitoring',
   '/session-replay': 'Session Replay',
   '/performance-monitoring': 'Performance Monitoring',
