@@ -31,7 +31,8 @@ const mockProject = {
   name: 'Test Service',
   slug: 'test-service',
   framework: 'react',
-  keys: [],
+  keys: [{platformTarget: null, dsn: 'https://abc123@api.moneat.io/1'}],
+  dsn: 'https://abc123@api.moneat.io/1',
 }
 
 const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, 'clipboard')
@@ -83,6 +84,7 @@ describe('ServiceSettingsCard', () => {
     await screen.findByText('General')
     expect(screen.queryByLabelText('Service slug')).not.toBeInTheDocument()
     expect(screen.queryByText('Sentry CLI Configuration')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('DSN')).not.toBeInTheDocument()
     // The OpenTelemetry pointer shows instead.
     expect(screen.getByText('OpenTelemetry')).toBeInTheDocument()
   })
@@ -157,7 +159,7 @@ describe('ServiceSettingsCard', () => {
     mockApi.getProject.mockResolvedValueOnce({
       ...mockProject,
       framework: 'unity',
-      keys: [{platformTarget: 'android'}],
+      keys: [{platformTarget: 'android', dsn: 'https://android-key@api.moneat.io/1'}],
     })
 
     renderCard(['sentry-sdk'])
@@ -178,11 +180,58 @@ describe('ServiceSettingsCard', () => {
     expect(screen.queryByLabelText('Service slug')).not.toBeInTheDocument()
   })
 
-  it('points setup guidance to the Setup page', async () => {
+  it('shows the copyable DSN for Sentry services', async () => {
+    const writeText = stubClipboard()
+
+    renderCard(['sentry-sdk'])
+    const dsnInput = (await screen.findByLabelText('DSN')) as HTMLInputElement
+    expect(dsnInput.value).toBe('https://abc123@api.moneat.io/1')
+
+    fireEvent.click(screen.getByRole('button', {name: /Copy dsn/i}))
+    expect(writeText).toHaveBeenCalledWith('https://abc123@api.moneat.io/1')
+  })
+
+  it('shows one labelled DSN per platform target', async () => {
+    mockApi.getProject.mockResolvedValueOnce({
+      ...mockProject,
+      framework: 'unity',
+      keys: [
+        {platformTarget: 'android', dsn: 'https://android-key@api.moneat.io/1'},
+        {platformTarget: 'ios', dsn: 'https://ios-key@api.moneat.io/1'},
+      ],
+    })
+
+    renderCard(['sentry-sdk'])
+    expect(((await screen.findByLabelText('Android')) as HTMLInputElement).value).toBe(
+      'https://android-key@api.moneat.io/1'
+    )
+    expect((screen.getByLabelText('iOS') as HTMLInputElement).value).toBe('https://ios-key@api.moneat.io/1')
+    expect(screen.queryByLabelText('DSN')).not.toBeInTheDocument()
+  })
+
+  it('explains the empty DSN state instead of rendering a blank field', async () => {
+    mockApi.getProject.mockResolvedValueOnce({...mockProject, keys: [], dsn: ''})
+
+    renderCard(['sentry-sdk'])
+    expect(await screen.findByText('No DSN yet. Add a target platform above to generate one.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('DSN')).not.toBeInTheDocument()
+  })
+
+  it('points OpenTelemetry setup at the OTLP endpoint, keys, and docs — not back at this page', async () => {
     renderCard(['opentelemetry'])
 
-    const setupButton = await screen.findByRole('button', {name: /View ingestion setup/})
-    expect(setupButton.closest('a')).toHaveAttribute('to', '/setup')
+    expect(((await screen.findByLabelText('OTLP endpoint')) as HTMLInputElement).value).toBeTruthy()
+    // The router Link is mocked as a bare anchor, so match on its content.
+    expect(screen.getByText('OTLP API keys').closest('a')).toHaveAttribute('to', '/settings')
+    expect(screen.getByText('Ingestion docs').closest('a')).toHaveAttribute('href', '/docs/opentelemetry')
+  })
+
+  it('points Datadog setup at the infrastructure agent builder', async () => {
+    renderCard(['datadog-agent'])
+
+    const agentLink = (await screen.findByText('Agent setup')).closest('a')
+    expect(agentLink).toHaveAttribute('to', '/setup')
+    expect(screen.getByText('Ingestion docs').closest('a')).toHaveAttribute('href', '/docs/datadog-agent/agent-setup')
   })
 
   it('deletes the selected service and calls the supplied delete callback', async () => {
