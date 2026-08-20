@@ -26,6 +26,7 @@
 import {Link, useRouterState} from '@tanstack/react-router'
 import {useEffect, useRef, useState, type ComponentType} from 'react'
 import {
+  BellRing,
   Boxes,
   Bug,
   CalendarClock,
@@ -74,6 +75,7 @@ const DOCS_LINK_CLASS =
 const MONITORING_TABS: readonly MonitoringTab[] = [
   {id: 'catalog', label: 'Resources', href: '/resources', icon: Boxes},
   {id: 'map', label: 'Map', href: '/monitoring/map', icon: MapIcon},
+  {id: 'alerts', label: 'Alert Rules', href: '/monitoring/alerts', icon: BellRing},
   {id: 'processes', label: 'Processes', href: '/monitoring/processes', icon: Terminal, requiresDatadog: true},
   {id: 'network', label: 'Network', href: '/monitoring/network', icon: Network, requiresDatadog: true},
   {id: 'events', label: 'Events', href: '/monitoring/events', icon: CalendarClock, requiresDatadog: true},

@@ -24,7 +24,7 @@ export const Route = createFileRoute('/monitoring')({
 })
 
 const KNOWN_TAB_PATHS = [
-  'hosts', 'map', 'containers', 'processes', 'network', 'events',
+  'hosts', 'map', 'containers', 'processes', 'network', 'events', 'alerts',
   'kubernetes', 'databases', 'debugger', 'network-devices', 'service-map', 'sbom',
 ]
 

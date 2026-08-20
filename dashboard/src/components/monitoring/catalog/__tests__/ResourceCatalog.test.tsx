@@ -199,8 +199,8 @@ describe('ResourceCatalog', () => {
 
     expect(screen.getByRole('heading', {name: 'empty-host'})).toBeInTheDocument()
 
-    // Overview is the default tab and carries the telemetry section + Open in Metrics.
-    expect(screen.getByRole('link', {name: /Open in Metrics/})).toHaveAttribute('href', '/monitoring/hosts/$hostId')
+    // Overview is the default tab and carries the telemetry section + alert rules link.
+    expect(screen.getByRole('link', {name: /Alert rules/})).toHaveAttribute('href', '/monitoring/alerts')
     expect(await screen.findByText('No telemetry data')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', {name: 'Relationships'}))

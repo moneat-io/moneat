@@ -203,7 +203,7 @@ interface HostsContentProps {
   readonly onSort: (field: SortField) => void
   readonly onDelete: (id: string, name: string) => void
   readonly onAddHost: () => void
-  readonly onOpenHost: (id: string) => void
+  readonly onOpenHost: (hostname: string) => void
 }
 
 function defaultHostAgentCapabilities(): AgentCapabilities {
@@ -621,8 +621,8 @@ function HostCard({host, onDelete}: HostCardProps) {
 
   return (
     <Link
-      to="/monitoring/hosts/$hostId"
-      params={{hostId: String(host.id)}}
+      to="/resources"
+      search={{q: host.hostname}}
       className="block group"
     >
       <Card className="relative overflow-hidden transition-all duration-200 hover:border-primary/20 group-hover:-translate-y-0.5">
@@ -900,7 +900,7 @@ function HostTableRow({
   host: DdHostResponse
   maxMemory: number
   onDelete: (id: string, name: string) => void
-  onOpenHost: (id: string) => void
+  onOpenHost: (hostname: string) => void
 }>) {
   const online = host.isOnline
   const memPct = maxMemory > 0 ? (host.memoryTotalKb / maxMemory) * 100 : 0
@@ -908,7 +908,7 @@ function HostTableRow({
   return (
     <TableRow
       className="group hover:bg-muted/50 transition-colors cursor-pointer"
-      onClick={() => onOpenHost(host.id)}
+      onClick={() => onOpenHost(host.hostname)}
     >
       <TableCell className="pl-4">
         <Badge variant={online ? 'success' : 'danger'} size="sm" className="gap-1.5">
@@ -1251,7 +1251,7 @@ function MonitoringHostsPage() {
           onSort={toggleSort}
           onDelete={handleDelete}
           onAddHost={() => setAddDialogOpen(true)}
-          onOpenHost={(hostId) => navigate({to: '/monitoring/hosts/$hostId', params: {hostId: String(hostId)}})}
+          onOpenHost={(hostname) => navigate({to: '/resources', search: {q: hostname}})}
         />
       </div>
     </div>
