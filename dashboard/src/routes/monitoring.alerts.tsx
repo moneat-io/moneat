@@ -21,16 +21,11 @@
 //
 // Two profiles exist: org-wide shared defaults, and per-host overrides. A host
 // follows one or the other — switching a host to "custom" seeds its rules from
-// the shared defaults and then diverges.
-//
-// The write API is keyed by host (`/monitor/hosts/{id}/alerts?scope=global`),
-// so editing shared defaults still needs some host to carry the request; the
-// first known host acts as that carrier.
+// the shared defaults and then diverges. See useAlertRules for the data layer.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {useMemo, useState} from 'react'
+import {useState, type ComponentType, type ReactNode} from 'react'
 import {createFileRoute, Link, useNavigate} from '@tanstack/react-router'
-import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
   BellRing,
   Check,
@@ -44,7 +39,7 @@ import {
   Trash2,
 } from 'lucide-react'
 
-import {api, type DdHostResponse, type HostAlert, type HostAlertConfig} from '@/lib/api'
+import type {DdHostResponse, HostAlert} from '@/lib/api'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
 import {
@@ -64,18 +59,14 @@ import {StatCard} from '@/components/ui/stat-card'
 import {StatusDot} from '@/components/ui/status-dot'
 import {Switch} from '@/components/ui/switch'
 import {cn, formatRelativeTime} from '@/lib/utils'
-import {
-  AlertRuleDialog,
-  type AlertRuleFormValues,
-} from '@/components/monitoring/alerts/AlertRuleDialog'
+import {AlertRuleDialog} from '@/components/monitoring/alerts/AlertRuleDialog'
+import {isPagingPriority, useAlertRules} from '@/components/monitoring/alerts/useAlertRules'
 import {
   alertMetricLabel,
   alertMetricTone,
   formatAlertDuration,
   formatAlertThreshold,
 } from '@/components/monitoring/alerts/alertMetrics'
-
-type AlertScope = 'global' | 'host'
 
 type AlertsSearch = Readonly<{
   /** Selected host profile; absent means the shared defaults. */
@@ -89,155 +80,43 @@ export const Route = createFileRoute('/monitoring/alerts')({
   component: AlertRulesPage,
 })
 
-const hostAlertConfigQueryKey = (hostId: string) => ['host-alert-config', hostId] as const
+const SKELETON_ROWS = ['a', 'b', 'c', 'd'] as const
 
 function AlertRulesPage() {
   const navigate = useNavigate({from: Route.fullPath})
   const {host: selectedHostId} = Route.useSearch()
-  const queryClient = useQueryClient()
 
   const [isRuleDialogOpen, setIsRuleDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<HostAlert | null>(null)
   const [pendingDelete, setPendingDelete] = useState<HostAlert | null>(null)
 
-  const {data: hostsData, isLoading: hostsLoading} = useQuery({
-    queryKey: ['hosts'],
-    queryFn: () => api.getHosts(),
-    enabled: api.isAuthenticated(),
-  })
+  const alerts = useAlertRules(selectedHostId)
+  const {rules, viewingGlobal, followsShared, canEdit, isLoading} = alerts
 
-  const hosts: DdHostResponse[] = useMemo(
-    () => [...(hostsData?.hosts ?? [])].sort((a, b) => a.hostname.localeCompare(b.hostname)),
-    [hostsData?.hosts]
-  )
-
-  // Shared defaults still travel over a host-scoped endpoint, so fall back to
-  // the first host as the carrier when no host is explicitly selected.
-  const carrierHostId = selectedHostId ?? hosts[0]?.id
-  const viewingGlobal = !selectedHostId
-  const selectedHost = hosts.find((host) => host.id === selectedHostId)
-
-  const {data: alertConfig, isLoading: configLoading} = useQuery({
-    queryKey: hostAlertConfigQueryKey(carrierHostId ?? ''),
-    queryFn: () => api.getHostAlertConfig(carrierHostId as string),
-    enabled: api.isAuthenticated() && Boolean(carrierHostId),
-  })
-
-  const hostScope: AlertScope = alertConfig?.scope === 'global' ? 'global' : 'host'
-  // A host that follows the shared defaults shows those rules, read-only.
-  const followsShared = !viewingGlobal && hostScope === 'global'
-  const editScope: AlertScope = viewingGlobal ? 'global' : 'host'
-
-  const rules = useMemo(() => {
-    if (!alertConfig) return []
-    const source =
-      viewingGlobal || followsShared ? alertConfig.globalAlerts : alertConfig.hostAlerts
-    return [...source].sort(
-      (a, b) => a.metric.localeCompare(b.metric) || a.threshold - b.threshold
-    )
-  }, [alertConfig, viewingGlobal, followsShared])
-
-  const invalidate = () => {
-    if (carrierHostId) {
-      queryClient.invalidateQueries({queryKey: hostAlertConfigQueryKey(carrierHostId)})
-    }
-  }
-
-  const scopeMutation = useMutation({
-    mutationFn: (scope: AlertScope) => api.updateHostAlertScope(carrierHostId as string, scope),
-    onSuccess: invalidate,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (values: AlertRuleFormValues) =>
-      api.createHostAlert(
-        carrierHostId as string,
-        {
-          metric: values.metric,
-          condition: values.condition,
-          threshold: values.threshold,
-          durationSeconds: values.durationSeconds,
-          enabled: values.enabled,
-          alertPriority: values.alertPriority ?? undefined,
-        },
-        editScope
-      ),
-    onSuccess: () => {
-      invalidate()
-      setIsRuleDialogOpen(false)
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({rule, values}: {rule: HostAlert; values: AlertRuleFormValues}) =>
-      api.updateHostAlert(
-        carrierHostId as string,
-        rule.id,
-        {
-          metric: values.metric,
-          condition: values.condition,
-          threshold: values.threshold,
-          durationSeconds: values.durationSeconds,
-          enabled: values.enabled,
-          alertPriority: values.alertPriority,
-        },
-        rule.scope as AlertScope
-      ),
-    onSuccess: () => {
-      invalidate()
-      setIsRuleDialogOpen(false)
-      setEditingRule(null)
-    },
-  })
-
-  const toggleMutation = useMutation({
-    mutationFn: ({rule, enabled}: {rule: HostAlert; enabled: boolean}) =>
-      api.updateHostAlert(
-        carrierHostId as string,
-        rule.id,
-        {enabled},
-        rule.scope as AlertScope
-      ),
-    // Reflect the switch immediately; the list is otherwise a full refetch away.
-    onMutate: ({rule, enabled}) => {
-      const key = hostAlertConfigQueryKey(carrierHostId ?? '')
-      const previous = queryClient.getQueryData<HostAlertConfig>(key)
-      queryClient.setQueryData<HostAlertConfig>(key, (current) =>
-        current ? applyRuleUpdate(current, {...rule, enabled}) : current
-      )
-      return {previous, key}
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(context.key, context.previous)
-    },
-    onSettled: invalidate,
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (rule: HostAlert) =>
-      api.deleteHostAlert(carrierHostId as string, rule.id, rule.scope as AlertScope),
-    onSuccess: () => {
-      invalidate()
-      setPendingDelete(null)
-    },
-  })
-
-  const enabledCount = rules.filter((rule) => rule.enabled).length
   const scopeLabel = viewingGlobal
     ? 'shared defaults'
-    : (selectedHost?.hostname ?? 'this host')
-
-  const isLoading = hostsLoading || (Boolean(carrierHostId) && configLoading)
-  const canEdit = viewingGlobal || !followsShared
+    : (alerts.selectedHost?.hostname ?? 'this host')
+  const panelTitle = viewingGlobal ? 'Shared defaults' : scopeLabel
 
   const openCreate = () => {
     setEditingRule(null)
     setIsRuleDialogOpen(true)
   }
 
-  const openEdit = (rule: HostAlert) => {
-    setEditingRule(rule)
-    setIsRuleDialogOpen(true)
+  const closeRuleDialog = (open: boolean) => {
+    setIsRuleDialogOpen(open)
+    if (!open) setEditingRule(null)
+  }
+
+  const submitRule = (values: Parameters<typeof alerts.createMutation.mutate>[0]) => {
+    if (editingRule) {
+      alerts.updateMutation.mutate(
+        {rule: editingRule, values},
+        {onSuccess: () => closeRuleDialog(false)}
+      )
+      return
+    }
+    alerts.createMutation.mutate(values, {onSuccess: () => closeRuleDialog(false)})
   }
 
   return (
@@ -266,28 +145,28 @@ function AlertRulesPage() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Active rules"
-          value={isLoading ? '—' : enabledCount}
+          value={isLoading ? '—' : alerts.enabledCount}
           icon={ShieldCheck}
           tone="success"
           subtitle={`of ${rules.length} in ${viewingGlobal ? 'shared defaults' : 'this profile'}`}
         />
         <StatCard
           label="Hosts"
-          value={hostsLoading ? '—' : hosts.length}
+          value={alerts.hostsLoading ? '—' : alerts.hosts.length}
           icon={Server}
           tone="info"
           subtitle="reporting to this org"
         />
         <StatCard
           label="Profile"
-          value={viewingGlobal ? 'Shared' : followsShared ? 'Shared' : 'Custom'}
+          value={followsShared || viewingGlobal ? 'Shared' : 'Custom'}
           icon={viewingGlobal ? Globe2 : SlidersHorizontal}
-          tone={viewingGlobal || followsShared ? 'accent' : 'warning'}
+          tone={followsShared || viewingGlobal ? 'accent' : 'warning'}
           subtitle={viewingGlobal ? 'org-wide defaults' : scopeLabel}
         />
         <StatCard
           label="Paging rules"
-          value={isLoading ? '—' : rules.filter((rule) => isPagingPriority(rule.alertPriority)).length}
+          value={isLoading ? '—' : alerts.pagingCount}
           icon={BellRing}
           tone="danger"
           subtitle="P0–P2 override set"
@@ -296,69 +175,39 @@ function AlertRulesPage() {
 
       <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <SectionCard title="Profiles" icon={Globe2} iconTone="info" flushBody>
-          <nav className="max-h-[28rem] overflow-y-auto py-1">
-            <ProfileRow
-              active={viewingGlobal}
-              icon={Globe2}
-              label="Shared defaults"
-              detail="Applies to every host set to shared"
-              onSelect={() => navigate({search: {}})}
-            />
-            {hosts.length > 0 && (
-              <p className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Hosts
-              </p>
-            )}
-            {hostsLoading &&
-              Array.from({length: 3}).map((_, index) => (
-                <div key={index} className="px-3 py-2">
-                  <div className="h-4 w-full animate-pulse rounded bg-muted" />
-                </div>
-              ))}
-            {hosts.map((host) => (
-              <ProfileRow
-                key={host.id}
-                active={host.id === selectedHostId}
-                icon={Server}
-                tone={host.isOnline ? 'success' : 'neutral'}
-                label={host.hostname}
-                detail={host.platform || host.os}
-                onSelect={() => navigate({search: {host: host.id}})}
-              />
-            ))}
-            {!hostsLoading && hosts.length === 0 && (
-              <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-                No hosts are reporting yet.
-              </p>
-            )}
-          </nav>
+          <ProfileRail
+            hosts={alerts.hosts}
+            loading={alerts.hostsLoading}
+            selectedHostId={selectedHostId}
+            onSelectShared={() => navigate({search: {}})}
+            onSelectHost={(hostId) => navigate({search: {host: hostId}})}
+          />
         </SectionCard>
 
         <SectionCard
-          title={viewingGlobal ? 'Shared defaults' : scopeLabel}
+          title={panelTitle}
           icon={viewingGlobal ? Globe2 : Server}
           iconTone={viewingGlobal ? 'info' : 'accent'}
           count={isLoading ? undefined : rules.length}
           actions={
-            !viewingGlobal &&
-            carrierHostId && (
+            !viewingGlobal && alerts.hasCarrier ? (
               <div className="flex items-center rounded-md border p-0.5">
                 <ScopeButton
                   active={followsShared}
-                  pending={scopeMutation.isPending}
-                  onClick={() => scopeMutation.mutate('global')}
+                  pending={alerts.scopeMutation.isPending}
+                  onClick={() => alerts.scopeMutation.mutate('global')}
                 >
                   Shared
                 </ScopeButton>
                 <ScopeButton
                   active={!followsShared}
-                  pending={scopeMutation.isPending}
-                  onClick={() => scopeMutation.mutate('host')}
+                  pending={alerts.scopeMutation.isPending}
+                  onClick={() => alerts.scopeMutation.mutate('host')}
                 >
                   Custom
                 </ScopeButton>
               </div>
-            )
+            ) : undefined
           }
           flushBody
         >
@@ -373,121 +222,220 @@ function AlertRulesPage() {
             </p>
           )}
 
-          {isLoading && (
-            <div className="space-y-2 px-4 py-3">
-              {Array.from({length: 4}).map((_, index) => (
-                <div key={index} className="h-12 w-full animate-pulse rounded bg-muted" />
-              ))}
-            </div>
-          )}
-
-          {!isLoading && rules.length === 0 && (
-            <div className="px-4 py-4">
-              <EmptyState
-                icon={BellRing}
-                title="No rules yet"
-                description={
-                  hosts.length === 0
-                    ? 'Connect a host with the agent to start configuring threshold alerts.'
-                    : 'Add a threshold rule to open an on-call alert when this metric drifts.'
-                }
-                action={
-                  canEdit && hosts.length > 0 ? (
-                    <Button size="sm" className="gap-1.5" onClick={openCreate}>
-                      <Plus className="h-3.5 w-3.5" />
-                      New rule
-                    </Button>
-                  ) : undefined
-                }
-              />
-            </div>
-          )}
-
-          {!isLoading && rules.length > 0 && (
-            <ul className="divide-y">
-              {rules.map((rule) => (
-                <RuleRow
-                  key={`${rule.scope}-${rule.id}`}
-                  rule={rule}
-                  readOnly={!canEdit}
-                  togglePending={toggleMutation.isPending}
-                  onToggle={(enabled) => toggleMutation.mutate({rule, enabled})}
-                  onEdit={() => openEdit(rule)}
-                  onDelete={() => setPendingDelete(rule)}
-                />
-              ))}
-            </ul>
-          )}
+          <RulesPanelBody
+            isLoading={isLoading}
+            rules={rules}
+            canEdit={canEdit}
+            hasHosts={alerts.hosts.length > 0}
+            togglePending={alerts.toggleMutation.isPending}
+            onToggle={(rule, enabled) => alerts.toggleMutation.mutate({rule, enabled})}
+            onEdit={(rule) => {
+              setEditingRule(rule)
+              setIsRuleDialogOpen(true)
+            }}
+            onDelete={setPendingDelete}
+            onCreate={openCreate}
+          />
         </SectionCard>
       </div>
 
       <AlertRuleDialog
         open={isRuleDialogOpen}
-        onOpenChange={(open) => {
-          setIsRuleDialogOpen(open)
-          if (!open) setEditingRule(null)
-        }}
+        onOpenChange={closeRuleDialog}
         rule={editingRule}
         scopeLabel={scopeLabel}
-        pending={createMutation.isPending || updateMutation.isPending}
-        onSubmit={(values) => {
-          if (editingRule) updateMutation.mutate({rule: editingRule, values})
-          else createMutation.mutate(values)
-        }}
+        pending={alerts.createMutation.isPending || alerts.updateMutation.isPending}
+        onSubmit={submitRule}
       />
 
-      <AlertDialog
-        open={Boolean(pendingDelete)}
-        onOpenChange={(open) => !open && setPendingDelete(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this rule?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDelete
-                ? `${alertMetricLabel(pendingDelete.metric)} ${pendingDelete.condition} ${formatAlertThreshold(pendingDelete.metric, pendingDelete.threshold)} will stop being evaluated for ${scopeLabel}.`
-                : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={deleteMutation.isPending}
-              onClick={(event) => {
-                event.preventDefault()
-                if (pendingDelete) deleteMutation.mutate(pendingDelete)
-              }}
-            >
-              {deleteMutation.isPending ? 'Deleting…' : 'Delete rule'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteRuleDialog
+        rule={pendingDelete}
+        scopeLabel={scopeLabel}
+        pending={alerts.deleteMutation.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={(rule) =>
+          alerts.deleteMutation.mutate(rule, {onSuccess: () => setPendingDelete(null)})
+        }
+      />
     </div>
   )
 }
 
-function isPagingPriority(priority?: string | null): boolean {
-  return priority === 'P0' || priority === 'P1' || priority === 'P2'
+type ProfileRailProps = Readonly<{
+  hosts: readonly DdHostResponse[]
+  loading: boolean
+  selectedHostId?: string
+  onSelectShared: () => void
+  onSelectHost: (hostId: string) => void
+}>
+
+function ProfileRail({
+  hosts,
+  loading,
+  selectedHostId,
+  onSelectShared,
+  onSelectHost,
+}: ProfileRailProps) {
+  return (
+    <nav className="max-h-[28rem] overflow-y-auto py-1">
+      <ProfileRow
+        active={!selectedHostId}
+        icon={Globe2}
+        label="Shared defaults"
+        detail="Applies to every host set to shared"
+        onSelect={onSelectShared}
+      />
+      {hosts.length > 0 && (
+        <p className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Hosts
+        </p>
+      )}
+      {loading &&
+        SKELETON_ROWS.slice(0, 3).map((key) => (
+          <div key={key} className="px-3 py-2">
+            <div className="h-4 w-full animate-pulse rounded bg-muted" />
+          </div>
+        ))}
+      {hosts.map((host) => (
+        <ProfileRow
+          key={host.id}
+          active={host.id === selectedHostId}
+          icon={Server}
+          tone={host.isOnline ? 'success' : 'neutral'}
+          label={host.hostname}
+          detail={host.platform || host.os}
+          onSelect={() => onSelectHost(host.id)}
+        />
+      ))}
+      {!loading && hosts.length === 0 && (
+        <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+          No hosts are reporting yet.
+        </p>
+      )}
+    </nav>
+  )
 }
 
-/** Swap one rule wherever it appears in a cached config. */
-function applyRuleUpdate(config: HostAlertConfig, updated: HostAlert): HostAlertConfig {
-  const swap = (list: HostAlert[]) =>
-    list.map((rule) =>
-      rule.id === updated.id && rule.scope === updated.scope ? updated : rule
+type RulesPanelBodyProps = Readonly<{
+  isLoading: boolean
+  rules: readonly HostAlert[]
+  canEdit: boolean
+  hasHosts: boolean
+  togglePending: boolean
+  onToggle: (rule: HostAlert, enabled: boolean) => void
+  onEdit: (rule: HostAlert) => void
+  onDelete: (rule: HostAlert) => void
+  onCreate: () => void
+}>
+
+function RulesPanelBody({
+  isLoading,
+  rules,
+  canEdit,
+  hasHosts,
+  togglePending,
+  onToggle,
+  onEdit,
+  onDelete,
+  onCreate,
+}: RulesPanelBodyProps) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2 px-4 py-3">
+        {SKELETON_ROWS.map((key) => (
+          <div key={key} className="h-12 w-full animate-pulse rounded bg-muted" />
+        ))}
+      </div>
     )
-  return {
-    ...config,
-    globalAlerts: swap(config.globalAlerts),
-    hostAlerts: swap(config.hostAlerts),
-    effectiveAlerts: swap(config.effectiveAlerts),
   }
+
+  if (rules.length === 0) {
+    return (
+      <div className="px-4 py-4">
+        <EmptyState
+          icon={BellRing}
+          title="No rules yet"
+          description={
+            hasHosts
+              ? 'Add a threshold rule to open an on-call alert when this metric drifts.'
+              : 'Connect a host with the agent to start configuring threshold alerts.'
+          }
+          action={
+            canEdit && hasHosts ? (
+              <Button size="sm" className="gap-1.5" onClick={onCreate}>
+                <Plus className="h-3.5 w-3.5" />
+                New rule
+              </Button>
+            ) : undefined
+          }
+        />
+      </div>
+    )
+  }
+
+  return (
+    <ul className="divide-y">
+      {rules.map((rule) => (
+        <RuleRow
+          key={`${rule.scope}-${rule.id}`}
+          rule={rule}
+          readOnly={!canEdit}
+          togglePending={togglePending}
+          onToggle={(enabled) => onToggle(rule, enabled)}
+          onEdit={() => onEdit(rule)}
+          onDelete={() => onDelete(rule)}
+        />
+      ))}
+    </ul>
+  )
+}
+
+type DeleteRuleDialogProps = Readonly<{
+  rule: HostAlert | null
+  scopeLabel: string
+  pending: boolean
+  onCancel: () => void
+  onConfirm: (rule: HostAlert) => void
+}>
+
+function DeleteRuleDialog({
+  rule,
+  scopeLabel,
+  pending,
+  onCancel,
+  onConfirm,
+}: DeleteRuleDialogProps) {
+  return (
+    <AlertDialog open={Boolean(rule)} onOpenChange={(open) => !open && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this rule?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {rule
+              ? `${alertMetricLabel(rule.metric)} ${rule.condition} ${formatAlertThreshold(rule.metric, rule.threshold)} will stop being evaluated for ${scopeLabel}.`
+              : null}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={pending}
+            onClick={(event) => {
+              event.preventDefault()
+              if (rule) onConfirm(rule)
+            }}
+          >
+            {pending ? 'Deleting…' : 'Delete rule'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 type ProfileRowProps = Readonly<{
   active: boolean
-  icon: React.ComponentType<{className?: string}>
+  icon: ComponentType<{className?: string}>
   label: string
   detail?: string
   tone?: 'success' | 'neutral'
@@ -527,7 +475,7 @@ type ScopeButtonProps = Readonly<{
   active: boolean
   pending: boolean
   onClick: () => void
-  children: React.ReactNode
+  children: ReactNode
 }>
 
 function ScopeButton({active, pending, onClick, children}: ScopeButtonProps) {
@@ -555,7 +503,7 @@ type RuleRowProps = Readonly<{
 }>
 
 function RuleRow({rule, readOnly, togglePending, onToggle, onEdit, onDelete}: RuleRowProps) {
-  const tone = alertMetricTone(rule.metric)
+  const label = alertMetricLabel(rule.metric)
   return (
     <li
       className={cn(
@@ -564,7 +512,7 @@ function RuleRow({rule, readOnly, togglePending, onToggle, onEdit, onDelete}: Ru
       )}
     >
       <Switch
-        aria-label={`${rule.enabled ? 'Disable' : 'Enable'} ${alertMetricLabel(rule.metric)} rule`}
+        aria-label={`${rule.enabled ? 'Disable' : 'Enable'} ${label} rule`}
         checked={rule.enabled}
         disabled={readOnly || togglePending}
         onCheckedChange={onToggle}
@@ -573,8 +521,8 @@ function RuleRow({rule, readOnly, togglePending, onToggle, onEdit, onDelete}: Ru
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <StatusDot tone={tone} size="sm" />
-          <span className="text-xs font-medium">{alertMetricLabel(rule.metric)}</span>
+          <StatusDot tone={alertMetricTone(rule.metric)} size="sm" />
+          <span className="text-xs font-medium">{label}</span>
           <Badge variant="outline" className="px-1.5 py-0 font-mono text-[10px]">
             {rule.condition} {formatAlertThreshold(rule.metric, rule.threshold)}
           </Badge>
@@ -591,9 +539,7 @@ function RuleRow({rule, readOnly, togglePending, onToggle, onEdit, onDelete}: Ru
           )}
         </div>
         <p className="mt-0.5 text-[11px] text-muted-foreground">
-          {rule.lastTriggeredAt
-            ? `Last fired ${formatRelativeTime(rule.lastTriggeredAt)}`
-            : 'Never fired'}
+          {rule.lastTriggeredAt ? `Last fired ${formatRelativeTime(rule.lastTriggeredAt)}` : 'Never fired'}
         </p>
       </div>
 
@@ -603,7 +549,7 @@ function RuleRow({rule, readOnly, togglePending, onToggle, onEdit, onDelete}: Ru
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0"
-            aria-label={`Edit ${alertMetricLabel(rule.metric)} rule`}
+            aria-label={`Edit ${label} rule`}
             onClick={onEdit}
           >
             <Pencil className="h-3.5 w-3.5" />
@@ -612,7 +558,7 @@ function RuleRow({rule, readOnly, togglePending, onToggle, onEdit, onDelete}: Ru
             size="sm"
             variant="ghost"
             className="h-7 w-7 p-0"
-            aria-label={`Delete ${alertMetricLabel(rule.metric)} rule`}
+            aria-label={`Delete ${label} rule`}
             onClick={onDelete}
           >
             <Trash2 className="h-3.5 w-3.5 text-danger-fg" />

@@ -20,7 +20,7 @@
 // inputs — the preview is the thing reviewers read, not the field labels.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {useState} from 'react'
+import {useState, type FormEventHandler} from 'react'
 import {BellRing} from 'lucide-react'
 
 import type {HostAlert} from '@/lib/api'
@@ -135,7 +135,11 @@ function AlertRuleForm({rule, scopeLabel, pending, onCancel, onSubmit}: AlertRul
 
   const durationMinutes = Math.round(values.durationSeconds / 60)
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  let submitLabel = 'Create rule'
+  if (pending) submitLabel = 'Saving…'
+  else if (isEdit) submitLabel = 'Save changes'
+
+  const handleSubmit: FormEventHandler<HTMLFormElement> = (event) => {
     event.preventDefault()
     onSubmit(values)
   }
@@ -291,7 +295,7 @@ function AlertRuleForm({rule, scopeLabel, pending, onCancel, onSubmit}: AlertRul
           Cancel
         </Button>
         <Button type="submit" disabled={pending}>
-          {pending ? 'Saving…' : isEdit ? 'Save changes' : 'Create rule'}
+          {submitLabel}
         </Button>
       </DialogFooter>
       </form>

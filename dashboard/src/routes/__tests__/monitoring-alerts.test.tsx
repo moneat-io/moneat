@@ -124,7 +124,12 @@ function installHandlers(
   config: Record<string, unknown>,
   hosts = [hostRow(HOST_ID, 'web-01'), hostRow(OTHER_HOST_ID, 'db-01', false)]
 ) {
-  const captured: {createBody?: Record<string, unknown>; updateBody?: Record<string, unknown>} = {}
+  const captured: {
+    createBody?: Record<string, unknown>
+    updateBody?: Record<string, unknown>
+    scopeBody?: Record<string, unknown>
+    deleted?: boolean
+  } = {}
   let current = structuredClone(config)
   server.use(
     http.get(`${API_BASE}/hosts`, () =>
@@ -134,6 +139,14 @@ function installHandlers(
     http.post(`${API_BASE}/monitor/hosts/:hostId/alerts`, async ({request}) => {
       captured.createBody = (await request.json()) as Record<string, unknown>
       return HttpResponse.json(alertRow())
+    }),
+    http.put(`${API_BASE}/monitor/hosts/:hostId/alerts/scope`, async ({request}) => {
+      captured.scopeBody = (await request.json()) as Record<string, unknown>
+      return new HttpResponse(null, {status: 204})
+    }),
+    http.delete(`${API_BASE}/monitor/hosts/:hostId/alerts/:alertId`, () => {
+      captured.deleted = true
+      return new HttpResponse(null, {status: 204})
     }),
     http.put(`${API_BASE}/monitor/hosts/:hostId/alerts/:alertId`, async ({request}) => {
       const body = (await request.json()) as Record<string, unknown>
@@ -267,5 +280,93 @@ describe('monitoring alert rules page', () => {
     await user.click(await within(rail).findByText('db-01'))
 
     expect(mockNavigate).toHaveBeenCalledWith({search: {host: OTHER_HOST_ID}})
+  })
+
+  it('edits an existing rule and sends the changed threshold', async () => {
+    const user = userEvent.setup()
+    const captured = installHandlers({
+      scope: 'global',
+      global_alerts: [alertRow({scope: 'global'})],
+      system_alerts: [],
+      effective_alerts: [],
+    })
+
+    renderRoute(AlertRulesRoute)
+
+    await user.click(await screen.findByRole('button', {name: /edit cpu usage rule/i}))
+
+    const threshold = await screen.findByLabelText(/threshold/i)
+    await user.clear(threshold)
+    await user.type(threshold, '95')
+    await user.click(screen.getByRole('button', {name: /save changes/i}))
+
+    await waitFor(() => expect(captured.updateBody).toBeDefined())
+    expect(captured.updateBody).toMatchObject({threshold: 95, duration_seconds: 60})
+  })
+
+  it('deletes a rule after the confirmation dialog', async () => {
+    const user = userEvent.setup()
+    const captured = installHandlers({
+      scope: 'global',
+      global_alerts: [alertRow({scope: 'global'})],
+      system_alerts: [],
+      effective_alerts: [],
+    })
+
+    renderRoute(AlertRulesRoute)
+
+    await user.click(await screen.findByRole('button', {name: /delete cpu usage rule/i}))
+    expect(await screen.findByText(/will stop being evaluated/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', {name: /delete rule/i}))
+
+    await waitFor(() => expect(captured.deleted).toBe(true))
+  })
+
+  it('switches a host from shared defaults to its own rules', async () => {
+    const user = userEvent.setup()
+    mockSearch.current = {host: HOST_ID}
+    const captured = installHandlers({
+      scope: 'global',
+      global_alerts: [alertRow({scope: 'global'})],
+      system_alerts: [],
+      effective_alerts: [],
+    })
+
+    renderRoute(AlertRulesRoute)
+
+    await user.click(await screen.findByRole('button', {name: 'Custom'}))
+
+    await waitFor(() => expect(captured.scopeBody).toEqual({scope: 'host'}))
+  })
+
+  it('offers rule creation from the empty state', async () => {
+    const user = userEvent.setup()
+    installHandlers({
+      scope: 'global',
+      global_alerts: [],
+      system_alerts: [],
+      effective_alerts: [],
+    })
+
+    renderRoute(AlertRulesRoute)
+
+    expect(await screen.findByText('No rules yet')).toBeInTheDocument()
+    const emptyStateButton = screen.getAllByRole('button', {name: /new rule/i})[1]
+    await user.click(emptyStateButton)
+
+    expect(await screen.findByRole('button', {name: /create rule/i})).toBeInTheDocument()
+  })
+
+  it('tells the user when no hosts are reporting', async () => {
+    installHandlers(
+      {scope: 'global', global_alerts: [], system_alerts: [], effective_alerts: []},
+      []
+    )
+
+    renderRoute(AlertRulesRoute)
+
+    expect(await screen.findByText(/no hosts are reporting yet/i)).toBeInTheDocument()
+    expect(screen.getByText(/connect a host with the agent/i)).toBeInTheDocument()
   })
 })
