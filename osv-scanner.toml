@@ -1,8 +1,3 @@
 # Accepted OSV Scanner vulnerability exceptions.
 # Each ignored vulnerability must include a package/advisory-specific reason,
 # an owner, and a review date in the reason text.
-
-[[IgnoredVulns]]
-id = "GHSA-mh99-v99m-4gvg"
-ignoreUntil = 2026-08-25
-reason = "Owner: Platform. Review 2026-08-25. Dev-only build/lint dependency; no user-controlled glob input."
