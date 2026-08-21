@@ -88,6 +88,22 @@ class AlertEpisodeServiceTest {
     }
 
     @Test
+    fun `firing recorded without notification remains immediately publishable`() {
+        val now = Instant.parse("2026-06-02T12:00:00Z")
+
+        val muted = service.recordFiringWithoutNotification(alertEvent(), now)
+        val unmuted = service.recordFiring(alertEvent(), now + 1.hours)
+
+        assertNotNull(muted)
+        assertEquals(0, muted.notificationCount)
+        assertNull(muted.lastNotificationAt)
+        assertNotNull(unmuted)
+        assertTrue(unmuted.shouldPublish)
+        assertEquals(1, unmuted.notificationSequence)
+        assertEquals(muted.id, unmuted.episode.id)
+    }
+
+    @Test
     fun `firing episode persists alert display metadata`() {
         val now = Instant.parse("2026-06-02T12:00:00Z")
 

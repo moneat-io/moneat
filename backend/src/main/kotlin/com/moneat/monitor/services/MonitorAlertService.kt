@@ -22,6 +22,7 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
@@ -56,7 +57,6 @@ import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
-import org.jetbrains.exposed.v1.core.greaterEq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.lessEq
 import org.jetbrains.exposed.v1.core.notInList
@@ -207,6 +207,7 @@ private fun rollupDiskPercentExpr(): String =
 class MonitorAlertService(
     private val incidentService: IncidentService = IncidentService(),
     private val workflowService: WorkflowService = WorkflowService(),
+    private val alertSilenceService: AlertSilenceService = AlertSilenceService(),
 ) {
     private val config = ApplicationConfig("application.conf")
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
@@ -459,10 +460,6 @@ class MonitorAlertService(
         val now = Clock.System.now()
         if (isThrottledByInterval(alert.lastTriggeredAt, now)) {
             setAlertTriggeredState(alertKey, isThrottled = true)
-            return
-        }
-
-        if (isAnySilenceActive(organizationId)) {
             return
         }
 
@@ -1027,8 +1024,6 @@ class MonitorAlertService(
             }
         }
 
-        if (isAnySilenceActive(host.organizationId)) return
-
         sendHostStatusNotification(host, newStatus)
     }
 
@@ -1187,18 +1182,8 @@ class MonitorAlertService(
 
     // --- Silence Period Methods ---
 
-    fun isAnySilenceActive(organizationId: Int): Boolean {
-        val now = Clock.System.now()
-        return transaction {
-            AlertSilencePeriods
-                .selectAll()
-                .where {
-                    (AlertSilencePeriods.organization_id eq organizationId) and
-                        (AlertSilencePeriods.starts_at lessEq now) and
-                        (AlertSilencePeriods.ends_at greaterEq now)
-                }.count() > 0
-        }
-    }
+    fun isAnySilenceActive(organizationId: Int): Boolean =
+        alertSilenceService.isOrganizationSilenced(organizationId)
 
     fun listSilencePeriods(organizationId: Int): List<SilencePeriodResponse> {
         return transaction {

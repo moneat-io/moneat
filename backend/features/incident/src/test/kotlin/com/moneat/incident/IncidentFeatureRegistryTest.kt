@@ -16,6 +16,7 @@
 
 package com.moneat.incident
 
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.incident.services.IncidentService
@@ -68,6 +69,7 @@ class IncidentFeatureRegistryTest {
                 module {
                     single { mockk<WorkflowService>(relaxed = true) }
                     single { mockk<ResourceOwnershipRepository>(relaxed = true) }
+                    single { mockk<AlertSilenceService>(relaxed = true) }
                 },
                 *IncidentModule().koinModules().toTypedArray(),
             )

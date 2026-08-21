@@ -76,7 +76,7 @@ class MonitoringModule : EnterpriseModule {
                 single<HostAlertRepository> { HostAlertRepositoryImpl() }
 
                 single { MonitorService(get(), get(), get(), get()) }
-                single { MonitorAlertService(get(), get()) }
+                single { MonitorAlertService(get(), get(), get()) }
                 single<ResourceOwnershipRepository> { ResourceOwnershipRepositoryImpl() }
                 single {
                     ResourceCatalogService(

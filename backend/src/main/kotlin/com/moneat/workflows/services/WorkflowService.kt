@@ -842,6 +842,13 @@ class WorkflowService(
         if (event.status == AlertStatus.RESOLVED) {
             return publishResolvedAlertEvent(event)
         }
+        if (isAlertDeliverySilenced(event.organizationId)) {
+            alertEpisodeService.recordFiringWithoutNotification(event)
+            logger.info {
+                "Alert delivery suppressed by an active silence for organization ${event.organizationId}"
+            }
+            return false
+        }
         val episode = alertEpisodeService.recordFiring(event) ?: return true
         if (!episode.shouldPublish) return false
         suspendRunCatching {
@@ -852,8 +859,25 @@ class WorkflowService(
         return true
     }
 
+    private fun isAlertDeliverySilenced(organizationId: Int): Boolean =
+        runCatching {
+            alertEpisodeService.isOrganizationSilenced(organizationId)
+        }.getOrElse { error ->
+            logger.error(error) {
+                "Failed to check alert silence for organization $organizationId; delivering alert"
+            }
+            false
+        }
+
     private suspend fun publishResolvedAlertEvent(event: AlertLifecycleEvent): Boolean {
-        val episode = alertEpisodeService.recordResolved(event) ?: return true
+        val episode = alertEpisodeService.recordResolved(event)
+        if (isAlertDeliverySilenced(event.organizationId)) {
+            logger.info {
+                "Resolved alert delivery suppressed by an active silence for organization ${event.organizationId}"
+            }
+            return false
+        }
+        if (episode == null) return true
         if (!episode.shouldPublish) return false
         suspendRunCatching {
             publishAlertWorkflowTriggers(event, episode)
@@ -1022,6 +1046,12 @@ class WorkflowService(
      * fold into an existing open signal (`Updated`) intentionally do not re-trigger.
      */
     suspend fun publishSecuritySignals(organizationId: Int, signals: List<SignalOutcome>) {
+        if (isAlertDeliverySilenced(organizationId)) {
+            logger.info {
+                "Security signal delivery suppressed by an active silence for organization $organizationId"
+            }
+            return
+        }
         signals
             .filter { it is SignalOutcome.Created || it is SignalOutcome.Escalated }
             .forEach { signal ->

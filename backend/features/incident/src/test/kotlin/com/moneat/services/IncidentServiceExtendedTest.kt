@@ -27,6 +27,7 @@ import com.moneat.incident.models.IncidentProviderConfigs
 import com.moneat.incident.models.IncidentRoutingRules
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.repositories.ResourceOwnershipRepository
 import com.moneat.shared.models.EscalationPolicies
@@ -38,6 +39,7 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.services.WorkflowService
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
@@ -64,7 +66,8 @@ class IncidentServiceExtendedTest {
     private var orgId: Int = 0
     private var providerConfigId: Int = 0
     private val workflowService: WorkflowService = mockk(relaxed = true)
-    private val service = IncidentService(workflowService)
+    private val alertSilenceService: AlertSilenceService = mockk()
+    private val service = IncidentService(workflowService, alertSilenceService = alertSilenceService)
     private val testProviderType = "test_provider_ext"
 
     companion object {
@@ -120,6 +123,9 @@ class IncidentServiceExtendedTest {
 
         mockkObject(EnvConfig)
         every { EnvConfig.get("ONCALL_ENABLED", "false") } returns "false"
+        clearMocks(workflowService, alertSilenceService)
+        coEvery { workflowService.publishAlertTriggered(any()) } returns true
+        every { alertSilenceService.isOrganizationSilenced(any(), any()) } returns false
     }
 
     @AfterTest
@@ -178,6 +184,27 @@ class IncidentServiceExtendedTest {
         assertTrue(logs[0][IncidentEventLog.success])
         assertEquals("inc-123", logs[0][IncidentEventLog.providerIncidentId])
         assertEquals(AlertStatus.FIRING.name, logs[0][IncidentEventLog.incidentStatus])
+    }
+
+    @Test
+    fun `fireAlert skips incident providers when workflow delivery is suppressed`() = runBlocking {
+        IncidentTestHelper.registerMockProvider(testProviderType)
+        coEvery { workflowService.publishAlertTriggered(any()) } returns false
+
+        service.fireAlert(makeEvent())
+
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(orgId))
+    }
+
+    @Test
+    fun `fireAlert without workflow skips incident providers during organization silence`() = runBlocking {
+        IncidentTestHelper.registerMockProvider(testProviderType)
+        every { alertSilenceService.isOrganizationSilenced(orgId, any()) } returns true
+
+        service.fireAlert(makeEvent(), publishWorkflow = false)
+
+        assertEquals(0L, IncidentTestHelper.getEventLogCount(orgId))
+        coVerify(exactly = 0) { workflowService.publishAlertTriggered(any()) }
     }
 
     @Test

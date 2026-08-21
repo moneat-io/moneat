@@ -35,7 +35,7 @@ class IncidentModule : EnterpriseModule {
     override fun koinModules(): List<Module> =
         listOf(
             module {
-                single { IncidentService(get(), get<ResourceOwnershipRepository>()) }
+                single { IncidentService(get(), get<ResourceOwnershipRepository>(), get()) }
             }
         )
 
