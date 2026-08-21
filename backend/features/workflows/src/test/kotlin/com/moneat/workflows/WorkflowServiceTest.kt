@@ -912,6 +912,18 @@ class WorkflowServiceTest {
         }
 
     @Test
+    fun `organization silence suppresses resolution without existing episode`() =
+        runBlocking {
+            every { alertSilenceService.isOrganizationSilenced(orgId, any()) } returns true
+
+            assertFalse(service.publishAlertTriggered(alertEvent().copy(status = AlertStatus.RESOLVED)))
+
+            transaction {
+                assertTrue(AlertEpisodes.selectAll().toList().isEmpty())
+            }
+        }
+
+    @Test
     fun `re-fired alert episode is not blocked by historical workflow runs`() =
         runBlocking {
             val workflow =
