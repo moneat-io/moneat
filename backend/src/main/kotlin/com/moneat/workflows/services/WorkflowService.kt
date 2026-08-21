@@ -871,6 +871,12 @@ class WorkflowService(
 
     private suspend fun publishResolvedAlertEvent(event: AlertLifecycleEvent): Boolean {
         val episode = alertEpisodeService.recordResolved(event) ?: return true
+        if (isAlertDeliverySilenced(event.organizationId)) {
+            logger.info {
+                "Resolved alert delivery suppressed by an active silence for organization ${event.organizationId}"
+            }
+            return false
+        }
         if (!episode.shouldPublish) return false
         suspendRunCatching {
             publishAlertWorkflowTriggers(event, episode)
