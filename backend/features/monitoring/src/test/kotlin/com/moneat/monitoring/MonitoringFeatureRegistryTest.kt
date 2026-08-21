@@ -16,6 +16,7 @@
 
 package com.moneat.monitoring
 
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.incident.services.IncidentService
@@ -94,6 +95,7 @@ class MonitoringFeatureRegistryTest {
                     single { mockk<RetentionPolicyService>(relaxed = true) }
                     single { mockk<IncidentService>(relaxed = true) }
                     single { mockk<WorkflowService>(relaxed = true) }
+                    single { mockk<AlertSilenceService>(relaxed = true) }
                     single { mockk<ResourceCatalogTeamResolver>(relaxed = true) }
                 },
                 *MonitoringModule().koinModules().toTypedArray(),

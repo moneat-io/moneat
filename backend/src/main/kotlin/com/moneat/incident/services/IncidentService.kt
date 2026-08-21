@@ -20,6 +20,7 @@ import com.moneat.alerts.models.AlertLifecycleEvent
 import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.config.EnvConfig
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.incident.models.IncidentEventLog
@@ -57,6 +58,7 @@ import kotlin.time.Clock
 class IncidentService(
     private val workflowService: WorkflowService = WorkflowService(),
     private val ownershipRepository: ResourceOwnershipRepository = NoopResourceOwnershipRepository,
+    private val alertSilenceService: AlertSilenceService = AlertSilenceService(),
 ) {
     private val logger = LoggerFactory.getLogger(IncidentService::class.java)
     private val json = Json { ignoreUnknownKeys = true }
@@ -82,6 +84,8 @@ class IncidentService(
         event: AlertLifecycleEvent,
         publishWorkflow: Boolean = true
     ) {
+        if (!shouldDeliverAlert(event, publishWorkflow)) return
+
         // Check if native on-call is enabled
         val onCallEnabled = EnvConfig.get("ONCALL_ENABLED", "false").toBoolean()
 
@@ -90,14 +94,6 @@ class IncidentService(
                 triggerNativeEscalation(event)
             }.getOrElse { e ->
                 logger.error("Error triggering native escalation", e)
-            }
-        }
-
-        if (publishWorkflow) {
-            suspendRunCatching {
-                workflowService.publishAlertTriggered(event)
-            }.getOrElse { e ->
-                logger.error("Error publishing alert-triggered workflow", e)
             }
         }
 
@@ -145,6 +141,27 @@ class IncidentService(
             }
         }.getOrElse { e ->
             logger.error("Error firing alert", e)
+        }
+    }
+
+    private suspend fun shouldDeliverAlert(
+        event: AlertLifecycleEvent,
+        publishWorkflow: Boolean
+    ): Boolean {
+        if (publishWorkflow) {
+            return suspendRunCatching {
+                workflowService.publishAlertTriggered(event)
+            }.getOrElse { error ->
+                logger.error("Error publishing alert-triggered workflow; delivering incident alert", error)
+                true
+            }
+        }
+
+        return runCatching {
+            !alertSilenceService.isOrganizationSilenced(event.organizationId)
+        }.getOrElse { error ->
+            logger.error("Error checking alert silence; delivering incident alert", error)
+            true
         }
     }
 

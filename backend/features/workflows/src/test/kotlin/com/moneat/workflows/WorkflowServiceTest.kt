@@ -22,6 +22,8 @@ import com.moneat.alerts.models.AlertPriority
 import com.moneat.alerts.models.AlertSource
 import com.moneat.alerts.models.AlertStatus
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.alerts.services.AlertEpisodeService
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
 import com.moneat.notifications.services.SlackService
@@ -91,6 +93,7 @@ class WorkflowServiceTest {
     private val emailService = mockk<EmailService>(relaxed = true)
     private val slackService = mockk<SlackService>()
     private val discordService = mockk<DiscordService>()
+    private val alertSilenceService = mockk<AlertSilenceService>()
     private lateinit var workflowEngine: FakeWorkflowExecutionEngine
     private lateinit var service: WorkflowService
     private var orgId: Int = 0
@@ -107,13 +110,20 @@ class WorkflowServiceTest {
         TransactionManager.defaultDatabase = db
         resetWorkflowSchema()
         workflowEngine = FakeWorkflowExecutionEngine()
-        clearMocks(emailService, slackService, discordService)
+        clearMocks(emailService, slackService, discordService, alertSilenceService)
         every { emailService.sendEmail(any(), any(), any(), any(), any()) } just runs
         coEvery { slackService.sendWorkflowMessage(any(), any(), any()) } returns true
         coEvery { slackService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowMessage(any(), any(), any(), any()) } returns true
         coEvery { discordService.sendWorkflowAlertMessage(any(), any(), any()) } returns true
-        service = WorkflowService(emailService, slackService, discordService, executionEngine = workflowEngine)
+        every { alertSilenceService.isOrganizationSilenced(any(), any()) } returns false
+        service = WorkflowService(
+            emailService,
+            slackService,
+            discordService,
+            executionEngine = workflowEngine,
+            alertEpisodeService = AlertEpisodeService(alertSilenceService)
+        )
         orgId = seedOrganizationWithMembers()
     }
 
@@ -840,6 +850,40 @@ class WorkflowServiceTest {
         }
 
     @Test
+    fun `organization silence records firing without reserving notification`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    CreateWorkflowRequest(
+                        name = "Muted alert workflow",
+                        triggerName = "alert.triggered",
+                        steps = emptyList()
+                    )
+                )
+            publish(workflow.id)
+            every { alertSilenceService.isOrganizationSilenced(orgId, any()) } returns true
+
+            assertFalse(service.publishAlertTriggered(alertEvent()))
+            assertTrue(service.listRuns(orgId, workflow.id).isEmpty())
+            transaction {
+                val episode = AlertEpisodes.selectAll().single()
+                assertEquals(0, episode[AlertEpisodes.notificationCount])
+                assertNull(episode[AlertEpisodes.lastNotificationAt])
+            }
+
+            every { alertSilenceService.isOrganizationSilenced(orgId, any()) } returns false
+            assertTrue(service.publishAlertTriggered(alertEvent()))
+            assertEquals(1, service.listRuns(orgId, workflow.id).size)
+            transaction {
+                val episode = AlertEpisodes.selectAll().single()
+                assertEquals(1, episode[AlertEpisodes.notificationCount])
+                assertNotNull(episode[AlertEpisodes.lastNotificationAt])
+            }
+            Unit
+        }
+
+    @Test
     fun `re-fired alert episode is not blocked by historical workflow runs`() =
         runBlocking {
             val workflow =
@@ -963,6 +1007,27 @@ class WorkflowServiceTest {
                 ).sorted(),
                 service.listRuns(orgId, workflow.id).map { it.onceFor }.sorted()
             )
+        }
+
+    @Test
+    fun `organization silence suppresses security signal workflows`() =
+        runBlocking {
+            val workflow =
+                service.createWorkflow(
+                    orgId,
+                    validRequest(
+                        name = "Muted security signal",
+                        triggerName = "security.signal",
+                        steps = emptyList(),
+                        onceForTemplate = listOf("security.rule_id", "security.resource")
+                    )
+                )
+            publish(workflow.id)
+            every { alertSilenceService.isOrganizationSilenced(orgId, any()) } returns true
+
+            service.publishSecuritySignals(orgId, listOf(createdSignal("rule-muted", "high")))
+
+            assertTrue(service.listRuns(orgId, workflow.id).isEmpty())
         }
 
     @Test

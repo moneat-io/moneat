@@ -74,7 +74,12 @@ private fun AlertLifecycleEvent.episodeIdentity(): AlertEpisodeIdentity =
         deduplicationKey = deduplicationKey,
     )
 
-class AlertEpisodeService {
+class AlertEpisodeService(
+    private val alertSilenceService: AlertSilenceService = AlertSilenceService()
+) {
+    fun isOrganizationSilenced(organizationId: Int): Boolean =
+        alertSilenceService.isOrganizationSilenced(organizationId)
+
     fun recordFiring(
         event: AlertLifecycleEvent,
         now: Instant = Clock.System.now()
@@ -85,6 +90,17 @@ class AlertEpisodeService {
             now = now,
             reservePublication = true
         )
+
+    fun recordFiringWithoutNotification(
+        event: AlertLifecycleEvent,
+        now: Instant = Clock.System.now()
+    ): AlertEpisodeContext? =
+        recordFiring(
+            identity = event.episodeIdentity(),
+            metadata = event.displayMetadata(),
+            now = now,
+            reservePublication = false
+        )?.episode
 
     fun ensureOpenEpisodeForWorkflow(
         event: AlertLifecycleEvent,

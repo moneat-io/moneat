@@ -17,6 +17,7 @@
 package com.moneat.di
 
 import com.moneat.alerts.services.AlertEpisodeService
+import com.moneat.alerts.services.AlertSilenceService
 import com.moneat.events.repositories.EventRepository
 import com.moneat.events.repositories.EventRepositoryImpl
 import com.moneat.events.repositories.IssueRepository
@@ -55,7 +56,8 @@ val sharedModule = module {
     single { SlackService() }
     single { DiscordService() }
     single { AlertNotificationPreferencesService() }
-    single { AlertEpisodeService() }
+    single { AlertSilenceService() }
+    single { AlertEpisodeService(get()) }
 
     single { RetentionPolicyService(get()) }
     single { RetentionBackgroundService(get()) }
