@@ -251,9 +251,10 @@ class OnCallModule :
         userId: Int,
     ): IncidentInfo? {
         val incident = onCallIncidentService.getIncident(incidentId) ?: return null
+        val organizationId = onCallIncidentService.getIncidentOrganizationId(incidentId) ?: return null
         return IncidentInfo(
-            id = incident.internalId,
-            organizationId = incident.organizationId,
+            id = incidentId,
+            organizationId = organizationId,
             title = incident.title,
             status = incident.status,
         )

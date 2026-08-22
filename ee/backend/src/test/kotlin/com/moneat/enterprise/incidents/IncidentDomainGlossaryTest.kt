@@ -66,11 +66,7 @@ class IncidentDomainGlossaryTest {
                 declaredAt = "2026-08-21T20:00:00Z",
                 createdAt = "2026-08-21T20:00:00Z",
                 updatedAt = "2026-08-21T20:00:00Z",
-            ).apply {
-                internalId = 42
-                organizationId = 7
-                declaredBy = 11
-            },
+            ),
         )
 
         assertTrue(encoded.contains("\"id\":\"8d62e71c-ab52-4d99-9f34-16404187d7ce\""))

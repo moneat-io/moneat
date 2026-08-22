@@ -55,11 +55,11 @@ class OnCallIncidentService(
         commandKey: String = Uuid.random().toString(),
         origin: String = "SERVICE",
     ): OnCallIncident? {
-        val incident = getIncident(incidentId) ?: return null
+        val organizationId = getIncidentOrganizationId(incidentId) ?: return null
         commandService.execute(
             ResolveIncidentCommand(
                 commandKey = commandKey,
-                actor = IncidentCommandActor(incident.organizationId, userId, origin),
+                actor = IncidentCommandActor(organizationId, userId, origin),
                 incidentId = incidentId,
                 note = resolutionNote,
             ),
@@ -155,6 +155,15 @@ class OnCallIncidentService(
                 .singleOrNull() != null
         }
 
+    fun getIncidentOrganizationId(incidentId: Int): Int? =
+        transaction {
+            OnCallIncidents
+                .selectAll()
+                .where { OnCallIncidents.id eq incidentId }
+                .singleOrNull()
+                ?.get(OnCallIncidents.organizationId)
+        }
+
     fun addNote(
         incidentId: Int,
         userId: Int,
@@ -162,11 +171,13 @@ class OnCallIncidentService(
         commandKey: String = Uuid.random().toString(),
         origin: String = "SERVICE",
     ) {
-        val incident = getIncident(incidentId) ?: throw IncidentCommandNotFoundException("Native incident not found")
+        val organizationId =
+            getIncidentOrganizationId(incidentId)
+                ?: throw IncidentCommandNotFoundException("Native incident not found")
         commandService.execute(
             AddIncidentTimelineEventCommand(
                 commandKey = commandKey,
-                actor = IncidentCommandActor(incident.organizationId, userId, origin),
+                actor = IncidentCommandActor(organizationId, userId, origin),
                 incidentId = incidentId,
                 eventType = "NOTE_ADDED",
                 details = mapOf("note" to JsonPrimitive(note)),
@@ -309,12 +320,7 @@ class OnCallIncidentService(
             alerts = alerts,
             createdAt = row[OnCallIncidents.createdAt].toString(),
             updatedAt = row[OnCallIncidents.updatedAt].toString(),
-        ).apply {
-            internalId = row[OnCallIncidents.id].value
-            organizationId = row[OnCallIncidents.organizationId]
-            declaredBy = declaredById
-            resolvedBy = resolvedById
-        }
+        )
     }
 
     private fun toOnCallAlert(
