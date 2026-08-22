@@ -102,7 +102,8 @@ class OnCallIncidentService(
                     .where { OnCallIncidents.organizationId eq organizationId }
 
             if (status != null) {
-                val canonicalStatus = if (status.equals("OPEN", ignoreCase = true)) "ACTIVE" else status.uppercase()
+                val normalizedStatus = status.uppercase()
+                val canonicalStatus = if (normalizedStatus == "OPEN") "ACTIVE" else normalizedStatus
                 query = query.andWhere { OnCallIncidents.status eq canonicalStatus }
             }
 

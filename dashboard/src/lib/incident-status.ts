@@ -45,7 +45,7 @@ const INCIDENT_STATUS_CONFIG: Record<OnCallIncidentStatus, IncidentStatusConfig>
 function fallbackLabel(status: string): string {
   const normalized = status.trim()
   if (!normalized) return 'Unknown'
-  const spaced = normalized.replace(/_/g, ' ').toLowerCase()
+  const spaced = normalized.replaceAll('_', ' ').toLowerCase()
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
