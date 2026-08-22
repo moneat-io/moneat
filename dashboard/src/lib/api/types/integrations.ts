@@ -55,8 +55,8 @@ export interface SlackChannelSelection {
 //   • An Enterprise Grid organization-wide install is authorized once for a Grid
 //     enterprise with no team at OAuth time (`isEnterpriseInstall` true,
 //     `teamId` null). A Slack admin attaches it to individual workspaces later.
-// The summary does not enumerate the workspaces a Grid install is attached to, so
-// clients must not infer per-workspace routing from these fields.
+// `workspaceBindings` enumerates the explicit workspace routing contexts. An
+// Enterprise Grid install with zero bindings is healthy but cannot route messages.
 
 export type SlackInstallationHealth =
   | 'HEALTHY'
@@ -76,7 +76,44 @@ export interface SlackCapabilityDefinition {
   label: string
   description: string
   scopes: string[]
+  botScopes: string[]
+  userScopes: string[]
   optional: boolean
+}
+
+export interface SlackWorkspaceBindingSummary {
+  id: string
+  teamId: string
+  teamName: string | null
+  enterpriseId: string | null
+  isPrimary: boolean
+  enabled: boolean
+  health: SlackInstallationHealth
+  healthDetail: string | null
+  lastVerifiedAt: string | null
+}
+
+export type SlackGrantType = 'BOT' | 'USER'
+
+export interface SlackGrantSummary {
+  id: string
+  grantType: SlackGrantType
+  slackUserId: string | null
+  tokenType: string | null
+  grantedScopes: string[]
+  expiresAt: string | null
+  rotatedAt: string | null
+  revokedAt: string | null
+  health: SlackInstallationHealth
+  healthDetail: string | null
+  lastVerifiedAt: string | null
+}
+
+export interface SlackCapabilityHealth {
+  capabilityId: string
+  missingBotScopes: string[]
+  missingUserScopes: string[]
+  healthy: boolean
 }
 
 // Why a single scope is requested, and which capabilities pull it in.
@@ -104,8 +141,12 @@ export interface SlackInstallationSummary {
   appId: string | null
   botUserId: string | null
   grantedScopes: string[]
+  grantedUserScopes: string[]
   enabledCapabilities: string[]
   missingScopes: string[]
+  workspaceBindings: SlackWorkspaceBindingSummary[]
+  grants: SlackGrantSummary[]
+  capabilityHealth: SlackCapabilityHealth[]
   defaultChannelId: string | null
   defaultChannelName: string | null
   isDefault: boolean

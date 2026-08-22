@@ -135,12 +135,25 @@ class SlackService(
         @SerialName("access_token") val accessToken: String? = null,
         @SerialName("token_type") val tokenType: String? = null,
         val scope: String? = null,
+        @SerialName("refresh_token") val refreshToken: String? = null,
+        @SerialName("expires_in") val expiresIn: Long? = null,
         @SerialName("bot_user_id") val botUserId: String? = null,
         @SerialName("app_id") val appId: String? = null,
         val team: SlackTeam? = null,
         val enterprise: SlackTeam? = null,
+        @SerialName("authed_user") val authedUser: SlackAuthedUser? = null,
         @SerialName("is_enterprise_install") val isEnterpriseInstall: Boolean = false,
         val error: String? = null
+    )
+
+    @Serializable
+    data class SlackAuthedUser(
+        val id: String,
+        val scope: String? = null,
+        @SerialName("access_token") val accessToken: String? = null,
+        @SerialName("token_type") val tokenType: String? = null,
+        @SerialName("refresh_token") val refreshToken: String? = null,
+        @SerialName("expires_in") val expiresIn: Long? = null,
     )
 
     @Serializable

@@ -145,6 +145,8 @@ const CAPABILITIES: SlackCapabilityDefinition[] = [
     label: 'Alert delivery',
     description: 'Send alerts.',
     scopes: ['channels:read', 'chat:write'],
+    botScopes: ['channels:read', 'chat:write'],
+    userScopes: [],
     optional: false,
   },
   {
@@ -152,6 +154,8 @@ const CAPABILITIES: SlackCapabilityDefinition[] = [
     label: 'Slack Assistant',
     description: 'Optional AI assistant.',
     scopes: ['assistant:write', 'chat:write'],
+    botScopes: ['assistant:write', 'chat:write'],
+    userScopes: [],
     optional: true,
   },
   {
@@ -159,6 +163,8 @@ const CAPABILITIES: SlackCapabilityDefinition[] = [
     label: 'On-call user groups',
     description: 'Sync groups.',
     scopes: ['usergroups:read', 'usergroups:write'],
+    botScopes: ['usergroups:read', 'usergroups:write'],
+    userScopes: [],
     optional: false,
   },
 ]

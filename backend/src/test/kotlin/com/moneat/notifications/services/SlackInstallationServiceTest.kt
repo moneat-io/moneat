@@ -18,7 +18,9 @@ package com.moneat.notifications.services
 
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackInstallationGrants
 import com.moneat.shared.models.SlackInstallations
+import com.moneat.shared.models.SlackWorkspaceBindings
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
@@ -43,7 +45,13 @@ class SlackInstallationServiceTest {
     @BeforeEach
     fun setUp() {
         TransactionManager.defaultDatabase = database
-        TestDatabaseHelper.resetSchema(Organizations, OrganizationIntegrations, SlackInstallations)
+        TestDatabaseHelper.resetSchema(
+            Organizations,
+            OrganizationIntegrations,
+            SlackInstallations,
+            SlackWorkspaceBindings,
+            SlackInstallationGrants,
+        )
         service = SlackInstallationService { TestSlackTokenCipher() }
     }
 
@@ -54,6 +62,7 @@ class SlackInstallationServiceTest {
         assertEquals(
             setOf(
                 "chat:write",
+                "chat:write.public",
                 "channels:read",
                 "channels:join",
                 "groups:read",
@@ -64,6 +73,10 @@ class SlackInstallationServiceTest {
             scopes,
         )
         assertTrue(service.capabilityCatalog().single { it.id == "assistant" }.optional)
+        assertEquals(
+            setOf("channels:write", "groups:write", "usergroups:write", "admin.conversations:write"),
+            service.requestedUserScopes(listOf("privileged_access")),
+        )
         assertTrue(service.scopeCatalog().all { it.reason.isNotBlank() && it.capabilities.isNotEmpty() })
     }
 
@@ -89,10 +102,12 @@ class SlackInstallationServiceTest {
         assertFalse(second.isDefault)
         assertEquals(listOf("T-FIRST", "T-SECOND"), service.listInstallations(organizationId).map { it.teamId })
         transaction {
-            val ciphertexts = SlackInstallations.selectAll().mapNotNull { it[SlackInstallations.accessTokenCiphertext] }
+            val ciphertexts = SlackInstallationGrants.selectAll()
+                .map { it[SlackInstallationGrants.accessTokenCiphertext] }
             assertEquals(2, ciphertexts.size)
             assertTrue(ciphertexts.none { it.contains("xoxb-") })
             assertNotEquals(ciphertexts[0], ciphertexts[1])
+            assertEquals(2, SlackWorkspaceBindings.selectAll().count())
         }
     }
 
@@ -127,7 +142,73 @@ class SlackInstallationServiceTest {
         assertTrue(enterprise.isEnterpriseInstall)
         assertEquals("E-GRID", enterprise.enterpriseId)
         assertNull(enterprise.teamId)
+        assertTrue(enterprise.workspaceBindings.isEmpty())
+        assertFalse(enterprise.isDefault)
+        service.bindEnterpriseWorkspace(organizationId, enterprise.id, "T-GRID-ONE", "Grid One", "E-GRID")
+        val attached = service.bindEnterpriseWorkspace(
+            organizationId,
+            enterprise.id,
+            "T-GRID-TWO",
+            "Grid Two",
+            "E-GRID",
+        )
+        assertEquals(setOf("T-GRID-ONE", "T-GRID-TWO"), attached.workspaceBindings.map { it.teamId }.toSet())
+        assertTrue(attached.workspaceBindings.none { it.isPrimary })
+        assertFailsWith<IllegalArgumentException> { service.setDefault(organizationId, enterprise.id) }
         assertEquals(2, service.listInstallations(organizationId).size)
+    }
+
+    @Test
+    fun `stores bot and privileged user grants separately with rotation metadata`() {
+        val organizationId = seedOrganization("Privileged Slack")
+        val botScopes = service.requestedScopes(listOf("alert_delivery", "privileged_access"))
+        val userScopes = service.requestedUserScopes(listOf("alert_delivery", "privileged_access"))
+        val original = service.storeOAuthGrant(
+            organizationId = organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = listOf("alert_delivery", "privileged_access"),
+            grant = grant("T-PRIVILEGED", "Privileged", botScopes).copy(
+                refreshToken = "xoxe-bot-refresh",
+                expiresInSeconds = 3600,
+                userGrant = SlackUserOAuthGrant(
+                    accessToken = "xoxp-privileged",
+                    slackUserId = "U-OWNER",
+                    grantedScopes = userScopes,
+                    refreshToken = "xoxe-user-refresh",
+                    expiresInSeconds = 3600,
+                ),
+            ),
+        )
+
+        assertTrue(original.missingScopes.isEmpty())
+        assertEquals(setOf(SlackGrantType.BOT, SlackGrantType.USER), original.grants.map { it.grantType }.toSet())
+        assertTrue(original.grants.all { it.expiresAt != null && it.revokedAt == null })
+        assertTrue(original.grantedUserScopes.contains("admin.conversations:write"))
+
+        val rotated = service.storeOAuthGrant(
+            organizationId = organizationId,
+            reauthorizeInstallationId = original.id,
+            capabilityIds = listOf("alert_delivery", "privileged_access"),
+            grant = grant("T-PRIVILEGED", "Privileged", botScopes, token = "xoxb-rotated").copy(
+                userGrant = SlackUserOAuthGrant(
+                    accessToken = "xoxp-rotated",
+                    slackUserId = "U-OWNER",
+                    grantedScopes = userScopes,
+                ),
+            ),
+        )
+
+        assertTrue(rotated.grants.all { it.rotatedAt != null })
+        assertEquals("xoxb-rotated", service.accessToken(organizationId, original.id))
+
+        val leastPrivilege = service.storeOAuthGrant(
+            organizationId = organizationId,
+            reauthorizeInstallationId = original.id,
+            capabilityIds = listOf("alert_delivery"),
+            grant = grant("T-PRIVILEGED", "Privileged", service.requestedScopes(listOf("alert_delivery"))),
+        )
+        assertTrue(leastPrivilege.grantedUserScopes.isEmpty())
+        assertTrue(leastPrivilege.grants.single { it.grantType == SlackGrantType.USER }.revokedAt != null)
     }
 
     @Test

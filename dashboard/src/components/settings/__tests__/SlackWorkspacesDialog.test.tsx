@@ -51,6 +51,8 @@ const CAPABILITIES: SlackCapabilitiesResponse = {
       label: 'Alert delivery',
       description: 'Send alert and incident updates to Slack.',
       scopes: ['channels:read', 'chat:write'],
+      botScopes: ['channels:read', 'chat:write'],
+      userScopes: [],
       optional: false,
     },
     {
@@ -58,6 +60,8 @@ const CAPABILITIES: SlackCapabilitiesResponse = {
       label: 'On-call user groups',
       description: 'Mirror on-call schedules to Slack user groups.',
       scopes: ['usergroups:read', 'usergroups:write'],
+      botScopes: ['usergroups:read', 'usergroups:write'],
+      userScopes: [],
       optional: false,
     },
     {
@@ -65,6 +69,8 @@ const CAPABILITIES: SlackCapabilitiesResponse = {
       label: 'Slack Assistant',
       description: 'Offer the optional AI assistant in Slack DMs.',
       scopes: ['assistant:write', 'im:write'],
+      botScopes: ['assistant:write', 'im:write'],
+      userScopes: [],
       optional: true,
     },
   ],
@@ -82,8 +88,12 @@ function installation(overrides: Partial<SlackInstallationSummary> = {}): SlackI
     appId: 'A1',
     botUserId: 'B1',
     grantedScopes: ['channels:read', 'chat:write'],
+    grantedUserScopes: [],
     enabledCapabilities: ['alert_delivery'],
     missingScopes: [],
+    workspaceBindings: [],
+    grants: [],
+    capabilityHealth: [],
     defaultChannelId: 'C1',
     defaultChannelName: 'alerts',
     isDefault: true,
@@ -240,7 +250,7 @@ describe('SlackWorkspacesDialog', () => {
     const grid = cardFor('Globex Grid')
     expect(within(grid).getByText('Grid organization')).toBeInTheDocument()
     expect(within(grid).getByText('Organization-wide install')).toBeInTheDocument()
-    expect(within(grid).getByText(/attaches Moneat to selected workspaces/i)).toBeInTheDocument()
+    expect(within(grid).getByText(/No workspaces are attached yet/i)).toBeInTheDocument()
     // An install missing scopes surfaces a reauthorization prompt naming the scope.
     expect(within(grid).getByText('Reauthorization needed')).toBeInTheDocument()
     expect(within(grid).getByText('Slack has not granted: usergroups:read.')).toBeInTheDocument()

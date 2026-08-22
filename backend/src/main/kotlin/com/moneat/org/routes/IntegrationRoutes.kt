@@ -31,6 +31,7 @@ import com.moneat.notifications.services.SlackInstallationSummary
 import com.moneat.notifications.services.SlackOAuthGrant
 import com.moneat.notifications.services.SlackScopeExplanation
 import com.moneat.notifications.services.SlackService
+import com.moneat.notifications.services.SlackUserOAuthGrant
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackUserMappings
@@ -244,6 +245,36 @@ private suspend fun ApplicationCall.integrationOrgIdOrRespond(): Int? {
     return orgId
 }
 
+private suspend fun ApplicationCall.integrationAdminOrgIdOrRespond(): Int? {
+    val principal = principal<JWTPrincipal>()
+    val userId = principal?.payload?.getClaim("userId")?.asInt()
+    val organizationId = principal?.currentOrgIdOrNull()
+    if (userId == null) {
+        respond(HttpStatusCode.Unauthorized, MessageResponse(UNAUTHORIZED_MESSAGE))
+        return null
+    }
+    if (organizationId == null) {
+        respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
+        return null
+    }
+    val authorized = transaction {
+        Memberships
+            .selectAll()
+            .where {
+                (Memberships.user_id eq userId) and
+                    (Memberships.organization_id eq organizationId)
+            }
+            .singleOrNull()
+            ?.get(Memberships.role)
+            ?.lowercase() in setOf("owner", "admin")
+    }
+    if (!authorized) {
+        respond(HttpStatusCode.Forbidden, MessageResponse("Organization admin access required"))
+        return null
+    }
+    return organizationId
+}
+
 private fun buildSlackOAuthStartResponse(
     userId: Int,
     organizationId: Int,
@@ -258,6 +289,7 @@ private fun buildSlackOAuthStartResponse(
     val capabilities = SlackCapability.fromIds(capabilityIds)
     val normalizedCapabilityIds = capabilities.map(SlackCapability::id)
     val scopes = SlackCapability.requiredScopes(capabilities).joinToString(",")
+    val userScopes = SlackCapability.requiredUserScopes(capabilities).joinToString(",")
     val state = generateSecureState(
         userId = userId,
         organizationId = organizationId,
@@ -268,6 +300,9 @@ private fun buildSlackOAuthStartResponse(
         append("https://slack.com/oauth/v2/authorize?")
         append("client_id=").append(URLEncoder.encode(clientId, "UTF-8"))
         append("&scope=").append(URLEncoder.encode(scopes, "UTF-8"))
+        if (userScopes.isNotEmpty()) {
+            append("&user_scope=").append(URLEncoder.encode(userScopes, "UTF-8"))
+        }
         append("&redirect_uri=").append(URLEncoder.encode(redirectUri, "UTF-8"))
         append("&state=").append(URLEncoder.encode(state, "UTF-8"))
         teamId?.let { append("&team=").append(URLEncoder.encode(it, "UTF-8")) }
@@ -342,7 +377,7 @@ private fun Route.slackInstallationReadRoutes(
     post("/slack/installations/{installationId}/reauthorize") {
         val principal = call.principal<JWTPrincipal>()
             ?: return@post call.respond(HttpStatusCode.Unauthorized, MessageResponse(UNAUTHORIZED_MESSAGE))
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@post
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@post
         entitlementService.unavailableFeatureMessage(
             organizationId,
             { it.slackEnabled },
@@ -394,7 +429,7 @@ private fun Route.slackInstallationWriteRoutes(
     installationService: SlackInstallationService,
 ) {
     put("/slack/installations/{installationId}/channel") {
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@put
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
         val installationId = call.parameters["installationId"]
             ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
         suspendRunCatching {
@@ -410,7 +445,7 @@ private fun Route.slackInstallationWriteRoutes(
     }
 
     put("/slack/installations/{installationId}/default") {
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@put
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
         val installationId = call.parameters["installationId"]
             ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
         suspendRunCatching { installationService.setDefault(organizationId, installationId) }
@@ -419,7 +454,7 @@ private fun Route.slackInstallationWriteRoutes(
     }
 
     put("/slack/installations/{installationId}/enabled") {
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@put
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
         val installationId = call.parameters["installationId"]
             ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
         suspendRunCatching {
@@ -435,7 +470,7 @@ private fun Route.slackInstallationOperationalRoutes(
     installationService: SlackInstallationService,
 ) {
     post("/slack/installations/{installationId}/health") {
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@post
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@post
         val installationId = call.parameters["installationId"]
             ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
         suspendRunCatching {
@@ -445,7 +480,7 @@ private fun Route.slackInstallationOperationalRoutes(
     }
 
     post("/slack/installations/{installationId}/test") {
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@post
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@post
         val installationId = call.parameters["installationId"]
             ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
         suspendRunCatching {
@@ -465,7 +500,7 @@ private fun Route.slackInstallationDeleteRoute(
     installationService: SlackInstallationService,
 ) {
     delete("/slack/installations/{installationId}") {
-        val organizationId = call.integrationOrgIdOrRespond() ?: return@delete
+        val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@delete
         val installationId = call.parameters["installationId"]
             ?: return@delete call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
         suspendRunCatching { installationService.deleteInstallation(organizationId, installationId) }
@@ -497,11 +532,7 @@ fun Route.integrationRoutes() {
                 val userId = principal.payload.getClaim("userId").asInt()
                 logger.info("Fetching integrations for user $userId")
 
-                val organizationId = principal.currentOrgIdOrNull()
-
-                if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
-                }
+                val organizationId = call.integrationOrgIdOrRespond() ?: return@get
 
                 val slackInstallations = slackInstallationService.listInstallationsWithLegacyFallback(organizationId)
                 val defaultSlackInstallation = slackInstallations.firstOrNull(SlackInstallationSummary::isDefault)
@@ -553,13 +584,9 @@ fun Route.integrationRoutes() {
         get("/slack/oauth/start") {
             suspendRunCatching {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal!!.payload.getClaim("userId").asInt()
-
-                val organizationId = principal.currentOrgIdOrNull()
-
-                if (organizationId == null) {
-                    return@get call.respond(HttpStatusCode.NotFound, MessageResponse(NO_ORGANIZATION_FOUND))
-                }
+                    ?: return@get call.respond(HttpStatusCode.Unauthorized, MessageResponse(UNAUTHORIZED_MESSAGE))
+                val userId = principal.payload.getClaim("userId").asInt()
+                val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@get
 
                 entitlementService.unavailableFeatureMessage(
                     organizationId,
@@ -616,7 +643,7 @@ fun Route.integrationRoutes() {
 
         // Update channel selection
         put("/slack/channel") {
-            val organizationId = call.integrationOrgIdOrRespond() ?: return@put
+            val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
 
             val request = call.receive<SlackChannelSelection>()
             val modeledInstallation = slackInstallationService.listInstallationsWithLegacyFallback(organizationId)
@@ -669,7 +696,7 @@ fun Route.integrationRoutes() {
 
         // Toggle enabled status
         put("/slack/toggle") {
-            val organizationId = call.integrationOrgIdOrRespond() ?: return@put
+            val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
             val modeledInstallation = slackInstallationService.listInstallationsWithLegacyFallback(organizationId)
                 .firstOrNull(SlackInstallationSummary::isDefault)
             if (modeledInstallation != null) {
@@ -713,7 +740,13 @@ fun Route.integrationRoutes() {
 
         // Delete Slack integration
         delete("/slack") {
-            val organizationId = call.integrationOrgIdOrRespond() ?: return@delete
+            val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@delete
+            if (slackInstallationService.listInstallationsWithLegacyFallback(organizationId).isNotEmpty()) {
+                return@delete call.respond(
+                    HttpStatusCode.Conflict,
+                    MessageResponse("Remove Slack workspaces individually from the workspace manager"),
+                )
+            }
 
             val deleted =
                 transaction {
@@ -732,7 +765,7 @@ fun Route.integrationRoutes() {
 
         // Test Slack integration
         post("/slack/test") {
-            val organizationId = call.integrationOrgIdOrRespond() ?: return@post
+            val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@post
 
             val (success, message) = slackService.testConnection(organizationId)
 
@@ -952,11 +985,17 @@ fun Route.integrationCallbackRoutes() {
                         .where {
                             (Memberships.user_id eq userId) and
                                 (Memberships.organization_id eq organizationId)
-                        }.firstOrNull() != null
+                        }
+                        .firstOrNull()
+                        ?.get(Memberships.role)
+                        ?.lowercase() in setOf("owner", "admin")
                 }
 
             if (!hasAccess) {
-                return@get call.respond(HttpStatusCode.Forbidden, MessageResponse("Access denied to organization"))
+                return@get call.respond(
+                    HttpStatusCode.Forbidden,
+                    MessageResponse("Organization admin access required"),
+                )
             }
 
             entitlementService.unavailableFeatureMessage(
@@ -1001,6 +1040,25 @@ fun Route.integrationCallbackRoutes() {
                         .map(String::trim)
                         .filter(String::isNotEmpty)
                         .toSet(),
+                    tokenType = oauthResponse.tokenType,
+                    refreshToken = oauthResponse.refreshToken,
+                    expiresInSeconds = oauthResponse.expiresIn,
+                    userGrant = oauthResponse.authedUser?.let { user ->
+                        user.accessToken?.let { accessToken ->
+                            SlackUserOAuthGrant(
+                                accessToken = accessToken,
+                                slackUserId = user.id,
+                                grantedScopes = user.scope.orEmpty()
+                                    .split(',', ' ')
+                                    .map(String::trim)
+                                    .filter(String::isNotEmpty)
+                                    .toSet(),
+                                tokenType = user.tokenType,
+                                refreshToken = user.refreshToken,
+                                expiresInSeconds = user.expiresIn,
+                            )
+                        }
+                    },
                 )
                 val installation = suspendRunCatching {
                     slackInstallationService.storeOAuthGrant(
@@ -1027,39 +1085,40 @@ fun Route.integrationCallbackRoutes() {
                     )
                 }
 
-                val now = Clock.System.now()
-
-                transaction {
-                    val existing =
-                        OrganizationIntegrations
+                if (installation.isDefault) {
+                    val now = Clock.System.now()
+                    transaction {
+                        val existing = OrganizationIntegrations
                             .selectAll()
                             .where {
                                 (OrganizationIntegrations.organization_id eq organizationId) and
                                     (OrganizationIntegrations.integration_type eq "slack")
-                            }.singleOrNull()
+                            }
+                            .singleOrNull()
 
-                    if (existing != null) {
-                        OrganizationIntegrations.update({
-                            (OrganizationIntegrations.organization_id eq organizationId) and
-                                (OrganizationIntegrations.integration_type eq "slack")
-                        }) {
-                            it[access_token] = null
-                            it[bot_user_id] = oauthResponse.botUserId
-                            it[team_id] = oauthResponse.team?.id
-                            it[team_name] = oauthResponse.team?.name
-                            it[enabled] = true
-                            it[updated_at] = now
-                        }
-                    } else {
-                        OrganizationIntegrations.insert {
-                            it[organization_id] = organizationId
-                            it[integration_type] = "slack"
-                            it[bot_user_id] = oauthResponse.botUserId
-                            it[team_id] = oauthResponse.team?.id
-                            it[team_name] = oauthResponse.team?.name
-                            it[enabled] = true
-                            it[created_at] = now
-                            it[updated_at] = now
+                        if (existing != null) {
+                            OrganizationIntegrations.update({
+                                (OrganizationIntegrations.organization_id eq organizationId) and
+                                    (OrganizationIntegrations.integration_type eq "slack")
+                            }) {
+                                it[access_token] = null
+                                it[bot_user_id] = oauthResponse.botUserId
+                                it[team_id] = oauthResponse.team?.id
+                                it[team_name] = oauthResponse.team?.name
+                                it[enabled] = true
+                                it[updated_at] = now
+                            }
+                        } else {
+                            OrganizationIntegrations.insert {
+                                it[organization_id] = organizationId
+                                it[integration_type] = "slack"
+                                it[bot_user_id] = oauthResponse.botUserId
+                                it[team_id] = oauthResponse.team?.id
+                                it[team_name] = oauthResponse.team?.name
+                                it[enabled] = true
+                                it[created_at] = now
+                                it[updated_at] = now
+                            }
                         }
                     }
                 }

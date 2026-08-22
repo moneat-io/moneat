@@ -14,27 +14,38 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {useMemo, useState} from 'react'
+import {type ReactNode, useMemo, useState} from 'react'
 import {type UseQueryResult, useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
+  Ban,
+  Bot,
   Building2,
   Check,
+  Clock,
+  KeyRound,
   Loader2,
   Plus,
   RefreshCw,
+  RotateCw,
   Send,
+  ShieldAlert,
   ShieldCheck,
   Slack,
   Trash2,
+  UserCog,
+  Users,
+  type LucideIcon,
 } from 'lucide-react'
 
 import {api} from '@/lib/api'
 import type {
   SlackCapabilitiesResponse,
   SlackCapabilityDefinition,
+  SlackGrantSummary,
   SlackInstallationSummary,
+  SlackWorkspaceBindingSummary,
 } from '@/lib/api/types'
 import {Badge} from '@/components/ui/badge'
 import {Button} from '@/components/ui/button'
@@ -57,25 +68,37 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {cn} from '@/lib/utils'
+import {cn, formatRelativeTime} from '@/lib/utils'
 import {useToast} from '@/hooks/useToast'
 import {trackEvent} from '@/lib/analytics'
 import {
   SLACK_ADDITIVE_GRANTS_NOTE,
+  SLACK_BINDING_HEALTH_NOTE,
+  SLACK_GRANT_PRINCIPAL_DESCRIPTION,
+  SLACK_GRANT_PRINCIPAL_LABEL,
   SLACK_LEAST_PRIVILEGE_NOTE,
+  SLACK_NO_BINDINGS_NOTE,
   SLACK_ORG_INSTALL_LABEL,
-  SLACK_ORG_INSTALL_NOTE,
   SLACK_ORG_WORKSPACE_ACTION_NOTE,
+  SLACK_PRIVILEGED_ACCESS_NOTE,
   SLACK_REAUTHORIZATION_NOTE,
+  SLACK_USER_SCOPE_PICKER_NOTE,
   belongsToEnterpriseGrid,
+  bindingDisplayName,
+  botScopesForCapabilities,
+  capabilityUsesUserScopes,
+  isCapabilityHealthy,
   isOrgWideSlackInstall,
+  missingScopesByPrincipal,
   optionalCapabilityIds,
-  scopesForCapabilities,
   selectedCapabilityIds,
+  shouldSurfaceBindings,
+  slackExpiryLabel,
   slackHealthDescription,
   slackHealthPresentation,
   slackInstallHasWorkspace,
   sortCapabilities,
+  userScopesForCapabilities,
 } from './slackScopes'
 
 // Query keys touched by installation mutations. The Connectors catalog derives a
@@ -292,6 +315,10 @@ function InstallationCard({
   const orgWide = isOrgWideSlackInstall(installation)
   const partOfGrid = belongsToEnterpriseGrid(installation)
   const hasWorkspace = slackInstallHasWorkspace(installation)
+  const bindings = installation.workspaceBindings
+  const grants = installation.grants
+  const missing = missingScopesByPrincipal(installation)
+  const showBindings = shouldSurfaceBindings(installation)
 
   const setDefault = useMutation({
     mutationFn: () => api.setSlackInstallationDefault(installation.id),
@@ -401,23 +428,14 @@ function InstallationCard({
       {health.needsReauthorization && (
         <div className="mx-3.5 mb-2 flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg/40 px-3 py-2 text-xs">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-fg" aria-hidden="true" />
-          <div>
+          <div className="space-y-1">
             <p className="font-medium text-foreground">Reauthorization needed</p>
-            <p className="mt-0.5 text-muted-foreground">
-              {installation.missingScopes.length > 0
-                ? `Slack has not granted: ${installation.missingScopes.join(', ')}.`
-                : 'Confirm this installation with Slack to restore delivery.'}
-            </p>
+            <ReauthorizationDetail installation={installation} missing={missing} />
           </div>
         </div>
       )}
 
-      {orgWide && (
-        <div className="mx-3.5 mb-2 flex items-start gap-2 rounded-md border border-info-border bg-info-bg/40 px-3 py-2 text-xs text-muted-foreground">
-          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info-fg" aria-hidden="true" />
-          <p>{SLACK_ORG_INSTALL_NOTE}</p>
-        </div>
-      )}
+      {showBindings && <WorkspaceBindings orgWide={orgWide} bindings={bindings} />}
 
       <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
         <dt className="text-muted-foreground">Default channel</dt>
@@ -447,17 +465,31 @@ function InstallationCard({
           {installation.enabledCapabilities.length === 0 ? (
             <span className="text-muted-foreground">—</span>
           ) : (
-            installation.enabledCapabilities.map((id) => (
-              <span
-                key={id}
-                className="rounded border bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground"
-              >
-                {capabilityLabels.get(id) ?? id}
-              </span>
-            ))
+            installation.enabledCapabilities.map((id) => {
+              const healthy = isCapabilityHealthy(installation, id)
+              return (
+                <span
+                  key={id}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium',
+                    healthy
+                      ? 'bg-muted/60 text-muted-foreground'
+                      : 'border-warning-border bg-warning-bg/50 text-warning-fg'
+                  )}
+                  title={
+                    healthy ? undefined : 'Slack has not granted every scope this capability needs'
+                  }
+                >
+                  {!healthy && <StatusDot tone="warning" size="sm" />}
+                  {capabilityLabels.get(id) ?? id}
+                </span>
+              )
+            })
           )}
         </dd>
       </dl>
+
+      {grants.length > 0 && <GrantList grants={grants} />}
 
       {showChannelPicker && hasWorkspace && (
         <ChannelPicker
@@ -576,6 +608,216 @@ function InstallationCard({
   )
 }
 
+// ── Reauthorization detail (missing bot vs. privileged-user scopes) ──────────
+
+function ReauthorizationDetail({
+  installation,
+  missing,
+}: Readonly<{
+  installation: SlackInstallationSummary
+  missing: {botScopes: string[]; userScopes: string[]}
+}>) {
+  // capabilityHealth splits the missing scopes by principal. If the backend
+  // reported none (older payloads), fall back to the flat missingScopes list.
+  if (missing.botScopes.length === 0 && missing.userScopes.length === 0) {
+    return (
+      <p className="text-muted-foreground">
+        {installation.missingScopes.length > 0
+          ? `Slack has not granted: ${installation.missingScopes.join(', ')}.`
+          : 'Reauthorize with Slack to restore delivery.'}
+      </p>
+    )
+  }
+  return (
+    <>
+      {missing.botScopes.length > 0 && (
+        <p className="text-muted-foreground">
+          Bot scopes not granted: {missing.botScopes.join(', ')}. Reauthorize to add them.
+        </p>
+      )}
+      {missing.userScopes.length > 0 && (
+        <p className="text-muted-foreground">
+          Privileged-user scopes not granted: {missing.userScopes.join(', ')}. A Slack admin or
+          owner must reauthorize with privileged workspace access.
+        </p>
+      )}
+    </>
+  )
+}
+
+// ── Workspace bindings ───────────────────────────────────────────────────────
+// The explicit workspaces an installation is attached to. An organization-wide
+// install can be healthy with none, so the empty state is truthful, not an error.
+
+function WorkspaceBindings({
+  orgWide,
+  bindings,
+}: Readonly<{
+  orgWide: boolean
+  bindings: SlackWorkspaceBindingSummary[]
+}>) {
+  return (
+    <div className="border-t px-3.5 py-2.5">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+          <Users className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+          Workspaces
+        </span>
+        {bindings.length > 0 && (
+          <span className="text-[11px] text-muted-foreground">{bindings.length} attached</span>
+        )}
+      </div>
+      {bindings.length === 0 ? (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {orgWide ? SLACK_NO_BINDINGS_NOTE : 'No workspaces are attached to this installation.'}
+        </p>
+      ) : (
+        <>
+          <ul className="mt-1.5 space-y-1.5">
+            {bindings.map((binding) => (
+              <BindingRow key={binding.id} binding={binding} />
+            ))}
+          </ul>
+          {bindings.length > 1 && (
+            <p className="mt-1.5 text-[11px] text-muted-foreground">{SLACK_BINDING_HEALTH_NOTE}</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function BindingRow({binding}: Readonly<{binding: SlackWorkspaceBindingSummary}>) {
+  const presentation = slackHealthPresentation(binding.health)
+  const healthy = presentation.tone === 'success'
+  return (
+    <li className="text-xs">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <StatusDot tone={presentation.tone} size="sm" />
+        <span className="truncate font-medium text-foreground">{bindingDisplayName(binding)}</span>
+        {binding.isPrimary && (
+          <Badge
+            variant="outline"
+            className="px-1 py-0 text-[10px] font-medium text-muted-foreground"
+          >
+            Primary
+          </Badge>
+        )}
+        <span className="text-muted-foreground">· {presentation.label}</span>
+        {!binding.enabled && <span className="text-muted-foreground">· Paused</span>}
+        {binding.lastVerifiedAt && (
+          <span className="text-muted-foreground">
+            · Verified {formatRelativeTime(binding.lastVerifiedAt)}
+          </span>
+        )}
+      </div>
+      {binding.healthDetail && !healthy && (
+        <p className="mt-0.5 text-[11px] text-muted-foreground">{binding.healthDetail}</p>
+      )}
+    </li>
+  )
+}
+
+// ── OAuth grants (bot and privileged-user principals) ────────────────────────
+// Each installation exposes its bot grant and any privileged-user grants as
+// separate principals with their own scopes, health, and token lifecycle. Grant
+// summaries never carry the tokens themselves.
+
+function GrantList({grants}: Readonly<{grants: SlackGrantSummary[]}>) {
+  const hasPrivilegedUser = grants.some((grant) => grant.grantType === 'USER')
+  return (
+    <div className="border-t px-3.5 py-2.5">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+        <KeyRound className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        Authorizations
+      </span>
+      <ul className="mt-1.5 space-y-2">
+        {grants.map((grant) => (
+          <GrantRow key={grant.id} grant={grant} />
+        ))}
+      </ul>
+      {hasPrivilegedUser && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">{SLACK_PRIVILEGED_ACCESS_NOTE}</p>
+      )}
+    </div>
+  )
+}
+
+function GrantRow({grant}: Readonly<{grant: SlackGrantSummary}>) {
+  const presentation = slackHealthPresentation(grant.health)
+  const healthy = presentation.tone === 'success'
+  const Icon = grant.grantType === 'BOT' ? Bot : UserCog
+  const expiry = slackExpiryLabel(grant.expiresAt)
+  const scopeCount = grant.grantedScopes.length
+  return (
+    <li className="rounded-md border bg-muted/30 px-2.5 py-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+        <span className="text-xs font-medium text-foreground">
+          {SLACK_GRANT_PRINCIPAL_LABEL[grant.grantType]}
+        </span>
+        {grant.slackUserId && (
+          <span className="font-mono text-[11px] text-muted-foreground">{grant.slackUserId}</span>
+        )}
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <StatusDot tone={presentation.tone} size="sm" />
+          {presentation.label}
+        </span>
+        <span className="text-[11px] text-muted-foreground">
+          · {scopeCount} scope{scopeCount === 1 ? '' : 's'}
+        </span>
+      </div>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
+        {SLACK_GRANT_PRINCIPAL_DESCRIPTION[grant.grantType]}
+      </p>
+      {(grant.revokedAt || expiry || grant.rotatedAt) && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {grant.revokedAt && (
+            <GrantMeta icon={Ban} tone="danger">
+              Revoked {formatRelativeTime(grant.revokedAt)}
+            </GrantMeta>
+          )}
+          {expiry && (
+            <GrantMeta icon={Clock} tone={expiry.expired ? 'danger' : 'muted'}>
+              {expiry.text}
+            </GrantMeta>
+          )}
+          {grant.rotatedAt && (
+            <GrantMeta icon={RotateCw}>Rotated {formatRelativeTime(grant.rotatedAt)}</GrantMeta>
+          )}
+        </div>
+      )}
+      {grant.healthDetail && !healthy && (
+        <p className="mt-1 text-[11px] text-warning-fg">{grant.healthDetail}</p>
+      )}
+    </li>
+  )
+}
+
+function GrantMeta({
+  icon: Icon,
+  tone = 'muted',
+  children,
+}: Readonly<{
+  icon: LucideIcon
+  tone?: 'muted' | 'danger'
+  children: ReactNode
+}>) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px]',
+        tone === 'danger'
+          ? 'border-danger-border bg-danger-bg/40 text-danger-fg'
+          : 'border-border bg-background text-muted-foreground'
+      )}
+    >
+      <Icon className="h-3 w-3" aria-hidden="true" />
+      {children}
+    </span>
+  )
+}
+
 // ── Channel picker (lazy per installation) ───────────────────────────────────
 
 function ChannelPicker({
@@ -677,8 +919,12 @@ function CapabilityPicker({
     () => selectedCapabilityIds(capabilities, optionalSelection),
     [capabilities, optionalSelection]
   )
-  const resultingScopes = useMemo(
-    () => scopesForCapabilities(capabilities, new Set(selectedIds)),
+  const botScopes = useMemo(
+    () => botScopesForCapabilities(capabilities, new Set(selectedIds)),
+    [capabilities, selectedIds]
+  )
+  const userScopes = useMemo(
+    () => userScopesForCapabilities(capabilities, new Set(selectedIds)),
     [capabilities, selectedIds]
   )
 
@@ -762,18 +1008,25 @@ function CapabilityPicker({
         </div>
       )}
 
-      <div className="space-y-1.5 rounded-md border bg-muted/30 p-3">
-        <p className="text-xs font-medium">Slack will be asked to grant {resultingScopes.length} scopes</p>
-        <div className="flex flex-wrap gap-1">
-          {resultingScopes.map((scope) => (
-            <span
-              key={scope}
-              className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
-            >
-              {scope}
-            </span>
-          ))}
-        </div>
+      <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+        <p className="text-xs font-medium">
+          Slack will be asked to grant {botScopes.length + userScopes.length} scopes
+        </p>
+        <ScopeCluster
+          title="Bot scopes"
+          hint="Granted to Moneat’s Slack app"
+          scopes={botScopes}
+        />
+        {userScopes.length > 0 && (
+          <>
+            <ScopeCluster
+              title="Privileged-user scopes"
+              hint="Granted by a Slack admin or owner"
+              scopes={userScopes}
+            />
+            <p className="text-[11px] text-muted-foreground">{SLACK_USER_SCOPE_PICKER_NOTE}</p>
+          </>
+        )}
         <p className="pt-1 text-[11px] text-muted-foreground">{SLACK_ADDITIVE_GRANTS_NOTE}</p>
         <p className="text-[11px] text-muted-foreground">{SLACK_REAUTHORIZATION_NOTE}</p>
       </div>
@@ -812,6 +1065,7 @@ function CapabilityRow({
   onToggle?: (next: boolean) => void
 }>) {
   const checkboxId = `slack-capability-${capability.id}`
+  const hasUserScopes = capabilityUsesUserScopes(capability)
   return (
     <li className="flex items-start gap-3 p-3">
       <Checkbox
@@ -822,21 +1076,83 @@ function CapabilityRow({
         className="mt-0.5"
       />
       <div className="min-w-0 flex-1">
-        <Label htmlFor={checkboxId} className={cn('text-sm font-medium', disabled && 'cursor-default')}>
-          {capability.label}
-        </Label>
-        <p className="mt-0.5 text-xs text-muted-foreground">{capability.description}</p>
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {capability.scopes.map((scope) => (
-            <span
-              key={scope}
-              className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-            >
-              {scope}
-            </span>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <Label
+            htmlFor={checkboxId}
+            className={cn('text-sm font-medium', disabled && 'cursor-default')}
+          >
+            {capability.label}
+          </Label>
+          {hasUserScopes && (
+            <Badge variant="warning" className="gap-1">
+              <ShieldAlert className="h-3 w-3" aria-hidden="true" />
+              Privileged user
+            </Badge>
+          )}
         </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">{capability.description}</p>
+        {hasUserScopes ? (
+          // A privileged capability spans two principals: keep the bot and
+          // user scopes labelled so the extra authorization is unmistakable.
+          <div className="mt-1.5 space-y-1.5">
+            <ScopeCluster title="Bot scopes" scopes={capability.botScopes} chipClassName="bg-muted" />
+            <ScopeCluster
+              title="User scopes"
+              scopes={capability.userScopes}
+              chipClassName="bg-muted"
+            />
+            <p className="text-[11px] text-muted-foreground">{SLACK_PRIVILEGED_ACCESS_NOTE}</p>
+          </div>
+        ) : (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {capability.botScopes.map((scope) => (
+              <span
+                key={scope}
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+              >
+                {scope}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </li>
+  )
+}
+
+// A labelled cluster of Slack scope chips, reused by the picker summary and the
+// privileged capability row to keep bot and user scopes visually distinct.
+function ScopeCluster({
+  title,
+  hint,
+  scopes,
+  chipClassName = 'bg-background',
+}: Readonly<{
+  title: string
+  hint?: string
+  scopes: string[]
+  chipClassName?: string
+}>) {
+  if (scopes.length === 0) return null
+  return (
+    <div>
+      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+        {hint && <span className="ml-1 font-normal normal-case">· {hint}</span>}
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {scopes.map((scope) => (
+          <span
+            key={scope}
+            className={cn(
+              'rounded px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground',
+              chipClassName
+            )}
+          >
+            {scope}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -254,6 +254,32 @@ class IntegrationRoutesTest {
     }
 
     @Test
+    fun `slack oauth start requires organization admin access`() {
+        val orgId = seedOrganization("Slack Member Org")
+        val userId = seedUser("slack-member@test.com")
+        seedMembership(orgId, userId, "member")
+
+        testApplication {
+            application {
+                install(ContentNegotiation) { json() }
+                installAuth()
+                routing {
+                    authenticate("auth-jwt") {
+                        route("/v1") { integrationRoutes() }
+                    }
+                }
+            }
+
+            val response = client.get("/v1/integrations/slack/oauth/start") {
+                header(HttpHeaders.Authorization, "Bearer ${token(userId, orgId)}")
+            }
+
+            assertEquals(HttpStatusCode.Forbidden, response.status)
+            assertTrue(response.bodyAsText().contains("Organization admin access required"))
+        }
+    }
+
+    @Test
     fun `discord oauth start returns forbidden when plan disables discord`() {
         val orgId = seedOrganization("Discord Disabled Org")
         val userId = seedUser("discord-disabled@test.com")

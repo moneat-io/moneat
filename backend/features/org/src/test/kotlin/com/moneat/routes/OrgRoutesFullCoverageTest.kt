@@ -323,8 +323,12 @@ class OrgRoutesFullCoverageTest {
         appId = "A1",
         botUserId = "B1",
         grantedScopes = listOf("chat:write"),
+        grantedUserScopes = emptyList(),
         enabledCapabilities = listOf("alert_delivery"),
         missingScopes = emptyList(),
+        workspaceBindings = emptyList(),
+        grants = emptyList(),
+        capabilityHealth = emptyList(),
         defaultChannelId = "C1",
         defaultChannelName = "incidents",
         isDefault = true,
@@ -1222,6 +1226,8 @@ class OrgRoutesFullCoverageTest {
                 label = "Alert delivery",
                 description = "Send alerts.",
                 scopes = listOf("chat:write"),
+                botScopes = listOf("chat:write"),
+                userScopes = emptyList(),
                 optional = false,
             )
         )
