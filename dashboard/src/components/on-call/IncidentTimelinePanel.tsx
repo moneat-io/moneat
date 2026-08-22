@@ -473,8 +473,6 @@ function TimelineRow({
             {safeSourceUrl ? (
               <a
                 href={safeSourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="text-primary underline underline-offset-2"
               >
                 {entry.sourceReference ?? safeSourceUrl}

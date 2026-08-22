@@ -35,6 +35,10 @@ const {mockApi} = vi.hoisted(() => ({
     exportOnCallIncidentTimeline: vi.fn(),
     reorderIncidentTimeline: vi.fn(),
     annotateIncidentTimelineEvent: vi.fn(),
+    editIncidentTimelineEvent: vi.fn(),
+    deleteIncidentTimelineEvent: vi.fn(),
+    restoreIncidentTimelineEvent: vi.fn(),
+    getIncidentTimelineRevisions: vi.fn(),
   },
 }))
 
@@ -127,6 +131,10 @@ describe('IncidentTimelinePanel', () => {
     mockApi.exportOnCallIncidentTimeline.mockResolvedValue({incidentId: INCIDENT_ID, exportedAt: '', events: entries})
     mockApi.reorderIncidentTimeline.mockResolvedValue(entries)
     mockApi.annotateIncidentTimelineEvent.mockResolvedValue(entries[0])
+    mockApi.editIncidentTimelineEvent.mockResolvedValue(entries[0])
+    mockApi.deleteIncidentTimelineEvent.mockResolvedValue(entries[0])
+    mockApi.restoreIncidentTimelineEvent.mockResolvedValue(entries[0])
+    mockApi.getIncidentTimelineRevisions.mockResolvedValue([])
   })
 
   it('renders canonical entries with provenance, visibility, note, and annotation', async () => {
@@ -249,6 +257,95 @@ describe('IncidentTimelinePanel', () => {
         annotation: 'Confirmed by logs',
         reason: 'Evidence review',
       })
+    )
+  })
+
+  it('edits timeline evidence through the versioned correction dialog', async () => {
+    renderWithQueryClient(<IncidentTimelinePanel incidentId={INCIDENT_ID} />)
+    await screen.findByText('Incident declared')
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Edit'})[0])
+    fireEvent.change(screen.getByLabelText('Event type'), {target: {value: 'status_changed'}})
+    fireEvent.change(screen.getByLabelText('Details (JSON)'), {
+      target: {value: '{"status":"mitigated"}'},
+    })
+    fireEvent.change(screen.getByLabelText('Reason (optional)'), {
+      target: {value: ' Correcting evidence '},
+    })
+    fireEvent.click(screen.getByRole('button', {name: 'Save changes'}))
+
+    await waitFor(() =>
+      expect(mockApi.editIncidentTimelineEvent).toHaveBeenCalledWith(INCIDENT_ID, EVENT_A, {
+        eventType: 'STATUS_CHANGED',
+        visibility: undefined,
+        originalOccurredAt: undefined,
+        details: {status: 'mitigated'},
+        reason: 'Correcting evidence',
+      })
+    )
+  })
+
+  it('soft-deletes an event with an audit reason', async () => {
+    renderWithQueryClient(<IncidentTimelinePanel incidentId={INCIDENT_ID} />)
+    await screen.findByText('Incident declared')
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Remove'})[0])
+    fireEvent.change(screen.getByLabelText('Reason (optional)'), {
+      target: {value: ' Duplicate evidence '},
+    })
+    fireEvent.click(screen.getAllByRole('button', {name: 'Remove'}).at(-1)!)
+
+    await waitFor(() =>
+      expect(mockApi.deleteIncidentTimelineEvent).toHaveBeenCalledWith(
+        INCIDENT_ID,
+        EVENT_A,
+        'Duplicate evidence'
+      )
+    )
+  })
+
+  it('restores removed evidence and shows its revision history', async () => {
+    const deletedEntry = {
+      ...entries[0],
+      deletedAt: '2026-06-05T12:10:00.000Z',
+    }
+    mockApi.getOnCallIncidentTimeline.mockResolvedValue([deletedEntry])
+    mockApi.getIncidentTimelineRevisions.mockResolvedValue([
+      {
+        id: 'c3000000-0000-4000-8000-000000000001',
+        revision: 1,
+        action: 'DELETED',
+        previous: {deletedAt: null},
+        next: {deletedAt: deletedEntry.deletedAt},
+        reason: 'Duplicate evidence',
+        editedByUserId: 'c2000000-0000-4000-8000-000000000002',
+        createdAt: deletedEntry.deletedAt,
+      },
+    ])
+
+    renderWithQueryClient(<IncidentTimelinePanel incidentId={INCIDENT_ID} />)
+    expect(await screen.findByText('Removed')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', {name: 'Revision history'}))
+    expect(await screen.findByText('Deleted')).toBeInTheDocument()
+    expect(screen.getByText(/Duplicate evidence/)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(mockApi.getIncidentTimelineRevisions).toHaveBeenCalledWith(INCIDENT_ID, EVENT_A)
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: 'Close'}))
+    fireEvent.click(screen.getAllByRole('button', {name: 'Restore'}).at(-1)!)
+    fireEvent.change(screen.getByLabelText('Reason (optional)'), {
+      target: {value: ' Needed for the audit '},
+    })
+    fireEvent.click(screen.getAllByRole('button', {name: 'Restore'}).at(-1)!)
+
+    await waitFor(() =>
+      expect(mockApi.restoreIncidentTimelineEvent).toHaveBeenCalledWith(
+        INCIDENT_ID,
+        EVENT_A,
+        'Needed for the audit'
+      )
     )
   })
 })
