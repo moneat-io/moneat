@@ -218,4 +218,25 @@ class IncidentConfigurationServiceTest {
             )
         }
     }
+
+    @Test
+    fun `rejects option values that collide after normalization`() {
+        assertFailsWith<IllegalArgumentException> {
+            service.createCustomField(
+                member.organizationId,
+                member.userId,
+                CreateIncidentCustomField(
+                    stableKey = "normalized-options",
+                    name = "Normalized options",
+                    description = null,
+                    valueType = IncidentCustomFieldValueType.SELECT,
+                    catalogResourceType = null,
+                    options = listOf(
+                        IncidentCustomFieldOptionInput("primary", "Primary", 0),
+                        IncidentCustomFieldOptionInput(" primary ", "Also primary", 1),
+                    ),
+                ),
+            )
+        }
+    }
 }

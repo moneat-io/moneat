@@ -699,7 +699,7 @@ class IncidentConfigurationService {
         require(options.all { (it.color.cleaned()?.length ?: 0) <= MAX_OPTION_COLOR_LENGTH }) {
             "Incident field option color is too long"
         }
-        require(options.map(IncidentCustomFieldOptionInput::value).distinct().size == options.size) {
+        require(options.map { it.value.trim() }.distinct().size == options.size) {
             "Incident field option values must be unique"
         }
         require(options.map(IncidentCustomFieldOptionInput::position).distinct().size == options.size) {
