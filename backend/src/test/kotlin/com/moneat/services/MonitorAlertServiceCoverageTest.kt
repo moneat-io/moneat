@@ -270,7 +270,7 @@ class MonitorAlertServiceCoverageTest {
         assertTrue(query.contains("tags['mountpoint']"))
         assertTrue(query.contains("pct AS value"))
         assertTrue(query.contains("disk_identity"))
-        assertTrue(query.contains("ORDER BY pct DESC"))
+        assertTrue(query.contains("ORDER BY pct DESC, disk_identity ASC"))
         assertTrue(query.contains("LIMIT 1"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.percent')"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.used')"))

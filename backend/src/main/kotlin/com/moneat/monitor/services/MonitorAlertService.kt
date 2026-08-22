@@ -836,7 +836,7 @@ class MonitorAlertService(
             GROUP BY disk_identity
         )
         WHERE pct IS NOT NULL
-        ORDER BY pct DESC
+        ORDER BY pct DESC, disk_identity ASC
         LIMIT 1
         FORMAT JSONCompact
         """.trimIndent()
