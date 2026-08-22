@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonObject
 data class AiAssistantStreamRequest(
     val message: String,
     val conversationId: String? = null,
+    val runId: String? = null,
     val projectId: String? = null,
 )
 
@@ -23,6 +24,7 @@ data class AiAssistantConfirmRequest(
 @Serializable
 data class AiAssistantConfirmResponse(
     val conversationId: String,
+    val runId: String,
     val requestId: String,
     val approved: Boolean,
     val tool: String,
@@ -51,6 +53,7 @@ data class AssistantConfirmationNeededEvent(
     val type: String = "confirmation_needed",
     val requestId: String,
     val conversationId: String,
+    val runId: String? = null,
     val tool: String,
     val args: JsonObject,
 )
@@ -71,4 +74,5 @@ data class AssistantErrorEvent(
 data class AssistantDoneEvent(
     val type: String = "done",
     val conversationId: String,
+    val runId: String? = null,
 )

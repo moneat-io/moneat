@@ -8,14 +8,22 @@ import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.Column
 import org.jetbrains.exposed.v1.core.ColumnType
 import org.jetbrains.exposed.v1.core.Table
+import org.jetbrains.exposed.v1.core.stringLiteral
 import org.jetbrains.exposed.v1.datetime.timestamp
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.postgresql.util.PGobject
 import kotlin.uuid.Uuid
 
-// ── Custom JSONB column type for raw JSON strings ───────────────────────
+// Custom JSONB column type for raw JSON strings.
 
 private class StringJsonbColumnType : ColumnType<String>() {
-    override fun sqlType() = "JSONB"
+    private fun isH2(): Boolean = TransactionManager
+        .currentOrNull()
+        ?.db
+        ?.url
+        ?.contains("h2", ignoreCase = true) == true
+
+    override fun sqlType() = if (isH2()) "TEXT" else "JSONB"
 
     override fun valueFromDB(value: Any): String = when (value) {
         is PGobject -> value.value ?: "{}"
@@ -23,16 +31,19 @@ private class StringJsonbColumnType : ColumnType<String>() {
         else -> value.toString()
     }
 
-    override fun notNullValueToDB(value: String): Any = PGobject().apply {
-        type = "jsonb"
-        this.value = value
+    override fun notNullValueToDB(value: String): Any {
+        if (isH2()) return value
+        return PGobject().apply {
+            type = "jsonb"
+            this.value = value
+        }
     }
 }
 
 private fun Table.stringJsonb(name: String): Column<String> =
     registerColumn(name, StringJsonbColumnType())
 
-// ── Exposed Table for context snapshots ─────────────────────────────────
+// Exposed table for context snapshots.
 
 object AiContextSnapshots : Table("ai_context_snapshots") {
     val id = integer("id").autoIncrement()
@@ -49,7 +60,97 @@ object AiContextSnapshots : Table("ai_context_snapshots") {
     override val primaryKey = PrimaryKey(id)
 }
 
-// ── SSE Event Types ─────────────────────────────────────────────────────
+object AiRuns : Table("ai_runs") {
+    val id = long("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
+    val organization_id = integer("organization_id")
+    val user_id = integer("user_id")
+    val conversation_id = integer("conversation_id")
+    val project_id = long("project_id").nullable()
+    val idempotency_key = varchar("idempotency_key", 128)
+    val request_fingerprint = char("request_fingerprint", 64)
+    val status = varchar("status", 32)
+    val current_round = integer("current_round").default(0)
+    val provider = varchar("provider", 64).nullable()
+    val model = varchar("model", 255).nullable()
+    val input_tokens = integer("input_tokens").default(0)
+    val output_tokens = integer("output_tokens").default(0)
+    val cost_usd = decimal("cost_usd", 18, 8).default(java.math.BigDecimal.ZERO)
+    val cost_metadata = stringJsonb("cost_metadata").defaultExpression(stringLiteral("{}"))
+    val output_content = text("output_content").nullable()
+    val error_code = varchar("error_code", 64).nullable()
+    val error_message = text("error_message").nullable()
+    val cancellation_requested_at = timestamp("cancellation_requested_at").nullable()
+    val cancellation_requested_by = integer("cancellation_requested_by").nullable()
+    val started_at = timestamp("started_at").nullable()
+    val completed_at = timestamp("completed_at").nullable()
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    val version = long("version").default(0)
+    override val primaryKey = PrimaryKey(id)
+}
+
+object AiToolCalls : Table("ai_tool_calls") {
+    val id = long("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
+    val organization_id = integer("organization_id")
+    val run_id = long("run_id")
+    val round = integer("round")
+    val provider_call_id = varchar("provider_call_id", 255)
+    val tool_name = varchar("tool_name", 255)
+    val arguments = stringJsonb("arguments").nullable()
+    val arguments_valid = bool("arguments_valid").default(true)
+    val read_only = bool("read_only")
+    val status = varchar("status", 32)
+    val effect_idempotency_key = varchar("effect_idempotency_key", 255)
+    val result = stringJsonb("result").nullable()
+    val result_summary = text("result_summary").nullable()
+    val is_error = bool("is_error").nullable()
+    val result_audit_event_id = uuid("result_audit_event_id").nullable()
+    val started_at = timestamp("started_at").nullable()
+    val completed_at = timestamp("completed_at").nullable()
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object AiRunEvidence : Table("ai_run_evidence") {
+    val id = long("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
+    val organization_id = integer("organization_id")
+    val run_id = long("run_id")
+    val evidence_type = varchar("evidence_type", 64)
+    val source_name = varchar("source", 128)
+    val source_resource_id = varchar("source_resource_id", 255).nullable()
+    val content = stringJsonb("content")
+    val created_at = timestamp("created_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+object AiApprovals : Table("ai_approvals") {
+    val id = long("id").autoIncrement()
+    val resource_id = uuid("resource_id").clientDefault { Uuid.random() }
+    val organization_id = integer("organization_id")
+    val run_id = long("run_id")
+    val tool_call_id = long("tool_call_id")
+    val requested_by = integer("requested_by")
+    val decided_by = integer("decided_by").nullable()
+    val incident_resource_id = uuid("incident_resource_id").nullable()
+    val incident_version = long("incident_version").nullable()
+    val proposed_command = stringJsonb("proposed_command")
+    val proposal_sha256 = char("proposal_sha256", 64)
+    val status = varchar("status", 32)
+    val decision_reason = text("decision_reason").nullable()
+    val expires_at = timestamp("expires_at")
+    val decided_at = timestamp("decided_at").nullable()
+    val result_audit_event_id = uuid("result_audit_event_id").nullable()
+    val response = stringJsonb("response").nullable()
+    val created_at = timestamp("created_at")
+    val updated_at = timestamp("updated_at")
+    override val primaryKey = PrimaryKey(id)
+}
+
+// SSE event types.
 
 @Serializable
 data class SseSearchProgress(
@@ -80,7 +181,7 @@ data class SseError(
     val error: String,
 )
 
-// ── API Request DTOs ────────────────────────────────────────────────────
+// API request DTOs.
 
 @Serializable
 data class AiChatStreamRequest(
@@ -95,7 +196,7 @@ data class AiConfirmRequest(
     val snapshotId: String,
 )
 
-// ── Aggregated Context Types ────────────────────────────────────────────
+// Aggregated context types.
 
 @Serializable
 data class AggregatedContext(
