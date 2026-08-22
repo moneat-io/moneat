@@ -69,7 +69,8 @@ object LlmProviderSettingsLoader {
 
     fun load(get: (String) -> String? = EnvConfig::get): LlmProviderSettings {
         val kind = LlmProviderKind.fromConfig(get("AI_PROVIDER") ?: LlmProviderKind.OPENAI.configValue)
-        val baseUrl = get("AI_BASE_URL")?.trimEnd('/') ?: defaultBaseUrl(kind)
+        val configuredBaseUrl = get("AI_BASE_URL")?.takeIf(String::isNotBlank)?.trimEnd('/')
+        val baseUrl = configuredBaseUrl ?: defaultBaseUrl(kind)
         val model = get("AI_MODEL")?.takeIf(String::isNotBlank) ?: legacyModel(kind, get)
         val timeout = parseLongOrDefault("AI_REQUEST_TIMEOUT_MS", get, DEFAULT_TIMEOUT_MILLIS)
         val maxRetries = parseIntOrDefault("AI_MAX_RETRIES", get, DEFAULT_MAX_RETRIES)
@@ -77,11 +78,16 @@ object LlmProviderSettingsLoader {
             ?.let(::parseCapabilities)
             ?: defaultCapabilities(kind)
 
+        val authentication = loadAuthentication(kind, get)
+        require(authentication != LlmAuthentication.None || configuredBaseUrl != null) {
+            "AI_BASE_URL must be set explicitly when AI_AUTH_TYPE is none"
+        }
+
         return LlmProviderSettings(
             kind = kind,
             baseUrl = baseUrl,
             model = model,
-            authentication = loadAuthentication(kind, get),
+            authentication = authentication,
             requestTimeoutMillis = timeout,
             maxRetries = maxRetries,
             capabilities = capabilities,
@@ -105,10 +111,7 @@ object LlmProviderSettingsLoader {
             "bearer" -> LlmAuthentication.Bearer(apiKey)
             "header" -> LlmAuthentication.Header(
                 name = get("AI_AUTH_HEADER")?.takeIf(String::isNotBlank) ?: "Authorization",
-                value = get("AI_AUTH_PREFIX")
-                    ?.takeIf(String::isNotBlank)
-                    ?.let { prefix -> "$prefix $apiKey" }
-                    ?: apiKey,
+                value = prefixedApiKey(apiKey, get("AI_AUTH_PREFIX")),
             )
             "none" -> LlmAuthentication.None
             else -> throw IllegalArgumentException(
@@ -122,6 +125,14 @@ object LlmProviderSettingsLoader {
         LlmProviderKind.OPENAI,
         LlmProviderKind.OPENAI_COMPATIBLE,
         -> LlmAuthentication.Bearer(apiKey)
+    }
+
+    private fun prefixedApiKey(apiKey: String, configuredPrefix: String?): String {
+        if (apiKey.isBlank()) return ""
+        return configuredPrefix
+            ?.takeIf(String::isNotBlank)
+            ?.let { prefix -> "$prefix $apiKey" }
+            ?: apiKey
     }
 
     private fun defaultBaseUrl(kind: LlmProviderKind): String = when (kind) {

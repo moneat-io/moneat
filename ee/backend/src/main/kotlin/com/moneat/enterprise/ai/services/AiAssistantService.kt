@@ -266,6 +266,18 @@ class AiAssistantService(
 
             for (toolCall in completion.toolCalls) {
                 val args = toolCall.arguments
+                if (args == null) {
+                    val invalidArgumentsSummary = "Invalid arguments for MCP tool: ${toolCall.name}"
+                    state.messages.add(
+                        LlmMessage(
+                            role = "tool",
+                            content = invalidArgumentsSummary,
+                            toolCallId = toolCall.id,
+                        ),
+                    )
+                    onToolResult(toolCall.name, invalidArgumentsSummary, true)
+                    continue
+                }
                 val definition = toolMap[toolCall.name]
 
                 if (definition == null) {

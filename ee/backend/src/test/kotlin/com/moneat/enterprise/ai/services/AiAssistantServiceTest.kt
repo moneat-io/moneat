@@ -217,6 +217,51 @@ class AiAssistantServiceTest {
         assertEquals("string", levelsSchema["items"]?.jsonObject?.get("type")?.jsonPrimitive?.content)
     }
 
+    @Test
+    fun `assistant never executes a tool with malformed arguments`() = runBlocking {
+        var executions = 0
+        val registry = McpToolRegistry()
+        registry.register(
+            object : McpTool {
+                override val name = "list_issues"
+                override val description = "List issues"
+                override val inputSchema = InputSchema()
+                override suspend fun execute(args: JsonObject, context: McpContext): ToolCallResult {
+                    executions += 1
+                    return ToolCallResult(content = listOf(ToolContent(text = "unexpected")))
+                }
+            },
+        )
+        val fakeClient = FakeLlmProvider(
+            completions = mutableListOf(
+                LlmResponse(
+                    content = "",
+                    toolCalls = listOf(LlmToolCall("call-invalid", "list_issues", null)),
+                ),
+                LlmResponse(content = "I could not run that tool."),
+            ),
+        )
+        val writer = StringWriter()
+
+        AiAssistantService(registry, fakeClient).streamAssistant(
+            writer = writer,
+            userId = 1,
+            orgId = 1,
+            message = "list issues",
+            conversationId = null,
+        )
+
+        val events = parseEvents(writer.toString())
+        assertEquals(0, executions)
+        assertEquals(2, fakeClient.callCount)
+        assertTrue(
+            events.any { event ->
+                event["type"]?.jsonPrimitive?.content == "tool_result" &&
+                    event["isError"]?.jsonPrimitive?.content == "true"
+            },
+        )
+    }
+
     private fun parseEvents(raw: String): List<JsonObject> {
         val events = mutableListOf<JsonObject>()
         raw.lineSequence()

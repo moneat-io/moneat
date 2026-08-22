@@ -127,33 +127,38 @@ class AnthropicProvider(
             }
 
             flushToolResults()
-            result += when (message.role) {
-                "assistant" -> assistantMessage(message)
-                else -> textMessage("user", message.content.orEmpty())
+            when (message.role) {
+                "assistant" -> assistantMessage(message)?.let { result += it }
+                else -> message.content
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { content -> result += textMessage("user", content) }
             }
         }
         flushToolResults()
         return JsonArray(result)
     }
 
-    private fun assistantMessage(message: LlmMessage): JsonObject = buildJsonObject {
-        put("role", "assistant")
-        put("content", buildJsonArray {
-            message.content?.takeIf(String::isNotBlank)?.let { content ->
-                add(buildJsonObject {
-                    put("type", "text")
-                    put("text", content)
-                })
-            }
-            message.toolCalls.forEach { call ->
-                add(buildJsonObject {
-                    put("type", "tool_use")
-                    put("id", call.id)
-                    put("name", call.name)
-                    put("input", call.arguments)
-                })
-            }
-        })
+    private fun assistantMessage(message: LlmMessage): JsonObject? {
+        if (message.content.isNullOrBlank() && message.toolCalls.isEmpty()) return null
+        return buildJsonObject {
+            put("role", "assistant")
+            put("content", buildJsonArray {
+                message.content?.takeIf(String::isNotBlank)?.let { content ->
+                    add(buildJsonObject {
+                        put("type", "text")
+                        put("text", content)
+                    })
+                }
+                message.toolCalls.forEach { call ->
+                    add(buildJsonObject {
+                        put("type", "tool_use")
+                        put("id", call.id)
+                        put("name", call.name)
+                        put("input", call.arguments ?: JsonObject(emptyMap()))
+                    })
+                }
+            })
+        }
     }
 
     private fun textMessage(role: String, content: String): JsonObject = buildJsonObject {
@@ -183,7 +188,7 @@ class AnthropicProvider(
             LlmToolCall(
                 id = id,
                 name = name,
-                arguments = value["input"] as? JsonObject ?: JsonObject(emptyMap()),
+                arguments = value["input"] as? JsonObject,
             )
         }
         val usage = response["usage"]?.jsonObject

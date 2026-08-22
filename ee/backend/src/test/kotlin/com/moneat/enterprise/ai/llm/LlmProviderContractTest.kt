@@ -7,11 +7,17 @@ package com.moneat.enterprise.ai.llm
 import com.moneat.enterprise.ai.llm.providers.AnthropicProvider
 import com.moneat.enterprise.ai.llm.providers.OpenAiProvider
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LlmProviderContractTest {
@@ -35,6 +41,8 @@ class LlmProviderContractTest {
         )
         assertTrue(transport.requests.all { request -> request.headers["Authorization"] == "Bearer test-key" })
         assertTrue(transport.requests.all { request -> "\"tools\"" in request.body })
+        assertTrue(transport.requests.all { request -> "\"max_tokens\"" in request.body })
+        assertTrue(transport.requests.all { request -> "\"max_completion_tokens\"" !in request.body })
     }
 
     @Test
@@ -79,6 +87,84 @@ class LlmProviderContractTest {
     }
 
     @Test
+    fun `rate limit retries honor Retry-After`() = runBlocking {
+        val transport = SequencedTransport(
+            mutableListOf(
+                LlmHttpResponse(429, "rate limited", mapOf("Retry-After" to "3")),
+                LlmHttpResponse(200, OPENAI_RESPONSE),
+            ),
+        )
+        val observedDelays = mutableListOf<Long>()
+
+        val response = executeLlmRequest(
+            transport = transport,
+            request = LlmHttpRequest("https://provider.example", emptyMap(), "{}"),
+            maxRetries = 1,
+            retryPolicy = LlmRetryPolicy(
+                delayAction = { delayMillis -> observedDelays += delayMillis },
+                currentTime = { Instant.parse("2026-08-22T00:00:00Z") },
+                jitterSource = { 0 },
+            ),
+        )
+
+        assertEquals(200, response.status)
+        assertEquals(listOf(3_000L), observedDelays)
+        assertEquals(2, transport.callCount)
+    }
+
+    @Test
+    fun `official OpenAI requests use the modern completion token field`() = runBlocking {
+        val transport = RecordingTransport(OPENAI_RESPONSE)
+        val provider = OpenAiProvider(
+            settings = settings(kind = LlmProviderKind.OPENAI),
+            transport = transport,
+        )
+
+        provider.chatCompletion(listOf(LlmMessage("user", "Summarize")))
+
+        val body = transport.requests.single().body
+        assertTrue("\"max_completion_tokens\"" in body)
+        assertFalse("\"max_tokens\"" in body)
+    }
+
+    @Test
+    fun `malformed OpenAI tool arguments remain distinguishable`() = runBlocking {
+        val provider = OpenAiProvider(
+            settings = settings(kind = LlmProviderKind.OPENAI_COMPATIBLE),
+            transport = RecordingTransport(OPENAI_MALFORMED_TOOL_RESPONSE),
+        )
+
+        val response = provider.chatCompletion(
+            messages = listOf(LlmMessage("user", "Inspect")),
+            tools = listOf(incidentTool()),
+        )
+
+        assertNull(response.toolCalls.single().arguments)
+    }
+
+    @Test
+    fun `Anthropic adapter skips messages without text or tool calls`() = runBlocking {
+        val transport = RecordingTransport(ANTHROPIC_RESPONSE)
+        val provider = AnthropicProvider(
+            settings = settings(kind = LlmProviderKind.ANTHROPIC),
+            transport = transport,
+        )
+
+        provider.chatCompletion(
+            messages = listOf(
+                LlmMessage("user"),
+                LlmMessage("assistant"),
+                LlmMessage("user", "Inspect"),
+            ),
+        )
+
+        val messages = Json.parseToJsonElement(transport.requests.single().body)
+            .jsonObject["messages"]
+            ?.jsonArray
+        assertEquals(1, messages?.size)
+    }
+
+    @Test
     fun `tool calls fail before transport when the configured endpoint lacks capability`() = runBlocking {
         val transport = RecordingTransport(OPENAI_RESPONSE)
         val provider = OpenAiProvider(
@@ -116,7 +202,7 @@ class LlmProviderContractTest {
         assertEquals("Inspecting", response.content)
         assertEquals("call-1", response.toolCalls.single().id)
         assertEquals("get_incident", response.toolCalls.single().name)
-        assertEquals("inc-1", (response.toolCalls.single().arguments["id"] as? JsonPrimitive)?.content)
+        assertEquals("inc-1", (response.toolCalls.single().arguments?.get("id") as? JsonPrimitive)?.content)
         assertEquals(12, response.inputTokens)
         assertEquals(4, response.outputTokens)
         assertEquals(expectedProvider, response.provider)
@@ -221,6 +307,21 @@ class LlmProviderContractTest {
                 }
               ],
               "usage": {"input_tokens": 12, "output_tokens": 4}
+            }
+            """.trimIndent()
+
+        val OPENAI_MALFORMED_TOOL_RESPONSE =
+            """
+            {
+              "choices": [{
+                "message": {
+                  "tool_calls": [{
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {"name": "get_incident", "arguments": "not-json"}
+                  }]
+                }
+              }]
             }
             """.trimIndent()
     }

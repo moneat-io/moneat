@@ -6,6 +6,7 @@ package com.moneat.enterprise.ai.llm
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
@@ -69,5 +70,34 @@ class LlmProviderSettingsTest {
         assertFailsWith<IllegalArgumentException> {
             LlmProviderSettingsLoader.load(mapOf("AI_MAX_RETRIES" to "often")::get)
         }
+    }
+
+    @Test
+    fun `no-auth mode requires an explicit endpoint`() {
+        assertFailsWith<IllegalArgumentException> {
+            LlmProviderSettingsLoader.load(mapOf("AI_AUTH_TYPE" to "none")::get)
+        }
+
+        val settings = LlmProviderSettingsLoader.load(
+            mapOf(
+                "AI_PROVIDER" to "openai-compatible",
+                "AI_AUTH_TYPE" to "none",
+                "AI_BASE_URL" to "http://llm.internal",
+            )::get,
+        )
+        assertIs<LlmAuthentication.None>(settings.authentication)
+    }
+
+    @Test
+    fun `auth prefix cannot enable an empty custom header key`() {
+        val settings = LlmProviderSettingsLoader.load(
+            mapOf(
+                "AI_AUTH_TYPE" to "header",
+                "AI_AUTH_PREFIX" to "Bearer",
+            )::get,
+        )
+
+        assertFalse(settings.isEnabled)
+        assertEquals("", assertIs<LlmAuthentication.Header>(settings.authentication).value)
     }
 }

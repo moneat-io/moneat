@@ -47,7 +47,7 @@ LM Studio, and hosted OpenAI-compatible gateways). Keep API keys out of committe
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AI_PROVIDER` | `openai` | Provider dialect: `openai`, `openai-compatible`, or `anthropic`. Use `openai-compatible` for any endpoint that speaks the OpenAI Chat Completions API. |
-| `AI_BASE_URL` | Provider default | API base URL. Defaults to `https://api.openai.com` for the `openai` dialects and `https://api.anthropic.com` for `anthropic`. Set your own endpoint for `openai-compatible`; give the provider root or a URL already ending in `/v1`, and the runtime appends `/v1` once without doubling it. |
+| `AI_BASE_URL` | Provider default (required when `AI_AUTH_TYPE=none`) | API base URL. Defaults to `https://api.openai.com` for the `openai` dialects and `https://api.anthropic.com` for `anthropic`. Set your own endpoint for `openai-compatible`; give the provider root or a URL already ending in `/v1`, and the runtime appends `/v1` once without doubling it. Keyless mode (`AI_AUTH_TYPE=none`) has no default and never falls back to a public provider endpoint, so it must be set explicitly. |
 | `AI_MODEL` | Provider default | Model identifier. Defaults to `gpt-4o-mini` for the `openai` dialects and `claude-sonnet-4-20250514` for `anthropic`. |
 | `AI_API_KEY` | none | Provider-neutral API key. Falls back to `OPENAI_API_KEY` (`openai`/`openai-compatible`) or `ANTHROPIC_API_KEY` (`anthropic`) when unset. |
 | `AI_AUTH_TYPE` | `default` | Auth scheme: `default` (Bearer for the `openai` dialects, `x-api-key` for `anthropic`), `bearer`, `header`, or `none`. |

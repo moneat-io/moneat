@@ -159,6 +159,9 @@ class EnvironmentValidator {
     private fun validateAiRuntimeConfig(errors: MutableList<String>) {
         validateAllowedValue("AI_PROVIDER", SUPPORTED_AI_PROVIDERS, errors)
         validateAllowedValue("AI_AUTH_TYPE", SUPPORTED_AI_AUTH_TYPES, errors)
+        if (getConfigValue("AI_AUTH_TYPE")?.trim()?.equals("none", ignoreCase = true) == true) {
+            validateRequired("AI_BASE_URL", "AI authentication is disabled", errors)
+        }
         validatePositiveLong("AI_REQUEST_TIMEOUT_MS", errors)
         validateIntegerRange("AI_MAX_RETRIES", 0..AI_MAX_RETRIES_LIMIT, errors)
         validateAiCapabilities(errors)

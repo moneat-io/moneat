@@ -139,6 +139,7 @@ class EnvironmentValidatorTest {
             mapOf(
                 "AI_PROVIDER" to "openai-compatible",
                 "AI_AUTH_TYPE" to "none",
+                "AI_BASE_URL" to "http://llm.internal",
                 "AI_REQUEST_TIMEOUT_MS" to "45000",
                 "AI_MAX_RETRIES" to "3",
                 "AI_CAPABILITIES" to "tool-calling,streaming"
@@ -147,6 +148,15 @@ class EnvironmentValidatorTest {
             val result = EnvironmentValidator().validate()
 
             assertFalse(result.errors.any { it.contains("AI_") })
+        }
+    }
+
+    @Test
+    fun `validate requires an explicit AI endpoint when authentication is disabled`() {
+        withSystemProperty("AI_AUTH_TYPE", "none") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("AI_BASE_URL") })
         }
     }
 

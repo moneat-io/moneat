@@ -64,7 +64,8 @@ class OpenAiProvider(
             messages = messages.map(::toOpenAiMessage),
             tools = tools.takeIf(List<LlmTool>::isNotEmpty)?.map(::toOpenAiTool),
             toolChoice = tools.takeIf(List<LlmTool>::isNotEmpty)?.let { config.toolChoice.toWireValue() },
-            maxTokens = config.maxTokens,
+            maxTokens = config.maxTokens.takeIf { settings.kind == LlmProviderKind.OPENAI_COMPATIBLE },
+            maxCompletionTokens = config.maxTokens.takeIf { settings.kind == LlmProviderKind.OPENAI },
             temperature = config.temperature,
             responseFormat = if (config.jsonMode && LlmCapability.JSON_MODE in capabilities()) {
                 OpenAiFormat("json_object")
@@ -116,7 +117,9 @@ class OpenAiProvider(
                 type = "function",
                 function = OpenAiToolCallFunction(
                     name = call.name,
-                    arguments = json.encodeToString(JsonObject.serializer(), call.arguments),
+                    arguments = call.arguments
+                        ?.let { arguments -> json.encodeToString(JsonObject.serializer(), arguments) }
+                        ?: EMPTY_TOOL_ARGUMENTS,
                 ),
             )
         },
@@ -130,7 +133,11 @@ class OpenAiProvider(
     private fun toLlmToolCall(call: OpenAiToolCall): LlmToolCall {
         val arguments = runCatching {
             json.parseToJsonElement(call.function.arguments).jsonObject
-        }.getOrDefault(JsonObject(emptyMap()))
+        }.onFailure { error ->
+            logger.warn(error) {
+                "${provider()} returned invalid arguments for tool ${call.function.name}"
+            }
+        }.getOrNull()
         return LlmToolCall(call.id, call.function.name, arguments)
     }
 
@@ -143,6 +150,7 @@ class OpenAiProvider(
     private fun LlmToolChoice.toWireValue(): String = name.lowercase()
 
     private companion object {
+        const val EMPTY_TOOL_ARGUMENTS = "{}"
         val HTTP_SUCCESS_RANGE = 200..299
     }
 }
@@ -164,7 +172,8 @@ private data class OpenAiRequest(
     val messages: List<OpenAiMessage>,
     val tools: List<OpenAiTool>? = null,
     @SerialName("tool_choice") val toolChoice: String? = null,
-    @SerialName("max_tokens") val maxTokens: Int,
+    @SerialName("max_tokens") val maxTokens: Int? = null,
+    @SerialName("max_completion_tokens") val maxCompletionTokens: Int? = null,
     val temperature: Double,
     @SerialName("response_format") val responseFormat: OpenAiFormat? = null,
 )
