@@ -4,7 +4,6 @@
 
 package com.moneat.enterprise.ai.llm
 
-import com.moneat.config.EnvConfig
 import com.moneat.enterprise.ai.llm.providers.AnthropicProvider
 import com.moneat.enterprise.ai.llm.providers.OpenAiProvider
 import mu.KotlinLogging
@@ -12,25 +11,25 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 /**
- * Factory that returns the configured LLM provider based on environment variables.
- *
- * Configuration:
- *   AI_PROVIDER = "openai" | "anthropic"  (default: "openai")
+ * Creates the one configured provider used by all enterprise AI surfaces.
  */
 object LlmProviderFactory {
 
     fun create(): LlmProvider {
-        val providerName = EnvConfig.get("AI_PROVIDER", "openai").lowercase()
-        val provider = when (providerName) {
-            "anthropic" -> AnthropicProvider()
-            else -> OpenAiProvider()
+        val settings = LlmProviderSettingsLoader.load()
+        val provider = when (settings.kind) {
+            LlmProviderKind.ANTHROPIC -> AnthropicProvider(settings)
+            LlmProviderKind.OPENAI,
+            LlmProviderKind.OPENAI_COMPATIBLE,
+            -> OpenAiProvider(settings)
         }
-        logger.info { "LLM provider configured: ${provider.provider()} / ${provider.model()}" }
+        logger.info {
+            "LLM provider configured: ${provider.provider()} / ${provider.model()} " +
+                "(${provider.capabilities().joinToString()})"
+        }
         return provider
     }
 
-    /** Check whether any AI provider is configured. */
-    fun isAnyProviderEnabled(): Boolean {
-        return OpenAiProvider().isEnabled() || AnthropicProvider().isEnabled()
-    }
+    /** Check whether the configured AI provider has usable authentication. */
+    fun isAnyProviderEnabled(): Boolean = LlmProviderSettingsLoader.load().isEnabled
 }

@@ -4,101 +4,221 @@
 
 package com.moneat.enterprise.ai.llm.providers
 
-import com.moneat.config.EnvConfig
+import com.moneat.enterprise.ai.llm.KtorLlmHttpTransport
+import com.moneat.enterprise.ai.llm.LlmAuthentication
+import com.moneat.enterprise.ai.llm.LlmCapability
 import com.moneat.enterprise.ai.llm.LlmConfig
+import com.moneat.enterprise.ai.llm.LlmHttpRequest
+import com.moneat.enterprise.ai.llm.LlmHttpTransport
 import com.moneat.enterprise.ai.llm.LlmMessage
 import com.moneat.enterprise.ai.llm.LlmProvider
+import com.moneat.enterprise.ai.llm.LlmProviderKind
+import com.moneat.enterprise.ai.llm.LlmProviderSettings
+import com.moneat.enterprise.ai.llm.LlmProviderSettingsLoader
 import com.moneat.enterprise.ai.llm.LlmResponse
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
+import com.moneat.enterprise.ai.llm.LlmTool
+import com.moneat.enterprise.ai.llm.LlmToolCall
+import com.moneat.enterprise.ai.llm.LlmToolChoice
+import com.moneat.enterprise.ai.llm.executeLlmRequest
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-class AnthropicProvider : LlmProvider {
-
+class AnthropicProvider(
+    private val settings: LlmProviderSettings = LlmProviderSettingsLoader.load(),
+    private val transport: LlmHttpTransport = KtorLlmHttpTransport(settings.requestTimeoutMillis),
+) : LlmProvider {
     private val json = Json { ignoreUnknownKeys = true }
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) { json(json) }
-        engine { requestTimeout = 120_000 }
+
+    init {
+        require(settings.kind == LlmProviderKind.ANTHROPIC) {
+            "AnthropicProvider requires anthropic settings"
+        }
     }
 
-    private val apiKey: String get() = EnvConfig.get("ANTHROPIC_API_KEY", "")
-    private val modelName: String get() = EnvConfig.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
-    private val maxTokensCfg: Int get() = EnvConfig.get("ANTHROPIC_MAX_TOKENS", "16384").toIntOrNull() ?: 16384
+    override fun provider(): String = settings.kind.configValue
 
-    override fun provider() = "anthropic"
-    override fun model() = modelName
-    override fun isEnabled() = apiKey.isNotBlank()
+    override fun model(): String = settings.model
 
-    override suspend fun chatCompletion(messages: List<LlmMessage>, config: LlmConfig): LlmResponse {
-        // Anthropic separates the system message from conversation messages
-        val systemText = messages.filter { it.role == "system" }.joinToString("\n\n") { it.content }
-        val conversationMessages = messages.filter { it.role != "system" }
-            .map { AnthropicMsg(it.role, it.content) }
+    override fun isEnabled(): Boolean = settings.isEnabled
 
-        val request = AnthropicRequest(
-            model = modelName,
-            max_tokens = minOf(config.maxTokens, maxTokensCfg),
-            system = systemText.ifBlank { null },
-            messages = conversationMessages,
+    override fun capabilities(): Set<LlmCapability> = settings.capabilities
+
+    override suspend fun chatCompletion(
+        messages: List<LlmMessage>,
+        config: LlmConfig,
+        tools: List<LlmTool>,
+    ): LlmResponse {
+        requireCapabilityForTools(tools)
+        val requestBody = buildRequest(messages, config, tools)
+        val response = executeLlmRequest(
+            transport = transport,
+            request = LlmHttpRequest(
+                url = settings.endpoint("messages"),
+                headers = requestHeaders(settings.authentication),
+                body = json.encodeToString(JsonObject.serializer(), requestBody),
+            ),
+            maxRetries = settings.maxRetries,
         )
-
-        val response = client.post("https://api.anthropic.com/v1/messages") {
-            contentType(ContentType.Application.Json)
-            header("x-api-key", apiKey)
-            header("anthropic-version", "2023-06-01")
-            setBody(request)
+        if (response.status !in HTTP_SUCCESS_RANGE) {
+            logger.error { "Anthropic completion failed with HTTP ${response.status}" }
+            throw IllegalStateException("Anthropic completion failed with HTTP ${response.status}")
         }
 
-        val body = response.bodyAsText()
-        if (response.status != HttpStatusCode.OK) {
-            logger.error { "Anthropic API error (${response.status}): $body" }
-            throw RuntimeException("Anthropic API error ${response.status.value}: $body")
+        return parseResponse(json.parseToJsonElement(response.body).jsonObject)
+    }
+
+    private fun buildRequest(
+        messages: List<LlmMessage>,
+        config: LlmConfig,
+        tools: List<LlmTool>,
+    ): JsonObject = buildJsonObject {
+        put("model", settings.model)
+        put("max_tokens", config.maxTokens)
+        put("temperature", config.temperature)
+        val system = messages
+            .filter { message -> message.role == "system" }
+            .mapNotNull(LlmMessage::content)
+            .joinToString("\n\n")
+        if (system.isNotBlank()) put("system", system)
+        put("messages", buildMessages(messages.filterNot { message -> message.role == "system" }))
+        if (tools.isNotEmpty() && config.toolChoice != LlmToolChoice.NONE) {
+            put("tools", JsonArray(tools.map(::toAnthropicTool)))
+            put("tool_choice", buildJsonObject {
+                put("type", if (config.toolChoice == LlmToolChoice.REQUIRED) "any" else "auto")
+            })
+        }
+    }
+
+    private fun buildMessages(messages: List<LlmMessage>): JsonArray {
+        val result = mutableListOf<JsonElement>()
+        val toolResults = mutableListOf<JsonElement>()
+
+        fun flushToolResults() {
+            if (toolResults.isEmpty()) return
+            result += buildJsonObject {
+                put("role", "user")
+                put("content", JsonArray(toolResults.toList()))
+            }
+            toolResults.clear()
         }
 
-        val parsed = json.decodeFromString(AnthropicResponse.serializer(), body)
-        val textContent = parsed.content.firstOrNull { it.type == "text" }?.text ?: ""
+        messages.forEach { message ->
+            if (message.role == "tool") {
+                toolResults += buildJsonObject {
+                    put("type", "tool_result")
+                    put("tool_use_id", message.toolCallId.orEmpty())
+                    put("content", message.content.orEmpty())
+                }
+                return@forEach
+            }
 
+            flushToolResults()
+            when (message.role) {
+                "assistant" -> assistantMessage(message)?.let { result += it }
+                else -> message.content
+                    ?.takeIf(String::isNotBlank)
+                    ?.let { content -> result += textMessage("user", content) }
+            }
+        }
+        flushToolResults()
+        return JsonArray(result)
+    }
+
+    private fun assistantMessage(message: LlmMessage): JsonObject? {
+        if (message.content.isNullOrBlank() && message.toolCalls.isEmpty()) return null
+        return buildJsonObject {
+            put("role", "assistant")
+            put("content", buildJsonArray {
+                message.content?.takeIf(String::isNotBlank)?.let { content ->
+                    add(buildJsonObject {
+                        put("type", "text")
+                        put("text", content)
+                    })
+                }
+                message.toolCalls.forEach { call ->
+                    add(buildJsonObject {
+                        put("type", "tool_use")
+                        put("id", call.id)
+                        put("name", call.name)
+                        put("input", call.arguments ?: JsonObject(emptyMap()))
+                    })
+                }
+            })
+        }
+    }
+
+    private fun textMessage(role: String, content: String): JsonObject = buildJsonObject {
+        put("role", role)
+        put("content", content)
+    }
+
+    private fun toAnthropicTool(tool: LlmTool): JsonObject = buildJsonObject {
+        put("name", tool.name)
+        put("description", tool.description)
+        put("input_schema", tool.parameters)
+    }
+
+    private fun parseResponse(response: JsonObject): LlmResponse {
+        val blocks = response["content"]?.jsonArray.orEmpty()
+        val text = blocks.mapNotNull { block ->
+            block.jsonObject.takeIf { it["type"]?.jsonPrimitive?.contentOrNull == "text" }
+                ?.get("text")
+                ?.jsonPrimitive
+                ?.contentOrNull
+        }.joinToString("")
+        val toolCalls = blocks.mapNotNull { block ->
+            val value = block.jsonObject
+            if (value["type"]?.jsonPrimitive?.contentOrNull != "tool_use") return@mapNotNull null
+            val id = value["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val name = value["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            LlmToolCall(
+                id = id,
+                name = name,
+                arguments = value["input"] as? JsonObject,
+            )
+        }
+        val usage = response["usage"]?.jsonObject
         return LlmResponse(
-            content = textContent,
-            inputTokens = parsed.usage?.input_tokens ?: 0,
-            outputTokens = parsed.usage?.output_tokens ?: 0,
-            model = modelName,
-            provider = "anthropic",
+            content = text,
+            toolCalls = toolCalls,
+            inputTokens = usage?.get("input_tokens")?.jsonPrimitive?.intOrNull ?: 0,
+            outputTokens = usage?.get("output_tokens")?.jsonPrimitive?.intOrNull ?: 0,
+            model = response["model"]?.jsonPrimitive?.contentOrNull ?: settings.model,
+            provider = provider(),
         )
     }
 
-    // Internal DTOs
-    @Serializable data class AnthropicMsg(val role: String, val content: String)
+    private fun requestHeaders(authentication: LlmAuthentication): Map<String, String> {
+        val authHeaders = when (authentication) {
+            is LlmAuthentication.Bearer -> mapOf("Authorization" to "Bearer ${authentication.token}")
+            is LlmAuthentication.Header -> mapOf(authentication.name to authentication.value)
+            LlmAuthentication.None -> emptyMap()
+        }
+        return authHeaders + ("anthropic-version" to ANTHROPIC_VERSION)
+    }
 
-    @Serializable data class AnthropicRequest(
-        val model: String,
-        val max_tokens: Int,
-        val system: String? = null,
-        val messages: List<AnthropicMsg>,
-    )
+    private fun requireCapabilityForTools(tools: List<LlmTool>) {
+        check(!(tools.isNotEmpty() && LlmCapability.TOOL_CALLING !in capabilities())) {
+            "Anthropic is not configured for tool calling"
+        }
+    }
 
-    @Serializable data class AnthropicContentBlock(val type: String, val text: String = "")
-
-    @Serializable data class AnthropicUsage(val input_tokens: Int = 0, val output_tokens: Int = 0)
-
-    @Serializable data class AnthropicResponse(
-        val id: String = "",
-        val content: List<AnthropicContentBlock> = emptyList(),
-        val usage: AnthropicUsage? = null,
-        @SerialName("stop_reason") val stopReason: String? = null,
-    )
+    private companion object {
+        const val ANTHROPIC_VERSION = "2023-06-01"
+        val HTTP_SUCCESS_RANGE = 200..299
+    }
 }

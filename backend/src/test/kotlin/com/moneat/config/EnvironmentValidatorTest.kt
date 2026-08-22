@@ -134,6 +134,54 @@ class EnvironmentValidatorTest {
     }
 
     @Test
+    fun `validate accepts provider-neutral AI configuration`() {
+        withSystemProperties(
+            mapOf(
+                "AI_PROVIDER" to "openai-compatible",
+                "AI_AUTH_TYPE" to "none",
+                "AI_BASE_URL" to "http://llm.internal",
+                "AI_REQUEST_TIMEOUT_MS" to "45000",
+                "AI_MAX_RETRIES" to "3",
+                "AI_CAPABILITIES" to "tool-calling,streaming"
+            )
+        ) {
+            val result = EnvironmentValidator().validate()
+
+            assertFalse(result.errors.any { it.contains("AI_") })
+        }
+    }
+
+    @Test
+    fun `validate requires an explicit AI endpoint when authentication is disabled`() {
+        withSystemProperty("AI_AUTH_TYPE", "none") {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("AI_BASE_URL") })
+        }
+    }
+
+    @Test
+    fun `validate rejects malformed provider-neutral AI configuration`() {
+        withSystemProperties(
+            mapOf(
+                "AI_PROVIDER" to "mystery",
+                "AI_AUTH_TYPE" to "query-param",
+                "AI_REQUEST_TIMEOUT_MS" to "soon",
+                "AI_MAX_RETRIES" to "6",
+                "AI_CAPABILITIES" to "streaming,telepathy"
+            )
+        ) {
+            val result = EnvironmentValidator().validate()
+
+            assertTrue(result.errors.any { it.contains("AI_PROVIDER") })
+            assertTrue(result.errors.any { it.contains("AI_AUTH_TYPE") })
+            assertTrue(result.errors.any { it.contains("AI_REQUEST_TIMEOUT_MS") })
+            assertTrue(result.errors.any { it.contains("AI_MAX_RETRIES") })
+            assertTrue(result.errors.any { it.contains("AI_CAPABILITIES") })
+        }
+    }
+
+    @Test
     fun `validate checks critical secrets`() {
         val validator = EnvironmentValidator()
         val result = validator.validate()

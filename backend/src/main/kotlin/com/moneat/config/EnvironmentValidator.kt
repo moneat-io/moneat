@@ -23,6 +23,10 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 private const val GOOGLE_ADS_CONNECTOR_ENABLED_REASON = "Google Ads connector is enabled"
+private const val AI_MAX_RETRIES_LIMIT = 5
+private val SUPPORTED_AI_PROVIDERS = setOf("openai", "openai-compatible", "anthropic")
+private val SUPPORTED_AI_AUTH_TYPES = setOf("default", "bearer", "header", "none")
+private val SUPPORTED_AI_CAPABILITIES = setOf("json_mode", "streaming", "tool_calling")
 
 class EnvironmentValidator {
 
@@ -128,11 +132,7 @@ class EnvironmentValidator {
             validateRequired("EXPO_TOKEN", "On-Call mobile push notifications are enabled", errors)
         }
 
-        // Validate AI Chat configuration when API key is present
-        val openAiApiKey = getConfigValue("OPENAI_API_KEY")
-        if (!openAiApiKey.isNullOrBlank()) {
-            logger.info { "OpenAI API key detected - AI chat will be available for admin users" }
-        }
+        validateAiRuntimeConfig(errors)
 
         // Validate Datadog Agent configuration when enabled
         val ddAgentHost = getConfigValue("DD_AGENT_HOST")
@@ -154,6 +154,65 @@ class EnvironmentValidator {
 
         validateProcessRole(errors)
         validateWorkflowRuntimeConfig(errors)
+    }
+
+    private fun validateAiRuntimeConfig(errors: MutableList<String>) {
+        validateAllowedValue("AI_PROVIDER", SUPPORTED_AI_PROVIDERS, errors)
+        validateAllowedValue("AI_AUTH_TYPE", SUPPORTED_AI_AUTH_TYPES, errors)
+        if (getConfigValue("AI_AUTH_TYPE")?.trim()?.equals("none", ignoreCase = true) == true) {
+            validateRequired("AI_BASE_URL", "AI authentication is disabled", errors)
+        }
+        validatePositiveLong("AI_REQUEST_TIMEOUT_MS", errors)
+        validateIntegerRange("AI_MAX_RETRIES", 0..AI_MAX_RETRIES_LIMIT, errors)
+        validateAiCapabilities(errors)
+
+        val aiConfigured = listOf("AI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AI_AUTH_TYPE")
+            .any { key -> !getConfigValue(key).isNullOrBlank() }
+        if (aiConfigured) {
+            logger.info { "AI provider configuration detected - AI features will be evaluated for availability" }
+        }
+    }
+
+    private fun validateAllowedValue(
+        envVar: String,
+        allowedValues: Set<String>,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)?.trim()?.lowercase()?.takeIf { it.isNotBlank() } ?: return
+        if (value !in allowedValues) {
+            errors.add("REQUIRED: $envVar must be one of ${allowedValues.sorted().joinToString()} when set.")
+        }
+    }
+
+    private fun validatePositiveLong(envVar: String, errors: MutableList<String>) {
+        val value = getConfigValue(envVar)?.takeIf { it.isNotBlank() } ?: return
+        if (value.toLongOrNull()?.let { it > 0 } != true) {
+            errors.add("REQUIRED: $envVar must be a positive integer when set.")
+        }
+    }
+
+    private fun validateIntegerRange(
+        envVar: String,
+        range: IntRange,
+        errors: MutableList<String>
+    ) {
+        val value = getConfigValue(envVar)?.takeIf { it.isNotBlank() } ?: return
+        if (value.toIntOrNull() !in range) {
+            errors.add("REQUIRED: $envVar must be between ${range.first} and ${range.last} when set.")
+        }
+    }
+
+    private fun validateAiCapabilities(errors: MutableList<String>) {
+        val configured = getConfigValue("AI_CAPABILITIES")?.takeIf { it.isNotBlank() } ?: return
+        val unsupported = configured
+            .split(',')
+            .map { value -> value.trim().lowercase().replace('-', '_') }
+            .filter { value -> value.isNotBlank() && value !in SUPPORTED_AI_CAPABILITIES }
+        if (unsupported.isNotEmpty()) {
+            errors.add(
+                "REQUIRED: AI_CAPABILITIES contains unsupported values: ${unsupported.distinct().joinToString()}."
+            )
+        }
     }
 
     private fun validateGoogleAdsConnectorConfig(errors: MutableList<String>) {
