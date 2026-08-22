@@ -222,6 +222,36 @@ describe('ResourceCatalog', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('renders a disk usage tile for each filesystem reported by a host', async () => {
+    const onSelect = vi.fn()
+    mockApi.get.mockResolvedValue({
+      kind: 'host',
+      rangeSeconds: 86_400,
+      intervalSeconds: 300,
+      metrics: [
+        {
+          key: 'disk:device_name=sda',
+          label: 'Disk usage (/dev/sda)',
+          unit: '%',
+          lines: [{name: '/dev/sda', points: [{ts: 1, value: 12.5}]}],
+        },
+        {
+          key: 'disk:device_name=vda1|mount_point=/',
+          label: 'Disk usage (/dev/vda1 at /)',
+          unit: '%',
+          lines: [{name: '/dev/vda1 at /', points: [{ts: 1, value: 67}]}],
+        },
+      ],
+    })
+
+    renderWithQueryClient(<ResourceDetailPanel resource={emptyResource} onSelect={onSelect} />)
+
+    expect(await screen.findByText('Disk usage (/dev/sda)')).toBeInTheDocument()
+    expect(screen.getByText('Disk usage (/dev/vda1 at /)')).toBeInTheDocument()
+    expect(document.querySelectorAll('.lucide-hard-drive')).toHaveLength(2)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('shows telemetry load failures in the detail panel', async () => {
     const onSelect = vi.fn()
 

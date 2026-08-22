@@ -492,6 +492,35 @@ class MonitorServiceExtendedTest {
         assertEquals(60.0f, result.dataPoints[1].cpuPercent)
     }
 
+    @Test
+    fun `getHistoricalFilesystemMetrics keeps mounted disks in separate series`() = runBlocking {
+        every { hostRepo.getById(1) } returns testHost
+        coEvery { retentionPolicyService.getRetentionDaysForHost(1) } returns 7
+        val querySlot = io.mockk.slot<String>()
+        val nowEpoch = Clock.System.now().epochSeconds
+        coEvery { hostRepo.executeClickHouseQuery(capture(querySlot)) } returns
+            """
+            {
+                "data": [
+                    ["${nowEpoch - 60}", "device_name=sda", 12.5],
+                    ["$nowEpoch", "device_name=sda", 13.0],
+                    ["$nowEpoch", "device_name=vda1|mount_point=/", 67.0]
+                ]
+            }
+            """.trimIndent()
+
+        val result = service.getHistoricalFilesystemMetrics(1, nowEpoch - 3600, nowEpoch, 60)
+
+        assertEquals(2, result.size)
+        assertEquals("/dev/sda", result[0].label)
+        assertEquals(listOf(12.5f, 13.0f), result[0].dataPoints.map { it.percent })
+        assertEquals("/dev/vda1 at /", result[1].label)
+        assertEquals(67.0f, result[1].dataPoints.single().percent)
+        assertTrue(querySlot.captured.contains("GROUP BY ts, metric_identity"))
+        assertTrue(querySlot.captured.contains("ORDER BY metric_identity, ts"))
+        assertTrue(querySlot.captured.contains("metric_name IN ('system.disk.percent'"))
+    }
+
     // ──── getContainerHistoricalMetrics ────
 
     @Test

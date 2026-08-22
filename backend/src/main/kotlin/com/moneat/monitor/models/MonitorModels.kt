@@ -121,6 +121,19 @@ data class MetricDataPoint(
 )
 
 @Serializable
+data class FilesystemMetricDataPoint(
+    val timestamp: Long,
+    val percent: Float
+)
+
+@Serializable
+data class FilesystemMetricSeries(
+    val identity: String,
+    val label: String,
+    @SerialName("data_points") val dataPoints: List<FilesystemMetricDataPoint>
+)
+
+@Serializable
 data class ContainerStatsResponse(
     val containers: List<ContainerStats>
 )

@@ -30,6 +30,8 @@ import com.moneat.monitor.models.ContainerStats
 import com.moneat.monitor.models.ContainerWithSystem
 import com.moneat.monitor.models.CreateAlertData
 import com.moneat.monitor.models.CreateAlertRequest
+import com.moneat.monitor.models.FilesystemMetricDataPoint
+import com.moneat.monitor.models.FilesystemMetricSeries
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
@@ -178,6 +180,11 @@ class MonitorService(
         private const val HIST_COL_TEMP_MAX = 9
         private const val HIST_COL_GPU_PERCENT = 10
         private const val HIST_COL_BATTERY_PERCENT = 11
+
+        // JSONCompact column indices — per-filesystem historical metrics query
+        // SELECT: ts(0), metric_identity(1), disk_percent(2)
+        private const val FILESYSTEM_HIST_COL_IDENTITY = 1
+        private const val FILESYSTEM_HIST_COL_PERCENT = 2
 
         // JSONCompact column indices — single-host container stats query
         // SELECT: name(0), container_id(1), image(2), state(3), cpu_percent(4),
@@ -867,6 +874,72 @@ class MonitorService(
                 intervalSeconds = rollupInterval,
                 dataPoints = dataPoints
             )
+        }
+
+    /**
+     * Get historical disk utilization grouped by stable filesystem identity.
+     */
+    suspend fun getHistoricalFilesystemMetrics(
+        hostId: Int,
+        fromTimestamp: Long,
+        toTimestamp: Long,
+        intervalSeconds: Int,
+    ): List<FilesystemMetricSeries> =
+        CacheService.cached(
+            "cache:monitor_filesystem_hist:$hostId:$fromTimestamp:$toTimestamp:$intervalSeconds",
+            MONITOR_HISTORY_CACHE_TTL_SECONDS,
+        ) {
+            val host = getHostById(hostId) ?: return@cached emptyList()
+            val clampedWindow = clampRangeToRetention(hostId, fromTimestamp, toTimestamp)
+                ?: return@cached emptyList()
+            val (effectiveFrom, effectiveTo) = clampedWindow
+            val rollupInterval = max(intervalSeconds, INTERVAL_ONE_MINUTE)
+            val query =
+                """
+                SELECT
+                    toUnixTimestamp(toStartOfInterval(bucket_start, INTERVAL $rollupInterval second)) as ts,
+                    metric_identity,
+                    ${rollupDiskPercentExpr()} as disk_percent
+                FROM `$clickhouseDb`.metrics_rollup_1m
+                WHERE ${clickHouseOrgClause(host.organizationId)}
+                  AND host_id = $hostId
+                  AND metric_name IN ($DISK_METRIC_NAMES_SQL)
+                  AND bucket_start >= fromUnixTimestamp64Milli(${effectiveFrom * MILLIS_PER_SECOND_LONG})
+                  AND bucket_start <= fromUnixTimestamp64Milli(${effectiveTo * MILLIS_PER_SECOND_LONG})
+                GROUP BY ts, metric_identity
+                HAVING disk_percent IS NOT NULL
+                ORDER BY metric_identity, ts
+                FORMAT JSONCompact
+                """.trimIndent()
+
+            val body = hostRepository.executeClickHouseQuery(query)
+            suspendRunCatching {
+                val json = Json { ignoreUnknownKeys = true }
+                val rows = json.parseToJsonElement(body)
+                    .jsonObject["data"]
+                    ?.jsonArray
+                    ?: return@cached emptyList()
+                val pointsByIdentity = linkedMapOf<String, MutableList<FilesystemMetricDataPoint>>()
+                rows.forEach { row ->
+                    val arr = row.jsonArray
+                    val timestamp = arr.stringAt(0).toLongOrNull() ?: return@forEach
+                    val percent = arr.floatAt(FILESYSTEM_HIST_COL_PERCENT) ?: return@forEach
+                    val identity = arr.stringAt(FILESYSTEM_HIST_COL_IDENTITY).ifBlank { "default" }
+                    pointsByIdentity.getOrPut(identity, ::mutableListOf).add(
+                        FilesystemMetricDataPoint(timestamp = timestamp, percent = percent)
+                    )
+                }
+                pointsByIdentity.map { (identity, points) ->
+                    FilesystemMetricSeries(
+                        identity = identity,
+                        label = diskResourceLabel(identity) ?: "Disk",
+                        dataPoints = points,
+                    )
+                }
+            }.getOrElse { e ->
+                logger.error(e) { "Failed to parse historical filesystem metrics" }
+                emptyList()
+            }
         }
 
     /**
