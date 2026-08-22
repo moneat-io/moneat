@@ -46,6 +46,77 @@ export interface SlackChannelSelection {
   channelName: string
 }
 
+// ── Slack installations ──────────────────────────────────────────────────────
+// Mirrors com.moneat.notifications.services.SlackInstallation* (GET/POST/PUT/DELETE
+// under /v1/integrations/slack). Each installation tracks its own granted scopes,
+// health, default channel, and enabled state, and takes one of two shapes:
+//   • A workspace install has a team (`teamId`) and may optionally belong to a
+//     Grid enterprise (`enterpriseId` set, `isEnterpriseInstall` false).
+//   • An Enterprise Grid organization-wide install is authorized once for a Grid
+//     enterprise with no team at OAuth time (`isEnterpriseInstall` true,
+//     `teamId` null). A Slack admin attaches it to individual workspaces later.
+// The summary does not enumerate the workspaces a Grid install is attached to, so
+// clients must not infer per-workspace routing from these fields.
+
+export type SlackInstallationHealth =
+  | 'HEALTHY'
+  | 'MISSING_SCOPES'
+  | 'TOKEN_REVOKED'
+  | 'BOT_REMOVED'
+  | 'WORKSPACE_MISMATCH'
+  | 'REAUTHORIZATION_REQUIRED'
+  | 'DEGRADED'
+  | 'DISABLED'
+
+// A capability bundles the least-privilege scopes needed for one product surface.
+// `optional` marks capabilities the workspace can run without (the Slack Assistant);
+// everything else is required for core alert and incident delivery.
+export interface SlackCapabilityDefinition {
+  id: string
+  label: string
+  description: string
+  scopes: string[]
+  optional: boolean
+}
+
+// Why a single scope is requested, and which capabilities pull it in.
+export interface SlackScopeExplanation {
+  scope: string
+  reason: string
+  capabilities: string[]
+}
+
+export interface SlackCapabilitiesResponse {
+  capabilities: SlackCapabilityDefinition[]
+  scopes: SlackScopeExplanation[]
+}
+
+export interface SlackInstallationSummary {
+  id: string
+  // Present for workspace installs; null for an org-wide Grid install.
+  teamId: string | null
+  teamName: string | null
+  // Present for org-wide installs and for workspaces that belong to a Grid.
+  enterpriseId: string | null
+  enterpriseName: string | null
+  // True only for an org-wide Grid install (enterprise context, no team).
+  isEnterpriseInstall: boolean
+  appId: string | null
+  botUserId: string | null
+  grantedScopes: string[]
+  enabledCapabilities: string[]
+  missingScopes: string[]
+  defaultChannelId: string | null
+  defaultChannelName: string | null
+  isDefault: boolean
+  enabled: boolean
+  health: SlackInstallationHealth
+  healthDetail: string | null
+  lastVerifiedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface SlackUsergroup {
   id: string
   handle: string

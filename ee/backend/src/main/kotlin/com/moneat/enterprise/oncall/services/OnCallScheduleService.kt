@@ -21,6 +21,7 @@ import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OnCallScheduleLayers
 import com.moneat.shared.models.OnCallScheduleLayerParticipants
+import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.JoinType
@@ -206,6 +207,19 @@ class OnCallScheduleService {
                 .selectAll()
                 .where { OnCallScheduleUsergroups.scheduleId eq scheduleId }
                 .singleOrNull()
+        val slackInstallationResourceId = usergroupMapping
+            ?.get(OnCallScheduleUsergroups.slackInstallationId)
+            ?.let { installationId ->
+                SlackInstallations
+                    .selectAll()
+                    .where {
+                        (SlackInstallations.id eq installationId) and
+                            (SlackInstallations.organizationId eq scheduleRow[OnCallSchedules.organizationId])
+                    }
+                    .singleOrNull()
+                    ?.get(SlackInstallations.resourceId)
+                    ?.toString()
+            }
 
         return OnCallSchedule(
             id = scheduleResourceId,
@@ -220,6 +234,7 @@ class OnCallScheduleService {
             currentOnCall = currentOnCall,
             slackUsergroupId = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupId),
             slackUsergroupHandle = usergroupMapping?.get(OnCallScheduleUsergroups.slackUsergroupHandle),
+            slackInstallationId = slackInstallationResourceId,
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
         )

@@ -20,6 +20,7 @@ import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.SlackUserMappings
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
@@ -60,6 +61,7 @@ class SlackServiceExtendedTest {
             Users,
             Memberships,
             OrganizationIntegrations,
+            SlackInstallations,
             SlackUserMappings,
         )
         slackService = SlackService()

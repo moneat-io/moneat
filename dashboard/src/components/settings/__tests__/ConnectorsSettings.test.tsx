@@ -57,6 +57,17 @@ const apiMock = vi.hoisted(() => ({
   testDiscordIntegration: vi.fn(),
   deleteSlackIntegration: vi.fn(),
   deleteDiscordIntegration: vi.fn(),
+  getSlackCapabilities: vi.fn(),
+  getSlackInstallations: vi.fn(),
+  startSlackInstallation: vi.fn(),
+  reauthorizeSlackInstallation: vi.fn(),
+  getSlackInstallationChannels: vi.fn(),
+  setSlackInstallationChannel: vi.fn(),
+  setSlackInstallationDefault: vi.fn(),
+  setSlackInstallationEnabled: vi.fn(),
+  checkSlackInstallationHealth: vi.fn(),
+  testSlackInstallation: vi.fn(),
+  deleteSlackInstallation: vi.fn(),
 }))
 
 vi.mock('@/lib/api', () => ({api: apiMock}))
@@ -221,6 +232,32 @@ describe('ConnectorsSettings', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    apiMock.isAuthenticated.mockReturnValue(true)
+    apiMock.getSlackCapabilities.mockResolvedValue({capabilities: [], scopes: []})
+    apiMock.getSlackInstallations.mockResolvedValue([
+      {
+        id: 'inst-obs',
+        teamId: 'T1',
+        teamName: 'Observability',
+        enterpriseId: null,
+        enterpriseName: null,
+        isEnterpriseInstall: false,
+        appId: 'A1',
+        botUserId: 'B1',
+        grantedScopes: ['chat:write'],
+        enabledCapabilities: ['alert_delivery'],
+        missingScopes: [],
+        defaultChannelId: 'C123',
+        defaultChannelName: 'alerts',
+        isDefault: true,
+        enabled: true,
+        health: 'HEALTHY',
+        healthDetail: null,
+        lastVerifiedAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ])
     apiMock.getConnectorProviders.mockResolvedValue({
       providers: [
         provider('slack', 'Slack', 'available'),
@@ -295,15 +332,15 @@ describe('ConnectorsSettings', () => {
     expect(screen.getByRole('button', {name: 'Coming soon'})).toBeDisabled()
   })
 
-  it('opens the live manage dialog from the provider id', async () => {
+  it('opens the Slack workspace manager from the provider id', async () => {
     const user = userEvent.setup()
     renderWithClient(<ConnectorsSettings />)
 
     await user.click(await screen.findByRole('button', {name: 'Manage'}))
 
-    expect(screen.getByText('Manage Slack')).toBeInTheDocument()
-    expect(screen.getByText(/Connected to Observability/)).toBeInTheDocument()
-    await waitFor(() => expect(apiMock.getSlackChannels).toHaveBeenCalled())
+    // Slack now opens the multi-workspace manager instead of the generic dialog.
+    expect(await screen.findByText('Slack workspaces')).toBeInTheDocument()
+    await waitFor(() => expect(apiMock.getSlackInstallations).toHaveBeenCalled())
   })
 
   it('shows RevenueCat as an available data-import connector with a connect action', async () => {

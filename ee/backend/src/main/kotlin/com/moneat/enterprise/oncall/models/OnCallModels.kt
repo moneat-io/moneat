@@ -9,6 +9,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.Users
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -287,6 +288,9 @@ object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
             .uniqueIndex()
     val slackUsergroupId = varchar("slack_usergroup_id", 100)
     val slackUsergroupHandle = varchar("slack_usergroup_handle", 100)
+    val slackInstallationId = integer("slack_installation_id")
+        .references(SlackInstallations.id, onDelete = ReferenceOption.SET_NULL)
+        .nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 }
@@ -361,6 +365,7 @@ data class OnCallSchedule(
     val currentOnCall: OnCallParticipant? = null,
     val slackUsergroupId: String? = null,
     val slackUsergroupHandle: String? = null,
+    val slackInstallationId: String? = null,
     val createdAt: String,
     val updatedAt: String,
 )

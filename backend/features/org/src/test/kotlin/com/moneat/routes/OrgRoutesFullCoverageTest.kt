@@ -27,6 +27,12 @@ import com.moneat.billing.services.PricingTierService
 import com.moneat.incident.services.IncidentService
 import com.moneat.notifications.services.DiscordService
 import com.moneat.notifications.services.EmailService
+import com.moneat.notifications.services.SlackCapabilityDefinition
+import com.moneat.notifications.services.SlackDeliveryConfig
+import com.moneat.notifications.services.SlackInstallationHealthStatus
+import com.moneat.notifications.services.SlackInstallationService
+import com.moneat.notifications.services.SlackInstallationSummary
+import com.moneat.notifications.services.SlackScopeExplanation
 import com.moneat.notifications.services.SlackService
 import com.moneat.org.routes.adminRoutes
 import com.moneat.org.routes.integrationCallbackRoutes
@@ -42,6 +48,7 @@ import com.moneat.org.services.DeleteUsersResponse
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.SlackUserMappings
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.AttributionAnalyticsResponse
@@ -105,6 +112,7 @@ class OrgRoutesFullCoverageTest {
     private val mockPricingTierService = mockk<PricingTierService>(relaxed = true)
     private val mockAttributionService = mockk<AttributionAnalyticsService>(relaxed = true)
     private val mockEmailService = mockk<EmailService>(relaxed = true)
+    private val mockSlackInstallationService = mockk<SlackInstallationService>(relaxed = true)
     private val mockSlackService = mockk<SlackService>(relaxed = true)
     private val mockDiscordService = mockk<DiscordService>(relaxed = true)
     private val mockIncidentService = mockk<IncidentService>(relaxed = true)
@@ -121,6 +129,7 @@ class OrgRoutesFullCoverageTest {
                 single<PricingTierService> { mockPricingTierService }
                 single<AttributionAnalyticsService> { mockAttributionService }
                 single<EmailService> { mockEmailService }
+                single<SlackInstallationService> { mockSlackInstallationService }
                 single<SlackService> { mockSlackService }
                 single<DiscordService> { mockDiscordService }
                 single<IncidentService> { mockIncidentService }
@@ -140,6 +149,7 @@ class OrgRoutesFullCoverageTest {
             Organizations,
             Memberships,
             OrganizationIntegrations,
+            SlackInstallations,
             SlackUserMappings
         )
         seedFixedOrg(42)
@@ -289,6 +299,42 @@ class OrgRoutesFullCoverageTest {
             it[updated_at] = Clock.System.now()
         } get OrganizationIntegrations.id
     }
+
+    private fun seedSlackInstallation(orgId: Int, teamId: String): Int = transaction {
+        SlackInstallations.insert {
+            it[SlackInstallations.organizationId] = orgId
+            it[SlackInstallations.teamId] = teamId
+            it[SlackInstallations.teamName] = "Team"
+            it[SlackInstallations.isDefault] = true
+            it[SlackInstallations.enabled] = true
+        } get SlackInstallations.id
+    }
+
+    private fun slackInstallationSummary(
+        id: String = resourceId(700),
+        enabled: Boolean = true,
+    ) = SlackInstallationSummary(
+        id = id,
+        teamId = "T1",
+        teamName = "Team",
+        enterpriseId = null,
+        enterpriseName = null,
+        isEnterpriseInstall = false,
+        appId = "A1",
+        botUserId = "B1",
+        grantedScopes = listOf("chat:write"),
+        enabledCapabilities = listOf("alert_delivery"),
+        missingScopes = emptyList(),
+        defaultChannelId = "C1",
+        defaultChannelName = "incidents",
+        isDefault = true,
+        enabled = enabled,
+        health = if (enabled) SlackInstallationHealthStatus.HEALTHY else SlackInstallationHealthStatus.DISABLED,
+        healthDetail = null,
+        lastVerifiedAt = "2026-08-22T00:00:00Z",
+        createdAt = "2026-08-22T00:00:00Z",
+        updatedAt = "2026-08-22T00:00:00Z",
+    )
 
     // ── Admin: overview ────────────────────────────────────────
 
@@ -1166,6 +1212,189 @@ class OrgRoutesFullCoverageTest {
         }
     }
 
+    @Test fun `slack installation catalog and list`() {
+        val o = seedOrg("A")
+        val u = seedUser("u@t.com")
+        seedMembership(o, u, "owner")
+        every { mockSlackInstallationService.capabilityCatalog() } returns listOf(
+            SlackCapabilityDefinition(
+                id = "alert_delivery",
+                label = "Alert delivery",
+                description = "Send alerts.",
+                scopes = listOf("chat:write"),
+                optional = false,
+            )
+        )
+        every { mockSlackInstallationService.scopeCatalog() } returns listOf(
+            SlackScopeExplanation(
+                scope = "chat:write",
+                reason = "Send alerts.",
+                capabilities = listOf("alert_delivery"),
+            )
+        )
+        every { mockSlackInstallationService.listInstallations(o) } returns listOf(slackInstallationSummary())
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val auth = "Bearer ${token(u, o)}"
+            val catalog = client.get("/integrations/slack/capabilities") {
+                header(HttpHeaders.Authorization, auth)
+            }
+            val installations = client.get("/integrations/slack/installations") {
+                header(HttpHeaders.Authorization, auth)
+            }
+
+            assertEquals(HttpStatusCode.OK, catalog.status)
+            assertTrue(catalog.bodyAsText().contains("alert_delivery"))
+            assertEquals(HttpStatusCode.OK, installations.status)
+            assertTrue(installations.bodyAsText().contains(resourceId(700)))
+        }
+    }
+
+    @Test fun `slack installation scoped channels and usergroups`() {
+        val o = seedOrg("A")
+        val u = seedUser("u@t.com")
+        val installationId = resourceId(700)
+        seedMembership(o, u, "owner")
+        every { mockSlackInstallationService.accessToken(o, installationId) } returns "xoxb-modeled"
+        coEvery { mockSlackService.listChannels("xoxb-modeled") } returns
+            listOf(SlackService.SlackChannel("C1", "incidents"))
+        coEvery { mockSlackService.listUsergroups("xoxb-modeled") } returns
+            listOf(SlackService.SlackUsergroup("S1", "on-call", "On-call"))
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val auth = "Bearer ${token(u, o)}"
+            val channels = client.get("/integrations/slack/installations/$installationId/channels") {
+                header(HttpHeaders.Authorization, auth)
+            }
+            val usergroups = client.get("/integrations/slack/installations/$installationId/usergroups") {
+                header(HttpHeaders.Authorization, auth)
+            }
+
+            assertEquals(HttpStatusCode.OK, channels.status)
+            assertTrue(channels.bodyAsText().contains("incidents"))
+            assertEquals(HttpStatusCode.OK, usergroups.status)
+            assertTrue(usergroups.bodyAsText().contains("on-call"))
+        }
+    }
+
+    @Test fun `slack installation settings and deletion`() {
+        val o = seedOrg("A")
+        val u = seedUser("u@t.com")
+        val installationId = resourceId(700)
+        val summary = slackInstallationSummary()
+        seedMembership(o, u, "owner")
+        every {
+            mockSlackInstallationService.updateChannel(o, installationId, "C2", "alerts")
+        } returns summary.copy(defaultChannelId = "C2", defaultChannelName = "alerts")
+        every { mockSlackInstallationService.setDefault(o, installationId) } returns summary
+        every { mockSlackInstallationService.setEnabled(o, installationId, false) } returns
+            slackInstallationSummary(enabled = false)
+        every { mockSlackInstallationService.deleteInstallation(o, installationId) } returns true
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val auth = "Bearer ${token(u, o)}"
+            assertEquals(
+                HttpStatusCode.OK,
+                client.put("/integrations/slack/installations/$installationId/channel") {
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"channelId":"C2","channelName":"alerts"}""")
+                }.status,
+            )
+            assertEquals(
+                HttpStatusCode.OK,
+                client.put("/integrations/slack/installations/$installationId/default") {
+                    header(HttpHeaders.Authorization, auth)
+                }.status,
+            )
+            assertEquals(
+                HttpStatusCode.OK,
+                client.put("/integrations/slack/installations/$installationId/enabled") {
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"enabled":false}""")
+                }.status,
+            )
+            assertEquals(
+                HttpStatusCode.OK,
+                client.delete("/integrations/slack/installations/$installationId") {
+                    header(HttpHeaders.Authorization, auth)
+                }.status,
+            )
+        }
+    }
+
+    @Test fun `slack installation health and test delivery`() {
+        val o = seedOrg("A")
+        val u = seedUser("u@t.com")
+        val installationId = resourceId(700)
+        val summary = slackInstallationSummary()
+        seedMembership(o, u, "owner")
+        coEvery {
+            mockSlackInstallationService.verifyInstallation(o, installationId, any())
+        } returns summary
+        every { mockSlackInstallationService.deliveryConfig(o, installationId) } returns SlackDeliveryConfig(
+            installationId = installationId,
+            accessToken = "xoxb-modeled",
+            teamId = "T1",
+            botUserId = "B1",
+            channelId = "C1",
+        )
+        coEvery { mockSlackService.testConnection("xoxb-modeled", "C1") } returns (true to "OK")
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val auth = "Bearer ${token(u, o)}"
+            assertEquals(
+                HttpStatusCode.OK,
+                client.post("/integrations/slack/installations/$installationId/health") {
+                    header(HttpHeaders.Authorization, auth)
+                }.status,
+            )
+            assertEquals(
+                HttpStatusCode.OK,
+                client.post("/integrations/slack/installations/$installationId/test") {
+                    header(HttpHeaders.Authorization, auth)
+                }.status,
+            )
+        }
+    }
+
+    @Test fun `slack installation errors map to client status`() {
+        val o = seedOrg("A")
+        val u = seedUser("u@t.com")
+        seedMembership(o, u, "owner")
+        every { mockSlackInstallationService.listInstallations(o) } throws
+            IllegalArgumentException("Invalid Slack installation")
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val response = client.get("/integrations/slack/installations") {
+                header(HttpHeaders.Authorization, "Bearer ${token(u, o)}")
+            }
+            assertEquals(HttpStatusCode.BadRequest, response.status)
+            assertTrue(response.bodyAsText().contains("Invalid Slack installation"))
+        }
+    }
+
     // ── Slack: channels, channel, usergroups, toggle, delete, test ──
 
     @Test fun `slack channels`() {
@@ -1812,6 +2041,8 @@ class OrgRoutesFullCoverageTest {
         val o = seedOrg("A")
         val u = seedUser("u@t.com")
         seedMembership(o, u, "owner")
+        val installationId = seedSlackInstallation(o, "T1")
+        every { mockSlackInstallationService.internalInstallationIdForTeam(o, "T1") } returns installationId
         testApplication {
             application {
                 installTestApp()
@@ -1831,9 +2062,12 @@ class OrgRoutesFullCoverageTest {
         val o = seedOrg("A")
         val u = seedUser("u@t.com")
         seedMembership(o, u, "owner")
+        val installationId = seedSlackInstallation(o, "NEW")
+        every { mockSlackInstallationService.internalInstallationIdForTeam(o, "NEW") } returns installationId
         transaction {
             SlackUserMappings.insert {
                 it[userId] = u
+                it[slackInstallationId] = installationId
                 it[slackUserId] = "OLD"
                 it[slackTeamId] = "OLD"
                 it[createdAt] = Clock.System.now()

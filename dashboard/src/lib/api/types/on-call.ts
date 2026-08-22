@@ -59,6 +59,7 @@ export interface OnCallSchedule {
   }
   slackUsergroupId?: string
   slackUsergroupHandle?: string
+  slackInstallationId?: string | null
 }
 
 export interface OnCallParticipant {

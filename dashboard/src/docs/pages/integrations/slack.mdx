@@ -1,0 +1,87 @@
+---
+title: Slack
+description: Install Moneat into Slack workspaces or an Enterprise Grid organization, grant least-privilege capabilities, and manage per-install health, channels, and delivery.
+---
+
+# Slack
+
+Moneat installs as a Slack app so alerts, incident response, and on-call mentions land where your team already works. Each installation keeps its own granted scopes, health, default channel, and enabled state, and comes in one of two shapes:
+
+- A **workspace install** targets a single Slack workspace. If that workspace is part of an Enterprise Grid, the installation notes the Grid it belongs to but still delivers to that one workspace.
+- An **Enterprise Grid organization install** is authorized once for the whole Grid organization and has no workspace of its own. See [Enterprise Grid organizations](#enterprise-grid-organizations) for how delivery works.
+
+Manage everything from **Settings → Connectors → Slack → Manage**.
+
+## Add a workspace
+
+<StepList
+  steps={[
+    {
+      title: 'Choose capabilities',
+      content: 'Open the Slack manager and select which capabilities to grant. Each capability bundles only the scopes it needs, so you can withhold what you do not use.',
+    },
+    {
+      title: 'Authorize with Slack',
+      content: 'Continue to Slack and approve the installation for the workspace you want. Moneat records the granted scopes and marks the workspace healthy when everything it needs was approved.',
+    },
+    {
+      title: 'Pick a default channel',
+      content: 'Select the channel that should receive this workspace’s alerts, then send a test message to confirm delivery.',
+    },
+  ]}
+/>
+
+## Enterprise Grid organizations
+
+An **Enterprise Grid organization install** is authorized once for the whole Grid organization. At authorization time it has **enterprise context but no workspace**, so it is not the same as installing into a workspace.
+
+- **It is not added to every workspace automatically.** A Slack admin attaches the Moneat app to the specific workspaces that should use it.
+- **A Grid organization install can be healthy with no workspace to deliver to.** Healthy means Moneat is authorized for the organization — not that a message can be sent yet.
+- **Delivery is set up per workspace.** Choosing a default channel, sending a test, and being set as the default are workspace actions, so they stay disabled on an organization install. To deliver alerts in a workspace, install Moneat into that workspace so it has a team and a channel.
+
+Moneat manages Slack delivery per workspace and does not route on your behalf across the workspaces a Grid admin attaches the app to.
+
+## Capabilities and scopes
+
+Moneat requests Slack scopes by **capability** — a group of scopes tied to one product surface. Requesting a capability requests only its scopes, which keeps each installation least-privilege.
+
+- **Required capabilities** cover alert delivery, incident channels and commands, incident history and context, Slack identity matching, and on-call user groups. These are always requested so core alerting and incident response work.
+- **Slack Assistant** is the one **optional** capability. Leave it off unless you want the AI assistant available in Slack direct messages; leaving it off withholds its scopes.
+
+:::note[Grants are additive]
+Slack grants accumulate. Turning on a new capability adds its scopes at the next authorization, and previously granted scopes remain until you remove and reinstall the app in Slack.
+:::
+
+:::tip[Expanding capabilities]
+Adding a capability to a workspace that is already connected may require **reauthorizing** so Slack can approve the new scopes. Use **Reauthorize** on the workspace and Slack will only prompt for what is missing.
+:::
+
+## Health
+
+Each installation shows a health status. Run **Run health check** at any time to re-probe Slack and refresh it.
+
+- **Healthy** — authorized and verified. A workspace install can deliver alerts; an organization install is authorized for the Grid organization but still needs a workspace to deliver to.
+- **Missing scopes** — an enabled capability needs a scope Slack has not granted. Reauthorize to add the missing scopes.
+- **Token revoked** — Slack revoked or expired the token. Reauthorize to restore delivery.
+- **App removed** — the Moneat app is no longer in the workspace. Reauthorize to reinstall it.
+- **Workspace mismatch** — Slack authorized a different workspace than this installation. Reauthorize from the intended workspace.
+- **Reauthorization required** — confirm the installation and its scopes by reauthorizing.
+- **Degraded** — Slack could not be verified on the last check. Run a health check or reauthorize.
+- **Disabled** — delivery is paused. Enable the workspace to resume alerts.
+
+## Manage delivery
+
+- **Default install** — one workspace install is the default that receives alerts when none is specified. Use **Set as default** to change it. An organization install has no workspace to deliver to, so it can't be the default.
+- **Enable / pause** — the toggle pauses or resumes delivery without disconnecting the installation.
+- **Default channel** — pick the channel and send a **test message** to verify it. This is a workspace action, so it is available on workspace installs only.
+- **Remove** — disconnect an installation. Delivery stops immediately; if you remove the default, another connected installation becomes the default.
+
+## On-call user group sync
+
+When the on-call capability is granted, you can link an [on-call schedule](/docs/on-call) to a Slack user group so `@mentions` always reach the current responder. The schedule syncs the on-call user into the group as rotations hand off.
+
+## Incident actions
+
+Incident notifications include interactive buttons so responders can acknowledge and resolve directly from Slack without opening the dashboard.
+
+See [Integrations](/docs/integrations) for Discord and webhooks.

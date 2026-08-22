@@ -55,11 +55,18 @@ object EscalationPolicyAlertSources : IntIdTable("escalation_policy_alert_source
 
 object SlackUserMappings : IntIdTable("slack_user_mappings") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
-    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE).uniqueIndex()
+    val userId = integer("user_id").references(Users.id, onDelete = ReferenceOption.CASCADE)
+    val slackInstallationId = integer("slack_installation_id")
+        .references(SlackInstallations.id, onDelete = ReferenceOption.CASCADE)
+        .nullable()
     val slackUserId = varchar("slack_user_id", 100)
     val slackTeamId = varchar("slack_team_id", 100)
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
+
+    init {
+        uniqueIndex(slackInstallationId, userId)
+    }
 }
 
 object SsoConfigurations : Table("sso_configurations") {

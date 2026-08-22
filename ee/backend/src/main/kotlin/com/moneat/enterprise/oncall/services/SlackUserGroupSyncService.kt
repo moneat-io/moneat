@@ -6,6 +6,7 @@ package com.moneat.enterprise.oncall.services
 
 import com.moneat.config.RedisClient
 import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
+import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.notifications.services.SlackService
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OrganizationIntegrations
@@ -39,6 +40,7 @@ class SlackUserGroupSyncService(
     private val onCallScheduleService: OnCallScheduleService,
     private val slackService: SlackService,
     private val redisClient: RedisClient,
+    private val slackInstallationService: SlackInstallationService = SlackInstallationService(),
 ) {
     private val logger = LoggerFactory.getLogger(SlackUserGroupSyncService::class.java)
     private var syncJob: Job? = null
@@ -102,15 +104,16 @@ class SlackUserGroupSyncService(
         organizationId: Int,
         schedules: List<ScheduleUsergroupMapping>,
     ) {
-        // Get Slack access token and bot user ID for this organization
-        val slackConfig = getSlackConfig(organizationId)
-        if (slackConfig == null) {
-            logger.debug("No Slack integration found for organization $organizationId")
-            return
-        }
-
         schedules.forEach { schedule ->
             try {
+                val slackConfig = getSlackConfig(organizationId, schedule.slackInstallationId)
+                if (slackConfig == null) {
+                    logger.debug(
+                        "No Slack installation found for schedule ${schedule.scheduleId} in organization " +
+                            organizationId,
+                    )
+                    return@forEach
+                }
                 syncSchedule(schedule, slackConfig)
             } catch (e: Exception) {
                 logger.error("Error syncing schedule ${schedule.scheduleId} (${schedule.scheduleName})", e)
@@ -193,7 +196,7 @@ class SlackUserGroupSyncService(
             return
         }
 
-        val slackConfig = getSlackConfig(schedule.organizationId)
+        val slackConfig = getSlackConfig(schedule.organizationId, schedule.slackInstallationId)
         if (slackConfig == null) {
             logger.warn("No Slack integration found for organization ${schedule.organizationId}")
             return
@@ -212,6 +215,7 @@ class SlackUserGroupSyncService(
         val scheduleId: Int,
         val scheduleName: String,
         val organizationId: Int,
+        val slackInstallationId: Int?,
         val usergroupId: String,
         val usergroupHandle: String,
     )
@@ -231,6 +235,7 @@ class SlackUserGroupSyncService(
                         scheduleId = row[OnCallScheduleUsergroups.scheduleId],
                         scheduleName = row[OnCallSchedules.name],
                         organizationId = row[OnCallSchedules.organizationId],
+                        slackInstallationId = row[OnCallScheduleUsergroups.slackInstallationId],
                         usergroupId = row[OnCallScheduleUsergroups.slackUsergroupId],
                         usergroupHandle = row[OnCallScheduleUsergroups.slackUsergroupHandle],
                     )
@@ -249,14 +254,27 @@ class SlackUserGroupSyncService(
                         scheduleId = row[OnCallScheduleUsergroups.scheduleId],
                         scheduleName = row[OnCallSchedules.name],
                         organizationId = row[OnCallSchedules.organizationId],
+                        slackInstallationId = row[OnCallScheduleUsergroups.slackInstallationId],
                         usergroupId = row[OnCallScheduleUsergroups.slackUsergroupId],
                         usergroupHandle = row[OnCallScheduleUsergroups.slackUsergroupHandle],
                     )
                 }
         }
 
-    private fun getSlackConfig(organizationId: Int): SlackConfig? =
-        transaction {
+    private fun getSlackConfig(
+        organizationId: Int,
+        slackInstallationId: Int?,
+    ): SlackConfig? {
+        val installation = runCatching {
+            slackInstallationService.deliveryConfigByInternalId(organizationId, slackInstallationId)
+        }.onFailure { error ->
+            logger.warn("Unable to read Slack installation for on-call sync", error)
+        }.getOrNull()
+        val installationBotUserId = installation?.botUserId
+        if (installation != null && installationBotUserId != null) {
+            return SlackConfig(installation.accessToken, installationBotUserId)
+        }
+        return transaction {
             OrganizationIntegrations
                 .selectAll()
                 .where {
@@ -267,19 +285,22 @@ class SlackUserGroupSyncService(
                 ?.let { row ->
                     val accessToken = row[OrganizationIntegrations.access_token]
                     val botUserId = row[OrganizationIntegrations.bot_user_id]
-                    if (accessToken != null && botUserId != null) {
-                        SlackConfig(accessToken, botUserId)
-                    } else {
-                        null
-                    }
+                    if (accessToken != null && botUserId != null) SlackConfig(accessToken, botUserId) else null
                 }
         }
+    }
 
-    private fun getSlackUserId(userId: Int): String? =
+    private fun getSlackUserId(
+        userId: Int,
+        slackInstallationId: Int?,
+    ): String? =
         transaction {
             SlackUserMappings
                 .selectAll()
-                .where { SlackUserMappings.userId eq userId }
+                .where {
+                    (SlackUserMappings.userId eq userId) and
+                        (SlackUserMappings.slackInstallationId eq slackInstallationId)
+                }
                 .singleOrNull()
                 ?.get(SlackUserMappings.slackUserId)
         }

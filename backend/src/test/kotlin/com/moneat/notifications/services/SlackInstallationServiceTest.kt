@@ -1,0 +1,328 @@
+// Moneat - observability platform
+// Copyright (C) 2026 Moneat
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+package com.moneat.notifications.services
+
+import com.moneat.shared.models.OrganizationIntegrations
+import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.SlackInstallations
+import com.moneat.testsupport.TestDatabaseHelper
+import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.jdbc.insert
+import org.jetbrains.exposed.v1.jdbc.selectAll
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
+import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import java.util.Base64
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.time.Clock
+
+class SlackInstallationServiceTest {
+    private lateinit var service: SlackInstallationService
+
+    @BeforeEach
+    fun setUp() {
+        TransactionManager.defaultDatabase = database
+        TestDatabaseHelper.resetSchema(Organizations, OrganizationIntegrations, SlackInstallations)
+        service = SlackInstallationService { TestSlackTokenCipher() }
+    }
+
+    @Test
+    fun `capabilities derive only their documented scopes`() {
+        val scopes = service.requestedScopes(listOf("alert_delivery", "on_call_usergroups"))
+
+        assertEquals(
+            setOf(
+                "chat:write",
+                "channels:read",
+                "channels:join",
+                "groups:read",
+                "usergroups:read",
+                "usergroups:write",
+                "users:read",
+            ),
+            scopes,
+        )
+        assertTrue(service.capabilityCatalog().single { it.id == "assistant" }.optional)
+        assertTrue(service.scopeCatalog().all { it.reason.isNotBlank() && it.capabilities.isNotEmpty() })
+    }
+
+    @Test
+    fun `stores encrypted grants for multiple workspaces and assigns one default`() {
+        val organizationId = seedOrganization("Multi Slack")
+        val requiredScopes = service.requestedScopes(emptyList())
+
+        val first = service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-FIRST", "First", requiredScopes),
+        )
+        val second = service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-SECOND", "Second", requiredScopes),
+        )
+
+        assertTrue(first.isDefault)
+        assertFalse(second.isDefault)
+        assertEquals(listOf("T-FIRST", "T-SECOND"), service.listInstallations(organizationId).map { it.teamId })
+        transaction {
+            val ciphertexts = SlackInstallations.selectAll().mapNotNull { it[SlackInstallations.accessTokenCiphertext] }
+            assertEquals(2, ciphertexts.size)
+            assertTrue(ciphertexts.none { it.contains("xoxb-") })
+            assertNotEquals(ciphertexts[0], ciphertexts[1])
+        }
+    }
+
+    @Test
+    fun `records Enterprise Grid context independently from workspace installations`() {
+        val organizationId = seedOrganization("Enterprise Slack")
+        val scopes = service.requestedScopes(emptyList())
+        service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-WORKSPACE", "Workspace", scopes),
+        )
+
+        val enterprise = service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = SlackOAuthGrant(
+                accessToken = "xoxb-enterprise",
+                teamId = null,
+                teamName = null,
+                enterpriseId = "E-GRID",
+                enterpriseName = "Example Grid",
+                isEnterpriseInstall = true,
+                appId = "A-MONEAT",
+                botUserId = "U-ENTERPRISE-BOT",
+                grantedScopes = scopes,
+            ),
+        )
+
+        assertTrue(enterprise.isEnterpriseInstall)
+        assertEquals("E-GRID", enterprise.enterpriseId)
+        assertNull(enterprise.teamId)
+        assertEquals(2, service.listInstallations(organizationId).size)
+    }
+
+    @Test
+    fun `manages workspace defaults delivery state and deletion independently`() {
+        val organizationId = seedOrganization("Workspace operations")
+        val scopes = service.requestedScopes(emptyList())
+        val first = service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-FIRST", "First", scopes),
+        )
+        val second = service.storeOAuthGrant(
+            organizationId,
+            reauthorizeInstallationId = null,
+            capabilityIds = emptyList(),
+            grant = grant("T-SECOND", "Second", scopes),
+        )
+
+        service.updateChannel(organizationId, second.id, "C-SECOND", "incidents")
+        val selected = service.setDefault(organizationId, second.id)
+        val delivery = service.defaultDeliveryConfig(organizationId)
+
+        assertTrue(selected.isDefault)
+        assertEquals("xoxb-T-SECOND", delivery?.accessToken)
+        assertEquals("U-BOT-T-SECOND", delivery?.botUserId)
+        assertEquals("C-SECOND", delivery?.channelId)
+        assertEquals(
+            service.internalInstallationId(organizationId, second.id),
+            service.internalInstallationIdForTeam(organizationId, "T-SECOND"),
+        )
+
+        assertEquals(
+            SlackInstallationHealthStatus.DISABLED,
+            service.setEnabled(organizationId, second.id, false).health,
+        )
+        assertNull(service.deliveryConfig(organizationId, second.id))
+        assertNull(
+            service.deliveryConfigByInternalId(
+                organizationId,
+                service.internalInstallationId(organizationId, second.id),
+            ),
+        )
+        assertEquals(
+            SlackInstallationHealthStatus.REAUTHORIZATION_REQUIRED,
+            service.setEnabled(organizationId, second.id, true).health,
+        )
+        assertTrue(service.deleteInstallation(organizationId, second.id))
+        assertEquals(first.id, service.listInstallations(organizationId).single().id)
+        assertTrue(service.listInstallations(organizationId).single().isDefault)
+        assertFailsWith<IllegalArgumentException> {
+            service.setDefault(organizationId, "123")
+        }
+    }
+
+    @Test
+    fun `reauthorization preserves mappings and rejects a different workspace`() {
+        val organizationId = seedOrganization("Reauthorize")
+        val scopes = service.requestedScopes(emptyList())
+        val original = service.storeOAuthGrant(
+            organizationId,
+            null,
+            emptyList(),
+            grant("T-ORIGINAL", "Original", scopes),
+        )
+        service.updateChannel(organizationId, original.id, "C-INCIDENTS", "incidents")
+
+        val refreshed = service.storeOAuthGrant(
+            organizationId,
+            original.id,
+            emptyList(),
+            grant("T-ORIGINAL", "Renamed", scopes, token = "xoxb-refreshed"),
+        )
+        val mismatch = service.storeOAuthGrant(
+            organizationId,
+            original.id,
+            emptyList(),
+            grant("T-WRONG", "Wrong", scopes),
+        )
+
+        assertEquals(original.id, refreshed.id)
+        assertEquals("C-INCIDENTS", refreshed.defaultChannelId)
+        assertEquals("incidents", refreshed.defaultChannelName)
+        assertEquals("Renamed", refreshed.teamName)
+        assertEquals(SlackInstallationHealthStatus.WORKSPACE_MISMATCH, mismatch.health)
+        assertEquals("T-ORIGINAL", mismatch.teamId)
+        assertEquals("xoxb-refreshed", service.accessToken(organizationId, original.id))
+    }
+
+    @Test
+    fun `health distinguishes missing scopes revoked tokens and workspace mismatch`() = runBlocking {
+        val organizationId = seedOrganization("Health")
+        val installation = service.storeOAuthGrant(
+            organizationId,
+            null,
+            listOf("incident_commands"),
+            grant("T-HEALTH", "Health", setOf("chat:write")),
+        )
+        assertEquals(SlackInstallationHealthStatus.MISSING_SCOPES, installation.health)
+
+        val revoked = service.verifyInstallation(organizationId, installation.id) {
+            SlackAuthenticationProbe(ok = false, error = "token_revoked")
+        }
+        assertEquals(SlackInstallationHealthStatus.TOKEN_REVOKED, revoked.health)
+
+        val mismatch = service.verifyInstallation(organizationId, installation.id) {
+            SlackAuthenticationProbe(ok = true, teamId = "T-OTHER")
+        }
+        assertEquals(SlackInstallationHealthStatus.WORKSPACE_MISMATCH, mismatch.health)
+
+        val removed = service.verifyInstallation(organizationId, installation.id) {
+            SlackAuthenticationProbe(ok = false, error = "account_inactive")
+        }
+        assertEquals(SlackInstallationHealthStatus.BOT_REMOVED, removed.health)
+
+        val degraded = service.verifyInstallation(organizationId, installation.id) {
+            SlackAuthenticationProbe(ok = false, error = "rate_limited")
+        }
+        assertEquals(SlackInstallationHealthStatus.DEGRADED, degraded.health)
+    }
+
+    @Test
+    fun `legacy installation migrates atomically and clears plaintext token`() {
+        val organizationId = seedOrganization("Legacy")
+        transaction {
+            OrganizationIntegrations.insert {
+                it[organization_id] = organizationId
+                it[integration_type] = "slack"
+                it[access_token] = "xoxb-legacy-plaintext"
+                it[team_id] = "T-LEGACY"
+                it[team_name] = "Legacy workspace"
+                it[channel_id] = "C-LEGACY"
+                it[channel_name] = "alerts"
+                it[enabled] = true
+                it[created_at] = Clock.System.now()
+                it[updated_at] = Clock.System.now()
+            }
+        }
+
+        val migrated = service.listInstallations(organizationId).single()
+
+        assertEquals("T-LEGACY", migrated.teamId)
+        assertEquals("C-LEGACY", migrated.defaultChannelId)
+        assertEquals(SlackInstallationHealthStatus.REAUTHORIZATION_REQUIRED, migrated.health)
+        assertEquals("xoxb-legacy-plaintext", service.accessToken(organizationId, migrated.id))
+        transaction {
+            val legacyToken = OrganizationIntegrations.selectAll().single()[OrganizationIntegrations.access_token]
+            assertNull(legacyToken)
+        }
+    }
+
+    private fun seedOrganization(name: String): Int = transaction {
+        Organizations.insert {
+            it[Organizations.name] = name
+            it[slug] = name.lowercase().replace(" ", "-")
+        } get Organizations.id
+    }
+
+    private fun grant(
+        teamId: String,
+        teamName: String,
+        scopes: Set<String>,
+        token: String = "xoxb-$teamId",
+    ) = SlackOAuthGrant(
+        accessToken = token,
+        teamId = teamId,
+        teamName = teamName,
+        enterpriseId = null,
+        enterpriseName = null,
+        isEnterpriseInstall = false,
+        appId = "A-MONEAT",
+        botUserId = "U-BOT-$teamId",
+        grantedScopes = scopes,
+    )
+
+    private class TestSlackTokenCipher : SlackTokenCipher {
+        override val activeKeyId: String = "test-key"
+
+        override fun encrypt(plaintext: String, organizationId: Int): String =
+            Base64.getUrlEncoder().encodeToString("$organizationId:$plaintext".toByteArray())
+
+        override fun decrypt(ciphertext: String, organizationId: Int): String {
+            val decoded = String(Base64.getUrlDecoder().decode(ciphertext))
+            val prefix = "$organizationId:"
+            require(decoded.startsWith(prefix))
+            return decoded.removePrefix(prefix)
+        }
+    }
+
+    companion object {
+        private val database: Database by lazy {
+            Database.connect(
+                url = "jdbc:h2:mem:moneat_slack_installations;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1",
+                driver = "org.h2.Driver",
+            )
+        }
+    }
+}

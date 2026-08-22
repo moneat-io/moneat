@@ -187,12 +187,13 @@ describe('Integrations API', () => {
             const body = (await request.json()) as Record<string, unknown>
             expect(body.usergroupId).toBe('S001')
             expect(body.usergroupHandle).toBe('oncall-team')
+            expect(body.slackInstallationId).toBe('installation-1')
             return new HttpResponse(null, { status: 204 })
           }
         )
       )
 
-      await api.setScheduleSlackUsergroup(SCHEDULE_ID, 'S001', 'oncall-team')
+      await api.setScheduleSlackUsergroup(SCHEDULE_ID, 'S001', 'oncall-team', 'installation-1')
     })
   })
 

@@ -55,6 +55,7 @@ import { mcpMethods } from './modules/mcp'
 import { securityMethods } from './modules/security'
 import { rbacMethods } from './modules/rbac'
 import { overviewMethods } from './modules/overview'
+import { slackMethods } from './modules/slack'
 
 const core = createApiClientCore()
 
@@ -100,6 +101,7 @@ export const api = {
   ...securityMethods(core),
   ...rbacMethods(core),
   ...overviewMethods(core),
+  ...slackMethods(core),
 }
 
 export { formatErrorForLogging } from './utils'

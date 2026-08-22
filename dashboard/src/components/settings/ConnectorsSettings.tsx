@@ -58,6 +58,7 @@ import {trackEvent} from '@/lib/analytics'
 import {ConnectorLogo} from './BrandLogos'
 import {SettingsSection} from './SettingsPrimitives'
 import {ConnectorSetupDialog, RevenueCatManageDialog} from './ConnectorInstallationDialogs'
+import {SlackWorkspacesDialog} from './SlackWorkspacesDialog'
 import {
   type HealthDescriptor,
   describeConnectorHealth,
@@ -396,6 +397,12 @@ function ConnectorManageDialogSwitch({
   onClose,
 }: Readonly<{view?: ConnectorView | null; onClose: () => void}>) {
   if (!view) return null
+  // Slack gets its own multi-workspace manager (install/reauthorize, per-workspace
+  // health, capability scopes, channel/default/enable/test). Discord keeps the
+  // generic single-workspace dialog below.
+  if (view.provider.id === 'slack') {
+    return <SlackWorkspacesDialog onClose={onClose} />
+  }
   if (view.installation) {
     return (
       <RevenueCatManageDialog
@@ -436,8 +443,12 @@ function ConnectorCard({
       toast({title: 'Failed to start connection', description: err.message, variant: 'destructive'}),
   })
 
-  const canOAuthConnect = OAUTH_PROVIDERS.has(provider.id) && availability === 'available'
+  // Slack routes both connect and manage through its own multi-workspace dialog,
+  // so it opts out of the direct single-workspace OAuth button (Discord keeps it).
+  const isSlack = provider.id === 'slack'
+  const canOAuthConnect = OAUTH_PROVIDERS.has(provider.id) && availability === 'available' && !isSlack
   const canInstall = installationBacked && availability === 'available'
+  const canOpenSlackManager = isSlack && availability === 'available'
   const usedBy = [...new Set(facets.map((f) => FACET_META[f].usedBy))].slice(0, 2).join(', ') || '—'
 
   return (
@@ -487,6 +498,7 @@ function ConnectorCard({
           footerHealth={footerHealth}
           canOAuthConnect={canOAuthConnect}
           canInstall={canInstall}
+          slackConnect={!connected && canOpenSlackManager}
           oauthPending={slackOAuth.isPending}
           availability={availability}
           onManage={onManage}
@@ -624,6 +636,7 @@ function ConnectorCardFooter({
   footerHealth,
   canOAuthConnect,
   canInstall,
+  slackConnect,
   oauthPending,
   availability,
   onManage,
@@ -635,6 +648,7 @@ function ConnectorCardFooter({
   readonly footerHealth: HealthDescriptor
   readonly canOAuthConnect: boolean
   readonly canInstall: boolean
+  readonly slackConnect: boolean
   readonly oauthPending: boolean
   readonly availability: ConnectorAvailability
   readonly onManage: () => void
@@ -661,6 +675,18 @@ function ConnectorCardFooter({
         <span />
         <Button size="sm" onClick={onOAuthConnect} disabled={oauthPending}>
           <ConnectorConnectButtonIcon pending={oauthPending} />
+          Connect
+        </Button>
+      </>
+    )
+  }
+
+  if (slackConnect) {
+    return (
+      <>
+        <span />
+        <Button size="sm" onClick={onManage}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
           Connect
         </Button>
       </>

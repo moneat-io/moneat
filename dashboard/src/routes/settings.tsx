@@ -160,6 +160,14 @@ function isExpired(expiresAt: string | null | undefined): boolean {
   }
 }
 
+// Human-readable copy for the Slack OAuth callback's error codes.
+function slackReturnErrorMessage(message: string | undefined): string {
+  if (message === 'workspace_mismatch') {
+    return 'Slack authorized a different workspace than expected. Reauthorize from the intended workspace.'
+  }
+  return message || 'Slack could not complete authorization. Please try again.'
+}
+
 // Back-compat: legacy tab keys redirect to their redesigned equivalents so old
 // deep links keep working after the Settings IA was regrouped by scope.
 const TAB_ALIASES: Record<string, string> = {
@@ -188,9 +196,19 @@ export const Route = createFileRoute('/settings')({
   validateSearch: (search: Record<string, unknown>) => {
     const raw = search.tab as string | undefined
     const requestedTab = (raw && TAB_ALIASES[raw]) || raw
+    // Slack's OAuth callback redirects back with ?slack=connected|error (and an
+    // optional error message). Surface it as a toast, then strip it from the URL.
+    const slackReturn =
+      search.slack === 'connected' || search.slack === 'error'
+        ? (search.slack as 'connected' | 'error')
+        : undefined
     return {
       tab: requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : 'general',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),
+      ...(slackReturn ? { slack: slackReturn } : {}),
+      ...(slackReturn === 'error' && typeof search.message === 'string'
+        ? { message: search.message }
+        : {}),
     }
   },
   component: SettingsPage,
@@ -200,12 +218,36 @@ function SettingsPage() {
   const search = useSearch({ from: '/settings' })
   const navigate = useNavigate({ from: '/settings' })
   const { user } = useAuth()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     if (search.checkout === 'success') {
       navigate({ search: (prev) => ({ ...prev, checkout: undefined }), replace: true })
     }
   }, [search.checkout, navigate])
+
+  // Report the Slack OAuth outcome, refresh the connector/installation views so a
+  // newly added workspace shows up, then clear the return params from the URL.
+  useEffect(() => {
+    if (!search.slack) return
+    if (search.slack === 'connected') {
+      toast({
+        title: 'Slack workspace connected',
+        description: 'The workspace is ready. Pick a default channel to start delivery.',
+      })
+    } else {
+      toast({
+        title: 'Slack authorization failed',
+        description: slackReturnErrorMessage(search.message),
+        variant: 'destructive',
+      })
+    }
+    for (const key of [['slackInstallations'], ['integrations'], ['connectorInstallations'], ['connectorState']]) {
+      queryClient.invalidateQueries({ queryKey: key })
+    }
+    navigate({ search: (prev) => ({ ...prev, slack: undefined, message: undefined }), replace: true })
+  }, [search.slack, search.message, toast, queryClient, navigate])
   
   const { data: subscription } = useQuery({
     queryKey: ['subscription'],

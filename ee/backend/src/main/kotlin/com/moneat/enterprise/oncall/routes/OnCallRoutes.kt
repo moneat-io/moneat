@@ -11,6 +11,7 @@ import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.enterprise.oncall.services.ScheduleLayerDefinition
 import com.moneat.enterprise.oncall.services.ScheduleLayerUpdate
+import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OnCallParticipants
@@ -151,6 +152,7 @@ private data class TimelineParticipant(
 data class SetScheduleUsergroupRequest(
     val usergroupId: String,
     val usergroupHandle: String,
+    val slackInstallationId: String? = null,
 )
 
 fun Route.onCallRoutes(
@@ -158,6 +160,7 @@ fun Route.onCallRoutes(
     getPushNotificationService: (() -> com.moneat.enterprise.oncall.services.PushNotificationService)? = null,
 ) {
     val scheduleService = OnCallScheduleService()
+    val slackInstallationService = SlackInstallationService()
     val slackUserGroupSyncService = getSlackUserGroupSyncService?.invoke()
     val pushNotificationService = getPushNotificationService?.invoke()
 
@@ -669,6 +672,10 @@ fun Route.onCallRoutes(
                 val request = call.receive<SetScheduleUsergroupRequest>()
 
                 try {
+                    val slackInstallationId = request.slackInstallationId?.let { installationId ->
+                        slackInstallationService.internalInstallationId(organizationId, installationId)
+                    } ?: slackInstallationService.defaultInternalInstallationId(organizationId)
+                        ?: throw IllegalArgumentException("Install Slack before mapping an on-call user group")
                     org.jetbrains.exposed.v1.jdbc.transactions.transaction {
                         val now = Clock.System.now()
 
@@ -686,6 +693,7 @@ fun Route.onCallRoutes(
                             }) {
                                 it[OnCallScheduleUsergroups.slackUsergroupId] = request.usergroupId
                                 it[OnCallScheduleUsergroups.slackUsergroupHandle] = request.usergroupHandle
+                                it[OnCallScheduleUsergroups.slackInstallationId] = slackInstallationId
                                 it[OnCallScheduleUsergroups.updatedAt] = now
                             }
                         } else {
@@ -694,6 +702,7 @@ fun Route.onCallRoutes(
                                 it[OnCallScheduleUsergroups.scheduleId] = scheduleId
                                 it[OnCallScheduleUsergroups.slackUsergroupId] = request.usergroupId
                                 it[OnCallScheduleUsergroups.slackUsergroupHandle] = request.usergroupHandle
+                                it[OnCallScheduleUsergroups.slackInstallationId] = slackInstallationId
                                 it[OnCallScheduleUsergroups.createdAt] = now
                                 it[OnCallScheduleUsergroups.updatedAt] = now
                             }
