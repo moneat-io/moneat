@@ -15,7 +15,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {Bell, Calendar, ListChecks, AlertTriangle, Shield, Users2} from 'lucide-react'
+import {Bell, Calendar, ListChecks, AlertTriangle, Settings2, Shield, Users2} from 'lucide-react'
 import {cn} from '@/lib/utils'
 import {PageHeader} from '@/components/ui/page-header'
 
@@ -30,6 +30,12 @@ const tabs = [
   {id: 'escalation-policies', label: 'Escalation Policies', href: '/on-call/escalation-policies', icon: ListChecks},
   {id: 'alerts', label: 'Alerts', href: '/on-call/alerts', icon: AlertTriangle},
   {id: 'incidents', label: 'Incidents', href: '/on-call/incidents', icon: Shield},
+  {
+    id: 'incident-configuration',
+    label: 'Configuration',
+    href: '/on-call/incident-configuration',
+    icon: Settings2,
+  },
 ]
 
 function OnCallLayout() {

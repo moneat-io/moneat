@@ -16,9 +16,10 @@
 
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
-import {api, type OnCallTimelineEvent} from '@/lib/api'
+import {api} from '@/lib/api'
+import type {OnCallIncidentDetail} from '@/lib/api/types'
 import {Button} from '@/components/ui/button'
-import {Badge, type BadgeProps} from '@/components/ui/badge'
+import {Badge} from '@/components/ui/badge'
 import {SectionCard} from '@/components/ui/section-card'
 import {EmptyState} from '@/components/ui/empty-state'
 import {Textarea} from '@/components/ui/textarea'
@@ -30,131 +31,37 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+} from '@/components/ui/dialog'
+import {Label} from '@/components/ui/label'
 import {useToast} from '@/hooks/useToast'
 import {
   AlertTriangle,
   ArrowLeft,
-  Bell,
   Calendar,
-  CheckCircle,
   CheckCircle2,
-  Clock,
   Eye,
   Link as LinkIcon,
   MessageSquare,
-  Send,
+  Tag,
   User,
-  UserPlus,
-  Zap,
 } from 'lucide-react'
 import {useState} from 'react'
-import {cn} from '@/lib/utils'
+import type {ReactNode} from 'react'
 import {isUuidResourceId} from '@/lib/api/utils'
 import {incidentStatusConfig, isResolvableIncidentStatus} from '@/lib/incident-status'
-
-interface DeclaredIncidentDetail {
-  id: string
-  title: string
-  description?: string
-  severity: string
-  status: string
-  declaredAt: string
-  declaredByName: string
-  resolvedAt?: string
-  resolvedBy?: string
-  resolvedByName?: string
-  alerts?: Array<{id: string; title: string; status: string; priority?: string}>
-  [key: string]: unknown
-}
-
-interface DeclaredIncidentTimelineEvent extends Omit<OnCallTimelineEvent, 'eventType'> {
-  eventType: string
-  source?: string
-  alertTitle?: string
-  actorName?: string
-}
+import {IncidentTimelinePanel} from '@/components/on-call/IncidentTimelinePanel'
+import {IncidentRolesPanel} from '@/components/on-call/IncidentRolesPanel'
+import {IncidentSourcesPanel} from '@/components/on-call/IncidentSourcesPanel'
+import {
+  incidentModeMeta,
+  incidentVisibilityMeta,
+  severityBadgeVariant,
+  timeAgo,
+} from '@/components/on-call/incident-modeling'
 
 export const Route = createFileRoute('/on-call/incidents/$incidentId')({
   component: DeclaredIncidentDetailComponent,
 })
-
-// Incident severity mapped onto the shared status language.
-function severityBadgeVariant(severity: string): BadgeProps['variant'] {
-  const severityMatch = /^SEV-?(\d)/i.exec(severity)
-  const severityLevel = severityMatch?.[1]
-  if (severityLevel === '0' || severityLevel === '1') return 'danger'
-  if (severityLevel === '2') return 'warning'
-  if (severityLevel === '3') return 'info'
-  return 'neutral'
-}
-
-// Timeline event icons keep distinct categorical tints from the shared palette
-// (literal classes so Tailwind emits them); status-laden events use status tokens.
-const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string; label: string}> = {
-  DECLARED: {icon: Zap, color: 'text-danger-fg', bgColor: 'bg-danger-bg', label: 'Incident declared'},
-  RESOLVED: {icon: CheckCircle2, color: 'text-success-fg', bgColor: 'bg-success-bg', label: 'Incident resolved'},
-  NOTE_ADDED: {icon: MessageSquare, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Note added'},
-  ALERT_LINKED: {icon: LinkIcon, color: 'text-chart-5', bgColor: 'bg-chart-5/15', label: 'Alert linked'},
-  // Alert-level events
-  TRIGGERED: {icon: Zap, color: 'text-danger-fg', bgColor: 'bg-danger-bg', label: 'Alert triggered'},
-  ESCALATED: {icon: Bell, color: 'text-warning-fg', bgColor: 'bg-warning-bg', label: 'Escalated'},
-  ACKNOWLEDGED: {icon: CheckCircle, color: 'text-info-fg', bgColor: 'bg-info-bg', label: 'Acknowledged'},
-  REASSIGNED: {icon: UserPlus, color: 'text-chart-5', bgColor: 'bg-chart-5/15', label: 'Reassigned'},
-  STEP_TIMEOUT: {icon: Clock, color: 'text-warning-fg', bgColor: 'bg-warning-bg', label: 'Step timed out'},
-  NOTIFICATION_SENT: {icon: Send, color: 'text-chart-6', bgColor: 'bg-chart-6/15', label: 'Notification sent'},
-  VIEWED: {icon: Eye, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Viewed'},
-}
-
-function timeAgo(date: string) {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-  if (seconds < 60) return 'just now'
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function detailString(value: unknown): string | null {
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
-  return null
-}
-
-function getTimelineDescription(event: DeclaredIncidentTimelineEvent): string | null {
-  switch (event.eventType) {
-    case 'NOTIFICATION_SENT':
-      return notificationDescription(event)
-    case 'ESCALATED':
-      if (event.details?.stepNumber === undefined) return null
-      return `to step ${Number(event.details.stepNumber) + 1}`
-    case 'REASSIGNED':
-      return reassignmentDescription(event)
-    case 'ALERT_LINKED':
-      return detailString(event.details?.alertTitle)
-    default:
-      return null
-  }
-}
-
-function notificationDescription(event: DeclaredIncidentTimelineEvent): string | null {
-  if (!event.details) return null
-  const toName = detailString(event.details.toUserName) ?? event.actorName ?? event.actorUserName
-  const channel = detailString(event.details.channel)
-  if (toName && channel) return `to ${toName} via ${channel}`
-  if (toName) return `to ${toName}`
-  if (channel) return `via ${channel}`
-  return null
-}
-
-function reassignmentDescription(event: DeclaredIncidentTimelineEvent): string | null {
-  const toName = detailString(event.details?.toUserName)
-  if (toName) return `to ${toName}`
-  return event.details?.reason === 'unavailable' ? 'user marked as unavailable' : null
-}
 
 function DeclaredIncidentDetailComponent() {
   const {incidentId} = Route.useParams()
@@ -166,21 +73,15 @@ function DeclaredIncidentDetailComponent() {
   const [note, setNote] = useState('')
   const normalizedIncidentId = incidentId.trim()
   const hasValidIncidentId = isUuidResourceId(normalizedIncidentId)
+  const incidentKey = ['declared-incident', normalizedIncidentId]
 
   const {data: incident, isLoading} = useQuery({
-    queryKey: ['declared-incident', normalizedIncidentId],
-    queryFn: async () => {
-      const result = await api.getOnCallIncident(normalizedIncidentId)
-      return result as unknown as DeclaredIncidentDetail
-    },
+    queryKey: incidentKey,
+    queryFn: () => api.getOnCallIncident(normalizedIncidentId) as Promise<OnCallIncidentDetail>,
     enabled: hasValidIncidentId,
   })
 
-  const {data: timeline} = useQuery({
-    queryKey: ['declared-incident-timeline', normalizedIncidentId],
-    queryFn: () => api.getOnCallIncidentTimeline(normalizedIncidentId) as Promise<DeclaredIncidentTimelineEvent[]>,
-    enabled: hasValidIncidentId,
-  })
+  const refreshIncident = () => queryClient.invalidateQueries({queryKey: incidentKey})
 
   const resolveMutation = useMutation({
     mutationFn: () =>
@@ -191,13 +92,10 @@ function DeclaredIncidentDetailComponent() {
     onSuccess: () => {
       setResolveOpen(false)
       setResolutionNote('')
-      queryClient.invalidateQueries({queryKey: ['declared-incident', normalizedIncidentId]})
-      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', normalizedIncidentId]})
+      refreshIncident()
+      queryClient.invalidateQueries({queryKey: ['incident-canonical-timeline', normalizedIncidentId]})
       queryClient.invalidateQueries({queryKey: ['on-call-incidents']})
-      toast({
-        title: 'Incident Resolved',
-        description: 'This incident has been marked as resolved.',
-      })
+      toast({title: 'Incident resolved', description: 'This incident has been marked as resolved.'})
     },
     onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
@@ -205,14 +103,11 @@ function DeclaredIncidentDetailComponent() {
   })
 
   const addNoteMutation = useMutation({
-    mutationFn: (note: string) => api.addOnCallIncidentNote(normalizedIncidentId, note),
+    mutationFn: (value: string) => api.addOnCallIncidentNote(normalizedIncidentId, value),
     onSuccess: () => {
       setNote('')
-      queryClient.invalidateQueries({queryKey: ['declared-incident-timeline', normalizedIncidentId]})
-      toast({
-        title: 'Note Added',
-        description: 'Your note has been added to the incident timeline.',
-      })
+      queryClient.invalidateQueries({queryKey: ['incident-canonical-timeline', normalizedIncidentId]})
+      toast({title: 'Note added', description: 'Your note has been added to the incident timeline.'})
     },
     onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
@@ -222,7 +117,7 @@ function DeclaredIncidentDetailComponent() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" />
       </div>
     )
   }
@@ -249,16 +144,24 @@ function DeclaredIncidentDetailComponent() {
 
   const statusCfg = incidentStatusConfig(incident.status)
   const StatusIcon = statusCfg.icon
+  const mode = incident.mode ?? 'LIVE'
+  const modeMeta = incidentModeMeta(mode)
+  const visibilityMeta = incidentVisibilityMeta(incident.visibility ?? 'ORGANIZATION')
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" className="mt-1 flex-shrink-0" onClick={() => navigate({to: '/on-call/incidents'})}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-1 flex-shrink-0"
+          onClick={() => navigate({to: '/on-call/incidents'})}
+        >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <Badge variant={statusCfg.variant} size="sm" className="gap-1">
               <StatusIcon className="h-3 w-3" />
               {statusCfg.label}
@@ -266,78 +169,98 @@ function DeclaredIncidentDetailComponent() {
             <Badge variant={severityBadgeVariant(incident.severity)} size="sm">
               {incident.severity}
             </Badge>
-            <span className="text-xs text-muted-foreground font-mono">#{incident.id}</span>
+            {mode !== 'LIVE' && (
+              <Badge variant={modeMeta.variant} size="sm">
+                {modeMeta.label}
+              </Badge>
+            )}
+            {incident.incidentType && (
+              <Badge variant="neutral" size="sm" className="gap-1">
+                <Tag className="h-3 w-3" />
+                {incident.incidentType}
+              </Badge>
+            )}
           </div>
           <h2 className="text-2xl font-bold tracking-tight">{incident.title}</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Declared {timeAgo(incident.declaredAt)} by {incident.declaredByName}
+          <p className="mt-1 text-sm text-muted-foreground">
+            Declared {timeAgo(incident.declaredAt)} by {incident.declaredByName ?? 'a responder'}
           </p>
         </div>
       </div>
 
+      {/* Test / retrospective notice */}
+      {mode !== 'LIVE' && (
+        <div className="flex items-center gap-2 rounded-xl border border-info-border bg-info-bg px-4 py-2.5 text-sm">
+          <AlertTriangle className="h-4 w-4 text-info-fg" />
+          <span>
+            This is a <span className="font-medium">{modeMeta.label.toLowerCase()}</span> incident — {modeMeta.description.toLowerCase()}.
+          </span>
+        </div>
+      )}
+
       {/* Action Banner */}
       {isResolvableIncidentStatus(incident.status) && (
-        <div className="flex items-center justify-between p-4 rounded-xl border bg-danger-bg border-danger-border">
+        <div className="flex items-center justify-between rounded-xl border border-danger-border bg-danger-bg p-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center h-10 w-10 rounded-full bg-danger-bg">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-danger-bg">
               <StatusIcon className="h-5 w-5 text-danger-fg" />
             </div>
             <div>
-              <p className="font-medium text-sm">
-                This incident is currently active
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Investigate and resolve when complete
-              </p>
+              <p className="text-sm font-medium">This incident is currently active</p>
+              <p className="text-xs text-muted-foreground">Investigate and resolve when complete</p>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-1">
-             <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm">
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Resolve incident
+          <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+                Resolve incident
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Resolve incident</DialogTitle>
+                <DialogDescription>
+                  Mark this incident as resolved. You can add a resolution note for the record.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-2 py-2">
+                <Label htmlFor="resolutionNote">Resolution note (optional)</Label>
+                <Textarea
+                  id="resolutionNote"
+                  value={resolutionNote}
+                  onChange={(e) => setResolutionNote(e.target.value)}
+                  placeholder="What was the fix?"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setResolveOpen(false)}>
+                  Cancel
                 </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Resolve Incident</DialogTitle>
-                  <DialogDescription>
-                    Are you sure you want to resolve this incident? This action cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-2 py-2">
-                    <Label htmlFor="resolutionNote">Resolution Note (Optional)</Label>
-                    <Textarea
-                        id="resolutionNote"
-                        value={resolutionNote}
-                        onChange={(e) => setResolutionNote(e.target.value)}
-                        placeholder="What was the fix?"
-                    />
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setResolveOpen(false)}>Cancel</Button>
-                  <Button onClick={() => resolveMutation.mutate()} disabled={resolveMutation.isPending}>
-                    {resolveMutation.isPending ? 'Resolving...' : 'Resolve Incident'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <Button onClick={() => resolveMutation.mutate()} disabled={resolveMutation.isPending}>
+                  {resolveMutation.isPending ? 'Resolving…' : 'Resolve incident'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Description */}
-          {incident.description && (
-            <SectionCard title="Description" icon={MessageSquare} iconTone="muted">
-              <p className="text-sm text-muted-foreground leading-relaxed">{incident.description}</p>
+        <div className="space-y-6 lg:col-span-2">
+          {incident.summary && (
+            <SectionCard title="Summary" icon={MessageSquare} iconTone="muted">
+              <p className="text-sm leading-relaxed text-muted-foreground">{incident.summary}</p>
             </SectionCard>
           )}
 
-          {/* Linked Alerts */}
+          {incident.description && (
+            <SectionCard title="Description" icon={MessageSquare} iconTone="muted">
+              <p className="text-sm leading-relaxed text-muted-foreground">{incident.description}</p>
+            </SectionCard>
+          )}
+
           {incident.alerts && incident.alerts.length > 0 && (
             <SectionCard
               title="Linked alerts"
@@ -346,18 +269,23 @@ function DeclaredIncidentDetailComponent() {
               count={incident.alerts.length}
               bodyClassName="space-y-2"
             >
-              {incident.alerts.map((alert: {id: string; title: string; status: string}) => (
-                <div key={alert.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent/40 transition-colors">
+              {incident.alerts.map((alert) => (
+                <div
+                  key={alert.id}
+                  className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-accent/40"
+                >
                   <div className="flex-1">
                     <p className="text-sm font-medium">{alert.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       Alert #{alert.id} · {alert.status}
                     </p>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => navigate({to: '/on-call/alerts/$alertId', params: {alertId: String(alert.id)}})}
+                    onClick={() =>
+                      navigate({to: '/on-call/alerts/$alertId', params: {alertId: String(alert.id)}})
+                    }
                   >
                     View
                   </Button>
@@ -366,130 +294,98 @@ function DeclaredIncidentDetailComponent() {
             </SectionCard>
           )}
 
-          {/* Timeline */}
-          {timeline && timeline.length > 0 && (
-            <SectionCard title="Timeline" icon={Clock} iconTone="muted">
-                <p className="-mt-1 mb-3 text-xs text-muted-foreground">Incident history and linked alert events</p>
-                <div className="relative">
-                  {timeline.map((event: DeclaredIncidentTimelineEvent, idx: number) => {
-                    const config = EVENT_CONFIG[event.eventType] || {
-                      icon: Clock,
-                      color: 'text-muted-foreground',
-                      bgColor: 'bg-muted',
-                      label: event.eventType.replace(/_/g, ' '),
-                    }
-                    const Icon = config.icon
-                    const description = getTimelineDescription(event)
+          <IncidentRolesPanel
+            incidentId={normalizedIncidentId}
+            incidentVersion={incident.version}
+            onMutated={refreshIncident}
+          />
 
-                    return (
-                      <div key={`${event.source}-${event.id}`} className="flex gap-3 pb-6 last:pb-0 relative">
-                        {idx < timeline.length - 1 && (
-                          <div className="absolute left-[15px] top-8 bottom-0 w-px bg-border" />
-                        )}
-                        <div className={cn(
-                          'flex-shrink-0 flex items-center justify-center h-8 w-8 rounded-full z-10',
-                          config.bgColor
-                        )}>
-                          <Icon className={cn('h-4 w-4', config.color)} />
-                        </div>
-                        <div className="flex-1 min-w-0 pt-0.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium">
-                              {config.label}
-                              {event.source === 'alert' && event.alertTitle && (
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  from {event.alertTitle}
-                                </span>
-                              )}
-                            </p>
-                            <span className="text-xs text-muted-foreground flex-shrink-0">
-                              {timeAgo(event.createdAt)}
-                            </span>
-                          </div>
-                          {event.actorName && event.eventType !== 'NOTIFICATION_SENT' && (
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              by {event.actorName}
-                            </p>
-                          )}
-                          {description && (
-                            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-                          )}
-                          {event.details && event.eventType === 'NOTE_ADDED' && !!event.details.note && (
-                            <p className="italic bg-muted/50 rounded-lg p-2.5 mt-1.5 text-xs text-muted-foreground">&quot;{String(event.details.note)}&quot;</p>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-            </SectionCard>
-          )}
+          <IncidentTimelinePanel incidentId={normalizedIncidentId} />
 
-          {/* Add Note */}
           <SectionCard title="Add note" icon={MessageSquare} iconTone="accent" bodyClassName="space-y-3">
-              <Textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Enter your note..."
-                rows={3}
-                className="resize-none"
-              />
-              <Button
-                onClick={() => addNoteMutation.mutate(note)}
-                disabled={!note.trim() || addNoteMutation.isPending}
-                size="sm"
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                {addNoteMutation.isPending ? 'Adding...' : 'Add note'}
-              </Button>
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Enter your note..."
+              rows={3}
+              className="resize-none"
+            />
+            <Button
+              onClick={() => addNoteMutation.mutate(note)}
+              disabled={!note.trim() || addNoteMutation.isPending}
+              size="sm"
+            >
+              <MessageSquare className="mr-2 h-4 w-4" />
+              {addNoteMutation.isPending ? 'Adding…' : 'Add note'}
+            </Button>
           </SectionCard>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4">
           <SectionCard title="Details" bodyClassName="space-y-4">
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Status</p>
-                <Badge variant={statusCfg.variant} className="gap-1">
-                  <StatusIcon className="h-3 w-3" />
-                  {statusCfg.label}
-                </Badge>
+            <DetailRow label="Status">
+              <Badge variant={statusCfg.variant} className="gap-1">
+                <StatusIcon className="h-3 w-3" />
+                {statusCfg.label}
+              </Badge>
+            </DetailRow>
+            <DetailRow label="Severity">
+              <Badge variant={severityBadgeVariant(incident.severity)}>{incident.severity}</Badge>
+            </DetailRow>
+            <DetailRow label="Mode">
+              <Badge variant={modeMeta.variant}>{modeMeta.label}</Badge>
+            </DetailRow>
+            <DetailRow label="Visibility">
+              <div className="flex items-center gap-2 text-sm">
+                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                {visibilityMeta.label}
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Severity</p>
-                <Badge variant={severityBadgeVariant(incident.severity)}>
-                  {incident.severity}
-                </Badge>
+            </DetailRow>
+            {incident.incidentType && (
+              <DetailRow label="Type">
+                <span className="text-sm">{incident.incidentType}</span>
+              </DetailRow>
+            )}
+            <DetailRow label="Declared at">
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                {new Date(incident.declaredAt).toLocaleString()}
               </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Declared At</p>
+            </DetailRow>
+            <DetailRow label="Declared by">
+              <div className="flex items-center gap-2 text-sm">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                {incident.declaredByName ?? 'a responder'}
+              </div>
+            </DetailRow>
+            {incident.resolvedBy && (
+              <DetailRow label="Resolved by">
                 <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    {new Date(incident.declaredAt).toLocaleString()}
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  {incident.resolvedByName}
                 </div>
-              </div>
-              <div>
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Declared By</p>
-                <div className="flex items-center gap-2 text-sm">
-                    <User className="h-3.5 w-3.5 text-muted-foreground" />
-                    {incident.declaredByName}
-                </div>
-              </div>
-              {incident.resolvedBy && (
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Resolved By</p>
-                  <div className="flex items-center gap-2 text-sm">
-                     <User className="h-3.5 w-3.5 text-muted-foreground" />
-                    {incident.resolvedByName}
-                  </div>
-                  <span className="text-xs text-muted-foreground block mt-0.5 ml-5">
-                      {new Date(incident.resolvedAt!).toLocaleString()}
+                {incident.resolvedAt && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {new Date(incident.resolvedAt).toLocaleString()}
                   </span>
-                </div>
-              )}
+                )}
+              </DetailRow>
+            )}
           </SectionCard>
+
+          <IncidentSourcesPanel incidentId={normalizedIncidentId} />
         </div>
       </div>
+    </div>
+  )
+}
+
+function DetailRow({label, children}: {label: string; children: ReactNode}) {
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      {children}
     </div>
   )
 }

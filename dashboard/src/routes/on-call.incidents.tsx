@@ -14,14 +14,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {createFileRoute, Link, Outlet, useRouterState} from '@tanstack/react-router'
-import {useQuery} from '@tanstack/react-query'
+import {createFileRoute, Link, Outlet, useNavigate, useRouterState} from '@tanstack/react-router'
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
+import {Button} from '@/components/ui/button'
 import {Card, CardContent} from '@/components/ui/card'
 import {Badge, type BadgeProps} from '@/components/ui/badge'
 import {EmptyState} from '@/components/ui/empty-state'
 import {StatusDot, type StatusTone} from '@/components/ui/status-dot'
 import {PageHeader} from '@/components/ui/page-header'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -29,11 +37,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, CheckCircle2, ChevronRight, FileText, ShieldAlert} from 'lucide-react'
+import {Filter, Zap, CheckCircle2, ChevronRight, FileText, Plus, ShieldAlert} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
+import {useToast} from '@/hooks/useToast'
 import {incidentStatusConfig} from '@/lib/incident-status'
-import type {OnCallIncidentStatus} from '@/lib/api/types'
+import type {DeclareIncidentInput, OnCallIncidentStatus} from '@/lib/api/types'
+import {IncidentDeclarationForm} from '@/components/on-call/IncidentDeclarationForm'
 
 export const Route = createFileRoute('/on-call/incidents')({
   component: DeclaredIncidents,
@@ -81,10 +91,29 @@ function timeAgo(date: string) {
 
 function DeclaredIncidents() {
   const pathname = useRouterState({select: state => state.location.pathname})
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const {toast} = useToast()
   const [statusFilter, setStatusFilter] =
     useState<IncidentStatusFilter>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
   const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
+  const [declareOpen, setDeclareOpen] = useState(false)
   const isDetailRoute = pathname.startsWith('/on-call/incidents/')
+
+  const declareMutation = useMutation({
+    mutationFn: (input: DeclareIncidentInput) => api.declareOnCallIncident(input),
+    onSuccess: (incident) => {
+      queryClient.invalidateQueries({queryKey: ['on-call-incidents']})
+      setDeclareOpen(false)
+      toast({title: 'Incident declared', description: 'Your incident has been created.'})
+      if (incident?.id) {
+        navigate({to: '/on-call/incidents/$incidentId', params: {incidentId: incident.id}})
+      }
+    },
+    onError: (error: Error) => {
+      toast({title: 'Error', description: error.message, variant: 'destructive'})
+    },
+  })
 
   const {data: incidents, isLoading} = useQuery({
     queryKey: ['on-call-incidents', statusFilter, severityFilter],
@@ -111,7 +140,31 @@ function DeclaredIncidents() {
         icon={ShieldAlert}
         title="Incidents"
         description="Manage user-declared incidents"
+        actions={
+          <Button size="sm" onClick={() => setDeclareOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Declare incident
+          </Button>
+        }
       />
+
+      <Dialog open={declareOpen} onOpenChange={setDeclareOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Declare incident</DialogTitle>
+            <DialogDescription>
+              Open a new incident. Choose a type to capture the configured details for your process.
+            </DialogDescription>
+          </DialogHeader>
+          {declareOpen && (
+            <IncidentDeclarationForm
+              isSubmitting={declareMutation.isPending}
+              onSubmit={(input) => declareMutation.mutate(input)}
+              onCancel={() => setDeclareOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Stats Row */}
       {!isLoading && incidents && incidents.length > 0 && (

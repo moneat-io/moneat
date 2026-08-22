@@ -124,6 +124,15 @@ class IncidentResponderService {
                     now = now,
                     ),
                 )
+            current?.let { previous ->
+                NativeIncidentRoleAssignments.update({
+                    (NativeIncidentRoleAssignments.roleDefinitionId eq
+                        previous[NativeIncidentRoleDefinitions.id].value) and
+                        NativeIncidentRoleAssignments.endedAt.isNull()
+                }) {
+                    it[roleDefinitionId] = id
+                }
+            }
             roleDefinition(requireRole(id))
         }
 
@@ -134,7 +143,8 @@ class IncidentResponderService {
                 .selectAll()
                 .where {
                     (NativeIncidentRoleDefinitions.organizationId eq organizationId) and
-                        (NativeIncidentRoleDefinitions.resourceId eq uuid)
+                        (NativeIncidentRoleDefinitions.resourceId eq uuid) and
+                        (NativeIncidentRoleDefinitions.isCurrent eq true)
                 }.singleOrNull()
                 ?.get(NativeIncidentRoleDefinitions.id)
                 ?.value

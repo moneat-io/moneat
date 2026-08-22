@@ -130,6 +130,31 @@ class IncidentRoutesTest {
     }
 
     @Test
+    fun `source references reject non-http external URLs`() = testApplication {
+        application { installIncidentRoutes() }
+        val incidentId = declareIncident("unsafe-source")
+
+        val response = client.post("/v1/on-call/incidents/$incidentId/sources") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody(
+                """
+                {
+                  "sourceType": "URL",
+                  "sourceKey": "unsafe",
+                  "sourceUrl": "javascript:alert(1)"
+                }
+                """.trimIndent(),
+            )
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("must use HTTP or HTTPS"))
+        val listed = client.get("/v1/on-call/incidents/$incidentId/sources") { authorize() }
+        assertEquals(0, Json.parseToJsonElement(listed.bodyAsText()).jsonArray.size)
+    }
+
+    @Test
     fun `incident routes reject numeric public IDs`() = testApplication {
         application { installIncidentRoutes() }
 

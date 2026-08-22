@@ -6,14 +6,16 @@ package com.moneat.enterprise.incidents.responders
 
 import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
+import com.moneat.enterprise.incidents.commands.AssignIncidentRoleCommand
+import com.moneat.enterprise.incidents.commands.ClaimIncidentRoleCommand
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.HandoverIncidentRoleCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.commands.LeaveIncidentCommand
 import com.moneat.enterprise.incidents.commands.SetIncidentParticipationCommand
-import com.moneat.enterprise.incidents.commands.AssignIncidentRoleCommand
 import com.moneat.enterprise.incidents.models.IncidentParticipationType
 import com.moneat.enterprise.incidents.models.NativeIncidentHandovers
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class IncidentResponderServiceTest {
@@ -64,6 +67,10 @@ class IncidentResponderServiceTest {
             "Operations Coordinator",
             service.listRoles(member.organizationId, member.userId).single { it.key == "operations-lead" }.name,
         )
+        assertFailsWith<IncidentCommandNotFoundException> {
+            service.resolveRoleId(member.organizationId, first.id)
+        }
+        assertTrue(service.resolveRoleId(member.organizationId, second.id) > 0)
     }
 
     @Test
@@ -151,6 +158,42 @@ class IncidentResponderServiceTest {
             service.listParticipants(member.organizationId, incident.incidentId)
                 .none { it.userId == secondUserResourceId },
         )
+    }
+
+    @Test
+    fun `carries active assignments onto a new role definition version`() {
+        val role = service.createRole(member.organizationId, member.userId, customRole("operations-lead"))
+        val incident =
+            commandService.execute(
+                DeclareIncidentCommand(
+                    commandKey = "declare-versioned-role-test",
+                    actor = actor(),
+                    title = "Queue unavailable",
+                    description = null,
+                    severity = "SEV-2",
+                ),
+            )
+        commandService.execute(
+            ClaimIncidentRoleCommand(
+                commandKey = "claim-versioned-role-test",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                roleDefinitionId = service.resolveRoleId(member.organizationId, role.id),
+                expectedVersion = 1,
+            ),
+        )
+
+        val updated =
+            service.createRole(
+                member.organizationId,
+                member.userId,
+                customRole("operations-lead").copy(name = "Operations Coordinator"),
+            )
+
+        val assignment = service.listAssignments(member.organizationId, incident.incidentId).single()
+        assertEquals(updated.id, assignment.role.id)
+        assertEquals("Operations Coordinator", assignment.role.name)
+        assertEquals(publicUserId(member.userId), assignment.assigneeUserId)
     }
 
     private fun actor() = IncidentCommandActor(member.organizationId, member.userId, "REST")

@@ -26,18 +26,17 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import {useToast} from '@/hooks/useToast'
 import {AlertTriangle, CheckCircle, Clock, MessageSquare, ArrowLeft, Zap, UserPlus, Bell, CheckCircle2, Eye, Send} from 'lucide-react'
 import {useState, useEffect} from 'react'
 import {cn} from '@/lib/utils'
 import {isUuidResourceId} from '@/lib/api/utils'
+import {IncidentDeclarationForm} from '@/components/on-call/IncidentDeclarationForm'
+import type {DeclareIncidentInput} from '@/lib/api/types'
 
 export const Route = createFileRoute('/on-call/alerts/$alertId')({
   component: AlertDetailPage,
@@ -61,18 +60,17 @@ const getStatusConfig = (
   return {variant: 'success', icon: CheckCircle2, label: 'Resolved', kind: 'success'}
 }
 
-// Timeline event icons keep distinct categorical tints from the shared chart
-// palette (literal classes so Tailwind emits them); status-laden events lean on
-// the status tokens.
+// Timeline event icons use the shared status language (success/warning/danger/
+// info/neutral) — the icon and label carry the distinction, not a chart tint.
 const EVENT_CONFIG: Record<string, {icon: typeof Zap; color: string; bgColor: string; label: string}> = {
   TRIGGERED: {icon: Zap, color: 'text-danger-fg', bgColor: 'bg-danger-bg', label: 'Alert triggered'},
   ESCALATED: {icon: Bell, color: 'text-warning-fg', bgColor: 'bg-warning-bg', label: 'Escalated'},
   ACKNOWLEDGED: {icon: CheckCircle, color: 'text-info-fg', bgColor: 'bg-info-bg', label: 'Acknowledged'},
   RESOLVED: {icon: CheckCircle2, color: 'text-success-fg', bgColor: 'bg-success-bg', label: 'Resolved'},
-  REASSIGNED: {icon: UserPlus, color: 'text-chart-5', bgColor: 'bg-chart-5/15', label: 'Reassigned'},
+  REASSIGNED: {icon: UserPlus, color: 'text-info-fg', bgColor: 'bg-info-bg', label: 'Reassigned'},
   NOTE_ADDED: {icon: MessageSquare, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Note added'},
   STEP_TIMEOUT: {icon: Clock, color: 'text-warning-fg', bgColor: 'bg-warning-bg', label: 'Step timed out'},
-  NOTIFICATION_SENT: {icon: Send, color: 'text-chart-6', bgColor: 'bg-chart-6/15', label: 'Notification sent'},
+  NOTIFICATION_SENT: {icon: Send, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Notification sent'},
   VIEWED: {icon: Eye, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Viewed'},
 }
 
@@ -121,9 +119,6 @@ function AlertDetailPage() {
   const {toast} = useToast()
   const [note, setNote] = useState('')
   const [declareOpen, setDeclareOpen] = useState(false)
-  const [declareTitle, setDeclareTitle] = useState('')
-  const [declareDesc, setDeclareDesc] = useState('')
-  const [declareSeverity, setDeclareSeverity] = useState('SEV-2')
   const normalizedAlertId = alertId.trim()
   const hasValidAlertId = isUuidResourceId(normalizedAlertId)
   const alertQueryKey = ['alert', normalizedAlertId] as const
@@ -135,30 +130,21 @@ function AlertDetailPage() {
     enabled: hasValidAlertId,
   })
 
-  const handleDeclareOpenChange = (open: boolean) => {
-    if (open && alert) {
-      setDeclareTitle(alert.title)
-      setDeclareDesc(alert.description || '')
-      setDeclareSeverity('SEV-2')
-    }
-    setDeclareOpen(open)
-  }
-
   const declareMutation = useMutation({
-    mutationFn: () =>
-      api.declareIncidentFromAlert(normalizedAlertId, {
-        title: declareTitle,
-        description: declareDesc,
-        severity: declareSeverity,
-      }),
-    onSuccess: async () => {
+    mutationFn: (input: DeclareIncidentInput) =>
+      api.declareIncidentFromAlert(normalizedAlertId, input),
+    onSuccess: async (incident) => {
       await Promise.all([
         queryClient.invalidateQueries({queryKey: alertQueryKey}),
         queryClient.invalidateQueries({queryKey: alertTimelineQueryKey}),
         queryClient.invalidateQueries({queryKey: ['alerts']}),
+        queryClient.invalidateQueries({queryKey: ['on-call-incidents']}),
       ])
       setDeclareOpen(false)
-      toast({title: 'Incident Declared', description: 'New incident created successfully.'})
+      toast({title: 'Incident declared', description: 'New incident created successfully.'})
+      if (incident?.id) {
+        navigate({to: '/on-call/incidents/$incidentId', params: {incidentId: incident.id}})
+      }
     },
     onError: (error: Error) => {
       toast({title: 'Error', description: error.message, variant: 'destructive'})
@@ -368,51 +354,32 @@ function AlertDetailPage() {
               I'm not available
             </Button>
 
-            <Dialog open={declareOpen} onOpenChange={handleDeclareOpenChange}>
+            <Dialog open={declareOpen} onOpenChange={setDeclareOpen}>
               <DialogTrigger asChild>
                 <Button variant="link" size="sm" className="h-auto p-0 text-muted-foreground hover:text-foreground text-xs">
                   Declare Incident
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
                 <DialogHeader>
-                  <DialogTitle>Declare Incident</DialogTitle>
+                  <DialogTitle>Declare incident</DialogTitle>
                   <DialogDescription>
-                    Declare an incident from this alert.
+                    Declare an incident from this alert. Details are prefilled and stay editable.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="title">Title</Label>
-                    <Input id="title" value={declareTitle} onChange={(e) => setDeclareTitle(e.target.value)} />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="severity">Severity</Label>
-                    <div className="flex gap-2">
-                      {['SEV-0', 'SEV-1', 'SEV-2', 'SEV-3', 'SEV-4'].map((sev) => (
-                        <Button
-                          key={sev}
-                          type="button"
-                          variant={declareSeverity === sev ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setDeclareSeverity(sev)}
-                        >
-                          {sev}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea id="description" value={declareDesc} onChange={(e) => setDeclareDesc(e.target.value)} />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setDeclareOpen(false)}>Cancel</Button>
-                  <Button onClick={() => declareMutation.mutate()} disabled={declareMutation.isPending}>
-                    {declareMutation.isPending ? 'Declaring...' : 'Declare Incident'}
-                  </Button>
-                </DialogFooter>
+                {declareOpen && (
+                  <IncidentDeclarationForm
+                    defaults={{
+                      title: alert.title,
+                      description: alert.description || '',
+                      severity: 'SEV-2',
+                    }}
+                    originHint={`Declaring from alert "${alert.title}" — the alert will be linked to the new incident.`}
+                    isSubmitting={declareMutation.isPending}
+                    onSubmit={(input) => declareMutation.mutate(input)}
+                    onCancel={() => setDeclareOpen(false)}
+                  />
+                )}
               </DialogContent>
             </Dialog>
           </div>

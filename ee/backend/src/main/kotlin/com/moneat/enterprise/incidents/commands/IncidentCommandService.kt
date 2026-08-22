@@ -43,6 +43,7 @@ import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
 import org.postgresql.util.PSQLException
+import java.net.URI
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -900,6 +901,17 @@ class IncidentCommandService(
     }
 
     private fun linkAlertRecord(incidentId: Int, alertId: Int) {
+        val existing =
+            OnCallIncidentAlerts
+                .selectAll()
+                .where { OnCallIncidentAlerts.alertId eq alertId }
+                .singleOrNull()
+        if (existing != null) {
+            if (existing[OnCallIncidentAlerts.incidentId] != incidentId) {
+                throw IncidentCommandConflictException("On-call alert is already linked to another native incident")
+            }
+            return
+        }
         OnCallIncidentAlerts.insert {
             it[OnCallIncidentAlerts.incidentId] = incidentId
             it[OnCallIncidentAlerts.alertId] = alertId
@@ -924,14 +936,6 @@ class IncidentCommandService(
                 val alertId = requireNotNull(source.onCallAlertId) { "On-call alert source is missing its alert" }
                 require(source.alertEpisodeId == null) { "On-call alert source has an unexpected episode" }
                 val alert = requireAlert(organizationId, alertId)
-                val existing =
-                    OnCallIncidentAlerts
-                        .selectAll()
-                        .where { OnCallIncidentAlerts.alertId eq alertId }
-                        .singleOrNull()
-                if (existing != null) {
-                    throw IncidentCommandConflictException("On-call alert is already linked to a native incident")
-                }
                 source.copy(
                     sourceKey = alert[OnCallAlerts.resourceId].toString(),
                     label = source.label.cleaned() ?: alert[OnCallAlerts.title],
@@ -957,16 +961,28 @@ class IncidentCommandService(
                 require(source.onCallAlertId == null && source.alertEpisodeId == null) {
                     "External incident source has an unexpected internal pointer"
                 }
+                val sourceUrl = source.sourceUrl.cleaned()
                 if (source.sourceType == com.moneat.enterprise.incidents.models.IncidentSourceType.URL) {
-                    require(!source.sourceUrl.cleaned().isNullOrEmpty()) { "URL incident source requires a URL" }
+                    require(sourceUrl != null) { "URL incident source requires a URL" }
                 }
+                sourceUrl?.let(::requireSafeExternalSourceUrl)
                 source.copy(
                     sourceKey = sourceKey,
                     label = source.label.cleaned(),
-                    sourceUrl = source.sourceUrl.cleaned(),
+                    sourceUrl = sourceUrl,
                 )
             }
         }
+    }
+
+    private fun requireSafeExternalSourceUrl(value: String) {
+        val uri = runCatching { URI(value) }.getOrNull()
+        require(
+            uri != null &&
+                uri.isAbsolute &&
+                uri.rawAuthority?.isNotBlank() == true &&
+                uri.scheme.lowercase() in SAFE_EXTERNAL_SOURCE_SCHEMES,
+        ) { "Incident source URL must use HTTP or HTTPS" }
     }
 
     private fun linkAlertEpisodeRecord(
@@ -1159,6 +1175,7 @@ class IncidentCommandService(
         private const val MAX_TITLE_LENGTH = 255
         private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 80
         private const val MAX_SOURCE_KEY_LENGTH = 500
+        private val SAFE_EXTERNAL_SOURCE_SCHEMES = setOf("http", "https")
 
         private val DECLARABLE_STATUSES = setOf(NativeIncidentStatus.TRIAGE, NativeIncidentStatus.ACTIVE)
 

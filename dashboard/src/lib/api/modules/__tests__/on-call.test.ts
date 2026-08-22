@@ -584,6 +584,399 @@ describe('onCallMethods', () => {
     })
   })
 
+  // ──── Incident modeling: declaration, timeline, responders, sources, config ────
+
+  const INCIDENT_ID = ON_CALL_INCIDENT_ID_PRIMARY
+  const EVENT_ID = 'e1111111-1111-4111-8111-111111111111'
+  const ROLE_ID = 'e2222222-2222-4222-8222-222222222222'
+  const USER_ID = 'e3333333-3333-4333-8333-333333333333'
+  const SOURCE_ID = 'e4444444-4444-4444-8444-444444444444'
+  const TYPE_ID = 'e5555555-5555-4555-8555-555555555555'
+  const FIELD_ID = 'e6666666-6666-4666-8666-666666666666'
+  const FORM_ID = 'e7777777-7777-4777-8777-777777777777'
+
+  describe('declareOnCallIncident', () => {
+    it('POSTs the full declaration payload', async () => {
+      const mock = { id: INCIDENT_ID, title: 'Global outage', status: 'ACTIVE' }
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.title).toBe('Global outage')
+          expect(body.mode).toBe('RETROSPECTIVE')
+          expect(body.visibility).toBe('PRIVATE')
+          expect(body.initialStatus).toBe('TRIAGE')
+          expect(body.incidentTypeId).toBe(TYPE_ID)
+          expect(body.fields).toEqual({ region: 'us-east' })
+          return HttpResponse.json(mock, { status: 201 })
+        })
+      )
+      const result = await api.declareOnCallIncident({
+        title: 'Global outage',
+        severity: 'SEV-1',
+        mode: 'RETROSPECTIVE',
+        visibility: 'PRIVATE',
+        initialStatus: 'TRIAGE',
+        incidentTypeId: TYPE_ID,
+        fields: { region: 'us-east' },
+      })
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('declareIncidentFromAlert with full payload', () => {
+    it('passes mode, visibility, and fields through to the alert declare path', async () => {
+      const mock = { id: INCIDENT_ID }
+      server.use(
+        http.post(`${API_BASE}/on-call/alerts/${ALERT_ID_PRIMARY}/declare-incident`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.mode).toBe('LIVE')
+          expect(body.visibility).toBe('ORGANIZATION')
+          expect(body.fields).toEqual({ impact: 'high' })
+          return HttpResponse.json(mock, { status: 201 })
+        })
+      )
+      const result = await api.declareIncidentFromAlert(ALERT_ID_PRIMARY, {
+        title: 'From alert',
+        severity: 'SEV-2',
+        mode: 'LIVE',
+        visibility: 'ORGANIZATION',
+        fields: { impact: 'high' },
+      })
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('getOnCallIncidentTimeline with filters', () => {
+    it('serialises event type, provenance, visibility, and includeDeleted', async () => {
+      const mock = [{ id: EVENT_ID, eventType: 'DECLARED', provenance: 'REST', visibility: 'ORGANIZATION' }]
+      server.use(
+        http.get(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.getAll('eventType')).toEqual(['DECLARED', 'NOTE_ADDED'])
+          expect(url.searchParams.getAll('provenance')).toEqual(['REST'])
+          expect(url.searchParams.getAll('visibility')).toEqual(['PRIVATE'])
+          expect(url.searchParams.get('includeDeleted')).toBe('true')
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.getOnCallIncidentTimeline(INCIDENT_ID, {
+        eventType: ['DECLARED', 'NOTE_ADDED'],
+        provenance: ['REST'],
+        visibility: ['PRIVATE'],
+        includeDeleted: true,
+      })
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('exportOnCallIncidentTimeline', () => {
+    it('GETs the timeline export', async () => {
+      const mock = { incidentId: INCIDENT_ID, exportedAt: '2026-06-05T00:00:00Z', events: [] }
+      server.use(
+        http.get(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/export`, () => HttpResponse.json(mock))
+      )
+      expect(await api.exportOnCallIncidentTimeline(INCIDENT_ID)).toEqual(mock)
+    })
+  })
+
+  describe('getIncidentTimelineRevisions', () => {
+    it('GETs revisions for an event', async () => {
+      const mock = [{ id: 'rev-1', revision: 1, action: 'EDIT' }]
+      server.use(
+        http.get(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/${EVENT_ID}/revisions`, () =>
+          HttpResponse.json(mock)
+        )
+      )
+      expect(await api.getIncidentTimelineRevisions(INCIDENT_ID, EVENT_ID)).toEqual(mock)
+    })
+  })
+
+  describe('editIncidentTimelineEvent', () => {
+    it('PATCHes the event with corrections and a reason', async () => {
+      const mock = { id: EVENT_ID, eventType: 'STATUS_CHANGED' }
+      server.use(
+        http.patch(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/${EVENT_ID}`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.eventType).toBe('STATUS_CHANGED')
+          expect(body.visibility).toBe('PARTICIPANTS')
+          expect(body.reason).toBe('correcting the record')
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.editIncidentTimelineEvent(INCIDENT_ID, EVENT_ID, {
+        eventType: 'STATUS_CHANGED',
+        visibility: 'PARTICIPANTS',
+        reason: 'correcting the record',
+      })
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('annotateIncidentTimelineEvent', () => {
+    it('POSTs an annotation', async () => {
+      const mock = { id: EVENT_ID, annotation: 'context' }
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/${EVENT_ID}/annotation`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.annotation).toBe('context')
+          return HttpResponse.json(mock)
+        })
+      )
+      expect(
+        await api.annotateIncidentTimelineEvent(INCIDENT_ID, EVENT_ID, { annotation: 'context' })
+      ).toEqual(mock)
+    })
+  })
+
+  describe('reorderIncidentTimeline', () => {
+    it('POSTs the ordered event ids', async () => {
+      const mock = [{ id: EVENT_ID }]
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/reorder`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.eventIds).toEqual([EVENT_ID, 'e1111111-1111-4111-8111-111111111112'])
+          return HttpResponse.json(mock)
+        })
+      )
+      const result = await api.reorderIncidentTimeline(INCIDENT_ID, [
+        EVENT_ID,
+        'e1111111-1111-4111-8111-111111111112',
+      ])
+      expect(result).toEqual(mock)
+    })
+  })
+
+  describe('deleteIncidentTimelineEvent', () => {
+    it('DELETEs the event with a reason', async () => {
+      const mock = { message: 'Timeline event deleted' }
+      server.use(
+        http.delete(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/${EVENT_ID}`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.reason).toBe('duplicate')
+          return HttpResponse.json(mock)
+        })
+      )
+      expect(await api.deleteIncidentTimelineEvent(INCIDENT_ID, EVENT_ID, 'duplicate')).toEqual(mock)
+    })
+  })
+
+  describe('restoreIncidentTimelineEvent', () => {
+    it('POSTs a restore', async () => {
+      const mock = { message: 'Timeline event restored' }
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/timeline/${EVENT_ID}/restore`, () =>
+          HttpResponse.json(mock)
+        )
+      )
+      expect(await api.restoreIncidentTimelineEvent(INCIDENT_ID, EVENT_ID)).toEqual(mock)
+    })
+  })
+
+  describe('incident sources', () => {
+    it('lists sources', async () => {
+      const mock = [{ id: SOURCE_ID, sourceType: 'URL', sourceKey: 'https://x', metadata: {}, createdAt: '' }]
+      server.use(
+        http.get(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/sources`, () => HttpResponse.json(mock))
+      )
+      expect(await api.getIncidentSources(INCIDENT_ID)).toEqual(mock)
+    })
+
+    it('links a source and returns the updated list', async () => {
+      const mock = [{ id: SOURCE_ID, sourceType: 'URL', sourceKey: 'https://runbook', metadata: {}, createdAt: '' }]
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/sources`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.sourceType).toBe('URL')
+          expect(body.sourceUrl).toBe('https://runbook')
+          return HttpResponse.json(mock, { status: 201 })
+        })
+      )
+      const result = await api.linkIncidentSource(INCIDENT_ID, {
+        sourceType: 'URL',
+        sourceKey: 'https://runbook',
+        sourceUrl: 'https://runbook',
+      })
+      expect(result).toEqual(mock)
+    })
+
+    it('unlinks a source', async () => {
+      const mock = { message: 'Incident source removed' }
+      server.use(
+        http.delete(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/sources/${SOURCE_ID}`, () =>
+          HttpResponse.json(mock)
+        )
+      )
+      expect(await api.unlinkIncidentSource(INCIDENT_ID, SOURCE_ID)).toEqual(mock)
+    })
+  })
+
+  describe('incident roles and participants', () => {
+    it('lists role assignments', async () => {
+      const mock = [{ id: 'a1', assigneeUserId: USER_ID }]
+      server.use(
+        http.get(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/roles`, () => HttpResponse.json(mock))
+      )
+      expect(await api.getIncidentRoleAssignments(INCIDENT_ID)).toEqual(mock)
+    })
+
+    it('assigns a role with expected version', async () => {
+      const mock = [{ id: 'a1', assigneeUserId: USER_ID }]
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/roles/${ROLE_ID}/assign`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.userId).toBe(USER_ID)
+          expect(body.expectedVersion).toBe(4)
+          return HttpResponse.json(mock)
+        })
+      )
+      expect(await api.assignIncidentRole(INCIDENT_ID, ROLE_ID, USER_ID, 4)).toEqual(mock)
+    })
+
+    it('claims a role', async () => {
+      const mock = [{ id: 'a1' }]
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/roles/${ROLE_ID}/claim`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.expectedVersion).toBe(2)
+          return HttpResponse.json(mock)
+        })
+      )
+      expect(await api.claimIncidentRole(INCIDENT_ID, ROLE_ID, 2)).toEqual(mock)
+    })
+
+    it('unassigns a role', async () => {
+      const mock = { message: 'Incident role unassigned' }
+      server.use(
+        http.delete(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/roles/${ROLE_ID}`, () =>
+          HttpResponse.json(mock)
+        )
+      )
+      expect(await api.unassignIncidentRole(INCIDENT_ID, ROLE_ID)).toEqual(mock)
+    })
+
+    it('hands over a role with a note', async () => {
+      const mock = [{ id: 'a2' }]
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/roles/${ROLE_ID}/handover`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.userId).toBe(USER_ID)
+          expect(body.note).toBe('taking over')
+          return HttpResponse.json(mock)
+        })
+      )
+      expect(
+        await api.handoverIncidentRole(INCIDENT_ID, ROLE_ID, { userId: USER_ID, note: 'taking over' })
+      ).toEqual(mock)
+    })
+
+    it('lists participants', async () => {
+      const mock = [{ id: 'p1', userId: USER_ID, type: 'PARTICIPANT' }]
+      server.use(
+        http.get(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/participants`, () => HttpResponse.json(mock))
+      )
+      expect(await api.getIncidentParticipants(INCIDENT_ID)).toEqual(mock)
+    })
+
+    it('joins and observes an incident', async () => {
+      const joined = [{ id: 'p1', userId: USER_ID, type: 'PARTICIPANT' }]
+      const observing = [{ id: 'p1', userId: USER_ID, type: 'OBSERVER' }]
+      server.use(
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/participants`, () => HttpResponse.json(joined)),
+        http.post(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/observers`, () => HttpResponse.json(observing))
+      )
+      expect(await api.joinIncident(INCIDENT_ID, { expectedVersion: 1 })).toEqual(joined)
+      expect(await api.observeIncident(INCIDENT_ID)).toEqual(observing)
+    })
+
+    it('leaves an incident', async () => {
+      const mock = { message: 'Incident participant removed' }
+      server.use(
+        http.delete(`${API_BASE}/on-call/incidents/${INCIDENT_ID}/participants/${USER_ID}`, () =>
+          HttpResponse.json(mock)
+        )
+      )
+      expect(await api.leaveIncident(INCIDENT_ID, USER_ID)).toEqual(mock)
+    })
+  })
+
+  describe('incident configuration', () => {
+    it('lists and creates incident types', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-configuration/types`, () =>
+          HttpResponse.json([{ id: TYPE_ID, key: 'security', name: 'Security', version: 1, enabled: true }])
+        ),
+        http.post(`${API_BASE}/on-call/incident-configuration/types`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.key).toBe('security')
+          return HttpResponse.json({ id: TYPE_ID, key: 'security', name: 'Security', version: 1, enabled: true }, { status: 201 })
+        })
+      )
+      expect((await api.getIncidentTypes()).length).toBe(1)
+      const created = await api.createIncidentType({ key: 'security', name: 'Security' })
+      expect(created.id).toBe(TYPE_ID)
+    })
+
+    it('lists and creates custom fields with options', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-configuration/fields`, () =>
+          HttpResponse.json([{ id: FIELD_ID, key: 'region', name: 'Region', version: 1, valueType: 'SELECT', options: [] }])
+        ),
+        http.post(`${API_BASE}/on-call/incident-configuration/fields`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.valueType).toBe('SELECT')
+          expect((body.options as unknown[]).length).toBe(1)
+          return HttpResponse.json({ id: FIELD_ID, key: 'region', name: 'Region', version: 1, valueType: 'SELECT', options: [] }, { status: 201 })
+        })
+      )
+      expect((await api.getIncidentCustomFields()).length).toBe(1)
+      const created = await api.createIncidentCustomField({
+        key: 'region',
+        name: 'Region',
+        valueType: 'SELECT',
+        options: [{ value: 'us', label: 'US', position: 0 }],
+      })
+      expect(created.id).toBe(FIELD_ID)
+    })
+
+    it('lists forms by stage and creates a form', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-configuration/forms`, ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('stage')).toBe('DECLARATION')
+          return HttpResponse.json([{ id: FORM_ID, stage: 'DECLARATION', name: 'Declare', version: 1, fields: [] }])
+        }),
+        http.post(`${API_BASE}/on-call/incident-configuration/forms`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.stage).toBe('DECLARATION')
+          return HttpResponse.json({ id: FORM_ID, stage: 'DECLARATION', name: 'Declare', version: 1, fields: [] }, { status: 201 })
+        })
+      )
+      expect((await api.getIncidentForms('DECLARATION')).length).toBe(1)
+      const created = await api.createIncidentForm({
+        stage: 'DECLARATION',
+        name: 'Declare',
+        fields: [{ fieldId: FIELD_ID, position: 0 }],
+      })
+      expect(created.id).toBe(FORM_ID)
+    })
+
+    it('lists and creates responder roles', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-configuration/roles`, () =>
+          HttpResponse.json([{ id: ROLE_ID, key: 'scribe', name: 'Scribe', version: 1, responsibilities: ['record'], required: false, default: false }])
+        ),
+        http.post(`${API_BASE}/on-call/incident-configuration/roles`, async ({ request }) => {
+          const body = await request.json() as Record<string, unknown>
+          expect(body.responsibilities).toEqual(['record'])
+          return HttpResponse.json({ id: ROLE_ID, key: 'scribe', name: 'Scribe', version: 1, responsibilities: ['record'], required: false, default: false }, { status: 201 })
+        })
+      )
+      expect((await api.getIncidentRoles()).length).toBe(1)
+      const created = await api.createIncidentRole({ key: 'scribe', name: 'Scribe', responsibilities: ['record'] })
+      expect(created.id).toBe(ROLE_ID)
+    })
+  })
+
   // ──── Phone Number ────
 
   describe('updatePhoneNumber', () => {

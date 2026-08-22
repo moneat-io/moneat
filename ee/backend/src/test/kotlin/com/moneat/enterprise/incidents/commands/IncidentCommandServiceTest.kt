@@ -9,8 +9,10 @@ import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
 import com.moneat.enterprise.incidents.models.NativeIncidentMode
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
+import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
+import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
@@ -213,6 +215,38 @@ class IncidentCommandServiceTest {
             val sourceRow = OnCallIncidents.selectAll().where { OnCallIncidents.id eq source.incidentId }.single()
             assertEquals(NativeIncidentStatus.CANCELLED.wire, sourceRow[OnCallIncidents.status])
             assertEquals(3, sourceRow[OnCallIncidents.version])
+        }
+    }
+
+    @Test
+    fun `links several alerts as idempotent incident sources`() {
+        val firstAlertId = seedAlert("first-source-alert")
+        val secondAlertId = seedAlert("second-source-alert")
+        val incident = service.execute(declareCommand("declare-source-alerts", actor()))
+
+        fun link(commandKey: String, alertId: Int) =
+            service.execute(
+                LinkIncidentSourceCommand(
+                    commandKey = commandKey,
+                    actor = actor(),
+                    incidentId = incident.incidentId,
+                    source =
+                        IncidentSourceReference(
+                            sourceType = IncidentSourceType.ON_CALL_ALERT,
+                            sourceKey = "resolved-by-service",
+                            onCallAlertId = alertId,
+                        ),
+                ),
+            )
+
+        val first = link("link-first-source-alert", firstAlertId)
+        val replay = link("replay-first-source-alert", firstAlertId)
+        val second = link("link-second-source-alert", secondAlertId)
+
+        assertEquals(listOf(2, 2, 3), listOf(first.version, replay.version, second.version))
+        transaction {
+            assertEquals(2, OnCallIncidentAlerts.selectAll().count())
+            assertEquals(2, NativeIncidentSourceLinks.selectAll().count())
         }
     }
 
