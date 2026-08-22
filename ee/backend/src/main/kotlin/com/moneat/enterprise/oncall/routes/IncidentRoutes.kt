@@ -21,7 +21,11 @@ import com.moneat.enterprise.incidents.config.IncidentConfigurationService
 import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineService
 import com.moneat.enterprise.incidents.models.IncidentFormStage
+import com.moneat.enterprise.incidents.models.IncidentParticipationType
 import com.moneat.enterprise.incidents.models.NativeIncidentMode
+import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
@@ -30,6 +34,7 @@ import com.moneat.enterprise.oncall.models.OnCallIncident
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
+import com.moneat.org.services.OrgRole
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.Users
 import com.moneat.shared.services.toUuidOrNull
@@ -53,6 +58,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import kotlin.uuid.Uuid
@@ -65,11 +71,14 @@ private const val INVALID_ALERT_ID_MESSAGE = "Invalid alert ID"
 private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
 private const val INVALID_INCIDENT_ID_MESSAGE = "Invalid incident ID"
 private const val INCIDENT_NOT_FOUND_MESSAGE = "Incident not found"
+private const val FORBIDDEN_MESSAGE = "Insufficient permissions"
+private const val INCIDENT_COMMANDER_ROLE_KEY = "incident-commander"
 private const val IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 internal data class OnCallUserContext(
     val organizationId: Int,
     val userId: Int,
+    val role: OrgRole,
 )
 
 internal fun ApplicationCall.incidentCommandKey(action: String): String =
@@ -381,7 +390,92 @@ internal suspend fun ApplicationCall.requireUserContext(): OnCallUserContext? {
         respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
         return null
     }
-    return OnCallUserContext(organizationId, userId)
+    val role =
+        transaction {
+            Memberships
+                .selectAll()
+                .where {
+                    (Memberships.organization_id eq organizationId) and
+                        (Memberships.user_id eq userId)
+                }.firstOrNull()
+                ?.get(Memberships.role)
+        }
+    if (role == null) {
+        respond(HttpStatusCode.Unauthorized, ErrorResponse(INVALID_TOKEN_MESSAGE))
+        return null
+    }
+    return OnCallUserContext(organizationId, userId, OrgRole.fromString(role))
+}
+
+internal suspend fun ApplicationCall.requireIncidentAdmin(context: OnCallUserContext): Boolean {
+    if (context.role.level >= OrgRole.ADMIN.level) return true
+    respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+    return false
+}
+
+internal suspend fun ApplicationCall.requireIncidentAdminContext(): OnCallUserContext? {
+    val context = requireUserContext() ?: return null
+    if (!requireIncidentAdmin(context)) return null
+    return context
+}
+
+internal suspend fun ApplicationCall.requireIncidentResponderOrAdmin(
+    context: OnCallUserContext,
+    incidentId: Int,
+): Boolean {
+    if (context.role.level >= OrgRole.ADMIN.level) return true
+    val isResponder =
+        transaction {
+            val hasRole =
+                NativeIncidentRoleAssignments
+                    .selectAll()
+                    .where {
+                        (NativeIncidentRoleAssignments.organizationId eq context.organizationId) and
+                            (NativeIncidentRoleAssignments.incidentId eq incidentId) and
+                            (NativeIncidentRoleAssignments.assigneeUserId eq context.userId) and
+                            NativeIncidentRoleAssignments.endedAt.isNull()
+                    }.limit(1)
+                    .firstOrNull() != null
+            hasRole ||
+                NativeIncidentParticipants
+                    .selectAll()
+                    .where {
+                        (NativeIncidentParticipants.organizationId eq context.organizationId) and
+                            (NativeIncidentParticipants.incidentId eq incidentId) and
+                            (NativeIncidentParticipants.userId eq context.userId) and
+                            (NativeIncidentParticipants.participationType eq
+                                IncidentParticipationType.PARTICIPANT.wire) and
+                            NativeIncidentParticipants.leftAt.isNull()
+                    }.limit(1)
+                    .firstOrNull() != null
+        }
+    if (isResponder) return true
+    respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+    return false
+}
+
+internal suspend fun ApplicationCall.requireIncidentManagerOrSelf(
+    context: OnCallUserContext,
+    incidentId: Int,
+    targetUserId: Int,
+): Boolean {
+    if (context.role.level >= OrgRole.ADMIN.level || context.userId == targetUserId) return true
+    val isIncidentCommander =
+        transaction {
+            (NativeIncidentRoleAssignments innerJoin NativeIncidentRoleDefinitions)
+                .selectAll()
+                .where {
+                    (NativeIncidentRoleAssignments.organizationId eq context.organizationId) and
+                        (NativeIncidentRoleAssignments.incidentId eq incidentId) and
+                        (NativeIncidentRoleAssignments.assigneeUserId eq context.userId) and
+                        NativeIncidentRoleAssignments.endedAt.isNull() and
+                        (NativeIncidentRoleDefinitions.stableKey eq INCIDENT_COMMANDER_ROLE_KEY)
+                }.limit(1)
+                .firstOrNull() != null
+        }
+    if (isIncidentCommander) return true
+    respond(HttpStatusCode.Forbidden, ErrorResponse(FORBIDDEN_MESSAGE))
+    return false
 }
 
 private suspend fun ApplicationCall.requireAlertId(
@@ -690,7 +784,7 @@ private suspend fun declareIncident(declaration: IncidentDeclaration): OnCallInc
     val visibility =
         NativeIncidentVisibility.entries.firstOrNull { it.wire == request.visibility.trim().uppercase() }
             ?: throw IllegalArgumentException("Invalid incident visibility")
-    val initialStatus = NativeIncidentStatus.fromWire(request.initialStatus.trim())
+    val initialStatus = NativeIncidentStatus.fromWire(request.initialStatus.trim().uppercase())
         ?: throw IllegalArgumentException("Invalid incident status")
     val resolvedForm =
         declaration.configurationService.resolveForm(

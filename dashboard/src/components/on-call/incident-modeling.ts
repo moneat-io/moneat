@@ -52,8 +52,9 @@ import type {
   IncidentSourceType,
   IncidentTimelineProvenance,
   IncidentTimelineVisibility,
+  OnCallIncidentMode,
+  OnCallIncidentVisibility,
 } from '@/lib/api/types'
-import type {OnCallIncidentMode, OnCallIncidentVisibility} from '@/lib/api/types'
 
 export const INCIDENT_MODES: OnCallIncidentMode[] = ['LIVE', 'RETROSPECTIVE', 'TEST']
 
@@ -324,6 +325,19 @@ export function isScalarConditionField(field: IncidentCustomFieldDefinition): bo
   return field.valueType !== 'MULTI_SELECT'
 }
 
+/**
+ * Parse a raw NUMBER-field text value into a finite number, accepting negatives
+ * and decimals. Returns undefined for empty or not-yet-numeric input (e.g. a
+ * lone "-") so partial keystrokes are stored as "no value" rather than blocked;
+ * server-side validation remains authoritative for the final value.
+ */
+export function parseNumericInput(raw: string): number | undefined {
+  const trimmed = raw.trim()
+  if (trimmed === '') return undefined
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 /** Assemble a create-form field input, preserving typed defaults/conditions. */
 export function buildFormFieldInput(row: {
   fieldId: string
@@ -389,7 +403,8 @@ export function buildTimelineEditPayload(
     } catch {
       return {error: 'Details must be valid JSON.'}
     }
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    const isObject = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+    if (!isObject) {
       return {error: 'Details must be a JSON object of key/value pairs.'}
     }
     details = parsed as Record<string, IncidentFieldValue>
@@ -399,11 +414,23 @@ export function buildTimelineEditPayload(
   const occurredChanged =
     draft.occurredAtLocal.length > 0 && draft.occurredAtLocal !== original.occurredAtLocal
 
+  // A changed occurred-at must parse to a real instant. Invalid input (a cleared
+  // or malformed datetime-local value) is surfaced through the same error
+  // contract rather than producing an Invalid Date / throwing from toISOString().
+  let originalOccurredAt: string | undefined
+  if (occurredChanged) {
+    const parsedOccurred = new Date(draft.occurredAtLocal)
+    if (Number.isNaN(parsedOccurred.getTime())) {
+      return {error: 'Occurred-at must be a valid date and time.'}
+    }
+    originalOccurredAt = parsedOccurred.toISOString()
+  }
+
   return {
     payload: {
       eventType: eventType && eventType !== original.eventType ? eventType : undefined,
       visibility: draft.visibility !== original.visibility ? draft.visibility : undefined,
-      originalOccurredAt: occurredChanged ? new Date(draft.occurredAtLocal).toISOString() : undefined,
+      originalOccurredAt,
       details,
       reason: draft.reason.trim() || undefined,
     },
@@ -431,9 +458,32 @@ const HIDDEN_DETAIL_KEYS = new Set([
   'annotation',
 ])
 
-function isHiddenDetailKey(key: string): boolean {
+/** Private role instructions must never be surfaced, at any nesting depth. */
+function isPrivateDetailKey(key: string): boolean {
   const lower = key.toLowerCase()
-  return HIDDEN_DETAIL_KEYS.has(lower) || lower.includes('instruction') || lower.includes('private')
+  return lower.includes('instruction') || lower.includes('private')
+}
+
+function isHiddenDetailKey(key: string): boolean {
+  return HIDDEN_DETAIL_KEYS.has(key.toLowerCase()) || isPrivateDetailKey(key)
+}
+
+/**
+ * Recursively remove private-instruction keys from a detail value so that a
+ * nested object/array can never leak instructions through a stringified render,
+ * while keeping every other (legitimate) key intact.
+ */
+function stripPrivateDetailKeys(value: IncidentFieldValue): IncidentFieldValue {
+  if (Array.isArray(value)) return value.map(stripPrivateDetailKeys)
+  if (value !== null && typeof value === 'object') {
+    const cleaned: Record<string, IncidentFieldValue> = {}
+    for (const [key, nested] of Object.entries(value)) {
+      if (isPrivateDetailKey(key)) continue
+      cleaned[key] = stripPrivateDetailKeys(nested)
+    }
+    return cleaned
+  }
+  return value
 }
 
 function detailToString(value: IncidentFieldValue | undefined): string {
@@ -441,7 +491,7 @@ function detailToString(value: IncidentFieldValue | undefined): string {
   if (typeof value === 'string') return value
   if (typeof value === 'number' || typeof value === 'boolean') return String(value)
   if (Array.isArray(value)) return value.map(detailToString).filter(Boolean).join(', ')
-  return JSON.stringify(value)
+  return JSON.stringify(stripPrivateDetailKeys(value))
 }
 
 /** Short, safe fallback for an opaque id when no display name resolves. */

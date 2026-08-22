@@ -99,7 +99,7 @@ function detailString(value: IncidentFieldValue | undefined): string | null {
   return null
 }
 
-export function IncidentTimelinePanel({incidentId}: IncidentTimelinePanelProps) {
+export function IncidentTimelinePanel({incidentId}: Readonly<IncidentTimelinePanelProps>) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
 
@@ -148,7 +148,9 @@ export function IncidentTimelinePanel({incidentId}: IncidentTimelinePanelProps) 
     queryKey: ['incident-timeline-event-types', incidentId, includeDeleted],
     queryFn: () => api.getOnCallIncidentTimeline(incidentId, {includeDeleted}),
   })
-  const seenTypes = [...new Set((typeOptionsQuery.data ?? []).map((entry) => entry.eventType))].sort()
+  const seenTypes = [...new Set((typeOptionsQuery.data ?? []).map((entry) => entry.eventType))].sort(
+    (left, right) => left.localeCompare(right)
+  )
 
   const invalidate = () => queryClient.invalidateQueries({queryKey: ['incident-canonical-timeline', incidentId]})
   const onError = (error: Error) =>
@@ -203,7 +205,11 @@ export function IncidentTimelinePanel({incidentId}: IncidentTimelinePanelProps) 
       const anchor = document.createElement('a')
       anchor.href = url
       anchor.download = `incident-${incidentId}-timeline.json`
+      // Firefox (and some others) only trigger a download when the anchor is in
+      // the document, so attach it before clicking and remove it afterwards.
+      document.body.appendChild(anchor)
       anchor.click()
+      anchor.remove()
       URL.revokeObjectURL(url)
     } catch (error) {
       onError(error as Error)
@@ -372,7 +378,7 @@ function TimelineRow({
   onRemove,
   onRestore,
   onRevisions,
-}: TimelineRowProps) {
+}: Readonly<TimelineRowProps>) {
   const style = timelineEventStyle(entry.eventType)
   const Icon = style.icon
   const deleted = Boolean(entry.deletedAt)
@@ -528,7 +534,7 @@ function RowMenu({
   onRemove,
   onRestore,
   onRevisions,
-}: RowMenuProps) {
+}: Readonly<RowMenuProps>) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -589,7 +595,7 @@ interface TimelineFilterBarProps {
   onClear: () => void
 }
 
-function TimelineFilterBar(props: TimelineFilterBarProps) {
+function TimelineFilterBar(props: Readonly<TimelineFilterBarProps>) {
   const toggle = <T,>(list: T[], value: T): T[] =>
     list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 
@@ -645,7 +651,13 @@ interface MultiFilterMenuProps {
   empty?: boolean
 }
 
-function MultiFilterMenu({label, selected, options, onToggle, empty}: MultiFilterMenuProps) {
+function MultiFilterMenu({
+  label,
+  selected,
+  options,
+  onToggle,
+  empty,
+}: Readonly<MultiFilterMenuProps>) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -681,7 +693,7 @@ interface AnnotateDialogProps {
   onSaved: () => void
 }
 
-function AnnotateDialog({incidentId, entry, onClose, onSaved}: AnnotateDialogProps) {
+function AnnotateDialog({incidentId, entry, onClose, onSaved}: Readonly<AnnotateDialogProps>) {
   const {toast} = useToast()
   const [annotation, setAnnotation] = useState(entry.annotation ?? '')
   const [reason, setReason] = useState('')
@@ -752,7 +764,7 @@ function toLocalInputValue(iso: string): string {
   return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16)
 }
 
-function EditEventDialog({incidentId, entry, onClose, onSaved}: EditEventDialogProps) {
+function EditEventDialog({incidentId, entry, onClose, onSaved}: Readonly<EditEventDialogProps>) {
   const {toast} = useToast()
   const initialOccurredAt = toLocalInputValue(entry.originalOccurredAt)
   const [eventType, setEventType] = useState(entry.eventType)
@@ -876,8 +888,10 @@ interface RemoveDialogProps {
   onConfirm: (reason?: string) => void
 }
 
-function RemoveDialog({restore, isPending, onClose, onConfirm}: RemoveDialogProps) {
+function RemoveDialog({restore, isPending, onClose, onConfirm}: Readonly<RemoveDialogProps>) {
   const [reason, setReason] = useState('')
+  const actionLabel = restore ? 'Restore' : 'Remove'
+  const submitLabel = isPending ? 'Working…' : actionLabel
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -907,7 +921,7 @@ function RemoveDialog({restore, isPending, onClose, onConfirm}: RemoveDialogProp
             onClick={() => onConfirm(reason.trim() || undefined)}
             disabled={isPending}
           >
-            {isPending ? 'Working…' : restore ? 'Restore' : 'Remove'}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -922,7 +936,7 @@ interface RevisionsDialogProps {
   onClose: () => void
 }
 
-function RevisionsDialog({incidentId, entry, memberName, onClose}: RevisionsDialogProps) {
+function RevisionsDialog({incidentId, entry, memberName, onClose}: Readonly<RevisionsDialogProps>) {
   const {data, isLoading} = useQuery({
     queryKey: ['incident-timeline-revisions', incidentId, entry.id],
     queryFn: () => api.getIncidentTimelineRevisions(incidentId, entry.id),
@@ -976,7 +990,10 @@ function RevisionsDialog({incidentId, entry, memberName, onClose}: RevisionsDial
   )
 }
 
-function RevisionSnapshot({title, snapshot}: {title: string; snapshot: Record<string, IncidentFieldValue>}) {
+function RevisionSnapshot({
+  title,
+  snapshot,
+}: Readonly<{title: string; snapshot: Record<string, IncidentFieldValue>}>) {
   return (
     <div>
       <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{title}</p>

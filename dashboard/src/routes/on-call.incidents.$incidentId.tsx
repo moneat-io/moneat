@@ -17,7 +17,6 @@
 import {createFileRoute, useNavigate} from '@tanstack/react-router'
 import {useQuery, useMutation, useQueryClient} from '@tanstack/react-query'
 import {api} from '@/lib/api'
-import type {OnCallIncidentDetail} from '@/lib/api/types'
 import {Button} from '@/components/ui/button'
 import {Badge} from '@/components/ui/badge'
 import {SectionCard} from '@/components/ui/section-card'
@@ -77,7 +76,7 @@ function DeclaredIncidentDetailComponent() {
 
   const {data: incident, isLoading} = useQuery({
     queryKey: incidentKey,
-    queryFn: () => api.getOnCallIncident(normalizedIncidentId) as Promise<OnCallIncidentDetail>,
+    queryFn: () => api.getOnCallIncident(normalizedIncidentId),
     enabled: hasValidIncidentId,
   })
 
@@ -381,7 +380,7 @@ function DeclaredIncidentDetailComponent() {
   )
 }
 
-function DetailRow({label, children}: {label: string; children: ReactNode}) {
+function DetailRow({label, children}: Readonly<{label: string; children: ReactNode}>) {
   return (
     <div>
       <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>

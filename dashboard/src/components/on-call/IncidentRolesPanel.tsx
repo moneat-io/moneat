@@ -57,7 +57,11 @@ interface MemberOption {
   label: string
 }
 
-export function IncidentRolesPanel({incidentId, incidentVersion, onMutated}: IncidentRolesPanelProps) {
+export function IncidentRolesPanel({
+  incidentId,
+  incidentVersion,
+  onMutated,
+}: Readonly<IncidentRolesPanelProps>) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const {user} = useAuth()
@@ -113,17 +117,19 @@ export function IncidentRolesPanel({incidentId, incidentVersion, onMutated}: Inc
 
   const claimMutation = useMutation({
     mutationFn: (roleId: string) => api.claimIncidentRole(incidentId, roleId, incidentVersion),
-    onSuccess: (data) => {
-      void syncVersioned(() => queryClient.setQueryData(rolesKey, data))
+    onSuccess: async (data) => {
+      await syncVersioned(() => queryClient.setQueryData(rolesKey, data))
       toast({title: 'Role claimed', description: 'You now own this incident role.'})
     },
     onError,
   })
   const unassignMutation = useMutation({
     mutationFn: (roleId: string) => api.unassignIncidentRole(incidentId, roleId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: rolesKey})
-      void onMutated()
+    onSuccess: async () => {
+      // Unassigning still bumps the incident version server-side, so hold the
+      // gate until the incident refetches — a follow-up versioned action must
+      // not reuse the now-stale expectedVersion.
+      await syncVersioned(() => queryClient.invalidateQueries({queryKey: rolesKey}))
       toast({title: 'Role unassigned'})
     },
     onError,
@@ -131,9 +137,9 @@ export function IncidentRolesPanel({incidentId, incidentVersion, onMutated}: Inc
   const assignMutation = useMutation({
     mutationFn: ({roleId, userId}: {roleId: string; userId: string}) =>
       api.assignIncidentRole(incidentId, roleId, userId, incidentVersion),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setPicker(null)
-      void syncVersioned(() => queryClient.setQueryData(rolesKey, data))
+      await syncVersioned(() => queryClient.setQueryData(rolesKey, data))
       toast({title: 'Role assigned'})
     },
     onError,
@@ -141,9 +147,9 @@ export function IncidentRolesPanel({incidentId, incidentVersion, onMutated}: Inc
   const handoverMutation = useMutation({
     mutationFn: ({roleId, userId, note}: {roleId: string; userId: string; note?: string}) =>
       api.handoverIncidentRole(incidentId, roleId, {userId, note, expectedVersion: incidentVersion}),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setPicker(null)
-      void syncVersioned(() => queryClient.setQueryData(rolesKey, data))
+      await syncVersioned(() => queryClient.setQueryData(rolesKey, data))
       toast({title: 'Role handed over'})
     },
     onError,
@@ -153,17 +159,17 @@ export function IncidentRolesPanel({incidentId, incidentVersion, onMutated}: Inc
       kind === 'participant'
         ? api.joinIncident(incidentId, {expectedVersion: incidentVersion})
         : api.observeIncident(incidentId, {expectedVersion: incidentVersion}),
-    onSuccess: (data) => {
-      void syncVersioned(() => queryClient.setQueryData(participantsKey, data))
+    onSuccess: async (data) => {
+      await syncVersioned(() => queryClient.setQueryData(participantsKey, data))
       toast({title: 'Membership updated'})
     },
     onError,
   })
   const leaveMutation = useMutation({
     mutationFn: (userId: string) => api.leaveIncident(incidentId, userId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({queryKey: participantsKey})
-      void onMutated()
+    onSuccess: async () => {
+      // Leaving also bumps the incident version, so use the same refresh gate.
+      await syncVersioned(() => queryClient.invalidateQueries({queryKey: participantsKey}))
       toast({title: 'Removed from incident'})
     },
     onError,
@@ -368,7 +374,7 @@ function MembershipList({
   memberName,
   onLeave,
   disabled,
-}: MembershipListProps) {
+}: Readonly<MembershipListProps>) {
   return (
     <div className="rounded-lg border p-3">
       <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
@@ -426,9 +432,11 @@ function UserPickerDialog({
   isPending,
   onCancel,
   onConfirm,
-}: UserPickerDialogProps) {
+}: Readonly<UserPickerDialogProps>) {
   const [userId, setUserId] = useState('')
   const [note, setNote] = useState('')
+  const actionLabel = mode === 'assign' ? 'Assign' : 'Hand over'
+  const submitLabel = isPending ? 'Saving…' : actionLabel
 
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
@@ -480,7 +488,7 @@ function UserPickerDialog({
             onClick={() => onConfirm(userId, note.trim() || undefined)}
             disabled={!userId || isPending}
           >
-            {isPending ? 'Saving…' : mode === 'assign' ? 'Assign' : 'Hand over'}
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

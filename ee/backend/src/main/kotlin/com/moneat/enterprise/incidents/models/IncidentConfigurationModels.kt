@@ -10,8 +10,11 @@ import com.moneat.enterprise.oncall.models.requiredJsonb
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.v1.core.Coalesce
 import org.jetbrains.exposed.v1.core.ReferenceOption
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.intLiteral
 import org.jetbrains.exposed.v1.datetime.timestamp
 import kotlin.uuid.Uuid
 
@@ -96,7 +99,10 @@ object NativeIncidentCustomFieldOptions : IntIdTable("native_incident_custom_fie
 object NativeIncidentForms : IntIdTable("native_incident_forms") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
-    val incidentTypeId = integer("incident_type_id").references(NativeIncidentTypes.id).nullable()
+    val incidentTypeId =
+        integer("incident_type_id")
+            .references(NativeIncidentTypes.id, onDelete = ReferenceOption.CASCADE)
+            .nullable()
     val stage = varchar("stage", 32)
     val version = integer("version")
     val isCurrent = bool("is_current").default(true)
@@ -107,6 +113,16 @@ object NativeIncidentForms : IntIdTable("native_incident_forms") {
 
     init {
         uniqueIndex(organizationId, resourceId)
+        uniqueIndex(
+            customIndexName = "uq_native_incident_forms_version",
+            columns = arrayOf(organizationId, stage, version),
+            functions = listOf(Coalesce(incidentTypeId, intLiteral(0))),
+        )
+        uniqueIndex(
+            customIndexName = "uq_native_incident_forms_current",
+            columns = arrayOf(organizationId, stage),
+            functions = listOf(Coalesce(incidentTypeId, intLiteral(0))),
+        ) { isCurrent eq true }
     }
 }
 

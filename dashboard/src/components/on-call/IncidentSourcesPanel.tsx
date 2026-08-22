@@ -48,7 +48,7 @@ interface IncidentSourcesPanelProps {
   incidentId: string
 }
 
-export function IncidentSourcesPanel({incidentId}: IncidentSourcesPanelProps) {
+export function IncidentSourcesPanel({incidentId}: Readonly<IncidentSourcesPanelProps>) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
   const [linkOpen, setLinkOpen] = useState(false)
@@ -161,7 +161,7 @@ interface LinkSourceDialogProps {
   onSubmit: (input: LinkIncidentSourceInput) => void
 }
 
-function LinkSourceDialog({isPending, onClose, onSubmit}: LinkSourceDialogProps) {
+function LinkSourceDialog({isPending, onClose, onSubmit}: Readonly<LinkSourceDialogProps>) {
   const [sourceType, setSourceType] = useState<IncidentSourceType>('URL')
   const [sourceUrl, setSourceUrl] = useState('')
   const [sourceKey, setSourceKey] = useState('')

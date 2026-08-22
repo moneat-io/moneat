@@ -92,6 +92,7 @@ private fun Route.registerIncidentTimelineEditRoutes(service: IncidentTimelineSe
     patch("/{id}/timeline/{eventId}") {
         val context = call.requireUserContext() ?: return@patch
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@patch
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@patch
         val request = call.receive<EditIncidentTimelineEventRequest>()
         call.respondTimelineFailure {
             call.respond(
@@ -114,6 +115,7 @@ private fun Route.registerIncidentTimelineEditRoutes(service: IncidentTimelineSe
     post("/{id}/timeline/{eventId}/annotation") {
         val context = call.requireUserContext() ?: return@post
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@post
         val request = call.receive<AnnotateIncidentTimelineEventRequest>()
         call.respondTimelineFailure {
             call.respond(
@@ -130,6 +132,7 @@ private fun Route.registerIncidentTimelineEditRoutes(service: IncidentTimelineSe
     post("/{id}/timeline/reorder") {
         val context = call.requireUserContext() ?: return@post
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@post
         val request = call.receive<ReorderIncidentTimelineRequest>()
         call.respondTimelineFailure {
             call.respond(
@@ -149,6 +152,7 @@ private fun Route.registerIncidentTimelineRemovalRoutes(service: IncidentTimelin
     delete("/{id}/timeline/{eventId}") {
         val context = call.requireUserContext() ?: return@delete
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@delete
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@delete
         val request = call.receiveNullable<IncidentTimelineMutationReasonRequest>()
         call.respondTimelineFailure {
             service.delete(
@@ -164,6 +168,7 @@ private fun Route.registerIncidentTimelineRemovalRoutes(service: IncidentTimelin
     post("/{id}/timeline/{eventId}/restore") {
         val context = call.requireUserContext() ?: return@post
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        if (!call.requireIncidentResponderOrAdmin(context, incidentId)) return@post
         val request = call.receiveNullable<IncidentTimelineMutationReasonRequest>()
         call.respondTimelineFailure {
             service.restore(

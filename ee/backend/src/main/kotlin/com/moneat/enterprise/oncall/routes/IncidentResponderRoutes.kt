@@ -110,6 +110,13 @@ private fun Route.registerIncidentRoleRoutes(
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@delete
         call.respondResponderFailure {
             val roleId = responderService.resolveRoleId(context.organizationId, call.parameters["roleId"].orEmpty())
+            val assigneeUserId =
+                responderService.requireActiveRoleAssigneeUserId(
+                    context.organizationId,
+                    incidentId,
+                    roleId,
+                )
+            if (!call.requireIncidentManagerOrSelf(context, incidentId, assigneeUserId)) return@respondResponderFailure
             incidentService.executeIncidentCommand(
                 UnassignIncidentRoleCommand(
                     commandKey = call.incidentCommandKey("unassign-role"),
@@ -164,6 +171,7 @@ private fun Route.registerIncidentParticipantRoutes(
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@delete
         call.respondResponderFailure {
             val userId = responderService.resolveUserId(context.organizationId, call.parameters["userId"].orEmpty())
+            if (!call.requireIncidentManagerOrSelf(context, incidentId, userId)) return@respondResponderFailure
             incidentService.executeIncidentCommand(
                 LeaveIncidentCommand(
                     commandKey = call.incidentCommandKey("leave-incident"),

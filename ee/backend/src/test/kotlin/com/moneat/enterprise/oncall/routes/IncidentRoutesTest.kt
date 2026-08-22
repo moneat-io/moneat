@@ -96,6 +96,14 @@ class IncidentRoutesTest {
             assertEquals(declaration.name, body.requiredString("title"))
             Uuid.parse(body.requiredString("id"))
         }
+
+        val lowercaseStatus = client.post("/v1/on-call/incidents") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"title":"lowercase-status","severity":"SEV-2","initialStatus":"active"}""")
+        }
+        assertEquals(HttpStatusCode.Created, lowercaseStatus.status)
+        assertEquals("ACTIVE", lowercaseStatus.jsonObject().requiredString("status"))
     }
 
     @Test
@@ -215,6 +223,14 @@ class IncidentRoutesTest {
         val incidentId = declareIncident("operational-contracts")
         val roles = getJsonArray("/v1/on-call/incident-configuration/roles")
         val commander = roles.single { it.jsonObject.requiredString("key") == "incident-commander" }.jsonObject
+        assertTrue("privateInstructions" !in commander)
+        val privateRoles = getJsonArray(
+            "/v1/on-call/incident-configuration/roles?includePrivateInstructions=true",
+        )
+        assertTrue(
+            "privateInstructions" in
+                privateRoles.single { it.jsonObject.requiredString("key") == "incident-commander" }.jsonObject,
+        )
         val assignments = postJson(
             "/v1/on-call/incidents/$incidentId/roles/${commander.requiredString("id")}/claim",
             """{"expectedVersion":1}""",
@@ -266,6 +282,70 @@ class IncidentRoutesTest {
         )
         assertEquals(HttpStatusCode.OK, restored.status)
         assertEquals(2, restoredTimelineExport(incidentId).getValue("events").jsonArray.size)
+    }
+
+    @Test
+    fun `configuration and incident mutation routes enforce responder permissions`() = testApplication {
+        application { installIncidentRoutes() }
+        val regularUserId = IncidentTestDatabase.seedUserInOrganization(member.organizationId, "regular-responder")
+        val incidentId = declareIncident("route-permissions")
+        val timelinePath = "/v1/on-call/incidents/$incidentId/timeline"
+        val eventId = getJsonArray(timelinePath).single().jsonObject.requiredString("id")
+
+        val configurationWrite = client.post("/v1/on-call/incident-configuration/types") {
+            authorize(regularUserId)
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"key":"unauthorized","name":"Unauthorized"}""")
+        }
+        assertEquals(HttpStatusCode.Forbidden, configurationWrite.status)
+
+        val privateRoleRead = client.get(
+            "/v1/on-call/incident-configuration/roles?includePrivateInstructions=true",
+        ) { authorize(regularUserId) }
+        assertEquals(HttpStatusCode.Forbidden, privateRoleRead.status)
+
+        val forbiddenTimelineEdit = client.patch("$timelinePath/$eventId") {
+            authorize(regularUserId)
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"annotation":"not allowed"}""")
+        }
+        assertEquals(HttpStatusCode.Forbidden, forbiddenTimelineEdit.status)
+
+        val joined = client.post("/v1/on-call/incidents/$incidentId/participants") {
+            authorize(regularUserId)
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"expectedVersion":1}""")
+        }
+        assertEquals(HttpStatusCode.OK, joined.status)
+        val regularPublicUserId = joined.jsonArray().single().jsonObject.requiredString("userId")
+
+        val allowedTimelineEdit = client.patch("$timelinePath/$eventId") {
+            authorize(regularUserId)
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"visibility":"PARTICIPANTS"}""")
+        }
+        assertEquals(HttpStatusCode.OK, allowedTimelineEdit.status)
+
+        val ownerJoined = client.post("/v1/on-call/incidents/$incidentId/participants") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"expectedVersion":2}""")
+        }
+        assertEquals(HttpStatusCode.OK, ownerJoined.status)
+        val ownerPublicUserId =
+            ownerJoined.jsonArray()
+                .map { it.jsonObject.requiredString("userId") }
+                .single { it != regularPublicUserId }
+
+        val forbiddenRemoval = client.delete("/v1/on-call/incidents/$incidentId/participants/$ownerPublicUserId") {
+            authorize(regularUserId)
+        }
+        assertEquals(HttpStatusCode.Forbidden, forbiddenRemoval.status)
+
+        val selfRemoval = client.delete("/v1/on-call/incidents/$incidentId/participants/$regularPublicUserId") {
+            authorize(regularUserId)
+        }
+        assertEquals(HttpStatusCode.OK, selfRemoval.status)
     }
 
     private fun Application.installIncidentRoutes() {
@@ -346,13 +426,13 @@ class IncidentRoutesTest {
         return Json.parseToJsonElement(response.bodyAsText()).jsonArray.map { it.jsonObject }
     }
 
-    private fun io.ktor.client.request.HttpRequestBuilder.authorize() {
+    private fun io.ktor.client.request.HttpRequestBuilder.authorize(userId: Int = member.userId) {
         bearerAuth(
             JWT
                 .create()
                 .withIssuer(ISSUER)
                 .withAudience(AUDIENCE)
-                .withClaim("userId", member.userId)
+                .withClaim("userId", userId)
                 .withClaim("orgId", member.organizationId)
                 .sign(Algorithm.HMAC256(JWT_SECRET)),
         )

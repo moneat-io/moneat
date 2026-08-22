@@ -145,7 +145,7 @@ class IncidentConfigurationService {
         transaction {
             requireMember(organizationId, actorUserId)
             val key = normalizeKey(request.stableKey)
-            requireName(request.name, "Incident type name")
+            requireName(request.name, "Incident type name", MAX_INCIDENT_TYPE_NAME_LENGTH)
             val current = currentType(organizationId, key)
             current?.supersede(NativeIncidentTypes.isCurrent, NativeIncidentTypes.supersededAt)
             val now = Clock.System.now()
@@ -185,9 +185,12 @@ class IncidentConfigurationService {
         transaction {
             requireMember(organizationId, actorUserId)
             val key = normalizeKey(request.stableKey)
-            requireName(request.name, "Custom field name")
+            requireName(request.name, "Custom field name", MAX_CUSTOM_FIELD_NAME_LENGTH)
             validateFieldOptions(request.valueType, request.options)
             val catalogType = request.catalogResourceType.cleaned()
+            catalogType?.let {
+                require(it.length <= MAX_CATALOG_RESOURCE_TYPE_LENGTH) { "Catalog resource type is too long" }
+            }
             require((request.valueType == IncidentCustomFieldValueType.CATALOG_RESOURCE) == (catalogType != null)) {
                 "Catalog resource type is required only for catalog-resource fields"
             }
@@ -241,7 +244,7 @@ class IncidentConfigurationService {
     ): IncidentFormDefinition =
         transaction {
             requireMember(organizationId, actorUserId)
-            requireName(request.name, "Incident form name")
+            requireName(request.name, "Incident form name", MAX_INCIDENT_FORM_NAME_LENGTH)
             require(request.fields.map(IncidentFormFieldInput::fieldId).distinct().size == request.fields.size) {
                 "Incident form fields must be unique"
             }
@@ -366,13 +369,13 @@ class IncidentConfigurationService {
         when (field.valueType) {
             IncidentCustomFieldValueType.SELECT ->
                 require(requireString(value) in field.options.map(IncidentCustomFieldOption::value)) {
-                    "Incident field includes an unknown option"
+                    UNKNOWN_OPTION_MESSAGE
                 }
             IncidentCustomFieldValueType.MULTI_SELECT -> {
                 val values = (value as? JsonArray)?.map(::requireString)
                 require(values != null) { "Multi-select incident field requires an array" }
                 val allowed = field.options.mapTo(mutableSetOf(), IncidentCustomFieldOption::value)
-                require(values.all(allowed::contains)) { "Incident field includes an unknown option" }
+                require(values.all(allowed::contains)) { UNKNOWN_OPTION_MESSAGE }
             }
             IncidentCustomFieldValueType.NUMBER -> {
                 require(value is JsonPrimitive && value.doubleOrNull != null) {
@@ -419,7 +422,7 @@ class IncidentConfigurationService {
                 .selectAll()
                 .where { NativeIncidentCustomFieldOptions.customFieldId eq field[NativeIncidentCustomFields.id].value }
                 .mapTo(mutableSetOf()) { it[NativeIncidentCustomFieldOptions.value] }
-        require(selected.all(allowed::contains)) { "Incident field includes an unknown option" }
+        require(selected.all(allowed::contains)) { UNKNOWN_OPTION_MESSAGE }
     }
 
     private fun conditionMatches(
@@ -672,8 +675,9 @@ class IncidentConfigurationService {
         return normalized
     }
 
-    private fun requireName(value: String, label: String) {
+    private fun requireName(value: String, label: String, maxLength: Int) {
         require(value.isNotBlank()) { "$label is required" }
+        require(value.trim().length <= maxLength) { "$label is too long" }
     }
 
     private fun validateFieldOptions(
@@ -685,6 +689,15 @@ class IncidentConfigurationService {
         require(!supportsOptions || options.isNotEmpty()) { "Select incident fields require options" }
         require(options.all { it.value.isNotBlank() && it.label.isNotBlank() && it.position >= 0 }) {
             "Incident field options are invalid"
+        }
+        require(options.all { it.value.trim().length <= MAX_CUSTOM_FIELD_OPTION_LENGTH }) {
+            "Incident field option value is too long"
+        }
+        require(options.all { it.label.trim().length <= MAX_CUSTOM_FIELD_OPTION_LENGTH }) {
+            "Incident field option label is too long"
+        }
+        require(options.all { (it.color.cleaned()?.length ?: 0) <= MAX_OPTION_COLOR_LENGTH }) {
+            "Incident field option color is too long"
         }
         require(options.map(IncidentCustomFieldOptionInput::value).distinct().size == options.size) {
             "Incident field option values must be unique"
@@ -706,6 +719,13 @@ class IncidentConfigurationService {
     private fun String?.toJsonElement(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
     companion object {
+        private const val MAX_INCIDENT_TYPE_NAME_LENGTH = 120
+        private const val MAX_CUSTOM_FIELD_NAME_LENGTH = 160
+        private const val MAX_INCIDENT_FORM_NAME_LENGTH = 160
+        private const val MAX_CATALOG_RESOURCE_TYPE_LENGTH = 120
+        private const val MAX_CUSTOM_FIELD_OPTION_LENGTH = 160
+        private const val MAX_OPTION_COLOR_LENGTH = 32
+        private const val UNKNOWN_OPTION_MESSAGE = "Incident field includes an unknown option"
         private val KEY_SEPARATOR_PATTERN = Regex("[^a-z0-9]+")
         private val KEY_PATTERN = Regex("[a-z][a-z0-9_]{0,99}")
         private val OPTION_FIELD_TYPES =

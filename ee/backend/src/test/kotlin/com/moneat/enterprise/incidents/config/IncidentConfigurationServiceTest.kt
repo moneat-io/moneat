@@ -165,4 +165,57 @@ class IncidentConfigurationServiceTest {
             )
         }
     }
+
+    @Test
+    fun `rejects configuration values longer than their database columns`() {
+        assertFailsWith<IllegalArgumentException> {
+            service.createIncidentType(
+                member.organizationId,
+                member.userId,
+                CreateIncidentType("long-type", "x".repeat(121), null, enabled = true),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createCustomField(
+                member.organizationId,
+                member.userId,
+                CreateIncidentCustomField(
+                    stableKey = "long-catalog",
+                    name = "Catalog",
+                    description = null,
+                    valueType = IncidentCustomFieldValueType.CATALOG_RESOURCE,
+                    catalogResourceType = "x".repeat(121),
+                    options = emptyList(),
+                ),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createCustomField(
+                member.organizationId,
+                member.userId,
+                CreateIncidentCustomField(
+                    stableKey = "long-option",
+                    name = "Option",
+                    description = null,
+                    valueType = IncidentCustomFieldValueType.SELECT,
+                    catalogResourceType = null,
+                    options = listOf(
+                        IncidentCustomFieldOptionInput(
+                            value = "x".repeat(161),
+                            label = "Label",
+                            position = 0,
+                            color = "x".repeat(33),
+                        ),
+                    ),
+                ),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            service.createForm(
+                member.organizationId,
+                member.userId,
+                CreateIncidentForm(null, IncidentFormStage.DECLARATION, "x".repeat(161), emptyList()),
+            )
+        }
+    }
 }

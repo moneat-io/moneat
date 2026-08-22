@@ -24,6 +24,7 @@ import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.insertIgnore
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -72,7 +73,11 @@ data class CreateIncidentRole(
 )
 
 class IncidentResponderService {
-    fun listRoles(organizationId: Int, actorUserId: Int): List<IncidentRoleDefinition> =
+    fun listRoles(
+        organizationId: Int,
+        actorUserId: Int,
+        includePrivateInstructions: Boolean = false,
+    ): List<IncidentRoleDefinition> =
         transaction {
             requireMember(organizationId, actorUserId)
             ensureDefaultRoles(organizationId, actorUserId)
@@ -82,7 +87,7 @@ class IncidentResponderService {
                     (NativeIncidentRoleDefinitions.organizationId eq organizationId) and
                         (NativeIncidentRoleDefinitions.isCurrent eq true)
                 }.orderBy(NativeIncidentRoleDefinitions.name to SortOrder.ASC)
-                .map(::roleDefinition)
+                .map { roleDefinition(it, includePrivateInstructions) }
         }
 
     fun createRole(
@@ -111,17 +116,17 @@ class IncidentResponderService {
             val id =
                 insertRole(
                     RoleInsert(
-                    organizationId = organizationId,
-                    actorUserId = actorUserId,
-                    key = key,
-                    version = (current?.get(NativeIncidentRoleDefinitions.version) ?: 0) + 1,
-                    name = name,
-                    description = request.description.cleaned(),
-                    responsibilities = responsibilities,
-                    privateInstructions = request.privateInstructions.cleaned(),
-                    required = request.required,
-                    default = request.default,
-                    now = now,
+                        organizationId = organizationId,
+                        actorUserId = actorUserId,
+                        key = key,
+                        version = (current?.get(NativeIncidentRoleDefinitions.version) ?: 0) + 1,
+                        name = name,
+                        description = request.description.cleaned(),
+                        responsibilities = responsibilities,
+                        privateInstructions = request.privateInstructions.cleaned(),
+                        required = request.required,
+                        default = request.default,
+                        now = now,
                     ),
                 )
             current?.let { previous ->
@@ -163,6 +168,24 @@ class IncidentResponderService {
                     ?: throw IncidentCommandNotFoundException("Incident participant not found")
             requireMember(organizationId, userId)
             userId
+        }
+
+    fun requireActiveRoleAssigneeUserId(
+        organizationId: Int,
+        incidentId: Int,
+        roleDefinitionId: Int,
+    ): Int =
+        transaction {
+            NativeIncidentRoleAssignments
+                .selectAll()
+                .where {
+                    (NativeIncidentRoleAssignments.organizationId eq organizationId) and
+                        (NativeIncidentRoleAssignments.incidentId eq incidentId) and
+                        (NativeIncidentRoleAssignments.roleDefinitionId eq roleDefinitionId) and
+                        NativeIncidentRoleAssignments.endedAt.isNull()
+                }.singleOrNull()
+                ?.get(NativeIncidentRoleAssignments.assigneeUserId)
+                ?: throw IncidentCommandNotFoundException("Incident role assignment not found")
         }
 
     fun listAssignments(organizationId: Int, incidentId: Int): List<IncidentRoleAssignment> =
@@ -229,19 +252,19 @@ class IncidentResponderService {
         val now = Clock.System.now()
         DEFAULT_ROLES.forEach { role ->
             if (currentRole(organizationId, role.key) == null) {
-                insertRole(
+                insertRoleIgnore(
                     RoleInsert(
-                    organizationId = organizationId,
-                    actorUserId = actorUserId,
-                    key = role.key,
-                    version = 1,
-                    name = role.name,
-                    description = role.description,
-                    responsibilities = role.responsibilities,
-                    privateInstructions = role.privateInstructions,
-                    required = true,
-                    default = true,
-                    now = now,
+                        organizationId = organizationId,
+                        actorUserId = actorUserId,
+                        key = role.key,
+                        version = 1,
+                        name = role.name,
+                        description = role.description,
+                        responsibilities = role.responsibilities,
+                        privateInstructions = role.privateInstructions,
+                        required = true,
+                        default = true,
+                        now = now,
                     ),
                 )
             }
@@ -265,6 +288,25 @@ class IncidentResponderService {
             it[createdAt] = request.now
             it[supersededAt] = null
         }.value
+
+    private fun insertRoleIgnore(request: RoleInsert) {
+        NativeIncidentRoleDefinitions.insertIgnore {
+            it[resourceId] = Uuid.random()
+            it[NativeIncidentRoleDefinitions.organizationId] = request.organizationId
+            it[stableKey] = request.key
+            it[NativeIncidentRoleDefinitions.version] = request.version
+            it[isCurrent] = true
+            it[NativeIncidentRoleDefinitions.name] = request.name
+            it[NativeIncidentRoleDefinitions.description] = request.description
+            it[NativeIncidentRoleDefinitions.responsibilities] = json.encodeToString(request.responsibilities)
+            it[NativeIncidentRoleDefinitions.privateInstructions] = request.privateInstructions
+            it[isRequired] = request.required
+            it[isDefault] = request.default
+            it[createdBy] = request.actorUserId
+            it[createdAt] = request.now
+            it[supersededAt] = null
+        }
+    }
 
     private fun currentRole(organizationId: Int, key: String): ResultRow? =
         NativeIncidentRoleDefinitions
@@ -315,7 +357,7 @@ class IncidentResponderService {
 
     private fun roleDefinition(
         row: ResultRow,
-        includePrivateInstructions: Boolean = true,
+        includePrivateInstructions: Boolean = false,
     ): IncidentRoleDefinition =
         IncidentRoleDefinition(
             id = row[NativeIncidentRoleDefinitions.resourceId].toString(),

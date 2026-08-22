@@ -65,6 +65,7 @@ import {
   OPTION_FIELD_TYPES,
   buildFormFieldInput,
   isScalarConditionField,
+  parseNumericInput,
 } from '@/components/on-call/incident-modeling'
 
 export const Route = createFileRoute('/on-call/incident-configuration')({
@@ -77,10 +78,10 @@ function slugify(value: string, separator: '_' | '-'): string {
   const cleaned = value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, separator)
+    .replaceAll(/[^a-z0-9]+/g, separator)
   return separator === '-'
-    ? cleaned.replace(/^-+|-+$/g, '')
-    : cleaned.replace(/^_+|_+$/g, '')
+    ? cleaned.replaceAll(/^-+/g, '').replaceAll(/-+$/g, '')
+    : cleaned.replaceAll(/^_+/g, '').replaceAll(/_+$/g, '')
 }
 
 function IncidentConfiguration() {
@@ -125,7 +126,7 @@ function useConfigError() {
   return (error: Error) => toast({title: 'Error', description: error.message, variant: 'destructive'})
 }
 
-function VersionBadge({version}: {version: number}) {
+function VersionBadge({version}: Readonly<{version: number}>) {
   return (
     <Badge variant="neutral" size="sm" className="gap-1">
       <History className="h-3 w-3" />v{version}
@@ -196,11 +197,11 @@ function TypeDialog({
   isPending,
   onClose,
   onCreate,
-}: {
+}: Readonly<{
   isPending: boolean
   onClose: () => void
   onCreate: (input: CreateIncidentTypeInput) => void
-}) {
+}>) {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [keyDirty, setKeyDirty] = useState(false)
@@ -339,27 +340,41 @@ function FieldsTab() {
 }
 
 interface OptionDraft {
+  id: string
   value: string
   label: string
   color: string
+}
+
+function createOptionDraft(): OptionDraft {
+  return {id: globalThis.crypto.randomUUID(), value: '', label: '', color: ''}
+}
+
+function updateOptionDraft(
+  options: OptionDraft[],
+  id: string,
+  property: 'value' | 'label',
+  value: string
+): OptionDraft[] {
+  return options.map((option) => (option.id === id ? {...option, [property]: value} : option))
 }
 
 function FieldDialog({
   isPending,
   onClose,
   onCreate,
-}: {
+}: Readonly<{
   isPending: boolean
   onClose: () => void
   onCreate: (input: CreateIncidentCustomFieldInput) => void
-}) {
+}>) {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [keyDirty, setKeyDirty] = useState(false)
   const [description, setDescription] = useState('')
   const [valueType, setValueType] = useState<IncidentCustomFieldValueType>('TEXT')
   const [catalogResourceType, setCatalogResourceType] = useState('')
-  const [options, setOptions] = useState<OptionDraft[]>([{value: '', label: '', color: ''}])
+  const [options, setOptions] = useState<OptionDraft[]>([createOptionDraft()])
   const effectiveKey = keyDirty ? key : slugify(name, '_')
 
   const needsOptions = OPTION_FIELD_TYPES.includes(valueType)
@@ -451,12 +466,14 @@ function FieldDialog({
             <div className="grid gap-2">
               <Label>Options</Label>
               {options.map((option, index) => (
-                <div key={index} className="flex items-center gap-2">
+                <div key={option.id} className="flex items-center gap-2">
                   <Input
                     aria-label={`Option ${index + 1} value`}
                     value={option.value}
                     onChange={(e) =>
-                      setOptions((prev) => prev.map((item, i) => (i === index ? {...item, value: e.target.value} : item)))
+                      setOptions((previous) =>
+                        updateOptionDraft(previous, option.id, 'value', e.target.value)
+                      )
                     }
                     placeholder="value"
                     className="font-mono"
@@ -465,7 +482,9 @@ function FieldDialog({
                     aria-label={`Option ${index + 1} label`}
                     value={option.label}
                     onChange={(e) =>
-                      setOptions((prev) => prev.map((item, i) => (i === index ? {...item, label: e.target.value} : item)))
+                      setOptions((previous) =>
+                        updateOptionDraft(previous, option.id, 'label', e.target.value)
+                      )
                     }
                     placeholder="Label"
                   />
@@ -474,7 +493,9 @@ function FieldDialog({
                     size="icon"
                     className="h-8 w-8 shrink-0"
                     aria-label={`Remove option ${index + 1}`}
-                    onClick={() => setOptions((prev) => prev.filter((_, i) => i !== index))}
+                    onClick={() =>
+                      setOptions((previous) => previous.filter((item) => item.id !== option.id))
+                    }
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -484,7 +505,7 @@ function FieldDialog({
                 variant="outline"
                 size="sm"
                 className="w-fit"
-                onClick={() => setOptions((prev) => [...prev, {value: '', label: '', color: ''}])}
+                onClick={() => setOptions((previous) => [...previous, createOptionDraft()])}
               >
                 <Plus className="mr-1 h-3.5 w-3.5" /> Add option
               </Button>
@@ -603,6 +624,35 @@ interface FormFieldDraft {
 
 const NO_VALUE = '__no_value__'
 
+// A numeric default control that keeps the raw text locally so partial entries
+// like "-", "1.", or "-3.5" are not blocked or clobbered at input time. It
+// stores a finite number when the text parses, and clears the stored value for
+// empty/incomplete input; server-side validation remains the source of truth.
+function NumberValueInput({
+  value,
+  onChange,
+  ariaLabel,
+}: Readonly<{
+  value: IncidentFieldValue | undefined
+  onChange: (value: IncidentFieldValue | undefined) => void
+  ariaLabel: string
+}>) {
+  const [text, setText] = useState(typeof value === 'number' ? String(value) : '')
+  return (
+    <Input
+      aria-label={ariaLabel}
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value
+        setText(raw)
+        onChange(parseNumericInput(raw))
+      }}
+    />
+  )
+}
+
 // A control whose stored value is type-correct for the field it targets, so
 // defaults and condition-equality reach the backend as the right JSON type
 // (string / number / string[]) instead of a coerced string.
@@ -611,12 +661,12 @@ function TypedValueControl({
   value,
   onChange,
   ariaLabel,
-}: {
+}: Readonly<{
   field: IncidentCustomFieldDefinition
   value: IncidentFieldValue | undefined
   onChange: (value: IncidentFieldValue | undefined) => void
   ariaLabel: string
-}) {
+}>) {
   switch (field.valueType) {
     case 'SELECT':
       return (
@@ -663,19 +713,7 @@ function TypedValueControl({
       )
     }
     case 'NUMBER':
-      return (
-        <Input
-          aria-label={ariaLabel}
-          type="number"
-          value={typeof value === 'number' ? String(value) : ''}
-          onChange={(e) => {
-            const raw = e.target.value
-            if (raw === '') return onChange(undefined)
-            const parsed = Number(raw)
-            onChange(Number.isNaN(parsed) ? undefined : parsed)
-          }}
-        />
-      )
+      return <NumberValueInput value={value} onChange={onChange} ariaLabel={ariaLabel} />
     case 'LINK':
       return (
         <Input
@@ -705,13 +743,13 @@ function FormDialog({
   types,
   onClose,
   onCreate,
-}: {
+}: Readonly<{
   isPending: boolean
   fields: IncidentCustomFieldDefinition[]
   types: {id: string; name: string}[]
   onClose: () => void
   onCreate: (input: CreateIncidentFormInput) => void
-}) {
+}>) {
   const [name, setName] = useState('')
   const [stage, setStage] = useState<IncidentFormStage>('DECLARATION')
   const [typeId, setTypeId] = useState<string>(DEFAULT_TYPE)
@@ -1054,11 +1092,11 @@ function RoleDialog({
   isPending,
   onClose,
   onCreate,
-}: {
+}: Readonly<{
   isPending: boolean
   onClose: () => void
   onCreate: (input: CreateIncidentRoleInput) => void
-}) {
+}>) {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [keyDirty, setKeyDirty] = useState(false)

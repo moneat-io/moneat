@@ -13,7 +13,14 @@ import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import kotlinx.serialization.Serializable
 import org.jetbrains.exposed.v1.core.ReferenceOption
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
+import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNotNull
+import org.jetbrains.exposed.v1.core.isNull
+import org.jetbrains.exposed.v1.core.neq
+import org.jetbrains.exposed.v1.core.or
+import org.jetbrains.exposed.v1.core.regexp
 import org.jetbrains.exposed.v1.datetime.timestamp
 import kotlin.uuid.Uuid
 
@@ -61,8 +68,10 @@ object NativeIncidentSourceLinks : IntIdTable("native_incident_source_links") {
     val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
     val sourceType = varchar("source_type", 32)
     val sourceKey = varchar("source_key", 500)
-    val onCallAlertId = integer("on_call_alert_id").references(OnCallAlerts.id).nullable()
-    val alertEpisodeId = integer("alert_episode_id").references(AlertEpisodes.id).nullable()
+    val onCallAlertId =
+        integer("on_call_alert_id").references(OnCallAlerts.id, onDelete = ReferenceOption.CASCADE).nullable()
+    val alertEpisodeId =
+        integer("alert_episode_id").references(AlertEpisodes.id, onDelete = ReferenceOption.CASCADE).nullable()
     val label = varchar("label", 500).nullable()
     val sourceUrl = text("source_url").nullable()
     val metadata = requiredJsonb("metadata").clientDefault { emptyMap() }
@@ -72,7 +81,22 @@ object NativeIncidentSourceLinks : IntIdTable("native_incident_source_links") {
     init {
         uniqueIndex(organizationId, resourceId)
         uniqueIndex(incidentId, sourceType, sourceKey)
+        check("chk_native_incident_source_type") {
+            sourceType regexp INCIDENT_SOURCE_TYPE_PATTERN
+        }
+        check("chk_native_incident_source_pointer") {
+            ((sourceType eq IncidentSourceType.ON_CALL_ALERT.wire) and
+                onCallAlertId.isNotNull() and alertEpisodeId.isNull()) or
+                ((sourceType eq IncidentSourceType.ALERT_EPISODE.wire) and
+                    alertEpisodeId.isNotNull() and onCallAlertId.isNull()) or
+                ((sourceType neq IncidentSourceType.ON_CALL_ALERT.wire) and
+                    (sourceType neq IncidentSourceType.ALERT_EPISODE.wire) and
+                    onCallAlertId.isNull() and alertEpisodeId.isNull())
+        }
     }
+
+    private const val INCIDENT_SOURCE_TYPE_PATTERN =
+        "^(ON_CALL_ALERT|ALERT_EPISODE|SLACK_MESSAGE|SOURCE_MESSAGE|URL)$"
 }
 
 object NativeIncidentTimelineRevisions : IntIdTable("native_incident_timeline_revisions") {

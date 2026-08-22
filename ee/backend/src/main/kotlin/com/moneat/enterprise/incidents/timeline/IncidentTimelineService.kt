@@ -114,7 +114,7 @@ class IncidentTimelineService {
         request: EditIncidentTimelineEvent,
     ): IncidentTimelineEntry =
         transaction {
-            val row = requireEvent(organizationId, incidentId, eventResourceId)
+            val row = requireEvent(organizationId, incidentId, eventResourceId, lockForUpdate = true)
             require(row[OnCallIncidentTimeline.deletedAt] == null) { "Deleted timeline events cannot be edited" }
             val eventType = request.eventType?.trim()?.uppercase()
             eventType?.let {
@@ -146,7 +146,7 @@ class IncidentTimelineService {
         request: AnnotateIncidentTimelineEvent,
     ): IncidentTimelineEntry =
         transaction {
-            val row = requireEvent(organizationId, incidentId, eventResourceId)
+            val row = requireEvent(organizationId, incidentId, eventResourceId, lockForUpdate = true)
             require(row[OnCallIncidentTimeline.deletedAt] == null) { "Deleted timeline events cannot be annotated" }
             val previous = snapshot(row)
             val now = Clock.System.now()
@@ -183,6 +183,7 @@ class IncidentTimelineService {
             }
             val rows =
                 filteredTimeline(organizationId, incidentId, IncidentTimelineFilters())
+                    .forUpdate()
                     .toList()
             val rowsById = rows.associateBy { it[OnCallIncidentTimeline.resourceId].toString() }
             require(rowsById.keys == orderedEventIds.toSet()) {
@@ -285,7 +286,13 @@ class IncidentTimelineService {
 
     private fun mutateDeletedState(mutation: DeletedStateMutation) {
         transaction {
-            val row = requireEvent(mutation.organizationId, mutation.incidentId, mutation.eventResourceId)
+            val row =
+                requireEvent(
+                    mutation.organizationId,
+                    mutation.incidentId,
+                    mutation.eventResourceId,
+                    lockForUpdate = true,
+                )
             val currentlyDeleted = row[OnCallIncidentTimeline.deletedAt] != null
             if (currentlyDeleted == mutation.deleted) return@transaction
             val previous = snapshot(row)
@@ -350,15 +357,22 @@ class IncidentTimelineService {
             }.singleOrNull()
             ?: throw IncidentCommandNotFoundException("Native incident not found")
 
-    private fun requireEvent(organizationId: Int, incidentId: Int, resourceId: String): ResultRow {
+    private fun requireEvent(
+        organizationId: Int,
+        incidentId: Int,
+        resourceId: String,
+        lockForUpdate: Boolean = false,
+    ): ResultRow {
         val uuid = resourceId.toUuidOrNull() ?: throw IllegalArgumentException("Invalid timeline event ID")
-        return OnCallIncidentTimeline
+        val query = OnCallIncidentTimeline
             .selectAll()
             .where {
                 (OnCallIncidentTimeline.organizationId eq organizationId) and
                     (OnCallIncidentTimeline.incidentId eq incidentId) and
                     (OnCallIncidentTimeline.resourceId eq uuid)
-            }.singleOrNull()
+            }
+        if (lockForUpdate) query.forUpdate()
+        return query.singleOrNull()
             ?: throw IncidentCommandNotFoundException("Incident timeline event not found")
     }
 

@@ -23,6 +23,7 @@ import {
   evaluateFieldCondition,
   incidentModeMeta,
   incidentVisibilityMeta,
+  parseNumericInput,
   sourceTypeLabel,
   summarizeTimelineDetails,
   timelineEventStyle,
@@ -161,6 +162,28 @@ describe('buildTimelineEditPayload', () => {
       reason: '',
     })).toEqual({error: expect.stringMatching(/valid json/i)})
   })
+
+  it('rejects a changed occurred-at value that is not a real date', () => {
+    expect(
+      buildTimelineEditPayload(original, {
+        eventType: 'NOTE_ADDED',
+        visibility: 'ORGANIZATION',
+        occurredAtLocal: 'not-a-date',
+        detailsText: JSON.stringify({note: 'hi'}),
+        reason: '',
+      }),
+    ).toEqual({error: expect.stringMatching(/valid date/i)})
+  })
+})
+
+describe('parseNumericInput', () => {
+  it('accepts negative and decimal values and rejects partial or non-finite input', () => {
+    expect(parseNumericInput('-3.5')).toBe(-3.5)
+    expect(parseNumericInput('0.25')).toBe(0.25)
+    expect(parseNumericInput('')).toBeUndefined()
+    expect(parseNumericInput('-')).toBeUndefined()
+    expect(parseNumericInput('Infinity')).toBeUndefined()
+  })
 })
 
 describe('summarizeTimelineDetails', () => {
@@ -197,6 +220,25 @@ describe('summarizeTimelineDetails', () => {
 
   it('leaves notes to the dedicated note block', () => {
     expect(summarizeTimelineDetails('NOTE_ADDED', {note: 'hello'}, resolve)).toEqual({summary: null, fallback: []})
+  })
+
+  it('redacts private instructions recursively inside fallback details', () => {
+    const {fallback} = summarizeTimelineDetails(
+      'UNKNOWN_EVENT',
+      {
+        metadata: {
+          public: 'visible',
+          privateInstructions: 'SECRET',
+          nested: [{instructions: 'ALSO SECRET', result: 'kept'}],
+        },
+      },
+      resolve,
+    )
+    const rendered = fallback.map(([, value]) => value).join(' ')
+    expect(rendered).toContain('visible')
+    expect(rendered).toContain('kept')
+    expect(rendered).not.toContain('SECRET')
+    expect(rendered).not.toContain('instruction')
   })
 })
 

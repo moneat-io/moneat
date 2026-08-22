@@ -95,7 +95,7 @@ internal fun Route.registerIncidentConfigurationRoutes(
                     call.respond(service.listIncidentTypes(context.organizationId))
                 }
                 post {
-                    val context = call.requireUserContext() ?: return@post
+                    val context = call.requireIncidentAdminContext() ?: return@post
                     val request = call.receive<CreateIncidentTypeRequest>()
                     call.respondConfigurationFailure {
                         call.respond(
@@ -120,7 +120,7 @@ internal fun Route.registerIncidentConfigurationRoutes(
                     call.respond(service.listCustomFields(context.organizationId))
                 }
                 post {
-                    val context = call.requireUserContext() ?: return@post
+                    val context = call.requireIncidentAdminContext() ?: return@post
                     val request = call.receive<CreateIncidentCustomFieldRequest>()
                     call.respondConfigurationFailure {
                         val valueType = enumValue<IncidentCustomFieldValueType>(request.valueType, "custom field type")
@@ -162,7 +162,7 @@ internal fun Route.registerIncidentConfigurationRoutes(
                     }
                 }
                 post {
-                    val context = call.requireUserContext() ?: return@post
+                    val context = call.requireIncidentAdminContext() ?: return@post
                     val request = call.receive<CreateIncidentFormRequest>()
                     call.respondConfigurationFailure {
                         val fields =
@@ -196,10 +196,19 @@ internal fun Route.registerIncidentConfigurationRoutes(
             route("/roles") {
                 get {
                     val context = call.requireUserContext() ?: return@get
-                    call.respond(responderService.listRoles(context.organizationId, context.userId))
+                    val includePrivateInstructions =
+                        call.request.queryParameters["includePrivateInstructions"]?.toBooleanStrictOrNull() ?: false
+                    if (includePrivateInstructions && !call.requireIncidentAdmin(context)) return@get
+                    call.respond(
+                        responderService.listRoles(
+                            context.organizationId,
+                            context.userId,
+                            includePrivateInstructions,
+                        ),
+                    )
                 }
                 post {
-                    val context = call.requireUserContext() ?: return@post
+                    val context = call.requireIncidentAdminContext() ?: return@post
                     val request = call.receive<CreateIncidentRoleRequest>()
                     call.respondConfigurationFailure {
                         call.respond(

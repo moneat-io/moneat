@@ -24,8 +24,9 @@ import type {
   IncidentFieldValue,
   IncidentFormDefinition,
   IncidentFormFieldDefinition,
+  OnCallIncidentMode,
+  OnCallIncidentVisibility,
 } from '@/lib/api/types'
-import type {OnCallIncidentMode, OnCallIncidentVisibility} from '@/lib/api/types'
 import {Button} from '@/components/ui/button'
 import {Input} from '@/components/ui/input'
 import {Textarea} from '@/components/ui/textarea'
@@ -96,7 +97,7 @@ export function IncidentDeclarationForm({
   onCancel,
   defaults,
   originHint,
-}: IncidentDeclarationFormProps) {
+}: Readonly<IncidentDeclarationFormProps>) {
   const [title, setTitle] = useState(defaults?.title ?? '')
   const [description, setDescription] = useState(defaults?.description ?? '')
   const [summary, setSummary] = useState(defaults?.summary ?? '')
@@ -168,7 +169,7 @@ export function IncidentDeclarationForm({
     const fields: Record<string, IncidentFieldValue> = {}
     visibleFields.forEach((formField) => {
       const value = fieldValues[formField.field.key]
-      if (!isEmptyValue(value)) fields[formField.field.key] = value as IncidentFieldValue
+      if (value !== undefined && !isEmptyValue(value)) fields[formField.field.key] = value
     })
     onSubmit({
       title: title.trim(),
@@ -362,7 +363,7 @@ interface ConfiguredFieldProps {
   showError: boolean
 }
 
-function ConfiguredField({formField, value, onChange, showError}: ConfiguredFieldProps) {
+function ConfiguredField({formField, value, onChange, showError}: Readonly<ConfiguredFieldProps>) {
   const {field, required, helpText} = formField
   const fieldId = `field-${formField.id}`
   const invalid = showError && required && isEmptyValue(value)
@@ -391,7 +392,12 @@ interface ConfiguredFieldControlProps {
   fieldId: string
 }
 
-function ConfiguredFieldControl({formField, value, onChange, fieldId}: ConfiguredFieldControlProps) {
+function ConfiguredFieldControl({
+  formField,
+  value,
+  onChange,
+  fieldId,
+}: Readonly<ConfiguredFieldControlProps>) {
   const {field} = formField
 
   switch (field.valueType) {
