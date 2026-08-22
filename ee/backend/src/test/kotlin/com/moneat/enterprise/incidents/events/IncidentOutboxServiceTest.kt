@@ -169,6 +169,7 @@ class IncidentOutboxServiceTest {
             val delivery = NativeIncidentOutboxDeliveries.selectAll().single()
             assertEquals(0, delivery[NativeIncidentOutboxDeliveries.attemptCount])
         }
+        clock.advance(1.seconds)
         assertEquals(2, service.processBatch(limit = 2))
         assertEquals(listOf("INCIDENT_DECLARE", "INCIDENT_UPDATE"), consumer.completedEventTypes)
     }
