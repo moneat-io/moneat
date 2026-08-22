@@ -8,8 +8,11 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
+import com.moneat.enterprise.NativeIncidentRolloutState
+import com.moneat.enterprise.NativeIncidentRolloutStatus
 import com.moneat.enterprise.incidents.commands.IncidentCommandPolicy
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
+import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.delete
@@ -58,6 +61,39 @@ class IncidentRoutesTest {
     @AfterEach
     fun tearDown() {
         IncidentTestDatabase.clearReference()
+    }
+
+    @Test
+    fun `disabled rollout denies native routes and reports preserved external passthrough`() = testApplication {
+        application { installIncidentRoutes(rolloutEnabled = false) }
+
+        val incidents = client.get("/v1/on-call/incidents") { authorize() }
+        val configuration = client.get("/v1/on-call/incident-configuration/types") { authorize() }
+        val alertDeclaration = client.post("/v1/on-call/alerts/not-a-uuid/declare-incident") {
+            authorize()
+            header(HttpHeaders.ContentType, ContentType.Application.Json)
+            setBody("""{"title":"blocked","severity":"SEV-2"}""")
+        }
+        val capabilities = client.get("/v1/on-call/incident-response/capabilities") { authorize() }
+
+        assertEquals(HttpStatusCode.Forbidden, incidents.status)
+        assertEquals(HttpStatusCode.Forbidden, configuration.status)
+        assertEquals(HttpStatusCode.Forbidden, alertDeclaration.status)
+        assertEquals(HttpStatusCode.OK, capabilities.status)
+        val body = capabilities.jsonObject()
+        assertEquals(false, body["enabled"]?.jsonPrimitive?.content?.toBoolean())
+        assertEquals("production", body.requiredString("environment"))
+        assertEquals("DISABLED", body.requiredString("state"))
+        assertEquals(false, body["externalProviderPassthroughAffected"]?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `rollout gate fails closed when organization context is missing`() = testApplication {
+        application { installIncidentRoutes() }
+
+        val response = client.get("/v1/on-call/incidents") { authorizeWithoutOrganization() }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
     }
 
     @Test
@@ -348,7 +384,7 @@ class IncidentRoutesTest {
         assertEquals(HttpStatusCode.OK, selfRemoval.status)
     }
 
-    private fun Application.installIncidentRoutes() {
+    private fun Application.installIncidentRoutes(rolloutEnabled: Boolean = true) {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         install(Authentication) {
             jwt("auth-jwt") {
@@ -368,6 +404,19 @@ class IncidentRoutesTest {
                 onCallIncidentService = OnCallIncidentService(
                     IncidentCommandService(policy = IncidentCommandPolicy.allowForTests()),
                 ),
+                incidentEntitlement = IncidentEntitlement { rolloutEnabled },
+                rolloutStatusProvider = {
+                    NativeIncidentRolloutStatus(
+                        enabled = rolloutEnabled,
+                        environment = "production",
+                        state =
+                            if (rolloutEnabled) {
+                                NativeIncidentRolloutState.ENABLED
+                            } else {
+                                NativeIncidentRolloutState.DISABLED
+                            },
+                    )
+                },
             )
         }
     }
@@ -434,6 +483,17 @@ class IncidentRoutesTest {
                 .withAudience(AUDIENCE)
                 .withClaim("userId", userId)
                 .withClaim("orgId", member.organizationId)
+                .sign(Algorithm.HMAC256(JWT_SECRET)),
+        )
+    }
+
+    private fun io.ktor.client.request.HttpRequestBuilder.authorizeWithoutOrganization() {
+        bearerAuth(
+            JWT
+                .create()
+                .withIssuer(ISSUER)
+                .withAudience(AUDIENCE)
+                .withClaim("userId", member.userId)
                 .sign(Algorithm.HMAC256(JWT_SECRET)),
         )
     }

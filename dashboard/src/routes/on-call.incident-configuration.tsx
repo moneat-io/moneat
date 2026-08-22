@@ -17,7 +17,7 @@
 import {useState} from 'react'
 import {createFileRoute} from '@tanstack/react-router'
 import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
-import {History, Info, Plus, Trash2} from 'lucide-react'
+import {History, Info, Plus, ShieldAlert, Trash2} from 'lucide-react'
 
 import {api} from '@/lib/api'
 import type {
@@ -58,6 +58,10 @@ import {
 } from '@/components/ui/select'
 import {useToast} from '@/hooks/useToast'
 import {
+  nativeIncidentUnavailableCopy,
+  useNativeIncidentRollout,
+} from '@/hooks/useNativeIncidentRollout'
+import {
   FIELD_VALUE_TYPES,
   FIELD_VALUE_TYPE_LABELS,
   FORM_STAGES,
@@ -96,6 +100,21 @@ function slugify(value: string, separator: '_' | '-'): string {
 }
 
 function IncidentConfiguration() {
+  const rollout = useNativeIncidentRollout()
+
+  if (rollout.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
+      </div>
+    )
+  }
+
+  if (!rollout.enabled) {
+    const copy = nativeIncidentUnavailableCopy(rollout)
+    return <EmptyState icon={ShieldAlert} title={copy.title} description={copy.description} />
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-sm">

@@ -378,12 +378,16 @@ class IncidentCommandServiceTest {
             deniedService.execute(
                 DeclareIncidentCommand(
                     commandKey = "not-entitled",
-                    actor = actor(),
+                    actor = IncidentCommandActor(member.organizationId, member.userId, "SLACK"),
                     title = "Denied",
                     description = null,
                     severity = "SEV-3",
                 ),
             )
+        }
+        transaction {
+            assertEquals(0, NativeIncidentCommands.selectAll().count())
+            assertEquals(0, NativeIncidentOutboxEvents.selectAll().count())
         }
 
         val incident = service.execute(

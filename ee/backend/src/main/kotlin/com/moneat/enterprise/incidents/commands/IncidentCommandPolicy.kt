@@ -5,6 +5,7 @@
 package com.moneat.enterprise.incidents.commands
 
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.monitoring.OperationalMetrics
 
 fun interface IncidentEntitlement {
     fun isEnabled(organizationId: Int): Boolean
@@ -16,7 +17,7 @@ fun interface IncidentCommandAuthorizer {
 
 class IncidentCommandPolicy(
     private val entitlement: IncidentEntitlement = IncidentEntitlement {
-        FeatureRegistry.hasModule(ON_CALL_MODULE_NAME)
+        FeatureRegistry.isNativeIncidentResponseEnabled(it)
     },
     private val authorizer: IncidentCommandAuthorizer = IncidentCommandAuthorizer { actor, _ ->
         actor.organizationId > 0 && actor.userId > 0
@@ -25,6 +26,7 @@ class IncidentCommandPolicy(
     fun requireAllowed(command: IncidentCommand) {
         val actor = command.actor
         if (!entitlement.isEnabled(actor.organizationId)) {
+            OperationalMetrics.recordNativeIncidentRolloutDecision("command", "denied")
             throw IncidentCommandDeniedException("Native incident response is not enabled for this organization")
         }
         if (!authorizer.isAllowed(actor, command.type)) {
@@ -36,7 +38,6 @@ class IncidentCommandPolicy(
     }
 
     companion object {
-        private const val ON_CALL_MODULE_NAME = "On-Call"
         private const val MAX_COMMAND_KEY_LENGTH = 160
 
         fun allowForTests(): IncidentCommandPolicy =

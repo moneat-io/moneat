@@ -17,19 +17,24 @@
 package com.moneat.featureflags
 
 import com.moneat.enterprise.EnterpriseModule
+import com.moneat.enterprise.NativeIncidentRolloutBridge
 import com.moneat.featureflags.routes.featureFlagRoutes
 import com.moneat.featureflags.services.FeatureFlagEvaluator
 import com.moneat.featureflags.services.FeatureFlagEventService
+import com.moneat.featureflags.services.FeatureFlagNativeIncidentRolloutBridge
 import com.moneat.featureflags.services.FeatureFlagService
 import io.ktor.server.application.Application
 import io.ktor.server.routing.Route
 
-class FeatureFlagsModule : EnterpriseModule {
+class FeatureFlagsModule :
+    EnterpriseModule,
+    NativeIncidentRolloutBridge {
     override val name: String = "Feature Flags"
 
     private val featureFlagService = FeatureFlagService()
     private val evaluator = FeatureFlagEvaluator()
     private val eventService = FeatureFlagEventService()
+    private val nativeIncidentRolloutBridge = FeatureFlagNativeIncidentRolloutBridge(featureFlagService, evaluator)
 
     override fun registerRoutes(route: Route) {
         route.featureFlagRoutes(
@@ -42,4 +47,7 @@ class FeatureFlagsModule : EnterpriseModule {
     override fun startBackgroundJobs(application: Application) = Unit
 
     override fun stopBackgroundJobs() = Unit
+
+    override fun status(organizationId: Int, environment: String) =
+        nativeIncidentRolloutBridge.status(organizationId, environment)
 }

@@ -44,6 +44,10 @@ import {useToast} from '@/hooks/useToast'
 import {incidentStatusConfig} from '@/lib/incident-status'
 import type {DeclareIncidentInput, OnCallIncidentStatus} from '@/lib/api/types'
 import {IncidentDeclarationForm} from '@/components/on-call/IncidentDeclarationForm'
+import {
+  nativeIncidentUnavailableCopy,
+  useNativeIncidentRollout,
+} from '@/hooks/useNativeIncidentRollout'
 
 export const Route = createFileRoute('/on-call/incidents')({
   component: DeclaredIncidents,
@@ -98,6 +102,7 @@ function DeclaredIncidents() {
     useState<IncidentStatusFilter>(DEFAULT_DECLARED_INCIDENT_STATUS_FILTER)
   const [severityFilter, setSeverityFilter] = useState<IncidentSeverityFilter>('all')
   const [declareOpen, setDeclareOpen] = useState(false)
+  const rollout = useNativeIncidentRollout()
   const isDetailRoute = pathname.startsWith('/on-call/incidents/')
 
   const declareMutation = useMutation({
@@ -124,6 +129,8 @@ function DeclaredIncidents() {
       return api.getOnCallIncidents(filters)
     },
     refetchInterval: 30000,
+    // Never fetch native incidents while the rollout is loading or disabled.
+    enabled: rollout.enabled,
   })
 
   const activeCount = incidents?.filter(i => i.status === 'ACTIVE').length || 0
@@ -132,6 +139,24 @@ function DeclaredIncidents() {
 
   if (isDetailRoute) {
     return <Outlet />
+  }
+
+  if (rollout.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-10">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
+      </div>
+    )
+  }
+
+  if (!rollout.enabled) {
+    const copy = nativeIncidentUnavailableCopy(rollout)
+    return (
+      <div className="space-y-4">
+        <PageHeader icon={ShieldAlert} title="Incidents" description="Manage user-declared incidents" />
+        <EmptyState icon={ShieldAlert} title={copy.title} description={copy.description} />
+      </div>
+    )
   }
 
   return (

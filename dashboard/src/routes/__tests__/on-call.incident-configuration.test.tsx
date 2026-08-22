@@ -29,6 +29,7 @@ const {mockApi} = vi.hoisted(() => ({
     createIncidentCustomField: vi.fn(),
     createIncidentForm: vi.fn(),
     createIncidentRole: vi.fn(),
+    getNativeIncidentCapabilities: vi.fn(),
   },
 }))
 
@@ -170,6 +171,13 @@ describe('IncidentConfiguration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Native incident rollout enabled so the configuration surface renders.
+    mockApi.getNativeIncidentCapabilities.mockResolvedValue({
+      enabled: true,
+      environment: 'production',
+      state: 'ENABLED',
+      externalProviderPassthroughAffected: false,
+    })
     mockApi.getIncidentTypes.mockResolvedValue([
       {id: 't1', key: 'security', name: 'Security incident', version: 2, enabled: true, description: 'Handle breaches'},
     ])

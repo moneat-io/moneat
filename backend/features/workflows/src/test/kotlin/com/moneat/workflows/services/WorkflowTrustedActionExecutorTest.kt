@@ -144,7 +144,8 @@ class WorkflowTrustedActionExecutorTest {
                 dashboardService = dashboardService,
                 monitorService = monitorService,
                 monitorAlertServiceProvider = { monitorAlertService },
-                statusPageService = statusPageService
+                statusPageService = statusPageService,
+                nativeIncidentEntitlement = { true },
             )
     }
 
@@ -393,6 +394,38 @@ class WorkflowTrustedActionExecutorTest {
             )
 
         assertEquals(true, result["requires_enterprise"]?.jsonPrimitive?.content?.toBoolean())
+    }
+
+    @Test
+    fun `on-call incident declaration fails closed before invoking enterprise bridge`() {
+        val bridge = mockk<OnCallBridge>()
+        val disabledExecutor =
+            WorkflowTrustedActionExecutor(
+                logService = logService,
+                dashboardService = dashboardService,
+                monitorService = monitorService,
+                monitorAlertServiceProvider = { monitorAlertService },
+                statusPageService = statusPageService,
+                nativeIncidentEntitlement = { false },
+            )
+        mockkObject(FeatureRegistry)
+        try {
+            every { FeatureRegistry.getOnCallBridge() } returns bridge
+
+            assertFailsWith<IllegalStateException> {
+                runBlocking {
+                    disabledExecutor.execute(
+                        orgId,
+                        WorkflowTrustedActionExecutor.ON_CALL_DECLARE_INCIDENT_STEP,
+                        mapOf("title" to "Checkout outage", "incident_severity" to "SEV-1"),
+                        actorUserId = 99,
+                    )
+                }
+            }
+            coVerify(exactly = 0) { bridge.declareIncident(any()) }
+        } finally {
+            unmockkObject(FeatureRegistry)
+        }
     }
 
     @Test

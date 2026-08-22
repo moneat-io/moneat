@@ -4,10 +4,13 @@
 
 package com.moneat.enterprise.incidents.events
 
+import com.moneat.enterprise.FeatureRegistry
+import com.moneat.enterprise.incidents.commands.IncidentEntitlement
 import com.moneat.enterprise.incidents.models.IncidentDeliveryStatus
 import com.moneat.enterprise.incidents.models.IncidentOutboxStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
+import com.moneat.monitoring.OperationalMetrics
 import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -90,6 +93,9 @@ class IncidentOutboxService(
     consumers: List<NativeIncidentEventConsumer>,
     private val workerId: String = "incident-outbox-${Uuid.random()}",
     private val clock: Clock = Clock.System,
+    private val entitlement: IncidentEntitlement = IncidentEntitlement {
+        FeatureRegistry.isNativeIncidentResponseEnabled(it)
+    },
 ) {
     private val logger = LoggerFactory.getLogger(IncidentOutboxService::class.java)
     private val consumersByName = consumers.associateBy { it.name }
@@ -106,7 +112,11 @@ class IncidentOutboxService(
         var processed = 0
         repeat(limit) {
             val event = claimNextEvent() ?: return processed
-            processEvent(event)
+            if (entitlement.isEnabled(event.organizationId)) {
+                processEvent(event)
+            } else {
+                deferEventForRollout(event)
+            }
             processed += 1
         }
         return processed
@@ -230,6 +240,32 @@ class IncidentOutboxService(
             failed -> rescheduleEvent(event.id, "One or more consumers require retry")
             else -> markEventPublished(event.id)
         }
+    }
+
+    private fun deferEventForRollout(event: NativeIncidentDomainEvent) {
+        transaction {
+            val row =
+                NativeIncidentOutboxEvents
+                    .selectAll()
+                    .where { NativeIncidentOutboxEvents.id eq event.id }
+                    .single()
+            val now = clock.now()
+            NativeIncidentOutboxEvents.update({ NativeIncidentOutboxEvents.id eq event.id }) {
+                it[status] = IncidentOutboxStatus.PENDING.wire
+                it[attemptCount] = (row[NativeIncidentOutboxEvents.attemptCount] - 1).coerceAtLeast(0)
+                it[availableAt] = now.plus(ROLLOUT_DEFER_DURATION)
+                it[leasedAt] = null
+                it[leaseOwner] = null
+                it[lastError] = ROLLOUT_DISABLED_MESSAGE
+                it[updatedAt] = now
+            }
+        }
+        OperationalMetrics.recordNativeIncidentRolloutDecision("outbox", "deferred")
+        logger.debug(
+            "Deferred native incident outbox event {} for organization {} while rollout is disabled",
+            event.resourceId,
+            event.organizationId,
+        )
     }
 
     private fun ensureDeliveries(event: NativeIncidentDomainEvent) {
@@ -442,6 +478,8 @@ class IncidentOutboxService(
         private const val MAX_ERROR_LENGTH = 4_000
         private const val MAX_BACKOFF_SECONDS = 300
         private const val MAX_BACKOFF_EXPONENT = 8
+        private const val ROLLOUT_DISABLED_MESSAGE = "Native incident rollout is disabled; delivery is deferred"
         private val LEASE_DURATION = 5.minutes
+        private val ROLLOUT_DEFER_DURATION = 30.seconds
     }
 }

@@ -76,6 +76,7 @@ These variables are optional. Ingestion queues use Redis Streams by default.
 | `INGESTION_<PIPELINE>_STREAM_MAXLEN` | `250000` | Deprecated compatibility alias for that pipeline's admission capacity. Primary streams are no longer trimmed. |
 | `INGESTION_<PIPELINE>_DLQ_STREAM_MAXLEN` | `10000` | Approximate maximum length for the DLQ stream. |
 | `GOOGLE_ADS_API_VERSION` | `v24` | Google Ads API version used by the connector client. |
+| `MONEAT_FEATURE_FLAG_ENVIRONMENT` | `production` | Feature-flag environment this deployment evaluates flags against. Optional. Each deployment must set it to the environment its staged rollout rules (such as native incident response) are configured for; a mismatch resolves flags in the wrong environment. |
 
 Redis Streams are the durable ingestion buffer. Run Redis with persistence and HA appropriate for production, and
 alert on pending entries, oldest pending age, and DLQ growth.

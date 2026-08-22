@@ -27,6 +27,7 @@ const {mockApi, mockNavigate} = vi.hoisted(() => ({
     declareOnCallIncident: vi.fn(),
     getIncidentTypes: vi.fn(),
     getIncidentForms: vi.fn(),
+    getNativeIncidentCapabilities: vi.fn(),
   },
   mockNavigate: vi.fn(),
 }))
@@ -50,6 +51,13 @@ describe('standalone incident declaration', () => {
     mockApi.getIncidentTypes.mockResolvedValue([])
     mockApi.getIncidentForms.mockResolvedValue([])
     mockApi.declareOnCallIncident.mockResolvedValue({id: NEW_INCIDENT_ID})
+    // Native incident rollout enabled so declaration behavior stays covered.
+    mockApi.getNativeIncidentCapabilities.mockResolvedValue({
+      enabled: true,
+      environment: 'production',
+      state: 'ENABLED',
+      externalProviderPassthroughAffected: false,
+    })
   })
 
   it('declares a standalone LIVE incident and navigates to it', async () => {

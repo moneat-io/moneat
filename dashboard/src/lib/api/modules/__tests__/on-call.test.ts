@@ -503,6 +503,73 @@ describe('onCallMethods', () => {
     })
   })
 
+  // ──── Native incident rollout capabilities ────
+
+  describe('getNativeIncidentCapabilities', () => {
+    it('parses an enabled capability payload', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
+          HttpResponse.json({
+            enabled: true,
+            environment: 'production',
+            state: 'ENABLED',
+            externalProviderPassthroughAffected: false,
+          })
+        )
+      )
+      const result = await api.getNativeIncidentCapabilities()
+      expect(result).toEqual({
+        enabled: true,
+        environment: 'production',
+        state: 'ENABLED',
+        externalProviderPassthroughAffected: false,
+      })
+    })
+
+    it('preserves reason states while reporting disabled', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
+          HttpResponse.json({
+            enabled: false,
+            environment: 'staging',
+            state: 'FLAG_NOT_FOUND',
+            externalProviderPassthroughAffected: false,
+          })
+        )
+      )
+      const result = await api.getNativeIncidentCapabilities()
+      expect(result.enabled).toBe(false)
+      expect(result.environment).toBe('staging')
+      expect(result.state).toBe('FLAG_NOT_FOUND')
+    })
+
+    it('fails closed and normalizes an unexpected payload', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
+          HttpResponse.json({enabled: 'yes', state: 'SOMETHING_NEW'})
+        )
+      )
+      const result = await api.getNativeIncidentCapabilities()
+      expect(result).toEqual({
+        enabled: false,
+        environment: '',
+        state: 'EVALUATION_ERROR',
+        externalProviderPassthroughAffected: false,
+      })
+    })
+
+    it('fails closed when enabled conflicts with the rollout state', async () => {
+      server.use(
+        http.get(`${API_BASE}/on-call/incident-response/capabilities`, () =>
+          HttpResponse.json({enabled: true, environment: 'production', state: 'EVALUATION_ERROR'})
+        )
+      )
+      const result = await api.getNativeIncidentCapabilities()
+      expect(result.enabled).toBe(false)
+      expect(result.state).toBe('EVALUATION_ERROR')
+    })
+  })
+
   // ──── On-Call Incidents ────
 
   describe('getOnCallIncidents', () => {

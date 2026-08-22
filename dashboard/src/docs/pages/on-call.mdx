@@ -182,6 +182,31 @@ You can filter the timeline by **event type**, **provenance**, and **visibility*
 
 An active incident can be resolved from its detail page, with an optional resolution note. Adding notes and resolving both record events on the timeline.
 
+## Native incident rollout and rollback
+
+Native incident response ships behind a staged rollout so it can be turned on for specific organizations and turned off cleanly if needed. The rollout is controlled entirely from the server.
+
+### Enabling
+
+- The rollout is gated by the reserved, server-only flag key `moneat.system.native-incident-response`. It is not client-visible and is evaluated on the backend.
+- Enable it **by organization and environment** through **Feature Flags**. Each deployment evaluates flags for the environment set in `MONEAT_FEATURE_FLAG_ENVIRONMENT` (default `production`), so target the environment your rules are configured for.
+- Verify the result for the current organization with `GET /v1/on-call/incident-response/capabilities`. It returns `enabled`, the resolved `environment`, and a `state` explaining the decision.
+- Configuration changes are recorded in the existing **feature-flag audit log** — no separate audit trail.
+
+When the rollout is disabled for an organization, the dashboard hides the Incidents and Configuration tabs and the alert **Declare Incident** action. The backend independently rejects native incident routes and commands from every origin, including Slack and workflows, and the `get_incident_context` AI/MCP tool fails closed. The metric `moneat_native_incident_rollout_decisions` records denied and deferred surfaces so you can watch a rollout converge.
+
+### Rolling back
+
+Disabling the flag rolls the feature back without data loss:
+
+- Native incident routes, dashboard surfaces, Slack actions, workflows, and AI tools stop serving native incident operations.
+- Outbox delivery of native incident events is **deferred** rather than dropped — deferral does not consume delivery attempts and never discards events. Re-enabling the flag resumes delivery of the queued events from where it left off.
+- **External incident-provider passthrough is unaffected.** Forwarded provider incidents continue to deliver and synchronize regardless of this rollout.
+
+:::info[Propagation]
+Rollout state is cached per process. Allow up to **30 seconds** for a change to converge across all running processes before expecting the new behavior everywhere.
+:::
+
 ## Notification Channels
 
 Moneat supports multiple notification channels for on-call alerts:

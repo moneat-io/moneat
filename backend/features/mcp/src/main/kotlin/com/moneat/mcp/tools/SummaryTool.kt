@@ -16,6 +16,7 @@
 
 package com.moneat.mcp.tools
 
+import com.moneat.enterprise.FeatureRegistry
 import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.InputSchema
 import com.moneat.mcp.protocol.McpTool
@@ -128,7 +129,9 @@ class GetWeeklyReportTool : McpTool {
     }
 }
 
-class GetIncidentContextTool : McpTool {
+class GetIncidentContextTool(
+    private val nativeIncidentEntitlement: (Int) -> Boolean = FeatureRegistry::isNativeIncidentResponseEnabled,
+) : McpTool {
     override val name = "get_incident_context"
     override val description =
         "Get correlated context for an incident " +
@@ -146,6 +149,10 @@ class GetIncidentContextTool : McpTool {
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
+        if (!nativeIncidentEntitlement(context.organizationId)) {
+            FeatureRegistry.recordNativeIncidentRolloutDecision("ai", "denied")
+            return errorResult("Native incident response is not enabled for this organization")
+        }
         val incidentId = args["incident_id"]?.jsonPrimitive
             ?.content
             ?.toUuidOrNull()
