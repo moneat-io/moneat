@@ -30,9 +30,30 @@ enum class IncidentDomainObject(
         owner = "enterprise on-call escalation",
         lifecycle = "triggered through acknowledgement and resolution",
     ),
+    ENTERPRISE_ALERT_ROUTE(
+        apiName = "enterprise_alert_route",
+        owner = "enterprise incident response",
+        lifecycle = "ordered first-match selection of paging, grouping, incident creation, and recovery",
+    ),
+    PROVIDER_ROUTING_RULE(
+        apiName = "provider_routing_rule",
+        owner = "AGPL incident-provider passthrough",
+        lifecycle = "per-provider forwarding selection and priority defaults only",
+    ),
 }
 
 object IncidentDomainGlossary {
+    /**
+     * Routing concepts that are frequently confused.
+     *
+     * [IncidentDomainObject.ENTERPRISE_ALERT_ROUTE] decides native paging, grouping, incident
+     * creation, and recovery from a normalized alert context.
+     * [IncidentDomainObject.PROVIDER_ROUTING_RULE] only decides whether the open-source passthrough
+     * forwards an alert source to a configured external provider. Neither one governs the other.
+     */
+    val ROUTING_OBJECTS: Set<IncidentDomainObject> =
+        setOf(IncidentDomainObject.ENTERPRISE_ALERT_ROUTE, IncidentDomainObject.PROVIDER_ROUTING_RULE)
+
     fun requireCanonicalApiName(value: String): IncidentDomainObject =
         IncidentDomainObject.entries.firstOrNull { it.apiName == value }
             ?: throw IllegalArgumentException("Unknown incident-domain object: $value")
