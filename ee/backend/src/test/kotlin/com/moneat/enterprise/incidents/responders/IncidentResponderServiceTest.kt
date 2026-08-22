@@ -93,10 +93,9 @@ class IncidentResponderServiceTest {
                 expectedVersion = 1,
             ),
         )
-        assertEquals(
-            secondUserResourceId,
-            service.listAssignments(member.organizationId, incident.incidentId).single().assigneeUserId,
-        )
+        val assignedRole = service.listAssignments(member.organizationId, incident.incidentId).single()
+        assertEquals(secondUserResourceId, assignedRole.assigneeUserId)
+        assertEquals(null, assignedRole.role.privateInstructions)
 
         commandService.execute(
             HandoverIncidentRoleCommand(

@@ -177,7 +177,10 @@ class IncidentResponderService {
             rows.map { row ->
                 IncidentRoleAssignment(
                     id = row[NativeIncidentRoleAssignments.resourceId].toString(),
-                    role = roleDefinition(requireRole(row[NativeIncidentRoleAssignments.roleDefinitionId])),
+                    role = roleDefinition(
+                        requireRole(row[NativeIncidentRoleAssignments.roleDefinitionId]),
+                        includePrivateInstructions = false,
+                    ),
                     assigneeUserId = checkNotNull(users[row[NativeIncidentRoleAssignments.assigneeUserId]]),
                     assignedByUserId = checkNotNull(users[row[NativeIncidentRoleAssignments.assignedBy]]),
                     assignedAt = row[NativeIncidentRoleAssignments.assignedAt].toString(),
@@ -300,7 +303,10 @@ class IncidentResponderService {
             .associate { row -> row[Users.id] to row[Users.resource_id].toString() }
     }
 
-    private fun roleDefinition(row: ResultRow): IncidentRoleDefinition =
+    private fun roleDefinition(
+        row: ResultRow,
+        includePrivateInstructions: Boolean = true,
+    ): IncidentRoleDefinition =
         IncidentRoleDefinition(
             id = row[NativeIncidentRoleDefinitions.resourceId].toString(),
             key = row[NativeIncidentRoleDefinitions.stableKey],
@@ -308,7 +314,8 @@ class IncidentResponderService {
             name = row[NativeIncidentRoleDefinitions.name],
             description = row[NativeIncidentRoleDefinitions.description],
             responsibilities = json.decodeFromString(row[NativeIncidentRoleDefinitions.responsibilities]),
-            privateInstructions = row[NativeIncidentRoleDefinitions.privateInstructions],
+            privateInstructions = row[NativeIncidentRoleDefinitions.privateInstructions]
+                .takeIf { includePrivateInstructions },
             required = row[NativeIncidentRoleDefinitions.isRequired],
             default = row[NativeIncidentRoleDefinitions.isDefault],
         )
