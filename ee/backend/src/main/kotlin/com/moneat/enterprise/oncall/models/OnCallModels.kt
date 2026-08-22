@@ -365,7 +365,7 @@ data class OnCallSchedule(
     val currentOnCall: OnCallParticipant? = null,
     val slackUsergroupId: String? = null,
     val slackUsergroupHandle: String? = null,
-    val slackInstallationId: String? = null,
+    val slackInstallationId: String?,
     val createdAt: String,
     val updatedAt: String,
 )
