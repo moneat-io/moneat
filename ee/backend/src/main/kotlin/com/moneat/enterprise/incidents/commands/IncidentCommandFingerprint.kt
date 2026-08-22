@@ -33,6 +33,10 @@ internal object IncidentCommandFingerprint {
                         command.mode.wire,
                         command.visibility.wire,
                         command.incidentType,
+                        command.incidentTypeDefinitionId?.toString(),
+                        command.formDefinitionId?.toString(),
+                        canonicalDetails(command.formDefinitionSnapshot),
+                        canonicalDetails(command.formValues),
                         command.initialStatus.wire,
                         command.onCallAlertId?.toString(),
                     )
@@ -53,13 +57,49 @@ internal object IncidentCommandFingerprint {
                 is TransitionIncidentCommand ->
                     listOf(command.incidentId.toString(), command.targetStatus.wire, command.note)
                 is AssignIncidentRoleCommand ->
-                    listOf(command.incidentId.toString(), command.role, command.assigneeUserId.toString())
+                    listOf(
+                        command.incidentId.toString(),
+                        command.roleDefinitionId.toString(),
+                        command.assigneeUserId.toString(),
+                    )
+                is ClaimIncidentRoleCommand ->
+                    listOf(command.incidentId.toString(), command.roleDefinitionId.toString())
+                is UnassignIncidentRoleCommand ->
+                    listOf(command.incidentId.toString(), command.roleDefinitionId.toString())
+                is HandoverIncidentRoleCommand ->
+                    listOf(
+                        command.incidentId.toString(),
+                        command.roleDefinitionId.toString(),
+                        command.toUserId.toString(),
+                        command.note,
+                    )
+                is SetIncidentParticipationCommand ->
+                    listOf(
+                        command.incidentId.toString(),
+                        command.userId.toString(),
+                        command.participationType.wire,
+                    )
+                is LeaveIncidentCommand ->
+                    listOf(command.incidentId.toString(), command.userId.toString())
                 is AddIncidentActionCommand ->
                     listOf(command.incidentId.toString(), command.title, command.assigneeUserId?.toString())
                 is AddIncidentTimelineEventCommand ->
                     listOf(command.incidentId.toString(), command.eventType, canonicalDetails(command.details))
                 is LinkOnCallAlertCommand ->
                     listOf(command.incidentId.toString(), command.alertId.toString())
+                is LinkIncidentSourceCommand ->
+                    listOf(
+                        command.incidentId.toString(),
+                        command.source.sourceType.wire,
+                        command.source.sourceKey,
+                        command.source.onCallAlertId?.toString(),
+                        command.source.alertEpisodeId?.toString(),
+                        command.source.label,
+                        command.source.sourceUrl,
+                        canonicalDetails(command.source.metadata),
+                    )
+                is UnlinkIncidentSourceCommand ->
+                    listOf(command.incidentId.toString(), command.sourceType.wire, command.sourceKey)
                 is ResolveIncidentCommand -> listOf(command.incidentId.toString(), command.note)
                 is CancelIncidentCommand -> listOf(command.incidentId.toString(), command.reason)
                 is ReopenIncidentCommand -> listOf(command.incidentId.toString(), command.reason)

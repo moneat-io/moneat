@@ -6,6 +6,7 @@ package com.moneat.enterprise.oncall.routes
 
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
@@ -13,6 +14,17 @@ import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
+import com.moneat.enterprise.incidents.commands.IncidentSourceReference
+import com.moneat.enterprise.incidents.commands.LinkIncidentSourceCommand
+import com.moneat.enterprise.incidents.commands.UnlinkIncidentSourceCommand
+import com.moneat.enterprise.incidents.config.IncidentConfigurationService
+import com.moneat.enterprise.incidents.responders.IncidentResponderService
+import com.moneat.enterprise.incidents.timeline.IncidentTimelineService
+import com.moneat.enterprise.incidents.models.IncidentFormStage
+import com.moneat.enterprise.incidents.models.NativeIncidentMode
+import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
+import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
@@ -33,9 +45,11 @@ import io.ktor.server.request.receiveNullable
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -52,12 +66,12 @@ private const val INVALID_INCIDENT_ID_MESSAGE = "Invalid incident ID"
 private const val INCIDENT_NOT_FOUND_MESSAGE = "Incident not found"
 private const val IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
-private data class OnCallUserContext(
+internal data class OnCallUserContext(
     val organizationId: Int,
     val userId: Int,
 )
 
-private fun ApplicationCall.incidentCommandKey(action: String): String =
+internal fun ApplicationCall.incidentCommandKey(action: String): String =
     namespacedIncidentCommandKey(action, request.headers[IDEMPOTENCY_KEY_HEADER])
         ?: "$action:${Uuid.random()}"
 
@@ -67,7 +81,7 @@ internal fun namespacedIncidentCommandKey(action: String, suppliedKey: String?):
         ?.takeIf { it.isNotEmpty() }
         ?.let { "$action:$it" }
 
-private suspend fun ApplicationCall.respondIncidentCommandFailure(error: IncidentCommandException) {
+internal suspend fun ApplicationCall.respondIncidentCommandFailure(error: IncidentCommandException) {
     respond(incidentCommandStatus(error), ErrorResponse(error.message))
 }
 
@@ -91,12 +105,28 @@ private fun parseStatusFilters(rawStatuses: List<String>?): List<String> =
 data class DeclareIncidentRequest(
     val title: String,
     val description: String? = null,
+    val summary: String? = null,
     val severity: String? = null,
+    val mode: String = "LIVE",
+    val visibility: String = "ORGANIZATION",
+    val initialStatus: String = "ACTIVE",
+    val incidentTypeId: String? = null,
+    val fields: Map<String, JsonElement> = emptyMap(),
 )
 
 @Serializable
 data class AddAlertToIncidentRequest(
     val alertId: String,
+)
+
+@Serializable
+data class AddIncidentSourceRequest(
+    val sourceType: String,
+    val sourceId: String? = null,
+    val sourceKey: String? = null,
+    val label: String? = null,
+    val sourceUrl: String? = null,
+    val metadata: Map<String, JsonElement> = emptyMap(),
 )
 
 @Serializable
@@ -116,8 +146,18 @@ data class ResolveIncidentRequest(
 
 fun Route.incidentRoutes(alertServiceProvider: () -> OnCallAlertService) {
     val onCallIncidentService = OnCallIncidentService()
+    val configurationService = IncidentConfigurationService()
+    val responderService = IncidentResponderService()
+    val timelineService = IncidentTimelineService()
     registerAlertRoutes(alertServiceProvider, onCallIncidentService)
-    registerDeclaredIncidentRoutes(alertServiceProvider, onCallIncidentService)
+    registerDeclaredIncidentRoutes(
+        alertServiceProvider,
+        onCallIncidentService,
+        configurationService,
+        responderService,
+        timelineService,
+    )
+    registerIncidentConfigurationRoutes(configurationService, responderService)
 }
 
 private fun Route.registerAlertRoutes(
@@ -143,15 +183,179 @@ private fun Route.registerAlertRoutes(
 private fun Route.registerDeclaredIncidentRoutes(
     alertServiceProvider: () -> OnCallAlertService,
     onCallIncidentService: OnCallIncidentService,
+    configurationService: IncidentConfigurationService,
+    responderService: IncidentResponderService,
+    timelineService: IncidentTimelineService,
 ) {
     route("/v1/on-call/incidents") {
         authenticate("auth-jwt") {
+            registerDeclareIncidentRoute(onCallIncidentService, configurationService)
             registerListDeclaredIncidentsRoute(onCallIncidentService)
             registerGetDeclaredIncidentRoute(onCallIncidentService)
             registerResolveDeclaredIncidentRoute(onCallIncidentService)
             registerAddAlertToIncidentRoute(alertServiceProvider, onCallIncidentService)
-            registerIncidentTimelineRoute(onCallIncidentService)
+            registerIncidentSourceRoutes(onCallIncidentService)
+            registerIncidentResponderRoutes(onCallIncidentService, responderService)
+            registerIncidentTimelineRoutes(timelineService)
             registerAddIncidentNoteRoute(onCallIncidentService)
+        }
+    }
+}
+
+private fun Route.registerIncidentSourceRoutes(onCallIncidentService: OnCallIncidentService) {
+    get("/{id}/sources") {
+        val context = call.requireUserContext() ?: return@get
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
+        call.respond(onCallIncidentService.getIncidentSources(context.organizationId, incidentId))
+    }
+    post("/{id}/sources") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receive<AddIncidentSourceRequest>()
+        try {
+            val source = call.resolveIncidentSource(context.organizationId, request) ?: return@post
+            onCallIncidentService.addSourceToIncident(
+                LinkIncidentSourceCommand(
+                    commandKey = call.incidentCommandKey("link-source"),
+                    actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                    incidentId = incidentId,
+                    source = source,
+                ),
+            )
+            call.respond(
+                HttpStatusCode.Created,
+                onCallIncidentService.getIncidentSources(context.organizationId, incidentId),
+            )
+        } catch (error: IncidentCommandException) {
+            call.respondIncidentCommandFailure(error)
+        } catch (error: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
+        }
+    }
+    delete("/{id}/sources/{sourceId}") {
+        val context = call.requireUserContext() ?: return@delete
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@delete
+        val sourceResourceId = call.parameters["sourceId"]
+        if (sourceResourceId?.toUuidOrNull() == null) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident source ID"))
+            return@delete
+        }
+        val source =
+            onCallIncidentService.getIncidentSourceIdentity(
+                context.organizationId,
+                incidentId,
+                checkNotNull(sourceResourceId),
+            )
+        if (source == null) {
+            call.respond(HttpStatusCode.NotFound, ErrorResponse("Incident source not found"))
+            return@delete
+        }
+        try {
+            onCallIncidentService.removeSourceFromIncident(
+                UnlinkIncidentSourceCommand(
+                    commandKey = call.incidentCommandKey("unlink-source"),
+                    actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                    incidentId = incidentId,
+                    sourceType = source.sourceType,
+                    sourceKey = source.sourceKey,
+                ),
+            )
+            call.respond(HttpStatusCode.OK, MessageResponse("Incident source removed"))
+        } catch (error: IncidentCommandException) {
+            call.respondIncidentCommandFailure(error)
+        }
+    }
+}
+
+private suspend fun ApplicationCall.resolveIncidentSource(
+    organizationId: Int,
+    request: AddIncidentSourceRequest,
+): IncidentSourceReference? {
+    val sourceType = IncidentSourceType.entries.firstOrNull { it.wire == request.sourceType.trim().uppercase() }
+    if (sourceType == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident source type"))
+        return null
+    }
+    return when (sourceType) {
+        IncidentSourceType.ON_CALL_ALERT -> {
+            val alertId = requireAlertIdValue(request.sourceId, organizationId) ?: return null
+            IncidentSourceReference(
+                sourceType = sourceType,
+                sourceKey = checkNotNull(request.sourceId),
+                onCallAlertId = alertId,
+                label = request.label,
+                metadata = request.metadata,
+            )
+        }
+        IncidentSourceType.ALERT_EPISODE -> {
+            val episodeId = requireAlertEpisodeIdValue(request.sourceId, organizationId) ?: return null
+            IncidentSourceReference(
+                sourceType = sourceType,
+                sourceKey = checkNotNull(request.sourceId),
+                alertEpisodeId = episodeId,
+                label = request.label,
+                metadata = request.metadata,
+            )
+        }
+        else ->
+            IncidentSourceReference(
+                sourceType = sourceType,
+                sourceKey = request.sourceKey ?: request.sourceId.orEmpty(),
+                label = request.label,
+                sourceUrl = request.sourceUrl,
+                metadata = request.metadata,
+            )
+    }
+}
+
+private suspend fun ApplicationCall.requireAlertEpisodeIdValue(
+    raw: String?,
+    organizationId: Int,
+): Int? {
+    val resourceId = parseOnCallResourceId(raw)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid alert episode ID"))
+        return null
+    }
+    val id =
+        transaction {
+            AlertEpisodes
+                .selectAll()
+                .where {
+                    (AlertEpisodes.resourceId eq resourceId) and
+                        (AlertEpisodes.organizationId eq organizationId)
+                }.singleOrNull()
+                ?.get(AlertEpisodes.id)
+                ?.value
+        }
+    if (id == null) respond(HttpStatusCode.NotFound, ErrorResponse("Alert episode not found"))
+    return id
+}
+
+private fun Route.registerDeclareIncidentRoute(
+    onCallIncidentService: OnCallIncidentService,
+    configurationService: IncidentConfigurationService,
+) {
+    post {
+        val context = call.requireUserContext() ?: return@post
+        val request = call.receive<DeclareIncidentRequest>()
+        val severity = call.requireIncidentSeverity(request.severity) ?: return@post
+        try {
+            val incident =
+                declareIncident(
+                    call = call,
+                    context = context,
+                    request = request,
+                    severity = severity,
+                    onCallAlertId = null,
+                    onCallIncidentService = onCallIncidentService,
+                    configurationService = configurationService,
+                )
+            call.respond(HttpStatusCode.Created, incident)
+        } catch (e: IncidentCommandException) {
+            call.respondIncidentCommandFailure(e)
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
         }
     }
 }
@@ -164,7 +368,7 @@ private suspend fun ApplicationCall.requireOrganizationId(): Int? {
     return organizationId
 }
 
-private suspend fun ApplicationCall.requireUserContext(): OnCallUserContext? {
+internal suspend fun ApplicationCall.requireUserContext(): OnCallUserContext? {
     val principal = principal<JWTPrincipal>()
     val organizationId = principal?.currentOrgIdOrNull()
     val userId = principal?.payload?.getClaim("userId")?.asInt()
@@ -181,7 +385,7 @@ private suspend fun ApplicationCall.requireAlertId(
 ): Int? =
     requireAlertIdValue(parameters[parameterName], organizationId)
 
-private suspend fun ApplicationCall.requireIncidentId(organizationId: Int): Int? =
+internal suspend fun ApplicationCall.requireIncidentId(organizationId: Int): Int? =
     requireIncidentIdValue(parameters["id"], organizationId)
 
 private suspend fun ApplicationCall.requireAlertIdValue(
@@ -443,15 +647,14 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
 
         try {
             val incident =
-                onCallIncidentService.declareIncident(
-                    DeclareIncidentCommand(
-                        commandKey = call.incidentCommandKey("declare"),
-                        actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
-                        title = request.title,
-                        description = request.description,
-                        severity = incidentSeverity,
-                        onCallAlertId = alertId,
-                    ),
+                declareIncident(
+                    call = call,
+                    context = context,
+                    request = request,
+                    severity = incidentSeverity,
+                    onCallAlertId = alertId,
+                    onCallIncidentService = onCallIncidentService,
+                    configurationService = IncidentConfigurationService(),
                 )
             call.respond(HttpStatusCode.Created, incident)
         } catch (e: IncidentCommandException) {
@@ -460,6 +663,51 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
         }
     }
+}
+
+private suspend fun declareIncident(
+    call: ApplicationCall,
+    context: OnCallUserContext,
+    request: DeclareIncidentRequest,
+    severity: String,
+    onCallAlertId: Int?,
+    onCallIncidentService: OnCallIncidentService,
+    configurationService: IncidentConfigurationService,
+): com.moneat.enterprise.oncall.models.OnCallIncident {
+    val mode =
+        NativeIncidentMode.entries.firstOrNull { it.wire == request.mode.trim().uppercase() }
+            ?: throw IllegalArgumentException("Invalid incident mode")
+    val visibility =
+        NativeIncidentVisibility.entries.firstOrNull { it.wire == request.visibility.trim().uppercase() }
+            ?: throw IllegalArgumentException("Invalid incident visibility")
+    val initialStatus = NativeIncidentStatus.fromWire(request.initialStatus.trim())
+        ?: throw IllegalArgumentException("Invalid incident status")
+    val resolvedForm =
+        configurationService.resolveForm(
+            organizationId = context.organizationId,
+            incidentTypeResourceId = request.incidentTypeId,
+            stage = IncidentFormStage.DECLARATION,
+            submittedValues = request.fields,
+        )
+    return onCallIncidentService.declareIncident(
+        DeclareIncidentCommand(
+            commandKey = call.incidentCommandKey("declare"),
+            actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+            title = request.title,
+            description = request.description,
+            summary = request.summary,
+            severity = severity,
+            mode = mode,
+            visibility = visibility,
+            incidentType = resolvedForm.incidentTypeName,
+            incidentTypeDefinitionId = resolvedForm.incidentTypeDefinitionId,
+            formDefinitionId = resolvedForm.formDefinitionId,
+            formDefinitionSnapshot = resolvedForm.definitionSnapshot,
+            formValues = resolvedForm.values,
+            initialStatus = initialStatus,
+            onCallAlertId = onCallAlertId,
+        ),
+    )
 }
 
 private suspend fun ApplicationCall.requireIncidentSeverity(severity: String?): String? {
@@ -561,16 +809,6 @@ private fun Route.registerAddAlertToIncidentRoute(
         } catch (e: IllegalArgumentException) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
         }
-    }
-}
-
-private fun Route.registerIncidentTimelineRoute(onCallIncidentService: OnCallIncidentService) {
-    get("/{id}/timeline") {
-        val organizationId = call.requireOrganizationId() ?: return@get
-        val incidentId = call.requireIncidentId(organizationId) ?: return@get
-        if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, organizationId)) return@get
-        val timeline = onCallIncidentService.getIncidentTimeline(incidentId)
-        call.respond(timeline)
     }
 }
 

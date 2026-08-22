@@ -8,10 +8,17 @@ import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.incidents.commands.AddIncidentTimelineEventCommand
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommand
+import com.moneat.enterprise.incidents.commands.IncidentCommandResult
 import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
+import com.moneat.enterprise.incidents.commands.LinkIncidentSourceCommand
 import com.moneat.enterprise.incidents.commands.ResolveIncidentCommand
+import com.moneat.enterprise.incidents.commands.UnlinkIncidentSourceCommand
+import com.moneat.enterprise.incidents.models.IncidentSourceLink
+import com.moneat.enterprise.incidents.models.IncidentSourceType
+import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.oncall.escalationPolicyResourceIds
 import com.moneat.enterprise.oncall.incidentResourceIds
 import com.moneat.enterprise.oncall.organizationResourceId
@@ -25,6 +32,7 @@ import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.models.OnCallTimelineEvent
 import com.moneat.shared.models.Users
+import com.moneat.shared.services.toUuidOrNull
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -39,6 +47,8 @@ import kotlin.uuid.Uuid
 class OnCallIncidentService(
     private val commandService: IncidentCommandService = IncidentCommandService(),
 ) {
+    fun executeIncidentCommand(command: IncidentCommand): IncidentCommandResult = commandService.execute(command)
+
     suspend fun declareIncident(command: DeclareIncidentCommand): OnCallIncident {
         val result = commandService.execute(command)
         return checkNotNull(getIncident(result.incidentId))
@@ -46,6 +56,51 @@ class OnCallIncidentService(
 
     fun addAlertToIncident(command: LinkOnCallAlertCommand) {
         commandService.execute(command)
+    }
+
+    fun addSourceToIncident(command: LinkIncidentSourceCommand) {
+        commandService.execute(command)
+    }
+
+    fun removeSourceFromIncident(command: UnlinkIncidentSourceCommand) {
+        commandService.execute(command)
+    }
+
+    fun getIncidentSources(
+        organizationId: Int,
+        incidentId: Int,
+    ): List<IncidentSourceLink> =
+        transaction {
+            NativeIncidentSourceLinks
+                .selectAll()
+                .where {
+                    (NativeIncidentSourceLinks.organizationId eq organizationId) and
+                        (NativeIncidentSourceLinks.incidentId eq incidentId)
+                }.orderBy(NativeIncidentSourceLinks.createdAt to SortOrder.ASC)
+                .map(::toIncidentSourceLink)
+        }
+
+    fun getIncidentSourceIdentity(
+        organizationId: Int,
+        incidentId: Int,
+        sourceResourceId: String,
+    ): IncidentSourceIdentity? {
+        val resourceId = sourceResourceId.toUuidOrNull() ?: return null
+        return transaction {
+            NativeIncidentSourceLinks
+                .selectAll()
+                .where {
+                    (NativeIncidentSourceLinks.organizationId eq organizationId) and
+                        (NativeIncidentSourceLinks.incidentId eq incidentId) and
+                        (NativeIncidentSourceLinks.resourceId eq resourceId)
+                }.singleOrNull()
+                ?.let {
+                    IncidentSourceIdentity(
+                        sourceType = IncidentSourceType.valueOf(it[NativeIncidentSourceLinks.sourceType]),
+                        sourceKey = it[NativeIncidentSourceLinks.sourceKey],
+                    )
+                }
+        }
     }
 
     suspend fun resolveIncident(
@@ -323,6 +378,17 @@ class OnCallIncidentService(
         )
     }
 
+    private fun toIncidentSourceLink(row: ResultRow): IncidentSourceLink =
+        IncidentSourceLink(
+            id = row[NativeIncidentSourceLinks.resourceId].toString(),
+            sourceType = IncidentSourceType.valueOf(row[NativeIncidentSourceLinks.sourceType]),
+            sourceKey = row[NativeIncidentSourceLinks.sourceKey],
+            label = row[NativeIncidentSourceLinks.label],
+            sourceUrl = row[NativeIncidentSourceLinks.sourceUrl],
+            metadata = row[NativeIncidentSourceLinks.metadata],
+            createdAt = row[NativeIncidentSourceLinks.createdAt].toString(),
+        )
+
     private fun toOnCallAlert(
         row: ResultRow,
         resourceIds: IncidentResponseResourceIds,
@@ -442,3 +508,8 @@ class OnCallIncidentService(
             policyId?.let { policyResourceIds.requireValue(it, "escalation policy") }
     }
 }
+
+data class IncidentSourceIdentity(
+    val sourceType: IncidentSourceType,
+    val sourceKey: String,
+)

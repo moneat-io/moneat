@@ -4,9 +4,23 @@
 
 package com.moneat.enterprise.incidents
 
+import com.moneat.alerts.models.AlertEpisodes
+import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
+import com.moneat.enterprise.incidents.models.NativeIncidentCustomFieldOptions
+import com.moneat.enterprise.incidents.models.NativeIncidentCustomFields
+import com.moneat.enterprise.incidents.models.NativeIncidentFormFields
+import com.moneat.enterprise.incidents.models.NativeIncidentForms
+import com.moneat.enterprise.incidents.models.NativeIncidentFormSubmissions
+import com.moneat.enterprise.incidents.models.NativeIncidentHandovers
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
+import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
+import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
+import com.moneat.enterprise.incidents.models.NativeIncidentTimelineRevisions
+import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
@@ -38,10 +52,24 @@ object IncidentTestDatabase {
             Organizations,
             Memberships,
             EscalationPolicies,
+            AlertEpisodes,
+            NativeIncidentTypes,
+            NativeIncidentCustomFields,
+            NativeIncidentCustomFieldOptions,
+            NativeIncidentForms,
+            NativeIncidentFormFields,
             OnCallIncidents,
             OnCallAlerts,
             OnCallIncidentAlerts,
             OnCallIncidentTimeline,
+            NativeIncidentTimelineRevisions,
+            NativeIncidentFormSubmissions,
+            NativeIncidentAlertEpisodeLinks,
+            NativeIncidentSourceLinks,
+            NativeIncidentRoleDefinitions,
+            NativeIncidentRoleAssignments,
+            NativeIncidentParticipants,
+            NativeIncidentHandovers,
             NativeIncidentCommands,
             NativeIncidentOutboxEvents,
             NativeIncidentOutboxDeliveries,

@@ -7,6 +7,7 @@ package com.moneat.enterprise.incidents.commands
 import com.moneat.enterprise.incidents.models.NativeIncidentMode
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
+import com.moneat.enterprise.incidents.models.IncidentSourceType
 import kotlinx.serialization.json.JsonElement
 
 data class IncidentCommandActor(
@@ -22,9 +23,17 @@ enum class IncidentCommandType(val wire: String) {
     UPDATE("UPDATE"),
     TRANSITION("TRANSITION"),
     ASSIGN_ROLE("ASSIGN_ROLE"),
+    CLAIM_ROLE("CLAIM_ROLE"),
+    UNASSIGN_ROLE("UNASSIGN_ROLE"),
+    HANDOVER_ROLE("HANDOVER_ROLE"),
+    JOIN("JOIN"),
+    OBSERVE("OBSERVE"),
+    LEAVE("LEAVE"),
     ADD_ACTION("ADD_ACTION"),
     ADD_TIMELINE_EVENT("ADD_TIMELINE_EVENT"),
     LINK_ON_CALL_ALERT("LINK_ON_CALL_ALERT"),
+    LINK_SOURCE("LINK_SOURCE"),
+    UNLINK_SOURCE("UNLINK_SOURCE"),
     RESOLVE("RESOLVE"),
     CANCEL("CANCEL"),
     REOPEN("REOPEN"),
@@ -47,6 +56,10 @@ data class DeclareIncidentCommand(
     val mode: NativeIncidentMode = NativeIncidentMode.LIVE,
     val visibility: NativeIncidentVisibility = NativeIncidentVisibility.ORGANIZATION,
     val incidentType: String? = null,
+    val incidentTypeDefinitionId: Int? = null,
+    val formDefinitionId: Int? = null,
+    val formDefinitionSnapshot: Map<String, JsonElement> = emptyMap(),
+    val formValues: Map<String, JsonElement> = emptyMap(),
     val initialStatus: NativeIncidentStatus = NativeIncidentStatus.ACTIVE,
     val onCallAlertId: Int? = null,
 ) : IncidentCommand {
@@ -108,11 +121,68 @@ data class AssignIncidentRoleCommand(
     override val commandKey: String,
     override val actor: IncidentCommandActor,
     override val incidentId: Int,
-    val role: String,
+    val roleDefinitionId: Int,
     val assigneeUserId: Int,
     override val expectedVersion: Int? = null,
 ) : ExistingIncidentCommand {
     override val type = IncidentCommandType.ASSIGN_ROLE
+}
+
+data class ClaimIncidentRoleCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val roleDefinitionId: Int,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.CLAIM_ROLE
+}
+
+data class UnassignIncidentRoleCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val roleDefinitionId: Int,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.UNASSIGN_ROLE
+}
+
+data class HandoverIncidentRoleCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val roleDefinitionId: Int,
+    val toUserId: Int,
+    val note: String? = null,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.HANDOVER_ROLE
+}
+
+data class SetIncidentParticipationCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val userId: Int,
+    val participationType: com.moneat.enterprise.incidents.models.IncidentParticipationType,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type =
+        when (participationType) {
+            com.moneat.enterprise.incidents.models.IncidentParticipationType.PARTICIPANT -> IncidentCommandType.JOIN
+            com.moneat.enterprise.incidents.models.IncidentParticipationType.OBSERVER -> IncidentCommandType.OBSERVE
+        }
+}
+
+data class LeaveIncidentCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val userId: Int,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.LEAVE
 }
 
 data class AddIncidentActionCommand(
@@ -145,6 +215,37 @@ data class LinkOnCallAlertCommand(
     override val expectedVersion: Int? = null,
 ) : ExistingIncidentCommand {
     override val type = IncidentCommandType.LINK_ON_CALL_ALERT
+}
+
+data class IncidentSourceReference(
+    val sourceType: IncidentSourceType,
+    val sourceKey: String,
+    val onCallAlertId: Int? = null,
+    val alertEpisodeId: Int? = null,
+    val label: String? = null,
+    val sourceUrl: String? = null,
+    val metadata: Map<String, JsonElement> = emptyMap(),
+)
+
+data class LinkIncidentSourceCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val source: IncidentSourceReference,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.LINK_SOURCE
+}
+
+data class UnlinkIncidentSourceCommand(
+    override val commandKey: String,
+    override val actor: IncidentCommandActor,
+    override val incidentId: Int,
+    val sourceType: IncidentSourceType,
+    val sourceKey: String,
+    override val expectedVersion: Int? = null,
+) : ExistingIncidentCommand {
+    override val type = IncidentCommandType.UNLINK_SOURCE
 }
 
 data class ResolveIncidentCommand(

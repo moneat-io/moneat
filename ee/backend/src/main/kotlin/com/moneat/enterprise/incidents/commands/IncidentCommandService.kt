@@ -5,24 +5,39 @@
 package com.moneat.enterprise.incidents.commands
 
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.incidents.events.IncidentOutboxWriter
 import com.moneat.enterprise.incidents.events.PendingNativeIncidentDomainEvent
 import com.moneat.enterprise.incidents.models.NativeIncidentCommands
+import com.moneat.enterprise.incidents.models.NativeIncidentAlertEpisodeLinks
+import com.moneat.enterprise.incidents.models.NativeIncidentFormSubmissions
+import com.moneat.enterprise.incidents.models.IncidentParticipationType
+import com.moneat.enterprise.incidents.models.IncidentRoleEndReason
+import com.moneat.enterprise.incidents.models.NativeIncidentHandovers
+import com.moneat.enterprise.incidents.models.NativeIncidentParticipants
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleAssignments
+import com.moneat.enterprise.incidents.models.NativeIncidentRoleDefinitions
+import com.moneat.enterprise.incidents.models.NativeIncidentSourceLinks
 import com.moneat.enterprise.incidents.models.NativeIncidentStatus
+import com.moneat.enterprise.incidents.timeline.IncidentTimelineWriter
+import com.moneat.enterprise.incidents.timeline.PendingIncidentTimelineEvent
+import com.moneat.enterprise.incidents.timeline.toIncidentTimelineProvenance
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
-import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.shared.models.Memberships
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.isNull
 import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
@@ -33,6 +48,7 @@ import kotlin.uuid.Uuid
 class IncidentCommandService(
     private val policy: IncidentCommandPolicy = IncidentCommandPolicy(),
     private val outboxWriter: IncidentOutboxWriter = IncidentOutboxWriter(),
+    private val timelineWriter: IncidentTimelineWriter = IncidentTimelineWriter(),
 ) {
     fun execute(command: IncidentCommand): IncidentCommandResult {
         policy.requireAllowed(command)
@@ -86,9 +102,16 @@ class IncidentCommandService(
     private fun applySupportingCommand(command: IncidentCommand): IncidentMutation =
         when (command) {
             is AssignIncidentRoleCommand -> assignRole(command)
+            is ClaimIncidentRoleCommand -> claimRole(command)
+            is UnassignIncidentRoleCommand -> unassignRole(command)
+            is HandoverIncidentRoleCommand -> handoverRole(command)
+            is SetIncidentParticipationCommand -> setParticipation(command)
+            is LeaveIncidentCommand -> leaveIncident(command)
             is AddIncidentActionCommand -> addAction(command)
             is AddIncidentTimelineEventCommand -> addTimelineEvent(command)
             is LinkOnCallAlertCommand -> linkAlert(command)
+            is LinkIncidentSourceCommand -> linkSource(command)
+            is UnlinkIncidentSourceCommand -> unlinkSource(command)
             is ResolveIncidentCommand -> transition(command, NativeIncidentStatus.RESOLVED, command.note)
             is CancelIncidentCommand -> transition(command, NativeIncidentStatus.CANCELLED, command.reason)
             is ReopenIncidentCommand -> transition(command, NativeIncidentStatus.ACTIVE, command.reason)
@@ -152,6 +175,9 @@ class IncidentCommandService(
                 it[mode] = command.mode.wire
                 it[visibility] = command.visibility.wire
                 it[incidentType] = command.incidentType?.trim()?.takeIf(String::isNotEmpty)
+                it[incidentTypeDefinitionId] = command.incidentTypeDefinitionId
+                it[declarationSnapshot] =
+                    command.formDefinitionSnapshot + ("values" to JsonObject(command.formValues))
                 it[summary] = command.summary?.trim()?.takeIf(String::isNotEmpty)
                 it[version] = INITIAL_VERSION
                 it[declaredBy] = command.actor.userId
@@ -167,10 +193,38 @@ class IncidentCommandService(
                 it[createdAt] = now
                 it[updatedAt] = now
             }.value
-        command.onCallAlertId?.let { alertId -> linkAlertRecord(incidentId, alertId) }
+        if (command.formDefinitionId != null || command.formDefinitionSnapshot.isNotEmpty()) {
+            NativeIncidentFormSubmissions.insert {
+                it[NativeIncidentFormSubmissions.resourceId] = Uuid.random()
+                it[NativeIncidentFormSubmissions.organizationId] = command.actor.organizationId
+                it[NativeIncidentFormSubmissions.incidentId] = incidentId
+                it[NativeIncidentFormSubmissions.formId] = command.formDefinitionId
+                it[NativeIncidentFormSubmissions.stage] = "DECLARATION"
+                it[NativeIncidentFormSubmissions.definitionSnapshot] = command.formDefinitionSnapshot
+                it[NativeIncidentFormSubmissions.valuesSnapshot] = command.formValues
+                it[NativeIncidentFormSubmissions.submittedBy] = command.actor.userId
+                it[NativeIncidentFormSubmissions.submittedAt] = now
+            }
+        }
+        command.onCallAlertId?.let { alertId ->
+            linkAlertRecord(incidentId, alertId)
+            val alert = requireAlert(command.actor.organizationId, alertId)
+            insertSourceLink(
+                command.actor,
+                incidentId,
+                IncidentSourceReference(
+                    sourceType = com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT,
+                    sourceKey = alert[OnCallAlerts.resourceId].toString(),
+                    onCallAlertId = alertId,
+                    label = alert[OnCallAlerts.title],
+                ),
+                now,
+            )
+        }
         insertTimelineEvent(
+            command = command,
             incidentId = incidentId,
-            actorUserId = command.actor.userId,
+            eventKey = command.commandKey,
             eventType = "DECLARED",
             details = mapOf(
                 "origin" to JsonPrimitive(command.actor.origin),
@@ -207,8 +261,9 @@ class IncidentCommandService(
             }
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
+            command,
             command.incidentId,
-            command.actor.userId,
+            command.commandKey,
             "UPDATED",
             mapOf("origin" to JsonPrimitive(command.actor.origin)),
             now,
@@ -257,8 +312,9 @@ class IncidentCommandService(
             }
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
+            command,
             command.incidentId,
-            command.actor.userId,
+            command.commandKey,
             target.timelineEventType(),
             transitionDetails(command.actor.origin, note, currentStatus),
             now,
@@ -267,14 +323,260 @@ class IncidentCommandService(
     }
 
     private fun assignRole(command: AssignIncidentRoleCommand): IncidentMutation {
-        require(command.role.isNotBlank()) { "Incident role is required" }
+        requireIncident(command)
+        val role = requireRoleDefinition(command.actor.organizationId, command.roleDefinitionId)
         requireUserMembership(command.actor.organizationId, command.assigneeUserId)
-        return appendVersionedEvent(
+        val active = activeRoleAssignment(command.incidentId, command.roleDefinitionId)
+        if (active?.get(NativeIncidentRoleAssignments.assigneeUserId) == command.assigneeUserId) {
+            return loadMutation(command.incidentId, changed = false)
+        }
+        val now = Clock.System.now()
+        active?.let {
+            endRoleAssignment(it, command.actor.userId, IncidentRoleEndReason.REASSIGNED, now)
+        }
+        NativeIncidentRoleAssignments.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[roleDefinitionId] = command.roleDefinitionId
+            it[assigneeUserId] = command.assigneeUserId
+            it[assignedBy] = command.actor.userId
+            it[assignedAt] = now
+            it[endedBy] = null
+            it[endedAt] = null
+            it[endReason] = null
+        }
+        ensureParticipant(command, command.assigneeUserId, now)
+        val mutation = appendVersionedEvent(
             command,
             "ROLE_ASSIGNED",
             mapOf(
-                "role" to JsonPrimitive(command.role.trim()),
+                "roleId" to JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()),
+                "role" to JsonPrimitive(role[NativeIncidentRoleDefinitions.name]),
                 "assigneeUserId" to JsonPrimitive(command.assigneeUserId),
+            ),
+        )
+        recordPrivateRoleInstructions(command, role, command.assigneeUserId, mutation.version)
+        return mutation
+    }
+
+    private fun claimRole(command: ClaimIncidentRoleCommand): IncidentMutation =
+        assignRole(
+            AssignIncidentRoleCommand(
+                commandKey = command.commandKey,
+                actor = command.actor,
+                incidentId = command.incidentId,
+                roleDefinitionId = command.roleDefinitionId,
+                assigneeUserId = command.actor.userId,
+                expectedVersion = command.expectedVersion,
+            ),
+        )
+
+    private fun unassignRole(command: UnassignIncidentRoleCommand): IncidentMutation {
+        requireIncident(command)
+        val role = requireRoleDefinition(command.actor.organizationId, command.roleDefinitionId)
+        val active = activeRoleAssignment(command.incidentId, command.roleDefinitionId)
+            ?: return loadMutation(command.incidentId, changed = false)
+        val now = Clock.System.now()
+        val assigneeUserId = active[NativeIncidentRoleAssignments.assigneeUserId]
+        endRoleAssignment(active, command.actor.userId, IncidentRoleEndReason.UNASSIGNED, now)
+        return appendVersionedEvent(
+            command,
+            "ROLE_UNASSIGNED",
+            mapOf(
+                "roleId" to JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()),
+                "role" to JsonPrimitive(role[NativeIncidentRoleDefinitions.name]),
+                "assigneeUserId" to JsonPrimitive(assigneeUserId),
+            ),
+        )
+    }
+
+    private fun handoverRole(command: HandoverIncidentRoleCommand): IncidentMutation {
+        requireIncident(command)
+        val role = requireRoleDefinition(command.actor.organizationId, command.roleDefinitionId)
+        requireUserMembership(command.actor.organizationId, command.toUserId)
+        val active = activeRoleAssignment(command.incidentId, command.roleDefinitionId)
+            ?: throw IncidentCommandConflictException("Incident role is not assigned")
+        val fromUserId = active[NativeIncidentRoleAssignments.assigneeUserId]
+        if (fromUserId == command.toUserId) return loadMutation(command.incidentId, changed = false)
+        val now = Clock.System.now()
+        endRoleAssignment(active, command.actor.userId, IncidentRoleEndReason.HANDOVER, now)
+        val nextAssignmentId =
+            NativeIncidentRoleAssignments.insertAndGetId {
+                it[resourceId] = Uuid.random()
+                it[organizationId] = command.actor.organizationId
+                it[incidentId] = command.incidentId
+                it[roleDefinitionId] = command.roleDefinitionId
+                it[assigneeUserId] = command.toUserId
+                it[assignedBy] = command.actor.userId
+                it[assignedAt] = now
+                it[endedBy] = null
+                it[endedAt] = null
+                it[endReason] = null
+            }.value
+        NativeIncidentHandovers.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[roleDefinitionId] = command.roleDefinitionId
+            it[fromAssignmentId] = active[NativeIncidentRoleAssignments.id].value
+            it[toAssignmentId] = nextAssignmentId
+            it[handedOverBy] = command.actor.userId
+            it[note] = command.note.cleaned()
+            it[createdAt] = now
+        }
+        ensureParticipant(command, command.toUserId, now)
+        val details = buildMap<String, JsonElement> {
+            put("roleId", JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()))
+            put("role", JsonPrimitive(role[NativeIncidentRoleDefinitions.name]))
+            put("fromUserId", JsonPrimitive(fromUserId))
+            put("toUserId", JsonPrimitive(command.toUserId))
+            command.note.cleaned()?.let { put("note", JsonPrimitive(it)) }
+        }
+        val mutation = appendVersionedEvent(command, "ROLE_HANDED_OVER", details)
+        recordPrivateRoleInstructions(command, role, command.toUserId, mutation.version)
+        return mutation
+    }
+
+    private fun setParticipation(command: SetIncidentParticipationCommand): IncidentMutation {
+        requireIncident(command)
+        requireUserMembership(command.actor.organizationId, command.userId)
+        val now = Clock.System.now()
+        val changed = setActiveParticipation(command, command.userId, command.participationType, now)
+        if (!changed) return loadMutation(command.incidentId, changed = false)
+        val eventType = when (command.participationType) {
+            IncidentParticipationType.PARTICIPANT -> "PARTICIPANT_JOINED"
+            IncidentParticipationType.OBSERVER -> "OBSERVER_JOINED"
+        }
+        return appendVersionedEvent(
+            command,
+            eventType,
+            mapOf(
+                "userId" to JsonPrimitive(command.userId),
+                "participationType" to JsonPrimitive(command.participationType.wire),
+            ),
+        )
+    }
+
+    private fun leaveIncident(command: LeaveIncidentCommand): IncidentMutation {
+        requireIncident(command)
+        val active = activeParticipant(command.incidentId, command.userId)
+            ?: return loadMutation(command.incidentId, changed = false)
+        val now = Clock.System.now()
+        NativeIncidentParticipants.update({ NativeIncidentParticipants.id eq active[NativeIncidentParticipants.id] }) {
+            it[leftBy] = command.actor.userId
+            it[leftAt] = now
+        }
+        return appendVersionedEvent(
+            command,
+            "PARTICIPANT_LEFT",
+            mapOf(
+                "userId" to JsonPrimitive(command.userId),
+                "participationType" to JsonPrimitive(active[NativeIncidentParticipants.participationType]),
+            ),
+        )
+    }
+
+    private fun requireRoleDefinition(organizationId: Int, roleDefinitionId: Int): ResultRow =
+        NativeIncidentRoleDefinitions
+            .selectAll()
+            .where {
+                (NativeIncidentRoleDefinitions.id eq roleDefinitionId) and
+                    (NativeIncidentRoleDefinitions.organizationId eq organizationId)
+            }.singleOrNull()
+            ?: throw IncidentCommandNotFoundException("Incident role not found")
+
+    private fun activeRoleAssignment(incidentId: Int, roleDefinitionId: Int): ResultRow? =
+        NativeIncidentRoleAssignments
+            .selectAll()
+            .where {
+                (NativeIncidentRoleAssignments.incidentId eq incidentId) and
+                    (NativeIncidentRoleAssignments.roleDefinitionId eq roleDefinitionId) and
+                    NativeIncidentRoleAssignments.endedAt.isNull()
+            }.singleOrNull()
+
+    private fun endRoleAssignment(
+        assignment: ResultRow,
+        actorUserId: Int,
+        reason: IncidentRoleEndReason,
+        now: kotlin.time.Instant,
+    ) {
+        NativeIncidentRoleAssignments.update({
+            NativeIncidentRoleAssignments.id eq assignment[NativeIncidentRoleAssignments.id]
+        }) {
+            it[endedBy] = actorUserId
+            it[endedAt] = now
+            it[endReason] = reason.wire
+        }
+    }
+
+    private fun ensureParticipant(
+        command: ExistingIncidentCommand,
+        userId: Int,
+        now: kotlin.time.Instant,
+    ) {
+        setActiveParticipation(command, userId, IncidentParticipationType.PARTICIPANT, now)
+    }
+
+    private fun setActiveParticipation(
+        command: ExistingIncidentCommand,
+        userId: Int,
+        participationType: IncidentParticipationType,
+        now: kotlin.time.Instant,
+    ): Boolean {
+        val active = activeParticipant(command.incidentId, userId)
+        if (active?.get(NativeIncidentParticipants.participationType) == participationType.wire) return false
+        active?.let { row ->
+            NativeIncidentParticipants.update({ NativeIncidentParticipants.id eq row[NativeIncidentParticipants.id] }) {
+                it[leftBy] = command.actor.userId
+                it[leftAt] = now
+            }
+        }
+        NativeIncidentParticipants.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[NativeIncidentParticipants.userId] = userId
+            it[NativeIncidentParticipants.participationType] = participationType.wire
+            it[joinedBy] = command.actor.userId
+            it[joinedAt] = now
+            it[leftBy] = null
+            it[leftAt] = null
+        }
+        return true
+    }
+
+    private fun activeParticipant(incidentId: Int, userId: Int): ResultRow? =
+        NativeIncidentParticipants
+            .selectAll()
+            .where {
+                (NativeIncidentParticipants.incidentId eq incidentId) and
+                    (NativeIncidentParticipants.userId eq userId) and
+                    NativeIncidentParticipants.leftAt.isNull()
+            }.singleOrNull()
+
+    private fun recordPrivateRoleInstructions(
+        command: ExistingIncidentCommand,
+        role: ResultRow,
+        assigneeUserId: Int,
+        version: Int,
+    ) {
+        val instructions = role[NativeIncidentRoleDefinitions.privateInstructions].cleaned() ?: return
+        outboxWriter.record(
+            PendingNativeIncidentDomainEvent(
+                organizationId = command.actor.organizationId,
+                incidentId = command.incidentId,
+                eventType = "INCIDENT_ROLE_INSTRUCTIONS",
+                aggregateVersion = version,
+                idempotencyKey = "${command.commandKey}:private-instructions",
+                payload = mapOf(
+                    "incidentId" to JsonPrimitive(loadMutation(command.incidentId).incidentResourceId),
+                    "roleId" to JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()),
+                    "role" to JsonPrimitive(role[NativeIncidentRoleDefinitions.name]),
+                    "assigneeUserId" to JsonPrimitive(assigneeUserId),
+                    "instructions" to JsonPrimitive(instructions),
+                    "visibility" to JsonPrimitive("PRIVATE"),
+                ),
             ),
         )
     }
@@ -310,8 +612,9 @@ class IncidentCommandService(
             }
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
+            command,
             command.incidentId,
-            command.actor.userId,
+            command.commandKey,
             eventType,
             details + ("origin" to JsonPrimitive(command.actor.origin)),
             now,
@@ -343,9 +646,21 @@ class IncidentCommandService(
             }
         requireVersionUpdate(updated, command.incidentId)
         val alert = requireAlert(command.actor.organizationId, command.alertId)
-        insertTimelineEvent(
+        insertSourceLink(
+            command.actor,
             command.incidentId,
-            command.actor.userId,
+            IncidentSourceReference(
+                sourceType = com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT,
+                sourceKey = alert[OnCallAlerts.resourceId].toString(),
+                onCallAlertId = command.alertId,
+                label = alert[OnCallAlerts.title],
+            ),
+            now,
+        )
+        insertTimelineEvent(
+            command,
+            command.incidentId,
+            command.commandKey,
             "ALERT_LINKED",
             mapOf(
                 "origin" to JsonPrimitive(command.actor.origin),
@@ -355,6 +670,75 @@ class IncidentCommandService(
             now,
         )
         return loadMutation(command.incidentId)
+    }
+
+    private fun linkSource(command: LinkIncidentSourceCommand): IncidentMutation {
+        requireIncident(command)
+        val source = validateSource(command.actor.organizationId, command.source)
+        val existing =
+            NativeIncidentSourceLinks
+                .selectAll()
+                .where {
+                    (NativeIncidentSourceLinks.incidentId eq command.incidentId) and
+                        (NativeIncidentSourceLinks.sourceType eq source.sourceType.wire) and
+                        (NativeIncidentSourceLinks.sourceKey eq source.sourceKey)
+                }.singleOrNull()
+        if (existing != null) return loadMutation(command.incidentId, changed = false)
+
+        val now = Clock.System.now()
+        when (source.sourceType) {
+            com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT ->
+                linkAlertRecord(command.incidentId, checkNotNull(source.onCallAlertId))
+            com.moneat.enterprise.incidents.models.IncidentSourceType.ALERT_EPISODE ->
+                linkAlertEpisodeRecord(command, checkNotNull(source.alertEpisodeId), now)
+            else -> Unit
+        }
+        insertSourceLink(command.actor, command.incidentId, source, now)
+        return appendVersionedEvent(
+            command,
+            "SOURCE_LINKED",
+            sourceTimelineDetails(command.actor.origin, source),
+        )
+    }
+
+    private fun unlinkSource(command: UnlinkIncidentSourceCommand): IncidentMutation {
+        requireIncident(command)
+        val sourceKey = command.sourceKey.trim()
+        require(sourceKey.isNotEmpty()) { "Incident source key is required" }
+        val row =
+            NativeIncidentSourceLinks
+                .selectAll()
+                .where {
+                    (NativeIncidentSourceLinks.organizationId eq command.actor.organizationId) and
+                        (NativeIncidentSourceLinks.incidentId eq command.incidentId) and
+                        (NativeIncidentSourceLinks.sourceType eq command.sourceType.wire) and
+                        (NativeIncidentSourceLinks.sourceKey eq sourceKey)
+                }.singleOrNull() ?: return loadMutation(command.incidentId, changed = false)
+        row[NativeIncidentSourceLinks.onCallAlertId]?.let { alertId ->
+            OnCallIncidentAlerts.deleteWhere {
+                (incidentId eq command.incidentId) and (OnCallIncidentAlerts.alertId eq alertId)
+            }
+            OnCallAlerts.update({
+                (OnCallAlerts.id eq alertId) and (OnCallAlerts.declaredIncidentId eq command.incidentId)
+            }) {
+                it[declaredIncidentId] = null
+            }
+        }
+        row[NativeIncidentSourceLinks.alertEpisodeId]?.let { episodeId ->
+            NativeIncidentAlertEpisodeLinks.deleteWhere {
+                (incidentId eq command.incidentId) and (alertEpisodeId eq episodeId)
+            }
+        }
+        NativeIncidentSourceLinks.deleteWhere { id eq row[NativeIncidentSourceLinks.id] }
+        return appendVersionedEvent(
+            command,
+            "SOURCE_UNLINKED",
+            mapOf(
+                "origin" to JsonPrimitive(command.actor.origin),
+                "sourceType" to JsonPrimitive(command.sourceType.wire),
+                "sourceKey" to JsonPrimitive(sourceKey),
+            ),
+        )
     }
 
     private fun merge(command: MergeIncidentCommand): IncidentMutation {
@@ -403,8 +787,22 @@ class IncidentCommandService(
             "sourceIncidentId" to JsonPrimitive(source[OnCallIncidents.resourceId].toString()),
             "targetIncidentId" to JsonPrimitive(target[OnCallIncidents.resourceId].toString()),
         )
-        insertTimelineEvent(command.incidentId, command.actor.userId, "INCIDENT_MERGED", details, now)
-        insertTimelineEvent(command.sourceIncidentId, command.actor.userId, "MERGED_INTO_INCIDENT", details, now)
+        insertTimelineEvent(
+            command,
+            command.incidentId,
+            "${command.commandKey}:target",
+            "INCIDENT_MERGED",
+            details,
+            now,
+        )
+        insertTimelineEvent(
+            command,
+            command.sourceIncidentId,
+            "${command.commandKey}:source",
+            "MERGED_INTO_INCIDENT",
+            details,
+            now,
+        )
         outboxWriter.record(
             PendingNativeIncidentDomainEvent(
                 organizationId = command.actor.organizationId,
@@ -480,21 +878,136 @@ class IncidentCommandService(
         }
     }
 
-    private fun insertTimelineEvent(
+    private fun validateSource(
+        organizationId: Int,
+        source: IncidentSourceReference,
+    ): IncidentSourceReference {
+        val sourceKey = source.sourceKey.trim()
+        require(sourceKey.isNotEmpty()) { "Incident source key is required" }
+        require(sourceKey.length <= MAX_SOURCE_KEY_LENGTH) { "Incident source key is too long" }
+        return when (source.sourceType) {
+            com.moneat.enterprise.incidents.models.IncidentSourceType.ON_CALL_ALERT -> {
+                val alertId = requireNotNull(source.onCallAlertId) { "On-call alert source is missing its alert" }
+                require(source.alertEpisodeId == null) { "On-call alert source has an unexpected episode" }
+                val alert = requireAlert(organizationId, alertId)
+                val existing =
+                    OnCallIncidentAlerts
+                        .selectAll()
+                        .where { OnCallIncidentAlerts.alertId eq alertId }
+                        .singleOrNull()
+                if (existing != null) {
+                    throw IncidentCommandConflictException("On-call alert is already linked to a native incident")
+                }
+                source.copy(
+                    sourceKey = alert[OnCallAlerts.resourceId].toString(),
+                    label = source.label.cleaned() ?: alert[OnCallAlerts.title],
+                )
+            }
+            com.moneat.enterprise.incidents.models.IncidentSourceType.ALERT_EPISODE -> {
+                val episodeId = requireNotNull(source.alertEpisodeId) { "Alert episode source is missing its episode" }
+                require(source.onCallAlertId == null) { "Alert episode source has an unexpected on-call alert" }
+                val episode =
+                    AlertEpisodes
+                        .selectAll()
+                        .where {
+                            (AlertEpisodes.id eq episodeId) and
+                                (AlertEpisodes.organizationId eq organizationId)
+                        }.singleOrNull()
+                        ?: throw IncidentCommandNotFoundException("Alert episode not found")
+                source.copy(
+                    sourceKey = episode[AlertEpisodes.resourceId].toString(),
+                    label = source.label.cleaned() ?: episode[AlertEpisodes.title],
+                )
+            }
+            else -> {
+                require(source.onCallAlertId == null && source.alertEpisodeId == null) {
+                    "External incident source has an unexpected internal pointer"
+                }
+                if (source.sourceType == com.moneat.enterprise.incidents.models.IncidentSourceType.URL) {
+                    require(!source.sourceUrl.cleaned().isNullOrEmpty()) { "URL incident source requires a URL" }
+                }
+                source.copy(
+                    sourceKey = sourceKey,
+                    label = source.label.cleaned(),
+                    sourceUrl = source.sourceUrl.cleaned(),
+                )
+            }
+        }
+    }
+
+    private fun linkAlertEpisodeRecord(
+        command: LinkIncidentSourceCommand,
+        alertEpisodeId: Int,
+        now: kotlin.time.Instant,
+    ) {
+        NativeIncidentAlertEpisodeLinks.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = command.actor.organizationId
+            it[incidentId] = command.incidentId
+            it[NativeIncidentAlertEpisodeLinks.alertEpisodeId] = alertEpisodeId
+            it[statusOwner] = "INCIDENT"
+            it[severityOwner] = "INCIDENT"
+            it[resolutionOwner] = "INCIDENT"
+            it[createdAt] = now
+        }
+    }
+
+    private fun insertSourceLink(
+        actor: IncidentCommandActor,
         incidentId: Int,
-        actorUserId: Int,
+        source: IncidentSourceReference,
+        now: kotlin.time.Instant,
+    ) {
+        NativeIncidentSourceLinks.insert {
+            it[resourceId] = Uuid.random()
+            it[organizationId] = actor.organizationId
+            it[NativeIncidentSourceLinks.incidentId] = incidentId
+            it[sourceType] = source.sourceType.wire
+            it[sourceKey] = source.sourceKey
+            it[onCallAlertId] = source.onCallAlertId
+            it[alertEpisodeId] = source.alertEpisodeId
+            it[label] = source.label
+            it[sourceUrl] = source.sourceUrl
+            it[metadata] = source.metadata
+            it[linkedBy] = actor.userId
+            it[createdAt] = now
+        }
+    }
+
+    private fun sourceTimelineDetails(
+        origin: String,
+        source: IncidentSourceReference,
+    ): Map<String, JsonElement> =
+        buildMap {
+            put("origin", JsonPrimitive(origin))
+            put("sourceType", JsonPrimitive(source.sourceType.wire))
+            put("sourceKey", JsonPrimitive(source.sourceKey))
+            source.label?.let { put("label", JsonPrimitive(it)) }
+            source.sourceUrl?.let { put("sourceUrl", JsonPrimitive(it)) }
+        }
+
+    private fun String?.cleaned(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+
+    private fun insertTimelineEvent(
+        command: IncidentCommand,
+        incidentId: Int,
+        eventKey: String,
         eventType: String,
         details: Map<String, JsonElement>,
         at: kotlin.time.Instant,
     ) {
-        OnCallIncidentTimeline.insert {
-            it[OnCallIncidentTimeline.resourceId] = Uuid.random()
-            it[OnCallIncidentTimeline.incidentId] = incidentId
-            it[OnCallIncidentTimeline.eventType] = eventType
-            it[OnCallIncidentTimeline.actorUserId] = actorUserId
-            it[OnCallIncidentTimeline.details] = details
-            it[OnCallIncidentTimeline.createdAt] = at
-        }
+        timelineWriter.record(
+            PendingIncidentTimelineEvent(
+                organizationId = command.actor.organizationId,
+                incidentId = incidentId,
+                eventKey = eventKey,
+                eventType = eventType,
+                actorUserId = command.actor.userId,
+                details = details,
+                provenance = command.actor.origin.toIncidentTimelineProvenance(),
+                originalOccurredAt = at,
+            ),
+        )
     }
 
     private fun recordCommand(command: IncidentCommand, mutation: IncidentMutation) {
@@ -606,7 +1119,8 @@ class IncidentCommandService(
         private const val COMMAND_KEY_CONSTRAINT = "uq_native_incident_commands_org_command_key"
         private const val INITIAL_VERSION = 1
         private const val MAX_TITLE_LENGTH = 255
-        private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 30
+        private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 80
+        private const val MAX_SOURCE_KEY_LENGTH = 500
 
         private val DECLARABLE_STATUSES = setOf(NativeIncidentStatus.TRIAGE, NativeIncidentStatus.ACTIVE)
 

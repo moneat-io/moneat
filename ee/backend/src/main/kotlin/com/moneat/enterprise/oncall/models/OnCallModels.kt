@@ -4,6 +4,7 @@
 
 package com.moneat.enterprise.oncall.models
 
+import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Organizations
@@ -287,6 +288,8 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
     val mode = varchar("mode", 24).default("LIVE")
     val visibility = varchar("visibility", 24).default("ORGANIZATION")
     val incidentType = varchar("incident_type", 100).nullable()
+    val incidentTypeDefinitionId = integer("incident_type_definition_id").references(NativeIncidentTypes.id).nullable()
+    val declarationSnapshot = requiredJsonb("declaration_snapshot").clientDefault { emptyMap() }
     val summary = text("summary").nullable()
     val version = integer("version").default(1)
     val declaredBy = integer("declared_by").references(Users.id)
@@ -336,11 +339,30 @@ data class OnCallIncident(
 
 object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val organizationId = integer("organization_id").references(Organizations.id, onDelete = ReferenceOption.CASCADE)
     val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
-    val eventType = varchar("event_type", 30)
+    val eventKey = varchar("event_key", 200)
+    val eventType = varchar("event_type", 80)
     val actorUserId = integer("actor_user_id").references(Users.id, onDelete = ReferenceOption.SET_NULL).nullable()
-    val details = jsonb("details")
+    val details = requiredJsonb("details").clientDefault { emptyMap() }
+    val sourceType = varchar("source_type", 48).nullable()
+    val sourceReference = varchar("source_reference", 500).nullable()
+    val sourceUrl = text("source_url").nullable()
+    val provenance = varchar("provenance", 32).default("INTERNAL")
+    val visibility = varchar("visibility", 24).default("ORGANIZATION")
+    val originalOccurredAt = timestamp("original_occurred_at")
+    val observedAt = timestamp("observed_at")
+    val displayOrder = long("display_order")
+    val annotation = text("annotation").nullable()
+    val editedAt = timestamp("edited_at").nullable()
+    val editedBy = integer("edited_by").references(Users.id).nullable()
+    val deletedAt = timestamp("deleted_at").nullable()
+    val deletedBy = integer("deleted_by").references(Users.id).nullable()
     val createdAt = timestamp("created_at")
+
+    init {
+        uniqueIndex(incidentId, eventKey)
+    }
 }
 
 // ===== On-Call Alerts =====

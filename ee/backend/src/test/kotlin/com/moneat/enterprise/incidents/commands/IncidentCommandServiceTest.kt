@@ -16,6 +16,8 @@ import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
+import com.moneat.enterprise.incidents.responders.CreateIncidentRole
+import com.moneat.enterprise.incidents.responders.IncidentResponderService
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -263,13 +265,29 @@ class IncidentCommandServiceTest {
     @Test
     fun `supporting commands use the same policy version and outbox pipeline`() {
         val incident = service.execute(declareCommand("supporting-declare", actor()))
+        val responderService = IncidentResponderService()
+        val roleDefinition =
+            responderService.createRole(
+                member.organizationId,
+                member.userId,
+                CreateIncidentRole(
+                    stableKey = "incident-commander-test",
+                    name = "Incident Commander",
+                    description = null,
+                    responsibilities = listOf("Coordinate the response"),
+                    privateInstructions = null,
+                    required = true,
+                    default = false,
+                ),
+            )
+        val roleDefinitionId = responderService.resolveRoleId(member.organizationId, roleDefinition.id)
 
         val role = service.execute(
             AssignIncidentRoleCommand(
                 commandKey = "supporting-role",
                 actor = actor(),
                 incidentId = incident.incidentId,
-                role = "incident_commander",
+                roleDefinitionId = roleDefinitionId,
                 assigneeUserId = member.userId,
                 expectedVersion = 1,
             ),
