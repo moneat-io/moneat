@@ -509,6 +509,7 @@ class IncidentConfigurationService {
         mapOf(
             "formId" to JsonPrimitive(form.id),
             "formVersion" to JsonPrimitive(form.version),
+            "formName" to JsonPrimitive(form.name),
             "stage" to JsonPrimitive(form.stage.wire),
             "fields" to JsonArray(
                 form.fields.map { formField ->
@@ -516,14 +517,32 @@ class IncidentConfigurationService {
                         mapOf(
                             "id" to JsonPrimitive(formField.field.id),
                             "key" to JsonPrimitive(formField.field.key),
+                            "version" to JsonPrimitive(formField.field.version),
                             "name" to JsonPrimitive(formField.field.name),
+                            "description" to formField.field.description.toJsonElement(),
                             "type" to JsonPrimitive(formField.field.valueType.wire),
+                            "catalogResourceType" to formField.field.catalogResourceType.toJsonElement(),
+                            "options" to JsonArray(formField.field.options.map(::optionSnapshot)),
+                            "position" to JsonPrimitive(formField.position),
                             "required" to JsonPrimitive(formField.required),
                             "visible" to JsonPrimitive(formField.visible),
-                            "helpText" to (formField.helpText?.let(::JsonPrimitive) ?: JsonNull),
+                            "defaultValue" to (formField.defaultValue ?: JsonNull),
+                            "helpText" to formField.helpText.toJsonElement(),
+                            "condition" to JsonObject(formField.condition),
                         ),
                     )
                 },
+            ),
+        )
+
+    private fun optionSnapshot(option: IncidentCustomFieldOption): JsonElement =
+        JsonObject(
+            mapOf(
+                "id" to JsonPrimitive(option.id),
+                "value" to JsonPrimitive(option.value),
+                "label" to JsonPrimitive(option.label),
+                "position" to JsonPrimitive(option.position),
+                "color" to option.color.toJsonElement(),
             ),
         )
 
@@ -684,6 +703,7 @@ class IncidentConfigurationService {
     }
 
     private fun String?.cleaned(): String? = this?.trim()?.takeIf(String::isNotEmpty)
+    private fun String?.toJsonElement(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
 
     companion object {
         private val KEY_SEPARATOR_PATTERN = Regex("[^a-z0-9]+")

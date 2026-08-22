@@ -8,6 +8,8 @@ import com.moneat.enterprise.incidents.IncidentTestDatabase
 import com.moneat.enterprise.incidents.SeededMember
 import com.moneat.enterprise.incidents.models.IncidentCustomFieldValueType
 import com.moneat.enterprise.incidents.models.IncidentFormStage
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -107,6 +109,17 @@ class IncidentConfigurationServiceTest {
         assertEquals(JsonPrimitive("degraded"), resolved.values[impactField.key])
         assertTrue(resolved.formDefinitionId != null)
         assertEquals("Customer impact", resolved.incidentTypeName)
+        val snapshottedField =
+            ((resolved.definitionSnapshot.getValue("fields") as JsonArray).single() as JsonObject)
+        assertEquals(JsonPrimitive(impactField.version), snapshottedField["version"])
+        assertEquals(JsonPrimitive("none"), snapshottedField["defaultValue"])
+        val snapshottedOptions = snapshottedField["options"] as JsonArray
+        assertEquals(
+            listOf("None", "Degraded"),
+            snapshottedOptions.map { option ->
+                ((option as JsonObject).getValue("label") as JsonPrimitive).content
+            },
+        )
     }
 
     @Test
