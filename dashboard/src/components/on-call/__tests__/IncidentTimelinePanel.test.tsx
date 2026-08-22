@@ -74,9 +74,14 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }: Readonly<{
     children: React.ReactNode
     checked?: boolean
-    onCheckedChange?: () => void
+    onCheckedChange?: (checked: boolean) => void
   }>) => (
-    <button type="button" role="checkbox" aria-checked={checked} onClick={onCheckedChange}>
+    <button
+      type="button"
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      onClick={() => onCheckedChange?.(!checked)}
+    >
       {children}
     </button>
   ),
@@ -200,16 +205,16 @@ describe('IncidentTimelinePanel', () => {
     await screen.findByText('Incident declared')
     fireEvent.click(screen.getByRole('button', {name: /Filters/}))
 
-    fireEvent.click(screen.getByRole('checkbox', {name: 'Note added'}))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Note added'}))
     await waitFor(() =>
       expect(mockApi.getOnCallIncidentTimeline).toHaveBeenCalledWith(
         INCIDENT_ID,
         expect.objectContaining({eventType: ['NOTE_ADDED']})
       )
     )
-    fireEvent.click(screen.getByRole('checkbox', {name: 'Note added'}))
-    fireEvent.click(screen.getByRole('checkbox', {name: 'Dashboard'}))
-    fireEvent.click(screen.getByRole('checkbox', {name: 'Organization'}))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Note added'}))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Dashboard'}))
+    fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Organization'}))
     await waitFor(() =>
       expect(mockApi.getOnCallIncidentTimeline).toHaveBeenCalledWith(
         INCIDENT_ID,

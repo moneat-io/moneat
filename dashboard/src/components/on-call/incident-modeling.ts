@@ -429,7 +429,7 @@ export function buildTimelineEditPayload(
   return {
     payload: {
       eventType: eventType && eventType !== original.eventType ? eventType : undefined,
-      visibility: draft.visibility !== original.visibility ? draft.visibility : undefined,
+      visibility: draft.visibility === original.visibility ? undefined : draft.visibility,
       originalOccurredAt,
       details,
       reason: draft.reason.trim() || undefined,
