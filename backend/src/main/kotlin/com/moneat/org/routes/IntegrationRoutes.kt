@@ -326,12 +326,9 @@ private suspend fun ApplicationCall.respondSlackRouteFailure(error: Throwable) {
     when (error) {
         is BadRequestException,
         is CannotTransformContentToTypeException,
+        is IllegalArgumentException,
         -> respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Bad request"))
         is NoSuchElementException -> respond(HttpStatusCode.NotFound, MessageResponse(error.message ?: "Not found"))
-        is IllegalArgumentException -> respond(
-            HttpStatusCode.BadRequest,
-            MessageResponse(error.message ?: "Bad request"),
-        )
         is IllegalStateException -> respond(HttpStatusCode.Conflict, MessageResponse(error.message ?: "Conflict"))
         else -> {
             logger.error("Slack integration request failed", error)

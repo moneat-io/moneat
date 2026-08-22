@@ -187,6 +187,8 @@ function OnCallSchedules() {
     }
   }
 
+  const hasSchedules = !!schedules && schedules.length > 0
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -201,11 +203,12 @@ function OnCallSchedules() {
         }
       />
 
-      {isLoading ? (
+      {isLoading && (
         <div className="flex items-center justify-center py-10">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-muted border-t-primary" />
         </div>
-      ) : schedules && schedules.length > 0 ? (
+      )}
+      {!isLoading && hasSchedules && (
         <div className="space-y-3">
           {schedules.map((schedule, idx) => {
             const RotIcon = rotationIcons[schedule.rotationType] || RotateCcw
@@ -376,7 +379,8 @@ function OnCallSchedules() {
             )
           })}
         </div>
-      ) : (
+      )}
+      {!isLoading && !hasSchedules && (
         <EmptyState
           icon={Calendar}
           title="No on-call schedules"
