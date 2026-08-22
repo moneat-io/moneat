@@ -88,6 +88,11 @@ data class EditIncidentTimelineEvent(
     val reason: String? = null,
 )
 
+data class AnnotateIncidentTimelineEvent(
+    val annotation: String?,
+    val reason: String? = null,
+)
+
 class IncidentTimelineService {
     fun list(
         organizationId: Int,
@@ -127,7 +132,9 @@ class IncidentTimelineService {
                 it[editedBy] = actorUserId
             }
             val updated = requireEvent(organizationId, incidentId, eventResourceId)
-            recordRevision(updated, "EDIT", previous, snapshot(updated), request.reason, actorUserId, now)
+            recordRevision(
+                TimelineRevisionRecord(updated, "EDIT", previous, snapshot(updated), request.reason, actorUserId, now),
+            )
             timelineEntry(updated, publicUserIds(listOfNotNull(updated[OnCallIncidentTimeline.actorUserId])))
         }
 
@@ -136,8 +143,7 @@ class IncidentTimelineService {
         incidentId: Int,
         eventResourceId: String,
         actorUserId: Int,
-        annotation: String?,
-        reason: String?,
+        request: AnnotateIncidentTimelineEvent,
     ): IncidentTimelineEntry =
         transaction {
             val row = requireEvent(organizationId, incidentId, eventResourceId)
@@ -145,12 +151,22 @@ class IncidentTimelineService {
             val previous = snapshot(row)
             val now = Clock.System.now()
             OnCallIncidentTimeline.update({ OnCallIncidentTimeline.id eq row[OnCallIncidentTimeline.id] }) {
-                it[OnCallIncidentTimeline.annotation] = annotation.cleaned()
+                it[OnCallIncidentTimeline.annotation] = request.annotation.cleaned()
                 it[editedAt] = now
                 it[editedBy] = actorUserId
             }
             val updated = requireEvent(organizationId, incidentId, eventResourceId)
-            recordRevision(updated, "ANNOTATE", previous, snapshot(updated), reason, actorUserId, now)
+            recordRevision(
+                TimelineRevisionRecord(
+                    updated,
+                    "ANNOTATE",
+                    previous,
+                    snapshot(updated),
+                    request.reason,
+                    actorUserId,
+                    now,
+                ),
+            )
             timelineEntry(updated, publicUserIds(listOfNotNull(updated[OnCallIncidentTimeline.actorUserId])))
         }
 
@@ -184,7 +200,17 @@ class IncidentTimelineService {
                         it[editedBy] = actorUserId
                     }
                     val updated = requireEvent(organizationId, incidentId, resourceId)
-                    recordRevision(updated, "REORDER", previous, snapshot(updated), reason, actorUserId, now)
+                    recordRevision(
+                        TimelineRevisionRecord(
+                            updated,
+                            "REORDER",
+                            previous,
+                            snapshot(updated),
+                            reason,
+                            actorUserId,
+                            now,
+                        ),
+                    )
                 }
             }
             val updatedRows = filteredTimeline(organizationId, incidentId, IncidentTimelineFilters()).toList()
@@ -199,7 +225,9 @@ class IncidentTimelineService {
         actorUserId: Int,
         reason: String?,
     ) {
-        mutateDeletedState(organizationId, incidentId, eventResourceId, actorUserId, deleted = true, reason = reason)
+        mutateDeletedState(
+            DeletedStateMutation(organizationId, incidentId, eventResourceId, actorUserId, deleted = true, reason),
+        )
     }
 
     fun restore(
@@ -209,7 +237,9 @@ class IncidentTimelineService {
         actorUserId: Int,
         reason: String?,
     ) {
-        mutateDeletedState(organizationId, incidentId, eventResourceId, actorUserId, deleted = false, reason = reason)
+        mutateDeletedState(
+            DeletedStateMutation(organizationId, incidentId, eventResourceId, actorUserId, deleted = false, reason),
+        )
     }
 
     fun revisions(
@@ -253,29 +283,32 @@ class IncidentTimelineService {
             )
         }
 
-    private fun mutateDeletedState(
-        organizationId: Int,
-        incidentId: Int,
-        eventResourceId: String,
-        actorUserId: Int,
-        deleted: Boolean,
-        reason: String?,
-    ) {
+    private fun mutateDeletedState(mutation: DeletedStateMutation) {
         transaction {
-            val row = requireEvent(organizationId, incidentId, eventResourceId)
+            val row = requireEvent(mutation.organizationId, mutation.incidentId, mutation.eventResourceId)
             val currentlyDeleted = row[OnCallIncidentTimeline.deletedAt] != null
-            if (currentlyDeleted == deleted) return@transaction
+            if (currentlyDeleted == mutation.deleted) return@transaction
             val previous = snapshot(row)
             val now = Clock.System.now()
             OnCallIncidentTimeline.update({ OnCallIncidentTimeline.id eq row[OnCallIncidentTimeline.id] }) {
-                it[deletedAt] = now.takeIf { deleted }
-                it[deletedBy] = actorUserId.takeIf { deleted }
+                it[deletedAt] = now.takeIf { mutation.deleted }
+                it[deletedBy] = mutation.actorUserId.takeIf { mutation.deleted }
                 it[editedAt] = now
-                it[editedBy] = actorUserId
+                it[editedBy] = mutation.actorUserId
             }
-            val updated = requireEvent(organizationId, incidentId, eventResourceId)
-            val action = if (deleted) "DELETE" else "RESTORE"
-            recordRevision(updated, action, previous, snapshot(updated), reason, actorUserId, now)
+            val updated = requireEvent(mutation.organizationId, mutation.incidentId, mutation.eventResourceId)
+            val action = if (mutation.deleted) "DELETE" else "RESTORE"
+            recordRevision(
+                TimelineRevisionRecord(
+                    updated,
+                    action,
+                    previous,
+                    snapshot(updated),
+                    mutation.reason,
+                    mutation.actorUserId,
+                    now,
+                ),
+            )
         }
     }
 
@@ -329,16 +362,8 @@ class IncidentTimelineService {
             ?: throw IncidentCommandNotFoundException("Incident timeline event not found")
     }
 
-    private fun recordRevision(
-        event: ResultRow,
-        action: String,
-        previous: Map<String, JsonElement>,
-        next: Map<String, JsonElement>,
-        reason: String?,
-        actorUserId: Int,
-        now: Instant,
-    ) {
-        val eventId = event[OnCallIncidentTimeline.id].value
+    private fun recordRevision(record: TimelineRevisionRecord) {
+        val eventId = record.event[OnCallIncidentTimeline.id].value
         val revision =
             NativeIncidentTimelineRevisions
                 .selectAll()
@@ -351,15 +376,15 @@ class IncidentTimelineService {
                 ?: 1
         NativeIncidentTimelineRevisions.insert {
             it[resourceId] = Uuid.random()
-            it[organizationId] = event[OnCallIncidentTimeline.organizationId]
+            it[organizationId] = record.event[OnCallIncidentTimeline.organizationId]
             it[timelineEventId] = eventId
             it[revisionNumber] = revision
-            it[NativeIncidentTimelineRevisions.action] = action
-            it[previousSnapshot] = previous
-            it[nextSnapshot] = next
-            it[NativeIncidentTimelineRevisions.reason] = reason.cleaned()
-            it[editedBy] = actorUserId
-            it[createdAt] = now
+            it[NativeIncidentTimelineRevisions.action] = record.action
+            it[previousSnapshot] = record.previous
+            it[nextSnapshot] = record.next
+            it[NativeIncidentTimelineRevisions.reason] = record.reason.cleaned()
+            it[editedBy] = record.actorUserId
+            it[createdAt] = record.now
         }
     }
 
@@ -405,6 +430,25 @@ class IncidentTimelineService {
 
     private fun String?.cleaned(): String? = this?.trim()?.takeIf(String::isNotEmpty)
     private fun String?.toJsonElement(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+
+    private data class DeletedStateMutation(
+        val organizationId: Int,
+        val incidentId: Int,
+        val eventResourceId: String,
+        val actorUserId: Int,
+        val deleted: Boolean,
+        val reason: String?,
+    )
+
+    private data class TimelineRevisionRecord(
+        val event: ResultRow,
+        val action: String,
+        val previous: Map<String, JsonElement>,
+        val next: Map<String, JsonElement>,
+        val reason: String?,
+        val actorUserId: Int,
+        val now: Instant,
+    )
 
     companion object {
         private const val MAX_EVENT_TYPE_LENGTH = 80

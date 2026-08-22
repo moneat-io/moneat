@@ -8,6 +8,7 @@ import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.models.IncidentTimelineProvenance
 import com.moneat.enterprise.incidents.models.IncidentTimelineVisibility
 import com.moneat.enterprise.incidents.timeline.EditIncidentTimelineEvent
+import com.moneat.enterprise.incidents.timeline.AnnotateIncidentTimelineEvent
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineFilters
 import com.moneat.enterprise.incidents.timeline.IncidentTimelineService
 import com.moneat.utils.ErrorResponse
@@ -52,6 +53,12 @@ data class IncidentTimelineMutationReasonRequest(
 )
 
 internal fun Route.registerIncidentTimelineRoutes(service: IncidentTimelineService) {
+    registerIncidentTimelineReadRoutes(service)
+    registerIncidentTimelineEditRoutes(service)
+    registerIncidentTimelineRemovalRoutes(service)
+}
+
+private fun Route.registerIncidentTimelineReadRoutes(service: IncidentTimelineService) {
     get("/{id}/timeline") {
         val context = call.requireUserContext() ?: return@get
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
@@ -66,6 +73,22 @@ internal fun Route.registerIncidentTimelineRoutes(service: IncidentTimelineServi
             call.respond(service.export(context.organizationId, incidentId))
         }
     }
+    get("/{id}/timeline/{eventId}/revisions") {
+        val context = call.requireUserContext() ?: return@get
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
+        call.respondTimelineFailure {
+            call.respond(
+                service.revisions(
+                    context.organizationId,
+                    incidentId,
+                    call.parameters["eventId"].orEmpty(),
+                ),
+            )
+        }
+    }
+}
+
+private fun Route.registerIncidentTimelineEditRoutes(service: IncidentTimelineService) {
     patch("/{id}/timeline/{eventId}") {
         val context = call.requireUserContext() ?: return@patch
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@patch
@@ -99,8 +122,7 @@ internal fun Route.registerIncidentTimelineRoutes(service: IncidentTimelineServi
                     incidentId,
                     call.parameters["eventId"].orEmpty(),
                     context.userId,
-                    request.annotation,
-                    request.reason,
+                    AnnotateIncidentTimelineEvent(request.annotation, request.reason),
                 ),
             )
         }
@@ -121,6 +143,9 @@ internal fun Route.registerIncidentTimelineRoutes(service: IncidentTimelineServi
             )
         }
     }
+}
+
+private fun Route.registerIncidentTimelineRemovalRoutes(service: IncidentTimelineService) {
     delete("/{id}/timeline/{eventId}") {
         val context = call.requireUserContext() ?: return@delete
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@delete
@@ -149,19 +174,6 @@ internal fun Route.registerIncidentTimelineRoutes(service: IncidentTimelineServi
                 request?.reason,
             )
             call.respond(HttpStatusCode.OK, MessageResponse("Timeline event restored"))
-        }
-    }
-    get("/{id}/timeline/{eventId}/revisions") {
-        val context = call.requireUserContext() ?: return@get
-        val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
-        call.respondTimelineFailure {
-            call.respond(
-                service.revisions(
-                    context.organizationId,
-                    incidentId,
-                    call.parameters["eventId"].orEmpty(),
-                ),
-            )
         }
     }
 }

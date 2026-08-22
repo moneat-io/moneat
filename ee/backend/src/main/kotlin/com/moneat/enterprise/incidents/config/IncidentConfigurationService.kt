@@ -95,6 +95,13 @@ data class IncidentCustomFieldOptionInput(
     val color: String? = null,
 )
 
+data class CreateIncidentType(
+    val stableKey: String,
+    val name: String,
+    val description: String?,
+    val enabled: Boolean,
+)
+
 data class CreateIncidentCustomField(
     val stableKey: String,
     val name: String,
@@ -114,6 +121,13 @@ data class IncidentFormFieldInput(
     val condition: Map<String, JsonElement> = emptyMap(),
 )
 
+data class CreateIncidentForm(
+    val incidentTypeResourceId: String?,
+    val stage: IncidentFormStage,
+    val name: String,
+    val fields: List<IncidentFormFieldInput>,
+)
+
 data class ResolvedIncidentForm(
     val incidentTypeDefinitionId: Int?,
     val incidentTypeName: String?,
@@ -126,15 +140,12 @@ class IncidentConfigurationService {
     fun createIncidentType(
         organizationId: Int,
         actorUserId: Int,
-        stableKey: String,
-        name: String,
-        description: String?,
-        enabled: Boolean,
+        request: CreateIncidentType,
     ): IncidentTypeDefinition =
         transaction {
             requireMember(organizationId, actorUserId)
-            val key = normalizeKey(stableKey)
-            requireName(name, "Incident type name")
+            val key = normalizeKey(request.stableKey)
+            requireName(request.name, "Incident type name")
             val current = currentType(organizationId, key)
             current?.supersede(NativeIncidentTypes.isCurrent, NativeIncidentTypes.supersededAt)
             val now = Clock.System.now()
@@ -145,9 +156,9 @@ class IncidentConfigurationService {
                     it[NativeIncidentTypes.stableKey] = key
                     it[version] = (current?.get(NativeIncidentTypes.version) ?: 0) + 1
                     it[isCurrent] = true
-                    it[NativeIncidentTypes.name] = name.trim()
-                    it[NativeIncidentTypes.description] = description.cleaned()
-                    it[NativeIncidentTypes.enabled] = enabled
+                    it[NativeIncidentTypes.name] = request.name.trim()
+                    it[NativeIncidentTypes.description] = request.description.cleaned()
+                    it[NativeIncidentTypes.enabled] = request.enabled
                     it[createdBy] = actorUserId
                     it[createdAt] = now
                     it[supersededAt] = null
@@ -226,26 +237,31 @@ class IncidentConfigurationService {
     fun createForm(
         organizationId: Int,
         actorUserId: Int,
-        incidentTypeResourceId: String?,
-        stage: IncidentFormStage,
-        name: String,
-        fields: List<IncidentFormFieldInput>,
+        request: CreateIncidentForm,
     ): IncidentFormDefinition =
         transaction {
             requireMember(organizationId, actorUserId)
-            requireName(name, "Incident form name")
-            require(fields.map(IncidentFormFieldInput::fieldId).distinct().size == fields.size) {
+            requireName(request.name, "Incident form name")
+            require(request.fields.map(IncidentFormFieldInput::fieldId).distinct().size == request.fields.size) {
                 "Incident form fields must be unique"
             }
-            require(fields.map(IncidentFormFieldInput::position).distinct().size == fields.size) {
+            require(request.fields.map(IncidentFormFieldInput::position).distinct().size == request.fields.size) {
                 "Incident form positions must be unique"
             }
-            require(fields.all { it.position >= 0 && (!it.required || it.visible) }) {
+            require(request.fields.all { it.position >= 0 && (!it.required || it.visible) }) {
                 "Incident form field positions and visibility are invalid"
             }
-            val incidentType = incidentTypeResourceId?.let { requireType(organizationId, it, currentOnly = true) }
-            val fieldRows = fields.associateWith { requireField(organizationId, it.fieldId, currentOnly = true) }
-            val current = currentForm(organizationId, incidentType?.get(NativeIncidentTypes.id)?.value, stage)
+            val incidentType = request.incidentTypeResourceId?.let {
+                requireType(organizationId, it, currentOnly = true)
+            }
+            val fieldRows = request.fields.associateWith {
+                requireField(organizationId, it.fieldId, currentOnly = true)
+            }
+            val current = currentForm(
+                organizationId,
+                incidentType?.get(NativeIncidentTypes.id)?.value,
+                request.stage,
+            )
             current?.supersede(NativeIncidentForms.isCurrent, NativeIncidentForms.supersededAt)
             val now = Clock.System.now()
             val formId =
@@ -253,15 +269,15 @@ class IncidentConfigurationService {
                     it[resourceId] = Uuid.random()
                     it[NativeIncidentForms.organizationId] = organizationId
                     it[incidentTypeId] = incidentType?.get(NativeIncidentTypes.id)?.value
-                    it[NativeIncidentForms.stage] = stage.wire
+                    it[NativeIncidentForms.stage] = request.stage.wire
                     it[version] = (current?.get(NativeIncidentForms.version) ?: 0) + 1
                     it[isCurrent] = true
-                    it[NativeIncidentForms.name] = name.trim()
+                    it[NativeIncidentForms.name] = request.name.trim()
                     it[createdBy] = actorUserId
                     it[createdAt] = now
                     it[supersededAt] = null
                 }.value
-            fields.sortedBy(IncidentFormFieldInput::position).forEach { input ->
+            request.fields.sortedBy(IncidentFormFieldInput::position).forEach { input ->
                 val field = checkNotNull(fieldRows[input])
                 input.defaultValue?.let { validateValue(field, it) }
                 NativeIncidentFormFields.insertAndGetId {

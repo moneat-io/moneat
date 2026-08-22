@@ -26,6 +26,7 @@ import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.shared.models.Memberships
+import com.moneat.shared.models.Users
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -101,12 +102,13 @@ class IncidentCommandService(
 
     private fun applySupportingCommand(command: IncidentCommand): IncidentMutation =
         when (command) {
-            is AssignIncidentRoleCommand -> assignRole(command)
-            is ClaimIncidentRoleCommand -> claimRole(command)
-            is UnassignIncidentRoleCommand -> unassignRole(command)
-            is HandoverIncidentRoleCommand -> handoverRole(command)
-            is SetIncidentParticipationCommand -> setParticipation(command)
-            is LeaveIncidentCommand -> leaveIncident(command)
+            is AssignIncidentRoleCommand,
+            is ClaimIncidentRoleCommand,
+            is UnassignIncidentRoleCommand,
+            is HandoverIncidentRoleCommand,
+            is SetIncidentParticipationCommand,
+            is LeaveIncidentCommand,
+            -> applyResponderCommand(command)
             is AddIncidentActionCommand -> addAction(command)
             is AddIncidentTimelineEventCommand -> addTimelineEvent(command)
             is LinkOnCallAlertCommand -> linkAlert(command)
@@ -116,6 +118,17 @@ class IncidentCommandService(
             is CancelIncidentCommand -> transition(command, NativeIncidentStatus.CANCELLED, command.reason)
             is ReopenIncidentCommand -> transition(command, NativeIncidentStatus.ACTIVE, command.reason)
             else -> error("Unsupported incident command: ${command.type.wire}")
+        }
+
+    private fun applyResponderCommand(command: IncidentCommand): IncidentMutation =
+        when (command) {
+            is AssignIncidentRoleCommand -> assignRole(command)
+            is ClaimIncidentRoleCommand -> claimRole(command)
+            is UnassignIncidentRoleCommand -> unassignRole(command)
+            is HandoverIncidentRoleCommand -> handoverRole(command)
+            is SetIncidentParticipationCommand -> setParticipation(command)
+            is LeaveIncidentCommand -> leaveIncident(command)
+            else -> error("Unsupported incident responder command: ${command.type.wire}")
         }
 
     private fun replayResult(command: IncidentCommand): IncidentCommandResult? {
@@ -222,16 +235,18 @@ class IncidentCommandService(
             )
         }
         insertTimelineEvent(
-            command = command,
-            incidentId = incidentId,
-            eventKey = command.commandKey,
-            eventType = "DECLARED",
-            details = mapOf(
-                "origin" to JsonPrimitive(command.actor.origin),
-                "mode" to JsonPrimitive(command.mode.wire),
-                "visibility" to JsonPrimitive(command.visibility.wire),
+            command,
+            CommandTimelineEvent(
+                incidentId = incidentId,
+                eventKey = command.commandKey,
+                eventType = "DECLARED",
+                details = mapOf(
+                    "origin" to JsonPrimitive(command.actor.origin),
+                    "mode" to JsonPrimitive(command.mode.wire),
+                    "visibility" to JsonPrimitive(command.visibility.wire),
+                ),
+                at = now,
             ),
-            at = now,
         )
         return loadMutation(incidentId)
     }
@@ -262,11 +277,13 @@ class IncidentCommandService(
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
             command,
-            command.incidentId,
-            command.commandKey,
-            "UPDATED",
-            mapOf("origin" to JsonPrimitive(command.actor.origin)),
-            now,
+            CommandTimelineEvent(
+                command.incidentId,
+                command.commandKey,
+                "UPDATED",
+                mapOf("origin" to JsonPrimitive(command.actor.origin)),
+                now,
+            ),
         )
         return loadMutation(command.incidentId)
     }
@@ -313,11 +330,13 @@ class IncidentCommandService(
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
             command,
-            command.incidentId,
-            command.commandKey,
-            target.timelineEventType(),
-            transitionDetails(command.actor.origin, note, currentStatus),
-            now,
+            CommandTimelineEvent(
+                command.incidentId,
+                command.commandKey,
+                target.timelineEventType(),
+                transitionDetails(command.actor.origin, note, currentStatus),
+                now,
+            ),
         )
         return loadMutation(command.incidentId)
     }
@@ -353,7 +372,7 @@ class IncidentCommandService(
             mapOf(
                 "roleId" to JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()),
                 "role" to JsonPrimitive(role[NativeIncidentRoleDefinitions.name]),
-                "assigneeUserId" to JsonPrimitive(command.assigneeUserId),
+                "assigneeUserId" to JsonPrimitive(userResourceId(command.assigneeUserId)),
             ),
         )
         recordPrivateRoleInstructions(command, role, command.assigneeUserId, mutation.version)
@@ -386,7 +405,7 @@ class IncidentCommandService(
             mapOf(
                 "roleId" to JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()),
                 "role" to JsonPrimitive(role[NativeIncidentRoleDefinitions.name]),
-                "assigneeUserId" to JsonPrimitive(assigneeUserId),
+                "assigneeUserId" to JsonPrimitive(userResourceId(assigneeUserId)),
             ),
         )
     }
@@ -429,8 +448,8 @@ class IncidentCommandService(
         val details = buildMap<String, JsonElement> {
             put("roleId", JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()))
             put("role", JsonPrimitive(role[NativeIncidentRoleDefinitions.name]))
-            put("fromUserId", JsonPrimitive(fromUserId))
-            put("toUserId", JsonPrimitive(command.toUserId))
+            put("fromUserId", JsonPrimitive(userResourceId(fromUserId)))
+            put("toUserId", JsonPrimitive(userResourceId(command.toUserId)))
             command.note.cleaned()?.let { put("note", JsonPrimitive(it)) }
         }
         val mutation = appendVersionedEvent(command, "ROLE_HANDED_OVER", details)
@@ -452,7 +471,7 @@ class IncidentCommandService(
             command,
             eventType,
             mapOf(
-                "userId" to JsonPrimitive(command.userId),
+                "userId" to JsonPrimitive(userResourceId(command.userId)),
                 "participationType" to JsonPrimitive(command.participationType.wire),
             ),
         )
@@ -471,7 +490,7 @@ class IncidentCommandService(
             command,
             "PARTICIPANT_LEFT",
             mapOf(
-                "userId" to JsonPrimitive(command.userId),
+                "userId" to JsonPrimitive(userResourceId(command.userId)),
                 "participationType" to JsonPrimitive(active[NativeIncidentParticipants.participationType]),
             ),
         )
@@ -573,7 +592,7 @@ class IncidentCommandService(
                     "incidentId" to JsonPrimitive(loadMutation(command.incidentId).incidentResourceId),
                     "roleId" to JsonPrimitive(role[NativeIncidentRoleDefinitions.resourceId].toString()),
                     "role" to JsonPrimitive(role[NativeIncidentRoleDefinitions.name]),
-                    "assigneeUserId" to JsonPrimitive(assigneeUserId),
+                    "assigneeUserId" to JsonPrimitive(userResourceId(assigneeUserId)),
                     "instructions" to JsonPrimitive(instructions),
                     "visibility" to JsonPrimitive("PRIVATE"),
                 ),
@@ -585,7 +604,7 @@ class IncidentCommandService(
         require(command.title.isNotBlank()) { "Incident action title is required" }
         command.assigneeUserId?.let { requireUserMembership(command.actor.organizationId, it) }
         val details = mutableMapOf<String, JsonElement>("title" to JsonPrimitive(command.title.trim()))
-        command.assigneeUserId?.let { details["assigneeUserId"] = JsonPrimitive(it) }
+        command.assigneeUserId?.let { details["assigneeUserId"] = JsonPrimitive(userResourceId(it)) }
         return appendVersionedEvent(command, "ACTION_ADDED", details)
     }
 
@@ -613,11 +632,13 @@ class IncidentCommandService(
         requireVersionUpdate(updated, command.incidentId)
         insertTimelineEvent(
             command,
-            command.incidentId,
-            command.commandKey,
-            eventType,
-            details + ("origin" to JsonPrimitive(command.actor.origin)),
-            now,
+            CommandTimelineEvent(
+                command.incidentId,
+                command.commandKey,
+                eventType,
+                details + ("origin" to JsonPrimitive(command.actor.origin)),
+                now,
+            ),
         )
         return loadMutation(command.incidentId)
     }
@@ -659,15 +680,17 @@ class IncidentCommandService(
         )
         insertTimelineEvent(
             command,
-            command.incidentId,
-            command.commandKey,
-            "ALERT_LINKED",
-            mapOf(
-                "origin" to JsonPrimitive(command.actor.origin),
-                "alertId" to JsonPrimitive(alert[OnCallAlerts.resourceId].toString()),
-                "alertTitle" to JsonPrimitive(alert[OnCallAlerts.title]),
+            CommandTimelineEvent(
+                incidentId = command.incidentId,
+                eventKey = command.commandKey,
+                eventType = "ALERT_LINKED",
+                details = mapOf(
+                    "origin" to JsonPrimitive(command.actor.origin),
+                    "alertId" to JsonPrimitive(alert[OnCallAlerts.resourceId].toString()),
+                    "alertTitle" to JsonPrimitive(alert[OnCallAlerts.title]),
+                ),
+                at = now,
             ),
-            now,
         )
         return loadMutation(command.incidentId)
     }
@@ -789,19 +812,23 @@ class IncidentCommandService(
         )
         insertTimelineEvent(
             command,
-            command.incidentId,
-            "${command.commandKey}:target",
-            "INCIDENT_MERGED",
-            details,
-            now,
+            CommandTimelineEvent(
+                command.incidentId,
+                "${command.commandKey}:target",
+                "INCIDENT_MERGED",
+                details,
+                now,
+            ),
         )
         insertTimelineEvent(
             command,
-            command.sourceIncidentId,
-            "${command.commandKey}:source",
-            "MERGED_INTO_INCIDENT",
-            details,
-            now,
+            CommandTimelineEvent(
+                command.sourceIncidentId,
+                "${command.commandKey}:source",
+                "MERGED_INTO_INCIDENT",
+                details,
+                now,
+            ),
         )
         outboxWriter.record(
             PendingNativeIncidentDomainEvent(
@@ -853,6 +880,13 @@ class IncidentCommandService(
                 .singleOrNull() != null
         if (!found) throw IncidentCommandNotFoundException("Incident participant not found")
     }
+
+    private fun userResourceId(userId: Int): String =
+        Users
+            .selectAll()
+            .where { Users.id eq userId }
+            .single()[Users.resource_id]
+            .toString()
 
     private fun versionPredicate(command: ExistingIncidentCommand, current: ResultRow) =
         (OnCallIncidents.id eq command.incidentId) and
@@ -990,22 +1024,18 @@ class IncidentCommandService(
 
     private fun insertTimelineEvent(
         command: IncidentCommand,
-        incidentId: Int,
-        eventKey: String,
-        eventType: String,
-        details: Map<String, JsonElement>,
-        at: kotlin.time.Instant,
+        event: CommandTimelineEvent,
     ) {
         timelineWriter.record(
             PendingIncidentTimelineEvent(
                 organizationId = command.actor.organizationId,
-                incidentId = incidentId,
-                eventKey = eventKey,
-                eventType = eventType,
+                incidentId = event.incidentId,
+                eventKey = event.eventKey,
+                eventType = event.eventType,
                 actorUserId = command.actor.userId,
-                details = details,
+                details = event.details,
                 provenance = command.actor.origin.toIncidentTimelineProvenance(),
-                originalOccurredAt = at,
+                originalOccurredAt = event.at,
             ),
         )
     }
@@ -1112,6 +1142,14 @@ class IncidentCommandService(
         val status: NativeIncidentStatus,
         val version: Int,
         val changed: Boolean,
+    )
+
+    private data class CommandTimelineEvent(
+        val incidentId: Int,
+        val eventKey: String,
+        val eventType: String,
+        val details: Map<String, JsonElement>,
+        val at: kotlin.time.Instant,
     )
 
     companion object {

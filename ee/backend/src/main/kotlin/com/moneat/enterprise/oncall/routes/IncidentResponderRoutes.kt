@@ -54,6 +54,14 @@ internal fun Route.registerIncidentResponderRoutes(
     incidentService: OnCallIncidentService,
     responderService: IncidentResponderService,
 ) {
+    registerIncidentRoleRoutes(incidentService, responderService)
+    registerIncidentParticipantRoutes(incidentService, responderService)
+}
+
+private fun Route.registerIncidentRoleRoutes(
+    incidentService: OnCallIncidentService,
+    responderService: IncidentResponderService,
+) {
     get("/{id}/roles") {
         val context = call.requireUserContext() ?: return@get
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@get
@@ -134,6 +142,12 @@ internal fun Route.registerIncidentResponderRoutes(
             call.respond(responderService.listAssignments(context.organizationId, incidentId))
         }
     }
+}
+
+private fun Route.registerIncidentParticipantRoutes(
+    incidentService: OnCallIncidentService,
+    responderService: IncidentResponderService,
+) {
     get("/{id}/participants") {
         val context = call.requireUserContext() ?: return@get
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@get

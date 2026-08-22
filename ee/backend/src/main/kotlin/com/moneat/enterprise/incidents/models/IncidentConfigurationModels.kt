@@ -144,4 +144,3 @@ object NativeIncidentFormSubmissions : IntIdTable("native_incident_form_submissi
         uniqueIndex(organizationId, resourceId)
     }
 }
-

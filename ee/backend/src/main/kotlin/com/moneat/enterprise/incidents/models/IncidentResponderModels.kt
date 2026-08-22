@@ -97,4 +97,3 @@ object NativeIncidentHandovers : IntIdTable("native_incident_handovers") {
         uniqueIndex(organizationId, resourceId)
     }
 }
-

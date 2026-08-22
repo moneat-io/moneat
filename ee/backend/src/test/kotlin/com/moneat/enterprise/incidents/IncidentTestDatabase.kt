@@ -104,6 +104,22 @@ object IncidentTestDatabase {
             }
             SeededMember(organizationId, userId)
         }
+
+    fun seedUserInOrganization(organizationId: Int, slug: String): Int =
+        transaction {
+            val userId =
+                Users.insert {
+                    it[email] = "$slug@example.test"
+                    it[password_hash] = "x"
+                    it[name] = "Incident Responder $slug"
+                }[Users.id]
+            Memberships.insert {
+                it[user_id] = userId
+                it[Memberships.organization_id] = organizationId
+                it[role] = "member"
+            }
+            userId
+        }
 }
 
 data class SeededMember(

@@ -110,6 +110,7 @@ class IncidentResponderService {
             }
             val id =
                 insertRole(
+                    RoleInsert(
                     organizationId = organizationId,
                     actorUserId = actorUserId,
                     key = key,
@@ -121,6 +122,7 @@ class IncidentResponderService {
                     required = request.required,
                     default = request.default,
                     now = now,
+                    ),
                 )
             roleDefinition(requireRole(id))
         }
@@ -215,6 +217,7 @@ class IncidentResponderService {
         DEFAULT_ROLES.forEach { role ->
             if (currentRole(organizationId, role.key) == null) {
                 insertRole(
+                    RoleInsert(
                     organizationId = organizationId,
                     actorUserId = actorUserId,
                     key = role.key,
@@ -226,38 +229,27 @@ class IncidentResponderService {
                     required = true,
                     default = true,
                     now = now,
+                    ),
                 )
             }
         }
     }
 
-    private fun insertRole(
-        organizationId: Int,
-        actorUserId: Int,
-        key: String,
-        version: Int,
-        name: String,
-        description: String?,
-        responsibilities: List<String>,
-        privateInstructions: String?,
-        required: Boolean,
-        default: Boolean,
-        now: kotlin.time.Instant,
-    ): Int =
+    private fun insertRole(request: RoleInsert): Int =
         NativeIncidentRoleDefinitions.insertAndGetId {
             it[resourceId] = Uuid.random()
-            it[NativeIncidentRoleDefinitions.organizationId] = organizationId
-            it[stableKey] = key
-            it[NativeIncidentRoleDefinitions.version] = version
+            it[NativeIncidentRoleDefinitions.organizationId] = request.organizationId
+            it[stableKey] = request.key
+            it[NativeIncidentRoleDefinitions.version] = request.version
             it[isCurrent] = true
-            it[NativeIncidentRoleDefinitions.name] = name
-            it[NativeIncidentRoleDefinitions.description] = description
-            it[NativeIncidentRoleDefinitions.responsibilities] = json.encodeToString(responsibilities)
-            it[NativeIncidentRoleDefinitions.privateInstructions] = privateInstructions
-            it[isRequired] = required
-            it[isDefault] = default
-            it[createdBy] = actorUserId
-            it[createdAt] = now
+            it[NativeIncidentRoleDefinitions.name] = request.name
+            it[NativeIncidentRoleDefinitions.description] = request.description
+            it[NativeIncidentRoleDefinitions.responsibilities] = json.encodeToString(request.responsibilities)
+            it[NativeIncidentRoleDefinitions.privateInstructions] = request.privateInstructions
+            it[isRequired] = request.required
+            it[isDefault] = request.default
+            it[createdBy] = request.actorUserId
+            it[createdAt] = request.now
             it[supersededAt] = null
         }.value
 
@@ -337,6 +329,20 @@ class IncidentResponderService {
         val privateInstructions: String,
     )
 
+    private data class RoleInsert(
+        val organizationId: Int,
+        val actorUserId: Int,
+        val key: String,
+        val version: Int,
+        val name: String,
+        val description: String?,
+        val responsibilities: List<String>,
+        val privateInstructions: String?,
+        val required: Boolean,
+        val default: Boolean,
+        val now: kotlin.time.Instant,
+    )
+
     companion object {
         private const val MAX_ROLE_NAME_LENGTH = 120
         private val KEY_SEPARATOR = Regex("[ _]+")
@@ -348,8 +354,10 @@ class IncidentResponderService {
                     key = "incident-commander",
                     name = "Incident Commander",
                     description = "Coordinates the response and owns incident-level decisions.",
-                    responsibilities = listOf("Set response priorities", "Coordinate responders", "Drive resolution"),
-                    privateInstructions = "Keep the response focused, assign owners, and maintain a clear decision log.",
+                    responsibilities =
+                        listOf("Set response priorities", "Coordinate responders", "Drive resolution"),
+                    privateInstructions =
+                        "Keep the response focused, assign owners, and maintain a clear decision log.",
                 ),
                 DefaultRole(
                     key = "communications-lead",

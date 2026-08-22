@@ -6,6 +6,8 @@ package com.moneat.enterprise.oncall.routes
 
 import com.moneat.enterprise.incidents.commands.IncidentCommandException
 import com.moneat.enterprise.incidents.config.CreateIncidentCustomField
+import com.moneat.enterprise.incidents.config.CreateIncidentForm
+import com.moneat.enterprise.incidents.config.CreateIncidentType
 import com.moneat.enterprise.incidents.config.IncidentConfigurationService
 import com.moneat.enterprise.incidents.config.IncidentCustomFieldOptionInput
 import com.moneat.enterprise.incidents.config.IncidentFormFieldInput
@@ -101,10 +103,12 @@ internal fun Route.registerIncidentConfigurationRoutes(
                             service.createIncidentType(
                                 organizationId = context.organizationId,
                                 actorUserId = context.userId,
-                                stableKey = request.key,
-                                name = request.name,
-                                description = request.description,
-                                enabled = request.enabled,
+                                request = CreateIncidentType(
+                                    stableKey = request.key,
+                                    name = request.name,
+                                    description = request.description,
+                                    enabled = request.enabled,
+                                ),
                             ),
                         )
                     }
@@ -150,10 +154,12 @@ internal fun Route.registerIncidentConfigurationRoutes(
             route("/forms") {
                 get {
                     val context = call.requireUserContext() ?: return@get
-                    val stage = call.request.queryParameters["stage"]?.let {
-                        enumValue<IncidentFormStage>(it, "incident form stage")
+                    call.respondConfigurationFailure {
+                        val stage = call.request.queryParameters["stage"]?.let {
+                            enumValue<IncidentFormStage>(it, "incident form stage")
+                        }
+                        call.respond(service.listForms(context.organizationId, stage))
                     }
-                    call.respond(service.listForms(context.organizationId, stage))
                 }
                 post {
                     val context = call.requireUserContext() ?: return@post
@@ -176,10 +182,12 @@ internal fun Route.registerIncidentConfigurationRoutes(
                             service.createForm(
                                 organizationId = context.organizationId,
                                 actorUserId = context.userId,
-                                incidentTypeResourceId = request.incidentTypeId,
-                                stage = enumValue(request.stage, "incident form stage"),
-                                name = request.name,
-                                fields = fields,
+                                request = CreateIncidentForm(
+                                    incidentTypeResourceId = request.incidentTypeId,
+                                    stage = enumValue(request.stage, "incident form stage"),
+                                    name = request.name,
+                                    fields = fields,
+                                ),
                             ),
                         )
                     }

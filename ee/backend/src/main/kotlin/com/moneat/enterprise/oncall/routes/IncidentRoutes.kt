@@ -26,6 +26,7 @@ import com.moneat.enterprise.incidents.models.NativeIncidentStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentVisibility
 import com.moneat.enterprise.incidents.models.IncidentSourceType
 import com.moneat.enterprise.oncall.models.OnCallAlerts
+import com.moneat.enterprise.oncall.models.OnCallIncident
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
 import com.moneat.enterprise.oncall.services.OnCallIncidentService
@@ -144,8 +145,10 @@ data class ResolveIncidentRequest(
     val note: String? = null,
 )
 
-fun Route.incidentRoutes(alertServiceProvider: () -> OnCallAlertService) {
-    val onCallIncidentService = OnCallIncidentService()
+fun Route.incidentRoutes(
+    alertServiceProvider: () -> OnCallAlertService,
+    onCallIncidentService: OnCallIncidentService = OnCallIncidentService(),
+) {
     val configurationService = IncidentConfigurationService()
     val responderService = IncidentResponderService()
     val timelineService = IncidentTimelineService()
@@ -343,13 +346,15 @@ private fun Route.registerDeclareIncidentRoute(
         try {
             val incident =
                 declareIncident(
-                    call = call,
-                    context = context,
-                    request = request,
-                    severity = severity,
-                    onCallAlertId = null,
-                    onCallIncidentService = onCallIncidentService,
-                    configurationService = configurationService,
+                    IncidentDeclaration(
+                        call = call,
+                        context = context,
+                        request = request,
+                        severity = severity,
+                        onCallAlertId = null,
+                        incidentService = onCallIncidentService,
+                        configurationService = configurationService,
+                    ),
                 )
             call.respond(HttpStatusCode.Created, incident)
         } catch (e: IncidentCommandException) {
@@ -648,13 +653,15 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
         try {
             val incident =
                 declareIncident(
-                    call = call,
-                    context = context,
-                    request = request,
-                    severity = incidentSeverity,
-                    onCallAlertId = alertId,
-                    onCallIncidentService = onCallIncidentService,
-                    configurationService = IncidentConfigurationService(),
+                    IncidentDeclaration(
+                        call = call,
+                        context = context,
+                        request = request,
+                        severity = incidentSeverity,
+                        onCallAlertId = alertId,
+                        incidentService = onCallIncidentService,
+                        configurationService = IncidentConfigurationService(),
+                    ),
                 )
             call.respond(HttpStatusCode.Created, incident)
         } catch (e: IncidentCommandException) {
@@ -665,15 +672,18 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
     }
 }
 
-private suspend fun declareIncident(
-    call: ApplicationCall,
-    context: OnCallUserContext,
-    request: DeclareIncidentRequest,
-    severity: String,
-    onCallAlertId: Int?,
-    onCallIncidentService: OnCallIncidentService,
-    configurationService: IncidentConfigurationService,
-): com.moneat.enterprise.oncall.models.OnCallIncident {
+private data class IncidentDeclaration(
+    val call: ApplicationCall,
+    val context: OnCallUserContext,
+    val request: DeclareIncidentRequest,
+    val severity: String,
+    val onCallAlertId: Int?,
+    val incidentService: OnCallIncidentService,
+    val configurationService: IncidentConfigurationService,
+)
+
+private suspend fun declareIncident(declaration: IncidentDeclaration): OnCallIncident {
+    val request = declaration.request
     val mode =
         NativeIncidentMode.entries.firstOrNull { it.wire == request.mode.trim().uppercase() }
             ?: throw IllegalArgumentException("Invalid incident mode")
@@ -683,20 +693,24 @@ private suspend fun declareIncident(
     val initialStatus = NativeIncidentStatus.fromWire(request.initialStatus.trim())
         ?: throw IllegalArgumentException("Invalid incident status")
     val resolvedForm =
-        configurationService.resolveForm(
-            organizationId = context.organizationId,
+        declaration.configurationService.resolveForm(
+            organizationId = declaration.context.organizationId,
             incidentTypeResourceId = request.incidentTypeId,
             stage = IncidentFormStage.DECLARATION,
             submittedValues = request.fields,
         )
-    return onCallIncidentService.declareIncident(
+    return declaration.incidentService.declareIncident(
         DeclareIncidentCommand(
-            commandKey = call.incidentCommandKey("declare"),
-            actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+            commandKey = declaration.call.incidentCommandKey("declare"),
+            actor = IncidentCommandActor(
+                declaration.context.organizationId,
+                declaration.context.userId,
+                "REST",
+            ),
             title = request.title,
             description = request.description,
             summary = request.summary,
-            severity = severity,
+            severity = declaration.severity,
             mode = mode,
             visibility = visibility,
             incidentType = resolvedForm.incidentTypeName,
@@ -705,7 +719,7 @@ private suspend fun declareIncident(
             formDefinitionSnapshot = resolvedForm.definitionSnapshot,
             formValues = resolvedForm.values,
             initialStatus = initialStatus,
-            onCallAlertId = onCallAlertId,
+            onCallAlertId = declaration.onCallAlertId,
         ),
     )
 }
