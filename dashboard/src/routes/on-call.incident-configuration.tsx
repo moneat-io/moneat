@@ -359,6 +359,10 @@ function updateOptionDraft(
   return options.map((option) => (option.id === id ? {...option, [property]: value} : option))
 }
 
+function removeOptionDraft(options: OptionDraft[], id: string): OptionDraft[] {
+  return options.filter((option) => option.id !== id)
+}
+
 function FieldDialog({
   isPending,
   onClose,
@@ -493,9 +497,7 @@ function FieldDialog({
                     size="icon"
                     className="h-8 w-8 shrink-0"
                     aria-label={`Remove option ${index + 1}`}
-                    onClick={() =>
-                      setOptions((previous) => previous.filter((item) => item.id !== option.id))
-                    }
+                    onClick={() => setOptions(removeOptionDraft(options, option.id))}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
