@@ -329,11 +329,23 @@ data class OnCallIncident(
     val alerts: List<OnCallAlert> = emptyList(),
     val createdAt: String,
     val updatedAt: String,
-    @Transient val internalId: Int = 0,
-    @Transient val organizationId: Int = 0,
-    @Transient val declaredBy: Int = 0,
-    @Transient val resolvedBy: Int? = null,
-)
+) {
+    @Transient
+    var internalId: Int = 0
+        internal set
+
+    @Transient
+    var organizationId: Int = 0
+        internal set
+
+    @Transient
+    var declaredBy: Int = 0
+        internal set
+
+    @Transient
+    var resolvedBy: Int? = null
+        internal set
+}
 
 object OnCallIncidentTimeline : IntIdTable("on_call_incident_timeline") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }

@@ -307,11 +307,12 @@ class OnCallIncidentService(
             alerts = alerts,
             createdAt = row[OnCallIncidents.createdAt].toString(),
             updatedAt = row[OnCallIncidents.updatedAt].toString(),
-            internalId = row[OnCallIncidents.id].value,
-            organizationId = row[OnCallIncidents.organizationId],
-            declaredBy = declaredById,
-            resolvedBy = resolvedById,
-        )
+        ).apply {
+            internalId = row[OnCallIncidents.id].value
+            organizationId = row[OnCallIncidents.organizationId]
+            declaredBy = declaredById
+            resolvedBy = resolvedById
+        }
     }
 
     private fun toOnCallAlert(
