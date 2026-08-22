@@ -213,11 +213,13 @@ describe('IncidentConfiguration', () => {
     renderRoute(Route)
     await screen.findByText('Security incident')
     fireEvent.click(screen.getByRole('button', {name: /New type/}))
-    fireEvent.change(await screen.findByPlaceholderText('Security incident'), {target: {value: 'Outage'}})
+    fireEvent.change(await screen.findByPlaceholderText('Security incident'), {
+      target: {value: '  Major API / DB outage!!!  '},
+    })
     fireEvent.click(screen.getByRole('button', {name: 'Save type'}))
     await waitFor(() =>
       expect(mockApi.createIncidentType).toHaveBeenCalledWith(
-        expect.objectContaining({name: 'Outage', key: 'outage'})
+        expect.objectContaining({name: 'Major API / DB outage!!!', key: 'major_api_db_outage'})
       )
     )
   })
@@ -364,8 +366,6 @@ describe('IncidentConfiguration', () => {
     await user.click(await screen.findByRole('button', {name: /New role/}))
 
     await user.type(screen.getByLabelText('Name'), '  Incident commander  ')
-    await user.clear(screen.getByLabelText('Key'))
-    await user.type(screen.getByLabelText('Key'), 'incident-commander')
     await user.type(screen.getByLabelText('Description'), ' Leads the response ')
     await user.type(
       screen.getByLabelText('Responsibilities (one per line)'),

@@ -75,13 +75,24 @@ export const Route = createFileRoute('/on-call/incident-configuration')({
 const DEFAULT_TYPE = '__default__'
 
 function slugify(value: string, separator: '_' | '-'): string {
-  const cleaned = value
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9]+/g, separator)
-  return separator === '-'
-    ? cleaned.replaceAll(/^-+/g, '').replaceAll(/-+$/g, '')
-    : cleaned.replaceAll(/^_+/g, '').replaceAll(/_+$/g, '')
+  let result = ''
+  let separatorPending = false
+
+  for (const character of value.trim().toLowerCase()) {
+    const codePoint = character.codePointAt(0) ?? 0
+    const isDigit = codePoint >= 48 && codePoint <= 57
+    const isLowercaseLetter = codePoint >= 97 && codePoint <= 122
+    if (!isDigit && !isLowercaseLetter) {
+      separatorPending = result.length > 0
+      continue
+    }
+
+    if (separatorPending) result += separator
+    result += character
+    separatorPending = false
+  }
+
+  return result
 }
 
 function IncidentConfiguration() {
