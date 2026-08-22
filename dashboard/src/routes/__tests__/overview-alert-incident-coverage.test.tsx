@@ -219,7 +219,7 @@ const declaredIncident = {
   title: 'Checkout incident',
   description: 'Customer checkout is unavailable',
   severity: 'SEV-1',
-  status: 'OPEN',
+  status: 'ACTIVE',
   declaredBy: USER_RESOURCE_ID,
   declaredByName: 'Ada Lovelace',
   declaredAt: '2026-06-05T12:03:00.000Z',
@@ -734,8 +734,8 @@ describe('overview alert and incident dashboard', () => {
     expect(await screen.findByText('Resolved deploy incident')).toBeInTheDocument()
     expect(await screen.findByText('Resolved by Grace Hopper')).toBeInTheDocument()
 
-    fireEvent.click(await screen.findByText('1 Open'))
-    fireEvent.click(await screen.findByText('1 Open'))
+    fireEvent.click(await screen.findByText('1 Active'))
+    fireEvent.click(await screen.findByText('1 Active'))
     fireEvent.click(await screen.findByText('1 Resolved'))
     expect(await screen.findByText('Clear filters')).toBeInTheDocument()
   })

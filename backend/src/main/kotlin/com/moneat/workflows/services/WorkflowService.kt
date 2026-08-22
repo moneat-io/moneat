@@ -122,6 +122,7 @@ private const val WORKFLOW_CALLER_REFERENCE = "workflow.caller"
 private const val WEBHOOK_PAYLOAD_REFERENCE = "webhook.payload"
 private const val WEBHOOK_EVENT_ID_REFERENCE = "webhook.event_id"
 private const val INCIDENT_ID_REFERENCE = "incident.id"
+private const val INCIDENT_KIND_REFERENCE = "incident.kind"
 private const val INCIDENT_TITLE_REFERENCE = "incident.title"
 private const val INCIDENT_STATUS_REFERENCE = "incident.status"
 private const val INCIDENT_SEVERITY_REFERENCE = "incident.severity"
@@ -1580,6 +1581,7 @@ class WorkflowService(
         val episodeResourceId = episode.resourceId.toString()
         val baseScope = mapOf(
             INCIDENT_ID_REFERENCE to episodeResourceId,
+            INCIDENT_KIND_REFERENCE to "alert_episode",
             INCIDENT_TITLE_REFERENCE to title,
             INCIDENT_STATUS_REFERENCE to status,
             INCIDENT_SEVERITY_REFERENCE to severity,
@@ -1597,18 +1599,12 @@ class WorkflowService(
         severity: IncidentSeverity
     ): Map<String, JsonElement> {
         val incidentResourceId = declaredIncidentResourceId(organizationId, incidentId)
-        val workflowIncidentKey = "incident-$incidentResourceId"
         return mapOf(
             INCIDENT_ID_REFERENCE to incidentResourceId,
+            INCIDENT_KIND_REFERENCE to "native_incident",
             INCIDENT_TITLE_REFERENCE to title,
             INCIDENT_STATUS_REFERENCE to status,
             INCIDENT_SEVERITY_REFERENCE to severity.wire,
-            ALERT_DEDUPLICATION_KEY_REFERENCE to workflowIncidentKey,
-            ALERT_EPISODE_ID_REFERENCE to incidentResourceId,
-            ALERT_EPISODE_KEY_REFERENCE to workflowIncidentKey,
-            ALERT_EPISODE_SEQ_REFERENCE to "1",
-            ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
-            ALERT_NOTIFICATION_KIND_REFERENCE to status,
             ORGANIZATION_ID_REFERENCE to organizationResourceId(organizationId)
         ).typedWorkflowScope()
     }

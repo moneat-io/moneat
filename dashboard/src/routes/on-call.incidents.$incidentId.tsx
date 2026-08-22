@@ -52,6 +52,7 @@ import {
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
 import {isUuidResourceId} from '@/lib/api/utils'
+import {incidentStatusConfig, isResolvableIncidentStatus} from '@/lib/incident-status'
 
 interface DeclaredIncidentDetail {
   id: string
@@ -87,14 +88,6 @@ function severityBadgeVariant(severity: string): BadgeProps['variant'] {
   if (severityLevel === '2') return 'warning'
   if (severityLevel === '3') return 'info'
   return 'neutral'
-}
-
-const getStatusConfig = (
-  status: string,
-): {variant: BadgeProps['variant']; icon: typeof Zap; label: string} => {
-  if (status === 'OPEN') return {variant: 'danger', icon: Zap, label: 'Open'}
-  if (status === 'RESOLVED') return {variant: 'success', icon: CheckCircle2, label: 'Resolved'}
-  return {variant: 'neutral', icon: Clock, label: status}
 }
 
 // Timeline event icons keep distinct categorical tints from the shared palette
@@ -254,7 +247,7 @@ function DeclaredIncidentDetailComponent() {
     )
   }
 
-  const statusCfg = getStatusConfig(incident.status)
+  const statusCfg = incidentStatusConfig(incident.status)
   const StatusIcon = statusCfg.icon
 
   return (
@@ -283,7 +276,7 @@ function DeclaredIncidentDetailComponent() {
       </div>
 
       {/* Action Banner */}
-      {incident.status !== 'RESOLVED' && (
+      {isResolvableIncidentStatus(incident.status) && (
         <div className="flex items-center justify-between p-4 rounded-xl border bg-danger-bg border-danger-border">
           <div className="flex items-center gap-3">
             <div className="flex items-center justify-center h-10 w-10 rounded-full bg-danger-bg">
@@ -291,7 +284,7 @@ function DeclaredIncidentDetailComponent() {
             </div>
             <div>
               <p className="font-medium text-sm">
-                This incident is currently open
+                This incident is currently active
               </p>
               <p className="text-xs text-muted-foreground">
                 Investigate and resolve when complete

@@ -168,14 +168,7 @@ private class RecordingOnCallBridgeModule :
         return true
     }
 
-    override suspend fun declareIncident(
-        organizationId: Int,
-        userId: Int,
-        alertId: Int?,
-        title: String,
-        description: String?,
-        severity: String,
-    ): String? = null
+    override suspend fun declareIncident(declaration: OnCallIncidentDeclaration): String? = null
 
     override fun getIncident(
         incidentId: Int,

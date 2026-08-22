@@ -8,8 +8,14 @@ import com.moneat.config.RedisClient
 import com.moneat.enterprise.EnterpriseModule
 import com.moneat.enterprise.IncidentInfo
 import com.moneat.enterprise.OnCallBridge
+import com.moneat.enterprise.OnCallIncidentDeclaration
 import com.moneat.enterprise.OnCallUserInfo
 import com.moneat.enterprise.PriorityInfo
+import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
+import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.events.IncidentOutboxService
+import com.moneat.enterprise.incidents.events.IncidentOutboxWorker
+import com.moneat.enterprise.incidents.events.WorkflowIncidentEventConsumer
 import com.moneat.enterprise.oncall.routes.deviceRoutes
 import com.moneat.enterprise.oncall.routes.escalationRoutes
 import com.moneat.enterprise.oncall.routes.incidentRoutes
@@ -17,8 +23,8 @@ import com.moneat.enterprise.oncall.routes.notificationPreferencesRoutes
 import com.moneat.enterprise.oncall.routes.onCallRoutes
 import com.moneat.enterprise.oncall.routes.priorityRoutes
 import com.moneat.enterprise.oncall.routes.twilioWebhookRoutes
-import com.moneat.enterprise.oncall.mcp.GetIncidentTool
-import com.moneat.enterprise.oncall.mcp.ListIncidentsTool
+import com.moneat.enterprise.oncall.mcp.GetOnCallAlertTool
+import com.moneat.enterprise.oncall.mcp.ListOnCallAlertsTool
 import com.moneat.enterprise.oncall.mcp.ListSchedulesTool
 import com.moneat.enterprise.oncall.services.BusinessHoursService
 import com.moneat.enterprise.oncall.services.EscalationEngine
@@ -97,6 +103,15 @@ class OnCallModule :
             )
         }
     private val shiftChangeNotifier by shiftChangeNotifierDelegate
+    private val incidentOutboxWorkerDelegate =
+        lazy {
+            IncidentOutboxWorker(
+                IncidentOutboxService(
+                    consumers = listOf(WorkflowIncidentEventConsumer()),
+                ),
+            )
+        }
+    private val incidentOutboxWorker by incidentOutboxWorkerDelegate
 
     override val name: String = "On-Call"
     override val licenseFeature: String = "oncall"
@@ -117,8 +132,8 @@ class OnCallModule :
     }
 
     override fun contributeTools(registry: McpToolRegistry) {
-        registry.register(ListIncidentsTool { onCallAlertService })
-        registry.register(GetIncidentTool { onCallAlertService })
+        registry.register(ListOnCallAlertsTool { onCallAlertService })
+        registry.register(GetOnCallAlertTool { onCallAlertService })
         registry.register(ListSchedulesTool())
     }
 
@@ -128,6 +143,7 @@ class OnCallModule :
         slackUserGroupSyncService.start()
         onCallHandoffService.start()
         shiftChangeNotifier.start()
+        incidentOutboxWorker.start()
     }
 
     override fun stopBackgroundJobs() {
@@ -136,6 +152,7 @@ class OnCallModule :
         if (slackUserGroupSyncServiceDelegate.isInitialized()) slackUserGroupSyncService.stop()
         if (onCallHandoffServiceDelegate.isInitialized()) onCallHandoffService.stop()
         if (shiftChangeNotifierDelegate.isInitialized()) shiftChangeNotifier.stop()
+        if (incidentOutboxWorkerDelegate.isInitialized()) incidentOutboxWorker.stop()
     }
 
     // OnCallBridge implementation
@@ -216,22 +233,17 @@ class OnCallModule :
             deduplicationKey = deduplicationKey,
         )
 
-    override suspend fun declareIncident(
-        organizationId: Int,
-        userId: Int,
-        alertId: Int?,
-        title: String,
-        description: String?,
-        severity: String,
-    ): String =
+    override suspend fun declareIncident(declaration: OnCallIncidentDeclaration): String =
         onCallIncidentService
             .declareIncident(
-                organizationId = organizationId,
-                userId = userId,
-                alertId = alertId,
-                title = title,
-                description = description,
-                severity = severity,
+                DeclareIncidentCommand(
+                    commandKey = declaration.commandKey,
+                    actor = IncidentCommandActor(declaration.organizationId, declaration.userId, "WORKFLOW"),
+                    title = declaration.title,
+                    description = declaration.description,
+                    severity = declaration.severity,
+                    onCallAlertId = declaration.alertId,
+                ),
             ).id
 
     override fun getIncident(

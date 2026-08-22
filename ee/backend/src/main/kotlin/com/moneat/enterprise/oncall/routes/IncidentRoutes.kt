@@ -6,6 +6,13 @@ package com.moneat.enterprise.oncall.routes
 
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
+import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
+import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
+import com.moneat.enterprise.incidents.commands.IncidentCommandException
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
+import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
 import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.services.OnCallAlertService
@@ -43,11 +50,30 @@ private const val INVALID_ALERT_ID_MESSAGE = "Invalid alert ID"
 private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
 private const val INVALID_INCIDENT_ID_MESSAGE = "Invalid incident ID"
 private const val INCIDENT_NOT_FOUND_MESSAGE = "Incident not found"
+private const val IDEMPOTENCY_KEY_HEADER = "Idempotency-Key"
 
 private data class OnCallUserContext(
     val organizationId: Int,
     val userId: Int,
 )
+
+private fun ApplicationCall.incidentCommandKey(action: String): String =
+    request.headers[IDEMPOTENCY_KEY_HEADER]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: "$action:${Uuid.random()}"
+
+private suspend fun ApplicationCall.respondIncidentCommandFailure(error: IncidentCommandException) {
+    respond(incidentCommandStatus(error), ErrorResponse(error.message))
+}
+
+internal fun incidentCommandStatus(error: IncidentCommandException): HttpStatusCode =
+    when (error) {
+        is IncidentCommandDeniedException -> HttpStatusCode.Forbidden
+        is IncidentCommandNotFoundException -> HttpStatusCode.NotFound
+        is IncidentCommandConflictException -> HttpStatusCode.Conflict
+        else -> HttpStatusCode.BadRequest
+    }
 
 private fun parseStatusFilters(rawStatuses: List<String>?): List<String> =
     rawStatuses
@@ -414,17 +440,19 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
         try {
             val incident =
                 onCallIncidentService.declareIncident(
-                    organizationId = context.organizationId,
-                    userId = context.userId,
-                    alertId = alertId,
-                    title = request.title,
-                    description = request.description,
-                    severity = incidentSeverity,
+                    DeclareIncidentCommand(
+                        commandKey = call.incidentCommandKey("declare"),
+                        actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                        title = request.title,
+                        description = request.description,
+                        severity = incidentSeverity,
+                        onCallAlertId = alertId,
+                    ),
                 )
             call.respond(HttpStatusCode.Created, incident)
-        } catch (e: IllegalStateException) {
-            call.respond(HttpStatusCode.Conflict, ErrorResponse(e.message))
-        } catch (e: Exception) {
+        } catch (e: IncidentCommandException) {
+            call.respondIncidentCommandFailure(e)
+        } catch (e: IllegalArgumentException) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
         }
     }
@@ -475,7 +503,21 @@ private fun Route.registerResolveDeclaredIncidentRoute(onCallIncidentService: On
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, context.organizationId)) return@post
         val request = call.receiveNullable<ResolveIncidentRequest>() ?: ResolveIncidentRequest()
-        val incident = onCallIncidentService.resolveIncident(incidentId, context.userId, request.note)
+        val incident = try {
+            onCallIncidentService.resolveIncident(
+                incidentId = incidentId,
+                userId = context.userId,
+                resolutionNote = request.note,
+                commandKey = call.incidentCommandKey("resolve"),
+                origin = "REST",
+            )
+        } catch (e: IncidentCommandException) {
+            call.respondIncidentCommandFailure(e)
+            return@post
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+            return@post
+        }
         if (incident != null) {
             call.respond(incident)
         } else {
@@ -489,21 +531,30 @@ private fun Route.registerAddAlertToIncidentRoute(
     onCallIncidentService: OnCallIncidentService,
 ) {
     post("/{id}/add-alert") {
-        val organizationId = call.requireOrganizationId() ?: return@post
-        val incidentId = call.requireIncidentId(organizationId) ?: return@post
-        if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, organizationId)) return@post
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, context.organizationId)) return@post
         val request = call.receive<AddAlertToIncidentRequest>()
-        val alertId = call.requireAlertIdValue(request.alertId, organizationId) ?: return@post
+        val alertId = call.requireAlertIdValue(request.alertId, context.organizationId) ?: return@post
         val alert = alertServiceProvider().getAlert(alertId)
-        if (alert == null || alert.organizationId != organizationId) {
+        if (alert == null || alert.organizationId != context.organizationId) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse("Alert not found or not in organization"))
             return@post
         }
 
         try {
-            onCallIncidentService.addAlertToIncident(incidentId, alertId)
+            onCallIncidentService.addAlertToIncident(
+                LinkOnCallAlertCommand(
+                    commandKey = call.incidentCommandKey("link-alert"),
+                    actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                    incidentId = incidentId,
+                    alertId = alertId,
+                ),
+            )
             call.respond(HttpStatusCode.OK, MessageResponse("Alert added to incident"))
-        } catch (e: Exception) {
+        } catch (e: IncidentCommandException) {
+            call.respondIncidentCommandFailure(e)
+        } catch (e: IllegalArgumentException) {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
         }
     }
@@ -525,7 +576,21 @@ private fun Route.registerAddIncidentNoteRoute(onCallIncidentService: OnCallInci
         val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
         if (!call.ensureIncidentInOrganization(onCallIncidentService, incidentId, context.organizationId)) return@post
         val request = call.receive<AddNoteRequest>()
-        onCallIncidentService.addNote(incidentId, context.userId, request.note)
+        try {
+            onCallIncidentService.addNote(
+                incidentId = incidentId,
+                userId = context.userId,
+                note = request.note,
+                commandKey = call.incidentCommandKey("add-note"),
+                origin = "REST",
+            )
+        } catch (e: IncidentCommandException) {
+            call.respondIncidentCommandFailure(e)
+            return@post
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, ErrorResponse(e.message))
+            return@post
+        }
         call.respond(HttpStatusCode.OK, MessageResponse("Note added"))
     }
 }

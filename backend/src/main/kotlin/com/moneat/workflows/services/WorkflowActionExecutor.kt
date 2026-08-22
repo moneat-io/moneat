@@ -45,7 +45,9 @@ class WorkflowActionExecutor(
     suspend fun executeStep(
         organizationId: Int,
         step: WorkflowStepConfig,
-        scope: Map<String, JsonElement>
+        scope: Map<String, JsonElement>,
+        runId: Int? = null,
+        nodeId: String? = null,
     ): Map<String, JsonElement> {
         val stringScope = scope.workflowStringView()
         if (!notificationStepEnabled(step.name, stringScope)) {
@@ -69,13 +71,24 @@ class WorkflowActionExecutor(
                     organizationId = organizationId,
                     stepName = step.name,
                     params = step.params.mapValues { (_, value) -> interpolate(value, stringScope) },
-                    actorUserId = callerUserIdFromScope(organizationId, stringScope)
+                    actorUserId = callerUserIdFromScope(organizationId, stringScope),
+                    idempotencyKey = workflowStepIdempotencyKey(runId, nodeId),
                 )
             } else {
                 throw IllegalArgumentException("Unknown workflow step ${step.name}")
             }
         }
     }
+
+    private fun workflowStepIdempotencyKey(
+        runId: Int?,
+        nodeId: String?,
+    ): String? =
+        if (runId == null || nodeId.isNullOrBlank()) {
+            null
+        } else {
+            "workflow:$runId:$nodeId"
+        }
 
     private fun callerUserIdFromScope(
         organizationId: Int,

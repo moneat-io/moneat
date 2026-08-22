@@ -12,7 +12,7 @@ The [Model Context Protocol](https://modelcontextprotocol.io/) is an open standa
 - **IDE integration**: Connect Cursor or Copilot to your Moneat instance for in-editor observability
 - **Automated triage**: Build agents that automatically triage and categorize incoming issues
 - **Dashboard creation**: Let AI agents create dashboards and widgets based on natural language descriptions
-- **Incident response**: AI agents can query on-call incidents, alert status, and host health
+- **Incident response**: AI agents can query on-call alerts, escalation status, and host health
 - **Workflow operations**: Author, publish, run, and audit workflow automation from MCP clients
 
 ## Architecture

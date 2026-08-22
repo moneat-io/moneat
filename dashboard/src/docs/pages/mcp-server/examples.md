@@ -29,27 +29,27 @@ Agent: "Created dashboard 'API Performance Overview' (ID: 15).
 You can now add widgets to it via the Moneat dashboard UI."
 ```
 
-## Triaging an On-Call Incident
+## Triaging On-Call Alerts
 
 ```text
-User: "What incidents are currently active?"
+User: "Which on-call alerts are firing right now?"
 
-Agent calls: list_incidents(status="triggered")
-Agent calls: list_incidents(status="acknowledged")
+Agent calls: list_on_call_alerts(status="triggered")
+Agent calls: list_on_call_alerts(status="acknowledged")
 
-Agent: "There are 2 active incidents:
+Agent: "There are 2 active on-call alerts:
 1. [P1] Database connection pool exhausted (triggered 15m ago, unacknowledged)
 2. [P3] Elevated 5xx rate on api-gateway (acknowledged by @alice 5m ago)
 
-The P1 incident needs immediate attention."
+The P1 alert needs immediate attention."
 
-User: "Tell me more about the P1 incident"
+User: "Tell me more about the P1 alert"
 
-Agent calls: get_incident(incident_id=42)
+Agent calls: get_on_call_alert(alert_id="a3f1c8d2-9e4b-4c7a-bf10-2d6e5a9c1b34")
 Agent calls: query_logs(query="connection pool", levels=["error"], limit=10)
 Agent calls: get_host_status(host_id=123)
 
-Agent: "The P1 incident was triggered by the 'Database CPU > 90%' alert on 
+Agent: "The P1 alert was triggered by the 'Database CPU > 90%' alert on
 host db-primary-01. The host is currently at 94% CPU utilization. 
 Recent logs show repeated 'connection pool exhausted' errors from 3 services.
 This appears to be caused by a long-running query blocking the connection pool."

@@ -25,6 +25,7 @@ import org.jetbrains.exposed.v1.core.Table
 import org.jetbrains.exposed.v1.core.dao.id.IntIdTable
 import org.jetbrains.exposed.v1.datetime.timestamp
 import org.jetbrains.exposed.v1.javatime.time
+import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
 import org.postgresql.util.PGobject
 import java.time.LocalTime
 import kotlin.uuid.Uuid
@@ -32,7 +33,14 @@ import kotlin.uuid.Uuid
 // ===== Custom Column Types =====
 
 private class JsonbColumnType : ColumnType<Map<String, kotlinx.serialization.json.JsonElement>>() {
-    override fun sqlType() = "JSONB"
+    private fun isH2(): Boolean =
+        TransactionManager
+            .currentOrNull()
+            ?.db
+            ?.url
+            ?.contains("h2", ignoreCase = true) == true
+
+    override fun sqlType(): String = if (isH2()) "TEXT" else "JSONB"
 
     override fun valueFromDB(value: Any): Map<String, kotlinx.serialization.json.JsonElement> {
         if (value is PGobject && value.value == null) {
@@ -45,11 +53,14 @@ private class JsonbColumnType : ColumnType<Map<String, kotlinx.serialization.jso
         }
     }
 
-    override fun notNullValueToDB(value: Map<String, kotlinx.serialization.json.JsonElement>): Any =
-        PGobject().apply {
+    override fun notNullValueToDB(value: Map<String, kotlinx.serialization.json.JsonElement>): Any {
+        val encoded = Json.encodeToString(kotlinx.serialization.serializer(), value)
+        if (isH2()) return encoded
+        return PGobject().apply {
             type = "jsonb"
-            this.value = Json.encodeToString(kotlinx.serialization.serializer(), value)
+            this.value = encoded
         }
+    }
 }
 
 fun Table.jsonb(name: String): Column<Map<String, kotlinx.serialization.json.JsonElement>?> =
@@ -269,11 +280,22 @@ object OnCallIncidents : IntIdTable("on_call_incidents") {
     val title = varchar("title", 255)
     val description = text("description").nullable()
     val severity = varchar("severity", 10)
-    val status = varchar("status", 20)
+    val status = varchar("status", 20).default("ACTIVE")
+    val mode = varchar("mode", 24).default("LIVE")
+    val visibility = varchar("visibility", 24).default("ORGANIZATION")
+    val incidentType = varchar("incident_type", 100).nullable()
+    val summary = text("summary").nullable()
+    val version = integer("version").default(1)
     val declaredBy = integer("declared_by").references(Users.id)
     val declaredAt = timestamp("declared_at")
+    val triagedAt = timestamp("triaged_at").nullable()
+    val acceptedAt = timestamp("accepted_at").nullable()
     val resolvedBy = integer("resolved_by").references(Users.id).nullable()
     val resolvedAt = timestamp("resolved_at").nullable()
+    val postIncidentAt = timestamp("post_incident_at").nullable()
+    val closedAt = timestamp("closed_at").nullable()
+    val cancelledAt = timestamp("cancelled_at").nullable()
+    val declinedAt = timestamp("declined_at").nullable()
     val createdAt = timestamp("created_at")
     val updatedAt = timestamp("updated_at")
 }
@@ -286,12 +308,23 @@ data class OnCallIncident(
     val description: String? = null,
     val severity: String,
     val status: String,
+    val mode: String = "LIVE",
+    val visibility: String = "ORGANIZATION",
+    val incidentType: String? = null,
+    val summary: String? = null,
+    val version: Int = 1,
     @SerialName("declaredBy") val declaredByResourceId: String,
     val declaredByName: String? = null,
     val declaredAt: String,
+    val triagedAt: String? = null,
+    val acceptedAt: String? = null,
     @SerialName("resolvedBy") val resolvedByResourceId: String? = null,
     val resolvedByName: String? = null,
     val resolvedAt: String? = null,
+    val postIncidentAt: String? = null,
+    val closedAt: String? = null,
+    val cancelledAt: String? = null,
+    val declinedAt: String? = null,
     val alertCount: Int = 0,
     val alerts: List<OnCallAlert> = emptyList(),
     val createdAt: String,
@@ -394,7 +427,14 @@ object OnCallIncidentAlerts : Table("on_call_incident_alerts") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val incidentId = integer("incident_id").references(OnCallIncidents.id, onDelete = ReferenceOption.CASCADE)
     val alertId = integer("alert_id").references(OnCallAlerts.id, onDelete = ReferenceOption.CASCADE)
+    val statusOwner = varchar("status_owner", 24).default("INCIDENT")
+    val severityOwner = varchar("severity_owner", 24).default("INCIDENT")
+    val resolutionOwner = varchar("resolution_owner", 24).default("INCIDENT")
     override val primaryKey = PrimaryKey(incidentId, alertId)
+
+    init {
+        uniqueIndex(alertId)
+    }
 }
 
 @Serializable
