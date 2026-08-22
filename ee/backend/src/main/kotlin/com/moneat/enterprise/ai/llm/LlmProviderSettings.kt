@@ -68,13 +68,18 @@ object LlmProviderSettingsLoader {
     private const val DEFAULT_MAX_RETRIES = 2
 
     fun load(get: (String) -> String? = EnvConfig::get): LlmProviderSettings {
-        val kind = LlmProviderKind.fromConfig(get("AI_PROVIDER") ?: LlmProviderKind.OPENAI.configValue)
+        val kind = LlmProviderKind.fromConfig(
+            get("AI_PROVIDER")?.trim()?.takeIf(String::isNotEmpty)
+                ?: LlmProviderKind.OPENAI.configValue,
+        )
         val configuredBaseUrl = get("AI_BASE_URL")?.takeIf(String::isNotBlank)?.trimEnd('/')
         val baseUrl = configuredBaseUrl ?: defaultBaseUrl(kind)
         val model = get("AI_MODEL")?.takeIf(String::isNotBlank) ?: legacyModel(kind, get)
         val timeout = parseLongOrDefault("AI_REQUEST_TIMEOUT_MS", get, DEFAULT_TIMEOUT_MILLIS)
         val maxRetries = parseIntOrDefault("AI_MAX_RETRIES", get, DEFAULT_MAX_RETRIES)
         val capabilities = get("AI_CAPABILITIES")
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
             ?.let(::parseCapabilities)
             ?: defaultCapabilities(kind)
 
@@ -171,7 +176,7 @@ object LlmProviderSettingsLoader {
         key: String,
         get: (String) -> String?,
         default: Long,
-    ): Long = get(key)?.let { raw ->
+    ): Long = get(key)?.trim()?.takeIf(String::isNotEmpty)?.let { raw ->
         raw.toLongOrNull() ?: throw IllegalArgumentException("$key must be an integer")
     } ?: default
 
@@ -179,7 +184,7 @@ object LlmProviderSettingsLoader {
         key: String,
         get: (String) -> String?,
         default: Int,
-    ): Int = get(key)?.let { raw ->
+    ): Int = get(key)?.trim()?.takeIf(String::isNotEmpty)?.let { raw ->
         raw.toIntOrNull() ?: throw IllegalArgumentException("$key must be an integer")
     } ?: default
 }

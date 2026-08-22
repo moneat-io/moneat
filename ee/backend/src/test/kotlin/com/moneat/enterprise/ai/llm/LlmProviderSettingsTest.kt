@@ -73,6 +73,23 @@ class LlmProviderSettingsTest {
     }
 
     @Test
+    fun `blank optional settings use provider defaults`() {
+        val settings = LlmProviderSettingsLoader.load(
+            mapOf(
+                "AI_PROVIDER" to "  ",
+                "AI_REQUEST_TIMEOUT_MS" to " ",
+                "AI_MAX_RETRIES" to "\t",
+                "AI_CAPABILITIES" to "\n",
+            )::get,
+        )
+
+        assertEquals(LlmProviderKind.OPENAI, settings.kind)
+        assertEquals(120_000, settings.requestTimeoutMillis)
+        assertEquals(2, settings.maxRetries)
+        assertEquals(LlmCapability.entries.toSet(), settings.capabilities)
+    }
+
+    @Test
     fun `no-auth mode requires an explicit endpoint`() {
         assertFailsWith<IllegalArgumentException> {
             LlmProviderSettingsLoader.load(mapOf("AI_AUTH_TYPE" to "none")::get)
