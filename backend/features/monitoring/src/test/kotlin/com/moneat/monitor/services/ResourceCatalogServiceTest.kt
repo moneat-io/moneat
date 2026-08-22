@@ -21,6 +21,8 @@ import com.moneat.monitor.models.CatalogResourceTelemetry
 import com.moneat.monitor.models.CatalogSecurityFinding
 import com.moneat.monitor.models.ContainerMetricDataPoint
 import com.moneat.monitor.models.ContainerMetricsResponse
+import com.moneat.monitor.models.FilesystemMetricDataPoint
+import com.moneat.monitor.models.FilesystemMetricSeries
 import com.moneat.monitor.models.HistoricalMetricsResponse
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
@@ -761,6 +763,9 @@ class ResourceCatalogServiceTest {
                 metricPoint(timestamp = 2000, cpu = 18f, mem = 45f),
             ),
         )
+        coEvery {
+            monitorService.getHistoricalFilesystemMetrics(HOST_ID, any(), any(), any())
+        } returns emptyList()
         val service = ResourceCatalogService(
             monitorService = monitorService,
             queryClient = NoopResourceCatalogQueryClient,
@@ -780,6 +785,74 @@ class ResourceCatalogServiceTest {
         assertEquals(1_000_000L, cpu.lines.first().points.first().ts)
         // A column with no samples (disk) is omitted rather than emitted empty.
         assertTrue(telemetry.metrics.none { it.key == "disk" })
+    }
+
+    @Test
+    fun `host telemetry exposes one disk tile series per filesystem`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns
+            listOf(hostData(HOST_ID, ORGANIZATION_ID, HOSTNAME, "online"))
+        coEvery { monitorService.getHistoricalMetrics(HOST_ID, any(), any(), null) } returns HistoricalMetricsResponse(
+            systemId = "sys",
+            from = 0,
+            to = 0,
+            intervalSeconds = 300,
+            dataPoints = listOf(metricPoint(timestamp = 1000, cpu = 12f, mem = 40f, disk = 67f)),
+        )
+        coEvery {
+            monitorService.getHistoricalFilesystemMetrics(HOST_ID, any(), any(), 300)
+        } returns listOf(
+            FilesystemMetricSeries(
+                identity = "device_name=sda",
+                label = "/dev/sda",
+                dataPoints = listOf(FilesystemMetricDataPoint(timestamp = 1000, percent = 12.5f)),
+            ),
+            FilesystemMetricSeries(
+                identity = "device_name=vda1|mount_point=/",
+                label = "/dev/vda1 at /",
+                dataPoints = listOf(FilesystemMetricDataPoint(timestamp = 1000, percent = 67f)),
+            ),
+        )
+        val service = ResourceCatalogService(
+            monitorService = monitorService,
+            queryClient = NoopResourceCatalogQueryClient,
+            securityReader = NoopResourceSecurityReader,
+        )
+
+        val telemetry = service.getResourceTelemetry(hostTelemetryRequest(hostId = HOST_ID, rangeSeconds = 86_400))
+
+        val disks = telemetry.metrics.filter { it.key.startsWith("disk:") }
+        assertEquals(listOf("Disk usage (/dev/sda)", "Disk usage (/dev/vda1 at /)"), disks.map { it.label })
+        assertEquals(listOf(12.5, 67.0), disks.map { it.lines.single().points.single().value })
+        assertTrue(telemetry.metrics.none { it.key == "disk" })
+    }
+
+    @Test
+    fun `host telemetry falls back to the legacy aggregate disk series`() = runBlocking {
+        val monitorService = mockk<MonitorService>()
+        every { monitorService.listHosts(ORGANIZATION_ID) } returns
+            listOf(hostData(HOST_ID, ORGANIZATION_ID, HOSTNAME, "online"))
+        coEvery { monitorService.getHistoricalMetrics(HOST_ID, any(), any(), null) } returns HistoricalMetricsResponse(
+            systemId = "sys",
+            from = 0,
+            to = 0,
+            intervalSeconds = 300,
+            dataPoints = listOf(metricPoint(timestamp = 1000, cpu = 12f, mem = 40f, disk = 67f)),
+        )
+        coEvery {
+            monitorService.getHistoricalFilesystemMetrics(HOST_ID, any(), any(), 300)
+        } returns emptyList()
+        val service = ResourceCatalogService(
+            monitorService = monitorService,
+            queryClient = NoopResourceCatalogQueryClient,
+            securityReader = NoopResourceSecurityReader,
+        )
+
+        val telemetry = service.getResourceTelemetry(hostTelemetryRequest(hostId = HOST_ID, rangeSeconds = 86_400))
+
+        val disk = telemetry.metrics.single { it.key == "disk" }
+        assertEquals("Disk usage", disk.label)
+        assertEquals(67.0, disk.lines.single().points.single().value)
     }
 
     @Test
@@ -913,12 +986,12 @@ class ResourceCatalogServiceTest {
         assertTrue(noOrg.metrics.isEmpty())
     }
 
-    private fun metricPoint(timestamp: Long, cpu: Float, mem: Float): MetricDataPoint =
+    private fun metricPoint(timestamp: Long, cpu: Float, mem: Float, disk: Float? = null): MetricDataPoint =
         MetricDataPoint(
             timestamp = timestamp,
             cpuPercent = cpu,
             memPercent = mem,
-            diskPercent = null,
+            diskPercent = disk,
             netRecvBytes = 10,
             netSentBytes = 20,
             load1 = 0.5f,

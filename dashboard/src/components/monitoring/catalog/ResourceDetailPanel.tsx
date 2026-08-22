@@ -208,11 +208,12 @@ function unitFormatters(unit: string): {value: (v: number) => string; tick?: (v:
 /** Map one backend telemetry metric to MetricChart props. */
 function metricChartProps(metric: TelemetryMetric): MetricChartSpec {
   const fmt = unitFormatters(metric.unit)
+  const metricType = metric.key.split(':', 1)[0]
   return {
     title: metric.label,
     subtitle: metric.unit || undefined,
-    icon: METRIC_ICON[metric.key] ?? Activity,
-    iconClass: METRIC_ICON_CLASS[metric.key],
+    icon: METRIC_ICON[metricType] ?? Activity,
+    iconClass: METRIC_ICON_CLASS[metricType],
     lines: metric.lines,
     yDomain: metric.unit === '%' ? PCT_DOMAIN : undefined,
     formatValue: fmt.value,

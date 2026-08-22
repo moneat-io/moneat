@@ -25,6 +25,7 @@ import com.moneat.monitor.models.CatalogResource
 import com.moneat.monitor.models.CatalogResourceTelemetry
 import com.moneat.monitor.models.CatalogVulnerabilityCounts
 import com.moneat.monitor.models.ContainerMetricDataPoint
+import com.moneat.monitor.models.FilesystemMetricSeries
 import com.moneat.monitor.models.HostData
 import com.moneat.monitor.models.LatestMetrics
 import com.moneat.monitor.models.MetricDataPoint
@@ -511,9 +512,14 @@ class ResourceCatalogService(
         val nowSeconds = telemetryNowSeconds(demoEpochMs)
         val points = monitorService
             .getHistoricalMetrics(hostId, nowSeconds - rangeSeconds, nowSeconds, null)
-            .dataPoints
+        val filesystemSeries = monitorService.getHistoricalFilesystemMetrics(
+            hostId,
+            nowSeconds - rangeSeconds,
+            nowSeconds,
+            points.intervalSeconds,
+        )
         fun col(value: (MetricDataPoint) -> Double?): List<Pair<Long, Double?>> =
-            points.map { (it.timestamp * MILLIS_PER_SECOND) to value(it) }
+            points.dataPoints.map { (it.timestamp * MILLIS_PER_SECOND) to value(it) }
         return buildList {
             metricOrNull(
                 "cpu",
@@ -529,8 +535,7 @@ class ResourceCatalogService(
                 listOf(lineOrNull("Memory", col { it.memPercent?.toDouble() })),
             )
                 ?.let { add(it) }
-            metricOrNull("disk", "Disk usage", "%", listOf(lineOrNull("Disk", col { it.diskPercent?.toDouble() })))
-                ?.let { add(it) }
+            addFilesystemMetrics(filesystemSeries, col { it.diskPercent?.toDouble() })
             metricOrNull(
                 "load",
                 "Load average",
@@ -550,6 +555,28 @@ class ResourceCatalogService(
                     lineOrNull("Sent", col { it.netSentBytes?.toDouble() }),
                 ),
             )?.let { add(it) }
+        }
+    }
+
+    private fun MutableList<ResourceTelemetryMetric>.addFilesystemMetrics(
+        filesystemSeries: List<FilesystemMetricSeries>,
+        legacyPoints: List<Pair<Long, Double?>>,
+    ) {
+        if (filesystemSeries.isEmpty()) {
+            metricOrNull("disk", "Disk usage", "%", listOf(lineOrNull("Disk", legacyPoints)))?.let(::add)
+            return
+        }
+        filesystemSeries.forEach { filesystem ->
+            val points = filesystem.dataPoints.map { point ->
+                (point.timestamp * MILLIS_PER_SECOND) to point.percent.toDouble()
+            }
+            val label = if (filesystem.label == "Disk") "Disk usage" else "Disk usage (${filesystem.label})"
+            metricOrNull(
+                key = "disk:${filesystem.identity}",
+                label = label,
+                unit = "%",
+                lines = listOf(lineOrNull(filesystem.label, points)),
+            )?.let(::add)
         }
     }
 
