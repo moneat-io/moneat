@@ -33,10 +33,54 @@ const {mockApi} = vi.hoisted(() => ({
     getOnCallIncidentTimeline: vi.fn(),
     getOrgMembers: vi.fn(),
     exportOnCallIncidentTimeline: vi.fn(),
+    reorderIncidentTimeline: vi.fn(),
+    annotateIncidentTimelineEvent: vi.fn(),
   },
 }))
 
 vi.mock('@/lib/api', () => ({api: mockApi}))
+vi.mock('@/components/ui/dialog', () => ({
+  Dialog: ({open, children}: Readonly<{open: boolean; children: React.ReactNode}>) =>
+    open ? <>{children}</> : null,
+  DialogContent: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DialogDescription: ({children}: Readonly<{children: React.ReactNode}>) => <p>{children}</p>,
+  DialogFooter: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DialogHeader: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DialogTitle: ({children}: Readonly<{children: React.ReactNode}>) => <h2>{children}</h2>,
+}))
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DropdownMenuTrigger: ({children}: Readonly<{children: React.ReactNode}>) => <>{children}</>,
+  DropdownMenuContent: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DropdownMenuLabel: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DropdownMenuSeparator: () => <hr />,
+  DropdownMenuItem: ({
+    children,
+    disabled,
+    onSelect,
+  }: Readonly<{
+    children: React.ReactNode
+    disabled?: boolean
+    onSelect?: () => void
+  }>) => (
+    <button type="button" disabled={disabled} onClick={onSelect}>
+      {children}
+    </button>
+  ),
+  DropdownMenuCheckboxItem: ({
+    children,
+    checked,
+    onCheckedChange,
+  }: Readonly<{
+    children: React.ReactNode
+    checked?: boolean
+    onCheckedChange?: () => void
+  }>) => (
+    <button type="button" role="checkbox" aria-checked={checked} onClick={onCheckedChange}>
+      {children}
+    </button>
+  ),
+}))
 
 const entries = [
   {
@@ -76,6 +120,8 @@ describe('IncidentTimelinePanel', () => {
     mockApi.getOnCallIncidentTimeline.mockResolvedValue(entries)
     mockApi.getOrgMembers.mockResolvedValue({members: [], pendingInvitations: []})
     mockApi.exportOnCallIncidentTimeline.mockResolvedValue({incidentId: INCIDENT_ID, exportedAt: '', events: entries})
+    mockApi.reorderIncidentTimeline.mockResolvedValue(entries)
+    mockApi.annotateIncidentTimelineEvent.mockResolvedValue(entries[0])
   })
 
   it('renders canonical entries with provenance, visibility, note, and annotation', async () => {
@@ -146,6 +192,58 @@ describe('IncidentTimelinePanel', () => {
         INCIDENT_ID,
         expect.objectContaining({includeDeleted: true})
       )
+    )
+  })
+
+  it('filters by event type, provenance, and visibility and clears every filter', async () => {
+    renderWithQueryClient(<IncidentTimelinePanel incidentId={INCIDENT_ID} />)
+    await screen.findByText('Incident declared')
+    fireEvent.click(screen.getByRole('button', {name: /Filters/}))
+
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Note added'}))
+    await waitFor(() =>
+      expect(mockApi.getOnCallIncidentTimeline).toHaveBeenCalledWith(
+        INCIDENT_ID,
+        expect.objectContaining({eventType: ['NOTE_ADDED']})
+      )
+    )
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Note added'}))
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Dashboard'}))
+    fireEvent.click(screen.getByRole('checkbox', {name: 'Organization'}))
+    await waitFor(() =>
+      expect(mockApi.getOnCallIncidentTimeline).toHaveBeenCalledWith(
+        INCIDENT_ID,
+        expect.objectContaining({provenance: ['REST'], visibility: ['ORGANIZATION']})
+      )
+    )
+
+    fireEvent.click(screen.getByRole('button', {name: 'Clear'}))
+    await waitFor(() =>
+      expect(mockApi.getOnCallIncidentTimeline).toHaveBeenCalledWith(
+        INCIDENT_ID,
+        {eventType: undefined, provenance: undefined, visibility: undefined, includeDeleted: false}
+      )
+    )
+  })
+
+  it('reorders and annotates timeline evidence', async () => {
+    renderWithQueryClient(<IncidentTimelinePanel incidentId={INCIDENT_ID} />)
+    await screen.findByText('Incident declared')
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Move down'})[0])
+    await waitFor(() =>
+      expect(mockApi.reorderIncidentTimeline).toHaveBeenCalledWith(INCIDENT_ID, [EVENT_B, EVENT_A])
+    )
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Annotate'})[0])
+    fireEvent.change(screen.getByLabelText('Annotation'), {target: {value: ' Confirmed by logs '}})
+    fireEvent.change(screen.getByLabelText('Reason (optional)'), {target: {value: ' Evidence review '}})
+    fireEvent.click(screen.getByRole('button', {name: 'Save annotation'}))
+    await waitFor(() =>
+      expect(mockApi.annotateIncidentTimelineEvent).toHaveBeenCalledWith(INCIDENT_ID, EVENT_A, {
+        annotation: 'Confirmed by logs',
+        reason: 'Evidence review',
+      })
     )
   })
 })

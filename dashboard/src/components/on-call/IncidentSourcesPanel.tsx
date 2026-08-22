@@ -114,7 +114,7 @@ export function IncidentSourcesPanel({incidentId}: Readonly<IncidentSourcesPanel
               <a
                 href={safeUrl}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2"
               >
                 <ExternalLink className="h-3 w-3" />

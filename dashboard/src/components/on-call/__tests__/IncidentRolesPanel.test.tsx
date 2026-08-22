@@ -42,6 +42,75 @@ const {mockApi} = vi.hoisted(() => ({
 
 vi.mock('@/lib/api', () => ({api: mockApi}))
 vi.mock('@/hooks/useAuth', () => ({useAuth: () => ({user: {id: SELF}})}))
+vi.mock('@/components/ui/dialog', () => ({
+  Dialog: ({open, children}: Readonly<{open: boolean; children: React.ReactNode}>) =>
+    open ? <>{children}</> : null,
+  DialogContent: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DialogDescription: ({children}: Readonly<{children: React.ReactNode}>) => <p>{children}</p>,
+  DialogFooter: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DialogHeader: ({children}: Readonly<{children: React.ReactNode}>) => <div>{children}</div>,
+  DialogTitle: ({children}: Readonly<{children: React.ReactNode}>) => <h2>{children}</h2>,
+}))
+vi.mock('@/components/ui/select', async () => {
+  const React = await import('react')
+  interface SelectContextValue {
+    open: boolean
+    setOpen: (open: boolean) => void
+    value: string
+    onValueChange: (value: string) => void
+  }
+  const SelectContext = React.createContext<SelectContextValue | null>(null)
+  return {
+    Select: ({
+      value,
+      onValueChange,
+      children,
+    }: Readonly<{value: string; onValueChange: (value: string) => void; children: React.ReactNode}>) => {
+      const [open, setOpen] = React.useState(false)
+      return (
+        <SelectContext.Provider value={{open, setOpen, value, onValueChange}}>
+          <div>{children}</div>
+        </SelectContext.Provider>
+      )
+    },
+    SelectTrigger: ({children, ...props}: React.ButtonHTMLAttributes<HTMLButtonElement>) => {
+      const context = React.useContext(SelectContext)
+      return (
+        <button
+          {...props}
+          type="button"
+          role="combobox"
+          aria-controls="test-select-options"
+          aria-expanded={context?.open ?? false}
+          onClick={() => context?.setOpen(!context.open)}
+        >
+          {children}
+        </button>
+      )
+    },
+    SelectValue: () => null,
+    SelectContent: ({children}: Readonly<{children: React.ReactNode}>) => {
+      const context = React.useContext(SelectContext)
+      return context?.open ? <div role="listbox">{children}</div> : null
+    },
+    SelectItem: ({value, children}: Readonly<{value: string; children: React.ReactNode}>) => {
+      const context = React.useContext(SelectContext)
+      return (
+        <button
+          type="button"
+          role="option"
+          aria-selected={context?.value === value}
+          onClick={() => {
+            context?.onValueChange(value)
+            context?.setOpen(false)
+          }}
+        >
+          {children}
+        </button>
+      )
+    },
+  }
+})
 
 const commander = {
   id: 'role-cmd',
@@ -83,8 +152,12 @@ describe('IncidentRolesPanel', () => {
       pendingInvitations: [],
     })
     mockApi.claimIncidentRole.mockResolvedValue([])
+    mockApi.unassignIncidentRole.mockResolvedValue(undefined)
+    mockApi.assignIncidentRole.mockResolvedValue([])
+    mockApi.handoverIncidentRole.mockResolvedValue([])
     mockApi.joinIncident.mockResolvedValue([])
     mockApi.observeIncident.mockResolvedValue([])
+    mockApi.leaveIncident.mockResolvedValue(undefined)
   })
 
   it('shows roles, assignees, and membership without leaking private instructions', async () => {
@@ -144,5 +217,69 @@ describe('IncidentRolesPanel', () => {
 
     releaseRefetch()
     await waitFor(() => expect(screen.getByRole('button', {name: 'Join'})).not.toBeDisabled())
+  })
+
+  it('assigns and hands over responder roles with optimistic-version data', async () => {
+    mockApi.assignIncidentRole.mockResolvedValue([
+      {id: 'as1', role: commander, assigneeUserId: GRACE, assignedByUserId: SELF, assignedAt: '2026-06-05T00:00:00Z'},
+      {id: 'as2', role: scribe, assigneeUserId: LIN, assignedByUserId: SELF, assignedAt: '2026-06-05T00:01:00Z'},
+    ])
+    renderWithQueryClient(
+      <IncidentRolesPanel incidentId={INCIDENT_ID} incidentVersion={7} onMutated={vi.fn()} />
+    )
+    await screen.findByText('Incident Commander')
+
+    fireEvent.click(screen.getByRole('button', {name: 'Assign…'}))
+    fireEvent.click(screen.getByRole('combobox', {name: 'Responder'}))
+    fireEvent.click(screen.getByRole('option', {name: 'Lin'}))
+    fireEvent.click(screen.getByRole('button', {name: 'Assign'}))
+    await waitFor(() =>
+      expect(mockApi.assignIncidentRole).toHaveBeenCalledWith(INCIDENT_ID, 'role-scribe', LIN, 7)
+    )
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Handover'})[0])
+    fireEvent.click(screen.getByRole('combobox', {name: 'Responder'}))
+    fireEvent.click(screen.getByRole('option', {name: 'Ada'}))
+    fireEvent.change(screen.getByLabelText('Handover note'), {target: {value: ' Shift ended '}})
+    fireEvent.click(screen.getByRole('button', {name: 'Hand over'}))
+    await waitFor(() =>
+      expect(mockApi.handoverIncidentRole).toHaveBeenCalledWith(INCIDENT_ID, 'role-cmd', {
+        userId: SELF,
+        note: 'Shift ended',
+        expectedVersion: 7,
+      })
+    )
+  })
+
+  it('unassigns roles and removes incident members', async () => {
+    const onMutated = vi.fn()
+    renderWithQueryClient(
+      <IncidentRolesPanel incidentId={INCIDENT_ID} incidentVersion={3} onMutated={onMutated} />
+    )
+    fireEvent.click(await screen.findByRole('button', {name: 'Unassign'}))
+    await waitFor(() => expect(mockApi.unassignIncidentRole).toHaveBeenCalledWith(INCIDENT_ID, 'role-cmd'))
+    await waitFor(() => expect(onMutated).toHaveBeenCalled())
+
+    fireEvent.click(screen.getAllByRole('button', {name: 'Remove'})[0])
+    await waitFor(() => expect(mockApi.leaveIncident).toHaveBeenCalledWith(INCIDENT_ID, LIN))
+  })
+
+  it('shows self-membership and lets the current responder leave', async () => {
+    mockApi.getIncidentParticipants.mockResolvedValue([
+      {
+        id: 'p-self',
+        userId: SELF,
+        type: 'PARTICIPANT',
+        joinedByUserId: SELF,
+        joinedAt: '2026-06-05T00:00:00Z',
+      },
+    ])
+    renderWithQueryClient(
+      <IncidentRolesPanel incidentId={INCIDENT_ID} incidentVersion={9} onMutated={vi.fn()} />
+    )
+
+    await waitFor(() => expect(screen.getByRole('button', {name: 'Join'})).toBeDisabled())
+    fireEvent.click(screen.getByRole('button', {name: 'Leave'}))
+    await waitFor(() => expect(mockApi.leaveIncident).toHaveBeenCalledWith(INCIDENT_ID, SELF))
   })
 })
