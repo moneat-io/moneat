@@ -23,8 +23,10 @@ import com.moneat.alerts.models.AlertSource
 import com.moneat.incident.services.IncidentService
 import com.moneat.monitor.models.AlertData
 import com.moneat.monitor.models.CreateSilencePeriodRequest
+import com.moneat.monitor.services.CurrentMetricReading
 import com.moneat.monitor.services.MonitorAlertService
 import com.moneat.monitor.services.MonitorService
+import com.moneat.monitor.services.diskResourceLabel
 import com.moneat.shared.models.AlertSilencePeriods
 import com.moneat.shared.models.HostAlertSettings
 import com.moneat.shared.models.HostAlertTemplateStates
@@ -266,7 +268,10 @@ class MonitorAlertServiceCoverageTest {
         assertTrue(query.contains("GROUP BY disk_identity"))
         assertTrue(query.contains("tags['device_name']"))
         assertTrue(query.contains("tags['mountpoint']"))
-        assertTrue(query.contains("max(pct)"))
+        assertTrue(query.contains("pct AS value"))
+        assertTrue(query.contains("disk_identity"))
+        assertTrue(query.contains("ORDER BY pct DESC"))
+        assertTrue(query.contains("LIMIT 1"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.percent')"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.used')"))
         assertTrue(query.contains("argMaxIf(value, timestamp, metric_name = 'system.disk.total')"))
@@ -474,6 +479,32 @@ class MonitorAlertServiceCoverageTest {
         }
 
     @Test
+    fun `getCurrentMetricReading preserves the fullest disk identity`() =
+        runBlocking {
+            val body =
+                """{"data":[["87.5","device_name=sda|mount_point=/mnt/volume_nyc3_01"]]}"""
+            val http = mockk<HttpResponse>()
+            every { http.status } returns HttpStatusCode.OK
+            coEvery { http.bodyAsText(any()) } returns body
+            coEvery { ClickHouseClient.execute(any()) } returns http
+
+            val reading = service.getCurrentMetricReading(153, 1, "disk_percent")
+
+            assertEquals(87.5, reading?.value)
+            assertEquals("/dev/sda at /mnt/volume_nyc3_01", reading?.resourceLabel)
+        }
+
+    @Test
+    fun `diskResourceLabel supports device mount and legacy identities`() {
+        assertEquals(
+            "/dev/sda at /mnt/data",
+            diskResourceLabel("device_name=sda|mountpoint=/mnt/data"),
+        )
+        assertEquals("/dev/vda1", diskResourceLabel("vda1"))
+        assertNull(diskResourceLabel("default"))
+    }
+
+    @Test
     fun `getCurrentMetricValue returns null for unsuccessful ClickHouse response`() =
         runBlocking {
             val http = mockk<HttpResponse>()
@@ -550,6 +581,45 @@ class MonitorAlertServiceCoverageTest {
 
             coVerify(exactly = 1) {
                 workflowService.publishAlertTriggered(any())
+            }
+        }
+
+    @Test
+    fun `disk alert notification identifies the fullest filesystem`() =
+        runBlocking {
+            val alert =
+                AlertData(
+                    id = 1,
+                    hostId = 1,
+                    organizationId = 1,
+                    metric = "disk_percent",
+                    condition = ">",
+                    threshold = 75.0,
+                    durationSeconds = 300,
+                    enabled = true,
+                    lastTriggeredAt = null,
+                    createdAt = Clock.System.now(),
+                    scope = MonitorService.ALERT_SCOPE_HOST,
+                    templateAlertId = null,
+                )
+
+            service.sendAlertNotificationWithContext(
+                alert,
+                "host-a",
+                1,
+                CurrentMetricReading(81.2, "/dev/sda at /mnt/volume_nyc3_01"),
+            )
+
+            coVerify(exactly = 1) {
+                workflowService.publishAlertTriggered(
+                    match {
+                        it.title ==
+                            "host-a - Disk Usage (/dev/sda at /mnt/volume_nyc3_01) > 75.0" &&
+                            it.description.contains("Filesystem: /dev/sda at /mnt/volume_nyc3_01") &&
+                            it.metadata["resource_label"]?.toString() ==
+                            "\"/dev/sda at /mnt/volume_nyc3_01\""
+                    }
+                )
             }
         }
 

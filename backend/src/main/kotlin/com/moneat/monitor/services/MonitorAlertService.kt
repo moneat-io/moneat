@@ -52,8 +52,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mu.KotlinLogging
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
@@ -83,6 +85,7 @@ private const val MEM_TOTAL_METRIC = "system.mem.total"
 private const val DISK_PERCENT_METRIC = "system.disk.percent"
 private const val DISK_USED_METRIC = "system.disk.used"
 private const val DISK_TOTAL_METRIC = "system.disk.total"
+private const val DISK_ALERT_METRIC = "disk_percent"
 private const val DISK_ID_EXPRESSION = """
     if(
         metric_identity != '',
@@ -104,6 +107,45 @@ private fun String.escapeHtml(): String =
         .replace(">", "&gt;")
         .replace("\"", "&quot;")
         .replace("'", "&#39;")
+
+internal data class CurrentMetricReading(
+    val value: Double,
+    val resourceLabel: String? = null,
+)
+
+private data class AlertTriggerContext(
+    val currentReading: CurrentMetricReading,
+    val alertKey: String,
+    val now: Instant,
+)
+
+internal fun diskResourceLabel(metricIdentity: String): String? {
+    if (metricIdentity.isBlank() || metricIdentity == "default") return null
+
+    val dimensions = metricIdentity
+        .split('|')
+        .mapNotNull { part ->
+            val separator = part.indexOf('=')
+            if (separator <= 0 || separator == part.lastIndex) {
+                null
+            } else {
+                part.substring(0, separator) to part.substring(separator + 1)
+            }
+        }.toMap()
+    val rawDevice = listOf("device_name", "device", "system.filesystem.device")
+        .firstNotNullOfOrNull(dimensions::get)
+    val device = rawDevice?.let { if (it.startsWith('/')) it else "/dev/$it" }
+    val mountPoint = listOf("mount_point", "mountpoint", "system.filesystem.mountpoint")
+        .firstNotNullOfOrNull(dimensions::get)
+
+    return when {
+        device != null && mountPoint != null -> "$device at $mountPoint"
+        device != null -> device
+        mountPoint != null -> mountPoint
+        dimensions.isEmpty() -> if (metricIdentity.startsWith('/')) metricIdentity else "/dev/$metricIdentity"
+        else -> null
+    }
+}
 
 private fun memoryPercentMetricFilter(): String =
     "metric_name IN ('$MEM_AVAILABLE_METRIC','$MEM_USED_METRIC','$MEM_TOTAL_METRIC')"
@@ -445,8 +487,8 @@ class MonitorAlertService(
         organizationId: Int
     ) {
         val alertKey = hostAlertRedisKey(alert)
-        val currentValue = getCurrentMetricValue(alert.hostId, alert.organizationId, alert.metric) ?: return
-        val triggered = isThresholdTriggered(alert.condition, currentValue, alert.threshold)
+        val currentReading = getCurrentMetricReading(alert.hostId, alert.organizationId, alert.metric) ?: return
+        val triggered = isThresholdTriggered(alert.condition, currentReading.value, alert.threshold)
 
         if (!triggered) {
             handleRecoveredAlert(alert, hostName, organizationId, alertKey)
@@ -463,7 +505,12 @@ class MonitorAlertService(
             return
         }
 
-        triggerAlert(alert, hostName, organizationId, currentValue, alertKey, now)
+        triggerAlertWithContext(
+            alert,
+            hostName,
+            organizationId,
+            AlertTriggerContext(currentReading, alertKey, now),
+        )
     }
 
     private suspend fun handleRecoveredAlert(
@@ -564,14 +611,28 @@ class MonitorAlertService(
         alertKey: String,
         now: Instant
     ) {
+        triggerAlertWithContext(
+            alert,
+            hostName,
+            organizationId,
+            AlertTriggerContext(CurrentMetricReading(currentValue), alertKey, now),
+        )
+    }
+
+    private suspend fun triggerAlertWithContext(
+        alert: AlertData,
+        hostName: String,
+        organizationId: Int,
+        context: AlertTriggerContext,
+    ) {
         logger.info {
             "Alert ${alert.id} triggered for host ${alert.hostId}: " +
-                "${alert.metric} ${alert.condition} ${alert.threshold} (current: $currentValue)"
+                "${alert.metric} ${alert.condition} ${alert.threshold} (current: ${context.currentReading.value})"
         }
 
-        setAlertTriggeredState(alertKey)
-        updateLastTriggeredAt(alert, now)
-        sendAlertNotification(alert, hostName, organizationId, currentValue)
+        setAlertTriggeredState(context.alertKey)
+        updateLastTriggeredAt(alert, context.now)
+        sendAlertNotificationWithContext(alert, hostName, organizationId, context.currentReading)
     }
 
     private fun wasAlertTriggered(
@@ -685,7 +746,13 @@ class MonitorAlertService(
         hostId: Int,
         organizationId: Int,
         metric: String
-    ): Double? {
+    ): Double? = getCurrentMetricReading(hostId, organizationId, metric)?.value
+
+    internal suspend fun getCurrentMetricReading(
+        hostId: Int,
+        organizationId: Int,
+        metric: String,
+    ): CurrentMetricReading? {
         val query = currentMetricValueQuery(hostId, organizationId, metric) ?: return null
 
         return suspendRunCatching {
@@ -703,7 +770,13 @@ class MonitorAlertService(
             val result = json.parseToJsonElement(body).jsonObject
             val data = result["data"]?.jsonArray?.firstOrNull()?.jsonArray ?: return null
 
-            data[0].toString().replace("\"", "").toDoubleOrNull()
+            val value = data[0].jsonPrimitive.contentOrNull?.toDoubleOrNull() ?: return null
+            val resourceLabel = if (metric == DISK_ALERT_METRIC) {
+                data.getOrNull(1)?.jsonPrimitive?.contentOrNull?.let(::diskResourceLabel)
+            } else {
+                null
+            }
+            CurrentMetricReading(value, resourceLabel)
         }.getOrElse { e ->
             logger.error(e) { "Error fetching metric value" }
             null
@@ -715,7 +788,7 @@ class MonitorAlertService(
         organizationId: Int,
         metric: String
     ): String? {
-        if (metric == "disk_percent") {
+        if (metric == DISK_ALERT_METRIC) {
             return diskPercentCurrentMetricQuery(hostId, organizationId)
         }
 
@@ -749,7 +822,8 @@ class MonitorAlertService(
     ): String =
         """
         SELECT
-            max(pct) AS value
+            pct AS value,
+            disk_identity
         FROM (
             SELECT
                 $DISK_ID_EXPRESSION AS disk_identity,
@@ -761,6 +835,9 @@ class MonitorAlertService(
               AND timestamp >= now64(3) - INTERVAL $CURRENT_METRIC_LOOKBACK_MINUTES MINUTE
             GROUP BY disk_identity
         )
+        WHERE pct IS NOT NULL
+        ORDER BY pct DESC
+        LIMIT 1
         FORMAT JSONCompact
         """.trimIndent()
 
@@ -908,8 +985,22 @@ class MonitorAlertService(
         organizationId: Int,
         currentValue: Double
     ) {
+        sendAlertNotificationWithContext(
+            alert,
+            hostName,
+            organizationId,
+            CurrentMetricReading(currentValue),
+        )
+    }
+
+    internal suspend fun sendAlertNotificationWithContext(
+        alert: AlertData,
+        hostName: String,
+        organizationId: Int,
+        currentReading: CurrentMetricReading,
+    ) {
         val metricLabel = getMetricLabel(alert.metric)
-        val formattedValue = formatMetricValue(alert.metric, currentValue)
+        val formattedValue = formatMetricValue(alert.metric, currentReading.value)
         val formattedThreshold = formatMetricValue(alert.metric, alert.threshold)
         val hostResourceId = hostResourceId(alert.hostId, organizationId)
         val dashboardUrl = hostDashboardUrl(alert.hostId, organizationId)
@@ -920,15 +1011,19 @@ class MonitorAlertService(
                 "current_value" to JsonPrimitive(formattedValue),
                 "threshold" to JsonPrimitive(formattedThreshold)
             )
+        currentReading.resourceLabel?.let { metadata["resource_label"] = JsonPrimitive(it) }
         hostResourceId?.let { metadata["host_id"] = JsonPrimitive(it) }
+
+        val resourceSuffix = currentReading.resourceLabel?.let { " ($it)" }.orEmpty()
+        val resourceDescription = currentReading.resourceLabel?.let { "\nFilesystem: $it" }.orEmpty()
 
         val alertPriority = hostAlertPriorityOverride(alert)
         val alertLifecycleEvent =
             AlertLifecycleEvent(
-                title = "$hostName - $metricLabel ${alert.condition} ${alert.threshold}",
+                title = "$hostName - $metricLabel$resourceSuffix ${alert.condition} ${alert.threshold}",
                 description =
                 "Metric: $metricLabel\nCondition: ${alert.condition} $formattedThreshold" +
-                    "\nCurrent Value: $formattedValue",
+                    "\nCurrent Value: $formattedValue$resourceDescription",
                 priority = alertPriority ?: AlertPriority.P1,
                 status = AlertStatus.FIRING,
                 source = AlertSource.HOST_ALERT,
