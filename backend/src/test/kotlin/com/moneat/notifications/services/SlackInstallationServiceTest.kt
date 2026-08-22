@@ -18,12 +18,15 @@ package com.moneat.notifications.services
 
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
+import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.models.OnCallScheduleUsergroups
 import com.moneat.shared.models.SlackInstallationGrants
 import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.SlackWorkspaceBindings
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
 import org.jetbrains.exposed.v1.jdbc.Database
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.TransactionManager
@@ -31,6 +34,7 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Base64
+import java.time.LocalTime
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
@@ -49,6 +53,8 @@ class SlackInstallationServiceTest {
             Organizations,
             OrganizationIntegrations,
             SlackInstallations,
+            OnCallSchedules,
+            OnCallScheduleUsergroups,
             SlackWorkspaceBindings,
             SlackInstallationGrants,
         )
@@ -209,6 +215,16 @@ class SlackInstallationServiceTest {
         )
         assertTrue(leastPrivilege.grantedUserScopes.isEmpty())
         assertTrue(leastPrivilege.grants.single { it.grantType == SlackGrantType.USER }.revokedAt != null)
+        transaction {
+            val revokedGrant = SlackInstallationGrants
+                .selectAll()
+                .where { SlackInstallationGrants.grantType eq SlackGrantType.USER.name }
+                .single()
+            val ciphertext = revokedGrant[SlackInstallationGrants.accessTokenCiphertext]
+            assertFalse(String(Base64.getUrlDecoder().decode(ciphertext)).contains("xoxp-rotated"))
+            assertNull(revokedGrant[SlackInstallationGrants.refreshTokenCiphertext])
+            assertNull(revokedGrant[SlackInstallationGrants.refreshTokenKeyId])
+        }
     }
 
     @Test
@@ -234,6 +250,7 @@ class SlackInstallationServiceTest {
 
         assertTrue(selected.isDefault)
         assertEquals("xoxb-T-SECOND", delivery?.accessToken)
+        assertEquals("xoxb-T-SECOND", service.defaultAccessToken(organizationId))
         assertEquals("U-BOT-T-SECOND", delivery?.botUserId)
         assertEquals("C-SECOND", delivery?.channelId)
         assertEquals(
@@ -299,6 +316,41 @@ class SlackInstallationServiceTest {
     }
 
     @Test
+    fun `installation deletion is blocked while on-call usergroup sync references it`() {
+        val organizationId = seedOrganization("Referenced Slack")
+        val installation = service.storeOAuthGrant(
+            organizationId,
+            null,
+            emptyList(),
+            grant("T-REFERENCED", "Referenced", service.requestedScopes(emptyList())),
+        )
+        val internalInstallationId = service.internalInstallationId(organizationId, installation.id)
+        transaction {
+            val scheduleId = OnCallSchedules.insert {
+                it[OnCallSchedules.organizationId] = organizationId
+                it[name] = "Primary"
+                it[rotationType] = "DAILY"
+                it[handoffTime] = LocalTime.NOON
+                it[timezone] = "UTC"
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            } get OnCallSchedules.id
+            OnCallScheduleUsergroups.insert {
+                it[OnCallScheduleUsergroups.scheduleId] = scheduleId.value
+                it[slackUsergroupId] = "S-ONCALL"
+                it[slackUsergroupHandle] = "on-call"
+                it[slackInstallationId] = internalInstallationId
+                it[createdAt] = Clock.System.now()
+                it[updatedAt] = Clock.System.now()
+            }
+        }
+
+        assertFailsWith<IllegalStateException> {
+            service.deleteInstallation(organizationId, installation.id)
+        }
+    }
+
+    @Test
     fun `health distinguishes missing scopes revoked tokens and workspace mismatch`() = runBlocking {
         val organizationId = seedOrganization("Health")
         val installation = service.storeOAuthGrant(
@@ -354,6 +406,7 @@ class SlackInstallationServiceTest {
         assertEquals("C-LEGACY", migrated.defaultChannelId)
         assertEquals(SlackInstallationHealthStatus.REAUTHORIZATION_REQUIRED, migrated.health)
         assertEquals("xoxb-legacy-plaintext", service.accessToken(organizationId, migrated.id))
+        assertEquals("xoxb-legacy-plaintext", service.defaultAccessToken(organizationId))
         transaction {
             val legacyToken = OrganizationIntegrations.selectAll().single()[OrganizationIntegrations.access_token]
             assertNull(legacyToken)

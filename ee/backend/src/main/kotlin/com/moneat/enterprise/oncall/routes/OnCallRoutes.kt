@@ -7,13 +7,13 @@ package com.moneat.enterprise.oncall.routes
 import com.moneat.auth.currentOrgIdOrNull
 import com.moneat.enterprise.oncall.overrideResourceId
 import com.moneat.enterprise.oncall.models.OnCallOverrides
-import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.oncall.services.OnCallScheduleService
 import com.moneat.enterprise.oncall.services.ScheduleLayerDefinition
 import com.moneat.enterprise.oncall.services.ScheduleLayerUpdate
 import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OnCallSchedules
+import com.moneat.shared.models.OnCallScheduleUsergroups
 import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.OnCallScheduleLayers
 import com.moneat.shared.models.Users

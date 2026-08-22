@@ -42,6 +42,8 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.auth.authenticate
 import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
+import io.ktor.server.plugins.BadRequestException
+import io.ktor.server.plugins.CannotTransformContentToTypeException
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveText
 import io.ktor.server.response.respond
@@ -74,6 +76,9 @@ import com.moneat.utils.suspendRunCatching
 private val logger = LoggerFactory.getLogger("IntegrationRoutes")
 private const val NO_ORGANIZATION_FOUND = "No organization found"
 private const val UNAUTHORIZED_MESSAGE = "Unauthorized"
+private const val SLACK_INTEGRATION_LABEL = "Slack integration"
+private const val MISSING_INSTALLATION_ID = "Missing installation ID"
+private const val CHANNEL_UPDATED_MESSAGE = "Channel updated successfully"
 
 @Serializable
 data class OrganizationIntegrationResponse(
@@ -319,6 +324,9 @@ private fun parseSlackCapabilityIds(values: List<String>?): List<String> =
 
 private suspend fun ApplicationCall.respondSlackRouteFailure(error: Throwable) {
     when (error) {
+        is BadRequestException,
+        is CannotTransformContentToTypeException,
+        -> respond(HttpStatusCode.BadRequest, MessageResponse(error.message ?: "Bad request"))
         is NoSuchElementException -> respond(HttpStatusCode.NotFound, MessageResponse(error.message ?: "Not found"))
         is IllegalArgumentException -> respond(
             HttpStatusCode.BadRequest,
@@ -381,10 +389,10 @@ private fun Route.slackInstallationReadRoutes(
         entitlementService.unavailableFeatureMessage(
             organizationId,
             { it.slackEnabled },
-            "Slack integration",
+            SLACK_INTEGRATION_LABEL,
         )?.let { return@post call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
         val installationId = call.parameters["installationId"]
-            ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             val installation = installationService.listInstallations(organizationId)
                 .singleOrNull { it.id == installationId }
@@ -405,7 +413,7 @@ private fun Route.slackInstallationReadRoutes(
     get("/slack/installations/{installationId}/channels") {
         val organizationId = call.integrationOrgIdOrRespond() ?: return@get
         val installationId = call.parameters["installationId"]
-            ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             val token = installationService.accessToken(organizationId, installationId)
             SlackChannelList(slackService.listChannels(token).map { SlackChannel(it.id, it.name) })
@@ -416,7 +424,7 @@ private fun Route.slackInstallationReadRoutes(
     get("/slack/installations/{installationId}/usergroups") {
         val organizationId = call.integrationOrgIdOrRespond() ?: return@get
         val installationId = call.parameters["installationId"]
-            ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@get call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             val token = installationService.accessToken(organizationId, installationId)
             slackService.listUsergroups(token)
@@ -431,7 +439,7 @@ private fun Route.slackInstallationWriteRoutes(
     put("/slack/installations/{installationId}/channel") {
         val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
         val installationId = call.parameters["installationId"]
-            ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             val request = call.receive<SlackChannelSelection>()
             installationService.updateChannel(
@@ -447,7 +455,7 @@ private fun Route.slackInstallationWriteRoutes(
     put("/slack/installations/{installationId}/default") {
         val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
         val installationId = call.parameters["installationId"]
-            ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching { installationService.setDefault(organizationId, installationId) }
             .onSuccess { call.respond(it) }
             .onFailure { call.respondSlackRouteFailure(it) }
@@ -456,7 +464,7 @@ private fun Route.slackInstallationWriteRoutes(
     put("/slack/installations/{installationId}/enabled") {
         val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@put
         val installationId = call.parameters["installationId"]
-            ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@put call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             val request = call.receive<SlackInstallationEnabledRequest>()
             installationService.setEnabled(organizationId, installationId, request.enabled)
@@ -472,7 +480,7 @@ private fun Route.slackInstallationOperationalRoutes(
     post("/slack/installations/{installationId}/health") {
         val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@post
         val installationId = call.parameters["installationId"]
-            ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             installationService.verifyInstallation(organizationId, installationId, slackService::probeAuthentication)
         }.onSuccess { call.respond(it) }
@@ -482,7 +490,7 @@ private fun Route.slackInstallationOperationalRoutes(
     post("/slack/installations/{installationId}/test") {
         val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@post
         val installationId = call.parameters["installationId"]
-            ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@post call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching {
             val config = installationService.deliveryConfig(organizationId, installationId)
                 ?: throw IllegalStateException("Select a default Slack channel before sending a test")
@@ -502,7 +510,7 @@ private fun Route.slackInstallationDeleteRoute(
     delete("/slack/installations/{installationId}") {
         val organizationId = call.integrationAdminOrgIdOrRespond() ?: return@delete
         val installationId = call.parameters["installationId"]
-            ?: return@delete call.respond(HttpStatusCode.BadRequest, MessageResponse("Missing installation ID"))
+            ?: return@delete call.respond(HttpStatusCode.BadRequest, MessageResponse(MISSING_INSTALLATION_ID))
         suspendRunCatching { installationService.deleteInstallation(organizationId, installationId) }
             .onSuccess { call.respond(MessageResponse("Slack installation deleted")) }
             .onFailure { call.respondSlackRouteFailure(it) }
@@ -551,12 +559,21 @@ fun Route.integrationRoutes() {
                                         row[OrganizationIntegrations.resource_id].toString()
                                     },
                                     integrationType = row[OrganizationIntegrations.integration_type],
-                                    teamName = defaultSlackInstallation?.teamName
-                                        .takeIf { isSlack } ?: row[OrganizationIntegrations.team_name],
-                                    channelId = defaultSlackInstallation?.defaultChannelId
-                                        .takeIf { isSlack } ?: row[OrganizationIntegrations.channel_id],
-                                    channelName = defaultSlackInstallation?.defaultChannelName
-                                        .takeIf { isSlack } ?: row[OrganizationIntegrations.channel_name],
+                                    teamName = if (isSlack && defaultSlackInstallation != null) {
+                                        defaultSlackInstallation.teamName
+                                    } else {
+                                        row[OrganizationIntegrations.team_name]
+                                    },
+                                    channelId = if (isSlack && defaultSlackInstallation != null) {
+                                        defaultSlackInstallation.defaultChannelId
+                                    } else {
+                                        row[OrganizationIntegrations.channel_id]
+                                    },
+                                    channelName = if (isSlack && defaultSlackInstallation != null) {
+                                        defaultSlackInstallation.defaultChannelName
+                                    } else {
+                                        row[OrganizationIntegrations.channel_name]
+                                    },
                                     enabled = if (isSlack && defaultSlackInstallation != null) {
                                         defaultSlackInstallation.enabled
                                     } else {
@@ -591,7 +608,7 @@ fun Route.integrationRoutes() {
                 entitlementService.unavailableFeatureMessage(
                     organizationId,
                     { it.slackEnabled },
-                    "Slack integration"
+                    SLACK_INTEGRATION_LABEL
                 )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
                 val capabilityIds = parseSlackCapabilityIds(
@@ -655,7 +672,7 @@ fun Route.integrationRoutes() {
                     request.channelId,
                     request.channelName,
                 )
-                return@put call.respond(HttpStatusCode.OK, MessageResponse("Channel updated successfully"))
+                return@put call.respond(HttpStatusCode.OK, MessageResponse(CHANNEL_UPDATED_MESSAGE))
             }
 
             transaction {
@@ -669,7 +686,7 @@ fun Route.integrationRoutes() {
                 }
             }
 
-            call.respond(HttpStatusCode.OK, MessageResponse("Channel updated successfully"))
+            call.respond(HttpStatusCode.OK, MessageResponse(CHANNEL_UPDATED_MESSAGE))
         }
 
         // List available Slack user groups
@@ -878,7 +895,7 @@ fun Route.integrationRoutes() {
 
             if (updated > 0) {
                 logger.info("Discord channel updated for organization $organizationId")
-                call.respond(HttpStatusCode.OK, MessageResponse("Channel updated successfully"))
+                call.respond(HttpStatusCode.OK, MessageResponse(CHANNEL_UPDATED_MESSAGE))
             } else {
                 call.respond(HttpStatusCode.NotFound, MessageResponse("Integration not found"))
             }
@@ -1001,7 +1018,7 @@ fun Route.integrationCallbackRoutes() {
             entitlementService.unavailableFeatureMessage(
                 organizationId,
                 { it.slackEnabled },
-                "Slack integration"
+                SLACK_INTEGRATION_LABEL
             )?.let { return@get call.respond(HttpStatusCode.Forbidden, MessageResponse(it)) }
 
             val clientId =
@@ -1105,7 +1122,7 @@ fun Route.integrationCallbackRoutes() {
                                 it[bot_user_id] = oauthResponse.botUserId
                                 it[team_id] = oauthResponse.team?.id
                                 it[team_name] = oauthResponse.team?.name
-                                it[enabled] = true
+                                it[enabled] = installation.enabled
                                 it[updated_at] = now
                             }
                         } else {
@@ -1115,7 +1132,7 @@ fun Route.integrationCallbackRoutes() {
                                 it[bot_user_id] = oauthResponse.botUserId
                                 it[team_id] = oauthResponse.team?.id
                                 it[team_name] = oauthResponse.team?.name
-                                it[enabled] = true
+                                it[enabled] = installation.enabled
                                 it[created_at] = now
                                 it[updated_at] = now
                             }

@@ -1342,6 +1342,47 @@ class OrgRoutesFullCoverageTest {
         }
     }
 
+    @Test fun `slack installation mutations require an organization admin`() {
+        val o = seedOrg("A")
+        val u = seedUser("member@t.com")
+        val installationId = resourceId(700)
+        seedMembership(o, u, "member")
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val auth = "Bearer ${token(u, o)}"
+            val requests = listOf(
+                client.put("/integrations/slack/installations/$installationId/channel") {
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"channelId":"C2","channelName":"alerts"}""")
+                },
+                client.put("/integrations/slack/installations/$installationId/default") {
+                    header(HttpHeaders.Authorization, auth)
+                },
+                client.put("/integrations/slack/installations/$installationId/enabled") {
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"enabled":false}""")
+                },
+                client.post("/integrations/slack/installations/$installationId/health") {
+                    header(HttpHeaders.Authorization, auth)
+                },
+                client.post("/integrations/slack/installations/$installationId/test") {
+                    header(HttpHeaders.Authorization, auth)
+                },
+                client.delete("/integrations/slack/installations/$installationId") {
+                    header(HttpHeaders.Authorization, auth)
+                },
+            )
+
+            assertTrue(requests.all { it.status == HttpStatusCode.Forbidden })
+        }
+    }
+
     @Test fun `slack installation health and test delivery`() {
         val o = seedOrg("A")
         val u = seedUser("u@t.com")
@@ -1398,6 +1439,26 @@ class OrgRoutesFullCoverageTest {
             }
             assertEquals(HttpStatusCode.BadRequest, response.status)
             assertTrue(response.bodyAsText().contains("Invalid Slack installation"))
+        }
+    }
+
+    @Test fun `slack installation request decoding errors return bad request`() {
+        val o = seedOrg("A")
+        val u = seedUser("u@t.com")
+        seedMembership(o, u, "owner")
+
+        testApplication {
+            application {
+                installTestApp()
+                routing { authenticate("auth-jwt") { integrationRoutes() } }
+            }
+            val response = client.put("/integrations/slack/installations/${resourceId(700)}/enabled") {
+                header(HttpHeaders.Authorization, "Bearer ${token(u, o)}")
+                contentType(ContentType.Application.Json)
+                setBody("""{"enabled":"not-a-boolean"}""")
+            }
+
+            assertEquals(HttpStatusCode.BadRequest, response.status)
         }
     }
 

@@ -9,7 +9,6 @@ import com.moneat.enterprise.incidents.models.NativeIncidentTypes
 import com.moneat.shared.models.EscalationPolicies
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.Organizations
-import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.Users
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
@@ -280,21 +279,6 @@ object OnCallOverrides : IntIdTable("on_call_overrides") {
     val createdAt = timestamp("created_at")
 }
 
-object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
-    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
-    val scheduleId =
-        integer("schedule_id")
-            .references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
-            .uniqueIndex()
-    val slackUsergroupId = varchar("slack_usergroup_id", 100)
-    val slackUsergroupHandle = varchar("slack_usergroup_handle", 100)
-    val slackInstallationId = integer("slack_installation_id")
-        .references(SlackInstallations.id, onDelete = ReferenceOption.SET_NULL)
-        .nullable()
-    val createdAt = timestamp("created_at")
-    val updatedAt = timestamp("updated_at")
-}
-
 @Serializable
 data class OnCallScheduleLayer(
     val id: String,
@@ -368,7 +352,10 @@ data class OnCallSchedule(
     val slackInstallationId: String?,
     val createdAt: String,
     val updatedAt: String,
-)
+) {
+    @Transient
+    var organizationId: Int = 0
+}
 
 // ===== On-Call Incidents (User Declared) =====
 

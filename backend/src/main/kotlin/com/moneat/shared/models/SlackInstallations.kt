@@ -54,6 +54,7 @@ object SlackInstallations : Table("slack_installations") {
 
     init {
         uniqueIndex(organizationId, resourceId)
+        uniqueIndex(legacyIntegrationId)
     }
 }
 

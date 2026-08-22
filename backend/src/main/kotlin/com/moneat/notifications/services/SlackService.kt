@@ -1288,23 +1288,26 @@ class SlackService(
         userId: Int,
         organizationId: Int,
     ): String? {
-        val defaultInstallationId = installationService.defaultInternalInstallationId(organizationId)
+        val defaultInstallation = installationService.defaultInstallationIdentity(organizationId) ?: return null
         return transaction {
             val mappings = com.moneat.shared.models.SlackUserMappings
                 .selectAll()
                 .where { com.moneat.shared.models.SlackUserMappings.userId eq userId }
                 .toList()
             mappings.firstOrNull {
-                it[com.moneat.shared.models.SlackUserMappings.slackInstallationId] == defaultInstallationId
-            } ?: mappings.firstOrNull {
-                it[com.moneat.shared.models.SlackUserMappings.slackInstallationId] == null
+                it[com.moneat.shared.models.SlackUserMappings.slackInstallationId] == defaultInstallation.internalId
+            } ?: defaultInstallation.teamId?.let { teamId ->
+                mappings.firstOrNull {
+                    it[com.moneat.shared.models.SlackUserMappings.slackInstallationId] == null &&
+                        it[com.moneat.shared.models.SlackUserMappings.slackTeamId] == teamId
+                }
             }
         }?.get(com.moneat.shared.models.SlackUserMappings.slackUserId)
     }
 
     private fun getAccessToken(organizationId: Int): String? {
         val installationToken = runCatching {
-            installationService.defaultDeliveryConfig(organizationId)?.accessToken
+            installationService.defaultAccessToken(organizationId)
         }.onFailure { error ->
             logger.warn("Unable to read encrypted Slack installation; checking legacy token", error)
         }.getOrNull()

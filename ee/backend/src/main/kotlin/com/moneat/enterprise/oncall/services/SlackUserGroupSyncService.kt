@@ -5,9 +5,9 @@
 package com.moneat.enterprise.oncall.services
 
 import com.moneat.config.RedisClient
-import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.notifications.services.SlackInstallationService
 import com.moneat.notifications.services.SlackService
+import com.moneat.shared.models.OnCallScheduleUsergroups
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackUserMappings
@@ -266,7 +266,7 @@ class SlackUserGroupSyncService(
         slackInstallationId: Int?,
     ): SlackConfig? {
         val installation = runCatching {
-            slackInstallationService.deliveryConfigByInternalId(organizationId, slackInstallationId)
+            slackInstallationService.botConfigByInternalId(organizationId, slackInstallationId)
         }.onFailure { error ->
             logger.warn("Unable to read Slack installation for on-call sync", error)
         }.getOrNull()
@@ -274,6 +274,7 @@ class SlackUserGroupSyncService(
         if (installation != null && installationBotUserId != null) {
             return SlackConfig(installation.accessToken, installationBotUserId)
         }
+        if (slackInstallationId != null) return null
         return transaction {
             OrganizationIntegrations
                 .selectAll()

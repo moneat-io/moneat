@@ -18,6 +18,7 @@ package com.moneat.notifications.services
 
 import com.moneat.secrets.PurposeScopedSecretCipher
 import com.moneat.secrets.SecretVaultPurpose
+import com.moneat.shared.models.OnCallScheduleUsergroups
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.SlackInstallationGrants
 import com.moneat.shared.models.SlackInstallations
@@ -55,6 +56,8 @@ enum class SlackInstallationHealthStatus {
     DISABLED,
 }
 
+private const val SLACK_CHAT_WRITE_SCOPE = "chat:write"
+
 @Serializable
 enum class SlackCapability(
     val id: String,
@@ -68,7 +71,7 @@ enum class SlackCapability(
         label = "Alert delivery",
         description = "Send alert and incident updates to selected Slack conversations.",
         botScopes = setOf(
-            "chat:write",
+            SLACK_CHAT_WRITE_SCOPE,
             "chat:write.public",
             "channels:read",
             "channels:join",
@@ -79,7 +82,7 @@ enum class SlackCapability(
         id = "incident_commands",
         label = "Incident commands and mentions",
         description = "Handle slash commands, shortcuts, and app mentions during response.",
-        botScopes = setOf("commands", "app_mentions:read", "chat:write"),
+        botScopes = setOf("commands", "app_mentions:read", SLACK_CHAT_WRITE_SCOPE),
     ),
     INCIDENT_CHANNELS(
         id = "incident_channels",
@@ -91,7 +94,7 @@ enum class SlackCapability(
             "channels:join",
             "groups:read",
             "groups:write",
-            "chat:write",
+            SLACK_CHAT_WRITE_SCOPE,
         ),
     ),
     INCIDENT_CONTEXT(
@@ -131,7 +134,7 @@ enum class SlackCapability(
         id = "assistant",
         label = "Slack Assistant",
         description = "Offer the optional AI assistant in Slack direct messages.",
-        botScopes = setOf("assistant:write", "im:history", "im:write", "chat:write"),
+        botScopes = setOf("assistant:write", "im:history", "im:write", SLACK_CHAT_WRITE_SCOPE),
     ),
     PRIVILEGED_ACCESS(
         id = "privileged_access",
@@ -284,6 +287,18 @@ data class SlackDeliveryConfig(
     val teamId: String?,
     val botUserId: String?,
     val channelId: String,
+)
+
+data class SlackBotConfig(
+    val installationId: String,
+    val accessToken: String,
+    val teamId: String?,
+    val botUserId: String?,
+)
+
+data class SlackInstallationIdentity(
+    val internalId: Int,
+    val teamId: String?,
 )
 
 internal interface SlackTokenCipher {
@@ -557,11 +572,16 @@ class SlackInstallationService internal constructor(
 
     private fun revokeMissingUserGrant(request: SlackOAuthPersistence, installationId: Int) {
         val privilegedAccessDisabled = request.scopeState.requestedUserScopes.isEmpty()
+        val cipher = cipherFactory()
         SlackInstallationGrants.update({
             (SlackInstallationGrants.organizationId eq request.organizationId) and
                 (SlackInstallationGrants.slackInstallationId eq installationId) and
                 (SlackInstallationGrants.grantType eq SlackGrantType.USER.name)
         }) {
+            it[accessTokenCiphertext] = cipher.encrypt("revoked", request.organizationId)
+            it[accessTokenKeyId] = cipher.activeKeyId
+            it[refreshTokenCiphertext] = null
+            it[refreshTokenKeyId] = null
             it[revokedAt] = request.now
             it[healthStatus] = if (privilegedAccessDisabled) {
                 SlackInstallationHealthStatus.DISABLED.name
@@ -665,6 +685,17 @@ class SlackInstallationService internal constructor(
 
     fun deleteInstallation(organizationId: Int, installationId: String): Boolean = transaction {
         val installation = requireInstallation(organizationId, installationId)
+        check(
+            OnCallScheduleUsergroups
+                .selectAll()
+                .where {
+                    OnCallScheduleUsergroups.slackInstallationId eq installation[SlackInstallations.id]
+                }
+                .limit(1)
+                .empty(),
+        ) {
+            "Remove this Slack installation from on-call schedule user-group sync before deleting it"
+        }
         val wasDefault = installation[SlackInstallations.isDefault]
         val deleted = SlackInstallations.deleteWhere {
             SlackInstallations.id eq installation[SlackInstallations.id]
@@ -753,16 +784,22 @@ class SlackInstallationService internal constructor(
         requireInstallation(organizationId, installationId)[SlackInstallations.id]
     }
 
-    fun defaultInternalInstallationId(organizationId: Int): Int? = transaction {
-        SlackInstallations
-            .selectAll()
-            .where {
-                (SlackInstallations.organizationId eq organizationId) and
-                    (SlackInstallations.isDefault eq true)
-            }
-            .singleOrNull()
-            ?.get(SlackInstallations.id)
+    fun defaultInstallationIdentity(organizationId: Int): SlackInstallationIdentity? {
+        ensureLegacyDefaultGrant(organizationId)
+        return transaction {
+            SlackInstallations
+                .selectAll()
+                .where {
+                    (SlackInstallations.organizationId eq organizationId) and
+                        (SlackInstallations.isDefault eq true)
+                }
+                .singleOrNull()
+                ?.let { SlackInstallationIdentity(it[SlackInstallations.id], it[SlackInstallations.teamId]) }
+        }
     }
+
+    fun defaultInternalInstallationId(organizationId: Int): Int? =
+        defaultInstallationIdentity(organizationId)?.internalId
 
     fun internalInstallationIdForTeam(organizationId: Int, teamId: String): Int? = transaction {
         SlackWorkspaceBindings
@@ -818,9 +855,46 @@ class SlackInstallationService internal constructor(
         return deliveryConfig(organizationId, publicId)
     }
 
+    fun botConfigByInternalId(
+        organizationId: Int,
+        installationId: Int?,
+    ): SlackBotConfig? {
+        if (installationId == null) return defaultBotConfig(organizationId)
+        val publicId = transaction {
+            requireInstallationById(organizationId, installationId)[SlackInstallations.resourceId].toString()
+        }
+        val installation = installationWithToken(organizationId, publicId)
+        if (!installation.row[SlackInstallations.enabled]) return null
+        return installation.toBotConfig()
+    }
+
+    fun defaultAccessToken(organizationId: Int): String? = defaultBotConfig(organizationId)?.accessToken
+
     fun defaultDeliveryConfig(organizationId: Int): SlackDeliveryConfig? {
-        migrateLegacyInstallations(organizationId)
-        val row = transaction {
+        val botConfig = defaultBotConfig(organizationId) ?: return null
+        val channelId = transaction {
+            SlackInstallations
+                .selectAll()
+                .where {
+                    (SlackInstallations.organizationId eq organizationId) and
+                        (SlackInstallations.isDefault eq true) and
+                        (SlackInstallations.enabled eq true)
+                }
+                .singleOrNull()
+                ?.get(SlackInstallations.defaultChannelId)
+        } ?: return null
+        return SlackDeliveryConfig(
+            installationId = botConfig.installationId,
+            accessToken = botConfig.accessToken,
+            teamId = botConfig.teamId,
+            botUserId = botConfig.botUserId,
+            channelId = channelId,
+        )
+    }
+
+    private fun defaultBotConfig(organizationId: Int): SlackBotConfig? {
+        ensureLegacyDefaultGrant(organizationId)
+        val installation = transaction {
             SlackInstallations
                 .selectAll()
                 .where {
@@ -830,33 +904,49 @@ class SlackInstallationService internal constructor(
                 }
                 .singleOrNull()
         } ?: return null
-        val channelId = row[SlackInstallations.defaultChannelId] ?: return null
-        val grant = transaction { requireActiveBotGrant(organizationId, row[SlackInstallations.id]) }
-        val ciphertext = grant[SlackInstallationGrants.accessTokenCiphertext]
-        return SlackDeliveryConfig(
-            installationId = row[SlackInstallations.resourceId].toString(),
-            accessToken = cipherFactory().decrypt(ciphertext, organizationId),
-            teamId = row[SlackInstallations.teamId],
-            botUserId = grant[SlackInstallationGrants.slackUserId],
-            channelId = channelId,
+        val grant = transaction { requireActiveBotGrant(organizationId, installation[SlackInstallations.id]) }
+        val accessToken = cipherFactory().decrypt(
+            grant[SlackInstallationGrants.accessTokenCiphertext],
+            organizationId,
         )
+        return InstallationWithToken(installation, grant, accessToken).toBotConfig()
+    }
+
+    private fun InstallationWithToken.toBotConfig(): SlackBotConfig = SlackBotConfig(
+        installationId = row[SlackInstallations.resourceId].toString(),
+        accessToken = accessToken,
+        teamId = row[SlackInstallations.teamId],
+        botUserId = grant[SlackInstallationGrants.slackUserId],
+    )
+
+    private fun ensureLegacyDefaultGrant(organizationId: Int) {
+        val hasDefaultBotGrant = transaction {
+            (SlackInstallations innerJoin SlackInstallationGrants)
+                .selectAll()
+                .where {
+                    (SlackInstallations.organizationId eq organizationId) and
+                        (SlackInstallations.isDefault eq true) and
+                        (SlackInstallationGrants.grantType eq SlackGrantType.BOT.name)
+                }
+                .limit(1)
+                .any()
+        }
+        if (!hasDefaultBotGrant) migrateLegacyInstallations(organizationId)
     }
 
     private fun migrateLegacyInstallations(organizationId: Int) {
         val candidates = transaction {
+            val installationsWithBotGrant = SlackInstallationGrants
+                .selectAll()
+                .where {
+                    (SlackInstallationGrants.organizationId eq organizationId) and
+                        (SlackInstallationGrants.grantType eq SlackGrantType.BOT.name)
+                }
+                .mapTo(mutableSetOf()) { it[SlackInstallationGrants.slackInstallationId] }
             val modeled = SlackInstallations
                 .selectAll()
                 .where { SlackInstallations.organizationId eq organizationId }
-                .filter { installation ->
-                    SlackInstallationGrants
-                        .selectAll()
-                        .where {
-                            (SlackInstallationGrants.slackInstallationId eq installation[SlackInstallations.id]) and
-                                (SlackInstallationGrants.grantType eq SlackGrantType.BOT.name)
-                        }
-                        .limit(1)
-                        .empty()
-                }
+                .filterNot { it[SlackInstallations.id] in installationsWithBotGrant }
             if (modeled.isNotEmpty()) return@transaction modeled
 
             val legacy = OrganizationIntegrations
@@ -1048,7 +1138,7 @@ class SlackInstallationService internal constructor(
                 it[accessTokenCiphertext] = accessCiphertext
                 it[accessTokenKeyId] = cipher.activeKeyId
                 it[refreshTokenCiphertext] = refreshCiphertext
-                it[refreshTokenKeyId] = refreshCiphertext?.let { cipher.activeKeyId }
+                it[refreshTokenKeyId] = if (refreshCiphertext == null) null else cipher.activeKeyId
                 it[grantedScopes] = request.scopes.toCsv()
                 it[SlackInstallationGrants.expiresAt] = expiresAt
                 it[healthStatus] = request.health.name
@@ -1066,7 +1156,7 @@ class SlackInstallationService internal constructor(
             it[accessTokenCiphertext] = accessCiphertext
             it[accessTokenKeyId] = cipher.activeKeyId
             it[refreshTokenCiphertext] = refreshCiphertext
-            it[refreshTokenKeyId] = refreshCiphertext?.let { cipher.activeKeyId }
+            it[refreshTokenKeyId] = if (refreshCiphertext == null) null else cipher.activeKeyId
             it[grantedScopes] = request.scopes.toCsv()
             it[SlackInstallationGrants.expiresAt] = expiresAt
             it[rotatedAt] = now

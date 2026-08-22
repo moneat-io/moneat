@@ -21,7 +21,9 @@ import com.moneat.shared.models.Memberships
 import com.moneat.shared.models.OrganizationIntegrations
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.SlackInstallations
+import com.moneat.shared.models.SlackInstallationGrants
 import com.moneat.shared.models.SlackUserMappings
+import com.moneat.shared.models.SlackWorkspaceBindings
 import com.moneat.shared.models.Users
 import com.moneat.testsupport.TestDatabaseHelper
 import kotlinx.coroutines.runBlocking
@@ -62,6 +64,8 @@ class SlackServiceExtendedTest {
             Memberships,
             OrganizationIntegrations,
             SlackInstallations,
+            SlackWorkspaceBindings,
+            SlackInstallationGrants,
             SlackUserMappings,
         )
         slackService = SlackService()

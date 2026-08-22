@@ -160,12 +160,15 @@ function isExpired(expiresAt: string | null | undefined): boolean {
   }
 }
 
-// Human-readable copy for the Slack OAuth callback's error codes.
-function slackReturnErrorMessage(message: string | undefined): string {
-  if (message === 'workspace_mismatch') {
+// Fixed copy for the Slack OAuth callback's error codes. The callback puts a
+// short code in ?message=, which is untrusted URL input: it only ever selects
+// fixed copy here and is never rendered verbatim in the toast. Unknown or absent
+// codes fall back to generic copy.
+function slackReturnErrorMessage(code: string | undefined): string {
+  if (code === 'workspace_mismatch') {
     return 'Slack authorized a different workspace than expected. Reauthorize from the intended workspace.'
   }
-  return message || 'Slack could not complete authorization. Please try again.'
+  return 'Slack could not complete authorization. Please try again.'
 }
 
 // Back-compat: legacy tab keys redirect to their redesigned equivalents so old
@@ -199,9 +202,7 @@ export const Route = createFileRoute('/settings')({
     // Slack's OAuth callback redirects back with ?slack=connected|error (and an
     // optional error message). Surface it as a toast, then strip it from the URL.
     const slackReturn =
-      search.slack === 'connected' || search.slack === 'error'
-        ? (search.slack as 'connected' | 'error')
-        : undefined
+      search.slack === 'connected' || search.slack === 'error' ? search.slack : undefined
     return {
       tab: requestedTab && VALID_TABS.has(requestedTab) ? requestedTab : 'general',
       ...(search.checkout ? { checkout: search.checkout as string } : {}),

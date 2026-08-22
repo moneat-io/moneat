@@ -113,6 +113,20 @@ object OnCallSchedules : IntIdTable("on_call_schedules") {
     val updatedAt = timestamp("updated_at")
 }
 
+object OnCallScheduleUsergroups : IntIdTable("on_call_schedule_usergroups") {
+    val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
+    val scheduleId = integer("schedule_id")
+        .references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)
+        .uniqueIndex()
+    val slackUsergroupId = varchar("slack_usergroup_id", 100)
+    val slackUsergroupHandle = varchar("slack_usergroup_handle", 100)
+    val slackInstallationId = integer("slack_installation_id")
+        .references(SlackInstallations.id, onDelete = ReferenceOption.SET_NULL)
+        .nullable()
+    val createdAt = timestamp("created_at")
+    val updatedAt = timestamp("updated_at")
+}
+
 object OnCallParticipants : IntIdTable("on_call_participants") {
     val resourceId = uuid("resource_id").clientDefault { Uuid.random() }
     val scheduleId = integer("schedule_id").references(OnCallSchedules.id, onDelete = ReferenceOption.CASCADE)

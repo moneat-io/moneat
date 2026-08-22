@@ -414,6 +414,42 @@ describe('SlackWorkspacesDialog', () => {
     await waitFor(() => expect(window.location.href).toBe('https://slack.test/reauth'))
   })
 
+  it('seeds optional capabilities on reauthorize even when the catalog resolves after the picker opens', async () => {
+    // Hold the capability catalog so the picker mounts before it arrives; the
+    // initial state then seeds from an empty catalog and must be re-seeded once
+    // the catalog resolves.
+    let resolveCapabilities: (value: SlackCapabilitiesResponse) => void = () => {}
+    apiMock.getSlackCapabilities.mockReturnValue(
+      new Promise<SlackCapabilitiesResponse>((resolve) => {
+        resolveCapabilities = resolve
+      })
+    )
+
+    renderDialog(<SlackWorkspacesDialog onClose={vi.fn()} />)
+    await screen.findByText('Globex Grid')
+
+    // Open the reauthorize picker while the catalog is still loading.
+    fireEvent.click(within(cardFor('Globex Grid')).getByRole('button', {name: 'Reauthorize'}))
+    expect(await screen.findByText('Reauthorize Globex Grid')).toBeInTheDocument()
+    expect(screen.getByText('Loading capabilities…')).toBeInTheDocument()
+
+    // The catalog arrives after the picker mounted.
+    resolveCapabilities(CAPABILITIES)
+
+    // The Assistant, enabled on this install, is seeded checked once the catalog
+    // resolves and flows through to the reauthorization request.
+    const assistant = await screen.findByRole('checkbox', {name: /Slack Assistant/})
+    await waitFor(() => expect(assistant).toBeChecked())
+
+    fireEvent.click(screen.getByRole('button', {name: 'Continue to Slack'}))
+    await waitFor(() =>
+      expect(apiMock.reauthorizeSlackInstallation).toHaveBeenCalledWith(
+        'inst-grid',
+        expect.arrayContaining(['alert_delivery', 'on_call_usergroups', 'assistant'])
+      )
+    )
+  })
+
   it('loads channels lazily when changing a workspace channel', async () => {
     renderDialog(<SlackWorkspacesDialog onClose={vi.fn()} />)
     await screen.findByText('Acme HQ')

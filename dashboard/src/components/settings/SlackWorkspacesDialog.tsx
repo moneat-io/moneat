@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import {type ReactNode, useMemo, useState} from 'react'
+import {type ReactNode, useEffect, useMemo, useRef, useState} from 'react'
 import {type UseQueryResult, useMutation, useQuery, useQueryClient} from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -32,12 +32,13 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
-  Slack,
   Trash2,
   UserCog,
   Users,
   type LucideIcon,
 } from 'lucide-react'
+
+import {SlackLogo} from './BrandLogos'
 
 import {api} from '@/lib/api'
 import type {
@@ -121,6 +122,43 @@ function installationName(installation: SlackInstallationSummary): string {
   )
 }
 
+// Title copy for the dialog header across the list, add, and reauthorize modes.
+function dialogTitle(mode: PickerMode): string {
+  if (mode.kind === 'add') return 'Add a Slack workspace'
+  if (mode.kind === 'reauthorize') return `Reauthorize ${installationName(mode.installation)}`
+  return 'Slack workspaces'
+}
+
+// One-line description of what kind of install this is.
+function installKindLabel(installation: SlackInstallationSummary): string {
+  if (isOrgWideSlackInstall(installation)) return 'Organization-wide install'
+  if (belongsToEnterpriseGrid(installation)) {
+    return `Workspace on ${installation.enterpriseName ?? 'an Enterprise Grid organization'}`
+  }
+  return 'Workspace install'
+}
+
+// The default-channel value shown per install. An org-wide install routes per
+// attached workspace, so it has no single channel of its own.
+function defaultChannelLabel(installation: SlackInstallationSummary, hasWorkspace: boolean): string {
+  if (hasWorkspace) {
+    return installation.defaultChannelName ? `#${installation.defaultChannelName}` : 'None selected'
+  }
+  return 'Per workspace'
+}
+
+// Why the "Send test message" action is unavailable, or undefined when it is
+// ready. Mirrors the same conditions that disable the button.
+function sendTestBlockReason(
+  installation: SlackInstallationSummary,
+  hasWorkspace: boolean
+): string | undefined {
+  if (!hasWorkspace) return SLACK_ORG_WORKSPACE_ACTION_NOTE
+  if (!installation.defaultChannelId) return 'Select a default channel first'
+  if (!installation.enabled) return 'Enable delivery first'
+  return undefined
+}
+
 export function SlackWorkspacesDialog({onClose}: Readonly<{onClose: () => void}>) {
   const [mode, setMode] = useState<PickerMode>({kind: 'list'})
 
@@ -143,12 +181,8 @@ export function SlackWorkspacesDialog({onClose}: Readonly<{onClose: () => void}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Slack className="h-5 w-5" aria-hidden="true" />
-            {showPicker
-              ? mode.kind === 'add'
-                ? 'Add a Slack workspace'
-                : `Reauthorize ${installationName(mode.installation)}`
-              : 'Slack workspaces'}
+            <SlackLogo className="h-5 w-5" />
+            {dialogTitle(mode)}
           </DialogTitle>
           <DialogDescription>
             {showPicker
@@ -197,14 +231,10 @@ function InstallationList({
 
   if (isLoading) {
     return (
-      <div
-        className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"
-        role="status"
-        aria-live="polite"
-      >
+      <output className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         Loading Slack workspaces…
-      </div>
+      </output>
     )
   }
 
@@ -230,7 +260,7 @@ function InstallationList({
     <div className="space-y-4">
       {list.length === 0 ? (
         <div className="rounded-lg border border-dashed py-10 text-center">
-          <Slack className="mx-auto mb-2 h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          <SlackLogo className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
           <p className="text-sm font-medium">No Slack workspaces yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-muted-foreground">
             Add your first workspace to deliver alerts and run incident response in Slack.
@@ -287,21 +317,12 @@ function InstallationList({
 
 // ── Single installation ──────────────────────────────────────────────────────
 
-function InstallationCard({
-  installation,
-  catalog,
-  installationCount,
-  onReauthorize,
-}: Readonly<{
-  installation: SlackInstallationSummary
-  catalog?: SlackCapabilitiesResponse
-  installationCount: number
-  onReauthorize: () => void
-}>) {
+// The delivery/lifecycle mutations for one installation, with their toasts and
+// cache invalidation. Kept in a hook so InstallationCard stays a thin composer.
+function useInstallationActions(installation: SlackInstallationSummary) {
   const queryClient = useQueryClient()
   const {toast} = useToast()
-  const [showChannelPicker, setShowChannelPicker] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const name = installationName(installation)
 
   const invalidate = () => {
     queryClient.invalidateQueries({queryKey: SLACK_INSTALLATIONS_KEY})
@@ -309,16 +330,6 @@ function InstallationCard({
   }
   const fail = (title: string) => (err: Error) =>
     toast({title, description: err.message, variant: 'destructive'})
-
-  const health = slackHealthPresentation(installation.health)
-  const name = installationName(installation)
-  const orgWide = isOrgWideSlackInstall(installation)
-  const partOfGrid = belongsToEnterpriseGrid(installation)
-  const hasWorkspace = slackInstallHasWorkspace(installation)
-  const bindings = installation.workspaceBindings
-  const grants = installation.grants
-  const missing = missingScopesByPrincipal(installation)
-  const showBindings = shouldSurfaceBindings(installation)
 
   const setDefault = useMutation({
     mutationFn: () => api.setSlackInstallationDefault(installation.id),
@@ -368,126 +379,70 @@ function InstallationCard({
     onError: fail('Failed to remove'),
   })
 
-  const capabilityLabels = useMemo(
-    () => new Map((catalog?.capabilities ?? []).map((c) => [c.id, c.label])),
-    [catalog]
-  )
+  return {invalidate, setDefault, setEnabled, runHealthCheck, sendTest, remove}
+}
+
+type SlackHealth = ReturnType<typeof slackHealthPresentation>
+type InstallationActionSet = ReturnType<typeof useInstallationActions>
+
+function InstallationCard({
+  installation,
+  catalog,
+  installationCount,
+  onReauthorize,
+}: Readonly<{
+  installation: SlackInstallationSummary
+  catalog?: SlackCapabilitiesResponse
+  installationCount: number
+  onReauthorize: () => void
+}>) {
+  const [showChannelPicker, setShowChannelPicker] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const actions = useInstallationActions(installation)
+
+  const health = slackHealthPresentation(installation.health)
+  const name = installationName(installation)
+  const hasWorkspace = slackInstallHasWorkspace(installation)
+  const grants = installation.grants
 
   return (
     <div className="rounded-lg border bg-card">
-      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-3.5">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-sm font-semibold">{name}</span>
-            {installation.isDefault &&
-              (hasWorkspace ? (
-                <Badge variant="accent">Default</Badge>
-              ) : (
-                // Honestly surface an unexpected default flag on an install that
-                // has no workspace, without presenting it as usable delivery.
-                <Badge variant="warning">Default · needs workspace</Badge>
-              ))}
-            {orgWide && (
-              <Badge variant="info" className="gap-1">
-                <Building2 className="h-3 w-3" aria-hidden="true" />
-                {SLACK_ORG_INSTALL_LABEL}
-              </Badge>
-            )}
-            {partOfGrid && (
-              <Badge variant="outline" className="gap-1 text-muted-foreground">
-                <Building2 className="h-3 w-3" aria-hidden="true" />
-                On Enterprise Grid
-              </Badge>
-            )}
-          </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {orgWide
-              ? 'Organization-wide install'
-              : partOfGrid
-                ? `Workspace on ${installation.enterpriseName ?? 'an Enterprise Grid organization'}`
-                : 'Workspace install'}
-          </p>
-          <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <StatusDot tone={health.tone} size="sm" />
-            <span className="font-medium text-foreground">{health.label}</span>
-            <span aria-hidden="true">·</span>
-            <span>{slackHealthDescription(installation)}</span>
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={health.badge}>{health.label}</Badge>
-          <Switch
-            checked={installation.enabled}
-            onCheckedChange={(checked) => setEnabled.mutate(checked)}
-            disabled={setEnabled.isPending}
-            aria-label={`Enable Slack delivery to ${name}`}
-          />
-        </div>
-      </div>
+      <InstallationHeader
+        installation={installation}
+        health={health}
+        name={name}
+        hasWorkspace={hasWorkspace}
+        onToggleEnabled={(checked) => actions.setEnabled.mutate(checked)}
+        toggleDisabled={actions.setEnabled.isPending}
+      />
 
       {health.needsReauthorization && (
         <div className="mx-3.5 mb-2 flex items-start gap-2 rounded-md border border-warning-border bg-warning-bg/40 px-3 py-2 text-xs">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-fg" aria-hidden="true" />
           <div className="space-y-1">
             <p className="font-medium text-foreground">Reauthorization needed</p>
-            <ReauthorizationDetail installation={installation} missing={missing} />
+            <ReauthorizationDetail
+              installation={installation}
+              missing={missingScopesByPrincipal(installation)}
+            />
           </div>
         </div>
       )}
 
-      {showBindings && <WorkspaceBindings orgWide={orgWide} bindings={bindings} />}
+      {shouldSurfaceBindings(installation) && (
+        <WorkspaceBindings
+          orgWide={isOrgWideSlackInstall(installation)}
+          bindings={installation.workspaceBindings}
+        />
+      )}
 
-      <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
-        <dt className="text-muted-foreground">Default channel</dt>
-        <dd className="m-0 flex items-center justify-end gap-2 text-right">
-          <span className={hasWorkspace ? 'font-mono' : 'text-muted-foreground'}>
-            {!hasWorkspace
-              ? 'Per workspace'
-              : installation.defaultChannelName
-                ? `#${installation.defaultChannelName}`
-                : 'None selected'}
-          </span>
-          {hasWorkspace && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={() => setShowChannelPicker((v) => !v)}
-              aria-expanded={showChannelPicker}
-            >
-              {showChannelPicker ? 'Close' : 'Change'}
-            </Button>
-          )}
-        </dd>
-
-        <dt className="text-muted-foreground">Capabilities</dt>
-        <dd className="m-0 flex flex-wrap justify-end gap-1">
-          {installation.enabledCapabilities.length === 0 ? (
-            <span className="text-muted-foreground">—</span>
-          ) : (
-            installation.enabledCapabilities.map((id) => {
-              const healthy = isCapabilityHealthy(installation, id)
-              return (
-                <span
-                  key={id}
-                  className={cn(
-                    'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium',
-                    healthy
-                      ? 'bg-muted/60 text-muted-foreground'
-                      : 'border-warning-border bg-warning-bg/50 text-warning-fg'
-                  )}
-                  title={
-                    healthy ? undefined : 'Slack has not granted every scope this capability needs'
-                  }
-                >
-                  {!healthy && <StatusDot tone="warning" size="sm" />}
-                  {capabilityLabels.get(id) ?? id}
-                </span>
-              )
-            })
-          )}
-        </dd>
-      </dl>
+      <InstallationDetails
+        installation={installation}
+        catalog={catalog}
+        hasWorkspace={hasWorkspace}
+        showChannelPicker={showChannelPicker}
+        onToggleChannelPicker={() => setShowChannelPicker((v) => !v)}
+      />
 
       {grants.length > 0 && <GrantList grants={grants} />}
 
@@ -495,115 +450,296 @@ function InstallationCard({
         <ChannelPicker
           installation={installation}
           onDone={() => setShowChannelPicker(false)}
-          onSaved={invalidate}
+          onSaved={actions.invalidate}
         />
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3.5 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Only a workspace install can act as the default delivery target. */}
-          {!installation.isDefault && hasWorkspace && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDefault.mutate()}
-              disabled={setDefault.isPending}
-            >
-              {setDefault.isPending ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              ) : (
-                <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              Set as default
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => runHealthCheck.mutate()}
-            disabled={runHealthCheck.isPending}
-          >
-            {runHealthCheck.isPending ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-            ) : (
-              <ShieldCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            )}
-            Run health check
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => sendTest.mutate()}
-            disabled={
-              sendTest.isPending ||
-              !hasWorkspace ||
-              !installation.defaultChannelId ||
-              !installation.enabled
-            }
-            title={
-              !hasWorkspace
-                ? SLACK_ORG_WORKSPACE_ACTION_NOTE
-                : !installation.defaultChannelId
-                  ? 'Select a default channel first'
-                  : !installation.enabled
-                    ? 'Enable delivery first'
-                    : undefined
-            }
-          >
-            {sendTest.isPending ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-            ) : (
-              <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            )}
-            Send test message
-          </Button>
-          <Button
-            variant={health.needsReauthorization ? 'default' : 'outline'}
-            size="sm"
-            onClick={onReauthorize}
-          >
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-            Reauthorize
-          </Button>
-        </div>
+      <InstallationActions
+        installation={installation}
+        health={health}
+        hasWorkspace={hasWorkspace}
+        name={name}
+        actions={actions}
+        onReauthorize={onReauthorize}
+        onRequestDelete={() => setConfirmDelete(true)}
+      />
 
+      {confirmDelete && (
+        <DeleteConfirm
+          name={name}
+          showDefaultReassign={installation.isDefault && installationCount > 1}
+          isPending={actions.remove.isPending}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => actions.remove.mutate()}
+        />
+      )}
+    </div>
+  )
+}
+
+// Name, org/grid badges, health line, and the delivery toggle.
+function InstallationHeader({
+  installation,
+  health,
+  name,
+  hasWorkspace,
+  onToggleEnabled,
+  toggleDisabled,
+}: Readonly<{
+  installation: SlackInstallationSummary
+  health: SlackHealth
+  name: string
+  hasWorkspace: boolean
+  onToggleEnabled: (checked: boolean) => void
+  toggleDisabled: boolean
+}>) {
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 p-3.5">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-semibold">{name}</span>
+          {installation.isDefault &&
+            (hasWorkspace ? (
+              <Badge variant="accent">Default</Badge>
+            ) : (
+              // Honestly surface an unexpected default flag on an install that
+              // has no workspace, without presenting it as usable delivery.
+              <Badge variant="warning">Default · needs workspace</Badge>
+            ))}
+          {isOrgWideSlackInstall(installation) && (
+            <Badge variant="info" className="gap-1">
+              <Building2 className="h-3 w-3" aria-hidden="true" />
+              {SLACK_ORG_INSTALL_LABEL}
+            </Badge>
+          )}
+          {belongsToEnterpriseGrid(installation) && (
+            <Badge variant="outline" className="gap-1 text-muted-foreground">
+              <Building2 className="h-3 w-3" aria-hidden="true" />
+              On Enterprise Grid
+            </Badge>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">{installKindLabel(installation)}</p>
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <StatusDot tone={health.tone} size="sm" />
+          <span className="font-medium text-foreground">{health.label}</span>
+          <span aria-hidden="true">·</span>
+          <span>{slackHealthDescription(installation)}</span>
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <Badge variant={health.badge}>{health.label}</Badge>
+        <Switch
+          checked={installation.enabled}
+          onCheckedChange={onToggleEnabled}
+          disabled={toggleDisabled}
+          aria-label={`Enable Slack delivery to ${name}`}
+        />
+      </div>
+    </div>
+  )
+}
+
+// The default-channel row (with its inline picker toggle) and the enabled
+// capability chips.
+function InstallationDetails({
+  installation,
+  catalog,
+  hasWorkspace,
+  showChannelPicker,
+  onToggleChannelPicker,
+}: Readonly<{
+  installation: SlackInstallationSummary
+  catalog?: SlackCapabilitiesResponse
+  hasWorkspace: boolean
+  showChannelPicker: boolean
+  onToggleChannelPicker: () => void
+}>) {
+  const capabilityLabels = useMemo(
+    () => new Map((catalog?.capabilities ?? []).map((c) => [c.id, c.label])),
+    [catalog]
+  )
+
+  return (
+    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 border-t px-3.5 py-2.5 text-xs">
+      <dt className="text-muted-foreground">Default channel</dt>
+      <dd className="m-0 flex items-center justify-end gap-2 text-right">
+        <span className={hasWorkspace ? 'font-mono' : 'text-muted-foreground'}>
+          {defaultChannelLabel(installation, hasWorkspace)}
+        </span>
+        {hasWorkspace && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={onToggleChannelPicker}
+            aria-expanded={showChannelPicker}
+          >
+            {showChannelPicker ? 'Close' : 'Change'}
+          </Button>
+        )}
+      </dd>
+
+      <dt className="text-muted-foreground">Capabilities</dt>
+      <dd className="m-0 flex flex-wrap justify-end gap-1">
+        {installation.enabledCapabilities.length === 0 ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          installation.enabledCapabilities.map((id) => (
+            <CapabilityChip
+              key={id}
+              label={capabilityLabels.get(id) ?? id}
+              healthy={isCapabilityHealthy(installation, id)}
+            />
+          ))
+        )}
+      </dd>
+    </dl>
+  )
+}
+
+// One enabled-capability chip; warns when Slack has not granted its full scopes.
+function CapabilityChip({label, healthy}: Readonly<{label: string; healthy: boolean}>) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] font-medium',
+        healthy
+          ? 'bg-muted/60 text-muted-foreground'
+          : 'border-warning-border bg-warning-bg/50 text-warning-fg'
+      )}
+      title={healthy ? undefined : 'Slack has not granted every scope this capability needs'}
+    >
+      {!healthy && <StatusDot tone="warning" size="sm" />}
+      {label}
+    </span>
+  )
+}
+
+// The action row: set default, health check, send test, reauthorize, and remove.
+function InstallationActions({
+  installation,
+  health,
+  hasWorkspace,
+  name,
+  actions,
+  onReauthorize,
+  onRequestDelete,
+}: Readonly<{
+  installation: SlackInstallationSummary
+  health: SlackHealth
+  hasWorkspace: boolean
+  name: string
+  actions: InstallationActionSet
+  onReauthorize: () => void
+  onRequestDelete: () => void
+}>) {
+  const {setDefault, runHealthCheck, sendTest} = actions
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3.5 py-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Only a workspace install can act as the default delivery target. */}
+        {!installation.isDefault && hasWorkspace && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDefault.mutate()}
+            disabled={setDefault.isPending}
+          >
+            {setDefault.isPending ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            Set as default
+          </Button>
+        )}
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
-          className="text-destructive hover:text-destructive"
-          onClick={() => setConfirmDelete(true)}
-          aria-label={`Remove ${name}`}
+          onClick={() => runHealthCheck.mutate()}
+          disabled={runHealthCheck.isPending}
         >
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          Remove
+          {runHealthCheck.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <ShieldCheck className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          Run health check
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => sendTest.mutate()}
+          disabled={
+            sendTest.isPending ||
+            !hasWorkspace ||
+            !installation.defaultChannelId ||
+            !installation.enabled
+          }
+          title={sendTestBlockReason(installation, hasWorkspace)}
+        >
+          {sendTest.isPending ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Send className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          Send test message
+        </Button>
+        <Button
+          variant={health.needsReauthorization ? 'default' : 'outline'}
+          size="sm"
+          onClick={onReauthorize}
+        >
+          <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          Reauthorize
         </Button>
       </div>
 
-      {confirmDelete && (
-        <div className="border-t border-danger-border bg-danger-bg/30 px-3.5 py-3">
-          <p className="text-sm font-medium">Remove {name}?</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Delivery from this install stops immediately.
-            {installation.isDefault && installationCount > 1
-              ? ' Another install becomes the default.'
-              : ''}{' '}
-            You can add it again by reinstalling with Slack.
-          </p>
-          <div className="mt-3 flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => remove.mutate()}
-              disabled={remove.isPending}
-            >
-              {remove.isPending ? 'Removing…' : 'Remove install'}
-            </Button>
-          </div>
-        </div>
-      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-destructive hover:text-destructive"
+        onClick={onRequestDelete}
+        aria-label={`Remove ${name}`}
+      >
+        <Trash2 className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+        Remove
+      </Button>
+    </div>
+  )
+}
+
+// Inline confirmation shown before a destructive removal.
+function DeleteConfirm({
+  name,
+  showDefaultReassign,
+  isPending,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  name: string
+  showDefaultReassign: boolean
+  isPending: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}>) {
+  return (
+    <div className="border-t border-danger-border bg-danger-bg/30 px-3.5 py-3">
+      <p className="text-sm font-medium">Remove {name}?</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        Delivery from this install stops immediately.
+        {showDefaultReassign ? ' Another install becomes the default.' : ''}{' '}
+        You can add it again by reinstalling with Slack.
+      </p>
+      <div className="mt-3 flex justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="destructive" size="sm" onClick={onConfirm} disabled={isPending}>
+          {isPending ? 'Removing…' : 'Remove install'}
+        </Button>
+      </div>
     </div>
   )
 }
@@ -909,11 +1045,26 @@ function CapabilityPicker({
   const optionalIds = useMemo(() => optionalCapabilityIds(capabilities), [capabilities])
 
   // Optional capabilities (the Slack Assistant) start off, or from the current
-  // grant when reauthorizing an existing workspace.
+  // grant when reauthorizing an existing workspace. When the catalog is already
+  // cached this seeds synchronously; when it arrives later the effect below seeds
+  // it once, without clobbering the user's toggles.
   const [optionalSelection, setOptionalSelection] = useState<Set<string>>(() => {
     const enabled = new Set(installation?.enabledCapabilities ?? [])
     return new Set(optionalIds.filter((id) => enabled.has(id)))
   })
+
+  // The capability catalog can resolve after this picker mounts, in which case
+  // the initial state above seeded from an empty catalog and dropped the
+  // installation's optional capabilities. Seed once the catalog is available,
+  // then leave the selection alone so reauthorization reflects the current grant
+  // without resetting the user's edits.
+  const seededFromCatalog = useRef(catalog !== undefined)
+  useEffect(() => {
+    if (seededFromCatalog.current || !catalog) return
+    seededFromCatalog.current = true
+    const enabled = new Set(installation?.enabledCapabilities ?? [])
+    setOptionalSelection(new Set(optionalIds.filter((id) => enabled.has(id))))
+  }, [catalog, installation, optionalIds])
 
   const selectedIds = useMemo(
     () => selectedCapabilityIds(capabilities, optionalSelection),
@@ -943,14 +1094,10 @@ function CapabilityPicker({
 
   if (isLoading) {
     return (
-      <div
-        className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"
-        role="status"
-        aria-live="polite"
-      >
+      <output className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
         Loading capabilities…
-      </div>
+      </output>
     )
   }
 
@@ -1044,7 +1191,7 @@ function CapabilityPicker({
           {startInstall.isPending ? (
             <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
           ) : (
-            <Slack className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            <SlackLogo className="mr-1.5 h-3.5 w-3.5" />
           )}
           {mode === 'reauthorize' ? 'Continue to Slack' : 'Authorize with Slack'}
         </Button>

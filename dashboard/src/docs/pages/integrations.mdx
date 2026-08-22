@@ -18,16 +18,16 @@ Moneat can connect several Slack workspaces (including Enterprise Grid), each wi
 <StepList
   steps={[
     {
-      title: 'Connect your workspace',
-      content: "Go to Settings → Integrations → Slack and click \"Connect Slack\". You'll be redirected to Slack to authorize the Moneat app.",
+      title: 'Add a workspace',
+      content: 'Go to Settings → Connectors → Slack and click "Manage" to open the Slack workspaces manager, then click "Add workspace". Choose the capabilities Slack should grant and authorize the Moneat app. You can connect several workspaces, including Enterprise Grid organizations.',
     },
     {
-      title: 'Select a notification channel',
-      content: 'Choose which Slack channel should receive error and incident notifications. You can change this at any time.',
+      title: 'Select a default channel',
+      content: 'In the workspace manager, choose the Slack channel each workspace should post errors and incidents to. You can change it at any time.',
     },
     {
-      title: 'Test the connection',
-      content: 'Click "Test" to send a test notification to your selected channel and verify everything is working.',
+      title: 'Send a test message',
+      content: 'Click "Send test message" for a workspace to post to its default channel and verify delivery is working.',
     },
   ]}
 />
@@ -52,7 +52,7 @@ For custom integrations, you can configure webhook endpoints. Moneat will send H
 
 ## Managing Integrations
 
-All integrations can be managed from **Settings → Integrations**. From there you can:
+All integrations can be managed from **Settings → Connectors**. From there you can:
 
 - View connected integrations and their status
 - Update notification channel preferences

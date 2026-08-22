@@ -15,12 +15,12 @@ import com.moneat.enterprise.oncall.models.OnCallOverrides
 import com.moneat.enterprise.oncall.models.OnCallParticipant
 import com.moneat.enterprise.oncall.models.OnCallSchedule
 import com.moneat.enterprise.oncall.models.OnCallScheduleLayer
-import com.moneat.enterprise.oncall.models.OnCallScheduleUsergroups
 import com.moneat.enterprise.oncall.models.OnCallResponderResolution
 import com.moneat.shared.models.OnCallParticipants
 import com.moneat.shared.models.OnCallSchedules
 import com.moneat.shared.models.OnCallScheduleLayers
 import com.moneat.shared.models.OnCallScheduleLayerParticipants
+import com.moneat.shared.models.OnCallScheduleUsergroups
 import com.moneat.shared.models.SlackInstallations
 import com.moneat.shared.models.Subscriptions
 import com.moneat.shared.models.Users
@@ -238,6 +238,9 @@ class OnCallScheduleService {
             createdAt = scheduleRow[OnCallSchedules.createdAt].toString(),
             updatedAt = scheduleRow[OnCallSchedules.updatedAt].toString(),
         )
+        ).also {
+            it.organizationId = scheduleRow[OnCallSchedules.organizationId]
+        }
     }
 
     fun getOnCallAt(scheduleId: Int, at: Instant): OnCallParticipant? =
