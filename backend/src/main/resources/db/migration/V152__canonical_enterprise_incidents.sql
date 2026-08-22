@@ -92,7 +92,7 @@ CREATE TABLE native_incident_commands (
     expected_version INTEGER,
     result_version INTEGER,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    UNIQUE (organization_id, command_key),
+    CONSTRAINT uq_native_incident_commands_org_command_key UNIQUE (organization_id, command_key),
     UNIQUE (organization_id, resource_id)
 );
 

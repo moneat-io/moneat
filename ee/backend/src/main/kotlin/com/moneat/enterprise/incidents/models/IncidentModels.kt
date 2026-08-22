@@ -6,7 +6,7 @@ package com.moneat.enterprise.incidents.models
 
 import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.oncall.models.OnCallIncidents
-import com.moneat.enterprise.oncall.models.jsonb
+import com.moneat.enterprise.oncall.models.requiredJsonb
 import com.moneat.shared.models.Organizations
 import com.moneat.shared.models.Users
 import kotlinx.serialization.Serializable
@@ -92,7 +92,7 @@ object NativeIncidentCommands : IntIdTable("native_incident_commands") {
     val createdAt = timestamp("created_at")
 
     init {
-        uniqueIndex(organizationId, commandKey)
+        uniqueIndex("uq_native_incident_commands_org_command_key", organizationId, commandKey)
         uniqueIndex(organizationId, resourceId)
     }
 }
@@ -111,7 +111,7 @@ object NativeIncidentOutboxEvents : IntIdTable("native_incident_outbox_events") 
     val eventType = varchar("event_type", 80)
     val aggregateVersion = integer("aggregate_version")
     val idempotencyKey = varchar("idempotency_key", 200)
-    val payload = jsonb("payload")
+    val payload = requiredJsonb("payload")
     val status = varchar("status", 24)
     val attemptCount = integer("attempt_count")
     val availableAt = timestamp("available_at")

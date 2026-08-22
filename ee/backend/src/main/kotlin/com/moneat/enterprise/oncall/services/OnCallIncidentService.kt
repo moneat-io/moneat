@@ -8,6 +8,7 @@ import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.incidents.commands.AddIncidentTimelineEventCommand
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import com.moneat.enterprise.incidents.commands.IncidentCommandService
 import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
 import com.moneat.enterprise.incidents.commands.ResolveIncidentCommand
@@ -160,7 +161,7 @@ class OnCallIncidentService(
         commandKey: String = Uuid.random().toString(),
         origin: String = "SERVICE",
     ) {
-        val incident = getIncident(incidentId) ?: throw IllegalArgumentException("Native incident not found")
+        val incident = getIncident(incidentId) ?: throw IncidentCommandNotFoundException("Native incident not found")
         commandService.execute(
             AddIncidentTimelineEventCommand(
                 commandKey = commandKey,

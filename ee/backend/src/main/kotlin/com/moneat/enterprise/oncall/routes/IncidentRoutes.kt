@@ -58,10 +58,14 @@ private data class OnCallUserContext(
 )
 
 private fun ApplicationCall.incidentCommandKey(action: String): String =
-    request.headers[IDEMPOTENCY_KEY_HEADER]
+    namespacedIncidentCommandKey(action, request.headers[IDEMPOTENCY_KEY_HEADER])
+        ?: "$action:${Uuid.random()}"
+
+internal fun namespacedIncidentCommandKey(action: String, suppliedKey: String?): String? =
+    suppliedKey
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
-        ?: "$action:${Uuid.random()}"
+        ?.let { "$action:$it" }
 
 private suspend fun ApplicationCall.respondIncidentCommandFailure(error: IncidentCommandException) {
     respond(incidentCommandStatus(error), ErrorResponse(error.message))

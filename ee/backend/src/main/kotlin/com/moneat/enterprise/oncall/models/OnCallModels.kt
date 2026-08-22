@@ -66,6 +66,9 @@ private class JsonbColumnType : ColumnType<Map<String, kotlinx.serialization.jso
 fun Table.jsonb(name: String): Column<Map<String, kotlinx.serialization.json.JsonElement>?> =
     registerColumn<Map<String, kotlinx.serialization.json.JsonElement>>(name, JsonbColumnType()).nullable()
 
+fun Table.requiredJsonb(name: String): Column<Map<String, kotlinx.serialization.json.JsonElement>> =
+    registerColumn(name, JsonbColumnType())
+
 // ===== Priority Management =====
 
 object AlertPriorities : IntIdTable("alert_priorities") {

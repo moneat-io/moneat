@@ -15,6 +15,7 @@ import com.moneat.enterprise.oncall.models.OnCallAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentAlerts
 import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
+import com.moneat.enterprise.oncall.services.OnCallIncidentService
 import com.moneat.shared.models.Users
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.insert
@@ -109,10 +110,22 @@ class IncidentCommandServiceTest {
             assertEquals("PRIVATE", row[OnCallIncidents.visibility])
             assertNotNull(row[OnCallIncidents.triagedAt])
             assertNotNull(row[OnCallIncidents.acceptedAt])
-            assertNotNull(row[OnCallIncidents.resolvedAt])
-            assertNotNull(row[OnCallIncidents.postIncidentAt])
-            assertNotNull(row[OnCallIncidents.closedAt])
+            assertEquals(null, row[OnCallIncidents.resolvedAt])
+            assertEquals(null, row[OnCallIncidents.postIncidentAt])
+            assertEquals(null, row[OnCallIncidents.closedAt])
             assertNotNull(row[OnCallIncidents.cancelledAt])
+        }
+    }
+
+    @Test
+    fun `rejects declaration in a terminal lifecycle status`() {
+        assertFailsWith<IllegalArgumentException> {
+            service.execute(
+                declareCommand("terminal-declare", actor()).copy(initialStatus = NativeIncidentStatus.RESOLVED),
+            )
+        }
+        transaction {
+            assertEquals(0, OnCallIncidents.selectAll().count())
         }
     }
 
@@ -174,30 +187,7 @@ class IncidentCommandServiceTest {
     fun `merge moves linked on-call alerts and cancels the source incident`() {
         val target = service.execute(declareCommand("merge-target", actor()))
         val source = service.execute(declareCommand("merge-source", actor()))
-        val alertId = transaction {
-            val now = Clock.System.now()
-            OnCallAlerts.insertAndGetId {
-                it[organizationId] = member.organizationId
-                it[declaredIncidentId] = null
-                it[escalationPolicyId] = null
-                it[title] = "Database page"
-                it[description] = null
-                it[priority] = "P1"
-                it[status] = "TRIGGERED"
-                it[alertSource] = "TEST"
-                it[deduplicationKey] = "merge-alert"
-                it[currentStep] = 0
-                it[repeatIteration] = 0
-                it[triggeredAt] = now
-                it[acknowledgedAt] = null
-                it[acknowledgedBy] = null
-                it[resolvedAt] = null
-                it[resolvedBy] = null
-                it[metadata] = null
-                it[createdAt] = now
-                it[updatedAt] = now
-            }.value
-        }
+        val alertId = seedAlert("merge-alert")
         service.execute(LinkOnCallAlertCommand("link-source-alert", actor(), source.incidentId, alertId, 1))
 
         val merged = service.execute(
@@ -221,6 +211,52 @@ class IncidentCommandServiceTest {
             val sourceRow = OnCallIncidents.selectAll().where { OnCallIncidents.id eq source.incidentId }.single()
             assertEquals(NativeIncidentStatus.CANCELLED.wire, sourceRow[OnCallIncidents.status])
             assertEquals(3, sourceRow[OnCallIncidents.version])
+        }
+    }
+
+    @Test
+    fun `maps a conflicting alert link to the command conflict contract`() {
+        val alertId = seedAlert("duplicate-link")
+        service.execute(declareCommand("first-alert-owner", actor()).copy(onCallAlertId = alertId))
+
+        assertFailsWith<IncidentCommandConflictException> {
+            service.execute(declareCommand("second-alert-owner", actor()).copy(onCallAlertId = alertId))
+        }
+        transaction {
+            assertEquals(1, OnCallIncidents.selectAll().count())
+            assertEquals(1, NativeIncidentCommands.selectAll().count())
+        }
+    }
+
+    @Test
+    fun `merge obeys the canonical lifecycle policy`() {
+        val target = service.execute(declareCommand("merge-policy-target", actor()))
+        val source = service.execute(declareCommand("merge-policy-source", actor()))
+        service.execute(ResolveIncidentCommand("resolve-merge-source", actor(), source.incidentId, expectedVersion = 1))
+
+        assertFailsWith<IncidentCommandConflictException> {
+            service.execute(
+                MergeIncidentCommand(
+                    commandKey = "merge-resolved-source",
+                    actor = actor(),
+                    incidentId = target.incidentId,
+                    sourceIncidentId = source.incidentId,
+                    expectedVersion = 1,
+                ),
+            )
+        }
+        transaction {
+            val sourceRow = OnCallIncidents.selectAll().where { OnCallIncidents.id eq source.incidentId }.single()
+            assertEquals(NativeIncidentStatus.RESOLVED.wire, sourceRow[OnCallIncidents.status])
+        }
+    }
+
+    @Test
+    fun `missing incident notes use the shared not found contract`() {
+        val incidentService = OnCallIncidentService(service)
+
+        assertFailsWith<IncidentCommandNotFoundException> {
+            incidentService.addNote(Int.MAX_VALUE, member.userId, "Not found")
         }
     }
 
@@ -340,6 +376,32 @@ class IncidentCommandServiceTest {
     }
 
     private fun actor() = IncidentCommandActor(member.organizationId, member.userId, "REST")
+
+    private fun seedAlert(deduplicationKey: String): Int =
+        transaction {
+            val now = Clock.System.now()
+            OnCallAlerts.insertAndGetId {
+                it[organizationId] = member.organizationId
+                it[declaredIncidentId] = null
+                it[escalationPolicyId] = null
+                it[title] = "Database page"
+                it[description] = null
+                it[priority] = "P1"
+                it[status] = "TRIGGERED"
+                it[alertSource] = "TEST"
+                it[OnCallAlerts.deduplicationKey] = deduplicationKey
+                it[currentStep] = 0
+                it[repeatIteration] = 0
+                it[triggeredAt] = now
+                it[acknowledgedAt] = null
+                it[acknowledgedBy] = null
+                it[resolvedAt] = null
+                it[resolvedBy] = null
+                it[metadata] = null
+                it[createdAt] = now
+                it[updatedAt] = now
+            }.value
+        }
 
     private fun declareCommand(commandKey: String, actor: IncidentCommandActor) =
         DeclareIncidentCommand(

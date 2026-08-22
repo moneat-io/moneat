@@ -16,6 +16,7 @@ import com.moneat.enterprise.incidents.models.IncidentOutboxStatus
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxDeliveries
 import com.moneat.enterprise.incidents.models.NativeIncidentOutboxEvents
 import kotlinx.coroutines.runBlocking
+import org.jetbrains.exposed.v1.core.SortOrder
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -122,6 +123,53 @@ class IncidentOutboxServiceTest {
             listOf("INCIDENT_DECLARE", "INCIDENT_DECLARE", "INCIDENT_UPDATE"),
             consumer.attemptedEventTypes,
         )
+        assertEquals(listOf("INCIDENT_DECLARE", "INCIDENT_UPDATE"), consumer.completedEventTypes)
+    }
+
+    @Test
+    fun `dead letter blocks later aggregate events until replay resets attempts`() = runBlocking {
+        val incident = declare("dead-letter-declare")
+        commandService.execute(
+            UpdateIncidentCommand(
+                commandKey = "dead-letter-update",
+                actor = actor(),
+                incidentId = incident.incidentId,
+                expectedVersion = 1,
+                summary = "Waiting behind the first event",
+            ),
+        )
+        val consumer = RecordingConsumer(failuresRemaining = 8)
+        val service = IncidentOutboxService(listOf(consumer), workerId = "dead-letter-worker", clock = clock)
+
+        repeat(8) {
+            assertEquals(1, service.processBatch(limit = 2))
+            clock.advance(10.minutes)
+        }
+        val firstResourceId = transaction {
+            val events =
+                NativeIncidentOutboxEvents
+                    .selectAll()
+                    .orderBy(NativeIncidentOutboxEvents.aggregateVersion to SortOrder.ASC)
+                    .toList()
+            assertEquals(IncidentOutboxStatus.DEAD_LETTER.wire, events[0][NativeIncidentOutboxEvents.status])
+            assertEquals(IncidentOutboxStatus.PENDING.wire, events[1][NativeIncidentOutboxEvents.status])
+            events[0][NativeIncidentOutboxEvents.resourceId].toString()
+        }
+        assertEquals(0, service.processBatch(limit = 2))
+
+        assertEquals(true, service.replay(firstResourceId))
+        transaction {
+            val firstEvent =
+                NativeIncidentOutboxEvents
+                    .selectAll()
+                    .orderBy(NativeIncidentOutboxEvents.aggregateVersion to SortOrder.ASC)
+                    .limit(1)
+                    .single()
+            assertEquals(0, firstEvent[NativeIncidentOutboxEvents.attemptCount])
+            val delivery = NativeIncidentOutboxDeliveries.selectAll().single()
+            assertEquals(0, delivery[NativeIncidentOutboxDeliveries.attemptCount])
+        }
+        assertEquals(2, service.processBatch(limit = 2))
         assertEquals(listOf("INCIDENT_DECLARE", "INCIDENT_UPDATE"), consumer.completedEventTypes)
     }
 

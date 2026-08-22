@@ -19,12 +19,14 @@ import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.statements.UpdateBuilder
 import org.jetbrains.exposed.v1.exceptions.ExposedSQLException
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
+import org.postgresql.util.PSQLException
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
@@ -38,10 +40,14 @@ class IncidentCommandService(
             executeTransaction(command)
         } catch (e: ExposedSQLException) {
             if (e.sqlState != UNIQUE_VIOLATION_SQL_STATE) throw e
-            transaction {
-                requireActorMembership(command.actor)
-                replayResult(command)
-                    ?: throw e
+            if (e.violatesConstraint(COMMAND_KEY_CONSTRAINT)) {
+                transaction {
+                    requireActorMembership(command.actor)
+                    replayResult(command)
+                        ?: throw IncidentCommandConflictException("Incident command key is already in use")
+                }
+            } else {
+                throw IncidentCommandConflictException("Incident mutation conflicts with existing state")
             }
         }
     }
@@ -130,6 +136,9 @@ class IncidentCommandService(
             requireNotNull(IncidentSeverity.fromString(command.severity)) {
                 "Invalid incident severity: ${command.severity}"
             }.wire
+        require(command.initialStatus in DECLARABLE_STATUSES) {
+            "Incidents can only be declared in TRIAGE or ACTIVE status"
+        }
         command.onCallAlertId?.let { requireAlert(command.actor.organizationId, it) }
         val now = Clock.System.now()
         val incidentId =
@@ -228,8 +237,14 @@ class IncidentCommandService(
                 it[version] = nextVersion
                 it[updatedAt] = now
                 when (target) {
-                    NativeIncidentStatus.TRIAGE -> it[triagedAt] = now
-                    NativeIncidentStatus.ACTIVE -> it[acceptedAt] = now
+                    NativeIncidentStatus.TRIAGE -> {
+                        it[triagedAt] = now
+                        clearTerminalState(it)
+                    }
+                    NativeIncidentStatus.ACTIVE -> {
+                        it[acceptedAt] = now
+                        clearTerminalState(it)
+                    }
                     NativeIncidentStatus.RESOLVED -> {
                         it[resolvedBy] = command.actor.userId
                         it[resolvedAt] = now
@@ -347,8 +362,8 @@ class IncidentCommandService(
         val target = requireIncident(command)
         val source = requireIncident(command.actor.organizationId, command.sourceIncidentId)
         val sourceStatus = statusOf(source)
-        if (sourceStatus == NativeIncidentStatus.CLOSED) {
-            throw IncidentCommandConflictException("A closed incident cannot be merged")
+        if (NativeIncidentStatus.CANCELLED !in allowedTransitions.getValue(sourceStatus)) {
+            throw IncidentCommandConflictException("An incident in ${sourceStatus.wire} status cannot be merged")
         }
         val sourceAlerts =
             OnCallIncidentAlerts
@@ -550,6 +565,23 @@ class IncidentCommandService(
             "commandType" to JsonPrimitive(command.type.wire),
         )
 
+    private fun clearTerminalState(statement: UpdateBuilder<*>) {
+        statement[OnCallIncidents.resolvedBy] = null
+        statement[OnCallIncidents.resolvedAt] = null
+        statement[OnCallIncidents.postIncidentAt] = null
+        statement[OnCallIncidents.closedAt] = null
+        statement[OnCallIncidents.cancelledAt] = null
+        statement[OnCallIncidents.declinedAt] = null
+    }
+
+    private fun ExposedSQLException.violatesConstraint(constraintName: String): Boolean =
+        generateSequence<Throwable>(this) { it.cause }
+            .any { cause ->
+                val postgresConstraint = (cause as? PSQLException)?.serverErrorMessage?.constraint
+                postgresConstraint == constraintName ||
+                    cause.message?.contains(constraintName, ignoreCase = true) == true
+            }
+
     private fun IncidentMutation.toResult(replayed: Boolean) =
         IncidentCommandResult(
             incidentId = incidentId,
@@ -571,9 +603,12 @@ class IncidentCommandService(
 
     companion object {
         private const val UNIQUE_VIOLATION_SQL_STATE = "23505"
+        private const val COMMAND_KEY_CONSTRAINT = "uq_native_incident_commands_org_command_key"
         private const val INITIAL_VERSION = 1
         private const val MAX_TITLE_LENGTH = 255
         private const val MAX_TIMELINE_EVENT_TYPE_LENGTH = 30
+
+        private val DECLARABLE_STATUSES = setOf(NativeIncidentStatus.TRIAGE, NativeIncidentStatus.ACTIVE)
 
         private val allowedTransitions = mapOf(
             NativeIncidentStatus.TRIAGE to setOf(

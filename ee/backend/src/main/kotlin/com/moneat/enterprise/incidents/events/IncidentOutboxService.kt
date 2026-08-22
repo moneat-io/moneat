@@ -123,6 +123,7 @@ class IncidentOutboxService(
             val now = clock.now()
             NativeIncidentOutboxDeliveries.update({ NativeIncidentOutboxDeliveries.eventId eq eventId }) {
                 it[status] = IncidentDeliveryStatus.PENDING.wire
+                it[attemptCount] = 0
                 it[availableAt] = now
                 it[leasedAt] = null
                 it[leaseOwner] = null
@@ -131,6 +132,7 @@ class IncidentOutboxService(
             }
             NativeIncidentOutboxEvents.update({ NativeIncidentOutboxEvents.id eq eventId }) {
                 it[status] = IncidentOutboxStatus.PENDING.wire
+                it[attemptCount] = 0
                 it[availableAt] = now
                 it[leasedAt] = null
                 it[leaseOwner] = null
@@ -412,7 +414,7 @@ class IncidentOutboxService(
             eventType = this[NativeIncidentOutboxEvents.eventType],
             aggregateVersion = this[NativeIncidentOutboxEvents.aggregateVersion],
             idempotencyKey = this[NativeIncidentOutboxEvents.idempotencyKey],
-            payload = this[NativeIncidentOutboxEvents.payload].orEmpty(),
+            payload = this[NativeIncidentOutboxEvents.payload],
             createdAt = this[NativeIncidentOutboxEvents.createdAt].toString(),
         )
 

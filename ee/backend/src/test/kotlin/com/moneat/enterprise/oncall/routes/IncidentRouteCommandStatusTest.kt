@@ -11,8 +11,15 @@ import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
 import io.ktor.http.HttpStatusCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class IncidentRouteCommandStatusTest {
+    @Test
+    fun `client idempotency keys are namespaced by incident action`() {
+        assertEquals("declare:client-key", namespacedIncidentCommandKey("declare", " client-key "))
+        assertNull(namespacedIncidentCommandKey("declare", "  "))
+    }
+
     @Test
     fun `incident command failures preserve transport semantics`() {
         assertEquals(HttpStatusCode.Forbidden, incidentCommandStatus(IncidentCommandDeniedException("denied")))
