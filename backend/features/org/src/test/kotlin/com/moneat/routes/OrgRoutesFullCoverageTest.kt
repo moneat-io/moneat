@@ -70,6 +70,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
+import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.install
@@ -85,13 +86,21 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.datetime.LocalDate
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
+import org.jetbrains.exposed.v1.jdbc.update
 import org.koin.core.context.loadKoinModules
 import org.koin.dsl.module
+import org.junit.jupiter.api.parallel.ResourceLock
+import org.junit.jupiter.api.parallel.Resources
+import java.net.URI
 import kotlin.uuid.Uuid
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -1257,6 +1266,192 @@ class OrgRoutesFullCoverageTest {
             assertTrue(catalog.bodyAsText().contains("alert_delivery"))
             assertEquals(HttpStatusCode.OK, installations.status)
             assertTrue(installations.bodyAsText().contains(resourceId(700)))
+        }
+    }
+
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    @Test
+    fun `slack oauth reauthorization and callback cover success and failure states`() =
+        withSystemProperties(
+            mapOf(
+                "JWT_SECRET" to "slack-oauth-state-secret",
+                "SLACK_CLIENT_ID" to "client-id",
+                "SLACK_CLIENT_SECRET" to "client-secret",
+                "SLACK_REDIRECT_URI" to "https://api.test/integrations/slack/oauth/callback",
+                "FRONTEND_URL" to "https://frontend.test",
+                "SELF_HOSTED" to "true",
+            )
+        ) {
+            val organizationId = seedOrg("Slack OAuth")
+            val userId = seedUser("slack-oauth@test.com")
+            val installationId = resourceId(700)
+            val installation = slackInstallationSummary().copy(
+                enabledCapabilities = listOf("alert_delivery", "privileged_access"),
+            )
+            seedMembership(organizationId, userId, "owner")
+            every { mockSlackInstallationService.listInstallations(organizationId) } returns listOf(installation)
+            every {
+                mockSlackInstallationService.storeOAuthGrant(
+                    organizationId,
+                    installationId,
+                    installation.enabledCapabilities,
+                    any(),
+                )
+            } returns installation
+            coEvery {
+                mockSlackService.exchangeOAuthCode(any(), "client-id", "client-secret", any())
+            } returns successfulSlackOAuthResponse()
+
+            testApplication {
+                application {
+                    installTestApp()
+                    routing {
+                        authenticate("auth-jwt") { integrationRoutes() }
+                        integrationCallbackRoutes()
+                    }
+                }
+                val auth = "Bearer ${token(userId, organizationId)}"
+                val startResponse = client.get(
+                    "/integrations/slack/oauth/start?" +
+                        "installationId=$installationId&" +
+                        "capabilities=alert_delivery,%20privileged_access,alert_delivery",
+                ) {
+                    header(HttpHeaders.Authorization, auth)
+                }
+                assertEquals(HttpStatusCode.OK, startResponse.status)
+                assertTrue(slackAuthUrl(startResponse.bodyAsText()).contains("user_scope="))
+
+                val reauthorizeResponse = client.post(
+                    "/integrations/slack/installations/$installationId/reauthorize"
+                ) {
+                    header(HttpHeaders.Authorization, auth)
+                    contentType(ContentType.Application.Json)
+                    setBody("""{"capabilities":[]}""")
+                }
+                assertEquals(HttpStatusCode.OK, reauthorizeResponse.status)
+                val state = slackOAuthState(reauthorizeResponse.bodyAsText())
+                val noRedirectClient = createClient { followRedirects = false }
+
+                val connected = noRedirectClient.get(
+                    "/integrations/slack/oauth/callback?code=good&state=$state"
+                )
+                assertEquals(HttpStatusCode.Found, connected.status)
+                assertEquals(
+                    "https://frontend.test/settings?tab=integrations&slack=connected",
+                    connected.headers[HttpHeaders.Location],
+                )
+
+                val updated = noRedirectClient.get(
+                    "/integrations/slack/oauth/callback?code=good-again&state=$state"
+                )
+                assertEquals(HttpStatusCode.Found, updated.status)
+
+                every {
+                    mockSlackInstallationService.storeOAuthGrant(
+                        organizationId,
+                        installationId,
+                        installation.enabledCapabilities,
+                        any(),
+                    )
+                } throws IllegalStateException("cipher unavailable")
+                val storeFailure = noRedirectClient.get(
+                    "/integrations/slack/oauth/callback?code=store-failure&state=$state"
+                )
+                assertEquals(HttpStatusCode.Found, storeFailure.status)
+                assertTrue(storeFailure.headers[HttpHeaders.Location].orEmpty().contains("cipher+unavailable"))
+
+                every {
+                    mockSlackInstallationService.storeOAuthGrant(
+                        organizationId,
+                        installationId,
+                        installation.enabledCapabilities,
+                        any(),
+                    )
+                } returns installation.copy(
+                    isDefault = false,
+                    health = SlackInstallationHealthStatus.WORKSPACE_MISMATCH,
+                )
+                val mismatch = noRedirectClient.get(
+                    "/integrations/slack/oauth/callback?code=mismatch&state=$state"
+                )
+                assertTrue(mismatch.headers[HttpHeaders.Location].orEmpty().endsWith("message=workspace_mismatch"))
+
+                coEvery {
+                    mockSlackService.exchangeOAuthCode("denied", any(), any(), any())
+                } returns SlackService.SlackOAuthResponse(ok = false, error = "invalid_auth")
+                val denied = noRedirectClient.get(
+                    "/integrations/slack/oauth/callback?code=denied&state=$state"
+                )
+                assertTrue(denied.headers[HttpHeaders.Location].orEmpty().endsWith("message=invalid_auth"))
+
+                transaction {
+                    Memberships.update({
+                        (Memberships.organization_id eq organizationId) and
+                            (Memberships.user_id eq userId)
+                    }) {
+                        it[Memberships.role] = "member"
+                    }
+                }
+                val forbidden = noRedirectClient.get(
+                    "/integrations/slack/oauth/callback?code=good&state=$state"
+                )
+                assertEquals(HttpStatusCode.Forbidden, forbidden.status)
+            }
+
+            verify(atLeast = 3) {
+                mockSlackInstallationService.storeOAuthGrant(
+                    organizationId,
+                    installationId,
+                    installation.enabledCapabilities,
+                    match { grant ->
+                        grant.teamId == "T1" &&
+                            grant.enterpriseId == "E1" &&
+                            grant.grantedScopes.contains("chat:write") &&
+                            grant.userGrant?.slackUserId == "U1"
+                    },
+                )
+            }
+        }
+
+    private fun slackAuthUrl(responseBody: String): String =
+        Json.parseToJsonElement(responseBody).jsonObject.getValue("authUrl").jsonPrimitive.content
+
+    private fun slackOAuthState(responseBody: String): String =
+        checkNotNull(parseQueryString(URI(slackAuthUrl(responseBody)).rawQuery)["state"])
+
+    private fun successfulSlackOAuthResponse() = SlackService.SlackOAuthResponse(
+        ok = true,
+        accessToken = "xoxb-grant",
+        tokenType = "bot",
+        scope = "chat:write, commands users:read",
+        refreshToken = "bot-refresh",
+        expiresIn = 3_600,
+        botUserId = "B1",
+        appId = "A1",
+        team = SlackService.SlackTeam("T1", "Team"),
+        enterprise = SlackService.SlackTeam("E1", "Enterprise"),
+        authedUser = SlackService.SlackAuthedUser(
+            id = "U1",
+            scope = "admin users:read",
+            accessToken = "xoxp-user",
+            tokenType = "user",
+            refreshToken = "user-refresh",
+            expiresIn = 1_800,
+        ),
+    )
+
+    private inline fun <T> withSystemProperties(
+        properties: Map<String, String>,
+        block: () -> T,
+    ): T {
+        val previous = properties.keys.associateWith(System::getProperty)
+        properties.forEach(System::setProperty)
+        return try {
+            block()
+        } finally {
+            previous.forEach { (key, value) ->
+                if (value == null) System.clearProperty(key) else System.setProperty(key, value)
+            }
         }
     }
 
