@@ -4,9 +4,14 @@
 
 package com.moneat.enterprise.ai.services
 
-import com.moneat.config.EnvConfig
 import com.moneat.config.ClickHouseClient
 import com.moneat.enterprise.ai.llm.CostRegistry
+import com.moneat.enterprise.ai.llm.LlmConfig
+import com.moneat.enterprise.ai.llm.LlmMessage
+import com.moneat.enterprise.ai.llm.LlmProvider
+import com.moneat.enterprise.ai.llm.LlmProviderFactory
+import com.moneat.enterprise.ai.llm.LlmResponse
+import com.moneat.enterprise.ai.llm.LlmTool
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
 import com.moneat.enterprise.ai.models.AiAssistantConfirmResponse
 import com.moneat.enterprise.ai.models.AssistantConfirmationNeededEvent
@@ -14,25 +19,13 @@ import com.moneat.enterprise.ai.models.AssistantDoneEvent
 import com.moneat.enterprise.ai.models.AssistantResponseEvent
 import com.moneat.enterprise.ai.models.AssistantToolInvokingEvent
 import com.moneat.enterprise.ai.models.AssistantToolResultEvent
+import com.moneat.mcp.models.McpContext
 import com.moneat.mcp.protocol.McpToolRegistry
 import com.moneat.mcp.protocol.ToolDefinition
-import com.moneat.mcp.models.McpContext
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
+import com.moneat.utils.ClickHouseSqlUtils
 import io.ktor.http.isSuccess
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -41,14 +34,13 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
-import com.moneat.utils.ClickHouseSqlUtils
 import java.io.Writer
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-import kotlin.time.Clock
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Clock
 
 private val logger = KotlinLogging.logger {}
 private val json = Json {
@@ -61,7 +53,7 @@ private const val NANOS_PER_MILLI = 1_000_000.0
 
 class AiAssistantService(
     private val toolRegistry: McpToolRegistry,
-    private val llmClient: AssistantLlmClient = OpenAiAssistantLlmClient(),
+    private val llmProvider: LlmProvider = LlmProviderFactory.create(),
 ) {
     private val clickhouseDb: String get() = ClickHouseClient.getDatabase()
     private val conversations = ConcurrentHashMap<String, ConversationState>()
@@ -84,7 +76,7 @@ class AiAssistantService(
         val state = getOrCreateConversation(conversationId, projectId)
         return state.mutex.withLock {
             refreshTimeContext(state, userTimezone)
-            state.messages.add(AssistantMessage(role = "user", content = normalizedMessage))
+            state.messages.add(LlmMessage(role = "user", content = normalizedMessage))
 
             val outcome = runAssistantLoop(
                 state = state,
@@ -186,7 +178,7 @@ class AiAssistantService(
             }
 
             state.messages.add(
-                AssistantMessage(
+                LlmMessage(
                     role = "tool",
                     content = toolSummary,
                     toolCallId = pending.toolCallId,
@@ -230,12 +222,20 @@ class AiAssistantService(
     ): LoopOutcome {
         val toolDefinitions = toolRegistry.listTools()
         val toolMap = toolDefinitions.associateBy { it.name }
-        val llmTools = toolDefinitions.map { def -> toLlmFunction(def) }
+        val llmTools = toolDefinitions.map(::toLlmTool)
 
         repeat(MAX_TOOL_ROUNDS) {
             val startedAtMs = Clock.System.now().toEpochMilliseconds()
             val startedAtNs = System.nanoTime()
-            val completion = llmClient.complete(state.messages.toList(), llmTools)
+            val completion = llmProvider.chatCompletion(
+                messages = state.messages.toList(),
+                config = LlmConfig(
+                    maxTokens = ASSISTANT_MAX_TOKENS,
+                    temperature = ASSISTANT_TEMPERATURE,
+                    jsonMode = false,
+                ),
+                tools = llmTools,
+            )
             val durationMs = (System.nanoTime() - startedAtNs) / NANOS_PER_MILLI
             persistLlmGeneration(
                 state = state,
@@ -248,7 +248,7 @@ class AiAssistantService(
             if (completion.toolCalls.isEmpty()) {
                 val responseContent = completion.content.ifBlank { DEFAULT_EMPTY_RESPONSE }
                 state.messages.add(
-                    AssistantMessage(
+                    LlmMessage(
                         role = "assistant",
                         content = responseContent,
                     ),
@@ -257,7 +257,7 @@ class AiAssistantService(
             }
 
             state.messages.add(
-                AssistantMessage(
+                LlmMessage(
                     role = "assistant",
                     content = completion.content.ifBlank { null },
                     toolCalls = completion.toolCalls,
@@ -265,13 +265,13 @@ class AiAssistantService(
             )
 
             for (toolCall in completion.toolCalls) {
-                val args = parseToolArguments(toolCall.arguments)
+                val args = toolCall.arguments
                 val definition = toolMap[toolCall.name]
 
                 if (definition == null) {
                     val unknownToolSummary = "Unknown MCP tool: ${toolCall.name}"
                     state.messages.add(
-                        AssistantMessage(
+                        LlmMessage(
                             role = "tool",
                             content = unknownToolSummary,
                             toolCallId = toolCall.id,
@@ -310,7 +310,7 @@ class AiAssistantService(
                 )
                 val summary = summarizeToolResult(toolResult)
                 state.messages.add(
-                    AssistantMessage(
+                    LlmMessage(
                         role = "tool",
                         content = summary,
                         toolCallId = toolCall.id,
@@ -322,7 +322,7 @@ class AiAssistantService(
 
         val limitMessage = "I reached the MCP tool iteration limit. Please refine the question and try again."
         state.messages.add(
-            AssistantMessage(
+            LlmMessage(
                 role = "assistant",
                 content = limitMessage,
             ),
@@ -367,16 +367,7 @@ class AiAssistantService(
         }
     }
 
-    private fun parseToolArguments(raw: String): JsonObject {
-        if (raw.isBlank()) return JsonObject(emptyMap())
-        return try {
-            json.parseToJsonElement(raw).jsonObject
-        } catch (_: Exception) {
-            JsonObject(emptyMap())
-        }
-    }
-
-    private fun toLlmFunction(tool: ToolDefinition): AssistantFunction {
+    private fun toLlmTool(tool: ToolDefinition): LlmTool {
         val requiredValues = tool.inputSchema.required.map { JsonPrimitive(it) }
         val rawParameters = JsonObject(
             mapOf(
@@ -387,7 +378,7 @@ class AiAssistantService(
         )
         val sanitizedParameters = sanitizeSchemaElement(rawParameters).jsonObject
 
-        return AssistantFunction(
+        return LlmTool(
             name = tool.name,
             description = tool.description,
             parameters = sanitizedParameters,
@@ -417,7 +408,7 @@ class AiAssistantService(
 
     private suspend fun persistLlmGeneration(
         state: ConversationState,
-        completion: AssistantCompletion,
+        completion: LlmResponse,
         userId: Int,
         startedAtMs: Long,
         durationMs: Double,
@@ -513,7 +504,7 @@ class AiAssistantService(
                 id = normalizedConversationId,
                 projectId = projectId,
                 messages = mutableListOf(
-                    AssistantMessage(role = "system", content = loadSystemPrompt()),
+                    LlmMessage(role = "system", content = loadSystemPrompt()),
                 ),
             )
         }
@@ -554,12 +545,12 @@ class AiAssistantService(
         val systemIdx = state.messages.indexOfFirst { it.role == "system" }
         val content = "${loadSystemPrompt()}\n\n${buildTimeContext(userTimezone)}"
         if (systemIdx >= 0) {
-            state.messages[systemIdx] = AssistantMessage(
+            state.messages[systemIdx] = LlmMessage(
                 role = "system",
                 content = content,
             )
         } else {
-            state.messages.add(0, AssistantMessage(role = "system", content = content))
+            state.messages.add(0, LlmMessage(role = "system", content = content))
         }
     }
 
@@ -588,89 +579,10 @@ class AiAssistantService(
     }
 }
 
-interface AssistantLlmClient {
-    suspend fun complete(
-        messages: List<AssistantMessage>,
-        tools: List<AssistantFunction>,
-    ): AssistantCompletion
-}
-
-class OpenAiAssistantLlmClient : AssistantLlmClient {
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) {
-            json(json)
-        }
-        engine {
-            requestTimeout = 120_000
-        }
-    }
-
-    private val apiKey: String get() = EnvConfig.get("OPENAI_API_KEY", "")
-    private val modelName: String get() = EnvConfig.get("OPENAI_MODEL", "gpt-4o-mini")
-
-    override suspend fun complete(
-        messages: List<AssistantMessage>,
-        tools: List<AssistantFunction>,
-    ): AssistantCompletion {
-        if (apiKey.isBlank()) {
-            throw IllegalStateException("OPENAI_API_KEY is not configured")
-        }
-
-        val request = OpenAiCompletionRequest(
-            model = modelName,
-            messages = messages.map { msg -> msg.toOpenAiMessage() },
-            tools = tools.map { function ->
-                OpenAiTool(
-                    type = "function",
-                    function = OpenAiFunction(
-                        name = function.name,
-                        description = function.description,
-                        parameters = function.parameters,
-                    ),
-                )
-            },
-            toolChoice = "auto",
-            temperature = ASSISTANT_TEMPERATURE,
-            maxTokens = ASSISTANT_MAX_TOKENS,
-        )
-
-        val response = client.post("https://api.openai.com/v1/chat/completions") {
-            contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer $apiKey")
-            setBody(request)
-        }
-
-        val rawBody = response.bodyAsText()
-        if (response.status != HttpStatusCode.OK) {
-            logger.error { "OpenAI assistant completion failed (${response.status}): $rawBody" }
-            throw RuntimeException("OpenAI API error ${response.status.value}: $rawBody")
-        }
-
-        val parsed = json.decodeFromString(OpenAiCompletionResponse.serializer(), rawBody)
-        val message = parsed.choices.firstOrNull()?.message
-            ?: throw IllegalStateException("OpenAI returned no choices")
-
-        return AssistantCompletion(
-            content = message.content.orEmpty(),
-            toolCalls = message.toolCalls.orEmpty().map { call ->
-                AssistantToolCall(
-                    id = call.id,
-                    name = call.function.name,
-                    arguments = call.function.arguments,
-                )
-            },
-            inputTokens = parsed.usage?.promptTokens ?: 0,
-            outputTokens = parsed.usage?.completionTokens ?: 0,
-            model = parsed.model.ifBlank { modelName },
-            provider = "openai",
-        )
-    }
-}
-
 private data class ConversationState(
     val id: String,
     var projectId: Long?,
-    val messages: MutableList<AssistantMessage>,
+    val messages: MutableList<LlmMessage>,
     val mutex: Mutex = Mutex(),
 )
 
@@ -692,119 +604,3 @@ private sealed interface LoopOutcome {
         val args: JsonObject,
     ) : LoopOutcome
 }
-
-data class AssistantFunction(
-    val name: String,
-    val description: String,
-    val parameters: JsonObject,
-)
-
-data class AssistantCompletion(
-    val content: String,
-    val toolCalls: List<AssistantToolCall>,
-    val inputTokens: Int = 0,
-    val outputTokens: Int = 0,
-    val model: String = "",
-    val provider: String = "",
-)
-
-data class AssistantToolCall(
-    val id: String,
-    val name: String,
-    val arguments: String,
-)
-
-data class AssistantMessage(
-    val role: String,
-    val content: String? = null,
-    val toolCallId: String? = null,
-    val toolCalls: List<AssistantToolCall> = emptyList(),
-)
-
-private fun AssistantMessage.toOpenAiMessage(): OpenAiMessage {
-    val mappedToolCalls = toolCalls.takeIf { it.isNotEmpty() }?.map { call ->
-        OpenAiToolCall(
-            id = call.id,
-            type = "function",
-            function = OpenAiToolCallFunction(
-                name = call.name,
-                arguments = call.arguments,
-            ),
-        )
-    }
-
-    return OpenAiMessage(
-        role = role,
-        content = content,
-        toolCallId = toolCallId,
-        toolCalls = mappedToolCalls,
-    )
-}
-
-@Serializable
-private data class OpenAiCompletionRequest(
-    val model: String,
-    val messages: List<OpenAiMessage>,
-    val tools: List<OpenAiTool>,
-    @SerialName("tool_choice") val toolChoice: String = "auto",
-    val temperature: Double = 0.2,
-    @SerialName("max_tokens") val maxTokens: Int = 2_048,
-)
-
-@Serializable
-private data class OpenAiTool(
-    val type: String,
-    val function: OpenAiFunction,
-)
-
-@Serializable
-private data class OpenAiFunction(
-    val name: String,
-    val description: String,
-    val parameters: JsonObject,
-)
-
-@Serializable
-private data class OpenAiMessage(
-    val role: String,
-    val content: String? = null,
-    @SerialName("tool_call_id") val toolCallId: String? = null,
-    @SerialName("tool_calls") val toolCalls: List<OpenAiToolCall>? = null,
-)
-
-@Serializable
-private data class OpenAiCompletionResponse(
-    val model: String = "",
-    val choices: List<OpenAiChoice> = emptyList(),
-    val usage: OpenAiUsage? = null,
-)
-
-@Serializable
-private data class OpenAiChoice(
-    val message: OpenAiMessageResponse,
-)
-
-@Serializable
-private data class OpenAiMessageResponse(
-    val content: String? = null,
-    @SerialName("tool_calls") val toolCalls: List<OpenAiToolCall>? = null,
-)
-
-@Serializable
-private data class OpenAiToolCall(
-    val id: String,
-    val type: String,
-    val function: OpenAiToolCallFunction,
-)
-
-@Serializable
-private data class OpenAiToolCallFunction(
-    val name: String,
-    val arguments: String,
-)
-
-@Serializable
-private data class OpenAiUsage(
-    @SerialName("prompt_tokens") val promptTokens: Int = 0,
-    @SerialName("completion_tokens") val completionTokens: Int = 0,
-)

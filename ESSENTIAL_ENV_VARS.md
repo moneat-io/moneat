@@ -35,6 +35,28 @@ Workflow runtime variables are required when `WORKFLOWS_ENABLED=true` (the defau
 
 Workflow secrets must be distinct from `JWT_SECRET` and `DATA_SOURCE_ENCRYPTION_KEY`.
 
+## AI Chat Assistant
+
+The in-app AI assistant is optional and turns on for admin users once a provider is
+configured: either an API key resolves (`AI_API_KEY` or a legacy provider key), or
+`AI_AUTH_TYPE=none` points the runtime at a keyless local endpoint. The runtime is
+provider-neutral: point it at OpenAI, Anthropic, or any OpenAI-compatible endpoint. Set
+`AI_PROVIDER=openai-compatible` for the vendor-agnostic, self-hosted path (vLLM, Ollama,
+LM Studio, and hosted OpenAI-compatible gateways). Keep API keys out of committed files.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AI_PROVIDER` | `openai` | Provider dialect: `openai`, `openai-compatible`, or `anthropic`. Use `openai-compatible` for any endpoint that speaks the OpenAI Chat Completions API. |
+| `AI_BASE_URL` | Provider default | API base URL. Defaults to `https://api.openai.com` for the `openai` dialects and `https://api.anthropic.com` for `anthropic`. Set your own endpoint for `openai-compatible`; give the provider root or a URL already ending in `/v1`, and the runtime appends `/v1` once without doubling it. |
+| `AI_MODEL` | Provider default | Model identifier. Defaults to `gpt-4o-mini` for the `openai` dialects and `claude-sonnet-4-20250514` for `anthropic`. |
+| `AI_API_KEY` | none | Provider-neutral API key. Falls back to `OPENAI_API_KEY` (`openai`/`openai-compatible`) or `ANTHROPIC_API_KEY` (`anthropic`) when unset. |
+| `AI_AUTH_TYPE` | `default` | Auth scheme: `default` (Bearer for the `openai` dialects, `x-api-key` for `anthropic`), `bearer`, `header`, or `none`. |
+| `AI_AUTH_HEADER` | `Authorization` | Header name, used only when `AI_AUTH_TYPE=header`. |
+| `AI_AUTH_PREFIX` | none | Value prefix, used only when `AI_AUTH_TYPE=header`; the header value becomes `<prefix> <key>`, or just `<key>` with no prefix. |
+| `AI_REQUEST_TIMEOUT_MS` | `120000` | Per-request timeout in milliseconds. Must be positive. |
+| `AI_MAX_RETRIES` | `2` | Retries after a failed request, `0`-`5`. |
+| `AI_CAPABILITIES` | Provider default | Comma-separated features the endpoint supports: `json_mode`, `streaming`, `tool_calling`. Defaults to all three for the `openai` dialects and `streaming,tool_calling` for `anthropic`. Narrow it when a compatible endpoint lacks a capability. |
+
 ## Operational Rollout Controls
 
 These variables are optional. Ingestion queues use Redis Streams by default.

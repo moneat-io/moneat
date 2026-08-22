@@ -4,6 +4,13 @@
 
 package com.moneat.enterprise.ai.services
 
+import com.moneat.enterprise.ai.llm.LlmCapability
+import com.moneat.enterprise.ai.llm.LlmConfig
+import com.moneat.enterprise.ai.llm.LlmMessage
+import com.moneat.enterprise.ai.llm.LlmProvider
+import com.moneat.enterprise.ai.llm.LlmResponse
+import com.moneat.enterprise.ai.llm.LlmTool
+import com.moneat.enterprise.ai.llm.LlmToolCall
 import com.moneat.enterprise.ai.models.AiAssistantConfirmRequest
 import com.moneat.mcp.auth.McpScopes
 import com.moneat.mcp.models.McpContext
@@ -47,19 +54,19 @@ class AiAssistantServiceTest {
             },
         )
 
-        val fakeClient = FakeAssistantLlmClient(
+        val fakeClient = FakeLlmProvider(
             completions = mutableListOf(
-                AssistantCompletion(
+                LlmResponse(
                     content = "",
                     toolCalls = listOf(
-                        AssistantToolCall(
+                        LlmToolCall(
                             id = "call-1",
                             name = "list_issues",
-                            arguments = """{"limit":5}""",
+                            arguments = JsonObject(mapOf("limit" to JsonPrimitive(5))),
                         ),
                     ),
                 ),
-                AssistantCompletion(content = "There are 2 active issues.", toolCalls = emptyList()),
+                LlmResponse(content = "There are 2 active issues."),
             ),
         )
 
@@ -102,19 +109,19 @@ class AiAssistantServiceTest {
             },
         )
 
-        val fakeClient = FakeAssistantLlmClient(
+        val fakeClient = FakeLlmProvider(
             completions = mutableListOf(
-                AssistantCompletion(
+                LlmResponse(
                     content = "I can create that host.",
                     toolCalls = listOf(
-                        AssistantToolCall(
+                        LlmToolCall(
                             id = "call-2",
                             name = "create_project",
-                            arguments = """{"name":"edge-01"}""",
+                            arguments = JsonObject(mapOf("name" to JsonPrimitive("edge-01"))),
                         ),
                     ),
                 ),
-                AssistantCompletion(content = "Done. Project edge-01 has been created.", toolCalls = emptyList()),
+                LlmResponse(content = "Done. Project edge-01 has been created."),
             ),
         )
 
@@ -180,9 +187,9 @@ class AiAssistantServiceTest {
             },
         )
 
-        val fakeClient = FakeAssistantLlmClient(
+        val fakeClient = FakeLlmProvider(
             completions = mutableListOf(
-                AssistantCompletion(content = "No tool call required.", toolCalls = emptyList()),
+                LlmResponse(content = "No tool call required."),
             ),
         )
         val service = AiAssistantService(registry, fakeClient)
@@ -226,23 +233,32 @@ class AiAssistantServiceTest {
     }
 }
 
-private class FakeAssistantLlmClient(
-    private val completions: MutableList<AssistantCompletion>,
-) : AssistantLlmClient {
+private class FakeLlmProvider(
+    private val completions: MutableList<LlmResponse>,
+) : LlmProvider {
     var callCount: Int = 0
         private set
-    var capturedTools: List<AssistantFunction> = emptyList()
+    var capturedTools: List<LlmTool> = emptyList()
         private set
 
-    override suspend fun complete(
-        messages: List<AssistantMessage>,
-        tools: List<AssistantFunction>,
-    ): AssistantCompletion {
+    override suspend fun chatCompletion(
+        messages: List<LlmMessage>,
+        config: LlmConfig,
+        tools: List<LlmTool>,
+    ): LlmResponse {
         callCount += 1
         capturedTools = tools
         if (completions.isEmpty()) {
-            return AssistantCompletion(content = "No more completions configured.", toolCalls = emptyList())
+            return LlmResponse(content = "No more completions configured.")
         }
         return completions.removeAt(0)
     }
+
+    override fun provider(): String = "fake"
+
+    override fun model(): String = "fake-model"
+
+    override fun isEnabled(): Boolean = true
+
+    override fun capabilities(): Set<LlmCapability> = LlmCapability.entries.toSet()
 }

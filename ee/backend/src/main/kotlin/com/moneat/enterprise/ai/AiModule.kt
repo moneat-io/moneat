@@ -38,7 +38,7 @@ class AiModule : EnterpriseModule {
         val contextAggregator = AiContextAggregator()
         val chatService = EnterpriseAiChatService(llmProvider, contextAggregator, snapshotService)
         val toolRegistry = McpToolRegistry().apply { McpToolRegistrar.registerAll(this) }
-        val assistantService = AiAssistantService(toolRegistry)
+        val assistantService = AiAssistantService(toolRegistry, llmProvider)
 
         route.apply {
             aiEnterpriseRoutes(chatService)

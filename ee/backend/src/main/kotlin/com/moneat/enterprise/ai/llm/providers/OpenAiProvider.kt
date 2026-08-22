@@ -4,100 +4,209 @@
 
 package com.moneat.enterprise.ai.llm.providers
 
-import com.moneat.config.EnvConfig
+import com.moneat.enterprise.ai.llm.KtorLlmHttpTransport
+import com.moneat.enterprise.ai.llm.LlmAuthentication
+import com.moneat.enterprise.ai.llm.LlmCapability
 import com.moneat.enterprise.ai.llm.LlmConfig
+import com.moneat.enterprise.ai.llm.LlmHttpRequest
+import com.moneat.enterprise.ai.llm.LlmHttpTransport
 import com.moneat.enterprise.ai.llm.LlmMessage
 import com.moneat.enterprise.ai.llm.LlmProvider
+import com.moneat.enterprise.ai.llm.LlmProviderKind
+import com.moneat.enterprise.ai.llm.LlmProviderSettings
+import com.moneat.enterprise.ai.llm.LlmProviderSettingsLoader
 import com.moneat.enterprise.ai.llm.LlmResponse
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.cio.CIO
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
+import com.moneat.enterprise.ai.llm.LlmTool
+import com.moneat.enterprise.ai.llm.LlmToolCall
+import com.moneat.enterprise.ai.llm.LlmToolChoice
+import com.moneat.enterprise.ai.llm.executeLlmRequest
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-class OpenAiProvider : LlmProvider {
-
-    private val json = Json { ignoreUnknownKeys = true }
-    private val client = HttpClient(CIO) {
-        install(ContentNegotiation) { json(json) }
-        engine { requestTimeout = 120_000 }
+class OpenAiProvider(
+    private val settings: LlmProviderSettings = LlmProviderSettingsLoader.load(),
+    private val transport: LlmHttpTransport = KtorLlmHttpTransport(settings.requestTimeoutMillis),
+) : LlmProvider {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = false
     }
 
-    private val apiKey: String get() = EnvConfig.get("OPENAI_API_KEY", "")
-    private val modelName: String get() = EnvConfig.get("OPENAI_MODEL", "gpt-4o-mini")
+    init {
+        require(settings.kind == LlmProviderKind.OPENAI || settings.kind == LlmProviderKind.OPENAI_COMPATIBLE) {
+            "OpenAiProvider requires openai or openai-compatible settings"
+        }
+    }
 
-    override fun provider() = "openai"
-    override fun model() = modelName
-    override fun isEnabled() = apiKey.isNotBlank()
+    override fun provider(): String = settings.kind.configValue
 
-    override suspend fun chatCompletion(messages: List<LlmMessage>, config: LlmConfig): LlmResponse {
+    override fun model(): String = settings.model
+
+    override fun isEnabled(): Boolean = settings.isEnabled
+
+    override fun capabilities(): Set<LlmCapability> = settings.capabilities
+
+    override suspend fun chatCompletion(
+        messages: List<LlmMessage>,
+        config: LlmConfig,
+        tools: List<LlmTool>,
+    ): LlmResponse {
+        requireCapabilityForTools(tools)
         val request = OpenAiRequest(
-            model = modelName,
-            messages = messages.map { OpenAiMsg(it.role, it.content) },
-            max_tokens = config.maxTokens,
+            model = settings.model,
+            messages = messages.map(::toOpenAiMessage),
+            tools = tools.takeIf(List<LlmTool>::isNotEmpty)?.map(::toOpenAiTool),
+            toolChoice = tools.takeIf(List<LlmTool>::isNotEmpty)?.let { config.toolChoice.toWireValue() },
+            maxTokens = config.maxTokens,
             temperature = config.temperature,
-            response_format = if (config.jsonMode) OpenAiFormat("json_object") else null,
+            responseFormat = if (config.jsonMode && LlmCapability.JSON_MODE in capabilities()) {
+                OpenAiFormat("json_object")
+            } else {
+                null
+            },
         )
 
-        val response = client.post("https://api.openai.com/v1/chat/completions") {
-            contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer $apiKey")
-            setBody(request)
+        val response = executeLlmRequest(
+            transport = transport,
+            request = LlmHttpRequest(
+                url = settings.endpoint("chat/completions"),
+                headers = requestHeaders(settings.authentication),
+                body = json.encodeToString(request),
+            ),
+            maxRetries = settings.maxRetries,
+        )
+        if (response.status !in HTTP_SUCCESS_RANGE) {
+            logger.error { "${provider()} completion failed with HTTP ${response.status}" }
+            throw IllegalStateException("${provider()} completion failed with HTTP ${response.status}")
         }
 
-        val body = response.bodyAsText()
-        if (response.status != HttpStatusCode.OK) {
-            logger.error { "OpenAI API error (${response.status}): $body" }
-            throw RuntimeException("OpenAI API error ${response.status.value}: $body")
-        }
-
-        val parsed = json.decodeFromString(OpenAiResponse.serializer(), body)
+        val parsed = json.decodeFromString(OpenAiResponse.serializer(), response.body)
         val choice = parsed.choices.firstOrNull()
+            ?: throw IllegalStateException("${provider()} returned no completion choices")
         return LlmResponse(
-            content = choice?.message?.content ?: "",
-            inputTokens = parsed.usage?.prompt_tokens ?: 0,
-            outputTokens = parsed.usage?.completion_tokens ?: 0,
-            model = modelName,
-            provider = "openai",
+            content = choice.message.content.orEmpty(),
+            toolCalls = choice.message.toolCalls.orEmpty().map(::toLlmToolCall),
+            inputTokens = parsed.usage?.promptTokens ?: 0,
+            outputTokens = parsed.usage?.completionTokens ?: 0,
+            model = parsed.model.ifBlank { settings.model },
+            provider = provider(),
         )
     }
 
-    // Internal DTOs
-    @Serializable data class OpenAiMsg(val role: String, val content: String)
+    private fun requireCapabilityForTools(tools: List<LlmTool>) {
+        if (tools.isNotEmpty() && LlmCapability.TOOL_CALLING !in capabilities()) {
+            throw IllegalStateException("${provider()} is not configured for tool calling")
+        }
+    }
 
-    @Serializable data class OpenAiFormat(val type: String)
-
-    @Serializable data class OpenAiRequest(
-        val model: String,
-        val messages: List<OpenAiMsg>,
-        val max_tokens: Int = 4096,
-        val temperature: Double = 0.3,
-        val response_format: OpenAiFormat? = null,
+    private fun toOpenAiMessage(message: LlmMessage): OpenAiMessage = OpenAiMessage(
+        role = message.role,
+        content = message.content,
+        toolCallId = message.toolCallId,
+        toolCalls = message.toolCalls.takeIf(List<LlmToolCall>::isNotEmpty)?.map { call ->
+            OpenAiToolCall(
+                id = call.id,
+                type = "function",
+                function = OpenAiToolCallFunction(
+                    name = call.name,
+                    arguments = json.encodeToString(JsonObject.serializer(), call.arguments),
+                ),
+            )
+        },
     )
 
-    @Serializable data class OpenAiChoice(val message: OpenAiMsg, val finish_reason: String? = null)
-
-    @Serializable
-    data class OpenAiUsage(
-        val prompt_tokens: Int = 0,
-        val completion_tokens: Int = 0,
-        val total_tokens: Int = 0,
+    private fun toOpenAiTool(tool: LlmTool): OpenAiTool = OpenAiTool(
+        type = "function",
+        function = OpenAiFunction(tool.name, tool.description, tool.parameters),
     )
 
-    @Serializable
-    data class OpenAiResponse(
-        val choices: List<OpenAiChoice> = emptyList(),
-        val usage: OpenAiUsage? = null,
-    )
+    private fun toLlmToolCall(call: OpenAiToolCall): LlmToolCall {
+        val arguments = runCatching {
+            json.parseToJsonElement(call.function.arguments).jsonObject
+        }.getOrDefault(JsonObject(emptyMap()))
+        return LlmToolCall(call.id, call.function.name, arguments)
+    }
+
+    private fun requestHeaders(authentication: LlmAuthentication): Map<String, String> = when (authentication) {
+        is LlmAuthentication.Bearer -> mapOf("Authorization" to "Bearer ${authentication.token}")
+        is LlmAuthentication.Header -> mapOf(authentication.name to authentication.value)
+        LlmAuthentication.None -> emptyMap()
+    }
+
+    private fun LlmToolChoice.toWireValue(): String = name.lowercase()
+
+    private companion object {
+        val HTTP_SUCCESS_RANGE = 200..299
+    }
 }
+
+@Serializable
+private data class OpenAiMessage(
+    val role: String = "",
+    val content: String? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    @SerialName("tool_calls") val toolCalls: List<OpenAiToolCall>? = null,
+)
+
+@Serializable
+private data class OpenAiFormat(val type: String)
+
+@Serializable
+private data class OpenAiRequest(
+    val model: String,
+    val messages: List<OpenAiMessage>,
+    val tools: List<OpenAiTool>? = null,
+    @SerialName("tool_choice") val toolChoice: String? = null,
+    @SerialName("max_tokens") val maxTokens: Int,
+    val temperature: Double,
+    @SerialName("response_format") val responseFormat: OpenAiFormat? = null,
+)
+
+@Serializable
+private data class OpenAiTool(
+    val type: String,
+    val function: OpenAiFunction,
+)
+
+@Serializable
+private data class OpenAiFunction(
+    val name: String,
+    val description: String,
+    val parameters: JsonObject,
+)
+
+@Serializable
+private data class OpenAiResponse(
+    val model: String = "",
+    val choices: List<OpenAiChoice> = emptyList(),
+    val usage: OpenAiUsage? = null,
+)
+
+@Serializable
+private data class OpenAiChoice(val message: OpenAiMessage)
+
+@Serializable
+private data class OpenAiToolCall(
+    val id: String,
+    val type: String,
+    val function: OpenAiToolCallFunction,
+)
+
+@Serializable
+private data class OpenAiToolCallFunction(
+    val name: String,
+    val arguments: String,
+)
+
+@Serializable
+private data class OpenAiUsage(
+    @SerialName("prompt_tokens") val promptTokens: Int = 0,
+    @SerialName("completion_tokens") val completionTokens: Int = 0,
+)
