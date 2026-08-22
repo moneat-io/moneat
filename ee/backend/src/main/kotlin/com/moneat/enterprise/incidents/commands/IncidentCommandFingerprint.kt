@@ -28,6 +28,7 @@ internal object IncidentCommandFingerprint {
         when (command) {
             is DeclareIncidentCommand,
             is AcceptIncidentCommand,
+            is DeclineIncidentCommand,
             is MergeIncidentCommand,
             is UpdateIncidentCommand,
             is TransitionIncidentCommand,
@@ -60,7 +61,14 @@ internal object IncidentCommandFingerprint {
                     command.initialStatus.wire,
                     command.onCallAlertId?.toString(),
                 )
-            is AcceptIncidentCommand -> listOf(command.incidentId.toString())
+            is AcceptIncidentCommand ->
+                listOf(
+                    command.incidentId.toString(),
+                    command.severity,
+                    command.incidentTypeResourceId,
+                    canonicalDetails(command.formValues),
+                )
+            is DeclineIncidentCommand -> listOf(command.incidentId.toString(), command.reason)
             is MergeIncidentCommand -> listOf(command.incidentId.toString(), command.sourceIncidentId.toString())
             is UpdateIncidentCommand ->
                 listOf(

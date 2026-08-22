@@ -24,7 +24,11 @@ enum class NativeIncidentStatus(val wire: String) {
     CLOSED("CLOSED"),
     CANCELLED("CANCELLED"),
     DECLINED("DECLINED"),
+    MERGED("MERGED"),
     ;
+
+    /** MERGED is the only outcome that permanently retires an incident aggregate. */
+    val terminal: Boolean get() = this == MERGED
 
     companion object {
         fun fromWire(value: String): NativeIncidentStatus? =

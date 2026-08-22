@@ -186,7 +186,7 @@ function DeclaredIncidentDetailComponent() {
               {statusCfg.label}
             </Badge>
             <Badge variant={severityBadgeVariant(incident.severity)} size="sm">
-              {incident.severity}
+              {incident.severity ?? 'Unclassified'}
             </Badge>
             {mode !== 'LIVE' && (
               <Badge variant={modeMeta.variant} size="sm">
@@ -350,7 +350,9 @@ function DeclaredIncidentDetailComponent() {
               </Badge>
             </DetailRow>
             <DetailRow label="Severity">
-              <Badge variant={severityBadgeVariant(incident.severity)}>{incident.severity}</Badge>
+              <Badge variant={severityBadgeVariant(incident.severity)}>
+                {incident.severity ?? 'Unclassified'}
+              </Badge>
             </DetailRow>
             <DetailRow label="Mode">
               <Badge variant={modeMeta.variant}>{modeMeta.label}</Badge>

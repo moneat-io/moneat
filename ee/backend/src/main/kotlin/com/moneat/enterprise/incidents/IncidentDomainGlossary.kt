@@ -13,7 +13,7 @@ enum class IncidentDomainObject(
     NATIVE_INCIDENT(
         apiName = "native_incident",
         owner = "enterprise incident response",
-        lifecycle = "triage through post-incident closure",
+        lifecycle = "triage through post-incident closure, decline, or terminal merge",
     ),
     FORWARDED_PROVIDER_INCIDENT(
         apiName = "forwarded_provider_incident",

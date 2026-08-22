@@ -10,7 +10,11 @@ import com.moneat.alerts.models.AlertEpisodes
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.NativeIncidentEntitlementStatus
 import com.moneat.enterprise.NativeIncidentRolloutStatus
+import com.moneat.enterprise.incidents.commands.AcceptIncidentCommand
 import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
+import com.moneat.enterprise.incidents.commands.DeclineIncidentCommand
+import com.moneat.enterprise.incidents.commands.MergeIncidentCommand
+import com.moneat.enterprise.incidents.commands.IncidentCommand
 import com.moneat.enterprise.incidents.commands.IncidentCommandActor
 import com.moneat.enterprise.incidents.commands.IncidentCommandConflictException
 import com.moneat.enterprise.incidents.commands.IncidentCommandDeniedException
@@ -186,6 +190,26 @@ data class NativeIncidentQuotaResponse(
     val exhausted: Boolean,
 )
 
+@Serializable
+data class AcceptIncidentRequest(
+    val severity: String? = null,
+    val incidentTypeId: String? = null,
+    val fields: Map<String, JsonElement> = emptyMap(),
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class DeclineIncidentRequest(
+    val reason: String? = null,
+    val expectedVersion: Int? = null,
+)
+
+@Serializable
+data class MergeIncidentRequest(
+    val sourceIncidentId: String,
+    val expectedVersion: Int? = null,
+)
+
 private data class IncidentRouteServices(
     val alertServiceProvider: () -> OnCallAlertService,
     val incidentService: OnCallIncidentService,
@@ -292,6 +316,7 @@ private fun Route.registerDeclaredIncidentRoutes(
             registerListDeclaredIncidentsRoute(services.incidentService)
             registerGetDeclaredIncidentRoute(services.incidentService)
             registerResolveDeclaredIncidentRoute(services.incidentService)
+            registerTriageCommandRoutes(services.incidentService)
             registerAddAlertToIncidentRoute(services.alertServiceProvider, services.incidentService)
             registerIncidentSourceRoutes(services.incidentService)
             registerIncidentResponderRoutes(services.incidentService, services.responderService)
@@ -464,7 +489,6 @@ private fun Route.registerDeclareIncidentRoute(
     post {
         val context = call.requireUserContext() ?: return@post
         val request = call.receive<DeclareIncidentRequest>()
-        val severity = call.requireIncidentSeverity(request.severity) ?: return@post
         try {
             val incident =
                 declareIncident(
@@ -472,7 +496,6 @@ private fun Route.registerDeclareIncidentRoute(
                         call = call,
                         context = context,
                         request = request,
-                        severity = severity,
                         onCallAlertId = null,
                         incidentService = onCallIncidentService,
                         configurationService = configurationService,
@@ -864,7 +887,6 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
         val alertService = alertServiceProvider()
         if (!call.ensureAlertInOrganization(alertService, alertId, context.organizationId)) return@post
         val request = call.receive<DeclareIncidentRequest>()
-        val incidentSeverity = call.requireIncidentSeverity(request.severity) ?: return@post
 
         try {
             val incident =
@@ -873,7 +895,6 @@ private fun Route.registerDeclareIncidentFromAlertRoute(
                         call = call,
                         context = context,
                         request = request,
-                        severity = incidentSeverity,
                         onCallAlertId = alertId,
                         incidentService = onCallIncidentService,
                         configurationService = IncidentConfigurationService(),
@@ -892,7 +913,6 @@ private data class IncidentDeclaration(
     val call: ApplicationCall,
     val context: OnCallUserContext,
     val request: DeclareIncidentRequest,
-    val severity: String,
     val onCallAlertId: Int?,
     val incidentService: OnCallIncidentService,
     val configurationService: IncidentConfigurationService,
@@ -908,6 +928,7 @@ private suspend fun declareIncident(declaration: IncidentDeclaration): OnCallInc
             ?: throw IllegalArgumentException("Invalid incident visibility")
     val initialStatus = NativeIncidentStatus.fromWire(request.initialStatus.trim().uppercase())
         ?: throw IllegalArgumentException("Invalid incident status")
+    val severity = declarationSeverity(request.severity, initialStatus)
     val resolvedForm =
         declaration.configurationService.resolveForm(
             organizationId = declaration.context.organizationId,
@@ -926,7 +947,7 @@ private suspend fun declareIncident(declaration: IncidentDeclaration): OnCallInc
             title = request.title,
             description = request.description,
             summary = request.summary,
-            severity = declaration.severity,
+            severity = severity,
             mode = mode,
             visibility = visibility,
             incidentType = resolvedForm.incidentTypeName,
@@ -940,19 +961,14 @@ private suspend fun declareIncident(declaration: IncidentDeclaration): OnCallInc
     )
 }
 
-private suspend fun ApplicationCall.requireIncidentSeverity(severity: String?): String? {
-    val trimmedSeverity = severity?.trim()
-    if (trimmedSeverity.isNullOrBlank()) {
-        respond(HttpStatusCode.BadRequest, ErrorResponse("Missing incident severity"))
+// Triage declarations may stay unclassified; every other initial status needs a severity.
+private fun declarationSeverity(severity: String?, initialStatus: NativeIncidentStatus): String? {
+    val trimmedSeverity = severity?.trim()?.takeIf(String::isNotEmpty)
+    if (trimmedSeverity == null) {
+        require(initialStatus == NativeIncidentStatus.TRIAGE) { "Missing incident severity" }
         return null
     }
-
-    val incidentSeverity = IncidentSeverity.wireValue(trimmedSeverity)
-    if (incidentSeverity == null) {
-        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid incident severity"))
-        return null
-    }
-    return incidentSeverity
+    return requireNotNull(IncidentSeverity.wireValue(trimmedSeverity)) { "Invalid incident severity" }
 }
 
 private fun Route.registerListDeclaredIncidentsRoute(onCallIncidentService: OnCallIncidentService) {
@@ -1005,6 +1021,110 @@ private fun Route.registerResolveDeclaredIncidentRoute(onCallIncidentService: On
         } else {
             call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to resolve incident"))
         }
+    }
+}
+
+/**
+ * Accept, decline, and merge run through the shared command contract: opaque UUID params,
+ * optional expected-version optimistic concurrency, and Idempotency-Key replay.
+ */
+private fun Route.registerTriageCommandRoutes(onCallIncidentService: OnCallIncidentService) {
+    registerAcceptIncidentRoute(onCallIncidentService)
+    registerDeclineIncidentRoute(onCallIncidentService)
+    registerMergeIncidentRoute(onCallIncidentService)
+}
+
+private fun Route.registerAcceptIncidentRoute(onCallIncidentService: OnCallIncidentService) {
+    post("/{id}/accept") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receiveNullable<AcceptIncidentRequest>() ?: AcceptIncidentRequest()
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            AcceptIncidentCommand(
+                commandKey = call.incidentCommandKey("accept"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                expectedVersion = request.expectedVersion,
+                severity = request.severity,
+                incidentTypeResourceId = request.incidentTypeId,
+                formValues = request.fields,
+            )
+        }
+    }
+}
+
+private fun Route.registerDeclineIncidentRoute(onCallIncidentService: OnCallIncidentService) {
+    post("/{id}/decline") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receiveNullable<DeclineIncidentRequest>() ?: DeclineIncidentRequest()
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            DeclineIncidentCommand(
+                commandKey = call.incidentCommandKey("decline"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                reason = request.reason,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+}
+
+private fun Route.registerMergeIncidentRoute(onCallIncidentService: OnCallIncidentService) {
+    post("/{id}/merge") {
+        val context = call.requireUserContext() ?: return@post
+        val incidentId = call.requireIncidentId(context.organizationId) ?: return@post
+        val request = call.receive<MergeIncidentRequest>()
+        val sourceIncidentId =
+            call.requireMergeSourceIncidentId(request.sourceIncidentId, context.organizationId) ?: return@post
+        call.runIncidentCommand(onCallIncidentService, incidentId) {
+            MergeIncidentCommand(
+                commandKey = call.incidentCommandKey("merge"),
+                actor = IncidentCommandActor(context.organizationId, context.userId, "REST"),
+                incidentId = incidentId,
+                sourceIncidentId = sourceIncidentId,
+                expectedVersion = request.expectedVersion,
+            )
+        }
+    }
+}
+
+private suspend fun ApplicationCall.requireMergeSourceIncidentId(
+    raw: String,
+    organizationId: Int,
+): Int? {
+    val resourceId = parseOnCallResourceId(raw)
+    if (resourceId == null) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse("Invalid source incident ID"))
+        return null
+    }
+    val id =
+        transaction {
+            OnCallIncidents
+                .selectAll()
+                .where {
+                    (OnCallIncidents.resourceId eq resourceId) and
+                        (OnCallIncidents.organizationId eq organizationId)
+                }.firstOrNull()
+                ?.get(OnCallIncidents.id)
+                ?.value
+        }
+    if (id == null) respond(HttpStatusCode.NotFound, ErrorResponse("Source incident not found"))
+    return id
+}
+
+private suspend fun ApplicationCall.runIncidentCommand(
+    onCallIncidentService: OnCallIncidentService,
+    incidentId: Int,
+    command: () -> IncidentCommand,
+) {
+    try {
+        onCallIncidentService.executeIncidentCommand(command())
+        respond(checkNotNull(onCallIncidentService.getIncident(incidentId)))
+    } catch (error: IncidentCommandException) {
+        respondIncidentCommandFailure(error)
+    } catch (error: IllegalArgumentException) {
+        respond(HttpStatusCode.BadRequest, ErrorResponse(error.message))
     }
 }
 

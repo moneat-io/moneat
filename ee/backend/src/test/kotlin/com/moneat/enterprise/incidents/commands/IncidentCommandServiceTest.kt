@@ -188,7 +188,7 @@ class IncidentCommandServiceTest {
     }
 
     @Test
-    fun `merge moves linked on-call alerts and cancels the source incident`() {
+    fun `merge moves linked on-call alerts and retires the source incident`() {
         val target = service.execute(declareCommand("merge-target", actor()))
         val source = service.execute(declareCommand("merge-source", actor()))
         val alertId = seedAlert("merge-alert")
@@ -213,7 +213,9 @@ class IncidentCommandServiceTest {
                 OnCallAlerts.selectAll().where { OnCallAlerts.id eq alertId }.single()[OnCallAlerts.declaredIncidentId],
             )
             val sourceRow = OnCallIncidents.selectAll().where { OnCallIncidents.id eq source.incidentId }.single()
-            assertEquals(NativeIncidentStatus.CANCELLED.wire, sourceRow[OnCallIncidents.status])
+            assertEquals(NativeIncidentStatus.MERGED.wire, sourceRow[OnCallIncidents.status])
+            assertEquals(target.incidentId, sourceRow[OnCallIncidents.mergedIntoIncidentId])
+            assertNotNull(sourceRow[OnCallIncidents.mergedAt])
             assertEquals(3, sourceRow[OnCallIncidents.version])
         }
     }

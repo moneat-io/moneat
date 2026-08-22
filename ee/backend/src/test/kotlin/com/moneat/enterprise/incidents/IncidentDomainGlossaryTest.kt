@@ -36,8 +36,12 @@ class IncidentDomainGlossaryTest {
     @Test
     fun `canonical lifecycle mode visibility and ownership values are explicit`() {
         assertEquals(
-            setOf("TRIAGE", "ACTIVE", "RESOLVED", "POST_INCIDENT", "CLOSED", "CANCELLED", "DECLINED"),
+            setOf("TRIAGE", "ACTIVE", "RESOLVED", "POST_INCIDENT", "CLOSED", "CANCELLED", "DECLINED", "MERGED"),
             NativeIncidentStatus.entries.mapTo(mutableSetOf(), NativeIncidentStatus::wire),
+        )
+        assertEquals(
+            setOf(NativeIncidentStatus.MERGED),
+            NativeIncidentStatus.entries.filterTo(mutableSetOf(), NativeIncidentStatus::terminal),
         )
         assertEquals(
             setOf("LIVE", "RETROSPECTIVE", "TEST"),
@@ -74,5 +78,41 @@ class IncidentDomainGlossaryTest {
         assertFalse(encoded.contains("internalId"))
         assertFalse(encoded.contains("\"organizationId\":7"))
         assertFalse(encoded.contains("\"declaredBy\":11"))
+    }
+
+    @Test
+    fun `triage incidents serialize without a severity and merged incidents carry their target`() {
+        val triage = Json.encodeToString(
+            OnCallIncident(
+                id = "0f0d6d31-1d3f-4a0b-8a06-2fd1a4c0f9a1",
+                organizationResourceId = "8eb53cb5-c34c-49af-827d-956abf96394c",
+                title = "Unclassified report",
+                status = NativeIncidentStatus.TRIAGE.wire,
+                declaredByResourceId = "b0c4fec4-7257-42d7-83aa-a32329cbec6f",
+                declaredAt = "2026-08-22T20:00:00Z",
+                createdAt = "2026-08-22T20:00:00Z",
+                updatedAt = "2026-08-22T20:00:00Z",
+            ),
+        )
+        assertFalse(triage.contains("\"severity\""))
+
+        val merged = Json.encodeToString(
+            OnCallIncident(
+                id = "0f0d6d31-1d3f-4a0b-8a06-2fd1a4c0f9a1",
+                organizationResourceId = "8eb53cb5-c34c-49af-827d-956abf96394c",
+                title = "Duplicate report",
+                severity = "SEV-2",
+                status = NativeIncidentStatus.MERGED.wire,
+                declaredByResourceId = "b0c4fec4-7257-42d7-83aa-a32329cbec6f",
+                declaredAt = "2026-08-22T20:00:00Z",
+                mergedAt = "2026-08-22T21:00:00Z",
+                mergedIntoIncidentResourceId = "5f9a0a0c-4d1f-4c1a-9d6f-2c1f8ba4b0d2",
+                createdAt = "2026-08-22T20:00:00Z",
+                updatedAt = "2026-08-22T21:00:00Z",
+            ),
+        )
+        assertTrue(merged.contains("\"status\":\"MERGED\""))
+        assertTrue(merged.contains("\"mergedAt\":\"2026-08-22T21:00:00Z\""))
+        assertTrue(merged.contains("\"mergedIntoIncidentId\":\"5f9a0a0c-4d1f-4c1a-9d6f-2c1f8ba4b0d2\""))
     }
 }
