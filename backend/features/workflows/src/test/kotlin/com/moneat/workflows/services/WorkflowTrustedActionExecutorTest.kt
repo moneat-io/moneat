@@ -18,6 +18,7 @@ package com.moneat.workflows.services
 
 import com.moneat.enterprise.FeatureRegistry
 import com.moneat.enterprise.OnCallBridge
+import com.moneat.enterprise.OnCallIncidentDeclaration
 import com.moneat.events.services.DashboardService
 import com.moneat.logs.models.LogAggregateResponse
 import com.moneat.logs.models.LogQueryResponse
@@ -151,9 +152,10 @@ class WorkflowTrustedActionExecutorTest {
         stepName: String,
         params: Map<String, String>,
         organizationId: Int = orgId,
-        actorUserId: Int? = null
+        actorUserId: Int? = null,
+        idempotencyKey: String? = null,
     ): Map<String, JsonElement> =
-        runBlocking { executor.execute(organizationId, stepName, params, actorUserId) }
+        runBlocking { executor.execute(organizationId, stepName, params, actorUserId, idempotencyKey) }
 
     // ──── supports / dispatch ────
 
@@ -397,19 +399,20 @@ class WorkflowTrustedActionExecutorTest {
     fun `on-call incident declaration sends explicit canonical severity`() {
         val bridge = mockk<OnCallBridge>()
         val incidentResourceId = "77777777-7777-4777-8777-777777777777"
+        val declaration =
+            OnCallIncidentDeclaration(
+                organizationId = orgId,
+                userId = 99,
+                alertId = null,
+                title = "Checkout outage",
+                description = "Investigating elevated checkout errors",
+                severity = "SEV-1",
+                commandKey = "workflow:73:declare-incident",
+            )
         mockkObject(FeatureRegistry)
         try {
             every { FeatureRegistry.getOnCallBridge() } returns bridge
-            coEvery {
-                bridge.declareIncident(
-                    organizationId = orgId,
-                    userId = 99,
-                    alertId = null,
-                    title = "Checkout outage",
-                    description = "Investigating elevated checkout errors",
-                    severity = "SEV-1"
-                )
-            } returns incidentResourceId
+            coEvery { bridge.declareIncident(declaration) } returns incidentResourceId
 
             val result =
                 run(
@@ -419,20 +422,12 @@ class WorkflowTrustedActionExecutorTest {
                         "description" to "Investigating elevated checkout errors",
                         "incident_severity" to "sev1"
                     ),
-                    actorUserId = 99
+                    actorUserId = 99,
+                    idempotencyKey = declaration.commandKey,
                 )
 
             assertEquals(incidentResourceId, result["incident_id"]?.jsonPrimitive?.content)
-            coVerify(exactly = 1) {
-                bridge.declareIncident(
-                    organizationId = orgId,
-                    userId = 99,
-                    alertId = null,
-                    title = "Checkout outage",
-                    description = "Investigating elevated checkout errors",
-                    severity = "SEV-1"
-                )
-            }
+            coVerify(exactly = 1) { bridge.declareIncident(declaration) }
         } finally {
             unmockkObject(FeatureRegistry)
         }
@@ -443,20 +438,21 @@ class WorkflowTrustedActionExecutorTest {
         val bridge = mockk<OnCallBridge>()
         val alertResourceId = "66666666-6666-4666-8666-666666666666"
         val incidentResourceId = "77777777-7777-4777-8777-777777777777"
+        val declaration =
+            OnCallIncidentDeclaration(
+                organizationId = orgId,
+                userId = 99,
+                alertId = 7,
+                title = "Checkout outage",
+                description = null,
+                severity = "SEV-1",
+                commandKey = "workflow:74:declare-from-alert",
+            )
         mockkObject(FeatureRegistry)
         try {
             every { FeatureRegistry.getOnCallBridge() } returns bridge
             every { bridge.resolveAlertId(orgId, alertResourceId) } returns 7
-            coEvery {
-                bridge.declareIncident(
-                    organizationId = orgId,
-                    userId = 99,
-                    alertId = 7,
-                    title = "Checkout outage",
-                    description = null,
-                    severity = "SEV-1"
-                )
-            } returns incidentResourceId
+            coEvery { bridge.declareIncident(declaration) } returns incidentResourceId
 
             val result =
                 run(
@@ -466,20 +462,12 @@ class WorkflowTrustedActionExecutorTest {
                         "incident_severity" to "SEV-1",
                         "alert_id" to alertResourceId
                     ),
-                    actorUserId = 99
+                    actorUserId = 99,
+                    idempotencyKey = declaration.commandKey,
                 )
 
             assertEquals(incidentResourceId, result["incident_id"]?.jsonPrimitive?.content)
-            coVerify(exactly = 1) {
-                bridge.declareIncident(
-                    organizationId = orgId,
-                    userId = 99,
-                    alertId = 7,
-                    title = "Checkout outage",
-                    description = null,
-                    severity = "SEV-1"
-                )
-            }
+            coVerify(exactly = 1) { bridge.declareIncident(declaration) }
         } finally {
             unmockkObject(FeatureRegistry)
         }

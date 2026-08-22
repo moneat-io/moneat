@@ -1149,8 +1149,11 @@ Update alert notification channel preferences.
 
 ## On-Call Tools
 
-### `list_incidents`
-List on-call incidents.
+On-call alerts are pages routed to responders through escalation policies. They are distinct
+from declared incidents; see the On-Call & Incidents guide for the terminology.
+
+### `list_on_call_alerts`
+List on-call alerts and their escalation state.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -1158,12 +1161,12 @@ List on-call incidents.
 | `priority` | string | No | `P0`-`P5` |
 | `limit` | number | No | Max results (default 50) |
 
-### `get_incident`
-Get incident details.
+### `get_on_call_alert`
+Get an on-call alert and its escalation timeline.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `incident_id` | number | Yes | Incident ID |
+| `alert_id` | string | Yes | On-call alert resource ID |
 
 ### `list_schedules`
 List on-call schedules. No parameters.

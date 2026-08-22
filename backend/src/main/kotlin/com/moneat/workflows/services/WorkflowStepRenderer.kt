@@ -184,17 +184,10 @@ class WorkflowStepRenderer {
         }
         return mapOf(
             "incident.id" to SAMPLE_INCIDENT_ID,
+            "incident.kind" to "native_incident",
             "incident.title" to "Checkout latency incident",
             "incident.status" to status,
             "incident.severity" to IncidentSeverity.SEV1.wire,
-            ALERT_DEDUPLICATION_KEY_REFERENCE to "incident-checkout-latency",
-            ALERT_EPISODE_ID_REFERENCE to SAMPLE_INCIDENT_ID,
-            ALERT_EPISODE_KEY_REFERENCE to "incident-checkout-latency#3",
-            ALERT_EPISODE_SEQ_REFERENCE to "3",
-            ALERT_NOTIFICATION_SEQUENCE_REFERENCE to "1",
-            ALERT_NOTIFICATION_KIND_REFERENCE to status,
-            ALERT_OPENED_AT_REFERENCE to "2026-06-02T12:00:00Z",
-            ALERT_LAST_SEEN_AT_REFERENCE to "2026-06-02T12:05:00Z",
             ORGANIZATION_ID_REFERENCE to SAMPLE_ORGANIZATION_ID
         )
     }

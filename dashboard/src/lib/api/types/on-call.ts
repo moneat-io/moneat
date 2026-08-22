@@ -149,19 +149,45 @@ export interface OnCallAlertDetail extends OnCallAlert {
   timeline?: OnCallTimelineEvent[]
 }
 
+// Native declared-incident lifecycle. The wire status OPEN was migrated to
+// ACTIVE; keep this union aligned with the enterprise native incident aggregate.
+export type OnCallIncidentStatus =
+  | 'TRIAGE'
+  | 'ACTIVE'
+  | 'RESOLVED'
+  | 'POST_INCIDENT'
+  | 'CLOSED'
+  | 'CANCELLED'
+  | 'DECLINED'
+
+export type OnCallIncidentMode = 'LIVE' | 'RETROSPECTIVE' | 'TEST'
+
+export type OnCallIncidentVisibility = 'ORGANIZATION' | 'PRIVATE' | 'PUBLIC'
+
 export interface OnCallIncident {
   id: string
   organizationId: string
   title: string
   description?: string
+  summary?: string
   severity: string
-  status: string
+  status: OnCallIncidentStatus
+  mode?: OnCallIncidentMode
+  visibility?: OnCallIncidentVisibility
+  incidentType?: string
+  version?: number
   declaredBy: string
   declaredByName?: string
   declaredAt: string
+  triagedAt?: string
+  acceptedAt?: string
   resolvedBy?: string
   resolvedByName?: string
   resolvedAt?: string
+  postIncidentAt?: string
+  closedAt?: string
+  cancelledAt?: string
+  declinedAt?: string
   alertCount: number
   alerts?: Array<{ id: string; title: string; status: string; priority?: string }>
   createdAt: string

@@ -26,6 +26,7 @@ import com.moneat.testsupport.TestDatabaseHelper
 import com.moneat.workflows.models.WorkflowStepConfig
 import com.moneat.workflows.models.typedWorkflowScope
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -201,13 +202,28 @@ class WorkflowActionExecutorTest {
     @Test
     fun `unknown step is delegated to trusted actions when supported`() {
         every { trustedActions.supports("moneat.logs.search") } returns true
-        coEvery { trustedActions.execute(any(), any(), any(), any()) } returns mapOf("logs" to JsonPrimitive(true))
+        coEvery { trustedActions.execute(any(), any(), any(), any(), any()) } returns
+            mapOf("logs" to JsonPrimitive(true))
         val result =
-            execute(
-                WorkflowStepConfig("moneat.logs.search", mapOf("query" to "{{alert.title}}")),
-                mapOf("alert.title" to "Boom", "workflow.actor_id" to "42")
-            )
+            runBlocking {
+                executor.executeStep(
+                    organizationId = orgId,
+                    step = WorkflowStepConfig("moneat.logs.search", mapOf("query" to "{{alert.title}}")),
+                    scope = mapOf("alert.title" to JsonPrimitive("Boom")),
+                    runId = 73,
+                    nodeId = "investigate",
+                )
+            }
         assertTrue(result.containsKey("logs"))
+        coVerify {
+            trustedActions.execute(
+                organizationId = orgId,
+                stepName = "moneat.logs.search",
+                params = mapOf("query" to "Boom"),
+                actorUserId = null,
+                idempotencyKey = "workflow:73:investigate",
+            )
+        }
     }
 
     @Test

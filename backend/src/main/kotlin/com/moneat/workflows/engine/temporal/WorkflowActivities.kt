@@ -56,7 +56,9 @@ class ExecuteActionActivityImpl(
                 actionExecutor.executeStep(
                     organizationId = input.organizationId,
                     step = input.step,
-                    scope = input.scope.toWorkflowValues()
+                    scope = input.scope.toWorkflowValues(),
+                    runId = input.runId,
+                    nodeId = input.nodeId,
                 )
             }.fold(
                 onSuccess = {

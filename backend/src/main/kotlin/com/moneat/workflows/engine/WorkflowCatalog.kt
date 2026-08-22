@@ -56,6 +56,7 @@ private const val WORKFLOW_CALLER_REFERENCE = "workflow.caller"
 private const val WEBHOOK_PAYLOAD_REFERENCE = "webhook.payload"
 private const val WEBHOOK_EVENT_ID_REFERENCE = "webhook.event_id"
 private const val INCIDENT_ID_REFERENCE = "incident.id"
+private const val INCIDENT_KIND_REFERENCE = "incident.kind"
 private const val INCIDENT_TITLE_REFERENCE = "incident.title"
 private const val INCIDENT_STATUS_REFERENCE = "incident.status"
 private const val INCIDENT_SEVERITY_REFERENCE = "incident.severity"
@@ -298,6 +299,7 @@ object WorkflowCatalog {
 
     private val incidentScope = listOf(
         WorkflowScopeReferenceDefinition(INCIDENT_ID_REFERENCE, "Incident ID", "String"),
+        WorkflowScopeReferenceDefinition(INCIDENT_KIND_REFERENCE, "Incident object type", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_TITLE_REFERENCE, "Incident title", "String"),
         WorkflowScopeReferenceDefinition(INCIDENT_STATUS_REFERENCE, "Incident status", "IncidentStatus"),
         WorkflowScopeReferenceDefinition(INCIDENT_SEVERITY_REFERENCE, INCIDENT_SEVERITY_LABEL, "IncidentSeverity"),

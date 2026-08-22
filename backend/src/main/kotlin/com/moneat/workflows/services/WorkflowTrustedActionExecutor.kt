@@ -18,6 +18,7 @@ package com.moneat.workflows.services
 
 import com.moneat.alerts.models.IncidentSeverity
 import com.moneat.enterprise.FeatureRegistry
+import com.moneat.enterprise.OnCallIncidentDeclaration
 import com.moneat.events.services.DashboardService
 import com.moneat.logs.models.LogAnalyticsFilters
 import com.moneat.logs.models.LogQueryRequest
@@ -79,7 +80,21 @@ class WorkflowTrustedActionExecutor(
         organizationId: Int,
         stepName: String,
         params: Map<String, String>,
-        actorUserId: Int? = null
+        actorUserId: Int? = null,
+        idempotencyKey: String? = null,
+    ): Map<String, JsonElement> {
+        if (stepName in WORKFLOW_PREMIUM_CONNECTOR_ACTIONS) {
+            return executePremiumConnector(organizationId, stepName, params, actorUserId)
+        }
+        return executeBuiltIn(organizationId, stepName, params, actorUserId, idempotencyKey)
+    }
+
+    private suspend fun executeBuiltIn(
+        organizationId: Int,
+        stepName: String,
+        params: Map<String, String>,
+        actorUserId: Int?,
+        idempotencyKey: String?,
     ): Map<String, JsonElement> =
         when (stepName) {
             LOGS_SEARCH_STEP -> executeLogSearch(organizationId, params)
@@ -93,9 +108,8 @@ class WorkflowTrustedActionExecutor(
             STATUS_PAGE_INCIDENT_CREATE_STEP -> executeStatusPageIncidentCreate(organizationId, params)
             ALERT_SILENCE_STEP -> executeAlertSilence(organizationId, params, actorUserId)
             ON_CALL_PAGE_STEP -> executeOnCallPage(organizationId, params)
-            ON_CALL_DECLARE_INCIDENT_STEP -> executeOnCallDeclareIncident(organizationId, params, actorUserId)
-            in WORKFLOW_PREMIUM_CONNECTOR_ACTIONS ->
-                executePremiumConnector(organizationId, stepName, params, actorUserId)
+            ON_CALL_DECLARE_INCIDENT_STEP ->
+                executeOnCallDeclareIncident(organizationId, params, actorUserId, idempotencyKey)
             else -> throw IllegalArgumentException("Unknown workflow step $stepName")
         }
 
@@ -293,7 +307,8 @@ class WorkflowTrustedActionExecutor(
     private suspend fun executeOnCallDeclareIncident(
         organizationId: Int,
         params: Map<String, String>,
-        actorUserId: Int?
+        actorUserId: Int?,
+        idempotencyKey: String?,
     ): Map<String, JsonElement> {
         val bridge = FeatureRegistry.getOnCallBridge()
             ?: return mapOf(
@@ -308,12 +323,15 @@ class WorkflowTrustedActionExecutor(
         }
         val incidentId =
             bridge.declareIncident(
-                organizationId = organizationId,
-                userId = actorUserId ?: workflowActorUserId(organizationId),
-                alertId = alertId,
-                title = params.required("title"),
-                description = params.optional("description"),
-                severity = severity
+                OnCallIncidentDeclaration(
+                    organizationId = organizationId,
+                    userId = actorUserId ?: workflowActorUserId(organizationId),
+                    alertId = alertId,
+                    title = params.required("title"),
+                    description = params.optional("description"),
+                    severity = severity,
+                    commandKey = idempotencyKey ?: "workflow:${UUID.randomUUID()}",
+                ),
             ) ?: throw IllegalStateException("On-call incident declaration did not return an incident ID")
         return mapOf("incident_id" to JsonPrimitive(incidentId))
     }

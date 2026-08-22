@@ -5,6 +5,13 @@
 package com.moneat.enterprise.oncall.services
 
 import com.moneat.alerts.models.IncidentSeverity
+import com.moneat.enterprise.incidents.commands.AddIncidentTimelineEventCommand
+import com.moneat.enterprise.incidents.commands.DeclareIncidentCommand
+import com.moneat.enterprise.incidents.commands.IncidentCommandActor
+import com.moneat.enterprise.incidents.commands.IncidentCommandNotFoundException
+import com.moneat.enterprise.incidents.commands.IncidentCommandService
+import com.moneat.enterprise.incidents.commands.LinkOnCallAlertCommand
+import com.moneat.enterprise.incidents.commands.ResolveIncidentCommand
 import com.moneat.enterprise.oncall.escalationPolicyResourceIds
 import com.moneat.enterprise.oncall.incidentResourceIds
 import com.moneat.enterprise.oncall.organizationResourceId
@@ -18,8 +25,6 @@ import com.moneat.enterprise.oncall.models.OnCallIncidentTimeline
 import com.moneat.enterprise.oncall.models.OnCallIncidents
 import com.moneat.enterprise.oncall.models.OnCallTimelineEvent
 import com.moneat.shared.models.Users
-import com.moneat.utils.suspendRunCatching
-import com.moneat.workflows.services.WorkflowService
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.SortOrder
@@ -27,255 +32,39 @@ import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.andWhere
-import org.jetbrains.exposed.v1.jdbc.insert
-import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import org.jetbrains.exposed.v1.jdbc.update
-import org.slf4j.LoggerFactory
-import kotlin.time.Clock
-
-private val logger = LoggerFactory.getLogger(OnCallIncidentService::class.java)
-private const val ALERT_NOT_FOUND_MESSAGE = "Alert not found"
+import kotlin.uuid.Uuid
 
 class OnCallIncidentService(
-    private val workflowService: WorkflowService = WorkflowService(),
+    private val commandService: IncidentCommandService = IncidentCommandService(),
 ) {
-    suspend fun declareIncident(
-        organizationId: Int,
-        userId: Int,
-        alertId: Int?,
-        title: String,
-        description: String?,
-        severity: String,
-    ): OnCallIncident {
-        val result =
-            transaction {
-                val now = Clock.System.now()
-                val incidentSeverity =
-                    requireNotNull(IncidentSeverity.fromString(severity)) {
-                        "Invalid incident severity: $severity"
-                    }
-
-                if (alertId != null) {
-                    validateAlertForDeclaration(organizationId, alertId)
-                }
-
-                // Create incident
-                val incidentId =
-                    OnCallIncidents
-                        .insertAndGetId {
-                            it[OnCallIncidents.organizationId] = organizationId
-                            it[OnCallIncidents.title] = title
-                            it[OnCallIncidents.description] = description
-                            it[OnCallIncidents.severity] = incidentSeverity.wire
-                            it[OnCallIncidents.status] = "OPEN"
-                            it[OnCallIncidents.declaredBy] = userId
-                            it[OnCallIncidents.declaredAt] = now
-                            it[OnCallIncidents.createdAt] = now
-                            it[OnCallIncidents.updatedAt] = now
-                        }.value
-
-                if (alertId != null) {
-                    // Link alert
-                    OnCallIncidentAlerts.insert {
-                        it[OnCallIncidentAlerts.incidentId] = incidentId
-                        it[OnCallIncidentAlerts.alertId] = alertId
-                    }
-
-                    // Update alert with incident_id reference
-                    OnCallAlerts.update({ OnCallAlerts.id eq alertId }) {
-                        it[OnCallAlerts.declaredIncidentId] = incidentId
-                    }
-                }
-
-                // Add DECLARED event to timeline
-                OnCallIncidentTimeline.insert {
-                    it[OnCallIncidentTimeline.incidentId] = incidentId
-                    it[OnCallIncidentTimeline.eventType] = "DECLARED"
-                    it[OnCallIncidentTimeline.actorUserId] = userId
-                    it[OnCallIncidentTimeline.details] = emptyMap()
-                    it[OnCallIncidentTimeline.createdAt] = now
-                }
-
-                DeclaredIncidentResult(
-                    incident = getIncident(incidentId)!!,
-                    severity = incidentSeverity,
-                )
-            }
-
-        publishIncidentCreated(result.incident, result.severity)
-        return result.incident
+    suspend fun declareIncident(command: DeclareIncidentCommand): OnCallIncident {
+        val result = commandService.execute(command)
+        return checkNotNull(getIncident(result.incidentId))
     }
 
-    private fun validateAlertForDeclaration(
-        organizationId: Int,
-        alertId: Int,
-    ) {
-        val alert =
-            OnCallAlerts
-                .selectAll()
-                .where { OnCallAlerts.id eq alertId }
-                .singleOrNull() ?: throw IllegalArgumentException(ALERT_NOT_FOUND_MESSAGE)
-
-        require(alert[OnCallAlerts.organizationId] == organizationId) {
-            ALERT_NOT_FOUND_MESSAGE
-        }
-
-        val existingLink =
-            OnCallIncidentAlerts
-                .selectAll()
-                .where { OnCallIncidentAlerts.alertId eq alertId }
-                .singleOrNull()
-
-        check(existingLink == null) {
-            "Alert is already linked to a declared incident"
-        }
-    }
-
-    private suspend fun publishIncidentCreated(
-        incident: OnCallIncident,
-        severity: IncidentSeverity,
-    ) {
-        suspendRunCatching {
-            workflowService.publishDeclaredIncidentCreated(
-                organizationId = incident.organizationId,
-                incidentId = incident.internalId,
-                title = incident.title,
-                severity = severity,
-            )
-        }.getOrElse { e ->
-            logger.error("Error publishing incident-created workflow for declared incident ${incident.id}", e)
-        }
-    }
-
-    fun addAlertToIncident(
-        incidentId: Int,
-        alertId: Int,
-    ) = transaction {
-        val incident =
-            OnCallIncidents.selectAll().where { OnCallIncidents.id eq incidentId }.singleOrNull()
-            ?: throw IllegalArgumentException("Incident not found")
-
-        val alert =
-            OnCallAlerts.selectAll().where { OnCallAlerts.id eq alertId }.singleOrNull()
-                ?: throw IllegalArgumentException(ALERT_NOT_FOUND_MESSAGE)
-
-        require(incident[OnCallIncidents.organizationId] == alert[OnCallAlerts.organizationId]) {
-            ALERT_NOT_FOUND_MESSAGE
-        }
-
-        // Insert if not exists
-        val exists =
-            OnCallIncidentAlerts
-                .selectAll()
-                .where {
-                    (OnCallIncidentAlerts.incidentId eq incidentId) and (OnCallIncidentAlerts.alertId eq alertId)
-                }.empty()
-                .not()
-
-        if (!exists) {
-            OnCallIncidentAlerts.insert {
-                it[OnCallIncidentAlerts.incidentId] = incidentId
-                it[OnCallIncidentAlerts.alertId] = alertId
-            }
-
-            OnCallAlerts.update({ OnCallAlerts.id eq alertId }) {
-                it[OnCallAlerts.declaredIncidentId] = incidentId
-            }
-
-            // Add ALERT_LINKED event to timeline
-            OnCallIncidentTimeline.insert {
-                it[OnCallIncidentTimeline.incidentId] = incidentId
-                it[OnCallIncidentTimeline.eventType] = "ALERT_LINKED"
-                    it[OnCallIncidentTimeline.actorUserId] = null
-                    it[OnCallIncidentTimeline.details] =
-                        mapOf(
-                            "alertId" to JsonPrimitive(alert[OnCallAlerts.resourceId].toString()),
-                            "alertTitle" to JsonPrimitive(alert[OnCallAlerts.title]),
-                        )
-                it[OnCallIncidentTimeline.createdAt] = Clock.System.now()
-            }
-        }
+    fun addAlertToIncident(command: LinkOnCallAlertCommand) {
+        commandService.execute(command)
     }
 
     suspend fun resolveIncident(
         incidentId: Int,
         userId: Int,
         resolutionNote: String? = null,
+        commandKey: String = Uuid.random().toString(),
+        origin: String = "SERVICE",
     ): OnCallIncident? {
-        val result =
-            transaction {
-                val current =
-                    OnCallIncidents
-                        .selectAll()
-                        .where { OnCallIncidents.id eq incidentId }
-                        .singleOrNull() ?: return@transaction null
-
-                val incidentSeverity =
-                    requireNotNull(IncidentSeverity.fromString(current[OnCallIncidents.severity])) {
-                        "Invalid incident severity: ${current[OnCallIncidents.severity]}"
-                    }
-
-                if (current[OnCallIncidents.status] == "RESOLVED") {
-                    return@transaction ResolvedIncidentResult(getIncident(incidentId), null)
-                }
-
-                val now = Clock.System.now()
-                val resolutionDetails =
-                    resolutionNote
-                        ?.trim()
-                        ?.takeIf { it.isNotEmpty() }
-                        ?.let { note -> mapOf("note" to JsonPrimitive(note)) }
-                        ?: emptyMap()
-
-                val updated =
-                    OnCallIncidents.update({
-                        (OnCallIncidents.id eq incidentId) and (OnCallIncidents.status eq "OPEN")
-                    }) {
-                        it[status] = "RESOLVED"
-                        it[resolvedBy] = userId
-                        it[resolvedAt] = now
-                        it[updatedAt] = now
-                    }
-
-                if (updated == 0) {
-                    return@transaction ResolvedIncidentResult(getIncident(incidentId), null)
-                }
-
-                // Add RESOLVED event to timeline
-                OnCallIncidentTimeline.insert {
-                    it[OnCallIncidentTimeline.incidentId] = incidentId
-                    it[OnCallIncidentTimeline.eventType] = "RESOLVED"
-                    it[OnCallIncidentTimeline.actorUserId] = userId
-                    it[OnCallIncidentTimeline.details] = resolutionDetails
-                    it[OnCallIncidentTimeline.createdAt] = now
-                }
-
-                ResolvedIncidentResult(getIncident(incidentId), incidentSeverity)
-            }
-
-        val incident = result?.incident ?: return null
-        result.severityToPublish?.let { severity ->
-            publishIncidentResolved(incident, severity)
-        }
-        return incident
-    }
-
-    private suspend fun publishIncidentResolved(
-        incident: OnCallIncident,
-        severity: IncidentSeverity,
-    ) {
-        suspendRunCatching {
-            workflowService.publishDeclaredIncidentResolved(
-                organizationId = incident.organizationId,
-                incidentId = incident.internalId,
-                title = incident.title,
-                severity = severity,
-            )
-        }.getOrElse { e ->
-            logger.error("Error publishing incident-resolved workflow for declared incident ${incident.id}", e)
-        }
+        val organizationId = getIncidentOrganizationId(incidentId) ?: return null
+        commandService.execute(
+            ResolveIncidentCommand(
+                commandKey = commandKey,
+                actor = IncidentCommandActor(organizationId, userId, origin),
+                incidentId = incidentId,
+                note = resolutionNote,
+            ),
+        )
+        return getIncident(incidentId)
     }
 
     fun getIncident(incidentId: Int): OnCallIncident? =
@@ -313,7 +102,9 @@ class OnCallIncidentService(
                     .where { OnCallIncidents.organizationId eq organizationId }
 
             if (status != null) {
-                query = query.andWhere { OnCallIncidents.status eq status }
+                val normalizedStatus = status.uppercase()
+                val canonicalStatus = if (normalizedStatus == "OPEN") "ACTIVE" else normalizedStatus
+                query = query.andWhere { OnCallIncidents.status eq canonicalStatus }
             }
 
             val normalizedSeverity = severity?.let {
@@ -364,23 +155,34 @@ class OnCallIncidentService(
                 .singleOrNull() != null
         }
 
+    fun getIncidentOrganizationId(incidentId: Int): Int? =
+        transaction {
+            OnCallIncidents
+                .selectAll()
+                .where { OnCallIncidents.id eq incidentId }
+                .singleOrNull()
+                ?.get(OnCallIncidents.organizationId)
+        }
+
     fun addNote(
         incidentId: Int,
         userId: Int,
         note: String,
-    ) = transaction {
-        val now = Clock.System.now()
-
-        OnCallIncidentTimeline.insert {
-            it[OnCallIncidentTimeline.incidentId] = incidentId
-            it[OnCallIncidentTimeline.eventType] = "NOTE_ADDED"
-            it[OnCallIncidentTimeline.actorUserId] = userId
-            it[OnCallIncidentTimeline.details] =
-                mapOf(
-                    "note" to JsonPrimitive(note),
-                )
-            it[OnCallIncidentTimeline.createdAt] = now
-        }
+        commandKey: String = Uuid.random().toString(),
+        origin: String = "SERVICE",
+    ) {
+        val organizationId =
+            getIncidentOrganizationId(incidentId)
+                ?: throw IncidentCommandNotFoundException("Native incident not found")
+        commandService.execute(
+            AddIncidentTimelineEventCommand(
+                commandKey = commandKey,
+                actor = IncidentCommandActor(organizationId, userId, origin),
+                incidentId = incidentId,
+                eventType = "NOTE_ADDED",
+                details = mapOf("note" to JsonPrimitive(note)),
+            ),
+        )
     }
 
     fun getIncidentTimeline(incidentId: Int): List<OnCallTimelineEvent> =
@@ -497,20 +299,27 @@ class OnCallIncidentService(
             description = row[OnCallIncidents.description],
             severity = row[OnCallIncidents.severity],
             status = row[OnCallIncidents.status],
+            mode = row[OnCallIncidents.mode],
+            visibility = row[OnCallIncidents.visibility],
+            incidentType = row[OnCallIncidents.incidentType],
+            summary = row[OnCallIncidents.summary],
+            version = row[OnCallIncidents.version],
             declaredByResourceId = resourceIds.user(declaredById),
             declaredByName = resourceIds.userName(declaredById),
             declaredAt = row[OnCallIncidents.declaredAt].toString(),
+            triagedAt = row[OnCallIncidents.triagedAt]?.toString(),
+            acceptedAt = row[OnCallIncidents.acceptedAt]?.toString(),
             resolvedByResourceId = resourceIds.userOrNull(resolvedById),
             resolvedByName = resourceIds.userNameOrNull(resolvedById),
             resolvedAt = row[OnCallIncidents.resolvedAt]?.toString(),
+            postIncidentAt = row[OnCallIncidents.postIncidentAt]?.toString(),
+            closedAt = row[OnCallIncidents.closedAt]?.toString(),
+            cancelledAt = row[OnCallIncidents.cancelledAt]?.toString(),
+            declinedAt = row[OnCallIncidents.declinedAt]?.toString(),
             alertCount = alerts.size,
             alerts = alerts,
             createdAt = row[OnCallIncidents.createdAt].toString(),
             updatedAt = row[OnCallIncidents.updatedAt].toString(),
-            internalId = row[OnCallIncidents.id].value,
-            organizationId = row[OnCallIncidents.organizationId],
-            declaredBy = declaredById,
-            resolvedBy = resolvedById,
         )
     }
 
@@ -632,14 +441,4 @@ class OnCallIncidentService(
         fun policyOrNull(policyId: Int?): String? =
             policyId?.let { policyResourceIds.requireValue(it, "escalation policy") }
     }
-
-    private data class DeclaredIncidentResult(
-        val incident: OnCallIncident,
-        val severity: IncidentSeverity,
-    )
-
-    private data class ResolvedIncidentResult(
-        val incident: OnCallIncident?,
-        val severityToPublish: IncidentSeverity?,
-    )
 }

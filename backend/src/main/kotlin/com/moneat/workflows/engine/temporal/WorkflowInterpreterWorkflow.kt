@@ -228,7 +228,13 @@ class WorkflowInterpreterWorkflowImpl : WorkflowInterpreterWorkflow {
                     executeActionActivity(
                         node = node,
                         action = action,
-                        input = ExecuteActionInput(snapshot.organizationId, step, scope.toRuntimeValues())
+                        input = ExecuteActionInput(
+                            organizationId = snapshot.organizationId,
+                            step = step,
+                            scope = scope.toRuntimeValues(),
+                            runId = input.runId,
+                            nodeId = node.id,
+                        ),
                     )
                 } catch (failure: ActivityFailure) {
                     handleActionFailure(node, failure.workflowStepMessage())

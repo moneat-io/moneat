@@ -26,7 +26,7 @@ class OnCallToolTest {
     )
 
     @Test
-    fun `list incidents initializes its service without scheduler jobs`() {
+    fun `list on-call alerts initializes its service without scheduler jobs`() {
         val service = mockk<OnCallAlertService>()
         every {
             service.listAlerts(
@@ -38,11 +38,12 @@ class OnCallToolTest {
             )
         } returns emptyList()
         var serviceInitialized = false
-        val tool = ListIncidentsTool {
+        val tool = ListOnCallAlertsTool {
             serviceInitialized = true
             service
         }
 
+        assertEquals("list_on_call_alerts", tool.name)
         assertFalse(serviceInitialized)
 
         val result = runBlocking {
@@ -58,19 +59,20 @@ class OnCallToolTest {
     }
 
     @Test
-    fun `get incident validates its id before initializing the service`() {
+    fun `get on-call alert validates its id before initializing the service`() {
         var serviceInitialized = false
-        val tool = GetIncidentTool {
+        val tool = GetOnCallAlertTool {
             serviceInitialized = true
             mockk()
         }
 
+        assertEquals("get_on_call_alert", tool.name)
         val result = runBlocking {
             tool.execute(JsonObject(emptyMap()), context)
         }
 
         assertFalse(serviceInitialized)
         assertTrue(result.isError)
-        assertEquals("incident_id is required", result.content.single().text)
+        assertEquals("alert_id is required", result.content.single().text)
     }
 }

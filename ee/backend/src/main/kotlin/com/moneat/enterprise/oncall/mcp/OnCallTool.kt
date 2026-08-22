@@ -24,14 +24,14 @@ import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
 private val scheduleService = OnCallScheduleService()
 
-private const val DEFAULT_INCIDENT_LIMIT = 50
-private const val MAX_INCIDENT_LIMIT = 200
+private const val DEFAULT_ALERT_LIMIT = 50
+private const val MAX_ALERT_LIMIT = 200
 
-class ListIncidentsTool(
-    private val incidentService: () -> OnCallAlertService,
+class ListOnCallAlertsTool(
+    private val alertService: () -> OnCallAlertService,
 ) : McpTool {
-    override val name = "list_incidents"
-    override val description = "List on-call incidents"
+    override val name = "list_on_call_alerts"
+    override val description = "List on-call alerts and their escalation state"
     override val inputSchema = InputSchema(
         properties = JsonObject(
             mapOf(
@@ -56,51 +56,51 @@ class ListIncidentsTool(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val svc = incidentService()
+        val svc = alertService()
         val status = args["status"]?.jsonPrimitive?.content
         val priority = args["priority"]?.jsonPrimitive?.content
-        val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_INCIDENT_LIMIT)
-            .coerceIn(1, MAX_INCIDENT_LIMIT)
+        val limit = (args["limit"]?.jsonPrimitive?.intOrNull ?: DEFAULT_ALERT_LIMIT)
+            .coerceIn(1, MAX_ALERT_LIMIT)
 
-        val incidents = svc.listAlerts(
+        val alerts = svc.listAlerts(
             organizationId = context.organizationId,
             status = status,
             priority = priority,
             limit = limit,
             currentUserId = context.userId
         )
-        return jsonResult(incidents)
+        return jsonResult(alerts)
     }
 }
 
-class GetIncidentTool(
-    private val incidentService: () -> OnCallAlertService,
+class GetOnCallAlertTool(
+    private val alertService: () -> OnCallAlertService,
 ) : McpTool {
-    override val name = "get_incident"
+    override val name = "get_on_call_alert"
     override val description =
-        "Get on-call incident details and timeline"
+        "Get an on-call alert and its escalation timeline"
     override val inputSchema = InputSchema(
         properties = JsonObject(
-            mapOf("incident_id" to schemaResourceId("Incident resource ID"))
+            mapOf("alert_id" to schemaResourceId("On-call alert resource ID"))
         ),
-        required = listOf("incident_id")
+        required = listOf("alert_id")
     )
 
     override suspend fun execute(
         args: JsonObject,
         context: McpContext
     ): ToolCallResult {
-        val incidentResourceId = args.stringContent("incident_id")
-            ?: return errorResult("incident_id is required")
-        val incidentId = transaction {
-            alertIdForResource(context.organizationId, incidentResourceId)
-        } ?: return errorResult("Incident not found: $incidentResourceId")
-        val svc = incidentService()
-        val incident = svc.getAlert(
-            incidentId,
+        val alertResourceId = args.stringContent("alert_id")
+            ?: return errorResult("alert_id is required")
+        val alertId = transaction {
+            alertIdForResource(context.organizationId, alertResourceId)
+        } ?: return errorResult("On-call alert not found: $alertResourceId")
+        val svc = alertService()
+        val alert = svc.getAlert(
+            alertId,
             context.userId
-        ) ?: return errorResult("Incident not found: $incidentResourceId")
-        return jsonResult(incident)
+        ) ?: return errorResult("On-call alert not found: $alertResourceId")
+        return jsonResult(alert)
     }
 }
 

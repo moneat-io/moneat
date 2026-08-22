@@ -72,14 +72,7 @@ interface OnCallBridge {
     ): Boolean
 
     /** Declare an operational incident and return the declared incident resource ID. */
-    suspend fun declareIncident(
-        organizationId: Int,
-        userId: Int,
-        alertId: Int?,
-        title: String,
-        description: String?,
-        severity: String
-    ): String?
+    suspend fun declareIncident(declaration: OnCallIncidentDeclaration): String?
 
     /** Get a declared incident by ID for a user. */
     fun getIncident(
@@ -105,6 +98,16 @@ interface OnCallBridge {
         userId: Int
     ): Boolean
 }
+
+data class OnCallIncidentDeclaration(
+    val organizationId: Int,
+    val userId: Int,
+    val alertId: Int?,
+    val title: String,
+    val description: String?,
+    val severity: String,
+    val commandKey: String,
+)
 
 /** Lightweight data carrier for priority info, avoiding enterprise model dependency. */
 data class PriorityInfo(val priority: String, val label: String?)

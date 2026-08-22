@@ -95,7 +95,9 @@ data class WorkflowInterpreterResult(
 data class ExecuteActionInput(
     var organizationId: Int = 0,
     var step: WorkflowStepConfig = WorkflowStepConfig(name = ""),
-    var scope: Map<String, String> = emptyMap()
+    var scope: Map<String, String> = emptyMap(),
+    var runId: Int? = null,
+    var nodeId: String? = null,
 )
 
 data class ExecuteActionResult(

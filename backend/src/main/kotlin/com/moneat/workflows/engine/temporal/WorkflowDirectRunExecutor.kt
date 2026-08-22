@@ -88,7 +88,9 @@ class WorkflowDirectRunExecutor(
                 ExecuteActionInput(
                     organizationId = snapshot.organizationId,
                     step = step,
-                    scope = snapshot.scope
+                    scope = snapshot.scope,
+                    runId = runId,
+                    nodeId = node.id,
                 )
             )
         val progress =

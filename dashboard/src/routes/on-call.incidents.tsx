@@ -29,20 +29,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {Filter, Zap, Clock, CheckCircle2, ChevronRight, FileText, ShieldAlert} from 'lucide-react'
+import {Filter, Zap, CheckCircle2, ChevronRight, FileText, ShieldAlert} from 'lucide-react'
 import {useState} from 'react'
 import {cn} from '@/lib/utils'
+import {incidentStatusConfig} from '@/lib/incident-status'
+import type {OnCallIncidentStatus} from '@/lib/api/types'
 
 export const Route = createFileRoute('/on-call/incidents')({
   component: DeclaredIncidents,
 })
 
 type IncidentSeverity = 'SEV-0' | 'SEV-1' | 'SEV-2' | 'SEV-3' | 'SEV-4'
-type IncidentStatus = 'OPEN' | 'RESOLVED'
-type IncidentStatusFilter = IncidentStatus | 'all'
+type IncidentStatusFilter = OnCallIncidentStatus | 'all'
 type IncidentSeverityFilter = IncidentSeverity | 'all'
 
-const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER: IncidentStatus = 'OPEN'
+const DEFAULT_DECLARED_INCIDENT_STATUS_FILTER: OnCallIncidentStatus = 'ACTIVE'
 
 // Incident severity mapped onto the shared status language.
 function severityTone(severity: string): StatusTone {
@@ -65,12 +66,6 @@ function severityBadgeVariant(severity: string): BadgeProps['variant'] {
     default:
       return 'neutral'
   }
-}
-
-const getStatusConfig = (status: string): {variant: BadgeProps['variant']; icon: typeof Zap; label: string} => {
-  if (status === 'OPEN') return {variant: 'danger', icon: Zap, label: 'Open'}
-  if (status === 'RESOLVED') return {variant: 'success', icon: CheckCircle2, label: 'Resolved'}
-  return {variant: 'neutral', icon: Clock, label: status}
 }
 
 function timeAgo(date: string) {
@@ -102,7 +97,7 @@ function DeclaredIncidents() {
     refetchInterval: 30000,
   })
 
-  const openCount = incidents?.filter(i => i.status === 'OPEN').length || 0
+  const activeCount = incidents?.filter(i => i.status === 'ACTIVE').length || 0
   const resolvedCount = incidents?.filter(i => i.status === 'RESOLVED').length || 0
   const hasIncidents = incidents !== undefined && incidents.length > 0
 
@@ -122,16 +117,16 @@ function DeclaredIncidents() {
       {!isLoading && incidents && incidents.length > 0 && (
         <div className="flex gap-1.5">
           <button
-            onClick={() => setStatusFilter(statusFilter === 'OPEN' ? 'all' : 'OPEN')}
+            onClick={() => setStatusFilter(statusFilter === 'ACTIVE' ? 'all' : 'ACTIVE')}
             className={cn(
               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors',
-              statusFilter === 'OPEN'
+              statusFilter === 'ACTIVE'
                 ? 'bg-danger-bg border-danger-border text-danger-fg'
                 : 'hover:bg-muted/60'
             )}
           >
             <Zap className="h-3 w-3" />
-            <span>{openCount} Open</span>
+            <span>{activeCount} Active</span>
           </button>
           <button
             onClick={() => setStatusFilter(statusFilter === 'RESOLVED' ? 'all' : 'RESOLVED')}
@@ -161,7 +156,7 @@ function DeclaredIncidents() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="OPEN">Open</SelectItem>
+              <SelectItem value="ACTIVE">Active</SelectItem>
               <SelectItem value="RESOLVED">Resolved</SelectItem>
             </SelectContent>
           </Select>
@@ -200,7 +195,7 @@ function DeclaredIncidents() {
       {!isLoading && hasIncidents && (
         <div className="space-y-2">
           {incidents?.map((incident) => {
-            const statusCfg = getStatusConfig(incident.status)
+            const statusCfg = incidentStatusConfig(incident.status)
             const StatusIcon = statusCfg.icon
             return (
               <Link
@@ -211,7 +206,7 @@ function DeclaredIncidents() {
               >
                 <Card className={cn(
                   'transition-colors border-l-[3px]',
-                  incident.status === 'OPEN' && 'border-l-danger-solid hover:border-danger-border',
+                  incident.status === 'ACTIVE' && 'border-l-danger-solid hover:border-danger-border',
                   incident.status === 'RESOLVED' && 'border-l-transparent hover:border-muted-foreground/20',
                 )}>
                   <CardContent className="p-3">
