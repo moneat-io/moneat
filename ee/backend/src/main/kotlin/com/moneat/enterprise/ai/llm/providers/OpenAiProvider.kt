@@ -102,8 +102,8 @@ class OpenAiProvider(
     }
 
     private fun requireCapabilityForTools(tools: List<LlmTool>) {
-        if (tools.isNotEmpty() && LlmCapability.TOOL_CALLING !in capabilities()) {
-            throw IllegalStateException("${provider()} is not configured for tool calling")
+        check(!(tools.isNotEmpty() && LlmCapability.TOOL_CALLING !in capabilities())) {
+            "${provider()} is not configured for tool calling"
         }
     }
 

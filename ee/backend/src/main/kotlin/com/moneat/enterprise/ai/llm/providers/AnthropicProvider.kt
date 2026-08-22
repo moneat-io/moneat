@@ -212,8 +212,8 @@ class AnthropicProvider(
     }
 
     private fun requireCapabilityForTools(tools: List<LlmTool>) {
-        if (tools.isNotEmpty() && LlmCapability.TOOL_CALLING !in capabilities()) {
-            throw IllegalStateException("Anthropic is not configured for tool calling")
+        check(!(tools.isNotEmpty() && LlmCapability.TOOL_CALLING !in capabilities())) {
+            "Anthropic is not configured for tool calling"
         }
     }
 
